@@ -11,7 +11,7 @@ from utilities.data.messages import Message
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
     heartbeat_info: mes.EventInfoMes = None
-    greetings: mes.DeviceInfoMes = None
+    device_info: mes.DeviceInfoMes = None
 
 
 @dataclass(frozen=False, order=True)

@@ -63,7 +63,7 @@ class GeneralCmdLogic(Thinker):
                     self.logger.info(f'Server {data.info.id} is active. Handshake was undertaken')
                     del self.demands_pending_answer[msg.reply_to]
                     connection: Connection = self.parent.connections[data.info.id]
-                    connection.greetings = data.info
+                    connection.device_info = data.info
         except KeyError as e:
             self.logger.error(e)
 
