@@ -134,6 +134,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     def stop(self):
         info_msg(self, 'STOPPING')
+        stop_msg = gen_msg(com='shutdown', device=self, reason='normal stop')
+        self.messenger.send_msg(stop_msg)
+        sleep(1)
         self.thinker.stop()
         sleep(0.5)
         self.messenger.stop()

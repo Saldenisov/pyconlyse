@@ -52,6 +52,7 @@ class GeneralCmdLogic(Thinker):
             self.logger.info('react_internal: I do not know what to do')
 
     def react_unknown(self, msg: Message):
+        # TODO: correct
         self.logger.info('Fuck Yeah')
 
     def react_reply(self, msg: Message):
@@ -95,6 +96,9 @@ class ServerCmdLogic(Thinker):
                 self.events[data.info.event_id].n = data.info.n
             except KeyError as e:
                 self.logger.error(e)
+        elif data.com == 'shutdown':
+            print('!!!!!!!!!!!!!!!!!!!!!!!')
+
 
     def react_demand(self, msg: Message):
         data = msg.data
@@ -142,10 +146,9 @@ class ServerCmdLogic(Thinker):
                     raise Exception(f'{self}:{device_info.type} is not known')
                 if device_info.id not in running:
                     running[device_info.id] = data.info
-                    a = device_info.messenger_info.public_sockets['publisher']
                     if 'publisher' in device_info.messenger_info.public_sockets:
                         from communication.logic.logic_functions import external_hb_logic
-                        self.parent.messenger.subscribe_sub(address=a)
+                        self.parent.messenger.subscribe_sub(address=device_info.messenger_info.public_sockets['publisher'])
                         self.register_event(name=f'heartbeat:{msg.data.info.name}',
                                             logic_func=external_hb_logic,
                                             event_id=f'heartbeat:{msg.data.info.id}',
@@ -181,6 +184,7 @@ class ServerCmdLogic(Thinker):
                 self.unregister_event(event.id)
                 try:
                     del self.parent.services_running[event.original_owner]
+                    # TODO: tasks should be deleted here and for client as well
                     self.logger.info(f"""Service {event.name} was away for too long...removing it from active services, 
                     deleting its tasks""")
                 except KeyError:

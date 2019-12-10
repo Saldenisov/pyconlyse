@@ -30,6 +30,7 @@ commands = {'error_message': mes.MessageStructure('reply', mes.Error),
             'available_services_reply': mes.MessageStructure('reply', mes.AvailableServices),
             'unknown_message': mes.MessageStructure('info', mes.Unknown),
             'welcome': mes.MessageStructure('reply', mes.DeviceInfoMes),
+            'shutdown': mes.MessageStructure('info', mes.ShutDownMes),
             'test': mes.MessageStructure('info', mes.Test)}
 
 
@@ -152,6 +153,12 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
         elif com == 'status_client_reply':
             client = device
             data_info = mes_info_class(client.device_status)
+        elif com == 'shutdown':
+            try:
+                reason = kwargs['reason']
+            except KeyError:
+                reason = 'unknown'
+            data_info = mes_info_class(device.id, reason=reason)
         elif com == 'welcome':
             data_info = mes_info_class(device.name, device.id, 'server',
                                           device.__class__.__name__,

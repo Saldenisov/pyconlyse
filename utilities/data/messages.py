@@ -63,8 +63,6 @@ class DeviceInfoMes:
     device_status: DeviceStatus
 
 
-
-
 @dataclass(frozen=True, order=True)
 class DeviceInfoShortMes:
     name: str
@@ -104,6 +102,12 @@ class ServerInfoQueKeysMes:
     queue_in_keys: deque = field(default_factory=deque)
     queue_out_keys: deque = field(default_factory=deque)
     queue_in_pending_keys: deque = field(default_factory=deque)
+
+
+@dataclass(frozen=True, order=True)
+class ShutDownMes:
+    device_id: str
+    reason: str = ""
 
 
 @dataclass(frozen=True, order=True)

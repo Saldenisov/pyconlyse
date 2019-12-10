@@ -133,8 +133,8 @@ def pending_demands(event: ThinkerEvent):
 
 
 def pending_replies(event: ThinkerEvent):
-
     thinker: Thinker = event.parent
+    device = thinker.parent
     tasks: OrderedDictMod = thinker.replies_pending_answer
     while event.active:
         if not event.paused:
@@ -150,7 +150,7 @@ def pending_replies(event: ThinkerEvent):
                             try:
                                 # TODO: xxxx
                                 msg = pending.message
-
+                                msg_out = gen_msg(com='timeout', device=device, msg_i=msg)
                                 del tasks[key]
                                 event.logger.error(f'Timeout for reply msg: {msg}')
                                 event.logger.info(f'Msg: {msg.id} is deleted')

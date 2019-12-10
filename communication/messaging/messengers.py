@@ -139,7 +139,6 @@ class Messenger(MessengerInter):
         # Start send loop here
         self._sendloop_logic(await_time=0.1 / 1000.)
 
-
     def stop(self):
         info_msg(self, 'STOPPING')
         self.active = False
@@ -172,7 +171,6 @@ class Messenger(MessengerInter):
             self._msg_out[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
-
 
     @make_loop
     def _sendloop_logic(self, await_time):
@@ -395,6 +393,12 @@ class ServerMessenger(Messenger):
             error_logger(self, self._create_sockets, e)
             raise e
 
+    def info(self):
+        from collections import OrderedDict as od
+        info: od = super().info()
+        info['pools'] = {'frontend': self._frontendpool, 'backend': self._backendpool}
+        return info
+
     def run(self):
         super().run()
         try:
@@ -445,35 +449,23 @@ class ServerMessenger(Messenger):
             msg_json = msg.json_repr()
             if msg.crypted:
                 msg_json = self.encrypt(msg_json)
-            if msg.body.type == 'reply':
-                if msg.body.receiver_id in self._frontendpool:
-                    self.sockets['frontend'].send_multipart(
-                        [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                    self.logger.info(f'Reply msg {msg.id} is send from frontend')
-                elif msg.body.receiver_id in self._backendpool:
-                    self.sockets['backend'].send_multipart(
-                        [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                    self.logger.info(f'Reply msg {msg.id} is send from backend')
-                else:
-                    error_logger(self, self.send_msg, f'Receiver ID does not exist: {msg.body.receiver_id}')
-                    raise MessengerError(f' {self.name}. Receiver ID does not exist: {msg.body.receiver_id}')
-            elif msg.body.type == 'demand':
-                self.sockets['backend'].send_multipart(
-                    [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                self.logger.info(f'Demand msg {msg.id} is send from backend')
-            elif msg.body.type == 'info':
+            if msg.body.type == 'info':
                 #self.logger.info(f'Info msg {msg} is send from publisher')
                 self.sockets['publisher'].send_multipart([msg_json, crypted])
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg)
+            elif msg.body.type != 'info':
+                if msg.body.receiver_id in self._frontendpool:
+                    self.sockets['frontend'].send_multipart([msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
+                    self.logger.info(f'{msg.body.type} msg {msg.id} is send from frontend')
+                elif msg.body.receiver_id in self._backendpool:
+                    self.sockets['backend'].send_multipart([msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
+                    self.logger.info(f'{msg.body.type} msg {msg.id} is send from backend')
+                else:
+                    error_logger(self, self.send_msg, f'Receiver ID does not exist: {msg.body.receiver_id}')
+                    raise MessengerError(f' {self.name}. Receiver ID does not exist: {msg.body.receiver_id}')
             else:
                 error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
-
-    def info(self):
-        from collections import OrderedDict as od
-        info: od = super().info()
-        info['pools'] = {'frontend': self._frontendpool, 'backend': self._backendpool}
-        return info
 
