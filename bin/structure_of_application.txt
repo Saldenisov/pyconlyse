@@ -1,0 +1,24 @@
+
+
+
+
+
+
+
+
+
+
+
+
+Software.1                                                                     Service.1
+(Device)                                                                       (Device)
+
+
+Software.2
+(Device)        <   -   -   -   -   >      Server    <   -   -   -   -   -   > Service.2
+.                                                                              (Device)
+.
+.
+.
+Software.n                                                                      Service.n
+(Device)                                                                        (Device)

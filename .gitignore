@@ -1,0 +1,14 @@
+
+\.idea/misc\.xml
+
+\.idea/pytlyse\.iml
+
+\.idea/workspace\.xml
+
+*.log
+
+/.mypy_cache
+
+*.pyc
+
+*.json

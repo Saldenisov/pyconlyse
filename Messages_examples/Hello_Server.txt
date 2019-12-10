@@ -1,0 +1,110 @@
+Станадартно сообщение состоит из
+Тела (body): message_type, sender, receiver
+Данных (data): com, sender_name, class_info, info: {это поле вариативно и зависит от задачи очень сильно}, reply_to	
+идентификатора из 32 знаков (id):
+
+Рассмотрим куски сообщения
+Сообщение на питоне выглядит вот так.
+class MessageExt:
+    body: MessageBodyE
+    data: MessageDataE
+    id: str ='' (дефолтное поле, заполняется само, автоматически кодом ниже)
+    def __post_init__(self):
+        if not self.id:
+            object.__setattr__(self, 'id', unique_id())
+
+Body:
+class MessageBodyE(NamedTuple):
+    message_type: str
+    sender: str
+    receiver: str = ''
+	
+Data:
+class MessageDataE(NamedTuple):
+    com: str
+    sender_name: str
+    class_info: str
+    info: NamedTuple
+    reply_to: str = ''
+	
+А теперь самое вкусное, поле info, которое зависит от типа комманды (com):
+
+Список доступных комманд:
+COMMANDS = ['heartbeat', 'hello_server', 'welcome', 'status_service', 'check_service', 'on_service', 'status', 'unknown_message', 'Unknown']
+
+На примере HelloServer расмотрим как она выглядит:
+
+class HelloServer(NamedTuple):
+    name: str  (имя клиента, в твоем случае это имя твоего веб сервера)
+    device_id: str (его идентификатор, мало ли будет много серверов)
+    messenger_id: str (идентификатор мессенджера сервера, в твоем случае он может и совпадать с device_id) 
+    on: bool 
+    active: bool
+    public_key: str
+    address_publisher: str = '' (адресс сокета pub, или пустая строка, если его нет)
+	
+Если ты отправишь байт строку (2) на сервер, то он тебе ответит байт строкой (3). Соотвественно 1 и 4 это их репрезентации внутри кода.
+
+В ответ придет сообщение с информацией Welcome
+
+class Welcome(NamedTuple):
+    public_key: str
+    server_id: str
+
+
+1) Original representation of what client sends to server.
+a = MessageExt(
+body=MessageBodyE(message_type='demand', 
+				  sender='DLClient:DL_emulate:5b8c79fd1ee3b7dd720e583254b7000c', 
+				  receiver='Server'),
+ 
+data=MessageDataE(com='hello_server', 
+				  sender_name='ClientMessenger:DLClient:DL_emulate', 
+				  class_info='HelloServer', 
+				  info=HelloServer(
+									name='DL_emulate', 
+									device_id='DL_emulate:91f1a5b7928ac52a31aa488274040d07', messenger_id='DLClient:DL_emulate:5b8c79fd1ee3b7dd720e583254b7000c', 
+									on=True, 
+									active=True, 
+									public_key='public_key:-_ClientMessenger:DLClient:DL_emulate', 
+									address_publisher=''), 
+									reply_to=''), 
+
+id='e8c85c2875cd5c8733fd9380da4a14e0')
+
+2) message converted to byte json string. This is what would be send by zmq.
+
+b'{"body": ["demand", "DLClient:DL_emulate:800281624df52eb53c7a3cc28d06f2f0", "Server"], "data": ["hello_server", "ClientMessenger:DLClient:DL_emulate", "HelloServer", ["DL_emulate", "DL_emulate:ed9a31e94697de9cbf0fac91df381bfd", "DLClient:DL_emulate:800281624df52eb53c7a3cc28d06f2f0", true, true, "public_key:-)_ClientMessenger:DLClient:DL_emulate", ""], ""], "id": "7062b4b475a4b37e4dbdf69a0ae93aae"}'
+
+3) This byte json string will be send back as a REPLY back to client
+b'{"body": ["reply", "Server:092555749438b7a3fc592d44de22044a", "DLClient:DL_emulate:800281624df52eb53c7a3cc28d06f2f0"], "data": ["welcome", "ServerMessenger:Server", "Welcome", ["public_key:-)_ServerMessenger:Server", "Server:092555749438b7a3fc592d44de22044a"], "7062b4b475a4b37e4dbdf69a0ae93aae"], "id": "4bbe8e57b4c027992cad581bb734ed63"}'
+
+4) JSON string will be created from MessageExt
+MessageExt(body=MessageBodyE(message_type='reply', 
+							 sender='Server:092555749438b7a3fc592d44de22044a', receiver='DLClient:DL_emulate:800281624df52eb53c7a3cc28d06f2f0'), 
+			
+			data=MessageDataE(com='welcome', 
+							  sender_name='ServerMessenger:Server', 
+							  class_info='Welcome', 
+
+							  info=Welcome(public_key='public_key:-)_ServerMessenger:Server',
+										   server_id='Server:092555749438b7a3fc592d44de22044a'), 
+										   reply_to='7062b4b475a4b37e4dbdf69a0ae93aae')
+			id='4bbe8e57b4c027992cad581bb734ed63')
+			
+			
+
+
+
+	frontend = tcp://127.0.0.1:5554
+	backend = tcp://127.0.0.1:5555
+	publisher = tcp://127.0.0.1:5556			
+
+	
+	
+
+
+
+
+
+
