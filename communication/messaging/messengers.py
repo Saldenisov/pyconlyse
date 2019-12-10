@@ -139,6 +139,7 @@ class Messenger(MessengerInter):
         # Start send loop here
         self._sendloop_logic(await_time=0.1 / 1000.)
 
+
     def stop(self):
         info_msg(self, 'STOPPING')
         self.active = False
@@ -178,12 +179,6 @@ class Messenger(MessengerInter):
         if len(self._msg_out) > 0:
             msg: Message = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
-
-    def _emergencyfullstop(self):
-        self.logger.info('Emergency full stop')
-        self.active = False
-        self._msg_out = None
-        sleep(0.01)
 
 
 class ClientMessenger(Messenger):
@@ -253,14 +248,15 @@ class ClientMessenger(Messenger):
 
         self.connect()
         try:
-            info_msg(self, 'STARTED')
+            if self.active:
+                info_msg(self, 'STARTED')
             msgs = []
             from time import time_ns as time
             while self.active:
                 try:
                     #a = time()
                     if not self.paused:
-                        sockets = dict(self.poller.poll())
+                        sockets = dict(self.poller.poll(1))
                         if self.sockets['dealer'] in sockets:
                             msg, crypted = self.sockets['dealer'].recv_multipart()
                             msgs.append((msg,crypted))
@@ -282,8 +278,8 @@ class ClientMessenger(Messenger):
 
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.run, e)
+            self.stop()
         finally:
-            self._emergencyfullstop()
             self.sockets['dealer'].close()
             if self.sockets['sub']:
                 self.sockets['sub'].close()
@@ -406,7 +402,7 @@ class ServerMessenger(Messenger):
             msgs = []
             while self.active:
                 if not self.paused:
-                    sockets = dict(self.poller.poll())
+                    sockets = dict(self.poller.poll(1))
                     try:
                         if self.sockets['frontend'] in sockets:
                             messenger_id, msg, crypted = self.sockets['frontend'].recv_multipart()
@@ -436,8 +432,8 @@ class ServerMessenger(Messenger):
                     sleep(0.5)
         except (Exception, zmq.error.ZMQError) as e:
             error_logger(self, self.run, e)
+            self.stop()
         finally:
-            self._emergencyfullstop()
             for _, soc in self.sockets.items():
                 soc.close()
             self.context.destroy()
