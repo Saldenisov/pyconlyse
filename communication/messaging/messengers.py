@@ -33,11 +33,12 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{name}:{Messenger.n_instance}'
-        self.id = f'{self.name}:{unique_id(self.name)}'
         if parent:
+            self.id = parent.id
             self.parent = parent
         else:
             self.parent = self
+            self.id = f'{self.name}:{unique_id(self.name)}'
             self.pyqtsignal_connected = False
         self.active = False
         self.paused = False

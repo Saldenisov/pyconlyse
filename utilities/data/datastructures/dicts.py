@@ -33,8 +33,11 @@ class Events_Dict(dict):
                 key = self.name_id[event_name]
                 del self.name_id[event_name]
                 super().__delitem__(key)
+
             else:
                 raise KeyError('Neither event_id nor event_name were passed correctly to delete the event...')
+        finally:
+            print(f'event {event_name} is deleted')
 
     def __contains__(self, item):
         if super().__contains__(item):
