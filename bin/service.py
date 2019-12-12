@@ -21,7 +21,7 @@ def init(device_id: str, db_name: str):
 
 if __name__ == "__main__":
     """
-    python service.py b8b10026214c373bffe2b2847a9538dd Devices.db 
+    python service.py b8b10026214c373bffe2b2847a9538dd or 2ecfc6712ca714be8b65f13dc490638b Devices.db 
     """
     if len(sys.argv) >= 3:
         init(device_id=sys.argv[1], db_name=sys.argv[2])

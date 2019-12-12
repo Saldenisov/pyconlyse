@@ -43,8 +43,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
-            if event.counter_timeout > 20:
-                self.parent.server_info = None
+            if event.counter_timeout > 5:
                 self.logger.info('Server was away for too long...deleting info about Server')
                 del self.parent.connections[event.original_owner]
                 self.unregister_event(event.id)
@@ -60,11 +59,11 @@ class GeneralCmdLogic(Thinker):
         self.logger.info(msg.short())
         try:
             if data.com == 'welcome':
-                if data.info.id in self.parent.connections:
-                    self.logger.info(f'Server {data.info.id} is active. Handshake was undertaken')
+                if data.info.device_id in self.parent.connections:
+                    self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
                     del self.demands_pending_answer[msg.reply_to]
-                    connection: Connection = self.parent.connections[data.info.id]
-                    connection.greetings = data.info
+                    connection: Connection = self.parent.connections[data.info.device_id]
+                    connection.device_info = data.info
         except KeyError as e:
             self.logger.error(e)
 
@@ -80,13 +79,10 @@ class ServerCmdLogic(Thinker):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from communication.logic.logic_functions import internal_hb_logic, internal_info_logic
+        from communication.logic.logic_functions import internal_hb_logic
         self.register_event(name='heartbeat',
                             external_name='server_heartbeat',
                             logic_func=internal_hb_logic)
-        self.register_event(name='info',
-                            external_name='server_info',
-                            logic_func=internal_info_logic)
 
     def react_info(self, msg: Message):
         data = msg.data
@@ -97,13 +93,13 @@ class ServerCmdLogic(Thinker):
             except KeyError as e:
                 self.logger.error(e)
         elif data.com == 'shutdown':
-            print('!!!!!!!!!!!!!!!!!!!!!!!')
-
+            self.remove_device_from_connections(data.info.device_id)
 
     def react_demand(self, msg: Message):
         data = msg.data
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg))
+        reply = True
         if cmd == 'check_service':
             service_name = data.info.service_name
             services_running = self.messenger.parent.services_running
@@ -131,28 +127,23 @@ class ServerCmdLogic(Thinker):
             else:
                 service = None
             msg_i = gen_msg('status_service', self.messenger, msg_i=msg, service=service)
-        elif cmd == 'stop_server':
-            reply = 'server_stopped'
-            timer = Timer(1, self.messenger.parent.stop, [])
-            timer.start()
         elif cmd == 'hello':
             try:
                 device_info: DeviceInfoMes = data.info
-                if 'service' in device_info.type:
-                    running = self.parent.services_running
-                elif 'client' in device_info.type:
-                    running = self.parent.clients_running
-                else:
+                connections = self.parent.connections
+                if data.info.type not in ('service', 'client'):
                     raise Exception(f'{self}:{device_info.type} is not known')
-                if device_info.id not in running:
-                    running[device_info.id] = data.info
+
+                if device_info.device_id not in connections:
+                    connections[device_info.device_id] = Connection(device_info=data.info)
                     if 'publisher' in device_info.messenger_info.public_sockets:
                         from communication.logic.logic_functions import external_hb_logic
                         self.parent.messenger.subscribe_sub(address=device_info.messenger_info.public_sockets['publisher'])
-                        self.register_event(name=f'heartbeat:{msg.data.info.name}',
+                        a = f'heartbeat:{data.info.name}'
+                        self.register_event(name=f'heartbeat:{data.info.name}',
                                             logic_func=external_hb_logic,
-                                            event_id=f'heartbeat:{msg.data.info.id}',
-                                            original_owner=device_info.id,
+                                            event_id=f'heartbeat:{data.info.device_id}',
+                                            original_owner=device_info.device_id,
                                             start_now=True)
                     msg_i = gen_msg('welcome', device=self.parent, msg_i=msg)
                     if self.parent.pyqtsignal_connected:
@@ -164,11 +155,15 @@ class ServerCmdLogic(Thinker):
                 self.logger.error(e)
                 msg_i = gen_msg('error_message', device=self.parent, comments=repr(e), msg_i=msg)
         elif cmd == 'available_services':
+            # from communication.logic.logic_functions import postponed_reaction
             msg_i = gen_msg('available_services_reply', device=self.parent, msg_i=msg)
+            # postponed_reaction(self.add_task_out, msg_i, 12, self.logger)
+            # reply = False
         else:
             msg_i = gen_msg('unknown_message', device=self.parent, msg_i=msg)
-        info_msg(self, 'REPLY', extra=repr(msg_i))
-        self.add_task_out(msg_i)
+        if reply:
+            info_msg(self, 'REPLY', extra=repr(msg_i))
+            self.add_task_out(msg_i)
 
     def react_reply(self,  msg: Message):
         pass
@@ -180,17 +175,16 @@ class ServerCmdLogic(Thinker):
 
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
-            if event.counter_timeout > 10:
-                self.unregister_event(event.id)
+            if event.counter_timeout > 5:
                 try:
-                    del self.parent.services_running[event.original_owner]
-                    # TODO: tasks should be deleted here and for client as well
-                    self.logger.info(f"""Service {event.name} was away for too long...removing it from active services, 
-                    deleting its tasks""")
-                except KeyError:
-                    del self.parent.clients_running[event.original_owner]
-                    self.logger.info(f"""Client {event.name} was away for too long...removing it from active clients, 
-                    deleting its tasks""")
+                    connections = self.parent.connections
+                    self.logger.info(f"""{connections[event.original_owner].device_info.type} {event.name} 
+                                     was away for too long...removing it from active services, deleting its tasks""")
+                    self.unregister_event(event.id)
+                    del connections[event.original_owner]
+                    # TODO: tasks should be deleted here
+                except KeyError as e:
+                    error_logger(self, self.react_internal, e)
                 self.parent.send_status_pyqt()
         else:
             self.logger.info(f'react_internal: I do not know what to do, {event.name} is not known')

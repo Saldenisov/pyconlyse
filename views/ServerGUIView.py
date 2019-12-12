@@ -20,6 +20,7 @@ class ServerGUIView(QMainWindow):
     """
     """
     def __init__(self, in_controller, in_model, parent=None):
+        # TODO: all queues should be added to GUI and tracked
         super().__init__(parent)
         self.name = 'ServerGUI:view: ' + get_local_ip()
         self.logger = module_logger

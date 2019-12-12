@@ -292,3 +292,16 @@ class StpMtrCtrl_emulate(Service):
 
     def getpos(self) -> float:
         return self.pos
+
+
+class StpMtrCtrl_emulate2(Service):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def moveto(self, pos: float):
+        from time import sleep
+        sleep(pos/1000. * 5)
+        self.pos = pos
+
+    def getpos(self) -> float:
+        return self.pos

@@ -11,7 +11,7 @@ from utilities.data.messages import Message
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
     heartbeat_info: mes.EventInfoMes = None
-    greetings: mes.DeviceInfoMes = None
+    device_info: mes.DeviceInfoMes = None
 
 
 @dataclass(frozen=False, order=True)
@@ -53,7 +53,7 @@ class OrderedDictMesTypeCounter(OrderedDict):
             super().__setitem__(key, value)
             if isinstance(value, Message):
                 msg: Message = value
-            elif isinstance(value, PendingDemand):
+            elif isinstance(value, PendingDemand) or isinstance(value, PendingReply):
                 msg = value.message
             else:
                 raise TypeError(f'Wrong type is passed {type(value)}')
@@ -70,7 +70,7 @@ class OrderedDictMesTypeCounter(OrderedDict):
             super().__delitem__(key)
             if isinstance(value, Message):
                 msg: Message = value
-            elif isinstance(value, PendingDemand):
+            elif isinstance(value, PendingDemand) or isinstance(value, PendingReply):
                 msg = value.message
 
             mes_type = msg.body.type

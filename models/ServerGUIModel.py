@@ -55,11 +55,10 @@ class ServerGUIModel(QObject):
     def stop_server(self):
         if self.server:
             try:
+                # TODO: when stopped dictionary changed size during iteration after second server start
                 self.server.stop()
-            except DeviceError as e:
-                self.logger.error(e)
-                msg = gen_msg(com='status_server', sender='ServerGUI', server=self.server)
-                self.model_changed.emit(msg)
+            except (DeviceError, Exception) as e:
+                self.logger.error(f'func: stop_server {e}')
             finally:
                 self.server = None
 

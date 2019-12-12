@@ -21,6 +21,7 @@ from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent import DeviceStatus, DeviceParts
+from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
@@ -47,9 +48,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  name: str,
                  db_path: Path,
                  cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, DeciderInter, ExecutorInter]],
-                 parent: QObject = None,
-                 DB_command: str = '',
-                 logger_new = True,
+                 parent: QObject=None,
+                 DB_command: str='',
+                 logger_new=True,
                  **kwargs):
         super().__init__()
         self._kwargs = kwargs
@@ -70,7 +71,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.db_path = db_path
         self.config = configurationSD(self)
 
-        self.connections: Dict[str, Dict[str, int]] = {}
+        self.connections: Dict[str, Connection] = {}
 
         self.cls_parts = cls_parts
         self.cls_parts_instances: DeviceParts
@@ -134,9 +135,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     def stop(self):
         info_msg(self, 'STOPPING')
-        stop_msg = gen_msg(com='shutdown', device=self, reason='normal stop')
+        stop_msg = gen_msg(com='shutdown', device=self, reason='normal shutdown')
         self.messenger.send_msg(stop_msg)
         sleep(1)
+        self.thinker.pause()
+        self.messenger.pause()
+
         self.thinker.stop()
         sleep(0.5)
         self.messenger.stop()
@@ -230,18 +234,32 @@ class Server(Device):
         if 'DB_command' not in kwargs:
             kwargs['DB_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
         self.services_available = []
-        self.clients_running: Dict[str, Device] = {}
-        self.services_running: Dict[str, Device] = {}
         self.type = 'server'
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
 
         super().__init__(**kwargs)
 
+    @property
+    def services_running(self):
+        services_running = {}
+        for device_id, connection in self.connections.items():
+            info = connection.device_info
+            if info.type == 'service':
+                services_running[device_id] = info.name
+        return services_running
+
+    @property
+    def clients_running(self):
+        clients_running = {}
+        for device_id, connection in self.connections.items():
+            info = connection.device_info
+            if info.type == 'client':
+                clients_running[device_id] = info.name
+        return clients_running
+
+
     def stop(self):
        super().stop()
-       self.services_running = {}
-       self.clients_running = {}
-       self.services_available = []
 
     def messenger_settings(self):
         pass
@@ -316,7 +334,11 @@ class Client(Device):
         super().__init__(**kwargs)
 
     def messenger_settings(self):
-        self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
+        if isinstance(self.messenger.addresses['server_publisher'], list):
+            for adr in self.messenger.addresses['server_publisher']:
+                self.messenger.subscribe_sub(address=adr)
+        else:
+            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
 
     def activate(self):
         pass

@@ -12,7 +12,7 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent import OrderedDictMod
 from utilities.data.messages import Message
-from utilities.myfunc import unique_id, info_msg, error_logger
+from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
 
@@ -73,6 +73,10 @@ class Messenger(MessengerInter):
     @property
     def public_sockets(self):
         return self._public_sockets
+
+    @public_sockets.setter
+    def public_sockets(self, value):
+        self._public_sockets = value
 
     @property
     def public_key(self):
@@ -143,6 +147,7 @@ class Messenger(MessengerInter):
         info_msg(self, 'STOPPING')
         self.active = False
         self.paused = False
+        self._msg_out = {}
 
     def pause(self):
         "put executation of thread on pause"
@@ -196,7 +201,7 @@ class ClientMessenger(Messenger):
                 publisher = self.context.socket(zmq.PUB)
                 publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
                 self.sockets = {'dealer': dealer, 'sub': sub, 'publisher': publisher}
-                self._public_sockets = {'publisher': self.addresses['publisher']}
+                self.public_sockets = {'publisher': self.addresses['publisher']}
             else:
                 self.sockets = {'dealer': dealer, 'sub': sub}
 
@@ -210,9 +215,17 @@ class ClientMessenger(Messenger):
 
     def connect(self):
         try:
-            if self.active:
-                self.sockets['dealer'].connect(self.addresses['server_frontend'])
-                if self._pub_option:
+            self.sockets['dealer'].connect(self.addresses['server_frontend'])
+            if self._pub_option:
+                try:
+                    self.sockets['publisher'].bind(self.addresses['publisher'])
+                except (WrongAddress, zmq.error.ZMQError) as e:
+                    error_logger(self, self.connect, e)
+                    port = get_free_port(scope=None)
+                    local_ip = get_local_ip()
+                    self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
+                    self.public_sockets = {'publisher': self.addresses['publisher']}
+                    self.sockets['publisher'].setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
                     self.sockets['publisher'].bind(self.addresses['publisher'])
         except (WrongAddress, zmq.error.ZMQError) as e:
             error_logger(self, self.connect, e)
@@ -234,7 +247,8 @@ class ClientMessenger(Messenger):
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
                 mes: Message = json_to_message(mes)
-                if mes.data.com == 'device_info_short' and mes.data.info.type == 'server':
+                # first heartbeat in principle could be received only from server
+                if mes.data.com == 'heartbeat':
                     sockets = mes.data.info.sockets
                     if 'frontend' in sockets and 'backend' in sockets:
                         self.logger.info(mes)
@@ -244,9 +258,10 @@ class ClientMessenger(Messenger):
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
 
-        self.connect()
+
         try:
             if self.active:
+                self.connect()
                 info_msg(self, 'STARTED')
             msgs = []
             from time import time_ns as time
@@ -314,23 +329,14 @@ class ClientMessenger(Messenger):
         from utilities.myfunc import verify_port
         # Check only publisher port availability
         port = verify_port(addresses['publisher'])
-        self.addresses['publisher'] = f'tcp://127.0.0.1:{port}'
+        local_ip = get_local_ip()
+        self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
         self.addresses['server_publisher'] = addresses['server_publisher']
 
 
 class ServiceMessenger(ClientMessenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def connect(self):
-        try:
-            self.sockets['dealer'].connect(self.addresses['server_backend'])
-            self.subscribe_sub(address=self.addresses['server_publisher'])
-            if self._pub_option:
-                self.sockets['publisher'].bind(self.addresses['publisher'])
-        except (WrongAddress, zmq.error.ZMQError) as e:
-            error_logger(self, self.connect, e)
-
 
 class ServerMessenger(Messenger):
     """
@@ -359,12 +365,16 @@ class ServerMessenger(Messenger):
         ports = ['publisher', 'frontend', 'backend']
         from utilities.myfunc import verify_port
         excluded = []
+        local_ip = get_local_ip()
         for port in ports:
             if port not in addresses:
                 raise Exception(f'Not enough ports {port} were passed to {self.name}')
             port_n = verify_port(addresses[port], excluded)
             excluded.append(port_n)
-            self.addresses[port] = f'tcp://127.0.0.1:{port_n}'
+            if port == 'publisher':
+                self.addresses[port] = f'tcp://127.0.0.1:{port_n}'
+            else:
+                self.addresses[port] = f'tcp://{local_ip}:{port_n}'
 
     def _create_sockets(self):
         try:
@@ -389,6 +399,9 @@ class ServerMessenger(Messenger):
                             'backend': backend,
                             'publisher': publisher,
                             'sub': sub}
+            self.public_sockets = {'publisher': self.addresses['publisher'],
+                                    'frontend': self.addresses['frontend'],
+                                    'backend': self.addresses['backend']}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e

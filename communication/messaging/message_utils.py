@@ -13,7 +13,6 @@ module_logger = logging.getLogger(__name__)
 
 mes_types = ['demand', 'reply', 'info']
 commands = {'error_message': mes.MessageStructure('reply', mes.Error),
-            'device_info_short': mes.MessageStructure('info', mes.DeviceInfoShortMes),
             'heartbeat': mes.MessageStructure('info', mes.EventInfoMes),
             'hello': mes.MessageStructure('demand', mes.DeviceInfoMes),
             'status_server': mes.MessageStructure('info', mes.ServerStatusMes),
@@ -26,11 +25,11 @@ commands = {'error_message': mes.MessageStructure('reply', mes.Error),
             'status_client': mes.MessageStructure('info', mes.ClientStatusMes),
             'status_client_demand': mes.MessageStructure('demand', mes.CheckClient),
             'status_client_reply': mes.MessageStructure('reply', mes.ClientStatusMes),
+            'shutdown': mes.MessageStructure('info', mes.ShutDownMes),
             'available_services': mes.MessageStructure('demand', None),
             'available_services_reply': mes.MessageStructure('reply', mes.AvailableServices),
             'unknown_message': mes.MessageStructure('info', mes.Unknown),
             'welcome': mes.MessageStructure('reply', mes.DeviceInfoMes),
-            'shutdown': mes.MessageStructure('info', mes.ShutDownMes),
             'test': mes.MessageStructure('info', mes.Test)}
 
 
@@ -90,9 +89,6 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
             except KeyError:
                 comments = 'Comments were not added. Default comment is None'
             data_info = mes_info_class(comments)
-        elif com == 'device_info_short':
-            crypted = False
-            data_info = mes_info_class(device.name, device.id, device.type, device.messenger.addresses)
         elif com == 'heartbeat':
             crypted = False
             try:
@@ -103,7 +99,8 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                                        event.external_name,
                                        device.id,
                                        tick=event.tick,
-                                       n=kwargs['n'])
+                                       n=kwargs['n'],
+                                       sockets=device.messenger.public_sockets)
         elif com == 'hello':
             data_info = mes_info_class(device.name,
                                        device.id,

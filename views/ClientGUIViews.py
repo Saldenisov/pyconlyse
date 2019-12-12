@@ -60,9 +60,10 @@ class SuperUserView(QMainWindow):
             #widget.setChecked(not before)
         elif com == 'available_services_reply':
             widget = self.ui.lW_devices
+            widget.clear()
             names = []
             for key, item in info.running_services.items():
-                names.append(f'{item.name}:{key}')
+                names.append(f'{item}:{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
 

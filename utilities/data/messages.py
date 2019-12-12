@@ -51,24 +51,17 @@ class EventInfoMes:
     device_id: str
     tick: float = 0.1
     n: float = 0.0
+    sockets: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, order=True)
 class DeviceInfoMes:
     name: str
-    id: str
+    device_id: str
     type: str  # service, client, server
     class_type: str
     messenger_info: MessengerInfoMes
     device_status: DeviceStatus
-
-
-@dataclass(frozen=True, order=True)
-class DeviceInfoShortMes:
-    name: str
-    id: str
-    type: str  # service, client, server
-    sockets: dict
 
 
 @dataclass(frozen=True, order=True)
