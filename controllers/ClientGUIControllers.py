@@ -53,14 +53,16 @@ class SuperClientGUIcontroller():
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text().split(':')[2]
-        msg_i = gen_msg(com='status_service_demand', device=self.model.superuser, service_id=service_id)
-        print(msg_i)
+        msg = gen_msg(com='info_service_demand', device=self.model.superuser, service_id=service_id)
+        self.model.superuser.thinker.add_task_out(msg)
 
+    def pB_checkServices_clicked(self):
+        msg = gen_msg('available_services', device=self.model.superuser)
+        self.model.superuser.thinker.add_task_out(msg)
 
     def quit_clicked(self, event):
         try:
             self.model.superuser.stop()
-            sleep(1)
         except Exception as e:
             print(e)
         self.logger.info('Closing')

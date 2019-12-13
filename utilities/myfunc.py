@@ -41,7 +41,8 @@ def list_to_str_repr(l: list) -> str:
 
 def info_msg(obj: object, msg_type: str, extra=''):
     msg = ['INITIALIZING', 'INITIALIZED', 'NOT INITIALIZED', 'STARTING', 'STARTED', 'STOPPING', 'STOPPED',
-           'CREATING', 'CREATED', 'NOT CREATED', 'REQUEST', 'REPLY', 'INFO', 'DENIED', 'STRANGE', 'PAUSING',
+           'CREATING', 'CREATED', 'NOT CREATED', 'REQUEST', 'REPLY', 'INFO', 'FORWARD',
+           'DENIED', 'STRANGE', 'PAUSING',
            'PAUSED', 'UNPAUSING','UNPAUSED']
 
     if msg_type in msg:
@@ -81,6 +82,8 @@ def info_msg(obj: object, msg_type: str, extra=''):
             r = f'REQUEST: {extra} \n____________________________\n'
         elif msg_type == 'INFO':
             r = f': {extra} \n____________________________\n'
+        elif msg_type == 'FORWARD':
+            r = f'FORWARD: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
         elif msg_type == 'REPLY':
             r = f'REPLY: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
 

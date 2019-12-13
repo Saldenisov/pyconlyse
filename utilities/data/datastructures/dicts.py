@@ -58,12 +58,12 @@ class Connections_Dict(dict):
         self.messenger_id = {}
 
     def __setitem__(self, key_id, connection: Connection):
-        msgn_info = connection.device_info.messenger_info
-        if msgn_info.id not in self.messenger_id:
+        msgn_id = connection.device_info.messenger_id
+        if msgn_id not in self.messenger_id:
             super().__setitem__(key_id, connection)
-            self.messenger_id[msgn_info.id] = key_id
+            self.messenger_id[msgn_id] = key_id
         else:
-            raise KeyError(f'Messenger id: {msgn_info.id} already exists in {self.messenger_id}')
+            raise KeyError(f'Messenger id: {msgn_id} already exists in {self.messenger_id}')
 
     def __getitem__(self, key):
         try:
@@ -77,7 +77,7 @@ class Connections_Dict(dict):
     def __delitem__(self, key):
         try:
             connection: Connection = self[key]
-            messenger_id = connection.device_info.messenger_info.id
+            messenger_id = connection.device_info.messenger_id
             super().__delitem__(key)
             del self.messenger_id[messenger_id]
         except KeyError:
@@ -96,5 +96,3 @@ class Connections_Dict(dict):
             if item in self.messenger_id:
                 return super().__contains__(self.messenger_id[item])
 
-
-c = Connection()

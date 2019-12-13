@@ -13,6 +13,7 @@ module_logger = logging.getLogger(__name__)
 
 mes_types = ['demand', 'reply', 'info']
 commands = {'error_message': mes.MessageStructure('reply', mes.Error),
+            'forward': mes.MessageStructure('reply', mes.Error),
             'heartbeat': mes.MessageStructure('info', mes.EventInfoMes),
             'hello': mes.MessageStructure('demand', mes.DeviceInfoMes),
             'status_server': mes.MessageStructure('info', mes.ServerStatusMes),
@@ -20,8 +21,8 @@ commands = {'error_message': mes.MessageStructure('reply', mes.Error),
             'status_server_demand': mes.MessageStructure('demand', None),
             'status_server_reply': mes.MessageStructure('reply', mes.ServerStatusMes),
             'status_service': mes.MessageStructure('info', mes.ServiceStatusMes),
-            'status_service_demand': mes.MessageStructure('demand', mes.CheckService),
-            'status_service_reply': mes.MessageStructure('reply', mes.ServiceStatusMes),
+            'info_service_demand': mes.MessageStructure('demand', mes.CheckService),
+            'info_service_reply': mes.MessageStructure('reply', mes.ServiceStatusMes),
             'status_client': mes.MessageStructure('info', mes.ClientStatusMes),
             'status_client_demand': mes.MessageStructure('demand', mes.CheckClient),
             'status_client_reply': mes.MessageStructure('reply', mes.ClientStatusMes),
@@ -56,8 +57,15 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
             try:
                 if isinstance(device, DeviceInter):
                     ms = device.messenger
+                    ms_id = ms.id
+                    try:
+                        rec_id = device.server_msgn_id
+                    except AttributeError:
+                        rec_id = ''
                 elif isinstance(device, MessengerInter):
                     ms = device
+                    ms_id = ms.id
+                    rec_id = ''
                 else:
                     raise Exception('device is not Device or not Messenger')
             except Exception as e:
@@ -65,12 +73,8 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                 raise e
             mes_info_class: mes.DataClass = commands[com].mes_class
             try:
-                if type_com is not 'reply':
-                    if ms:
-                        ms_id = ms.id
-                    else:
-                        ms_id = ''
-                    body = mes.MessageBody(type_com, ms_id)
+                if type_com != 'reply':
+                    body = mes.MessageBody(type_com, ms_id, rec_id)
                 else:
                     msg_i: mes.Message = kwargs['msg_i']
                     body = MessageBody(type_com, ms.id, msg_i.body.sender_id)
@@ -102,14 +106,13 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                                        n=kwargs['n'],
                                        sockets=device.messenger.public_sockets)
         elif com == 'hello':
-            data_info = mes_info_class(device.name,
-                                       device.id,
-                                       device.type,
-                                       device.__class__.__name__,
-                                       mes.MessengerInfoMes(ms.id,
-                                                            ms.public_key,
-                                                            ms.public_sockets),
-                                       device.device_status)
+            data_info = mes_info_class(name=device.name,
+                                       device_id=device.id,
+                                       messenger_id=device.messenger.id,
+                                       type=device.type,
+                                       class_type=device.__class__.__name__,
+                                       device_status=device.device_status,
+                                       public_sockets=device.messenger.public_sockets)
         elif com == 'status_server':
             server = device
             data_info = mes_info_class(device.device_status,
@@ -137,9 +140,9 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
         elif com == 'status_service':
             service = device
             data_info = mes_info_class(service.device_status)
-        elif com == 'status_service_demand':
+        elif com == 'info_service_demand':
             data_info = mes_info_class(service_id=kwargs['service_id'])
-        elif com == 'status_service_reply':
+        elif com == 'info_service_reply':
             service = device
             data_info = mes_info_class(service.device_status)
         elif com == 'status_client':
@@ -157,11 +160,13 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                 reason = 'unknown'
             data_info = mes_info_class(device.id, reason=reason)
         elif com == 'welcome':
-            data_info = mes_info_class(device.name, device.id, 'server',
-                                          device.__class__.__name__,
-                                          mes.MessengerInfoMes(ms.id, ms.public_key,
-                                                               ms.public_sockets),
-                                          device.device_status)
+            data_info = mes_info_class(name=device.name,
+                                       device_id=device.id,
+                                       messenger_id=device.messenger.id,
+                                       type=device.type,
+                                       class_type=device.__class__.__name__,
+                                       device_status=device.device_status,
+                                       public_sockets=device.messenger.public_sockets)
         elif com == 'available_services':
             data_info = None
         elif com == 'available_services_reply':

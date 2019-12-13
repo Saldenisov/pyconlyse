@@ -72,7 +72,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.db_path = db_path
         self.config = configurationSD(self)
 
-        self.connections: Dict[str, Connection] = Connections_Dict
+        self.connections: Dict[str, Connection] = Connections_Dict()
 
         self.cls_parts = cls_parts
         self.cls_parts_instances: DeviceParts
@@ -217,6 +217,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def get_general_settings(self) -> dict:
         return self.config.config_to_dict(self.name)['General']
 
+    def available_public_functions(self):
+        pass
+
     def __del__(self):
         self.logger.info(f"Instance of class {self.__class__.__name__}: {self.long_name} is deleted")
         del self
@@ -296,6 +299,7 @@ class Service(Device):
             raise Exception('DB_command_type is not determined')
 
         self.type = 'service'
+        self.server_msgn_id = ''
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
@@ -331,6 +335,7 @@ class Client(Device):
 
         kwargs['cls_parts'] = cls_parts
         self.type = 'client'
+        self.server_msgn_id = ''
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 

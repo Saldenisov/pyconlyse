@@ -30,14 +30,16 @@ def f(obj: object) -> str:
     return str(out)
 
 
-# INFO Messages
 @dataclass(frozen=True, order=True)
 class AvailableServices:
     running_services: dict
     all_services: dict = field(default_factory=dict)
 
-
 @dataclass(frozen=True, order=True)
+class ForwardMessage:
+    forwarded: MessageInter
+
+@dataclass(order=True)
 class MessengerInfoMes:
     id: str = ''
     public_key: str = ''
@@ -54,14 +56,15 @@ class EventInfoMes:
     sockets: dict = field(default_factory=dict)
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True)
 class DeviceInfoMes:
-    name: str
     device_id: str
-    type: str  # service, client, server
-    class_type: str
-    messenger_info: MessengerInfoMes
-    device_status: DeviceStatus
+    messenger_id: str
+    name: str = None
+    type: str = None  # service, client, server
+    class_type: str = None
+    device_status: DeviceStatus = None
+    public_sockets: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, order=True)
@@ -74,6 +77,7 @@ class ServerStatusMes:
 @dataclass(frozen=True, order=True)
 class ServiceStatusMes:
     device_status: DeviceStatus
+    available_public_functions: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, order=True)

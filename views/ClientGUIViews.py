@@ -44,6 +44,7 @@ class SuperUserView(QMainWindow):
         self.model.model_changed.connect(self.model_is_changed)
         #self.ui.pB_start.clicked.connect(self.controller.connect_to_server)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
+        self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 

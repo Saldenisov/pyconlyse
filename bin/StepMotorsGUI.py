@@ -23,8 +23,7 @@ def main():
     logger = initialize_logger(path.parent / 'LOG', file_name="StepMotors")
     logger.info('Starting Step motors widget')
     app = QApplication(sys.argv)
-    model = StepMotorsModel(Path(app_folder))
-    StepMotorsController(model)
+    StepMotorsController(StepMotorsModel(Path(app_folder)))
     sys.exit(app.exec())
 
 

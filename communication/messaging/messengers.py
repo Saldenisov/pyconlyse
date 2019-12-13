@@ -255,6 +255,7 @@ class ClientMessenger(Messenger):
                         self.logger.info(mes)
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
+                        self.parent.server_msgn_id = mes.body.sender_id
                         break
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
@@ -339,6 +340,7 @@ class ServiceMessenger(ClientMessenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+
 class ServerMessenger(Messenger):
     """
     Server Messenger represents router-router + Publisher + Subsriber sockets
@@ -356,6 +358,7 @@ class ServerMessenger(Messenger):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # TODO: when connection is deleted from device these pools must be updated
         self._frontendpool = set()
         self._backendpool = set()
 

@@ -84,7 +84,7 @@ def task_in_reaction(event: ThinkerEvent):
                         thinker.add_reply_pending(msg)
                     thinker.react_in(msg)
                 except ThinkerErrorReact as e:
-                    info_msg(event, event.run, e)
+                    info_msg(event, event.run, f'{e}: {msg}')
         else:
             sleep(0.5)
 

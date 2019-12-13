@@ -235,7 +235,7 @@ class Thinker(ThinkerInter):
         connections = self.parent.connections
         if device_id in connections:
             device_name = connections[device_id].device_info.name
-            self.logger.info(f'Procudure to delete {device_name} {device_id} is started')
+            self.logger.info(f'Procedure to delete {device_name} {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)

@@ -18,6 +18,12 @@ class StpMtrCtrl_2axis(Service):
         self.connected = False
         self.set_parameters(settings)
 
+    def available_public_functions(self):
+        # TODO: logic to be updated!!!
+        return {'connect': [[], None],
+                'disconnect': [[], None],
+                'move': [[('axis',  int), ('position', float)], None]}
+
     def set_parameters(self, Config):
         if not self.connected:
             self.__mconfig = Config['stepmotors']
