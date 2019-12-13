@@ -11,6 +11,7 @@ from utilities.data.messages import Message
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
     heartbeat_info: mes.EventInfoMes = None
+    messenger_id: str = None
     device_info: mes.DeviceInfoMes = None
 
 

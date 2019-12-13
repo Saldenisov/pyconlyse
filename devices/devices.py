@@ -22,6 +22,7 @@ from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent import DeviceStatus, DeviceParts
 from utilities.data.datastructures.mes_dependent import Connection
+from utilities.data.datastructures.dicts import Connections_Dict
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
@@ -71,7 +72,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.db_path = db_path
         self.config = configurationSD(self)
 
-        self.connections: Dict[str, Connection] = {}
+        self.connections: Dict[str, Connection] = Connections_Dict
 
         self.cls_parts = cls_parts
         self.cls_parts_instances: DeviceParts

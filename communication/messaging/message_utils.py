@@ -180,7 +180,7 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
         else:
             return msg
     except (MsgComNotKnown, MsgError, Exception) as e:
-        module_logger.error(e)
+        module_logger.error(f'{com}: {e}')
         raise e
 
 
