@@ -86,6 +86,8 @@ class ServerCmdLogic(Thinker):
 
     def react_info(self, msg: Message):
         data = msg.data
+        # TODO: if section should be added to check weather device which send cmd is in connections or not
+        # at this moment connections is dict with key = device_id
         if 'heartbeat' in data.com:
             try:
                 self.events[data.info.event_id].time = time()
@@ -93,6 +95,7 @@ class ServerCmdLogic(Thinker):
             except KeyError as e:
                 self.logger.error(e)
         elif data.com == 'shutdown':
+            # TODO: the info is not deleted from _frontend sockets or backend sockets
             self.remove_device_from_connections(data.info.device_id)
 
     def react_demand(self, msg: Message):
@@ -185,6 +188,7 @@ class ServerCmdLogic(Thinker):
                     # TODO: tasks should be deleted here
                 except KeyError as e:
                     error_logger(self, self.react_internal, e)
+                    self.unregister_event(event.id)
                 self.parent.send_status_pyqt()
         else:
             self.logger.info(f'react_internal: I do not know what to do, {event.name} is not known')

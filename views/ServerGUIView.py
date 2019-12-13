@@ -37,7 +37,7 @@ class ServerGUIView(QMainWindow):
         self.ui.pB_pause.clicked.connect(self.controller.pause_server)
         self.ui.pB_execute.clicked.connect(partial(self.controller.exec_user_com, widget=self.ui.lE_execute))
         self.ui.pB_status.clicked.connect(self.controller.check_status)
-        self.ui.lE_execute.setText('-start_service b8b10026214c373bffe2b2847a9538dd Devices.db')  # ; -start StepMotorsGUI.py')
+        self.ui.lE_execute.setText('-start_service StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd Devices.db')  # ; -start StepMotorsGUI.py')
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 

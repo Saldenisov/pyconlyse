@@ -121,6 +121,7 @@ class Thinker(ThinkerInter):
             self.events[event_id].stop()
             del self.events[event_id]
 
+
     def start(self):
         info_msg(self, 'STARTING')
         for _, event in self.events.items():
@@ -233,11 +234,13 @@ class Thinker(ThinkerInter):
     def remove_device_from_connections(self, device_id):
         connections = self.parent.connections
         if device_id in connections:
-            self.logger.info(f'Procudure to delete {connections[device_id].device_info.name} {device_id} is started')
+            device_name = connections[device_id].device_info.name
+            self.logger.info(f'Procudure to delete {device_name} {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
             del self.parent.connections[device_id]
+            self.logger.info(f'{device_name} {device_id} is deleted')
         else:
             self.logger.error(f'remove_device_from_connections: Wrong device_id {device_id} is passed ')
 
