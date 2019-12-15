@@ -67,6 +67,11 @@ class SuperUserView(QMainWindow):
                 names.append(f'{item}:{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
+        elif com == 'error_message':
+            self.ui.tE_info.setText(info.comments)
+        elif com == 'info_service_reply':
+            self.ui.tE_info.setText(str(info))
+
 
 class StepMotorsView(QMainWindow):
     '''

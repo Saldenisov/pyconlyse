@@ -121,6 +121,16 @@ class Thinker(ThinkerInter):
             self.events[event_id].stop()
             del self.events[event_id]
 
+    def reply_msg(self, reply: bool, msg_i: Message):
+        if reply:
+            info_msg(self, 'REPLY', extra=repr(msg_i))
+            if isinstance(msg_i, list):
+                for msg in msg_i:
+                    info_msg(self, 'REPLY', extra=repr(msg))
+                    self.add_task_out(msg)
+            else:
+                info_msg(self, 'REPLY', extra=repr(msg_i))
+                self.add_task_out(msg_i)
 
     def start(self):
         info_msg(self, 'STARTING')

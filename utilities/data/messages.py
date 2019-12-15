@@ -77,6 +77,11 @@ class ServerStatusMes:
 @dataclass(frozen=True, order=True)
 class ServiceStatusMes:
     device_status: DeviceStatus
+
+
+@dataclass(frozen=True, order=True)
+class ServiceInfoMes:
+    device_status: DeviceStatus
     available_public_functions: dict = field(default_factory=dict)
 
 
@@ -130,7 +135,7 @@ class Unknown:
 
 @dataclass(frozen=True, order=True)
 class Error:
-    comment: str = ''
+    comments: str = ''
 
 
 @dataclass(frozen=True, order=True)

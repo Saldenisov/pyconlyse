@@ -13,6 +13,7 @@ from communication.logic import Thinker, ThinkerEvent
 
 
 class GeneralCmdLogic(Thinker):
+    
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
@@ -43,6 +44,10 @@ class GeneralCmdLogic(Thinker):
                 self.events[data.info.event_id].time = time()
                 self.events[data.info.event_id].n = data.info.n
 
+    def react_unknown(self, msg: Message):
+        # TODO: correct
+        self.logger.info('Fuck Yeah')
+
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
             if event.counter_timeout > 5:
@@ -52,22 +57,18 @@ class GeneralCmdLogic(Thinker):
         else:
             self.logger.info('react_internal: I do not know what to do')
 
-    def react_unknown(self, msg: Message):
-        # TODO: correct
-        self.logger.info('Fuck Yeah')
-
     def react_reply(self, msg: Message):
         data = msg.data
-        self.logger.info(msg.short())
-        try:
-            if data.com == 'welcome':
-                if data.info.device_id in self.parent.connections:
-                    self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
+        info_msg(self, 'REPLY', extra=str(msg.short()))
+        if data.com == 'welcome':
+            if data.info.device_id in self.parent.connections:
+                self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
+                try:
                     del self.demands_pending_answer[msg.reply_to]
-                    connection: Connection = self.parent.connections[data.info.device_id]
-                    connection.device_info = data.info
-        except KeyError as e:
-            self.logger.error(e)
+                except KeyError as e:
+                    self.logger.error(f'react_reply com={data.com} : {e}')
+                connection: Connection = self.parent.connections[data.info.device_id]
+                connection.device_info = data.info
 
     def react_demand(self, msg: Message):
         pass
@@ -85,6 +86,7 @@ class ServerCmdLogic(Thinker):
         self.register_event(name='heartbeat',
                             external_name='server_heartbeat',
                             logic_func=internal_hb_logic)
+        self._forward_binding = {}
 
     def react_info(self, msg: Message):
         data = msg.data
@@ -107,13 +109,18 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg))
         reply = True
-        forward = False
         if cmd == 'info_service_demand':
-            reply = False
             if data.info.service_id in self.parent.connections:
                 # TODO: forward or something else?
-                msg_i = gen_msg(com='forward', device=self.parent, msg_i=msg)
-                forward = True
+                #msg_i = gen_msg(com='forward', device=self.parent, msg_i=msg)
+                service_msng_id = self.parent.connections[data.info.service_id].device_info.messenger_id
+                msg_i = gen_msg(com='info_service_demand', device=self.parent,
+                                service_id=data.info.service_id, rec_id=service_msng_id)
+                self._forward_binding[msg_i.id] = msg
+            else:
+                msg_i = [gen_msg('available_services_reply', device=self.parent, msg_i=msg),
+                         gen_msg(com='error_message', device=self.parent,
+                                 comments=f'service with id {data.info.service_id} is not available', msg_i=msg)]
         elif cmd == 'on_service':
             service_name = data.info.service_name
             services_running = self.messenger.parent.services_running
@@ -160,15 +167,30 @@ class ServerCmdLogic(Thinker):
             # reply = False
         else:
             msg_i = gen_msg('unknown_message', device=self.parent, msg_i=msg)
-        if reply:
-            info_msg(self, 'REPLY', extra=repr(msg_i))
-            self.add_task_out(msg_i)
-        if forward:
-            info_msg(self, 'FORWARD', extra=repr(msg_i))
-            self.add_task_out(msg_i)
+        self.reply_msg(reply, msg_i)
 
     def react_reply(self,  msg: Message):
-        pass
+        data = msg.data
+        cmd = data.com
+        info_msg(self, 'REPLY', extra=str(msg))
+        reply = False
+        if cmd == 'info_service_reply':
+            if msg.reply_to in self.demands_pending_answer:
+                if msg.reply_to in self._forward_binding:
+                    # TODO: need to teech how to form_reply_on_demand
+                    msg_i = gen_msg(com='reply_on_forwarded_demand',
+                                    device=self.parent,
+                                    msg_i=self._forward_binding[msg.reply_to],
+                                    msg_reply=msg)
+                    reply = True
+                else:
+                    self.logger.info(f'STRANGE info_service_reply')
+
+                del self._forward_binding[msg.reply_to]
+                del self.demands_pending_answer[msg.reply_to]
+            else:
+                self.logger.info(f'Reply arrived too late')
+        self.reply_msg(reply, msg_i)
 
     def react_unknown(self, msg: Message):
         msg_i = gen_msg('unknown_message', self.messenger, msg_i=msg)
@@ -195,7 +217,6 @@ class ServerCmdLogic(Thinker):
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 
-
     def react_info(self, msg: Message):
         super().react_info(msg)
 
@@ -221,10 +242,29 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
                 del self.demands_pending_answer[msg.reply_to]
             except KeyError as e:
                 self.logger.error(f'react_reply: {e}')
+        elif data.com == 'info_service_reply':
+            if self.parent.pyqtsignal_connected:
+                self.parent.signal.emit(msg)
+            try:
+                del self.demands_pending_answer[msg.reply_to]
+            except KeyError as e:
+                self.logger.error(f'react_reply: {e}')
+        elif data.com == 'error_message':
+            if self.parent.pyqtsignal_connected:
+                self.parent.signal.emit(msg)
 
 
 class StpMtrCmdLogic(GeneralCmdLogic):
-    pass
+
+    def react_demand(self, msg: Message):
+        super().react_demand(msg)
+        data = msg.data
+        reply = False
+        msg_i = []
+        if data.com == 'info_service_demand':
+            msg_i = gen_msg(com='info_service_reply', device=self.parent, msg_i=msg)
+            reply = True
+        self.reply_msg(reply, msg_i)
 
 
 class StpMtrClientCmdLogic(StpMtrCmdLogic):
@@ -234,4 +274,3 @@ class StpMtrClientCmdLogic(StpMtrCmdLogic):
 
 class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
     pass
-

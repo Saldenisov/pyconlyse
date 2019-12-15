@@ -291,6 +291,12 @@ class StpMtrCtrl_emulate(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def available_public_functions(self):
+        # TODO: logic to be updated!!!
+        return {'connect': [[(None, None)], None],
+                'disconnect': [[(None, None)], None],
+                'move': [[('axis',  int), ('position', float)], None]}
+
     def moveto(self, pos: float):
         from time import sleep
         sleep(pos/1000. * 5)

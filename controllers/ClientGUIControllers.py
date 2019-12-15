@@ -53,7 +53,9 @@ class SuperClientGUIcontroller():
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text().split(':')[2]
-        msg = gen_msg(com='info_service_demand', device=self.model.superuser, service_id=service_id)
+        client = self.model.superuser
+        msg = gen_msg(com='info_service_demand', device=client,
+                      service_id=service_id, rec_id=client.server_msgn_id)
         self.model.superuser.thinker.add_task_out(msg)
 
     def pB_checkServices_clicked(self):

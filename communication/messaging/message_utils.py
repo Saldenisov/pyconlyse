@@ -12,7 +12,9 @@ from utilities.data.messages import *  # This line is required for json_to_messa
 module_logger = logging.getLogger(__name__)
 
 mes_types = ['demand', 'reply', 'info']
-commands = {'error_message': mes.MessageStructure('reply', mes.Error),
+commands = {'available_services': mes.MessageStructure('demand', None),
+            'available_services_reply': mes.MessageStructure('reply', mes.AvailableServices),
+            'error_message': mes.MessageStructure('reply', mes.Error),
             'forward': mes.MessageStructure('reply', mes.Error),
             'heartbeat': mes.MessageStructure('info', mes.EventInfoMes),
             'hello': mes.MessageStructure('demand', mes.DeviceInfoMes),
@@ -22,13 +24,12 @@ commands = {'error_message': mes.MessageStructure('reply', mes.Error),
             'status_server_reply': mes.MessageStructure('reply', mes.ServerStatusMes),
             'status_service': mes.MessageStructure('info', mes.ServiceStatusMes),
             'info_service_demand': mes.MessageStructure('demand', mes.CheckService),
-            'info_service_reply': mes.MessageStructure('reply', mes.ServiceStatusMes),
+            'info_service_reply': mes.MessageStructure('reply', mes.ServiceInfoMes),
             'status_client': mes.MessageStructure('info', mes.ClientStatusMes),
             'status_client_demand': mes.MessageStructure('demand', mes.CheckClient),
             'status_client_reply': mes.MessageStructure('reply', mes.ClientStatusMes),
             'shutdown': mes.MessageStructure('info', mes.ShutDownMes),
-            'available_services': mes.MessageStructure('demand', None),
-            'available_services_reply': mes.MessageStructure('reply', mes.AvailableServices),
+            'reply_on_forwarded_demand': mes.MessageStructure('reply', None),
             'unknown_message': mes.MessageStructure('info', mes.Unknown),
             'welcome': mes.MessageStructure('reply', mes.DeviceInfoMes),
             'test': mes.MessageStructure('info', mes.Test)}
@@ -59,8 +60,8 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                     ms = device.messenger
                     ms_id = ms.id
                     try:
-                        rec_id = device.server_msgn_id
-                    except AttributeError:
+                        rec_id = kwargs['rec_id']
+                    except KeyError:
                         rec_id = ''
                 elif isinstance(device, MessengerInter):
                     ms = device
@@ -144,7 +145,8 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
             data_info = mes_info_class(service_id=kwargs['service_id'])
         elif com == 'info_service_reply':
             service = device
-            data_info = mes_info_class(service.device_status)
+            data_info = mes_info_class(service.device_status,
+                                       available_public_functions=service.available_public_functions)
         elif com == 'status_client':
             client = device
             data_info = mes_info_class(client.device_status)
@@ -159,6 +161,12 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
             except KeyError:
                 reason = 'unknown'
             data_info = mes_info_class(device.id, reason=reason)
+        elif com == 'reply_on_forwarded_demand':
+            try:
+                msg_reply: Message = kwargs['msg_reply']
+            except KeyError:
+                raise Exception(f'msg_reply was not passed to com: {com}')
+            data_info = msg_reply.data.info
         elif com == 'welcome':
             data_info = mes_info_class(name=device.name,
                                        device_id=device.id,
