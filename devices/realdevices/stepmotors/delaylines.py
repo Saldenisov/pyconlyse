@@ -1,7 +1,8 @@
 from devices.devices import Service
 import logging
 import ctypes
-from errors.myexceptions import CannotmoveDL
+from time import sleep
+from errors.myexceptions import CannotmoveDL, DeviceError
 module_logger = logging.getLogger(__name__)
 
 
@@ -20,9 +21,7 @@ class StpMtrCtrl_2axis(Service):
 
     def available_public_functions(self):
         # TODO: logic to be updated!!!
-        return {'connect': [[], None],
-                'disconnect': [[], None],
-                'move': [[('axis',  int), ('position', float)], None]}
+        return {}
 
     def set_parameters(self, Config):
         if not self.connected:
@@ -290,20 +289,62 @@ class StpMtrCtrl_2axis(Service):
 class StpMtrCtrl_emulate(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._axis_number = 4
+        self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+        self.pos = [0.0, 0.0, 0.0, 0.0]
 
     def available_public_functions(self):
-        # TODO: logic to be updated!!!
-        return {'connect': [[(None, None)], None],
-                'disconnect': [[(None, None)], None],
-                'move': [[('axis',  int), ('position', float)], None]}
+        return {'connect': [[], True],
+                'disconnect': [[], True],
+                'move': [[('axis',  [0,
+                                     [(0, 4, [])]]),
+                          ('position', [0.0,
+                                        [(0.0, 100.0, [0, 91]),
+                                         (-100.0, 100.0, [0, 50]),
+                                         (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
+                                         (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])
+                                         ]
+                                        ]
+                           )
+                          ],
+                         (0.0, 'comments')],
+                'get_pos': [[('axis', [0, [(0, 3, [])]])], (0.0, 'comments')]
+                }
 
-    def moveto(self, pos: float):
-        from time import sleep
-        sleep(pos/1000. * 5)
-        self.pos = pos
+    def description(self):
+        desc = """StpMtrCtrl_emulate service, 4 axes"""
+        return desc
 
-    def getpos(self) -> float:
-        return self.pos
+    def _within_limits(self, axis:int, pos) -> bool:
+        comments = ''
+        return True, comments
+
+    def _check_axis(self, axis: int) -> bool:
+        comments = ''
+        if axis in range(self._axis_number):
+            return True, comments
+        else:
+            return False, f'axis {axis} was out of order {list(range(self._axis_number))}'
+
+    def moveto(self, axis: int, pos: float):
+        chk_axis, comments = self._check_axis()
+        if chk_axis:
+            chk_lmt, comments = self._within_limits()
+            if chk_lmt:
+                self.pos[axis] = pos
+                sleep(pos / 1000. * 5)
+                return self.get_pos(axis), comments
+            else:
+                return None, comments
+        else:
+            return None, comments
+
+    def getpos(self, axis: int) -> float:
+        res, comments = self._check_axis(axis)
+        if res:
+            return self.pos[axis], comments
+        else:
+            return None, comments
 
 
 class StpMtrCtrl_emulate2(Service):

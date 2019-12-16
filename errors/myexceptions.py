@@ -11,8 +11,8 @@ class MyException(Exception):
 
 
 class DeviceError(Exception):
-    def __init__(self, text):
-        super().__init__(f'Device: {text}')
+    def __init__(self, text, device_name='Device'):
+        super().__init__(f'{device_name}: {text}')
 
 
 class ThinkerError(Exception):

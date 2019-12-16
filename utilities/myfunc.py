@@ -41,7 +41,7 @@ def list_to_str_repr(l: list) -> str:
 
 def info_msg(obj: object, msg_type: str, extra=''):
     msg = ['INITIALIZING', 'INITIALIZED', 'NOT INITIALIZED', 'STARTING', 'STARTED', 'STOPPING', 'STOPPED',
-           'CREATING', 'CREATED', 'NOT CREATED', 'REQUEST', 'REPLY', 'INFO', 'FORWARD',
+           'CREATING', 'CREATED', 'NOT CREATED', 'REQUEST', 'DEMAND', 'REPLY', 'REPLY_IN', 'INFO', 'FORWARD',
            'DENIED', 'STRANGE', 'PAUSING',
            'PAUSED', 'UNPAUSING','UNPAUSED']
 
@@ -78,14 +78,14 @@ def info_msg(obj: object, msg_type: str, extra=''):
             r = f'Something strange happened {obj.name}{extra}'
         elif msg_type == 'DENIED':
             r = 'Permission is denied'
-        elif msg_type == 'REQUEST':
-            r = f'REQUEST: {extra} \n____________________________\n'
+        elif msg_type in ['REQUEST', 'DEMAND']:
+            r = f'{msg_type}: {extra} \n____________________________\n'
         elif msg_type == 'INFO':
             r = f': {extra} \n____________________________\n'
         elif msg_type == 'FORWARD':
             r = f'FORWARD: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
-        elif msg_type == 'REPLY':
-            r = f'REPLY: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
+        elif msg_type in ['REPLY', 'REPLY_IN']:
+            r = f'{msg_type}: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
 
         obj.logger.info(r)
     else:

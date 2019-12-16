@@ -123,13 +123,14 @@ class Thinker(ThinkerInter):
 
     def reply_msg(self, reply: bool, msg_i: Message):
         if reply:
-            info_msg(self, 'REPLY', extra=repr(msg_i))
+            if msg_i.body.type == 'reply':
+                info_msg(self, 'REPLY', extra=repr(msg_i))
+            elif msg_i.body.type == 'demand':
+                info_msg(self, 'DEMAND', extra=repr(msg_i))
             if isinstance(msg_i, list):
                 for msg in msg_i:
-                    info_msg(self, 'REPLY', extra=repr(msg))
                     self.add_task_out(msg)
             else:
-                info_msg(self, 'REPLY', extra=repr(msg_i))
                 self.add_task_out(msg_i)
 
     def start(self):

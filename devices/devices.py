@@ -122,6 +122,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(str(e))
 
         info_msg(self, 'CREATED')
+    @abstractmethod
+    def description(self):
+        pass
 
     def start(self):
         info_msg(self, 'STARTING')
@@ -242,6 +245,9 @@ class Server(Device):
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
 
         super().__init__(**kwargs)
+
+    def description(self):
+        return 'Main Server'
 
     @property
     def services_running(self):

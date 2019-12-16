@@ -82,6 +82,7 @@ class ServiceStatusMes:
 @dataclass(frozen=True, order=True)
 class ServiceInfoMes:
     device_status: DeviceStatus
+    device_decription: str = ''
     available_public_functions: dict = field(default_factory=dict)
 
 
@@ -177,7 +178,11 @@ class Message(MessageInter):
             object.__setattr__(self, 'id', unique_id())
 
     def short(self):
-        return {'rec_id': self.body.receiver_id, 'data': self.data.com, 'reply_to': self.reply_to, 'id': self.id}
+        return {'sender_id':  self.body.sender_id,
+                'rec_id': self.body.receiver_id,
+                'data': self.data.com,
+                'reply_to': self.reply_to,
+                'id': self.id}
 
     def json_repr(self, compression=True):
         def message_to_json(msg: Message, compression: bool) -> bytes:

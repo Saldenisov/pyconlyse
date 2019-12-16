@@ -36,13 +36,16 @@ commands = {'available_services': mes.MessageStructure('demand', None),
 
 
 def msg_verification(msg: mes.Message) -> bool:
-    mes_class_var = isinstance(msg, mes.Message)
-    mes_type_ver = True if msg.body.type in mes_types else False
-    mes_com_ver = True if msg.data.com in commands else False
-    classname = msg.data.info.__class__.__name__
-    mes_info_class_ver = True if classname in dir(mes) or msg.data.info is None else False
-
-    return mes_class_var and mes_type_ver and mes_com_ver and mes_info_class_ver
+    try:
+        mes_class_var = isinstance(msg, mes.Message)
+        mes_type_ver = True if msg.body.type in mes_types else False
+        mes_com_ver = True if msg.data.com in commands else False
+        classname = msg.data.info.__class__.__name__
+        mes_info_class_ver = True if classname in dir(mes) or msg.data.info is None else False
+        return mes_class_var and mes_type_ver and mes_com_ver and mes_info_class_ver
+    except Exception as e:
+        module_logger.error(f'IN msg_verification {e}')
+        return False
 
 
 def gen_msg(com: str, device, **kwargs) -> mes.Message:
@@ -60,9 +63,12 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                     ms = device.messenger
                     ms_id = ms.id
                     try:
-                        rec_id = kwargs['rec_id']
-                    except KeyError:
-                        rec_id = ''
+                        rec_id = device.server_msgn_id
+                    except AttributeError:
+                        try:
+                            rec_id = kwargs['rec_id']
+                        except KeyError:
+                            rec_id = ''
                 elif isinstance(device, MessengerInter):
                     ms = device
                     ms_id = ms.id
@@ -84,7 +90,7 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
                 module_logger.error(e)
                 raise MsgError('msg_i is not present in gen_msg functions')
             except Exception as e:
-                module_logger.error(e)
+                module_logger.error(f'IN gen_msg point1 {e}')
                 raise MsgError(f'Something went so wrong: {e}')
 
         crypted = True
@@ -144,9 +150,19 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
         elif com == 'info_service_demand':
             data_info = mes_info_class(service_id=kwargs['service_id'])
         elif com == 'info_service_reply':
-            service = device
-            data_info = mes_info_class(service.device_status,
-                                       available_public_functions=service.available_public_functions)
+            try:
+                msg_reply = kwargs['msg_reply']
+            except KeyError:
+                msg_reply = None
+            if not msg_reply:
+                try:
+                    data_info = mes_info_class(device.device_status,
+                                               device.description(),
+                                               available_public_functions=device.available_public_functions())
+                except AttributeError:
+                    raise
+            else:
+                data_info = msg_reply.data.info
         elif com == 'status_client':
             client = device
             data_info = mes_info_class(client.device_status)
@@ -193,19 +209,21 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
         else:
             return msg
     except (MsgComNotKnown, MsgError, Exception) as e:
-        module_logger.error(f'{com}: {e}')
+        module_logger.error(f'IN gen_msg point 2 {com}: {e}')
         raise e
 
 
 def json_to_message(msg_json: str) -> mes.Message:
+    mes_dc = None
+    mes = None
     try:
         mes_str = loads(msg_json)
         return eval(mes_str)
-    except Exception as e:
+    except Exception:
         try:
             mes_dc = loads(decompress(b64decode(msg_json)))
             mes = eval(mes_dc)
             return mes
         except Exception as e:
-            module_logger.error(e)
+            module_logger.error(f'IN json_to_message {e} msg_jso: {msg_json}, mes_dc: {mes_dc}, mes: {mes}')
             raise

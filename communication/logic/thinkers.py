@@ -48,18 +48,9 @@ class GeneralCmdLogic(Thinker):
         # TODO: correct
         self.logger.info('Fuck Yeah')
 
-    def react_internal(self, event: ThinkerEvent):
-        if 'server_heartbeat' in event.name:
-            if event.counter_timeout > 5:
-                self.logger.info('Server was away for too long...deleting info about Server')
-                del self.parent.connections[event.original_owner]
-                self.unregister_event(event.id)
-        else:
-            self.logger.info('react_internal: I do not know what to do')
-
     def react_reply(self, msg: Message):
         data = msg.data
-        info_msg(self, 'REPLY', extra=str(msg.short()))
+        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
         if data.com == 'welcome':
             if data.info.device_id in self.parent.connections:
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
@@ -71,7 +62,16 @@ class GeneralCmdLogic(Thinker):
                 connection.device_info = data.info
 
     def react_demand(self, msg: Message):
-        pass
+        info_msg(self, 'REQUEST', extra=str(msg.short()))
+
+    def react_internal(self, event: ThinkerEvent):
+        if 'server_heartbeat' in event.name:
+            if event.counter_timeout > 5:
+                self.logger.info('Server was away for too long...deleting info about Server')
+                del self.parent.connections[event.original_owner]
+                self.unregister_event(event.id)
+        else:
+            self.logger.info('react_internal: I do not know what to do')
 
 
 class ServerCmdLogic(Thinker):
@@ -107,7 +107,7 @@ class ServerCmdLogic(Thinker):
     def react_demand(self, msg: Message):
         data = msg.data
         cmd = data.com
-        info_msg(self, 'REQUEST', extra=str(msg))
+        info_msg(self, 'REQUEST', extra=str(msg.short()))
         reply = True
         if cmd == 'info_service_demand':
             if data.info.service_id in self.parent.connections:
@@ -172,13 +172,12 @@ class ServerCmdLogic(Thinker):
     def react_reply(self,  msg: Message):
         data = msg.data
         cmd = data.com
-        info_msg(self, 'REPLY', extra=str(msg))
+        info_msg(self, 'REPLY_IN', extra=str(msg.short))
         reply = False
         if cmd == 'info_service_reply':
             if msg.reply_to in self.demands_pending_answer:
                 if msg.reply_to in self._forward_binding:
-                    # TODO: need to teech how to form_reply_on_demand
-                    msg_i = gen_msg(com='reply_on_forwarded_demand',
+                    msg_i = gen_msg(com='info_service_reply',
                                     device=self.parent,
                                     msg_i=self._forward_binding[msg.reply_to],
                                     msg_reply=msg)
@@ -187,7 +186,6 @@ class ServerCmdLogic(Thinker):
                     self.logger.info(f'STRANGE info_service_reply')
 
                 del self._forward_binding[msg.reply_to]
-                del self.demands_pending_answer[msg.reply_to]
             else:
                 self.logger.info(f'Reply arrived too late')
         self.reply_msg(reply, msg_i)
@@ -226,9 +224,6 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
     def react_unknown(self, msg: Message):
         super().react_unknown(msg)
 
-    def react_demand(self, msg: Message):
-        super().react_demand(msg)
-
     def react_reply(self, msg: Message):
         super().react_reply(msg)
         data = msg.data
@@ -255,6 +250,15 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 
 class StpMtrCmdLogic(GeneralCmdLogic):
+    pass
+
+
+class StpMtrClientCmdLogic(StpMtrCmdLogic):
+
+    pass
+
+
+class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
 
     def react_demand(self, msg: Message):
         super().react_demand(msg)
@@ -265,12 +269,3 @@ class StpMtrCmdLogic(GeneralCmdLogic):
             msg_i = gen_msg(com='info_service_reply', device=self.parent, msg_i=msg)
             reply = True
         self.reply_msg(reply, msg_i)
-
-
-class StpMtrClientCmdLogic(StpMtrCmdLogic):
-
-    pass
-
-
-class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
-    pass
