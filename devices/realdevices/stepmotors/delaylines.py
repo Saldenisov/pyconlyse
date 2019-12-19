@@ -5,6 +5,8 @@ from time import sleep
 from errors.myexceptions import CannotmoveDL, DeviceError
 module_logger = logging.getLogger(__name__)
 
+control = 'control'
+observe = 'observe'
 
 # is not working anymore, no support is available
 class StpMtrCtrl_2axis(Service):
@@ -294,9 +296,8 @@ class StpMtrCtrl_emulate(Service):
         self.pos = [0.0, 0.0, 0.0, 0.0]
 
     def available_public_functions(self):
-        return {'connect': [[], True],
-                'disconnect': [[], True],
-                'move': [[('axis',  [0,
+        return {'activate': ([[], True], control),
+                'move_pos': ([[('axis',  [0,
                                      [(0, 4, [])]]),
                           ('position', [0.0,
                                         [(0.0, 100.0, [0, 91]),
@@ -307,9 +308,12 @@ class StpMtrCtrl_emulate(Service):
                                         ]
                            )
                           ],
-                         (0.0, 'comments')],
-                'get_pos': [[('axis', [0, [(0, 3, [])]])], (0.0, 'comments')]
+                         (0.0, 'comments')], control),
+                'get_pos': ([[('axis', [0, [(0, 3, [])]])], (0.0, 'comments')], observe)
                 }
+
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def description(self):
         desc = """StpMtrCtrl_emulate service, 4 axes"""
@@ -326,7 +330,7 @@ class StpMtrCtrl_emulate(Service):
         else:
             return False, f'axis {axis} was out of order {list(range(self._axis_number))}'
 
-    def moveto(self, axis: int, pos: float):
+    def move_to(self, axis: int, pos: float):
         chk_axis, comments = self._check_axis()
         if chk_axis:
             chk_lmt, comments = self._within_limits()
@@ -339,7 +343,7 @@ class StpMtrCtrl_emulate(Service):
         else:
             return None, comments
 
-    def getpos(self, axis: int) -> float:
+    def get_pos(self, axis: int) -> float:
         res, comments = self._check_axis(axis)
         if res:
             return self.pos[axis], comments
