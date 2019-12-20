@@ -1,17 +1,16 @@
-class A():
-    def a(self):
-        print(self.__class__.__name__)
+class A:
+    F = None
 
-class B(A):
-    def a(self):
-        super().a()
-        print(self.__class__.__name__)
+    def s(self, F):
+        A.F = F
 
-class C(B):
+    def p(self):
+        print(A.F)
 
-    def a(self):
-        super().a()
-        print(self.__class__.__name__)
 
-c = C()
-c.a()
+a = A()
+a.s(2)
+a.p()
+
+a.s(str)
+a.p()
