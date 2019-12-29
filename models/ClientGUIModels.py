@@ -61,4 +61,39 @@ class SuperUserGUIModel(QObject):
             error_logger(self, self.treat_pyqtsignals, e)
 
 
+class StepMotorsGUIModel(QObject):
 
+    model_changed = pyqtSignal(Message, name='SuperUser_model_changed')
+
+    def __init__(self, app_folder: Path):
+        super().__init__(parent=None)
+        self.name = 'SuperUserGUI:model: ' + get_local_ip()
+        self.app_folder = app_folder
+        self.observers = []
+        self.logger = module_logger
+        self.db_path = Path(app_folder / 'DB' / 'Devices.db')
+        info_msg(self, 'INITIALIZING')
+        self.superuser = DeviceFactory.make_device(device_id="37cc841a6f8f907deaa49f117aa1a2f9",
+                                                   db_path=self.db_path,
+                                                   pyqtslot=self.treat_pyqtsignals,
+                                                   logger_new=False)
+        self.superuser.start()
+        info_msg(self, 'INITIALIZED')
+
+    def add_observer(self, inObserver):
+        self.observers.append(inObserver)
+
+    def remove_observer(self, inObserver):
+        self.observers.remove(inObserver)
+
+    def start_server(self):
+        pass
+
+    def stop_server(self):
+        pass
+
+    def treat_pyqtsignals(self, msg: Message):
+        try:
+            self.model_changed.emit(msg)
+        except MsgComNotKnown as e:
+            error_logger(self, self.treat_pyqtsignals, e)

@@ -31,9 +31,12 @@ class Ui_widget_stpmtr(object):
 
     def setupAxis(self, axis_n=1):
         self.axisVL0 = QtWidgets.QVBoxLayout()
-        self.axisVL0.setContentsMargins(5, 5, 5, 5)
+        self.axisVL0.setSizeConstraint(QtWidgets.QLayout.SetFixedSize)
+        self.axisVL0.setContentsMargins(2, 2, 2, 2)
+        self.axisVL0.setSpacing(6)
         self.axisVL0.setObjectName("axisVL0")
         self.axisHL0 = QtWidgets.QHBoxLayout()
+        self.axisHL0.setContentsMargins(2, 2, 2, 2)
         self.axisHL0.setObjectName("axisHL0")
         self.radioButton_axis = QtWidgets.QRadioButton(Ui_widget_stpmtr.Form)
         self.radioButton_axis.setObjectName("radioButton_axis")
@@ -79,6 +82,9 @@ class Ui_widget_stpmtr(object):
         self.checkBox_On.setChecked(False)
         self.checkBox_On.setObjectName("checkBox_On")
         self.axis_movement_typeHL3.addWidget(self.checkBox_On)
+        self.labelAxisname = QtWidgets.QLabel(Ui_widget_stpmtr.Form)
+        self.labelAxisname.setText('Axis name: ')
+        self.axis_movement_typeHL3.addWidget(self.labelAxisname)
         spacerItem3 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.axis_movement_typeHL3.addItem(spacerItem3)
         self.axis_controlsVL2.addLayout(self.axis_movement_typeHL3)
@@ -106,8 +112,6 @@ class Ui_widget_stpmtr(object):
         spacerItem5 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.axis_controlsVL2.addItem(spacerItem5)
         self.axisHL0.addLayout(self.axis_controlsVL2)
-        spacerItem6 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
-        self.axisHL0.addItem(spacerItem6)
         self.axisVL0.addLayout(self.axisHL0)
         self.line_bottom = QtWidgets.QFrame(Ui_widget_stpmtr.Form)
         self.line_bottom.setFrameShape(QtWidgets.QFrame.HLine)
@@ -115,9 +119,9 @@ class Ui_widget_stpmtr(object):
         self.line_bottom.setObjectName("line_bottom")
         self.axisVL0.addWidget(self.line_bottom)
         self.mainVL.addLayout(self.axisVL0)
-        spacerItem7 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-        self.mainVL.addItem(spacerItem7)
-        self.verticalLayout_4.addLayout(self.mainVL)
+        spacerItem6 = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+        self.mainVL.addItem(spacerItem6)
+        self.verticalLayout.addLayout(self.mainVL)
 
         _translate = QtCore.QCoreApplication.translate
         self.radioButton_axis.setText(_translate("Form", "I"))
@@ -132,5 +136,6 @@ class Ui_widget_stpmtr(object):
 
 
     def retranslateUi(self, Form):
+        _translate = QtCore.QCoreApplication.translate
         Form.setWindowTitle(_translate("Form", "Form"))
 
