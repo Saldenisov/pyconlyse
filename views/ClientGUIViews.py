@@ -13,13 +13,14 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
-from utilities.myfunc import list_to_str_repr, info_msg, error_logger, get_local_ip
-from views.ui.ServerGUI_ui import Ui_ServerGUI
+from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
+from communication.messaging.message_utils import gen_msg
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
+from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
 from views.ui.SuperUser_ui import Ui_SuperUser
 
 
@@ -27,8 +28,7 @@ module_logger = logging.getLogger(__name__)
 
 
 class SuperUserView(QMainWindow):
-    """
-    """
+
     def __init__(self, in_controller, in_model, parent=None):
         super().__init__(parent)
         self.name = 'SuperUserGUI:view: ' + get_local_ip()
@@ -42,14 +42,15 @@ class SuperUserView(QMainWindow):
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
-        #self.ui.pB_start.clicked.connect(self.controller.connect_to_server)
+        self.ui.pB_connection.clicked.connect(self.controller.create_service_gui)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 
     def closeEvent(self, event):
-        self.controller.quit_clicked(event)
+        self.logger.info('Closing')
+        self.controller.quit_clicked(event, total_close=True)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
@@ -71,9 +72,43 @@ class SuperUserView(QMainWindow):
             self.ui.tE_info.setText(info.comments)
         elif com == 'info_service_reply':
             self.ui.tE_info.setText(str(info))
+            self.model.service_parameters[info.device_id] = info
 
 
 class StepMotorsView(QMainWindow):
+
+    def __init__(self, in_controller, in_model, parameters, parent=None):
+        super().__init__(parent)
+        self.name = f'StepMotorsClient:view: {parameters.device_id} {get_local_ip()}'
+        self.parameters = parameters
+        self.logger = logging.getLogger("StepMotors." + __name__)
+        info_msg(self, 'INITIALIZING')
+        self.controller = in_controller
+        self.model = in_model
+        self.device = self.model.superuser
+
+        self.ui = Ui_StpMtrGUI()
+        self.ui.setupUi(self)
+
+        self.model.add_observer(self)
+        self.model.model_changed.connect(self.model_is_changed)
+        self.ui.pushButton_move.clicked.connect(partial(self.controller.send_request_to_server, self.gen_move_msg()))
+        self.ui.closeEvent = self.closeEvent
+        info_msg(self, 'INITIALIZED')
+
+    def closeEvent(self, event):
+        self.controller.quit_clicked(event)
+
+    def gen_move_msg(self) -> Message:
+        #return gen_msg(com='move', device=self.device, where=None, how=None)
+        return None
+
+    def model_is_changed(self, msg: Message):
+        com = msg.data.com
+        info = msg.data.info
+
+
+class StepMotorsView_old(QWidget):
     '''
     Created on 11 mai 2017
 

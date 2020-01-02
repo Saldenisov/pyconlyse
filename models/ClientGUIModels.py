@@ -40,6 +40,7 @@ class SuperUserGUIModel(QObject):
                                                    pyqtslot=self.treat_pyqtsignals,
                                                    logger_new=False)
         self.superuser.start()
+        self.service_parameters = {}
         info_msg(self, 'INITIALIZED')
 
     def add_observer(self, inObserver):
@@ -63,11 +64,30 @@ class SuperUserGUIModel(QObject):
 
 class StepMotorsGUIModel(QObject):
 
+    model_changed = pyqtSignal(Message, name='StepMotorsGUI_model_changed')
+
+    def __init__(self, parameters: dict = {}):
+        super().__init__(parent=None)
+        self.name = 'StepMotorsGUI:model: ' + get_local_ip()
+        self.logger = module_logger
+        info_msg(self, 'INITIALIZING')
+        self.parameters = parameters
+        info_msg(self, 'INITIALIZED')
+
+    def treat_pyqtsignals(self, msg: Message):
+        try:
+            self.model_changed.emit(msg)
+        except MsgComNotKnown as e:
+            error_logger(self, self.treat_pyqtsignals, e)
+
+
+class StepMotorsGUIModel_old(QObject):
+
     model_changed = pyqtSignal(Message, name='SuperUser_model_changed')
 
     def __init__(self, app_folder: Path):
         super().__init__(parent=None)
-        self.name = 'SuperUserGUI:model: ' + get_local_ip()
+        self.name = 'StepMotorsGUI:model: ' + get_local_ip()
         self.app_folder = app_folder
         self.observers = []
         self.logger = module_logger

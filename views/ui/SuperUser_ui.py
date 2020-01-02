@@ -11,6 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 
 
 class Ui_SuperUser(object):
+
     def setupUi(self, SuperUser):
         SuperUser.setObjectName("SuperUser")
         SuperUser.resize(828, 630)
@@ -58,9 +59,12 @@ class Ui_SuperUser(object):
         self.chooseLayout.setObjectName("chooseLayout")
         self.rB_window = QtWidgets.QRadioButton(self.centralwidget)
         self.rB_window.setObjectName("rB_window")
+        self.rB_window.setChecked(True)
+        self.rB_window.setEnabled(False)
         self.chooseLayout.addWidget(self.rB_window)
         self.rB_local = QtWidgets.QRadioButton(self.centralwidget)
         self.rB_local.setObjectName("rB_local")
+        self.rB_local.setEnabled(False)
         self.chooseLayout.addWidget(self.rB_local)
         spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.chooseLayout.addItem(spacerItem1)

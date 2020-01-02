@@ -157,8 +157,10 @@ def gen_msg(com: str, device, **kwargs) -> mes.Message:
             if not msg_reply:
                 try:
                     data_info = mes_info_class(device.device_status,
+                                               device.id,
                                                device.description(),
                                                available_public_functions=device.available_public_functions())
+                    print(data_info)
                 except AttributeError:
                     raise
             else:

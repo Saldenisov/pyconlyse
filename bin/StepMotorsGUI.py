@@ -13,7 +13,7 @@ app_folder = str(Path(__file__).resolve().parents[1])
 sys.path.append(app_folder)
 
 from PyQt5.QtWidgets import QApplication
-from models.ClientGUIModels import StepMotorsModel
+from models.ClientGUIModels import StepMotorsGUIModel_old
 from controllers.ClientGUIControllers import StepMotorsController
 from logs_pack import initialize_logger
 
@@ -23,7 +23,7 @@ def main():
     logger = initialize_logger(path.parent / 'LOG', file_name="StepMotors")
     logger.info('Starting Step motors widget')
     app = QApplication(sys.argv)
-    StepMotorsController(StepMotorsModel(Path(app_folder)))
+    StepMotorsController(StepMotorsGUIModel_old(Path(app_folder)))
     sys.exit(app.exec())
 
 

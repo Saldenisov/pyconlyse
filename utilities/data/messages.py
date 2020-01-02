@@ -82,6 +82,7 @@ class ServiceStatusMes:
 @dataclass(frozen=True, order=True)
 class ServiceInfoMes:
     device_status: DeviceStatus
+    device_id: str = ''
     device_decription: str = ''
     available_public_functions: dict = field(default_factory=dict)
 
