@@ -88,20 +88,35 @@ class StepMotorsView(QMainWindow):
         self.device = self.model.superuser
 
         self.ui = Ui_StpMtrGUI()
-        self.ui.setupUi(self)
+        self.ui.setupUi(self, parameters)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.pushButton_move.clicked.connect(partial(self.controller.send_request_to_server, self.gen_move_msg()))
+        self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
+
+    def axis_value_change(self):
+        self.ui.retranslateUi(self)
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
     def gen_move_msg(self) -> Message:
-        #return gen_msg(com='move', device=self.device, where=None, how=None)
-        return None
+        if self.ui.radioButton_absolute.isChecked():
+            how = 'absolute'
+        else:
+            how = 'relative'
+        return gen_msg(com='service_command',
+                       device=self.device,
+                       command='move_pos',
+                       service_id=self.parameters.device_id,
+                       where=float(self.ui.lineEdit_value.text()),
+                       how=how)
+
+    def gen_stop_msg(self) -> Message:
+        return gen_msg(com='move_pos', device=self.device, where=None, how=None)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com

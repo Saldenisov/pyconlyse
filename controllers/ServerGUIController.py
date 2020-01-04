@@ -78,4 +78,5 @@ class ServerGUIController:
         except Exception as e:
             print(e)
         self.logger.info('Closing')
+        self.logger.info('Done')
         QApplication.quit()

@@ -298,21 +298,21 @@ class StpMtrCtrl_emulate(Service):
 
     def available_public_functions(self):
         return {'activate': ([[('axis',  [0,
-                                         [(0, 4, [])]])],
+                                         [(0, 3, [])]])],
                               (True, 'comments')],  # response
                              control),
                 'move_pos': ([[('axis',  [0,
-                                     [(0, 4, [])]]),
-                            ('position', [0.0,
-                                         [(0.0, 100.0, [0, 91]),
-                                         (-100.0, 100.0, [0, 50]),
-                                         (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
-                                         (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])
-                                         ]
-                                        ]
-                            )
-                                ],
-                            (0.0, 'comments')],  # response
+                                     [(0, 3, [])]]),
+                               ('position', [0.0,
+                                            [(0.0, 100.0, [0, 91]),
+                                             (-100.0, 100.0, [0, 50]),
+                                             (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
+                                             (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])
+                                            ]
+                                             ]
+                                )
+                                 ],
+                            ({'axis': 0, 'position': 0, 'comments': ""})],  # response
                              control),
                 'get_pos': ([[('axis', [0, [(0, 3, [])]])],
                              (0.0, 'comments')],  # response
@@ -323,7 +323,13 @@ class StpMtrCtrl_emulate(Service):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def description(self):
-        desc = """StpMtrCtrl_emulate service, 4 axes"""
+        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
+                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
+                'axes_values': [0, 3],
+                'ranges': [(0.0, 100.0, [0, 91]),
+                           (-100.0, 100.0, [0, 50]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
         return desc
 
     def _within_limits(self, axis:int, pos) -> bool:

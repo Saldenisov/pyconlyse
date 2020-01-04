@@ -12,6 +12,8 @@ from utilities.data.messages import *  # This line is required for json_to_messa
 module_logger = logging.getLogger(__name__)
 
 mes_types = ['demand', 'reply', 'info']
+
+
 commands = {'available_services': mes.MessageStructure('demand', None),
             'available_services_reply': mes.MessageStructure('reply', mes.AvailableServices),
             'error_message': mes.MessageStructure('reply', mes.Error),
