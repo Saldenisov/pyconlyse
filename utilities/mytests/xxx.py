@@ -1,19 +1,11 @@
-from time import sleep
-from threading import Timer
+class A:
+    B = 10
+    C = 'sdfsdf'
 
-def a(b):
-    print(b)
+    @staticmethod
+    def f(cls):
+        print(cls)
 
 
+A.f()
 
-if __name__ == '__main__':
-    i = 0
-    timer = Timer(3, a, ['kot'])
-    timer.start()
-
-    while i < 10:
-        sleep(0.5)
-        print(i)
-        i += 1
-
-    sleep(10)
