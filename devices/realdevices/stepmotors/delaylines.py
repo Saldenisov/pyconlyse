@@ -7,6 +7,7 @@ module_logger = logging.getLogger(__name__)
 
 control = 'control'
 observe = 'observe'
+info = 'info'
 
 # is not working anymore, no support is available
 class StpMtrCtrl_2axis(Service):
@@ -296,20 +297,26 @@ class StpMtrCtrl_emulate(Service):
         self.pos = [0.0, 0.0, 0.0, 0.0]
 
     def available_public_functions(self):
-        return {'activate': ([[], True], control),
+        return {'activate': ([[('axis',  [0,
+                                         [(0, 4, [])]])],
+                              (True, 'comments')],  # response
+                             control),
                 'move_pos': ([[('axis',  [0,
                                      [(0, 4, [])]]),
-                          ('position', [0.0,
-                                        [(0.0, 100.0, [0, 91]),
+                            ('position', [0.0,
+                                         [(0.0, 100.0, [0, 91]),
                                          (-100.0, 100.0, [0, 50]),
                                          (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
                                          (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])
                                          ]
                                         ]
-                           )
-                          ],
-                         (0.0, 'comments')], control),
-                'get_pos': ([[('axis', [0, [(0, 3, [])]])], (0.0, 'comments')], observe)
+                            )
+                                ],
+                            (0.0, 'comments')],  # response
+                             control),
+                'get_pos': ([[('axis', [0, [(0, 3, [])]])],
+                             (0.0, 'comments')],  # response
+                            observe),
                 }
 
     def GUI_bounds(self):
