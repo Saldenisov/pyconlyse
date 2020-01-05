@@ -88,7 +88,7 @@ def set_settings(com='Full'):
 
 
 
-coef,  TTL_width, delay_TTL, steps = set_settings('Sixteen')
+coef, TTL_width, delay_TTL, steps = set_settings('Sixteen')
 print("Sleep time is {}; Steps between positions is {}.".format(TTL_width, steps))
 
 

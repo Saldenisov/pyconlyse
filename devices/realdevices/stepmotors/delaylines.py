@@ -2,16 +2,19 @@ from devices.devices import Service
 import logging
 import ctypes
 from time import sleep
-from errors.myexceptions import CannotmoveDL, DeviceError
+from deprecated import deprecated
+
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
 observe = 'observe'
 info = 'info'
 
-# is not working anymore, no support is available
+
+@deprecated(version='1.0', reason="Class is not supported, the hardware controller is out of order")
 class StpMtrCtrl_2axis(Service):
     """
+    It is not working anymore, no support is available
     Defines class of Delay line
     """
 
