@@ -7,7 +7,7 @@ from typing import Dict, Union
 import zmq
 import cryptography as crypto
 from communication.interfaces import MessengerInter
-from communication.messaging.message_utils import json_to_message
+from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent import OrderedDictMod
@@ -247,7 +247,7 @@ class ClientMessenger(Messenger):
             sockets = dict(self.poller.poll(self._polling_time * 1000))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
-                mes: Message = json_to_message(mes)
+                mes: Message = MsgGenerator.json_to_message(mes)
                 # first heartbeat in principle could be received only from server
                 if mes.data.com == 'heartbeat':
                     sockets = mes.data.info.sockets
@@ -282,7 +282,7 @@ class ClientMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     msg = self.decrypt(msg)
-                                mes: Message = json_to_message(msg)
+                                mes: Message = MsgGenerator.json_to_message(msg)
                                 self.parent.decide_on_msg(mes)
                             msgs = []
                     #b = time()
@@ -444,7 +444,7 @@ class ServerMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     msg = self.decrypt(msg)
-                                mes: Message = json_to_message(msg)
+                                mes: Message = MsgGenerator.json_to_message(msg)
                                 self.parent.decide_on_msg(mes)
                             msgs = []
                     except (ValueError, Exception) as e:

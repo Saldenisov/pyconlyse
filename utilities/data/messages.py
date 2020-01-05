@@ -204,7 +204,8 @@ class Message(MessageInter):
 
 class MessageStructure(NamedTuple):
     type: str
-    mes_class: object #  DataClass
+    mes_class: object  # DataClass
+    mes_name: str = ""
 
 @dataclass
 class Test():

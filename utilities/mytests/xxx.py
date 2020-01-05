@@ -1,11 +1,9 @@
-class A:
-    B = 10
-    C = 'sdfsdf'
+class MsgGenerator:
+    AVAILABLE_SERVICES = 10
 
-    @staticmethod
-    def f(cls):
-        print(cls)
+    @property
+    def AVAILABLE_SERVICES(self):
+        return 0
 
 
-A.f()
-
+print(MsgGenerator().AVAILABLE_SERVICES)

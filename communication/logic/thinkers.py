@@ -1,5 +1,4 @@
 import logging
-from threading import Timer
 from time import time
 
 from communication.messaging.message_utils import gen_msg
