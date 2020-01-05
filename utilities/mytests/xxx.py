@@ -1,19 +1,9 @@
-from time import sleep
-from threading import Timer
+class MsgGenerator:
+    AVAILABLE_SERVICES = 10
 
-def a(b):
-    print(b)
+    @property
+    def AVAILABLE_SERVICES(self):
+        return 0
 
 
-
-if __name__ == '__main__':
-    i = 0
-    timer = Timer(3, a, ['kot'])
-    timer.start()
-
-    while i < 10:
-        sleep(0.5)
-        print(i)
-        i += 1
-
-    sleep(10)
+print(MsgGenerator().AVAILABLE_SERVICES)

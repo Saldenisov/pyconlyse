@@ -8,7 +8,7 @@ from time import sleep
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import MsgComNotKnown, DeviceError
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
