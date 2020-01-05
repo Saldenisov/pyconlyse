@@ -5,9 +5,10 @@ disable controller and switch off for doulbe protection
 so current does not run during waiting time
 
 4 axis are controlled at this moment with this peace of code
-"""
 
+"""
 import RPi.GPIO as GPIO  # import RPi.GPIO module
+
 from time import sleep
 
 
