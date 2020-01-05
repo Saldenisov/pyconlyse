@@ -1,7 +1,7 @@
 import logging
 from time import time
 
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.messages import Message, DeviceInfoMes
 from utilities.myfunc import info_msg, error_logger
@@ -36,7 +36,7 @@ class GeneralCmdLogic(Thinker):
                                     start_now=True)
                 self.parent.connections[data.info.device_id] = Connection(DeviceInfoMes(device_id=data.info.device_id,
                                                                                         messenger_id=msg.body.sender_id))
-                msg = gen_msg('hello', device=self.parent)
+                msg = MsgGenerator.hello(device=self.parent)
                 self.add_task_out(msg)
             else:
                 # TODO: potential danger of calling non-existing event
@@ -117,9 +117,10 @@ class ServerCmdLogic(Thinker):
                                 service_id=data.info.service_id, rec_id=service_msng_id)
                 self._forward_binding[msg_i.id] = msg
             else:
-                msg_i = [gen_msg('available_services_reply', device=self.parent, msg_i=msg),
-                         gen_msg(com='error_message', device=self.parent,
-                                 comments=f'service with id {data.info.service_id} is not available', msg_i=msg)]
+                msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
+                         MsgGenerator.error(device=self.parent,
+                                            comments=f'service with id {data.info.service_id} is not available',
+                                            msg_i=msg)]
         elif cmd == 'on_service':
             service_name = data.info.service_name
             services_running = self.messenger.parent.services_running
@@ -227,7 +228,7 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         super().react_reply(msg)
         data = msg.data
         if data.com == 'welcome':
-            msg = gen_msg('available_services', device=self.parent)
+            msg = MsgGenerator.available_services_demand(device=self.parent)
             self.add_task_out(msg)
         elif data.com == 'available_services_reply':
             if self.parent.pyqtsignal_connected:
@@ -265,6 +266,6 @@ class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
         reply = False
         msg_i = []
         if data.com == 'info_service_demand':
-            msg_i = gen_msg(com='info_service_reply', device=self.parent, msg_i=msg)
+            msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
             reply = True
         self.reply_msg(reply, msg_i)

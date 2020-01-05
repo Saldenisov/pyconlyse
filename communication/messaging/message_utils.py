@@ -19,11 +19,12 @@ INFO = 'info'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
-    COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward', 'heartbeat', 'hello',
+    # TODO: rename to _ style
+    _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward', 'heartbeat', 'hello',
                 'status_server_info', 'status_server_info_full', 'status_server_demand', 'status_server_reply',
                 'status_service', 'info_service_demand', 'info_service_reply', 'reply_on_forwarded_demand',
                 'status_client_info','status_client_demand', 'status_client_reply', 'shutdown_info', 'welcome_info']
-    AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
+    _AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
     FORWARD = mes.MessageStructure(REPLY, mes.Error, 'forward')  # TODO: think what to do with this
@@ -34,18 +35,18 @@ class MsgGenerator:
     STATUS_SERVER_DEMAND = mes.MessageStructure(DEMAND, None, 'status_server_demand')
     STATUS_SERVER_REPLY = mes.MessageStructure(REPLY, mes.ServerStatusMes, 'status_server_reply')
     STATUS_SERVICE_INFO = mes.MessageStructure(INFO, mes.ServiceStatusMes, 'status_service_info')
-    INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, mes.CheckService, 'info_service_demand')
+    _INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, mes.CheckService, 'info_service_demand')
     INFO_SERVICE_REPLY = mes.MessageStructure(REPLY, mes.ServiceInfoMes, 'info_service_reply')
     STATUS_CLIENT_INFO = mes.MessageStructure(INFO, mes.ClientStatusMes, 'status_client_info')
     STATUS_CLIENT_DEMAND = mes.MessageStructure(DEMAND, mes.CheckClient, 'status_client_demand')
     STATUS_CLIENT_REPLY = mes.MessageStructure(REPLY, mes.ClientStatusMes, 'status_client_reply')
     SHUTDOWN_INFO = mes.MessageStructure(INFO, mes.ShutDownMes, 'shutdown_info')
     REPLY_ON_FORWARDED_DEMAND = mes.MessageStructure(REPLY, None, 'reply_on_forwarded_demand')
-    WELCOME_INFO = mes.MessageStructure(REPLY, mes.DeviceInfoMes, 'welcome_info')
+    _WELCOME_INFO = mes.MessageStructure(REPLY, mes.DeviceInfoMes, 'welcome_info')
 
     @staticmethod
     def available_services_demand(device):
-        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_DEMAND, device)
+        return MsgGenerator._gen_msg(MsgGenerator._AVAILABLE_SERVICES_DEMAND, device)
 
     @staticmethod
     def available_services_reply(device, msg_i: mes.Message):
@@ -89,7 +90,7 @@ class MsgGenerator:
 
     @staticmethod
     def info_service_demand(device, service_id):
-        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, service_id=service_id)
+        return MsgGenerator._gen_msg(MsgGenerator._INFO_SERVICE_DEMAND, device=device, service_id=service_id)
 
     @staticmethod
     def info_service_reply(device, msg_i: mes.Message, msg_reply: Union[mes.Message, None] = None):
@@ -118,7 +119,7 @@ class MsgGenerator:
 
     @staticmethod
     def welcome_info(device):
-        return MsgGenerator._gen_msg(MsgGenerator.WELCOME_INFO, device=device)
+        return MsgGenerator._gen_msg(MsgGenerator._WELCOME_INFO, device=device)
 
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
@@ -258,7 +259,7 @@ class MsgGenerator:
         try:
             mes_class_var = isinstance(msg, mes.Message)
             mes_type_ver = True if msg.body.type in mes_types else False
-            mes_com_ver = True if msg.data.com in MsgGenerator.COMMANDS else False
+            mes_com_ver = True if msg.data.com in MsgGenerator._COMMANDS else False
             classname = msg.data.info.__class__.__name__
             mes_info_class_ver = True if classname in dir(mes) or msg.data.info is None else False
             return mes_class_var and mes_type_ver and mes_com_ver and mes_info_class_ver
