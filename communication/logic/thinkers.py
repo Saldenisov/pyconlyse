@@ -23,7 +23,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_info(self, msg: Message):
         data = msg.data
-        if data.com == 'heartbeat':
+        if data.com == MsgGenerator.HEARTBEAT.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             if data.info.device_id not in self.parent.connections:
@@ -50,7 +50,7 @@ class GeneralCmdLogic(Thinker):
     def react_reply(self, msg: Message):
         data = msg.data
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
-        if data.com == 'welcome':
+        if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             if data.info.device_id in self.parent.connections:
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
                 try:
@@ -92,7 +92,7 @@ class ServerCmdLogic(Thinker):
         # TODO: if section should be added to check weather device which send cmd is in connections or not
         # at this moment connections is dict with key = device_id
         if msg.body.sender_id in self.parent.connections:
-            if 'heartbeat' in data.com:
+            if MsgGenerator.HEARTBEAT.mes_name in data.com:
                 try:
                     self.events[data.info.event_id].time = time()
                     self.events[data.info.event_id].n = data.info.n
@@ -108,21 +108,21 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg.short()))
         reply = True
-        if cmd == 'info_service_demand':
+        if cmd == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
             if data.info.service_id in self.parent.connections:
                 # TODO: forward or something else?
                 #msg_i = gen_msg(com='forward', device=self.parent, msg_i=msg)
                 service_msng_id = self.parent.connections[data.info.service_id].device_info.messenger_id
                 msg_i = MsgGenerator.info_service_demand(device=self.parent,
-                                                         service_id=data.info.service_id)
-                                                         # TODO: what should I do with -> rec_id=service_msng_id)
+                                                         service_id=data.info.service_id,
+                                                         rec_id=service_msng_id)
                 self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
                                             comments=f'service with id {data.info.service_id} is not available',
                                             msg_i=msg)]
-        elif cmd == 'hello':
+        elif cmd == MsgGenerator.HELLO.mes_name:
             try:
                 device_info: DeviceInfoMes = data.info
                 connections = self.parent.connections
@@ -147,7 +147,7 @@ class ServerCmdLogic(Thinker):
             except Exception as e:
                 self.logger.error(e)
                 msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-        elif cmd == 'available_services':
+        elif cmd == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
             # from communication.logic.logic_functions import postponed_reaction
             msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
             # postponed_reaction(self.add_task_out, msg_i, 12, self.logger)
@@ -161,7 +161,7 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REPLY_IN', extra=str(msg.short))
         reply = False
-        if cmd == 'info_service_reply':
+        if cmd == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             if msg.reply_to in self.demands_pending_answer:
                 if msg.reply_to in self._forward_binding:
                     msg_i = MsgGenerator.info_service_reply(device=self.parent,
@@ -213,7 +213,7 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
     def react_reply(self, msg: Message):
         super().react_reply(msg)
         data = msg.data
-        if data.com == 'welcome':
+        if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             msg = MsgGenerator.available_services_demand(device=self.parent)
             self.add_task_out(msg)
         elif data.com == 'available_services_reply':

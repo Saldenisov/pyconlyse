@@ -19,37 +19,38 @@ INFO = 'info'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
+    # TODO: return back to without _ style
     _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward', 'heartbeat', 'hello',
                 'status_server_info', 'status_server_info_full', 'status_server_demand', 'status_server_reply',
                 'status_service', 'info_service_demand', 'info_service_reply', 'reply_on_forwarded_demand',
                 'status_client_info','status_client_demand', 'status_client_reply', 'shutdown_info', 'welcome_info']
-    _AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
-    _AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
+    AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
+    AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     _ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
     _FORWARD = mes.MessageStructure(REPLY, mes.Error, 'forward')  # TODO: think what to do with this
-    _HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
-    _HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
+    HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
+    HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
     _STATUS_SERVER_INFO = mes.MessageStructure(INFO, mes.ServerStatusMes, 'status_server_info')
     _STATUS_SERVER_INFO_FULL = mes.MessageStructure(INFO, mes.ServerStatusExtMes, 'status_server_info_full')
     _STATUS_SERVER_DEMAND = mes.MessageStructure(DEMAND, None, 'status_server_demand')
     _STATUS_SERVER_REPLY = mes.MessageStructure(REPLY, mes.ServerStatusMes, 'status_server_reply')
     _STATUS_SERVICE_INFO = mes.MessageStructure(INFO, mes.ServiceStatusMes, 'status_service_info')
-    _INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, mes.CheckService, 'info_service_demand')
-    _INFO_SERVICE_REPLY = mes.MessageStructure(REPLY, mes.ServiceInfoMes, 'info_service_reply')
+    INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, mes.CheckService, 'info_service_demand')
+    INFO_SERVICE_REPLY = mes.MessageStructure(REPLY, mes.ServiceInfoMes, 'info_service_reply')
     _STATUS_CLIENT_INFO = mes.MessageStructure(INFO, mes.ClientStatusMes, 'status_client_info')
     _STATUS_CLIENT_DEMAND = mes.MessageStructure(DEMAND, mes.CheckClient, 'status_client_demand')
     _STATUS_CLIENT_REPLY = mes.MessageStructure(REPLY, mes.ClientStatusMes, 'status_client_reply')
     _SHUTDOWN_INFO = mes.MessageStructure(INFO, mes.ShutDownMes, 'shutdown_info')
     _REPLY_ON_FORWARDED_DEMAND = mes.MessageStructure(REPLY, None, 'reply_on_forwarded_demand')
-    _WELCOME_INFO = mes.MessageStructure(REPLY, mes.DeviceInfoMes, 'welcome_info')
+    WELCOME_INFO = mes.MessageStructure(REPLY, mes.DeviceInfoMes, 'welcome_info')
 
     @staticmethod
     def available_services_demand(device):
-        return MsgGenerator._gen_msg(MsgGenerator._AVAILABLE_SERVICES_DEMAND, device)
+        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_DEMAND, device)
 
     @staticmethod
     def available_services_reply(device, msg_i: mes.Message):
-        return MsgGenerator._gen_msg(MsgGenerator._AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
+        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
     def error(device, msg_i: mes.Message, comments="nothing to say about this error..."):
@@ -61,11 +62,11 @@ class MsgGenerator:
 
     @staticmethod
     def heartbeat(device, event, n):
-        return MsgGenerator._gen_msg(MsgGenerator._HEARTBEAT, device=device, event=event, n=n)
+        return MsgGenerator._gen_msg(MsgGenerator.HEARTBEAT, device=device, event=event, n=n)
 
     @staticmethod
     def hello(device):
-        return MsgGenerator._gen_msg(MsgGenerator._HELLO, device=device)
+        return MsgGenerator._gen_msg(MsgGenerator.HELLO, device=device)
 
     @staticmethod
     def status_server_info(device):
@@ -89,11 +90,11 @@ class MsgGenerator:
 
     @staticmethod
     def info_service_demand(device, service_id):
-        return MsgGenerator._gen_msg(MsgGenerator._INFO_SERVICE_DEMAND, device=device, service_id=service_id)
+        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, service_id=service_id)
 
     @staticmethod
     def info_service_reply(device, msg_i: mes.Message, msg_reply: Union[mes.Message, None] = None):
-        return MsgGenerator._gen_msg(MsgGenerator._INFO_SERVICE_REPLY, device=device, msg_i=msg_i, msg_reply=msg_reply)
+        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_REPLY, device=device, msg_i=msg_i, msg_reply=msg_reply)
 
     @staticmethod
     def reply_on_forwarded_demand(device, msg_i: mes.Message, msg_reply: mes.Message):
@@ -118,7 +119,7 @@ class MsgGenerator:
 
     @staticmethod
     def welcome_info(device, msg_i):
-        return MsgGenerator._gen_msg(MsgGenerator._WELCOME_INFO, device=device, msg_i=msg_i)
+        return MsgGenerator._gen_msg(MsgGenerator.WELCOME_INFO, device=device, msg_i=msg_i)
 
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
@@ -175,7 +176,7 @@ class MsgGenerator:
                                            tick=event.tick,
                                            n=kwargs['n'],
                                            sockets=device.messenger.public_sockets)
-            elif com_name == 'hello':
+            elif com_name == MsgGenerator.HELLO.mes_name:
                 data_info = mes_info_class(name=device.name,
                                            device_id=device.id,
                                            messenger_id=device.messenger.id,
