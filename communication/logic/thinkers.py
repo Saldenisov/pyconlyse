@@ -101,7 +101,7 @@ class ServerCmdLogic(Thinker):
             elif data.com == 'shutdown':
                 # TODO: the info is not deleted from _frontend sockets or backend sockets
                 self.remove_device_from_connections(data.info.device_id)
-                self.parent.send_status_pyqt(com='status_server_full')
+                self.parent.send_status_pyqt(com='status_server_info_full')
 
     def react_demand(self, msg: Message):
         data = msg.data
@@ -113,28 +113,15 @@ class ServerCmdLogic(Thinker):
                 # TODO: forward or something else?
                 #msg_i = gen_msg(com='forward', device=self.parent, msg_i=msg)
                 service_msng_id = self.parent.connections[data.info.service_id].device_info.messenger_id
-                msg_i = gen_msg(com='info_service_demand', device=self.parent,
-                                service_id=data.info.service_id, rec_id=service_msng_id)
+                msg_i = MsgGenerator.info_service_demand(device=self.parent,
+                                                         service_id=data.info.service_id)
+                                                         # TODO: what should I do with -> rec_id=service_msng_id)
                 self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
                                             comments=f'service with id {data.info.service_id} is not available',
                                             msg_i=msg)]
-        elif cmd == 'on_service':
-            service_name = data.info.service_name
-            services_running = self.messenger.parent.services_running
-            key_s = None
-            for key in enumerate(services_running.keys()):
-                if service_name in key[1]:
-                    key_s = key[1]
-                    break
-            if key_s:
-                service = services_running[key_s]
-                service.turn_on()
-            else:
-                service = None
-            msg_i = gen_msg('status_service', self.messenger, msg_i=msg, service=service)
         elif cmd == 'hello':
             try:
                 device_info: DeviceInfoMes = data.info
@@ -153,20 +140,20 @@ class ServerCmdLogic(Thinker):
                                             event_id=f'heartbeat:{data.info.device_id}',
                                             original_owner=device_info.device_id,
                                             start_now=True)
-                    msg_i = gen_msg('welcome', device=self.parent, msg_i=msg)
-                    self.parent.send_status_pyqt(com='status_server_full')
+                    msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
+                    self.parent.send_status_pyqt(com='status_server_info_full')
                 else:
-                    msg_i = gen_msg('welcome', device=self.parent, msg_i=msg)
+                    msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
             except Exception as e:
                 self.logger.error(e)
-                msg_i = gen_msg('error_message', device=self.parent, comments=repr(e), msg_i=msg)
+                msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
         elif cmd == 'available_services':
             # from communication.logic.logic_functions import postponed_reaction
-            msg_i = gen_msg('available_services_reply', device=self.parent, msg_i=msg)
+            msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
             # postponed_reaction(self.add_task_out, msg_i, 12, self.logger)
             # reply = False
         else:
-            msg_i = gen_msg('unknown_message', device=self.parent, msg_i=msg)
+            msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
         self.reply_msg(reply, msg_i)
 
     def react_reply(self,  msg: Message):
@@ -177,10 +164,9 @@ class ServerCmdLogic(Thinker):
         if cmd == 'info_service_reply':
             if msg.reply_to in self.demands_pending_answer:
                 if msg.reply_to in self._forward_binding:
-                    msg_i = gen_msg(com='info_service_reply',
-                                    device=self.parent,
-                                    msg_i=self._forward_binding[msg.reply_to],
-                                    msg_reply=msg)
+                    msg_i = MsgGenerator.info_service_reply(device=self.parent,
+                                                            msg_i=self._forward_binding[msg.reply_to],
+                                                            msg_reply=msg)
                     reply = True
                 else:
                     self.logger.info(f'STRANGE info_service_reply')
@@ -191,7 +177,7 @@ class ServerCmdLogic(Thinker):
         self.reply_msg(reply, msg_i)
 
     def react_unknown(self, msg: Message):
-        msg_i = gen_msg('unknown_message', self.messenger, msg_i=msg)
+        msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
         info_msg(self, 'REPLY', extra=repr(msg_i))
         self.messenger.add_task_out(self.msg_i)
 
@@ -208,7 +194,7 @@ class ServerCmdLogic(Thinker):
                 except KeyError as e:
                     error_logger(self, self.react_internal, e)
                     self.unregister_event(event.id)
-                self.parent.send_status_pyqt(com='status_server_full')
+                self.parent.send_status_pyqt(com='status_server_info_full')
         else:
             self.logger.info(f'react_internal: I do not know what to do, {event.name} is not known')
 

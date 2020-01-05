@@ -47,7 +47,7 @@ class ServerGUIView(QMainWindow):
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
-        if com == 'status_server_full':
+        if com == 'status_server_info_full':
             if info.device_status.active:
                 text_widget = "Click to stop..."
                 color = 'background-color: green'

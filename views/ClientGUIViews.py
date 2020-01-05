@@ -18,7 +18,7 @@ from PyQt5.QtGui import QCloseEvent
 from numpy import pad
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
 from views.ui.SuperUser_ui import Ui_SuperUser
@@ -108,15 +108,14 @@ class StepMotorsView(QMainWindow):
             how = 'absolute'
         else:
             how = 'relative'
-        return gen_msg(com='service_command',
-                       device=self.device,
-                       command='move_pos',
-                       service_id=self.parameters.device_id,
-                       where=float(self.ui.lineEdit_value.text()),
-                       how=how)
+        #return gen_msg(com='service_command', device=self.device, command='move_pos',
+            # service_id=self.parameters.device_id,
+            # where=float(self.ui.lineEdit_value.text()),
+        # how=how)
 
     def gen_stop_msg(self) -> Message:
-        return gen_msg(com='move_pos', device=self.device, where=None, how=None)
+        pass
+        #return gen_msg(com='move_pos', device=self.device, where=None, how=None)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
