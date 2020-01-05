@@ -89,8 +89,9 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator._STATUS_SERVICE_INFO, device=device)
 
     @staticmethod
-    def info_service_demand(device, service_id):
-        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, service_id=service_id)
+    def info_service_demand(device, service_id, rec_id):
+        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, service_id=service_id,
+                                     rec_id=rec_id)
 
     @staticmethod
     def info_service_reply(device, msg_i: mes.Message, msg_reply: Union[mes.Message, None] = None):
@@ -115,7 +116,7 @@ class MsgGenerator:
 
     @staticmethod
     def shutdown_info(device, reason='unknown'):
-        return MsgGenerator._gen_msg(MsgGenerator._SHUTDOWN_INFO, device=device)
+        return MsgGenerator._gen_msg(MsgGenerator._SHUTDOWN_INFO, device=device, reason=reason)
 
     @staticmethod
     def welcome_info(device, msg_i):
@@ -123,6 +124,7 @@ class MsgGenerator:
 
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
+        # TODO: Remove any str in com
         type_com: str = command.type
         com_name: str = command.mes_name
         mes_info_class: mes.DataClass = command.mes_class
@@ -160,7 +162,7 @@ class MsgGenerator:
         #  main logic for functions
         try:
             crypted = True
-            if com_name == 'available_services_demand':
+            if com_name == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
                 data_info = None
             elif com_name == 'available_services_reply':
                 data_info = mes_info_class(device.services_running, all_services={})
@@ -206,7 +208,7 @@ class MsgGenerator:
                                            services_available=device.services_available)
             elif com_name == 'status_service_info':
                 data_info = mes_info_class(device.device_status)
-            elif com_name == 'info_service_demand':
+            elif com_name == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
                 data_info = mes_info_class(service_id=kwargs['service_id'])
             elif com_name == 'info_service_reply':
                 msg_reply = kwargs['msg_reply']
@@ -230,8 +232,7 @@ class MsgGenerator:
             elif com_name == 'status_client_reply':
                 data_info = mes_info_class(device.device_status)
             elif com_name == 'shutdown_info':
-                reason = kwargs['reason']
-                data_info = mes_info_class(device.id, reason=reason)
+                data_info = mes_info_class(device.id, reason=kwargs['reason'])
             elif com_name == 'welcome_info':
                 data_info = mes_info_class(name=device.name,
                                            device_id=device.id,
