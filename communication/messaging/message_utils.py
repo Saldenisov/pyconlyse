@@ -125,7 +125,6 @@ class MsgGenerator:
 
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
-        # TODO: Remove any str in com
         type_com: str = command.type
         com_name: str = command.mes_name
         mes_info_class: mes.DataClass = command.mes_class
@@ -165,12 +164,12 @@ class MsgGenerator:
             crypted = True
             if com_name == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
                 data_info = None
-            elif com_name == 'available_services_reply':
+            elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
                 data_info = mes_info_class(device.services_running, all_services={})
-            elif com_name == 'error':
+            elif com_name == MsgGenerator.ERROR.mes_name:
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
-            elif com_name == 'heartbeat':
+            elif com_name == MsgGenerator.HEARTBEAT.mes_name:
                 crypted = False
                 event = kwargs['event']
                 data_info = mes_info_class(event.id,
@@ -187,11 +186,11 @@ class MsgGenerator:
                                            class_type=device.__class__.__name__,
                                            device_status=device.device_status,
                                            public_sockets=device.messenger.public_sockets)
-            elif com_name == 'status_server_info':
+            elif com_name == MsgGenerator.STATUS_SERVER_INFO.mes_name:
                 data_info = mes_info_class(device.device_status,
                                            services_running=device.services_running,
                                            services_available=device.services_available)
-            elif com_name == 'status_server_info_full':
+            elif com_name == MsgGenerator.STATUS_SERVER_INFO_FULL.mes_name:
                 if device.thinker:
                     events = device.thinker.events
                 else:
@@ -201,17 +200,17 @@ class MsgGenerator:
                                            services_available=device.services_available,
                                            events_running=events,
                                            clients_running=device.clients_running)
-            elif com_name == 'status_server_demand':
+            elif com_name == MsgGenerator.STATUS_SERVER_DEMAND.mes_name:
                 data_info = mes_info_class
-            elif com_name == 'status_server_reply':
+            elif com_name == MsgGenerator.STATUS_SERVER_REPLY.mes_name:
                 data_info = mes_info_class(device.device_status,
                                            services_running=device.services_running,
                                            services_available=device.services_available)
-            elif com_name == 'status_service_info':
+            elif com_name == MsgGenerator.STATUS_SERVICE_INFO.mes_name:
                 data_info = mes_info_class(device.device_status)
             elif com_name == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
                 data_info = mes_info_class(service_id=kwargs['service_id'])
-            elif com_name == 'info_service_reply':
+            elif com_name == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
                 msg_reply = kwargs['msg_reply']
                 if not msg_reply:
                     try:
@@ -223,18 +222,18 @@ class MsgGenerator:
                         raise
                 else:
                     data_info = msg_reply.data.info
-            elif com_name == 'reply_on_forwarded_demand':
+            elif com_name == MsgGenerator.REPLY_ON_FORWARDED_DEMAND.mes_name:
                 msg_reply: Message = kwargs['msg_reply']
                 data_info = msg_reply.data.info
-            elif com_name == 'status_client_info':
+            elif com_name == MsgGenerator.STATUS_CLIENT_INFO.mes_name:
                 data_info = mes_info_class(device.device_status)
-            elif com_name == 'status_client_demand':
+            elif com_name == MsgGenerator.STATUS_CLIENT_DEMAND.mes_name:
                 data_info = mes_info_class(client_id=kwargs['client_id'])
-            elif com_name == 'status_client_reply':
+            elif com_name == MsgGenerator.STATUS_CLIENT_REPLY.mes_name:
                 data_info = mes_info_class(device.device_status)
-            elif com_name == 'shutdown_info':
+            elif com_name == MsgGenerator.SHUTDOWN_INFO.mes_name:
                 data_info = mes_info_class(device.id, reason=kwargs['reason'])
-            elif com_name == 'welcome_info':
+            elif com_name == MsgGenerator.WELCOME_INFO.mes_name:
                 data_info = mes_info_class(name=device.name,
                                            device_id=device.id,
                                            messenger_id=device.messenger.id,
