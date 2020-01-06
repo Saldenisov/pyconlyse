@@ -35,9 +35,12 @@ class AvailableServices:
     running_services: dict
     all_services: dict = field(default_factory=dict)
 
+
 @dataclass(frozen=True, order=True)
-class ForwardMessage:
-    forwarded: MessageInter
+class ForwardToService:
+    where_id: str
+    demand_forwarded: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
+
 
 @dataclass(order=True)
 class MessengerInfoMes:
@@ -83,7 +86,7 @@ class ServiceStatusMes:
 class ServiceInfoMes:
     device_status: DeviceStatus = DeviceStatus()
     device_id: str = ''
-    device_decription: dict = field(default_factory=dict)
+    device_description: dict = field(default_factory=dict)
     available_public_functions: dict = field(default_factory=dict)
 
 
@@ -155,8 +158,8 @@ class Test:
 # General structure of message
 @dataclass(order=True)
 class MessageData:
-    com: str # command
-    info: object # DataClass
+    com: str  # command
+    info: object  # DataClass
 
 
 @dataclass(order=True)

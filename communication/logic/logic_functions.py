@@ -6,7 +6,7 @@ from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import ThinkerErrorReact
 from utilities.data.datastructures.mes_dependent import OrderedDictMod, PendingDemand, PendingReply
 from utilities.data.messages import Message
-from utilities.myfunc import info_msg
+from utilities.myfunc import info_msg, error_logger
 
 
 def external_hb_logic(event: ThinkerEvent):
@@ -149,7 +149,7 @@ def pending_demands(event: ThinkerEvent):
                             except KeyError:
                                 info_msg(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_demands')
                 except (ThinkerErrorReact, Exception) as e:
-                    info_msg(event, event.run, e)
+                    error_logger(event, event.run, e)
         else:
             sleep(0.5)
 

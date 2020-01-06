@@ -294,29 +294,12 @@ class StpMtrCtrl_emulate(Service):
         super().__init__(**kwargs)
         self._axis_number = 4
         self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
-        self.pos = [0.0, 0.0, 0.0, 0.0]
+        self._pos = [0.0, 0.0, 0.0, 0.0]
 
     def available_public_functions(self):
-        return {'activate': ([[('axis',  [0,
-                                         [(0, 3, [])]])],
-                              (True, 'comments')],  # response
-                             control),
-                'move_pos': ([[('axis',  [0,
-                                     [(0, 3, [])]]),
-                               ('position', [0.0,
-                                            [(0.0, 100.0, [0, 91]),
-                                             (-100.0, 100.0, [0, 50]),
-                                             (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
-                                             (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])
-                                            ]
-                                             ]
-                                )
-                                 ],
-                            ({'axis': 0, 'position': 0, 'comments': ""})],  # response
-                             control),
-                'get_pos': ([[('axis', [0, [(0, 3, [])]])],
-                             (0.0, 'comments')],  # response
-                            observe),
+        return {'activate': {'axis': 0, 'flag': True},
+                'move_to': {'axis': 0, 'pos': 0, 'how': 'absolute'},
+                'get_pos': {'axis': 0},
                 }
 
     def GUI_bounds(self):
@@ -348,7 +331,7 @@ class StpMtrCtrl_emulate(Service):
         if chk_axis:
             chk_lmt, comments = self._within_limits()
             if chk_lmt:
-                self.pos[axis] = pos
+                self._pos[axis] = pos
                 sleep(pos / 1000. * 5)
                 return self.get_pos(axis), comments
             else:
@@ -359,7 +342,7 @@ class StpMtrCtrl_emulate(Service):
     def get_pos(self, axis: int) -> float:
         res, comments = self._check_axis(axis)
         if res:
-            return self.pos[axis], comments
+            return self._pos[axis], comments
         else:
             return None, comments
 

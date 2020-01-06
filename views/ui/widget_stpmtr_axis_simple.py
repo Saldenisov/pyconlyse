@@ -33,8 +33,8 @@ class Ui_StpMtrGUI(object):
         self.spinBox_axis = QtWidgets.QSpinBox(self.centralwidget)
         self.spinBox_axis.setObjectName("spinBox")
         try:
-            self.spinBox_axis.setMinimum(self.parameters.device_decription['axes_values'][0])
-            self.spinBox_axis.setMaximum(self.parameters.device_decription['axes_values'][1])
+            self.spinBox_axis.setMinimum(self.parameters.device_description['axes_values'][0])
+            self.spinBox_axis.setMaximum(self.parameters.device_description['axes_values'][1])
         except KeyError:
             self.spinBox_axis.setMinimum(0)
             self.spinBox_axis.setMaximum(1)
@@ -108,11 +108,11 @@ class Ui_StpMtrGUI(object):
     def retranslateUi(self, StpMtrGUI):
         _translate = QtCore.QCoreApplication.translate
         try:
-            title = self.parameters.device_decription['GUI_title']
+            title = self.parameters.device_description['GUI_title']
             axis = int(self.spinBox_axis.value())
-            name = self.parameters.device_decription['axes_names'][axis]
-            ranges = str(self.parameters.device_decription['ranges'][axis][0:2])
-            preset = self.parameters.device_decription['ranges'][axis][2]
+            name = self.parameters.device_description['axes_names'][axis]
+            ranges = str(self.parameters.device_description['ranges'][axis][0:2])
+            preset = self.parameters.device_description['ranges'][axis][2]
             preset_list_str = []
             i = 0
             for item in preset:
