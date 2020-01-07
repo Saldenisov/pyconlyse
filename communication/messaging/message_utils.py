@@ -16,11 +16,12 @@ module_logger = logging.getLogger(__name__)
 DEMAND = 'demand'
 REPLY = 'reply'
 INFO = 'info'
+FORWARD = 'forward'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
     # TODO: return back to without _ style
-    _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward',
+    _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward_msg',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
                  'reply_on_forwarded_demand', 'status_client_info','status_client_demand', 'status_client_reply',
@@ -28,7 +29,7 @@ class MsgGenerator:
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
-    FORWARD = mes.MessageStructure(REPLY, mes.Forward, 'forward')
+    FORWARD_MSG = mes.MessageStructure(FORWARD, mes.forward_msg, 'forward_msg')
     HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
     HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
     STATUS_SERVER_INFO = mes.MessageStructure(INFO, mes.ServerStatusMes, 'status_server_info')
@@ -58,8 +59,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.ERROR, device=device, msg_i=msg_i, comments=comments)
 
     @staticmethod
-    def forward(device, msg_i):
-        return MsgGenerator._gen_msg(MsgGenerator.FORWARD, device=device, msg_i=msg_i)
+    def forward_msg(device, msg_i):
+        return MsgGenerator._gen_msg(MsgGenerator.FORWARD_MSG, device=device, msg_i=msg_i)
 
     @staticmethod
     def heartbeat(device, event, n):
@@ -125,6 +126,11 @@ class MsgGenerator:
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
         type_com: str = command.type
+
+        if type_com == FORWARD:
+            msg_i = kwargs['msg_i']
+            return msg_i
+
         com_name: str = command.mes_name
         mes_info_class: mes.DataClass = command.mes_class
         reply_to = ''
@@ -151,12 +157,12 @@ class MsgGenerator:
             module_logger.error(f'IN gen_msg point1 {e}')
             raise e
 
-        if type_com != 'reply':
+        if type_com in [DEMAND, INFO]:
             body = mes.MessageBody(type_com, ms_id, rec_id)
         else:
             msg_i: mes.Message = kwargs['msg_i']
-            body = MessageBody(type_com, ms.id, msg_i.body.sender_id)
             reply_to = msg_i.id
+            body = MessageBody(type_com, ms.id, msg_i.body.sender_id)
 
         #  main logic for functions
         try:
@@ -168,10 +174,8 @@ class MsgGenerator:
             elif com_name == MsgGenerator.ERROR.mes_name:
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
-            elif com_name == MsgGenerator.FORWARD.mes_name:
-                msg_i = kwargs['msg_i']
-                body.receiver_id = msg_i.body.receiver_id
-                data_info = msg_i.data.info
+            elif com_name == MsgGenerator.FORWARD_MSG.mes_name:
+                pass
             elif com_name == MsgGenerator.HEARTBEAT.mes_name:
                 crypted = False
                 event = kwargs['event']
@@ -240,6 +244,8 @@ class MsgGenerator:
                                            public_sockets=device.messenger.public_sockets)
             else:
                 raise MsgComNotKnown(com_name)
+
+
 
             msg = mes.Message(body, mes.MessageData(com_name, data_info), reply_to=reply_to, crypted=crypted)
 

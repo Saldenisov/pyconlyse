@@ -112,9 +112,10 @@ class ServerCmdLogic(Thinker):
 
         if msg.body.receiver_id != self.parent.id:
             if msg.body.receiver_id in self.parent.connections:
-                msg_i = MsgGenerator.forward(device=self.parent,
-                                             msg_i=msg)
-                self._forward_binding[msg_i.id] = msg
+                msg_i = MsgGenerator.forward_msg(device=self.parent,
+                                                 msg_i=msg)
+                print(1000000, msg_i)
+                #self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
@@ -157,22 +158,16 @@ class ServerCmdLogic(Thinker):
     def react_reply(self,  msg: Message):
         data = msg.data
         cmd = data.com
-        info_msg(self, 'REPLY_IN', extra=str(msg.short))
+        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
         reply = False
 
-        if cmd == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
-            if msg.reply_to in self.demands_pending_answer:
-                if msg.reply_to in self._forward_binding:
-                    msg_i = MsgGenerator.forward(device=self.parent,
-                                                 msg_i=msg)
-                    reply = True
-                else:
-                    # TODO: should here be something?
-                    pass
+        if msg.body.receiver_id != self.parent.id:
+            msg_i = MsgGenerator.forward_msg(device=self.parent,
+                                             msg_i=msg)
+            reply = True
 
-                del self._forward_binding[msg.reply_to]
-            else:
-                self.logger.info(f'Reply arrived too late')
+        else:
+            pass
         self.reply_msg(reply, msg_i)
 
     def react_unknown(self, msg: Message):
