@@ -20,7 +20,7 @@ mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
     # TODO: return back to without _ style
-    _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward_to_service',
+    _COMMANDS = ['available_services_demand', 'available_services_reply', 'error', 'forward',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
                  'reply_on_forwarded_demand', 'status_client_info','status_client_demand', 'status_client_reply',
@@ -28,7 +28,7 @@ class MsgGenerator:
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
-    FORWARD_TO_SERVICE = mes.MessageStructure(REPLY, mes.ForwardToService, 'forward_to_service')
+    FORWARD = mes.MessageStructure(REPLY, mes.Forward, 'forward')
     HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
     HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
     STATUS_SERVER_INFO = mes.MessageStructure(INFO, mes.ServerStatusMes, 'status_server_info')
@@ -36,7 +36,7 @@ class MsgGenerator:
     STATUS_SERVER_DEMAND = mes.MessageStructure(DEMAND, None, 'status_server_demand')
     STATUS_SERVER_REPLY = mes.MessageStructure(REPLY, mes.ServerStatusMes, 'status_server_reply')
     STATUS_SERVICE_INFO = mes.MessageStructure(INFO, mes.ServiceStatusMes, 'status_service_info')
-    INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, mes.CheckService, 'info_service_demand')
+    INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, None, 'info_service_demand')
     INFO_SERVICE_REPLY = mes.MessageStructure(REPLY, mes.ServiceInfoMes, 'info_service_reply')
     STATUS_CLIENT_INFO = mes.MessageStructure(INFO, mes.ClientStatusMes, 'status_client_info')
     STATUS_CLIENT_DEMAND = mes.MessageStructure(DEMAND, mes.CheckClient, 'status_client_demand')
@@ -58,8 +58,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.ERROR, device=device, msg_i=msg_i, comments=comments)
 
     @staticmethod
-    def forward(device, msg_i: mes.Message):
-        return MsgGenerator._gen_msg(MsgGenerator.FORWARD, device=device, msg_i=msg_i)
+    def forward_to_service(device, msg_to_forward):
+        return MsgGenerator._gen_msg(MsgGenerator.FORWARD, device=device, msg_to_forward=msg_to_forward)
 
     @staticmethod
     def heartbeat(device, event, n):
@@ -90,9 +90,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.STATUS_SERVICE_INFO, device=device)
 
     @staticmethod
-    def info_service_demand(device, service_id, rec_id):
-        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, service_id=service_id,
-                                     rec_id=rec_id)
+    def info_service_demand(device, service_id):
+        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, rec_id=service_id)
 
     @staticmethod
     def info_service_reply(device, msg_i: mes.Message, msg_reply: Union[mes.Message, None] = None):
@@ -169,6 +168,10 @@ class MsgGenerator:
             elif com_name == MsgGenerator.ERROR.mes_name:
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
+            elif com_name == MsgGenerator.FORWARD.mes_name:
+                msg_to_forward = kwargs['msg_to_forward']
+                body.receiver_id = msg_i.body.receiver_id
+                data_info = msg_to_forward.data.info
             elif com_name == MsgGenerator.HEARTBEAT.mes_name:
                 crypted = False
                 event = kwargs['event']
@@ -201,7 +204,7 @@ class MsgGenerator:
                                            events_running=events,
                                            clients_running=device.clients_running)
             elif com_name == MsgGenerator.STATUS_SERVER_DEMAND.mes_name:
-                data_info = mes_info_class
+                data_info = None
             elif com_name == MsgGenerator.STATUS_SERVER_REPLY.mes_name:
                 data_info = mes_info_class(device.device_status,
                                            services_running=device.services_running,
@@ -209,7 +212,8 @@ class MsgGenerator:
             elif com_name == MsgGenerator.STATUS_SERVICE_INFO.mes_name:
                 data_info = mes_info_class(device.device_status)
             elif com_name == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
-                data_info = mes_info_class(service_id=kwargs['service_id'])
+                body.receiver_id = kwargs['rec_id']
+                data_info = None
             elif com_name == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
                 msg_reply = kwargs['msg_reply']
                 if not msg_reply:

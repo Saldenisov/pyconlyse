@@ -108,21 +108,19 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg.short()))
         reply = True
-        if cmd == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
-            if data.info.service_id in self.parent.connections:
-                # TODO: forward or something else?
-                #msg_i = gen_msg(com='forward', device=self.parent, msg_i=msg)
-                service_msng_id = self.parent.connections[data.info.service_id].device_info.messenger_id
-                msg_i = MsgGenerator.info_service_demand(device=self.parent,
-                                                         service_id=data.info.service_id,
-                                                         rec_id=service_msng_id)
+
+        if msg.body.receiver_id != self.parent.id:
+            if msg.body.receiver_id in self.parent.connections:
+                msg_i = MsgGenerator.forward_to_service(device=self.parent,
+                                                        msg_to_forward=msg)
                 self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
-                                            comments=f'service with id {data.info.service_id} is not available',
+                                            comments=f'service {data.info.service_id} is not available anymore',
                                             msg_i=msg)]
-        elif cmd == MsgGenerator.HELLO.mes_name:
+
+        if cmd == MsgGenerator.HELLO.mes_name:
             try:
                 device_info: DeviceInfoMes = data.info
                 connections = self.parent.connections
@@ -169,7 +167,8 @@ class ServerCmdLogic(Thinker):
                                                             msg_reply=msg)
                     reply = True
                 else:
-                    self.logger.info(f'STRANGE info_service_reply')
+                    # TODO: should here be something?
+                    pass
 
                 del self._forward_binding[msg.reply_to]
             else:

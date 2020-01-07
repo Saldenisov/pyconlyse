@@ -37,9 +37,9 @@ class AvailableServices:
 
 
 @dataclass(frozen=True, order=True)
-class ForwardToService:
-    where_id: str
-    demand_forwarded: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
+class Forward:
+    service_id: str
+    demand: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
 
 
 @dataclass(order=True)
