@@ -9,7 +9,7 @@ import logging
 import pathlib
 from time import sleep
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message
 from views.ClientGUIViews import SuperUserView, StepMotorsView
@@ -64,6 +64,9 @@ class SuperClientGUIcontroller():
             self.view_stpmtr = StepMotorsView(in_controller=self, in_model=self.model, parameters=parameters)
             self.view_stpmtr.show()
             self.logger.info(f'GUI for service {service_id} is started')
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,
+                                     parameters={})
+            self.device.send_msg_externally(msg)
         except Exception as e:
             print(e)
 
@@ -72,12 +75,11 @@ class SuperClientGUIcontroller():
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text().split(':')[2]
-        msg = gen_msg(com='info_service_demand', device=self.device,
-                      service_id=service_id, rec_id=self.device.server_msgn_id)
-        self.device.thinker.add_task_out(msg)
+        msg = MsgGenerator.info_service_demand(device=self.device, service_id=service_id)
+        self.device.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
-        msg = gen_msg('available_services', device=self.device)
+        msg = MsgGenerator.available_services_demand(device=self.device)
         self.device.thinker.add_task_out(msg)
 
     def quit_clicked(self, event, total_close=False):

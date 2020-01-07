@@ -13,4 +13,8 @@
 
 *.json
 /views/ui/widget_stpmtr_axis.py
+<<<<<<< HEAD
 .idea/
+=======
+.idea/pyconlyse.iml
+>>>>>>> develop

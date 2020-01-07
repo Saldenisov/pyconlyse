@@ -15,7 +15,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
 from communication.interfaces import ThinkerInter, MessengerInter
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
@@ -134,12 +134,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         sleep(0.1)
         info_msg(self, 'STARTED')
         self.device_status.on = True
-        self.device_status.active = True
+        self.activate()
         self.send_status_pyqt()
 
     def stop(self):
         info_msg(self, 'STOPPING')
-        stop_msg = gen_msg(com='shutdown', device=self, reason='normal shutdown')
+        stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
         self.messenger.send_msg(stop_msg)
         sleep(1)
         self.thinker.pause()
@@ -161,13 +161,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def messenger_settings(self):
         pass
 
-    @abstractmethod
     def activate(self):
-        pass
+        self.device_status.active = True
 
-    @abstractmethod
     def deactivate(self):
-        pass
+        self.device_status.active = False
 
     def info(self):
         from collections import OrderedDict as od
@@ -179,9 +177,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         return info
 
     def send_status_pyqt(self, com=''):
+        # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
         if self.pyqtsignal_connected:
-            msg = gen_msg(com=com, device=self)
-            self.signal.emit(msg)
+            if com == 'status_server_info_full':
+                msg = MsgGenerator.status_server_info_full(device=self)
+            elif com == 'status_server_info':
+                msg = MsgGenerator.status_server_info(device=self)
+            elif com == 'status_client_info':
+                msg = MsgGenerator.status_client_info(device=self)
+            else:
+                self.logger.error(f'send_status_pyqt com {com} is not known')
+                msg = None
+            if msg:
+                self.signal.emit(msg)
         else:
             self.logger.info(f'pyqtsignal_connected is {self.pyqtsignal_connected}, the signal cannot be emitted')
 
@@ -284,7 +292,7 @@ class Server(Device):
         self.services_available = ['DLemulate', 'DL2axis']
 
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_server_full')
+        super().send_status_pyqt(com='status_server_info_full')
 
 
 class Service(Device):
@@ -309,17 +317,18 @@ class Service(Device):
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
-    def activate(self):
+    @abstractmethod
+    def available_public_functions(self):
         pass
-
-    def deactivate(self):
+    @abstractmethod
+    def execute_com(self, com: str, parameters: dict):
         pass
 
     def messenger_settings(self):
         self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
 
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_service')
+        super().send_status_pyqt(com='status_service_info')
 
 
 class Client(Device):
@@ -352,14 +361,8 @@ class Client(Device):
         else:
             self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
 
-    def activate(self):
-        pass
-
-    def deactivate(self):
-        pass
-
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_client')
+        super().send_status_pyqt(com='status_client_info')
 
 
 class DeviceFactory:

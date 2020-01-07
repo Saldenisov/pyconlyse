@@ -18,3 +18,4 @@ class DeviceParts(DataClass_frozen):
     thinker: ThinkerInter
     decider: DeciderInter
     executor: ExecutorInter
+

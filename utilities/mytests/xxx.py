@@ -1,19 +1,21 @@
-from time import sleep
-from threading import Timer
+import inspect as ins
 
-def a(b):
-    print(b)
+class A:
+
+    def b(self, a, b):
+        print(f'{a}  {b}')
+
+    def c(self):
+        method_list = [func for func in dir(A) if callable(getattr(A, func))]
+        print(method_list)
+
+    def d(self, com='b', parameters={}):
+        f = getattr(self, com)
+        if parameters.keys() == ins.signature(f).parameters.keys():
+            f(**parameters)
+        else:
+            print('error')
 
 
-
-if __name__ == '__main__':
-    i = 0
-    timer = Timer(3, a, ['kot'])
-    timer.start()
-
-    while i < 10:
-        sleep(0.5)
-        print(i)
-        i += 1
-
-    sleep(10)
+a = A()
+a.d(parameters={'b':1000, 'a': 232234, 'k':234})

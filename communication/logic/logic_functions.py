@@ -2,11 +2,11 @@ from time import sleep, time
 from threading import Thread
 from typing import Union, Callable
 from communication.logic.thinkers import Thinker, ThinkerEvent
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import ThinkerErrorReact
 from utilities.data.datastructures.mes_dependent import OrderedDictMod, PendingDemand, PendingReply
 from utilities.data.messages import Message
-from utilities.myfunc import info_msg
+from utilities.myfunc import info_msg, error_logger
 
 
 def external_hb_logic(event: ThinkerEvent):
@@ -51,7 +51,7 @@ def internal_hb_logic(event: ThinkerEvent):
         if not event.paused:
             i += 1
             sleep(event.tick)
-            msg = gen_msg('heartbeat', device, event=event, n=i)
+            msg = MsgGenerator.heartbeat(device, event=event, n=i)
             thinker.add_task_out(msg)
         else:
             sleep(0.5)
@@ -64,8 +64,9 @@ def internal_info_logic(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            msg = gen_msg('device_info_short', device, event=event)
-            thinker.add_task_out(msg)
+            # TODO': requires update
+            #msg = MsgGenerator.degen_msg('device_info_short', device, event=event)
+            #thinker.add_task_out(msg)
         else:
             sleep(0.5)
 
@@ -148,7 +149,7 @@ def pending_demands(event: ThinkerEvent):
                             except KeyError:
                                 info_msg(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_demands')
                 except (ThinkerErrorReact, Exception) as e:
-                    info_msg(event, event.run, e)
+                    error_logger(event, event.run, e)
         else:
             sleep(0.5)
 
@@ -170,9 +171,9 @@ def pending_replies(event: ThinkerEvent):
                             thinker.logger.info(f'Pending reply message waits {pending.attempt}: {pending.message}')
                         elif (time() - event.time) > event.tick and pending.attempt >= 3:
                             try:
-                                # TODO: xxxx
+                                # TODO: xxxx including correct error msg comments
                                 msg = pending.message
-                                msg_out = gen_msg(com='error_message', device=device, msg_i=msg, comments='timeout')
+                                msg_out = MsgGenerator.error(device=device, msg_i=msg, comments='timeout')
                                 thinker.add_task_out(msg_out)
                                 del tasks[key]
                                 event.logger.error(f'Timeout for reply msg: {msg}')
