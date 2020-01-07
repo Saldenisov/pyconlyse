@@ -44,7 +44,8 @@ class ServerGUIModel(QObject):
                                                         name='Server',
                                                         db_path=self.db_path,
                                                         pyqtslot=self.treat_pyqtsignals,
-                                                        logger_new=False)
+                                                        logger_new=False,
+                                                        id="Server:Main:sfqvtyjsdf23qa23xcv")
                 self.server.start()
             except (DeviceError) as e:
                 self.logger.error(e)

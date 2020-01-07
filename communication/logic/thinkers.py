@@ -121,38 +121,37 @@ class ServerCmdLogic(Thinker):
                                             comments=f'service {data.info.service_id} is not available anymore',
                                             msg_i=msg)]
 
-        if cmd == MsgGenerator.HELLO.mes_name:
-            try:
-                device_info: DeviceInfoMes = data.info
-                connections = self.parent.connections
-                if data.info.type not in ('service', 'client'):
-                    raise Exception(f'{self}:{device_info.type} is not known')
-
-                if device_info.device_id not in connections:
-                    connections[device_info.device_id] = Connection(device_info=data.info)
-                    if 'publisher' in device_info.public_sockets:
-                        from communication.logic.logic_functions import external_hb_logic
-                        self.parent.messenger.subscribe_sub(address=device_info.public_sockets['publisher'])
-                        a = f'heartbeat:{data.info.name}'
-                        self.register_event(name=f'heartbeat:{data.info.name}',
-                                            logic_func=external_hb_logic,
-                                            event_id=f'heartbeat:{data.info.device_id}',
-                                            original_owner=device_info.device_id,
-                                            start_now=True)
-                    msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
-                    self.parent.send_status_pyqt(com='status_server_info_full')
-                else:
-                    msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
-            except Exception as e:
-                self.logger.error(e)
-                msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-        elif cmd == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
-            # from communication.logic.logic_functions import postponed_reaction
-            msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
-            # postponed_reaction(self.add_task_out, msg_i, 12, self.logger)
-            # reply = False
         else:
-            msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
+            if cmd == MsgGenerator.HELLO.mes_name:
+                try:
+                    device_info: DeviceInfoMes = data.info
+                    connections = self.parent.connections
+                    if data.info.type not in ('service', 'client'):
+                        raise Exception(f'{self}:{device_info.type} is not known')
+
+                    if device_info.device_id not in connections:
+                        connections[device_info.device_id] = Connection(device_info=data.info)
+                        if 'publisher' in device_info.public_sockets:
+                            from communication.logic.logic_functions import external_hb_logic
+                            self.parent.messenger.subscribe_sub(address=device_info.public_sockets['publisher'])
+                            a = f'heartbeat:{data.info.name}'
+                            self.register_event(name=f'heartbeat:{data.info.name}',
+                                                logic_func=external_hb_logic,
+                                                event_id=f'heartbeat:{data.info.device_id}',
+                                                original_owner=device_info.device_id,
+                                                start_now=True)
+                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
+                        self.parent.send_status_pyqt(com='status_server_info_full')
+                    else:
+                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
+                except Exception as e:
+                    self.logger.error(e)
+                    msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
+            elif cmd == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
+                msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
+            else:
+                msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
+                                           comments=f'Unknown Message com: {msg.data.com}')
         self.reply_msg(reply, msg_i)
 
     def react_reply(self,  msg: Message):
@@ -219,17 +218,10 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         elif data.com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
-            try:
-                del self.demands_pending_answer[msg.reply_to]
-            except KeyError as e:
-                self.logger.error(f'react_reply: {e}')
         elif data.com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
+            print(10000000)
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
-            try:
-                del self.demands_pending_answer[msg.reply_to]
-            except KeyError as e:
-                self.logger.error(f'react_reply: {e}')
         elif data.com == MsgGenerator.ERROR.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
