@@ -49,10 +49,7 @@ class SuperUserGUIModel(QObject):
         pass
 
     def treat_pyqtsignals(self, msg: Message):
-        try:
-            self.model_changed.emit(msg)
-        except MsgComNotKnown as e:
-            error_logger(self, self.treat_pyqtsignals, e)
+        self.model_changed.emit(msg)
 
 
 class StepMotorsGUIModel(QObject):

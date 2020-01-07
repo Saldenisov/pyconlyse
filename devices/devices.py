@@ -134,7 +134,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         sleep(0.1)
         info_msg(self, 'STARTED')
         self.device_status.on = True
-        self.device_status.active = True
+        self.activate()
         self.send_status_pyqt()
 
     def stop(self):
@@ -161,13 +161,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def messenger_settings(self):
         pass
 
-    @abstractmethod
     def activate(self):
-        pass
+        self.device_status.active = True
 
-    @abstractmethod
     def deactivate(self):
-        pass
+        self.device_status.active = False
 
     def info(self):
         from collections import OrderedDict as od
@@ -319,10 +317,11 @@ class Service(Device):
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
-    def activate(self):
+    @abstractmethod
+    def available_public_functions(self):
         pass
-
-    def deactivate(self):
+    @abstractmethod
+    def execute_com(self, com: str, parameters: dict):
         pass
 
     def messenger_settings(self):
@@ -361,12 +360,6 @@ class Client(Device):
                 self.messenger.subscribe_sub(address=adr)
         else:
             self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
-
-    def activate(self):
-        pass
-
-    def deactivate(self):
-        pass
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')

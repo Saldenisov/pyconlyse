@@ -96,10 +96,15 @@ class StepMotorsView(QMainWindow):
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
-        self.ui.pushButton_move.clicked.connect(partial(self.controller.send_request_to_server, self.gen_move_msg()))
+        self.ui.pushButton_move.clicked.connect(self.move_axis)
+        self.ui.checkBox_On.stateChanged.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
+
+    def test(self):
+        #partial(self.controller.send_request_to_server, self.gen_activate_axis())
+        print(self.ui.checkBox_On.isChecked())
 
     def axis_value_change(self):
         self.ui.retranslateUi(self)
@@ -107,23 +112,35 @@ class StepMotorsView(QMainWindow):
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
-    def gen_move_msg(self) -> Message:
+    def activate_axis(self) -> Message:
+        msg = MsgGenerator.do_it(device=self.device, com='activate_axis', service_id=self.parameters.device_id,
+                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                              'flag': self.ui.checkBox_On.isChecked()})
+        self.device.send_msg_externally(msg)
+
+    def move_axis(self) -> Message:
         if self.ui.radioButton_absolute.isChecked():
             how = 'absolute'
         else:
             how = 'relative'
-        #return gen_msg(com='service_command', device=self.device, command='move_pos',
-            # service_id=self.parameters.device_id,
-            # where=float(self.ui.lineEdit_value.text()),
-        # how=how)
+        msg = MsgGenerator.do_it(com='move_to', device=self.device, service_id=self.parameters.device_id,
+                                      parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                                  'pos': float(self.ui.lineEdit_value.text()),
+                                                  'how': how})
+        self.device.send_msg_externally(msg)
 
-    def gen_stop_msg(self) -> Message:
+    def stop_axis(self) -> Message:
         pass
         #return gen_msg(com='move_pos', device=self.device, where=None, how=None)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
+        if com == MsgGenerator.DONE_IT.mes_name:
+            if info.com == 'activate_axis':
+                pass
+            elif info.com == 'move_to':
+                self.ui.lcdNumber_position.display(info.result['pos'])
 
 
 class StepMotorsView_old(QWidget):

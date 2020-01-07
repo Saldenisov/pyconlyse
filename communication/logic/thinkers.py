@@ -1,6 +1,7 @@
 import logging
 from time import time
 
+import utilities.data.messages as mes
 from communication.messaging.message_utils import MsgGenerator
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.messages import Message, DeviceInfoMes
@@ -49,7 +50,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_reply(self, msg: Message):
         data = msg.data
-        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
+        info_msg(self, 'REPLY_IN', extra=str(msg))
 
         if msg.reply_to in self.demands_pending_answer:
             del self.demands_pending_answer[msg.reply_to]
@@ -62,7 +63,7 @@ class GeneralCmdLogic(Thinker):
                 connection.device_info = data.info
 
     def react_demand(self, msg: Message):
-        info_msg(self, 'REQUEST', extra=str(msg.short()))
+        info_msg(self, 'REQUEST', extra=str(msg))
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
@@ -114,8 +115,6 @@ class ServerCmdLogic(Thinker):
             if msg.body.receiver_id in self.parent.connections:
                 msg_i = MsgGenerator.forward_msg(device=self.parent,
                                                  msg_i=msg)
-                print(1000000, msg_i)
-                #self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
@@ -164,6 +163,9 @@ class ServerCmdLogic(Thinker):
         if msg.body.receiver_id != self.parent.id:
             msg_i = MsgGenerator.forward_msg(device=self.parent,
                                              msg_i=msg)
+            if msg.reply_to in self.demands_pending_answer:
+                del self.demands_pending_answer[msg.reply_to]
+                self.logger.info(f'react_reply: Msg: {msg.reply_to} reply is obtained and forwarded to intial demander')
             reply = True
 
         else:
@@ -207,19 +209,13 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
     def react_reply(self, msg: Message):
         super().react_reply(msg)
         data = msg.data
+        if self.parent.pyqtsignal_connected:
+            self.parent.signal.emit(msg)
         if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             msg = MsgGenerator.available_services_demand(device=self.parent)
             self.add_task_out(msg)
-        elif data.com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
-            if self.parent.pyqtsignal_connected:
-                self.parent.signal.emit(msg)
-        elif data.com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
-            print(10000000)
-            if self.parent.pyqtsignal_connected:
-                self.parent.signal.emit(msg)
-        elif data.com == MsgGenerator.ERROR.mes_name:
-            if self.parent.pyqtsignal_connected:
-                self.parent.signal.emit(msg)
+
+
 
 
 class StpMtrCmdLogic(GeneralCmdLogic):
@@ -238,7 +234,15 @@ class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
         data = msg.data
         reply = False
         msg_i = []
-        if data.com == 'info_service_demand':
+        if data.com == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
             msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
             reply = True
+        elif data.com == MsgGenerator.DO_IT.mes_name:
+            reply = True
+            info: mes.DoIt = data.info
+            result, comments = self.parent.execute_com(com=info.com, parameters=info.parameters)
+            if result:
+                msg_i = MsgGenerator.done_it(self.parent, msg_i=msg, result=result, comments=comments)
+            else:
+                msg_i = MsgGenerator.error(self.parent, msg_i=msg, comments=comments)
         self.reply_msg(reply, msg_i)

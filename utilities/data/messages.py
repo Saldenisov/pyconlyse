@@ -37,6 +37,19 @@ class AvailableServices:
 
 
 @dataclass(frozen=True, order=True)
+class DoIt:
+    com: str
+    parameters: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True, order=True)
+class DoneIt:
+    com: str
+    result: object
+    comments: str = ''
+
+
+@dataclass(frozen=True, order=True)
 class forward_msg:
     service_id: str
     demand: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
