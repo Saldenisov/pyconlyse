@@ -31,7 +31,7 @@ class MsgGenerator:
     DO_IT = mes.MessageStructure(DEMAND, mes.DoIt, 'do_it')
     DONE_IT = mes.MessageStructure(REPLY, mes.DoneIt, 'done_it')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
-    FORWARD_MSG = mes.MessageStructure(FORWARD, mes.forward_msg, 'forward_msg')
+    FORWARD_MSG = mes.MessageStructure(FORWARD, mes.Forward_msg, 'forward_msg')
     HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
     HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
     STATUS_SERVER_INFO = mes.MessageStructure(INFO, mes.ServerStatusMes, 'status_server_info')

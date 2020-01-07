@@ -3,7 +3,6 @@ import logging
 import ctypes
 from inspect import signature
 from time import sleep
-from errors.myexceptions import CannotmoveDL, DeviceError
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
@@ -302,6 +301,7 @@ class StpMtrCtrl_emulate(Service):
         return {'activate_axis': {'axis': 0, 'flag': True},
                 'move_to': {'axis': 0, 'pos': 0, 'how': 'absolute'},
                 'get_pos': {'axis': 0},
+                'get_controller_state': {}
                 }
 
     def execute_com(self, com: str, parameters: dict):
@@ -386,6 +386,10 @@ class StpMtrCtrl_emulate(Service):
             return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments
+
+    def get_controller_state(self):
+        comments = ''
+        return {'device_status':self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
 
 
 class StpMtrCtrl_emulate2(Service):

@@ -50,7 +50,7 @@ class DoneIt:
 
 
 @dataclass(frozen=True, order=True)
-class forward_msg:
+class Forward_msg:
     service_id: str
     demand: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
 

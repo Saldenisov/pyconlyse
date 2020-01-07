@@ -64,6 +64,9 @@ class SuperClientGUIcontroller():
             self.view_stpmtr = StepMotorsView(in_controller=self, in_model=self.model, parameters=parameters)
             self.view_stpmtr.show()
             self.logger.info(f'GUI for service {service_id} is started')
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,
+                                     parameters={})
+            self.device.send_msg_externally(msg)
         except Exception as e:
             print(e)
 

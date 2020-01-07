@@ -79,12 +79,21 @@ class SuperUserView(QMainWindow):
             self.model.service_parameters[info.device_id] = info
 
 
+from dataclasses import dataclass, field
+from utilities.data.datastructures.mes_independent import DeviceStatus
+@dataclass(order=True, frozen=False)
+class StpMtrCtrlStatusMultiAxes:
+    device_status: DeviceStatus = DeviceStatus()
+    axes_status: list = field(default_factory=list)
+    positions: list = field(default_factory=list)
+
 class StepMotorsView(QMainWindow):
 
     def __init__(self, in_controller, in_model, parameters, parent=None):
         super().__init__(parent)
         self.name = f'StepMotorsClient:view: {parameters.device_id} {get_local_ip()}'
         self.parameters = parameters
+        self.controller_status = StpMtrCtrlStatusMultiAxes()
         self.logger = logging.getLogger("StepMotors." + __name__)
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
@@ -97,7 +106,7 @@ class StepMotorsView(QMainWindow):
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
-        self.ui.checkBox_On.stateChanged.connect(self.activate_axis)
+        self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
@@ -107,7 +116,8 @@ class StepMotorsView(QMainWindow):
         print(self.ui.checkBox_On.isChecked())
 
     def axis_value_change(self):
-        self.ui.retranslateUi(self)
+        self.ui.retranslateUi(self, self.controller_status)
+
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
@@ -138,9 +148,18 @@ class StepMotorsView(QMainWindow):
         info = msg.data.info
         if com == MsgGenerator.DONE_IT.mes_name:
             if info.com == 'activate_axis':
-                pass
+                flag = info.result['flag']
+                self.ui.checkBox_On.setChecked(flag)
+                self.controller_status.axes_status[info.result['axis']] = flag
+                self.ui.retranslateUi(self, self.controller_status)
             elif info.com == 'move_to':
-                self.ui.lcdNumber_position.display(info.result['pos'])
+                pos = info.result['pos']
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[info.result['axis']] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == 'get_controller_state':
+                self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
+                self.ui.retranslateUi(self, self.controller_status)
 
 
 class StepMotorsView_old(QWidget):

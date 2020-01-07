@@ -105,7 +105,7 @@ class Ui_StpMtrGUI(object):
         self.retranslateUi(StpMtrGUI)
         QtCore.QMetaObject.connectSlotsByName(StpMtrGUI)
 
-    def retranslateUi(self, StpMtrGUI):
+    def retranslateUi(self, StpMtrGUI, controller_status=None):
         _translate = QtCore.QCoreApplication.translate
         try:
             title = self.parameters.device_description['GUI_title']
@@ -120,10 +120,17 @@ class Ui_StpMtrGUI(object):
                 i += 1
             preset = str(preset_list_str)
         except KeyError:
+            axis = 0
             title = ''
             name = 'test_name'
             ranges = str((0, 100))
             preset = str([0, 100])
+        if controller_status:
+            try:
+                self.checkBox_On.setChecked(controller_status.axes_status[axis])
+                self.lcdNumber_position.display(controller_status.positions[axis])
+            except Exception as e:
+                print(e)
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis #"))
         self.label_name.setText(_translate("StpMtrGUI", name))
