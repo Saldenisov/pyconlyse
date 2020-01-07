@@ -50,13 +50,14 @@ class GeneralCmdLogic(Thinker):
     def react_reply(self, msg: Message):
         data = msg.data
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
+
+        if msg.reply_to in self.demands_pending_answer:
+            del self.demands_pending_answer[msg.reply_to]
+            self.logger.info(f'react_reply: Msg {msg.reply_to} reply is obtained')
+
         if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             if data.info.device_id in self.parent.connections:
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
-                try:
-                    del self.demands_pending_answer[msg.reply_to]
-                except KeyError as e:
-                    self.logger.error(f'react_reply com={data.com} : {e}')
                 connection: Connection = self.parent.connections[data.info.device_id]
                 connection.device_info = data.info
 
@@ -111,8 +112,8 @@ class ServerCmdLogic(Thinker):
 
         if msg.body.receiver_id != self.parent.id:
             if msg.body.receiver_id in self.parent.connections:
-                msg_i = MsgGenerator.forward_to_service(device=self.parent,
-                                                        msg_to_forward=msg)
+                msg_i = MsgGenerator.forward(device=self.parent,
+                                             msg_i=msg)
                 self._forward_binding[msg_i.id] = msg
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
@@ -159,12 +160,12 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REPLY_IN', extra=str(msg.short))
         reply = False
+
         if cmd == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             if msg.reply_to in self.demands_pending_answer:
                 if msg.reply_to in self._forward_binding:
-                    msg_i = MsgGenerator.info_service_reply(device=self.parent,
-                                                            msg_i=self._forward_binding[msg.reply_to],
-                                                            msg_reply=msg)
+                    msg_i = MsgGenerator.forward(device=self.parent,
+                                                 msg_i=msg)
                     reply = True
                 else:
                     # TODO: should here be something?
@@ -215,21 +216,21 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             msg = MsgGenerator.available_services_demand(device=self.parent)
             self.add_task_out(msg)
-        elif data.com == 'available_services_reply':
+        elif data.com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             try:
                 del self.demands_pending_answer[msg.reply_to]
             except KeyError as e:
                 self.logger.error(f'react_reply: {e}')
-        elif data.com == 'info_service_reply':
+        elif data.com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             try:
                 del self.demands_pending_answer[msg.reply_to]
             except KeyError as e:
                 self.logger.error(f'react_reply: {e}')
-        elif data.com == 'error_message':
+        elif data.com == MsgGenerator.ERROR.mes_name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
 

@@ -36,6 +36,7 @@ class SuperUserView(QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
         self.model = in_model
+        self._hb_counter = 0
 
         self.ui = Ui_SuperUser()
         self.ui.setupUi(self)
@@ -55,12 +56,15 @@ class SuperUserView(QMainWindow):
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
-        if com == 'heartbeat':
-            pass
-            #widget = self.ui.rB_hb
-            #before = widget.isChecked()
-            #widget.setChecked(not before)
-        elif com == 'available_services_reply':
+        if com == MsgGenerator.HEARTBEAT.mes_name:
+            widget1 = self.ui.rB_hb
+            widget2 = self.ui.rB_hb2
+            widget1v = widget1.isChecked()
+            if widget1v:
+                widget2.setChecked(True)
+            else:
+                widget1.setChecked(True)
+        elif com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
             widget = self.ui.lW_devices
             widget.clear()
             names = []
@@ -68,9 +72,9 @@ class SuperUserView(QMainWindow):
                 names.append(f'{item}:{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
-        elif com == 'error_message':
+        elif com == MsgGenerator.ERROR.mes_name:
             self.ui.tE_info.setText(info.comments)
-        elif com == 'info_service_reply':
+        elif com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             self.ui.tE_info.setText(str(info))
             self.model.service_parameters[info.device_id] = info
 

@@ -58,8 +58,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.ERROR, device=device, msg_i=msg_i, comments=comments)
 
     @staticmethod
-    def forward_to_service(device, msg_to_forward):
-        return MsgGenerator._gen_msg(MsgGenerator.FORWARD, device=device, msg_to_forward=msg_to_forward)
+    def forward(device, msg_i):
+        return MsgGenerator._gen_msg(MsgGenerator.FORWARD, device=device, msg_i=msg_i)
 
     @staticmethod
     def heartbeat(device, event, n):
@@ -94,8 +94,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_DEMAND, device=device, rec_id=service_id)
 
     @staticmethod
-    def info_service_reply(device, msg_i: mes.Message, msg_reply: Union[mes.Message, None] = None):
-        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_REPLY, device=device, msg_i=msg_i, msg_reply=msg_reply)
+    def info_service_reply(device, msg_i: mes.Message):
+        return MsgGenerator._gen_msg(MsgGenerator.INFO_SERVICE_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
     def reply_on_forwarded_demand(device, msg_i: mes.Message, msg_reply: mes.Message):
@@ -169,9 +169,9 @@ class MsgGenerator:
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
             elif com_name == MsgGenerator.FORWARD.mes_name:
-                msg_to_forward = kwargs['msg_to_forward']
+                msg_i = kwargs['msg_i']
                 body.receiver_id = msg_i.body.receiver_id
-                data_info = msg_to_forward.data.info
+                data_info = msg_i.data.info
             elif com_name == MsgGenerator.HEARTBEAT.mes_name:
                 crypted = False
                 event = kwargs['event']
@@ -215,17 +215,10 @@ class MsgGenerator:
                 body.receiver_id = kwargs['rec_id']
                 data_info = None
             elif com_name == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
-                msg_reply = kwargs['msg_reply']
-                if not msg_reply:
-                    try:
-                        data_info = mes_info_class(device.device_status,
+                data_info = mes_info_class(device.device_status,
                                                    device.id,
                                                    device.description(),
                                                    available_public_functions=device.available_public_functions())
-                    except AttributeError:
-                        raise
-                else:
-                    data_info = msg_reply.data.info
             elif com_name == MsgGenerator.REPLY_ON_FORWARDED_DEMAND.mes_name:
                 msg_reply: Message = kwargs['msg_reply']
                 data_info = msg_reply.data.info
