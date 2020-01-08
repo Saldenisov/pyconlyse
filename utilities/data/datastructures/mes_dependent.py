@@ -10,10 +10,7 @@ from utilities.data.messages import Message
 
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
-<<<<<<< HEAD
     heartbeat_info: mes.EventInfoMes = None
-=======
->>>>>>> stpmtr_newport
     device_info: mes.DeviceInfoMes = None
 
 

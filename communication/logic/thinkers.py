@@ -50,7 +50,6 @@ class GeneralCmdLogic(Thinker):
 
     def react_reply(self, msg: Message):
         data = msg.data
-<<<<<<< HEAD
         self.logger.info(msg.short())
         try:
             if data.com == 'welcome':
@@ -61,7 +60,6 @@ class GeneralCmdLogic(Thinker):
                     connection.device_info = data.info
         except KeyError as e:
             self.logger.error(e)
-=======
         info_msg(self, 'REPLY_IN', extra=str(msg))
 
         if msg.reply_to in self.demands_pending_answer:
@@ -73,7 +71,6 @@ class GeneralCmdLogic(Thinker):
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
                 connection: Connection = self.parent.connections[data.info.device_id]
                 connection.device_info = data.info
->>>>>>> stpmtr_newport
 
     def react_demand(self, msg: Message):
         info_msg(self, 'REQUEST', extra=str(msg))

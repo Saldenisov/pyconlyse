@@ -3,11 +3,8 @@ import logging
 import ctypes
 from inspect import signature
 from time import sleep
-<<<<<<< HEAD
 from deprecated import deprecated
 
-=======
->>>>>>> develop
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
