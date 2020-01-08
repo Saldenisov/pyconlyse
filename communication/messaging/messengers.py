@@ -375,10 +375,7 @@ class ServerMessenger(Messenger):
                 raise Exception(f'Not enough ports {port} were passed to {self.name}')
             port_n = verify_port(addresses[port], excluded)
             excluded.append(port_n)
-            if port == 'publisher':
-                self.addresses[port] = f'tcp://127.0.0.1:{port_n}'
-            else:
-                self.addresses[port] = f'tcp://{local_ip}:{port_n}'
+            self.addresses[port] = f'tcp://{local_ip}:{port_n}'
 
     def _create_sockets(self):
         try:
