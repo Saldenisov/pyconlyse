@@ -112,7 +112,22 @@ def unique_id(name: [Any] = '') -> str:
 
 
 def get_local_ip() -> str:
-        return str(gethostbyname(gethostname()))
+    import ifaddr
+
+    adapters = ifaddr.get_adapters()
+
+    ips_l = []
+    for adapter in adapters:
+        for ip in adapter.ips:
+            if ip.network_prefix < 64:
+                ips_l.append(ip.ip)
+
+    def get129(ips_l):
+        for ip in ips_l:
+            if '129.' in ip:
+                return ip
+    # was before return str(gethostbyname(gethostname()))
+    return get129(ips_l)
 
 
 def test_local_port(port):

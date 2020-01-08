@@ -6,10 +6,11 @@ LCP/CNRS UMR8000 ELYSE platform
 
 import sys
 from pathlib import Path
-from time import sleep
-from devices.devices import DeviceFactory
 app_folder = str(Path(__file__).resolve().parents[1])
 sys.path.append(app_folder)
+
+from time import sleep
+from devices.devices import DeviceFactory
 
 
 def init(device_id: str, db_name: str):
