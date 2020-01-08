@@ -1,21 +1,14 @@
-import inspect as ins
+import ifaddr
 
-class A:
+adapters = ifaddr.get_adapters()
 
-    def b(self, a, b):
-        print(f'{a}  {b}')
-
-    def c(self):
-        method_list = [func for func in dir(A) if callable(getattr(A, func))]
-        print(method_list)
-
-    def d(self, com='b', parameters={}):
-        f = getattr(self, com)
-        if parameters.keys() == ins.signature(f).parameters.keys():
-            f(**parameters)
-        else:
-            print('error')
-
-
-a = A()
-a.d(parameters={'b':1000, 'a': 232234, 'k':234})
+ips_l = []
+for adapter in adapters:
+    for ip in adapter.ips:
+        if ip.network_prefix < 64:
+            ips_l.append(ip.ip)
+def get129(ips_l):
+    for ip in ips_l:
+        if '129.' in ip:
+            return ip
+print(ips_l, get129(ips_l))
