@@ -15,12 +15,14 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
 from communication.interfaces import ThinkerInter, MessengerInter
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent import DeviceStatus, DeviceParts
+from utilities.data.datastructures.mes_dependent import Connection
+from utilities.data.datastructures.dicts import Connections_Dict
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
@@ -47,9 +49,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  name: str,
                  db_path: Path,
                  cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, DeciderInter, ExecutorInter]],
-                 parent: QObject = None,
-                 DB_command: str = '',
-                 logger_new = True,
+                 parent: QObject=None,
+                 DB_command: str='',
+                 logger_new=True,
                  **kwargs):
         super().__init__()
         self._kwargs = kwargs
@@ -70,7 +72,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.db_path = db_path
         self.config = configurationSD(self)
 
-        self.connections: Dict[str, Dict[str, int]] = {}
+        self.connections: Dict[str, Connection] = Connections_Dict()
 
         self.cls_parts = cls_parts
         self.cls_parts_instances: DeviceParts
@@ -120,6 +122,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(str(e))
 
         info_msg(self, 'CREATED')
+    @abstractmethod
+    def description(self):
+        pass
 
     def start(self):
         info_msg(self, 'STARTING')
@@ -129,11 +134,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         sleep(0.1)
         info_msg(self, 'STARTED')
         self.device_status.on = True
-        self.device_status.active = True
+        self.activate()
         self.send_status_pyqt()
 
     def stop(self):
         info_msg(self, 'STOPPING')
+        stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
+        self.messenger.send_msg(stop_msg)
+        sleep(1)
+        self.thinker.pause()
+        self.messenger.pause()
+
         self.thinker.stop()
         sleep(0.5)
         self.messenger.stop()
@@ -150,13 +161,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def messenger_settings(self):
         pass
 
-    @abstractmethod
     def activate(self):
-        pass
+        self.device_status.active = True
 
-    @abstractmethod
     def deactivate(self):
-        pass
+        self.device_status.active = False
 
     def info(self):
         from collections import OrderedDict as od
@@ -168,9 +177,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         return info
 
     def send_status_pyqt(self, com=''):
+        # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
         if self.pyqtsignal_connected:
-            msg = gen_msg(com=com, device=self)
-            self.signal.emit(msg)
+            if com == 'status_server_info_full':
+                msg = MsgGenerator.status_server_info_full(device=self)
+            elif com == 'status_server_info':
+                msg = MsgGenerator.status_server_info(device=self)
+            elif com == 'status_client_info':
+                msg = MsgGenerator.status_client_info(device=self)
+            else:
+                self.logger.error(f'send_status_pyqt com {com} is not known')
+                msg = None
+            if msg:
+                self.signal.emit(msg)
         else:
             self.logger.info(f'pyqtsignal_connected is {self.pyqtsignal_connected}, the signal cannot be emitted')
 
@@ -209,6 +228,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def get_general_settings(self) -> dict:
         return self.config.config_to_dict(self.name)['General']
 
+    def available_public_functions(self):
+        pass
+
     def __del__(self):
         self.logger.info(f"Instance of class {self.__class__.__name__}: {self.long_name} is deleted")
         del self
@@ -227,18 +249,35 @@ class Server(Device):
         if 'DB_command' not in kwargs:
             kwargs['DB_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
         self.services_available = []
-        self.clients_running: Dict[str, Device] = {}
-        self.services_running: Dict[str, Device] = {}
         self.type = 'server'
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
 
         super().__init__(**kwargs)
 
+    def description(self):
+        return 'Main Server'
+
+    @property
+    def services_running(self):
+        services_running = {}
+        for device_id, connection in self.connections.items():
+            info = connection.device_info
+            if info.type == 'service':
+                services_running[device_id] = info.name
+        return services_running
+
+    @property
+    def clients_running(self):
+        clients_running = {}
+        for device_id, connection in self.connections.items():
+            info = connection.device_info
+            if info.type == 'client':
+                clients_running[device_id] = info.name
+        return clients_running
+
+
     def stop(self):
        super().stop()
-       self.services_running = {}
-       self.clients_running = {}
-       self.services_available = []
 
     def messenger_settings(self):
         pass
@@ -253,7 +292,7 @@ class Server(Device):
         self.services_available = ['DLemulate', 'DL2axis']
 
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_server_full')
+        super().send_status_pyqt(com='status_server_info_full')
 
 
 class Service(Device):
@@ -274,20 +313,22 @@ class Service(Device):
             raise Exception('DB_command_type is not determined')
 
         self.type = 'service'
+        self.server_msgn_id = ''
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
-    def activate(self):
+    @abstractmethod
+    def available_public_functions(self):
         pass
-
-    def deactivate(self):
+    @abstractmethod
+    def execute_com(self, com: str, parameters: dict):
         pass
 
     def messenger_settings(self):
         self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
 
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_service')
+        super().send_status_pyqt(com='status_service_info')
 
 
 class Client(Device):
@@ -309,20 +350,19 @@ class Client(Device):
 
         kwargs['cls_parts'] = cls_parts
         self.type = 'client'
+        self.server_msgn_id = ''
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
     def messenger_settings(self):
-        self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
-
-    def activate(self):
-        pass
-
-    def deactivate(self):
-        pass
+        if isinstance(self.messenger.addresses['server_publisher'], list):
+            for adr in self.messenger.addresses['server_publisher']:
+                self.messenger.subscribe_sub(address=adr)
+        else:
+            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
 
     def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_client')
+        super().send_status_pyqt(com='status_client_info')
 
 
 class DeviceFactory:

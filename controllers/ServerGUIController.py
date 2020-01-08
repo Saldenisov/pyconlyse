@@ -10,7 +10,7 @@ import pathlib
 from PyQt5.QtWidgets import QApplication
 
 from views.ServerGUIView import ServerGUIView
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
 
@@ -69,7 +69,7 @@ class ServerGUIController:
                 os.system(exc)
 
     def check_status(self):
-        msg = gen_msg(com='status_server_full', device=self.model.server)
+        msg = MsgGenerator.status_server_info_full(device=self.model.server)
         self.model.model_changed.emit(msg)
 
     def quit_clicked(self, event):
@@ -78,4 +78,5 @@ class ServerGUIController:
         except Exception as e:
             print(e)
         self.logger.info('Closing')
+        self.logger.info('Done')
         QApplication.quit()

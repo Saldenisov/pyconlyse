@@ -7,12 +7,12 @@ from typing import Dict, Union
 import zmq
 import cryptography as crypto
 from communication.interfaces import MessengerInter
-from communication.messaging.message_utils import json_to_message
+from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent import OrderedDictMod
 from utilities.data.messages import Message
-from utilities.myfunc import unique_id, info_msg, error_logger
+from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
 
@@ -33,11 +33,12 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{name}:{Messenger.n_instance}'
-        self.id = f'{self.name}:{unique_id(self.name)}'
         if parent:
+            self.id = parent.id
             self.parent = parent
         else:
             self.parent = self
+            self.id = f'{self.name}:{unique_id(self.name)}'
             self.pyqtsignal_connected = False
         self.active = False
         self.paused = False
@@ -73,6 +74,10 @@ class Messenger(MessengerInter):
     @property
     def public_sockets(self):
         return self._public_sockets
+
+    @public_sockets.setter
+    def public_sockets(self, value):
+        self._public_sockets = value
 
     @property
     def public_key(self):
@@ -143,6 +148,7 @@ class Messenger(MessengerInter):
         info_msg(self, 'STOPPING')
         self.active = False
         self.paused = False
+        self._msg_out = {}
 
     def pause(self):
         "put executation of thread on pause"
@@ -172,18 +178,11 @@ class Messenger(MessengerInter):
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
 
-
     @make_loop
     def _sendloop_logic(self, await_time):
         if len(self._msg_out) > 0:
             msg: Message = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
-
-    def _emergencyfullstop(self):
-        self.logger.info('Emergency full stop')
-        self.active = False
-        self._msg_out = None
-        sleep(0.01)
 
 
 class ClientMessenger(Messenger):
@@ -203,7 +202,7 @@ class ClientMessenger(Messenger):
                 publisher = self.context.socket(zmq.PUB)
                 publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
                 self.sockets = {'dealer': dealer, 'sub': sub, 'publisher': publisher}
-                self._public_sockets = {'publisher': self.addresses['publisher']}
+                self.public_sockets = {'publisher': self.addresses['publisher']}
             else:
                 self.sockets = {'dealer': dealer, 'sub': sub}
 
@@ -217,9 +216,17 @@ class ClientMessenger(Messenger):
 
     def connect(self):
         try:
-            if self.active:
-                self.sockets['dealer'].connect(self.addresses['server_frontend'])
-                if self._pub_option:
+            self.sockets['dealer'].connect(self.addresses['server_frontend'])
+            if self._pub_option:
+                try:
+                    self.sockets['publisher'].bind(self.addresses['publisher'])
+                except (WrongAddress, zmq.error.ZMQError) as e:
+                    error_logger(self, self.connect, e)
+                    port = get_free_port(scope=None)
+                    local_ip = get_local_ip()
+                    self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
+                    self.public_sockets = {'publisher': self.addresses['publisher']}
+                    self.sockets['publisher'].setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
                     self.sockets['publisher'].bind(self.addresses['publisher'])
         except (WrongAddress, zmq.error.ZMQError) as e:
             error_logger(self, self.connect, e)
@@ -240,27 +247,31 @@ class ClientMessenger(Messenger):
             sockets = dict(self.poller.poll(self._polling_time * 1000))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
-                mes: Message = json_to_message(mes)
-                if mes.data.com == 'device_info_short' and mes.data.info.type == 'server':
+                mes: Message = MsgGenerator.json_to_message(mes)
+                # first heartbeat in principle could be received only from server
+                if mes.data.com == 'heartbeat':
                     sockets = mes.data.info.sockets
                     if 'frontend' in sockets and 'backend' in sockets:
                         self.logger.info(mes)
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
+                        self.parent.server_msgn_id = mes.body.sender_id
                         break
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
 
-        self.connect()
+
         try:
-            info_msg(self, 'STARTED')
+            if self.active:
+                self.connect()
+                info_msg(self, 'STARTED')
             msgs = []
             from time import time_ns as time
             while self.active:
                 try:
                     #a = time()
                     if not self.paused:
-                        sockets = dict(self.poller.poll())
+                        sockets = dict(self.poller.poll(1))
                         if self.sockets['dealer'] in sockets:
                             msg, crypted = self.sockets['dealer'].recv_multipart()
                             msgs.append((msg,crypted))
@@ -271,7 +282,7 @@ class ClientMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     msg = self.decrypt(msg)
-                                mes: Message = json_to_message(msg)
+                                mes: Message = MsgGenerator.json_to_message(msg)
                                 self.parent.decide_on_msg(mes)
                             msgs = []
                     #b = time()
@@ -282,8 +293,8 @@ class ClientMessenger(Messenger):
 
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.run, e)
+            self.stop()
         finally:
-            self._emergencyfullstop()
             self.sockets['dealer'].close()
             if self.sockets['sub']:
                 self.sockets['sub'].close()
@@ -320,22 +331,14 @@ class ClientMessenger(Messenger):
         from utilities.myfunc import verify_port
         # Check only publisher port availability
         port = verify_port(addresses['publisher'])
-        self.addresses['publisher'] = f'tcp://127.0.0.1:{port}'
+        local_ip = get_local_ip()
+        self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
         self.addresses['server_publisher'] = addresses['server_publisher']
 
 
 class ServiceMessenger(ClientMessenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def connect(self):
-        try:
-            self.sockets['dealer'].connect(self.addresses['server_backend'])
-            self.subscribe_sub(address=self.addresses['server_publisher'])
-            if self._pub_option:
-                self.sockets['publisher'].bind(self.addresses['publisher'])
-        except (WrongAddress, zmq.error.ZMQError) as e:
-            error_logger(self, self.connect, e)
 
 
 class ServerMessenger(Messenger):
@@ -355,6 +358,7 @@ class ServerMessenger(Messenger):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # TODO: when connection is deleted from device these pools must be updated
         self._frontendpool = set()
         self._backendpool = set()
 
@@ -365,12 +369,16 @@ class ServerMessenger(Messenger):
         ports = ['publisher', 'frontend', 'backend']
         from utilities.myfunc import verify_port
         excluded = []
+        local_ip = get_local_ip()
         for port in ports:
             if port not in addresses:
                 raise Exception(f'Not enough ports {port} were passed to {self.name}')
             port_n = verify_port(addresses[port], excluded)
             excluded.append(port_n)
-            self.addresses[port] = f'tcp://127.0.0.1:{port_n}'
+            if port == 'publisher':
+                self.addresses[port] = f'tcp://127.0.0.1:{port_n}'
+            else:
+                self.addresses[port] = f'tcp://{local_ip}:{port_n}'
 
     def _create_sockets(self):
         try:
@@ -395,9 +403,18 @@ class ServerMessenger(Messenger):
                             'backend': backend,
                             'publisher': publisher,
                             'sub': sub}
+            self.public_sockets = {'publisher': self.addresses['publisher'],
+                                    'frontend': self.addresses['frontend'],
+                                    'backend': self.addresses['backend']}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
+
+    def info(self):
+        from collections import OrderedDict as od
+        info: od = super().info()
+        info['pools'] = {'frontend': self._frontendpool, 'backend': self._backendpool}
+        return info
 
     def run(self):
         super().run()
@@ -406,7 +423,7 @@ class ServerMessenger(Messenger):
             msgs = []
             while self.active:
                 if not self.paused:
-                    sockets = dict(self.poller.poll())
+                    sockets = dict(self.poller.poll(1))
                     try:
                         if self.sockets['frontend'] in sockets:
                             messenger_id, msg, crypted = self.sockets['frontend'].recv_multipart()
@@ -427,7 +444,7 @@ class ServerMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     msg = self.decrypt(msg)
-                                mes: Message = json_to_message(msg)
+                                mes: Message = MsgGenerator.json_to_message(msg)
                                 self.parent.decide_on_msg(mes)
                             msgs = []
                     except (ValueError, Exception) as e:
@@ -436,8 +453,8 @@ class ServerMessenger(Messenger):
                     sleep(0.5)
         except (Exception, zmq.error.ZMQError) as e:
             error_logger(self, self.run, e)
+            self.stop()
         finally:
-            self._emergencyfullstop()
             for _, soc in self.sockets.items():
                 soc.close()
             self.context.destroy()
@@ -449,35 +466,23 @@ class ServerMessenger(Messenger):
             msg_json = msg.json_repr()
             if msg.crypted:
                 msg_json = self.encrypt(msg_json)
-            if msg.body.type == 'reply':
-                if msg.body.receiver_id in self._frontendpool:
-                    self.sockets['frontend'].send_multipart(
-                        [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                    self.logger.info(f'Reply msg {msg.id} is send from frontend')
-                elif msg.body.receiver_id in self._backendpool:
-                    self.sockets['backend'].send_multipart(
-                        [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                    self.logger.info(f'Reply msg {msg.id} is send from backend')
-                else:
-                    error_logger(self, self.send_msg, f'Receiver ID does not exist: {msg.body.receiver_id}')
-                    raise MessengerError(f' {self.name}. Receiver ID does not exist: {msg.body.receiver_id}')
-            elif msg.body.type == 'demand':
-                self.sockets['backend'].send_multipart(
-                    [msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
-                self.logger.info(f'Demand msg {msg.id} is send from backend')
-            elif msg.body.type == 'info':
+            if msg.body.type == 'info':
                 #self.logger.info(f'Info msg {msg} is send from publisher')
                 self.sockets['publisher'].send_multipart([msg_json, crypted])
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg)
+            elif msg.body.type != 'info':
+                if msg.body.receiver_id in self._frontendpool:
+                    self.sockets['frontend'].send_multipart([msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
+                    self.logger.info(f'{msg.body.type} msg {msg.id} is send from frontend')
+                elif msg.body.receiver_id in self._backendpool:
+                    self.sockets['backend'].send_multipart([msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
+                    self.logger.info(f'{msg.body.type} msg {msg.id} is send from backend')
+                else:
+                    error_logger(self, self.send_msg, f'Receiver ID does not exist: {msg.body.receiver_id}')
+                    raise MessengerError(f' {self.name}. Receiver ID does not exist: {msg.body.receiver_id}')
             else:
                 error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
-
-    def info(self):
-        from collections import OrderedDict as od
-        info: od = super().info()
-        info['pools'] = {'frontend': self._frontendpool, 'backend': self._backendpool}
-        return info
 

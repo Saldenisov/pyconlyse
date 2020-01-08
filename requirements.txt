@@ -3,5 +3,6 @@ matplotlib>=3.0.2
 configobj>=5.0.2
 zmq>=0.0.0
 cryptography
-PyQt5
+Deprecated
+PyQt5==5.13.1
 

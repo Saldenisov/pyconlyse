@@ -3,7 +3,7 @@ from abc import abstractmethod
 from threading import Thread
 from time import time
 from typing import Union, Callable
-
+from time import sleep
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import (ThinkerEventFuncError,
                                  ThinkerEventError,
@@ -99,6 +99,8 @@ class Thinker(ThinkerInter):
                     external_name = name
                 if not event_id:
                     event_id = f'{external_name}:{self.parent.id}'
+                if original_owner == '':
+                    original_owner = self.parent.id
                 self.events[event_id] = ThinkerEvent(name=name,
                                                      external_name=external_name,
                                                      parent=self,
@@ -119,6 +121,18 @@ class Thinker(ThinkerInter):
             self.events[event_id].stop()
             del self.events[event_id]
 
+    def reply_msg(self, reply: bool, msg_i: Message):
+        if reply:
+            if msg_i.body.type == 'reply':
+                info_msg(self, 'REPLY', extra=repr(msg_i))
+            elif msg_i.body.type == 'demand':
+                info_msg(self, 'DEMAND', extra=repr(msg_i))
+            if isinstance(msg_i, list):
+                for msg in msg_i:
+                    self.add_task_out(msg)
+            else:
+                self.add_task_out(msg_i)
+
     def start(self):
         info_msg(self, 'STARTING')
         for _, event in self.events.items():
@@ -128,7 +142,7 @@ class Thinker(ThinkerInter):
     def stop(self):
         info_msg(self, 'STOPPING')
         for event_id, event in self.events.items():
-            event.stop()
+            event.stop(join=True)
         self.events = {}
 
     def pause(self):
@@ -228,6 +242,19 @@ class Thinker(ThinkerInter):
     def react_unknown(self, msg: Message):
         pass
 
+    def remove_device_from_connections(self, device_id):
+        connections = self.parent.connections
+        if device_id in connections:
+            device_name = connections[device_id].device_info.name
+            self.logger.info(f'Procedure to delete {device_name} {device_id} is started')
+            for key, event in list(self.events.items()):
+                if event.original_owner == device_id:
+                    self.unregister_event(key)
+            del self.parent.connections[device_id]
+            self.logger.info(f'{device_name} {device_id} is deleted')
+        else:
+            self.logger.error(f'remove_device_from_connections: Wrong device_id {device_id} is passed ')
+
 
 class ThinkerEvent(Thread):
     def __init__(self, name: str,
@@ -271,9 +298,11 @@ class ThinkerEvent(Thread):
         finally:
             info_msg(self, 'STOPPED', extra=f' of {self.parent.name}')
 
-    def stop(self):
+    def stop(self, join=False):
         info_msg(self, 'STOPPING', extra=f' of {self.parent.name}')
         self.active = False
+        if join:
+            self.join()
 
     def pause(self):
         info_msg(self, 'PAUSING')

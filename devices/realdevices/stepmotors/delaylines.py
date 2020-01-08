@@ -1,13 +1,24 @@
 from devices.devices import Service
 import logging
 import ctypes
-from errors.myexceptions import CannotmoveDL
+from inspect import signature
+from time import sleep
+<<<<<<< HEAD
+from deprecated import deprecated
+
+=======
+>>>>>>> develop
 module_logger = logging.getLogger(__name__)
 
+control = 'control'
+observe = 'observe'
+info = 'info'
 
-# is not working anymore, no support is available
+
+@deprecated(version='1.0', reason="Class is not supported, the hardware controller is out of order")
 class StpMtrCtrl_2axis(Service):
     """
+    It is not working anymore, no support is available
     Defines class of Delay line
     """
 
@@ -17,6 +28,10 @@ class StpMtrCtrl_2axis(Service):
         self.logger = logging.getLogger(__name__)
         self.connected = False
         self.set_parameters(settings)
+
+    def available_public_functions(self):
+        # TODO: logic to be updated!!!
+        return {}
 
     def set_parameters(self, Config):
         if not self.connected:
@@ -282,6 +297,109 @@ class StpMtrCtrl_2axis(Service):
 
 
 class StpMtrCtrl_emulate(Service):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._axis_number = 4
+        self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+        self._pos = [0.0, 0.0, 0.0, 0.0]
+        self._axes_status = [False, False, False, False]
+
+    def available_public_functions(self):
+        return {'activate_axis': {'axis': 0, 'flag': True},
+                'move_to': {'axis': 0, 'pos': 0, 'how': 'absolute'},
+                'get_pos': {'axis': 0},
+                'get_controller_state': {}
+                }
+
+    def execute_com(self, com: str, parameters: dict):
+        if com in self.available_public_functions():
+            f = getattr(self, com)
+            if parameters.keys() == signature(f).parameters.keys():
+                return f(**parameters)
+            else:
+                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
+
+        else:
+            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+
+    def description(self):
+        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
+                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
+                'axes_values': [0, 3],
+                'ranges': [(0.0, 100.0, [0, 91]),
+                           (-100.0, 100.0, [0, 50]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
+        return desc
+
+    def _within_limits(self, axis:int, pos) -> bool:
+        comments = ''
+        return True, comments
+
+    def _check_axis(self, axis: int) -> bool:
+        res, comments = self._check_axis_range(axis)
+        if res:
+            return self._check_axis_active(axis)
+        else:
+            return res, comments
+
+    def _check_axis_range(self, axis: int) -> bool:
+        comments = ''
+        if axis in range(self._axis_number):
+            return True, comments
+        else:
+            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
+
+    def _check_axis_active(self, axis: int) -> bool:
+        comments = ''
+        if self._axes_status[axis]:
+            return True, comments
+        else:
+            return False, f'axis {axis} is not active, activate it first'
+
+    def activate_axis(self, axis: int, flag: bool):
+        chk_axis, comments = self._check_axis_range(axis)
+        if chk_axis:
+            self._axes_status[axis] = flag
+            return {'axis': axis, 'flag': flag}, comments
+        else:
+            return False, comments
+
+    def move_to(self, axis: int, pos: float, how='absolute'):
+        chk_axis, comments = self._check_axis(axis)
+        if chk_axis:
+            if how == 'absolute':
+                pass
+            elif how == 'relative':
+                pos = self._pos[axis] + pos
+            else:
+                return False, f'how {how} is wrong, could be only absolute and relative'
+            chk_lmt, comments = self._within_limits(axis, pos)
+            if chk_lmt:
+                self._pos[axis] = pos
+                sleep(pos / 1000. * 5)
+                return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
+            else:
+                return False, comments
+        else:
+            return False, comments
+
+    def get_pos(self, axis: int):
+        res, comments = self._check_axis(axis)
+        if res:
+            return {'axis': axis, 'pos': self._pos[axis]}, comments
+        else:
+            return False, comments
+
+    def get_controller_state(self):
+        comments = ''
+        return {'device_status':self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
+
+
+class StpMtrCtrl_emulate2(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 

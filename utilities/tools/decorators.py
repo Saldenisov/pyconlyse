@@ -39,7 +39,7 @@ def make_loop(func):
                     func(*args, **kwargs)
                 else:
                     sleep(kwargs['await_time'] * 10)
-            obj.logger.info('Sending loop thread is off')
+            obj.logger.info('Loop thread is off')
 
         obj.send_loop_thread = Thread(target=f, args=args, kwargs=kwargs)
         obj.send_loop_thread.start()

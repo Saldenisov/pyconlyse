@@ -8,7 +8,7 @@ from time import sleep
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import MsgComNotKnown, DeviceError
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
@@ -44,7 +44,8 @@ class ServerGUIModel(QObject):
                                                         name='Server',
                                                         db_path=self.db_path,
                                                         pyqtslot=self.treat_pyqtsignals,
-                                                        logger_new=False)
+                                                        logger_new=False,
+                                                        id="Server:Main:sfqvtyjsdf23qa23xcv")
                 self.server.start()
             except (DeviceError) as e:
                 self.logger.error(e)
@@ -55,11 +56,10 @@ class ServerGUIModel(QObject):
     def stop_server(self):
         if self.server:
             try:
+                # TODO: when stopped dictionary changed size during iteration after second server start
                 self.server.stop()
-            except DeviceError as e:
-                self.logger.error(e)
-                msg = gen_msg(com='status_server', sender='ServerGUI', server=self.server)
-                self.model_changed.emit(msg)
+            except (DeviceError, Exception) as e:
+                self.logger.error(f'func: stop_server {e}')
             finally:
                 self.server = None
 

@@ -13,13 +13,14 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
-from utilities.myfunc import list_to_str_repr, info_msg, error_logger, get_local_ip
-from views.ui.ServerGUI_ui import Ui_ServerGUI
+from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
+from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
+from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
 from views.ui.SuperUser_ui import Ui_SuperUser
 
 
@@ -27,8 +28,7 @@ module_logger = logging.getLogger(__name__)
 
 
 class SuperUserView(QMainWindow):
-    """
-    """
+
     def __init__(self, in_controller, in_model, parent=None):
         super().__init__(parent)
         self.name = 'SuperUserGUI:view: ' + get_local_ip()
@@ -36,37 +36,133 @@ class SuperUserView(QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
         self.model = in_model
+        self._hb_counter = 0
 
         self.ui = Ui_SuperUser()
         self.ui.setupUi(self)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
-        #self.ui.pB_start.clicked.connect(self.controller.connect_to_server)
+        self.ui.pB_connection.clicked.connect(self.controller.create_service_gui)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
+        self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 
     def closeEvent(self, event):
-        self.controller.quit_clicked(event)
+        self.logger.info('Closing')
+        self.controller.quit_clicked(event, total_close=True)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
-        if com == 'heartbeat':
-            pass
-            #widget = self.ui.rB_hb
-            #before = widget.isChecked()
-            #widget.setChecked(not before)
-        elif com == 'available_services_reply':
+        if com == MsgGenerator.HEARTBEAT.mes_name:
+            widget1 = self.ui.rB_hb
+            widget2 = self.ui.rB_hb2
+            widget1v = widget1.isChecked()
+            if widget1v:
+                widget2.setChecked(True)
+            else:
+                widget1.setChecked(True)
+        elif com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
             widget = self.ui.lW_devices
+            widget.clear()
             names = []
             for key, item in info.running_services.items():
-                names.append(f'{item.name}:{key}')
+                names.append(f'{item}:{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
+        elif com == MsgGenerator.ERROR.mes_name:
+            self.ui.tE_info.setText(info.comments)
+        elif com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
+            self.ui.tE_info.setText(str(info))
+            self.model.service_parameters[info.device_id] = info
+
+
+from dataclasses import dataclass, field
+from utilities.data.datastructures.mes_independent import DeviceStatus
+@dataclass(order=True, frozen=False)
+class StpMtrCtrlStatusMultiAxes:
+    device_status: DeviceStatus = DeviceStatus()
+    axes_status: list = field(default_factory=list)
+    positions: list = field(default_factory=list)
 
 class StepMotorsView(QMainWindow):
+
+    def __init__(self, in_controller, in_model, parameters, parent=None):
+        super().__init__(parent)
+        self.name = f'StepMotorsClient:view: {parameters.device_id} {get_local_ip()}'
+        self.parameters = parameters
+        self.controller_status = StpMtrCtrlStatusMultiAxes()
+        self.logger = logging.getLogger("StepMotors." + __name__)
+        info_msg(self, 'INITIALIZING')
+        self.controller = in_controller
+        self.model = in_model
+        self.device = self.model.superuser
+
+        self.ui = Ui_StpMtrGUI()
+        self.ui.setupUi(self, parameters)
+
+        self.model.add_observer(self)
+        self.model.model_changed.connect(self.model_is_changed)
+        self.ui.pushButton_move.clicked.connect(self.move_axis)
+        self.ui.checkBox_On.clicked.connect(self.activate_axis)
+        self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
+        self.ui.closeEvent = self.closeEvent
+        info_msg(self, 'INITIALIZED')
+
+    def test(self):
+        #partial(self.controller.send_request_to_server, self.gen_activate_axis())
+        print(self.ui.checkBox_On.isChecked())
+
+    def axis_value_change(self):
+        self.ui.retranslateUi(self, self.controller_status)
+
+
+    def closeEvent(self, event):
+        self.controller.quit_clicked(event)
+
+    def activate_axis(self) -> Message:
+        msg = MsgGenerator.do_it(device=self.device, com='activate_axis', service_id=self.parameters.device_id,
+                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                              'flag': self.ui.checkBox_On.isChecked()})
+        self.device.send_msg_externally(msg)
+
+    def move_axis(self) -> Message:
+        if self.ui.radioButton_absolute.isChecked():
+            how = 'absolute'
+        else:
+            how = 'relative'
+        msg = MsgGenerator.do_it(com='move_to', device=self.device, service_id=self.parameters.device_id,
+                                      parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                                  'pos': float(self.ui.lineEdit_value.text()),
+                                                  'how': how})
+        self.device.send_msg_externally(msg)
+
+    def stop_axis(self) -> Message:
+        pass
+        #return gen_msg(com='move_pos', device=self.device, where=None, how=None)
+
+    def model_is_changed(self, msg: Message):
+        com = msg.data.com
+        info = msg.data.info
+        if com == MsgGenerator.DONE_IT.mes_name:
+            if info.com == 'activate_axis':
+                flag = info.result['flag']
+                self.ui.checkBox_On.setChecked(flag)
+                self.controller_status.axes_status[info.result['axis']] = flag
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == 'move_to':
+                pos = info.result['pos']
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[info.result['axis']] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == 'get_controller_state':
+                self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
+                self.ui.retranslateUi(self, self.controller_status)
+
+
+class StepMotorsView_old(QWidget):
     '''
     Created on 11 mai 2017
 

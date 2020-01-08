@@ -9,9 +9,11 @@ import logging
 import pathlib
 from time import sleep
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
-from communication.messaging.message_utils import gen_msg
+from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
+from utilities.data.messages import Message
 from views.ClientGUIViews import SuperUserView, StepMotorsView
+from devices.devices import Device
 
 
 module_logger = logging.getLogger(__name__)
@@ -23,9 +25,10 @@ class SuperClientGUIcontroller():
         """
         """
         self.logger = module_logger
-        self.name = 'ServerGUI:controller: ' + get_local_ip()
+        self.name = 'SuperClientGUI:controller: ' + get_local_ip()
         info_msg(self, 'INITIALIZING')
         self.model = in_model
+        self.device = self.model.superuser
         self.view = SuperUserView(self, in_model=self.model)
         self.view.show()
         info_msg(self, 'INITIALIZED')
@@ -51,53 +54,56 @@ class SuperClientGUIcontroller():
                     exc = exc + r
                 os.system(exc)
 
-    def lW_devices_double_clicked(self, item: QListWidgetItem):
-        service_id = item.text().split(':')[2]
-        msg_i = gen_msg(com='status_service_demand', device=self.model.superuser, service_id=service_id)
-        print(msg_i)
-
-
-    def quit_clicked(self, event):
+    def create_service_gui(self):
+        service_id = self.view.ui.lW_devices.currentItem().text().split(':')[2]
         try:
-            self.model.superuser.stop()
-            sleep(1)
+            parameters = self.model.service_parameters[service_id]
+        except KeyError as e:
+            self.logger.error(f'Service with id {service_id} does not have parameters')
+        try:
+            self.view_stpmtr = StepMotorsView(in_controller=self, in_model=self.model, parameters=parameters)
+            self.view_stpmtr.show()
+            self.logger.info(f'GUI for service {service_id} is started')
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,
+                                     parameters={})
+            self.device.send_msg_externally(msg)
         except Exception as e:
             print(e)
-        self.logger.info('Closing')
-        QApplication.quit()
+
+    def send_request_to_server(self, msg: Message):
+        self.device.send_msg_externally(msg)
+
+    def lW_devices_double_clicked(self, item: QListWidgetItem):
+        service_id = item.text().split(':')[2]
+        msg = MsgGenerator.info_service_demand(device=self.device, service_id=service_id)
+        self.device.send_msg_externally(msg)
+
+    def pB_checkServices_clicked(self):
+        msg = MsgGenerator.available_services_demand(device=self.device)
+        self.device.thinker.add_task_out(msg)
+
+    def quit_clicked(self, event, total_close=False):
+        if total_close:
+            try:
+                self.device.stop()
+            except Exception as e:
+                print(e)
+            self.logger.info('Closing')
+            QApplication.quit()
 
 
 class StepMotorsController:
-    '''
-    Created on 7 juin 2016
 
-    @author: saldenisov
-    '''
-
-    def __init__(self, in_model):
-        """
-        """
+    def __init__(self, in_model, device: Device=None):
         self.logger = logging.getLogger('StepMotors' + '.' + __name__)
         self.name = 'StepMotorsClient:controller: ' + get_local_ip()
         info_msg(self, 'INITIALIZING')
         self.model = in_model
-        self.view = StepMotorsView(self, in_model=self.model)
+        if not Device:
+            raise Exception(f"{self} no Device were given")
+        self.view = StepMotorsView(self)
         self.view.show()
         info_msg(self, 'INITIALIZED')
-
-    def help_clicked(self):
-        QMessageBox.information(self.view,
-                                'Help',
-                                """For any help contact:\n
-                                Sergey A. Denisov\n
-                                sergey.denisov@u-psud.fr""")
-
-    def author_clicked(self):
-        QMessageBox.information(self.view,
-                                'Author information',
-                                """Author: Sergey A. Denisov\n
-                                e-mail: sergey.denisov@u-psud.fr\n
-                                telephone: +33625252159""")
 
     def quit_clicked(self, event):
         reply = QMessageBox.question(self.view, 'Quiting',
@@ -109,18 +115,6 @@ class StepMotorsController:
             QApplication.quit()
         else:
             event.ignore()
-
-    def listwidget_double_clicked(self, item: QListWidgetItem):
-        motor_controller_name = item.text()
-        if not motor_controller_name in self.model.stpmtrctrl:
-            try:
-                self.model.add_stpmtrctrl(motor_controller_name)
-                self.view.add_controls(motor_controller_name)
-            except Exception as e:
-                self.logger.error(e)
-        else:
-            self.model.remove_stpmtrctrl(motor_controller_name)
-            self.view.delete_controls(motor_controller_name)
 
     def connect_stpmtrctrl(self, motor_controller_name: str):
         on = self.model.dlines[motor_controller_name].on

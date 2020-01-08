@@ -30,7 +30,6 @@ def f(obj: object) -> str:
     return str(out)
 
 
-# INFO Messages
 @dataclass(frozen=True, order=True)
 class AvailableServices:
     running_services: dict
@@ -38,6 +37,25 @@ class AvailableServices:
 
 
 @dataclass(frozen=True, order=True)
+class DoIt:
+    com: str
+    parameters: dict = field(default_factory=dict)
+
+
+@dataclass(frozen=True, order=True)
+class DoneIt:
+    com: str
+    result: object
+    comments: str = ''
+
+
+@dataclass(frozen=True, order=True)
+class Forward_msg:
+    service_id: str
+    demand: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
+
+
+@dataclass(order=True)
 class MessengerInfoMes:
     id: str = ''
     public_key: str = ''
@@ -51,26 +69,18 @@ class EventInfoMes:
     device_id: str
     tick: float = 0.1
     n: float = 0.0
+    sockets: dict = field(default_factory=dict)
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True)
 class DeviceInfoMes:
-    name: str
-    id: str
-    type: str  # service, client, server
-    class_type: str
-    messenger_info: MessengerInfoMes
-    device_status: DeviceStatus
-
-
-
-
-@dataclass(frozen=True, order=True)
-class DeviceInfoShortMes:
-    name: str
-    id: str
-    type: str  # service, client, server
-    sockets: dict
+    device_id: str
+    messenger_id: str
+    name: str = None
+    type: str = None  # service, client, server
+    class_type: str = None
+    device_status: DeviceStatus = None
+    public_sockets: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, order=True)
@@ -83,6 +93,14 @@ class ServerStatusMes:
 @dataclass(frozen=True, order=True)
 class ServiceStatusMes:
     device_status: DeviceStatus
+
+
+@dataclass(frozen=True, order=True)
+class ServiceInfoMes:
+    device_status: DeviceStatus = DeviceStatus()
+    device_id: str = ''
+    device_description: dict = field(default_factory=dict)
+    available_public_functions: dict = field(default_factory=dict)
 
 
 @dataclass(frozen=True, order=True)
@@ -104,6 +122,12 @@ class ServerInfoQueKeysMes:
     queue_in_keys: deque = field(default_factory=deque)
     queue_out_keys: deque = field(default_factory=deque)
     queue_in_pending_keys: deque = field(default_factory=deque)
+
+
+@dataclass(frozen=True, order=True)
+class ShutDownMes:
+    device_id: str
+    reason: str = ""
 
 
 @dataclass(frozen=True, order=True)
@@ -129,7 +153,7 @@ class Unknown:
 
 @dataclass(frozen=True, order=True)
 class Error:
-    comment: str = ''
+    comments: str = ''
 
 
 @dataclass(frozen=True, order=True)
@@ -147,8 +171,8 @@ class Test:
 # General structure of message
 @dataclass(order=True)
 class MessageData:
-    com: str # command
-    info: object # DataClass
+    com: str  # command
+    info: object  # DataClass
 
 
 @dataclass(order=True)
@@ -171,7 +195,11 @@ class Message(MessageInter):
             object.__setattr__(self, 'id', unique_id())
 
     def short(self):
-        return {'rec_id': self.body.receiver_id, 'data': self.data.com, 'reply_to': self.reply_to, 'id': self.id}
+        return {'sender_id':  self.body.sender_id,
+                'rec_id': self.body.receiver_id,
+                'data': self.data.com,
+                'reply_to': self.reply_to,
+                'id': self.id}
 
     def json_repr(self, compression=True):
         def message_to_json(msg: Message, compression: bool) -> bytes:
@@ -192,7 +220,8 @@ class Message(MessageInter):
 
 class MessageStructure(NamedTuple):
     type: str
-    mes_class: object #  DataClass
+    mes_class: object  # DataClass
+    mes_name: str = ""
 
 @dataclass
 class Test():
