@@ -9,7 +9,6 @@ from pathlib import Path
 app_folder = str(Path(__file__).resolve().parents[1])
 sys.path.append(app_folder)
 
-from time import sleep
 from devices.devices import DeviceFactory
 
 

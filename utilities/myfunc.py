@@ -13,7 +13,6 @@ import logging
 from datetime import datetime
 from hashlib import md5
 from random import randint
-from socket import gethostbyname, gethostname
 from time import sleep
 from typing import Any
 
