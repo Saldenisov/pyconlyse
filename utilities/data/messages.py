@@ -80,7 +80,18 @@ class DeviceInfoMes:
     type: str = None  # service, client, server
     class_type: str = None
     device_status: DeviceStatus = None
+    public_key: bytes = b''
     public_sockets: dict = field(default_factory=dict)
+
+
+@dataclass(order=True)
+class WelcomeServer:
+    device_id: str
+    messenger_id: str
+    session_key: str
+    name: str
+    device_status: DeviceStatus
+    public_sockets: dict
 
 
 @dataclass(frozen=True, order=True)

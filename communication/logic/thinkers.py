@@ -61,6 +61,8 @@ class GeneralCmdLogic(Thinker):
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
                 connection: Connection = self.parent.connections[data.info.device_id]
                 connection.device_info = data.info
+                session_key = self.parent.messenger.decrypt_with_private(data.info.session_key)
+                self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
 
     def react_demand(self, msg: Message):
         info_msg(self, 'REQUEST', extra=str(msg))
@@ -140,7 +142,11 @@ class ServerCmdLogic(Thinker):
                                                 event_id=f'heartbeat:{data.info.device_id}',
                                                 original_owner=device_info.device_id,
                                                 start_now=True)
-                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
+                        session_key = self.parent.messenger.gen_symmetric_key(device_info.device_id)
+                        session_key_encrypted = self.parent.messenger.encrypt_with_public(session_key,
+                                                                                          device_info.public_key)
+                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg,
+                                                          session_key=session_key_encrypted)
                         self.parent.send_status_pyqt(com='status_server_info_full')
                     else:
                         msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
@@ -214,8 +220,6 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         if data.com == MsgGenerator.WELCOME_INFO.mes_name:
             msg = MsgGenerator.available_services_demand(device=self.parent)
             self.add_task_out(msg)
-
-
 
 
 class StpMtrCmdLogic(GeneralCmdLogic):
