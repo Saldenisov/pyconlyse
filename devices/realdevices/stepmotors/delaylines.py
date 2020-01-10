@@ -2,12 +2,16 @@ from devices.devices import Service
 import logging
 import ctypes
 from inspect import signature
+import utilities.data.messages as mes
+from concurrent.futures import ThreadPoolExecutor
+from communication.messaging.message_utils import MsgGenerator
 from time import sleep
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
 observe = 'observe'
 info = 'info'
+
 
 # is not working anymore, no support is available
 class StpMtrCtrl_2axis(Service):
@@ -296,6 +300,7 @@ class StpMtrCtrl_emulate(Service):
         self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
         self._pos = [0.0, 0.0, 0.0, 0.0]
         self._axes_status = [False, False, False, False]
+        self._moving = False
 
     def available_public_functions(self):
         return {'activate_axis': {'axis': 0, 'flag': True},
@@ -303,17 +308,6 @@ class StpMtrCtrl_emulate(Service):
                 'get_pos': {'axis': 0},
                 'get_controller_state': {}
                 }
-
-    def execute_com(self, com: str, parameters: dict):
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                return f(**parameters)
-            else:
-                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-
-        else:
-            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
 
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
@@ -327,6 +321,26 @@ class StpMtrCtrl_emulate(Service):
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
         return desc
+
+    def execute_com(self, msg: mes.Message):
+        msg_i=None
+        com = msg.data.info.com
+        parameters = msg.data.info.parameters
+        if com in self.available_public_functions():
+            f = getattr(self, com)
+            if parameters.keys() == signature(f).parameters.keys():
+                executor = ThreadPoolExecutor(max_workers=10)
+                results = executor.submit(f, **parameters)
+                result, comments = results.result()
+                if result:
+                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
+            else:
+                comments = f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
+        else:
+            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+        if not msg_i:
+            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
+        self.thinker.msg_out(True, msg_i)
 
     def _within_limits(self, axis:int, pos) -> bool:
         comments = ''
@@ -362,6 +376,7 @@ class StpMtrCtrl_emulate(Service):
             return False, comments
 
     def move_to(self, axis: int, pos: float, how='absolute'):
+        print(axis, pos, how)
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
             if how == 'absolute':
@@ -372,17 +387,31 @@ class StpMtrCtrl_emulate(Service):
                 return False, f'how {how} is wrong, could be only absolute and relative'
             chk_lmt, comments = self._within_limits(axis, pos)
             if chk_lmt:
-                self._pos[axis] = pos
-                sleep(pos / 1000. * 5)
-                return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
+                if not self._moving:
+                    self._moving = True
+                    if pos - self._pos[axis] > 0:
+                        dir = 1
+                    else:
+                        dir = -1
+                    steps = int(abs(pos - self._pos[axis]))
+                    print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
+                    for i in range(steps):
+                        self._pos[axis] = self._pos[axis] + dir
+                        sleep(0.1)
+                    self._moving = False
+                    return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
+                else:
+                    comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
+                    return False, comments
             else:
                 return False, comments
         else:
             return False, comments
 
-    def get_pos(self, axis: int):
+    def get_pos(self, axis=0):
         res, comments = self._check_axis(axis)
         if res:
+            print(f' axis{axis} getting {print(self._pos[axis])} {self._pos}')
             return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments

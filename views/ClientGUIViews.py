@@ -6,16 +6,17 @@ Created on 15.11.2019
 import logging
 from _functools import partial
 
-from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QPushButton, QVBoxLayout, QHBoxLayout,
                              QTextEdit, QRadioButton,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
+from concurrent.futures import ThreadPoolExecutor
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
+from devices.devices import Device
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
 from communication.messaging.message_utils import MsgGenerator
@@ -98,7 +99,7 @@ class StepMotorsView(QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
         self.model = in_model
-        self.device = self.model.superuser
+        self.device: Device = self.model.superuser
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, parameters)
@@ -118,7 +119,6 @@ class StepMotorsView(QMainWindow):
     def axis_value_change(self):
         self.ui.retranslateUi(self, self.controller_status)
 
-
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
@@ -134,10 +134,24 @@ class StepMotorsView(QMainWindow):
         else:
             how = 'relative'
         msg = MsgGenerator.do_it(com='move_to', device=self.device, service_id=self.parameters.device_id,
-                                      parameters={'axis': int(self.ui.spinBox_axis.value()),
-                                                  'pos': float(self.ui.lineEdit_value.text()),
-                                                  'how': how})
+                                 parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                             'pos': float(self.ui.lineEdit_value.text()),
+                                             'how': how})
         self.device.send_msg_externally(msg)
+        self._moving = True
+        # TODO: need to find a way to stop this executor
+        self.device.add_to_executor(self.device._exec_mes_every_n_sec, f=self.get_pos,
+                             flag=self._moving, delay=1, n_max=5,
+                             specific={'axis': int(self.ui.spinBox_axis.value())})
+
+
+    def get_pos(self, axis=None) -> Message:
+        if not axis:
+            axis = int(self.ui.spinBox_axis.value())
+        msg = MsgGenerator.do_it(com='get_pos', device=self.device, service_id=self.parameters.device_id,
+                                 parameters={'axis': axis})
+        self.device.send_msg_externally(msg)
+
 
     def stop_axis(self) -> Message:
         pass
@@ -153,6 +167,12 @@ class StepMotorsView(QMainWindow):
                 self.controller_status.axes_status[info.result['axis']] = flag
                 self.ui.retranslateUi(self, self.controller_status)
             elif info.com == 'move_to':
+                self._moving = False
+                pos = info.result['pos']
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[info.result['axis']] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == 'get_pos':
                 pos = info.result['pos']
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[info.result['axis']] = pos
@@ -160,6 +180,12 @@ class StepMotorsView(QMainWindow):
             elif info.com == 'get_controller_state':
                 self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
                 self.ui.retranslateUi(self, self.controller_status)
+        elif com == MsgGenerator.ERROR.mes_name:
+            #self.ui.tE_info.setText(info.comments)
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                                     service_id=self.parameters.device_id,
+                                     parameters={})
+            self.device.send_msg_externally(msg)
 
 
 class StepMotorsView_old(QWidget):

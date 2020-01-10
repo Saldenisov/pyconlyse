@@ -50,7 +50,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_reply(self, msg: Message):
         data = msg.data
-        info_msg(self, 'REPLY_IN', extra=str(msg))
+        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
         if msg.reply_to in self.demands_pending_answer:
             del self.demands_pending_answer[msg.reply_to]
@@ -65,7 +65,7 @@ class GeneralCmdLogic(Thinker):
                 self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
 
     def react_demand(self, msg: Message):
-        info_msg(self, 'REQUEST', extra=str(msg))
+        info_msg(self, 'REQUEST', extra=str(msg.short()))
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
@@ -158,7 +158,7 @@ class ServerCmdLogic(Thinker):
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')
-        self.reply_msg(reply, msg_i)
+        self.msg_out(reply, msg_i)
 
     def react_reply(self,  msg: Message):
         data = msg.data
@@ -176,7 +176,7 @@ class ServerCmdLogic(Thinker):
 
         else:
             pass
-        self.reply_msg(reply, msg_i)
+        self.msg_out(reply, msg_i)
 
     def react_unknown(self, msg: Message):
         msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
@@ -242,11 +242,7 @@ class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
             msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
             reply = True
         elif data.com == MsgGenerator.DO_IT.mes_name:
-            reply = True
+            reply = False
             info: mes.DoIt = data.info
-            result, comments = self.parent.execute_com(com=info.com, parameters=info.parameters)
-            if result:
-                msg_i = MsgGenerator.done_it(self.parent, msg_i=msg, result=result, comments=comments)
-            else:
-                msg_i = MsgGenerator.error(self.parent, msg_i=msg, comments=comments)
-        self.reply_msg(reply, msg_i)
+            self.parent.add_to_executor(self.parent.execute_com, msg=msg)
+        self.msg_out(reply, msg_i)
