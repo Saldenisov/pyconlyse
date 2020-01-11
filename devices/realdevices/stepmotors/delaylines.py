@@ -1,13 +1,12 @@
+from typing import Iterable, Union, Dict
+
 from devices.devices import Service
+from .stpmtr_controller import StpMtrController
 import logging
 import ctypes
 from inspect import signature
 from time import sleep
-<<<<<<< HEAD
 from deprecated import deprecated
-
-=======
->>>>>>> develop
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
@@ -296,7 +295,7 @@ class StpMtrCtrl_2axis(Service):
             self.logger.info('Connect stepmotors before applying settings')
 
 
-class StpMtrCtrl_emulate(Service):
+class StpMtrCtrl_emulate(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._axis_number = 4
@@ -311,6 +310,19 @@ class StpMtrCtrl_emulate(Service):
                 'get_controller_state': {}
                 }
 
+    def description(self):
+        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
+                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
+                'axes_values': [0, 3],
+                'ranges': [(0.0, 100.0, [0, 91]),
+                           (-100.0, 100.0, [0, 50]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
+        return desc
+
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+
     def execute_com(self, com: str, parameters: dict):
         if com in self.available_public_functions():
             f = getattr(self, com)
@@ -321,19 +333,6 @@ class StpMtrCtrl_emulate(Service):
 
         else:
             return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-
-    def GUI_bounds(self):
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
-
-    def description(self):
-        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
-                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
-                'axes_values': [0, 3],
-                'ranges': [(0.0, 100.0, [0, 91]),
-                           (-100.0, 100.0, [0, 50]),
-                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
-                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
-        return desc
 
     def _within_limits(self, axis:int, pos) -> bool:
         comments = ''
@@ -396,17 +395,4 @@ class StpMtrCtrl_emulate(Service):
 
     def get_controller_state(self):
         comments = ''
-        return {'device_status':self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
-
-
-class StpMtrCtrl_emulate2(Service):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def moveto(self, pos: float):
-        from time import sleep
-        sleep(pos/1000. * 5)
-        self.pos = pos
-
-    def getpos(self) -> float:
-        return self.pos
+        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments

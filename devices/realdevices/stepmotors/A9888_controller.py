@@ -13,7 +13,6 @@ under windows with no problems
 import gpiozero
 from devices.devices import Service
 import logging
-import ctypes
 from time import sleep
 from deprecated import deprecated
 
@@ -26,8 +25,59 @@ class Newport_4axis(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+
     def _setup_pins(self):
-        pass
+        GPIO.setmode(GPIO.BCM)  # choose BCM or BOARD
+
+        TTL_pin = 19
+        DIR_pin = 26
+        enable_pin = 12
+        ms1 = 21
+        ms2 = 20
+        ms3 = 16
+        relayIa = 2  # orange
+        relayIb = 3  # red
+        relayIIa = 17  # brown hz
+        relayIIb = 27  # green
+        relayIIIa = 22  # yellow
+        relayIIIb = 10  # gray
+        relayIVa = 9  # blue
+        relayIVb = 11  # green
+
+        GPIO.setup(TTL_pin, GPIO.OUT)
+        GPIO.setup(DIR_pin, GPIO.OUT)
+        GPIO.setup(enable_pin, GPIO.OUT)
+        GPIO.setup(ms1, GPIO.OUT)
+        GPIO.setup(ms2, GPIO.OUT)
+        GPIO.setup(ms3, GPIO.OUT)
+        GPIO.setup(relayIa, GPIO.OUT)
+        GPIO.setup(relayIb, GPIO.OUT)
+        GPIO.setup(relayIIa, GPIO.OUT)
+        GPIO.setup(relayIIb, GPIO.OUT)
+        GPIO.setup(relayIIIa, GPIO.OUT)
+        GPIO.setup(relayIIIb, GPIO.OUT)
+        GPIO.setup(relayIVa, GPIO.OUT)
+        GPIO.setup(relayIVb, GPIO.OUT)
+
+        # On/Off for relay normally closed
+        On = 0
+        Off = 1
+
+        GPIO.output(TTL_pin, 0)
+        GPIO.output(DIR_pin, 0)
+        GPIO.output(enable_pin, 0)
+
+        GPIO.output(relayIa, Off)
+        GPIO.output(relayIb, Off)
+
+        GPIO.output(relayIIa, Off)
+        GPIO.output(relayIIb, Off)
+
+        GPIO.output(relayIIIa, Off)
+        GPIO.output(relayIIIb, Off)
+
+        GPIO.output(relayIVa, Off)
+        GPIO.output(relayIVb, Off)
 
     def _enable_controller(self):
         GPIO.output(enable_pin, 0)
@@ -60,7 +110,6 @@ class Newport_4axis(Service):
 
     def get_pos(self, axis):
         pass
-
 
     def activate(self):
         super().activate()
