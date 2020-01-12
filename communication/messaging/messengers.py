@@ -227,6 +227,18 @@ class ClientMessenger(Messenger):
             error_logger(self, self._create_sockets, e)
             raise e
 
+    def _verify_addresses(self, addresses: dict):
+        ports = ['publisher', 'server_publisher']
+        for port in ports:
+            if port not in addresses:
+                raise Exception(f'Not enough ports {port} were passed to {self.name}')
+        from utilities.myfunc import verify_port
+        # Check only publisher port availability
+        port = verify_port(addresses['publisher'])
+        local_ip = get_local_ip()
+        self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
+        self.addresses['server_publisher'] = addresses['server_publisher'].split(',')
+
     def connect(self):
         try:
             self.sockets['dealer'].connect(self.addresses['server_frontend'])
@@ -335,18 +347,6 @@ class ClientMessenger(Messenger):
                 error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
-
-    def _verify_addresses(self, addresses: dict):
-        ports = ['publisher', 'server_publisher']
-        for port in ports:
-            if port not in addresses:
-                raise Exception(f'Not enough ports {port} were passed to {self.name}')
-        from utilities.myfunc import verify_port
-        # Check only publisher port availability
-        port = verify_port(addresses['publisher'])
-        local_ip = get_local_ip()
-        self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
-        self.addresses['server_publisher'] = addresses['server_publisher']
 
 
 class ServiceMessenger(ClientMessenger):

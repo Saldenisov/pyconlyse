@@ -320,42 +320,6 @@ class Server(Device):
         super().send_status_pyqt(com='status_server_info_full')
 
 
-class Service(Device):
-
-    def __init__(self, **kwargs):
-        from communication.messaging.messengers import ServiceMessenger
-        from devices.soft.deciders import ServiceDecider
-
-        if 'thinker_cls' in kwargs:
-            cls_parts = {'Thinker': kwargs['thinker_cls'],
-                         'Decider': ServiceDecider,
-                         'Messenger': ServiceMessenger}
-        else:
-            raise Exception('Thinker cls was not passed to Device factory')
-
-        kwargs['cls_parts'] = cls_parts
-        if 'DB_command' not in kwargs:
-            raise Exception('DB_command_type is not determined')
-
-        self.type = 'service'
-        self.server_msgn_id = ''
-        #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
-        super().__init__(**kwargs)
-
-    @abstractmethod
-    def available_public_functions(self):
-        pass
-    @abstractmethod
-    def execute_com(self, com: str, parameters: dict):
-        pass
-
-    def messenger_settings(self):
-        self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
-
-    def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_service_info')
-
-
 class Client(Device):
     """
     class Client communicates with Server to get access to Service it is bound to
@@ -391,6 +355,47 @@ class Client(Device):
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
+
+
+class Service(Device):
+    # TODO: Service and Client are basically the same thing. So they must be merged somehow
+    def __init__(self, **kwargs):
+        from communication.messaging.messengers import ServiceMessenger
+        from devices.soft.deciders import ServiceDecider
+
+        if 'thinker_cls' in kwargs:
+            cls_parts = {'Thinker': kwargs['thinker_cls'],
+                         'Decider': ServiceDecider,
+                         'Messenger': ServiceMessenger}
+        else:
+            raise Exception('Thinker cls was not passed to Device factory')
+
+        kwargs['cls_parts'] = cls_parts
+        if 'DB_command' not in kwargs:
+            raise Exception('DB_command_type is not determined')
+
+        self.type = 'service'
+        self.server_msgn_id = ''
+        #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
+        super().__init__(**kwargs)
+
+    @abstractmethod
+    def available_public_functions(self):
+        pass
+
+    @abstractmethod
+    def execute_com(self, com: str, parameters: dict):
+        pass
+
+    def messenger_settings(self):
+        if isinstance(self.messenger.addresses['server_publisher'], list):
+            for adr in self.messenger.addresses['server_publisher']:
+                self.messenger.subscribe_sub(address=adr)
+        else:
+            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
+
+    def send_status_pyqt(self, com=''):
+        super().send_status_pyqt(com='status_service_info')
 
 
 class DeviceFactory:
