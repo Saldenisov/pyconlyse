@@ -14,3 +14,4 @@
 *.json
 /views/ui/widget_stpmtr_axis.py
 .idea/pyconlyse.iml
+.idea/mypy.xml
