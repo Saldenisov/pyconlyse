@@ -1,21 +1,42 @@
-import inspect as ins
-
+from time import sleep
+from concurrent.futures import ThreadPoolExecutor
 class A:
+    def __init__(self):
+        self.a = 10
+        self._main_executor = ThreadPoolExecutor(max_workers=10)
 
-    def b(self, a, b):
-        print(f'{a}  {b}')
+    def add_to_executor(self, func, **kwargs):
+        # used for slow methods and functions
+        self._main_executor.submit(func, **kwargs)
 
-    def c(self):
-        method_list = [func for func in dir(A) if callable(getattr(A, func))]
-        print(method_list)
+    def _exec_mes_every_n_sec(self, f=None, flag=False, delay=1, n_max=2, specififc={}):
+        print("_exec_mes_every_n_se")
+        i = 0
+        if delay > 5:
+            delay = 5
+        from time import sleep
+        while self.flag and i <= n_max:
+            i += 1
+            print(i)
+            f(**specififc)
+            sleep(delay)
 
-    def d(self, com='b', parameters={}):
-        f = getattr(self, com)
-        if parameters.keys() == ins.signature(f).parameters.keys():
-            f(**parameters)
-        else:
-            print('error')
+    def f(self, b=0, **kwargs):
+        print(f'func f {b}')
+
+
+    def test(self, **kwargs):
+        #self._exec_mes_every_n_sec(f=self.f, flag=True, delay=1, n_max=2, specififc=kwargs)
+        self.add_to_executor(self._exec_mes_every_n_sec, f=self.f, flag=self.flag, delay=1, n_max=2, specififc=kwargs)
 
 
 a = A()
-a.d(parameters={'b':1000, 'a': 232234, 'k':234})
+a.flag = True
+a.test(b=1000, flag=True)
+sleep(1.5)
+a.flag = False
+
+
+
+
+

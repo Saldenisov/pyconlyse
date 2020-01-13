@@ -12,7 +12,7 @@ from time import sleep
 from typing import Union, Dict, Iterable, List, Tuple, Any
 from inspect import signature
 from PyQt5.QtCore import QObject, pyqtSignal
-
+from concurrent.futures import ThreadPoolExecutor
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
 from communication.interfaces import ThinkerInter, MessengerInter
 from communication.messaging.message_utils import MsgGenerator
@@ -54,6 +54,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  logger_new=True,
                  **kwargs):
         super().__init__()
+        self._main_executor = ThreadPoolExecutor(max_workers=100)
         self._kwargs = kwargs
         Device.n_instance += 1
         if logger_new:
@@ -124,6 +125,27 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'CREATED')
     @abstractmethod
     def description(self):
+        pass
+
+    def add_to_executor(self, func, **kwargs):
+        # used for slow methods and functions
+        a = self._main_executor.submit(func, **kwargs)
+        b = 0
+
+    def _exec_mes_every_n_sec(self, f=None, flag=True, delay=5, n_max=10, specific={}):
+        print("_exec_mes_every_n_se")
+        i = 0
+        if delay > 5:
+            delay = 5
+        from time import sleep
+        while flag and i <= n_max:
+            i += 1
+            sleep(delay)
+            if f:
+                f(**specific)
+
+    @abstractmethod
+    def execute_com(self, msg: Message):
         pass
 
     def start(self):
@@ -268,6 +290,9 @@ class Server(Device):
     def description(self):
         return 'Main Server'
 
+    def execute_com(self, msg: Message):
+        pass
+
     @property
     def services_running(self):
         services_running = {}
@@ -306,42 +331,6 @@ class Server(Device):
         super().send_status_pyqt(com='status_server_info_full')
 
 
-class Service(Device):
-
-    def __init__(self, **kwargs):
-        from communication.messaging.messengers import ServiceMessenger
-        from devices.soft.deciders import ServiceDecider
-
-        if 'thinker_cls' in kwargs:
-            cls_parts = {'Thinker': kwargs['thinker_cls'],
-                         'Decider': ServiceDecider,
-                         'Messenger': ServiceMessenger}
-        else:
-            raise Exception('Thinker cls was not passed to Device factory')
-
-        kwargs['cls_parts'] = cls_parts
-        if 'DB_command' not in kwargs:
-            raise Exception('DB_command_type is not determined')
-
-        self.type = 'service'
-        self.server_msgn_id = ''
-        #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
-        super().__init__(**kwargs)
-
-    @abstractmethod
-    def available_public_functions(self):
-        pass
-    @abstractmethod
-    def execute_com(self, com: str, parameters: dict):
-        pass
-
-    def messenger_settings(self):
-        self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
-
-    def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_service_info')
-
-
 class Client(Device):
     """
     class Client communicates with Server to get access to Service it is bound to
@@ -365,15 +354,58 @@ class Client(Device):
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
+    def execute_com(self, msg: Message):
+        pass
+
     def messenger_settings(self):
-        if isinstance(self.messenger.addresses['server_publisher'], list):
-            for adr in self.messenger.addresses['server_publisher']:
-                self.messenger.subscribe_sub(address=adr)
-        else:
-            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
+        for adr in self.messenger.addresses['server_publisher']:
+            self.messenger.subscribe_sub(address=adr)
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
+
+
+class Service(Device):
+    # TODO: Service and Client are basically the same thing. So they must be merged somehow
+    def __init__(self, **kwargs):
+        from communication.messaging.messengers import ServiceMessenger
+        from devices.soft.deciders import ServiceDecider
+
+        if 'thinker_cls' in kwargs:
+            cls_parts = {'Thinker': kwargs['thinker_cls'],
+                         'Decider': ServiceDecider,
+                         'Messenger': ServiceMessenger}
+        else:
+            raise Exception('Thinker cls was not passed to Device factory')
+
+        kwargs['cls_parts'] = cls_parts
+        if 'DB_command' not in kwargs:
+            raise Exception('DB_command_type is not determined')
+
+        self.type = 'service'
+        self.server_msgn_id = ''
+        #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
+        super().__init__(**kwargs)
+
+    @abstractmethod
+    def available_public_functions(self):
+        pass
+
+    @abstractmethod
+    def execute_com(self, com: str, parameters: dict):
+        pass
+
+    def messenger_settings(self):
+        for adr in self.messenger.addresses['server_publisher']:
+            try:
+                self.messenger.subscribe_sub(address=adr)
+            except Exception as e:
+                a = e
+                print(e)
+
+
+    def send_status_pyqt(self, com=''):
+        super().send_status_pyqt(com='status_service_info')
 
 
 class DeviceFactory:

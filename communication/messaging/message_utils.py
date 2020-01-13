@@ -46,7 +46,7 @@ class MsgGenerator:
     STATUS_CLIENT_REPLY = mes.MessageStructure(REPLY, mes.ClientStatusMes, 'status_client_reply')
     SHUTDOWN_INFO = mes.MessageStructure(INFO, mes.ShutDownMes, 'shutdown_info')
     REPLY_ON_FORWARDED_DEMAND = mes.MessageStructure(REPLY, None, 'reply_on_forwarded_demand')
-    WELCOME_INFO = mes.MessageStructure(REPLY, mes.DeviceInfoMes, 'welcome_info')
+    WELCOME_INFO = mes.MessageStructure(REPLY, mes.WelcomeServer, 'welcome_info')
 
     @staticmethod
     def available_services_demand(device):
@@ -130,8 +130,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.SHUTDOWN_INFO, device=device, reason=reason)
 
     @staticmethod
-    def welcome_info(device, msg_i):
-        return MsgGenerator._gen_msg(MsgGenerator.WELCOME_INFO, device=device, msg_i=msg_i)
+    def welcome_info(device, msg_i, session_key: bytes):
+        return MsgGenerator._gen_msg(MsgGenerator.WELCOME_INFO, device=device, msg_i=msg_i, session_key=session_key)
 
     @staticmethod
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
@@ -203,12 +203,14 @@ class MsgGenerator:
                                            n=kwargs['n'],
                                            sockets=device.messenger.public_sockets)
             elif com_name == MsgGenerator.HELLO.mes_name:
+                crypted = False
                 data_info = mes_info_class(name=device.name,
                                            device_id=device.id,
                                            messenger_id=device.messenger.id,
                                            type=device.type,
                                            class_type=device.__class__.__name__,
                                            device_status=device.device_status,
+                                           public_key=device.messenger.public_key,
                                            public_sockets=device.messenger.public_sockets)
             elif com_name == MsgGenerator.STATUS_SERVER_INFO.mes_name:
                 data_info = mes_info_class(device.device_status,
@@ -252,11 +254,11 @@ class MsgGenerator:
             elif com_name == MsgGenerator.SHUTDOWN_INFO.mes_name:
                 data_info = mes_info_class(device.id, reason=kwargs['reason'])
             elif com_name == MsgGenerator.WELCOME_INFO.mes_name:
+                crypted = False
                 data_info = mes_info_class(name=device.name,
                                            device_id=device.id,
+                                           session_key=kwargs['session_key'],
                                            messenger_id=device.messenger.id,
-                                           type=device.type,
-                                           class_type=device.__class__.__name__,
                                            device_status=device.device_status,
                                            public_sockets=device.messenger.public_sockets)
             else:

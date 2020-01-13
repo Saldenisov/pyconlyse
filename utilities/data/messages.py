@@ -80,7 +80,18 @@ class DeviceInfoMes:
     type: str = None  # service, client, server
     class_type: str = None
     device_status: DeviceStatus = None
+    public_key: bytes = b''
     public_sockets: dict = field(default_factory=dict)
+
+
+@dataclass(order=True)
+class WelcomeServer:
+    device_id: str
+    messenger_id: str
+    session_key: str
+    name: str
+    device_status: DeviceStatus
+    public_sockets: dict
 
 
 @dataclass(frozen=True, order=True)
@@ -195,9 +206,12 @@ class Message(MessageInter):
             object.__setattr__(self, 'id', unique_id())
 
     def short(self):
-        return {'sender_id':  self.body.sender_id,
-                'rec_id': self.body.receiver_id,
-                'data': self.data.com,
+        t = str(self.data.info)
+        l = len(t)
+        if l > 300:
+            l = int(0.8*l)
+        return {'path':  f'{self.body.sender_id}->{self.body.receiver_id}',
+                'data': f'{self.data.com}: {t[0:l]}...',
                 'reply_to': self.reply_to,
                 'id': self.id}
 

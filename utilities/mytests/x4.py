@@ -1,74 +1,21 @@
-
-import zmq
-import threading
-from time import sleep
-
-class Pub(threading.Thread):
-
-    def __init__(self):
-        super().__init__()
-        self.context = zmq.Context()
-        self.publisher = self.context.socket(zmq.PUB)
-        self.publisher.bind("tcp://127.0.0.1:5556")
-        self.dealer = self.context.socket(zmq.DEALER)
-        self.dealer.setsockopt_unicode(zmq.IDENTITY, 'bloody')
-        self.dealer.connect("tcp://127.0.0.1:5555")
-        self.p = True
-        self.r = True
-
-    def run(self):
-        s = 'test'.encode('utf-8')
-        from random import randint
-        i = 0
-        while self.r:
-            if self.p:
-                i += 1
-                f = str(i).encode('utf-8')
-                self.publisher.send_multipart([f, s])
-                self.dealer.send_multipart([f, s])
-                self.dealer.send_multipart([f, s + s])
-            sleep(0.1)
+from cryptography.fernet import Fernet
 
 
-class Sub(threading.Thread):
-    def __init__(self):
-        super().__init__()
-        self.context = zmq.Context()
-        self.sub = self.context.socket(zmq.SUB)
-        self.frontend = self.context.socket(zmq.ROUTER)
-        self.frontend.bind("tcp://127.0.0.1:5555")
-        self.poller = zmq.Poller()
-        self.poller.register(self.sub, zmq.POLLIN)
-        self.poller.register(self.frontend, zmq.POLLIN)
+import base64
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-        self.sub.setsockopt(zmq.SUBSCRIBE, b"")
-        self.sub.setsockopt(zmq.RCVHWM, 1)
-        self.sub.connect("tcp://127.0.0.1:5556")
-        self.p = True
-        self.r = True
+password = Fernet.generate_key()
+salt = Fernet.generate_key()
 
-
-    def run(self):
-        while self.r:
-            if self.p:
-                sockets = dict(self.poller.poll())
-
-                if self.sub in sockets:
-                    f, msg = self.sub.recv_multipart()
-                    print('sub', f, msg)
-                if self.frontend in sockets:
-                    who, f, s= self.frontend.recv_multipart()
-                    print('frontend', who, f, s)
-
-
-p = Pub()
-s = Sub()
-p.start()
-s.start()
-
-sleep(1)
-s.p = False
-sleep(1)
-p.p = False
-s.p = True
-
+kdf = PBKDF2HMAC(
+    algorithm=hashes.SHA256(),
+    length=32,
+    salt=salt,
+    iterations=100000,
+    backend=default_backend()
+)
+session_key = base64.urlsafe_b64encode(kdf.derive(password))
+fernet: Fernet = Fernet(b'')

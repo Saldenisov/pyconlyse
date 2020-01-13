@@ -17,4 +17,8 @@
 .idea/
 =======
 .idea/pyconlyse.iml
+<<<<<<< HEAD
+>>>>>>> develop
+=======
+.idea/mypy.xml
 >>>>>>> develop

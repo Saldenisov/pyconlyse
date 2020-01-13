@@ -13,7 +13,6 @@ import logging
 from datetime import datetime
 from hashlib import md5
 from random import randint
-from socket import gethostbyname, gethostname
 from time import sleep
 from typing import Any
 
@@ -112,8 +111,25 @@ def unique_id(name: [Any] = '') -> str:
 
 
 def get_local_ip() -> str:
-        return str(gethostbyname(gethostname()))
+    import ifaddr
 
+    adapters = ifaddr.get_adapters()
+
+    ips_l = []
+    for adapter in adapters:
+        for ip in adapter.ips:
+            if ip.network_prefix < 64:
+                ips_l.append(ip.ip)
+
+    def get(ips_l):
+        for ip in ips_l:
+            if '129.' in ip:
+                return ip
+            elif '127' in ip:
+                return ip
+        return None
+    # was before return str(gethostbyname(gethostname()))
+    return get(ips_l)
 
 def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
