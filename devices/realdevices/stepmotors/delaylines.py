@@ -1,5 +1,3 @@
-from typing import Iterable, Union, Dict
-
 from devices.devices import Service
 from .stpmtr_controller import StpMtrController
 import logging

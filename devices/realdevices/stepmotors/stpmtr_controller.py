@@ -13,10 +13,7 @@ class StpMtrController(Service):
         self._pos: List[float] = []
         self._axes_status: List[bool] = []
         self._limits: List[Tuple[int, int]] = []
-
-        self._set_axes_status()
-        self._set_limits()
-        self._set_pos()
+        self._set_parameters()
 
     @abstractmethod
     def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
@@ -72,18 +69,33 @@ class StpMtrController(Service):
         else:
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
 
-    def _set_axes_status(self):
-        pass
+    def _set_parameters(self) -> Tuple[bool, str]:
+        from DB.tools import create_connectionDB, executeDBcomm, close_connDB
+        from sqlite3 import Cursor
+        #  Device DB is read to set parameters from it
 
-    def _set_limits(self) -> Dict:
-        # TODO: realize logic. must be read from DB
-        return 0
+        def get_axes_status(self, cur: Cursor) -> List[bool]:
+            pass
 
-    def _set_pos(self) -> Iterable[bool, str]:
-        # Read from hardware controller if possible
-        pass
+        def get_limits(self, cur: Cursor) -> List[Tuple[Union[int, float]]]:
+            pass
 
-    def _within_limits(self, axis: int, pos) -> bool:
-        comments = ''
-        return True, comments
+        def get_pos(self, cur: Cursor) -> List[Union[int, float]]:
+            # Read from hardware controller if possible
+            pass
+
+        conn, cur = create_connectionDB(self.db_path)
+        self._axes_status = get_axes_status(cur=cur)
+        self._axis_number = len(self._axes_status)
+        self._limits = get_limits(cur=cur)
+        self._pos = get_pos(cur=cur)
+
+    def _within_limits(self, axis: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        if pos>=self._limits[axis][0] and pos<=self._limits[axis][1]:
+            return True, ''
+        else:
+            comments = f'pos: {pos} for axis {axis} is in the range {self._limits[axis]}'
+            return False, comments
+
+
 

@@ -10,7 +10,7 @@ from abc import abstractmethod
 from pathlib import Path
 from time import sleep
 from typing import Union, Dict, Iterable, List, Tuple, Any
-
+from inspect import signature
 from PyQt5.QtCore import QObject, pyqtSignal
 
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
@@ -100,7 +100,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             self.db_conn, self.cur = create_connectionDB(self.db_path)
             res = executeDBcomm(self.cur, DB_command)
-            self.db_conn = close_connDB(self.db_conn)
+            close_connDB(self.db_conn)
             self.config.add_config(self.name, config_text=res[0])
 
 
