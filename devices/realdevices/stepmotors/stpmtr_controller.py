@@ -12,7 +12,8 @@ class StpMtrController(Service):
         self._axis_number = 4
         self._pos: List[float] = []
         self._axes_status: List[bool] = []
-        self._limits: List[Tuple[int]] = []
+        self._limits: List[Tuple[int, int]] = []
+
         self._set_axes_status()
         self._set_limits()
         self._set_pos()
@@ -29,54 +30,7 @@ class StpMtrController(Service):
     def GUI_bounds(self) -> Dict[str, Any]:
         pass
 
-    def execute_com(self, com: str, parameters: dict) -> Iterable[Union[Dict, bool]]:
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                return f(**parameters)
-            else:
-                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-
-        else:
-            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-
-    def _set_limits(self) -> Dict:
-        # TODO: realize logic. must be read from DB
-        return 0
-
-    def _set_pos(self):
-        # Read from hardware controller if possible
-        pass
-
-    def _set_axes_status(self):
-        pass
-
-    def _within_limits(self, axis:int, pos) -> bool:
-        comments = ''
-        return True, comments
-
-    def _check_axis(self, axis: int) -> bool:
-        res, comments = self._check_axis_range(axis)
-        if res:
-            return self._check_axis_active(axis)
-        else:
-            return res, comments
-
-    def _check_axis_range(self, axis: int) -> bool:
-        comments = ''
-        if axis in range(self._axis_number):
-            return True, comments
-        else:
-            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
-
-    def _check_axis_active(self, axis: int) -> bool:
-        comments = ''
-        if self._axes_status[axis]:
-            return True, comments
-        else:
-            return False, f'axis {axis} is not active, activate it first'
-
-    def activate_axis(self, axis: int, flag: bool):
+    def activate_axis(self, axis: int, flag: bool) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         chk_axis, comments = self._check_axis_range(axis)
         if chk_axis:
             self._axes_status[axis] = flag
@@ -85,14 +39,51 @@ class StpMtrController(Service):
             return False, comments
 
     @abstractmethod
-    def move_to(self, axis: int, pos: float, how='absolute')  -> Iterable[Union[Dict[str, Union[int, str]], str]]:
+    def move_to(self, axis: int, pos: float, how='absolute') -> Tuple[Union[bool,
+                                                                            Dict[str, Union[int, float, str]]], str]:
         pass
 
     @abstractmethod
-    def get_pos(self, axis: int) -> Iterable[Union[Dict[str, Union[int, str]], str]]:
-        #{'axis': axis, 'pos': self._pos[axis], 'how': how}, comments:
+    def get_pos(self, axis: int) -> Tuple[Union[Dict[str, Union[int, float, str]], str]]:
         pass
 
     @abstractmethod
-    def get_controller_state(self)  -> Iterable[Union[Dict[str, Union[int, str]], str]]:
+    def get_controller_state(self) -> Iterable[Union[Dict[str, Union[int, str]], str]]:
         pass
+
+    def _check_axis(self, axis: int) -> Tuple[bool, str]:
+        res, comments = self._check_axis_range(axis)
+        if res:
+            return self._check_axis_active(axis)
+        else:
+            return res, comments
+
+    def _check_axis_active(self, axis: int) -> Tuple[bool, str]:
+        comments = ''
+        if self._axes_status[axis]:
+            return True, comments
+        else:
+            return False, f'axis {axis} is not active, activate it first'
+
+    def _check_axis_range(self, axis: int) -> Tuple[bool, str]:
+        comments = ''
+        if axis in range(self._axis_number):
+            return True, comments
+        else:
+            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
+
+    def _set_axes_status(self):
+        pass
+
+    def _set_limits(self) -> Dict:
+        # TODO: realize logic. must be read from DB
+        return 0
+
+    def _set_pos(self) -> Iterable[bool, str]:
+        # Read from hardware controller if possible
+        pass
+
+    def _within_limits(self, axis: int, pos) -> bool:
+        comments = ''
+        return True, comments
+

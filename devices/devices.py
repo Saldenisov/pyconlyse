@@ -9,7 +9,7 @@ import sqlite3 as sq3
 from abc import abstractmethod
 from pathlib import Path
 from time import sleep
-from typing import Dict, Union
+from typing import Union, Dict, Iterable, List, Tuple, Any
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
@@ -156,6 +156,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.messenger = None
         sleep(0.1)
         info_msg(self, 'STOPPED')
+
+    def execute_com(self, com: str, parameters: dict) -> Iterable[Union[Dict, bool]]:
+        if com in self.available_public_functions():
+            f = getattr(self, com)
+            if parameters.keys() == signature(f).parameters.keys():
+                return f(**parameters)
+            else:
+                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
+
+        else:
+            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
 
     @abstractmethod
     def messenger_settings(self):

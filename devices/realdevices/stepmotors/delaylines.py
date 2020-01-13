@@ -334,7 +334,7 @@ class StpMtrCtrl_emulate(StpMtrController):
         else:
             return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
 
-    def _within_limits(self, axis:int, pos) -> bool:
+    def _within_limits(self, axis: int, pos) -> bool:
         comments = ''
         return True, comments
 
