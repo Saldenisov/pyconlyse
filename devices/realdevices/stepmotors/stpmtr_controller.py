@@ -2,26 +2,19 @@ from devices.devices import Service
 from abc import abstractmethod
 from typing import Union, Dict, Iterable, List, Tuple, Any
 import logging
-from inspect import signature
+
 module_logger = logging.getLogger(__name__)
+
 
 class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Number of axis controller can support
+        # Number of axis that controller can support
         self._axis_number = 4
         self._pos: List[float] = []
         self._axes_status: List[bool] = []
         self._limits: List[Tuple[int, int]] = []
         self._set_parameters()
-
-    @abstractmethod
-    def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
-        pass
-
-    @abstractmethod
-    def description(self) -> Dict[str, Union[str, Any, Iterable[Any]]]:
-        pass
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
@@ -70,7 +63,7 @@ class StpMtrController(Service):
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
 
     def _set_parameters(self) -> Tuple[bool, str]:
-        from DB.tools import create_connectionDB, executeDBcomm, close_connDB
+        from DB.tools import create_connectionDB
         from sqlite3 import Cursor
         #  Device DB is read to set parameters from it
 

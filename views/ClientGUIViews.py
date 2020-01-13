@@ -140,9 +140,9 @@ class StepMotorsView(QMainWindow):
         self.device.send_msg_externally(msg)
         self._moving = True
         # TODO: need to find a way to stop this executor
-        self.device.add_to_executor(self.device._exec_mes_every_n_sec, f=self.get_pos,
-                             flag=self._moving, delay=1, n_max=5,
-                             specific={'axis': int(self.ui.spinBox_axis.value())})
+        self.device.add_to_executor(self.device.exec_mes_every_n_sec, f=self.get_pos,
+                                    flag=self._moving, delay=1, n_max=5,
+                                    specific={'axis': int(self.ui.spinBox_axis.value())})
 
 
     def get_pos(self, axis=None) -> Message:

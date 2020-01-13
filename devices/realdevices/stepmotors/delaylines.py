@@ -15,12 +15,8 @@ observe = 'observe'
 info = 'info'
 
 
-<<<<<<< HEAD
 @deprecated(version='1.0', reason="Class is not supported, the hardware controller is out of order")
-=======
-# is not working anymore, no support is available
->>>>>>> develop
-class StpMtrCtrl_2axis(Service):
+class StpMtrCtrl_2axis(StpMtrController):
     """
     It is not working anymore, no support is available
     Defines class of Delay line
@@ -316,12 +312,6 @@ class StpMtrCtrl_emulate(StpMtrController):
                 'get_controller_state': {}
                 }
 
-<<<<<<< HEAD
-=======
-    def GUI_bounds(self):
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
-
->>>>>>> develop
     def description(self):
         desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
                 'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
@@ -329,48 +319,14 @@ class StpMtrCtrl_emulate(StpMtrController):
                 'ranges': [(0.0, 100.0, [0, 91]),
                            (-100.0, 100.0, [0, 50]),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
-                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
+                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])],
+                'info': ""}
         return desc
 
-<<<<<<< HEAD
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
-    def execute_com(self, com: str, parameters: dict):
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                return f(**parameters)
-            else:
-                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-
-        else:
-            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-
-    def _within_limits(self, axis: int, pos) -> bool:
-=======
-    def execute_com(self, msg: mes.Message):
-        msg_i=None
-        com = msg.data.info.com
-        parameters = msg.data.info.parameters
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                executor = ThreadPoolExecutor(max_workers=10)
-                results = executor.submit(f, **parameters)
-                result, comments = results.result()
-                if result:
-                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
-            else:
-                comments = f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-        else:
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-        if not msg_i:
-            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
-        self.thinker.msg_out(True, msg_i)
-
     def _within_limits(self, axis:int, pos) -> bool:
->>>>>>> develop
         comments = ''
         return True, comments
 
@@ -447,19 +403,3 @@ class StpMtrCtrl_emulate(StpMtrController):
     def get_controller_state(self):
         comments = ''
         return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
-<<<<<<< HEAD
-=======
-
-
-class StpMtrCtrl_emulate2(Service):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def moveto(self, pos: float):
-        from time import sleep
-        sleep(pos/1000. * 5)
-        self.pos = pos
-
-    def getpos(self) -> float:
-        return self.pos
->>>>>>> develop

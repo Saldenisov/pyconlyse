@@ -123,16 +123,60 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(str(e))
 
         info_msg(self, 'CREATED')
+
     @abstractmethod
-    def description(self):
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         pass
 
-    def add_to_executor(self, func, **kwargs):
-        # used for slow methods and functions
-        a = self._main_executor.submit(func, **kwargs)
-        b = 0
+    @abstractmethod
+    def description(self) -> Dict[str, Any]:
+        pass
 
-    def _exec_mes_every_n_sec(self, f=None, flag=True, delay=5, n_max=10, specific={}):
+    @abstractmethod
+    def messenger_settings(self) -> None:
+        pass
+
+    def activate(self) -> None:
+        self.device_status.active = True
+
+    def deactivate(self) -> None:
+        self.device_status.active = False
+
+    def add_to_executor(self, func, **kwargs) -> bool:
+        # used for slow methods and functions
+        try:
+            self._main_executor.submit(func, **kwargs)
+            return True
+        except:
+            return False
+
+    def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
+        return self.config.config_to_dict(self.name)['General']
+
+    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
+        res = self.config.config_to_dict(self.name)['Addresses']
+        return res
+
+    def decide_on_msg(self, msg: Message) -> None:
+        # TODO : realise logic
+        decision = self.decider.decide(msg)
+        if decision.allowed:
+            self.thinker.add_task_in(msg)
+        else:
+            pass # should be send back or whereever
+
+    def execute_com(self, com: str, parameters: dict) -> Tuple[Dict[str, Any], str]:
+        if com in self.available_public_functions():
+            f = getattr(self, com)
+            if parameters.keys() == signature(f).parameters.keys():
+                return f(**parameters)
+            else:
+                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
+
+        else:
+            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+
+    def exec_mes_every_n_sec(self, f=None, flag=True, delay=5, n_max=10, specific={}) -> None:
         print("_exec_mes_every_n_se")
         i = 0
         if delay > 5:
@@ -143,10 +187,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             sleep(delay)
             if f:
                 f(**specific)
-
-    @abstractmethod
-    def execute_com(self, msg: Message):
-        pass
 
     def start(self):
         info_msg(self, 'STARTING')
@@ -179,36 +219,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         sleep(0.1)
         info_msg(self, 'STOPPED')
 
-    def execute_com(self, com: str, parameters: dict) -> Iterable[Union[Dict, bool]]:
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                return f(**parameters)
-            else:
-                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-
-        else:
-            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-
-    @abstractmethod
-    def messenger_settings(self):
-        pass
-
-    def activate(self):
-        self.device_status.active = True
-
-    def deactivate(self):
-        self.device_status.active = False
-
-    def info(self):
-        from collections import OrderedDict as od
-        info = od()
-        info['device_status'] = self.device_status
-        info['messenger_status'] = self.messenger.info()
-        info['thinker_status'] = self.thinker.info()
-        info['decider_status'] = self.decider.info()
-        return info
-
     def send_status_pyqt(self, com=''):
         # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
         if self.pyqtsignal_connected:
@@ -226,6 +236,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             self.logger.info(f'pyqtsignal_connected is {self.pyqtsignal_connected}, the signal cannot be emitted')
 
+    def info(self) -> Dict[str, Union[DeviceStatus, Any]]:
+        from collections import OrderedDict as od
+        info = od()
+        info['device_status'] = self.device_status
+        info['messenger_status'] = self.messenger.info()
+        info['thinker_status'] = self.thinker.info()
+        info['decider_status'] = self.decider.info()
+        return info
+
     def pause(self):
         self.thinker.pause()
         self.messenger.pause()
@@ -241,28 +260,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def send_msg_externally(self, msg: Message):
         self.messenger.add_msg_out(msg)
 
-    def decide_on_msg(self, msg: Message):
-        # TODO : realise logic
-        decision = self.decider.decide(msg)
-        if decision.allowed:
-            self.thinker.add_task_in(msg)
-        else:
-            pass # should be send back or whereever
-
     def update_config(self, message: str):
-        """
-        """
+        # TODO: realize
         self.logger.info('Config is updated: ' + message)
-
-    def get_addresses(self) -> dict:
-        res = self.config.config_to_dict(self.name)['Addresses']
-        return res
-
-    def get_general_settings(self) -> dict:
-        return self.config.config_to_dict(self.name)['General']
-
-    def available_public_functions(self):
-        pass
 
     def __del__(self):
         self.logger.info(f"Instance of class {self.__class__.__name__}: {self.long_name} is deleted")
@@ -287,10 +287,18 @@ class Server(Device):
 
         super().__init__(**kwargs)
 
-    def description(self):
-        return 'Main Server'
+    def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
+        # TODO: realize
+        return {}
 
-    def execute_com(self, msg: Message):
+    def description(self) -> Dict[str, Any]:
+        # TODO: realize
+        return {}
+
+    def activate(self):
+        pass
+
+    def deactivate(self):
         pass
 
     @property
@@ -311,21 +319,11 @@ class Server(Device):
                 clients_running[device_id] = info.name
         return clients_running
 
-
     def stop(self):
        super().stop()
 
     def messenger_settings(self):
         pass
-
-    def activate(self):
-        pass
-
-    def deactivate(self):
-        pass
-
-    def _find_available_services(self):
-        self.services_available = ['DLemulate', 'DL2axis']
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_server_info_full')
@@ -353,6 +351,12 @@ class Client(Device):
         self.server_msgn_id = ''
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
+
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        pass
+
+    def description(self) -> Dict[str, Any]:
+        pass
 
     def execute_com(self, msg: Message):
         pass
@@ -387,12 +391,10 @@ class Service(Device):
         #initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
-    @abstractmethod
-    def available_public_functions(self):
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         pass
 
-    @abstractmethod
-    def execute_com(self, com: str, parameters: dict):
+    def description(self) -> Dict[str, Any]:
         pass
 
     def messenger_settings(self):
@@ -402,7 +404,6 @@ class Service(Device):
             except Exception as e:
                 a = e
                 print(e)
-
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_service_info')
@@ -427,9 +428,12 @@ class DeviceFactory:
                 DB_cmd = f"SELECT device_name from DEVICES_settings where device_id = '{device_id}'"
                 db_conn, cur = create_connectionDB(kwargs['db_path'])
                 device_name = executeDBcomm(cur, DB_cmd)
-                device_name = device_name[0]
+
                 if not device_name:
+                    err = f'DeviceFactory Crash: {device_id} is not present in DB'
+                    module_logger.error(f'DeviceFactory Crash: {device_id} is not present in DB')
                     raise BaseException(f'DeviceFactory Crash: {device_id} is not present in DB')
+                device_name = device_name[0]
 
                 DB_cmd = f"SELECT project_type from DEVICES_settings where device_id = '{device_id}'"
                 db_conn, cur = create_connectionDB(kwargs['db_path'])
