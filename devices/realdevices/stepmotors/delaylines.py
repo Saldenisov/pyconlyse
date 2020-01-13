@@ -418,7 +418,7 @@ class StpMtrCtrl_emulate(Service):
 
     def get_controller_state(self):
         comments = ''
-        return {'device_status':self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
+        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
 
 
 class StpMtrCtrl_emulate2(Service):

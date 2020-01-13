@@ -122,12 +122,12 @@ def get_local_ip() -> str:
                 ips_l.append(ip.ip)
 
     def get(ips_l):
-        ip = None
         for ip in ips_l:
             if '129.' in ip:
                 return ip
             elif '127' in ip:
                 return ip
+        return None
     # was before return str(gethostbyname(gethostname()))
     return get(ips_l)
 

@@ -347,11 +347,8 @@ class Client(Device):
         pass
 
     def messenger_settings(self):
-        if isinstance(self.messenger.addresses['server_publisher'], list):
-            for adr in self.messenger.addresses['server_publisher']:
-                self.messenger.subscribe_sub(address=adr)
-        else:
-            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
+        for adr in self.messenger.addresses['server_publisher']:
+            self.messenger.subscribe_sub(address=adr)
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
@@ -388,11 +385,13 @@ class Service(Device):
         pass
 
     def messenger_settings(self):
-        if isinstance(self.messenger.addresses['server_publisher'], list):
-            for adr in self.messenger.addresses['server_publisher']:
+        for adr in self.messenger.addresses['server_publisher']:
+            try:
                 self.messenger.subscribe_sub(address=adr)
-        else:
-            self.messenger.subscribe_sub(address=self.messenger.addresses['server_publisher'])
+            except Exception as e:
+                a = e
+                print(e)
+
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_service_info')

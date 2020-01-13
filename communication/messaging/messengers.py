@@ -134,7 +134,7 @@ class Messenger(MessengerInter):
             self.sockets['sub'].connect(address)
             self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
             self.sockets['sub'].setsockopt(zmq.RCVHWM, 10)
-        except (zmq.ZMQError) as e:
+        except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
 
     @abstractmethod
@@ -237,7 +237,7 @@ class ClientMessenger(Messenger):
         port = verify_port(addresses['publisher'])
         local_ip = get_local_ip()
         self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
-        self.addresses['server_publisher'] = addresses['server_publisher'].split(',')
+        self.addresses['server_publisher'] = addresses['server_publisher'].replace(" ", "").split(',')
 
     def connect(self):
         try:
