@@ -1,3 +1,5 @@
+from typing import Dict, Union, Any
+
 from devices.devices import Service
 from .stpmtr_controller import StpMtrController
 import logging
@@ -305,12 +307,11 @@ class StpMtrCtrl_emulate(StpMtrController):
         self._axes_status = [False, False, False, False]
         self._moving = False
 
-    def available_public_functions(self):
-        return {'activate_axis': {'axis': 0, 'flag': True},
-                'move_to': {'axis': 0, 'pos': 0, 'how': 'absolute'},
-                'get_pos': {'axis': 0},
-                'get_controller_state': {}
-                }
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        # TODO: realized extension of public functions
+        pub_func = super().available_public_functions()
+        # pub_func = extend(pub_func, thisclass_public_functions())
+        return pub_func
 
     def description(self):
         desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
@@ -320,7 +321,7 @@ class StpMtrCtrl_emulate(StpMtrController):
                            (-100.0, 100.0, [0, 50]),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])],
-                'info': ""}
+                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
         return desc
 
     def GUI_bounds(self):

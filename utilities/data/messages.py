@@ -215,7 +215,8 @@ class Message(MessageInter):
                 'reply_to': self.reply_to,
                 'id': self.id}
 
-    def json_repr(self, compression=True):
+    def json_repr(self, compression=True) -> bytes:
+        # FIXME: Something should be done with this...
         def message_to_json(msg: Message, compression: bool) -> bytes:
             try:
                 json_str = dumps(repr(msg)).encode('utf-8')

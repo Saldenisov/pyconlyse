@@ -1,21 +1,36 @@
-class device:
+from abc import  abstractmethod
 
-    def __init__(self, id=10):
-        self.id = 10
+class A:
 
+    @abstractmethod
+    def a(self):
+        print(300)
 
-class controller:
-
-    def __init__(self, dev: device):
-        self.device = dev
-
-
-class serv(device, controller):
-
-    def __init__(self, id):
-        device.__init__(self, id=id)
-        controller.__init__(self, self.device)
+class B(A):
+    def a(self):
+        super().a()
+        print(200)
 
 
-a = serv(id=20)
-print(a.id)
+class C(B):
+    def __init__(self):
+        self._c = [1]*6
+
+    def a(self):
+        super().a()
+        print(100)
+
+    @property
+    def c(self):
+        return self._c
+
+    @c.setter
+    def c(self, value):
+        print('setting item of _c')
+        self._c = value
+
+c = C()
+c.a()
+c.c = [0]
+
+print(c.c)

@@ -9,27 +9,37 @@ module_logger = logging.getLogger(__name__)
 class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Number of axis that controller can support
-        self._axis_number = 4
-        self._pos: List[float] = []
-        self._axes_status: List[bool] = []
-        self._limits: List[Tuple[int, int]] = []
-        self._set_parameters()
+        self._pos: List[float] = []  # Keeps actual position for axes for controller
+        self._axes_status: List[bool] = []  # Keeps axes status, active or not
+        self._limits: List[Tuple[int, int]] = []  # Limits for each axis
+        self._set_parameters()  # OBLIGATORY STEP
+
+    @abstractmethod
+    def activate(self):
+        pass
+
+    @abstractmethod
+    def activate_axis(self, axis: int, flag: bool) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+        pass
+
+    @abstractmethod
+    def deactivate(self):
+        pass
+
+    @abstractmethod
+    def description(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def power(self, flag: bool):
+        pass
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
         pass
 
-    def activate_axis(self, axis: int, flag: bool) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
-        chk_axis, comments = self._check_axis_range(axis)
-        if chk_axis:
-            self._axes_status[axis] = flag
-            return {'axis': axis, 'flag': flag}, comments
-        else:
-            return False, comments
-
     @abstractmethod
-    def move_to(self, axis: int, pos: float, how='absolute') -> Tuple[Union[bool,
+    def move_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[Union[bool,
                                                                             Dict[str, Union[int, float, str]]], str]:
         pass
 
@@ -40,6 +50,22 @@ class StpMtrController(Service):
     @abstractmethod
     def get_controller_state(self) -> Iterable[Union[Dict[str, Union[int, str]], str]]:
         pass
+
+    @property
+    def pos(self):
+        return self._pos
+
+    @pos.setter
+    def pos(self, value):
+        # TODO: when pos is updated, it is saved into the file
+        self._pos = value
+
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        return {'activate_axis': {'axis': 0, 'flag': True},
+                'move_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
+                'get_pos': {'axis': 0},
+                'get_controller_state': {}
+                }
 
     def _check_axis(self, axis: int) -> Tuple[bool, str]:
         res, comments = self._check_axis_range(axis)
@@ -74,7 +100,7 @@ class StpMtrController(Service):
             pass
 
         def get_pos(self, cur: Cursor) -> List[Union[int, float]]:
-            # Read from hardware controller if possible
+            # Read from hardware controller if possible and compare it with file
             pass
 
         conn, cur = create_connectionDB(self.db_path)

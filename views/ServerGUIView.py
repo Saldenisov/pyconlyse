@@ -50,7 +50,6 @@ class ServerGUIView(QMainWindow):
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.STATUS_SERVER_INFO_FULL.mes_name:
-            info: MsgGenerator.STATUS_SERVER_INFO_FULL.mes_class = msg.data.info
             device_status: DeviceStatus = info.device_status
             if device_status.active:
                 text_widget = "Click to stop..."
@@ -84,6 +83,7 @@ class ServerGUIView(QMainWindow):
             self.ui.tE_events_running.setText(list_to_str_repr(list(info.events_running.keys())))
             self.ui.tE_clients_running.setText(list_to_str_repr(list(info.clients_running.keys())))
         elif com == 'server_queues_tasks_keys':
+            # TODO: change MsgGenerator naming
             self.ui.tE_queue_in.setText(list_to_str_repr(list(info.queue_in_keys)))
             self.ui.tE_queue_out.setText(list_to_str_repr(list(info.queue_out_keys)))
             self.ui.tE_queue_in_pending.setText(list_to_str_repr(list(info.queue_in_pending_keys)))

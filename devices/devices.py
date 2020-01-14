@@ -289,29 +289,6 @@ class Server(Device):
 
         super().__init__(**kwargs)
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
-        # TODO: realize
-        return {}
-
-    def activate(self):
-        self.device_status.active = True
-
-    def deactivate(self):
-        self.device_status.active = False
-
-    def description(self) -> Dict[str, Any]:
-        # TODO: realize
-        return {}
-
-    def start(self):
-        super().start()
-        self.power(True)
-
-    def power(self, flag: bool):
-        """Power of server is alway on"""
-        self.logger.info('Power is ON')
-        self.device_status.power = True
-
     @property
     def services_running(self) -> Dict[str, str]:
         """Returns dict of running services {device_id: name}"""
@@ -332,8 +309,32 @@ class Server(Device):
                 clients_running[device_id] = info.name
         return clients_running
 
+    def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
+        # TODO: realize
+        return {}
+
+    def activate(self):
+        self.device_status.active = True
+
+    def deactivate(self):
+        self.device_status.active = False
+
+    def description(self) -> Dict[str, Any]:
+        # TODO: realize
+        return {}
+
     def messenger_settings(self):
+        # FIXME:...
         pass
+
+    def start(self):
+        super().start()
+        self.power(True)
+
+    def power(self, flag: bool):
+        """Power of server is alway on"""
+        self.logger.info('Power is ON')
+        self.device_status.power = True
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_server_info_full')
@@ -363,9 +364,11 @@ class Client(Device):
         super().__init__(**kwargs)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        # TODO: add functionality
         pass
 
     def description(self) -> Dict[str, Any]:
+        # TODO: add functionality
         pass
 
     def execute_com(self, msg: Message):
@@ -374,6 +377,16 @@ class Client(Device):
     def messenger_settings(self):
         for adr in self.messenger.addresses['server_publisher']:
             self.messenger.subscribe_sub(address=adr)
+
+    def start(self):
+        """Power is ON by default"""
+        super().start()
+        self.power(True)
+
+    def power(self, flag: bool):
+        """Power of client is alway on"""
+        self.logger.info('Power is ON')
+        self.device_status.power = True
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
@@ -401,10 +414,27 @@ class Service(Device):
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
 
+    @abstractmethod
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         pass
 
+    @abstractmethod
     def description(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def activate(self):
+        """realization must be done in real hardware controllers"""
+        pass
+
+    @abstractmethod
+    def deactivate(self):
+        """realization must be done in real hardware controllers"""
+        pass
+
+    @abstractmethod
+    def power(self, flag: bool):
+        """realization must be done in real hardware controllers"""
         pass
 
     def messenger_settings(self):

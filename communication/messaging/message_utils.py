@@ -1,9 +1,8 @@
-from abc import abstractmethod
 from base64 import b64decode
 from json import loads
 from zlib import decompress
-
 import utilities.data.messages as mes
+from utilities.data.messages import MessageStructure
 from typing import Union
 from communication.interfaces import MessengerInter
 from errors.myexceptions import MsgComNotKnown, MsgError
@@ -26,6 +25,7 @@ class MsgGenerator:
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
                  'reply_on_forwarded_demand', 'status_client_info','status_client_demand', 'status_client_reply',
                  'shutdown_info', 'welcome_info']
+
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     DO_IT = mes.MessageStructure(DEMAND, mes.DoIt, 'do_it')
