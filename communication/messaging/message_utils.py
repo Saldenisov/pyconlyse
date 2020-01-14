@@ -20,7 +20,7 @@ FORWARD = 'forward'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
-    # TODO: return back to without _ style
+    # TODO: change to dataclasses
     _COMMANDS = ['available_services_demand', 'available_services_reply', 'do_it', 'done_it', 'error', 'forward_msg',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',

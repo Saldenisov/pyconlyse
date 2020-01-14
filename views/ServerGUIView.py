@@ -10,6 +10,7 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
 from utilities.data.messages import Message
+from utilities.data.datastructures.mes_independent import DeviceStatus
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.ServerGUI_ui import Ui_ServerGUI
@@ -49,7 +50,9 @@ class ServerGUIView(QMainWindow):
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.STATUS_SERVER_INFO_FULL.mes_name:
-            if info.device_status.active:
+            info: MsgGenerator.STATUS_SERVER_INFO_FULL.mes_class = msg.data.info
+            device_status: DeviceStatus = info.device_status
+            if device_status.active:
                 text_widget = "Click to stop..."
                 color = 'background-color: green'
                 self.ui.pB_pause.setEnabled(True)
@@ -63,7 +66,7 @@ class ServerGUIView(QMainWindow):
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
 
-            if info.device_status.paused:
+            if device_status.messaging_paused:
                 text_widget = "click to unpause..."
                 color = 'background-color: yellow'
             else:
@@ -73,7 +76,7 @@ class ServerGUIView(QMainWindow):
             _translate = QtCore.QCoreApplication.translate
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
-            text_info = f'{info.device_status}'
+            text_info = f'{device_status}'
             self.ui.lE_serverinfo.setText(text_info)
 
             # setting info on running services, clients, events

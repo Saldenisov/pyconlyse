@@ -117,7 +117,7 @@ class StepMotorsController:
             event.ignore()
 
     def connect_stpmtrctrl(self, motor_controller_name: str):
-        on = self.model.dlines[motor_controller_name].on
+        on = self.model.dlines[motor_controller_name].start
         active = self.model.dlines[motor_controller_name].active
         if not active:
             self.model.dlines[motor_controller_name].check()
