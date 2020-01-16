@@ -153,24 +153,35 @@ class CheckService:
 
 
 @dataclass(frozen=True, order=True)
-class CheckClient:
-    client_id: str
-
-
-@dataclass(frozen=True, order=True)
-class Unknown:
-    comment: str = ''
-
-
-@dataclass(frozen=True, order=True)
 class Error:
     comments: str = ''
+
+
+@dataclass(frozen=True, order=True)
+class CheckClient:
+    client_id: str
 
 
 @dataclass(frozen=True, order=True)
 class InfoViewUpdate:
     widget_name: str
     parameters: dict
+
+
+@dataclass(frozen=True, order=True)
+class PowerOnDemand:
+    device_id: str
+    power_on: bool
+
+@dataclass(frozen=True, order=True)
+class PowerOnReply:
+    device_id: str
+    power_on: bool
+    comments: str = ""
+
+@dataclass(frozen=True, order=True)
+class Unknown:
+    comment: str = ''
 
 
 @dataclass(frozen=True, order=True)

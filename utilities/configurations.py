@@ -19,6 +19,7 @@ class configurationSD():
     """
     Parse configuration file
     """
+    # TODO: the configurationSD is shit...must be redone completly
     def __init__(self, parent):
         self.logger = logging.getLogger(parent.__class__.__name__ + '.' + __name__ )
         self.logger.info('Configuration is created')

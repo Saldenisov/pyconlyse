@@ -317,8 +317,8 @@ class StpMtrCtrl_emulate(StpMtrController):
         desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
                 'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
                 'axes_values': [0, 3],
-                'ranges': [(0.0, 100.0, [0, 91]),
-                           (-100.0, 100.0, [0, 50]),
+                'ranges': [((0.0, 100.0), (0, 91)),
+                           (-100.0, 100.0, (0, 50)),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
                            (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])],
                 'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}

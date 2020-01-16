@@ -192,6 +192,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 f(**specific)
 
     def start(self):
+        self._start_messaging()
+
+    def stop(self):
+        self._stop_messaging()
+
+    def _start_messaging(self):
         """Start messaging part of Device"""
         info_msg(self, 'STARTING')
         self.thinker.start()
@@ -201,7 +207,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'STARTED')
         self.send_status_pyqt()
 
-    def stop(self):
+    def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
@@ -213,8 +219,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         sleep(0.5)
         self.messenger.stop()
         sleep(0.1)
-        self.device_status = DeviceStatus(*[False] * 3)
         self.send_status_pyqt()
+        self.device_status.messaging_paused = False
+        self.device_status.messaging_on = False
         self.decider = None
         self.thinker = None
         self.messenger = None
@@ -286,8 +293,8 @@ class Server(Device):
         self.services_available = []
         self.type = 'server'
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
-
         super().__init__(**kwargs)
+        self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
     @property
     def services_running(self) -> Dict[str, str]:
@@ -314,10 +321,12 @@ class Server(Device):
         return {}
 
     def activate(self):
-        self.device_status.active = True
+        """Server is always active"""
+        self.logger.info("""Server is always active""")
 
     def deactivate(self):
-        self.device_status.active = False
+        """You cannot deactivate server"""
+        self.logger.info("""You cannot deactivate server""")
 
     def description(self) -> Dict[str, Any]:
         # TODO: realize
@@ -329,12 +338,10 @@ class Server(Device):
 
     def start(self):
         super().start()
-        self.power(True)
 
     def power(self, flag: bool):
-        """Power of server is alway on"""
-        self.logger.info('Power is ON')
-        self.device_status.power = True
+        """Power of server is always ON"""
+        self.logger.info("""Power of server is always ON, """)
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_server_info_full')
@@ -362,10 +369,19 @@ class Client(Device):
         self.server_msgn_id = ''
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
+        self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: add functionality
         pass
+
+    def activate(self):
+        """Client is always active"""
+        self.logger.info("""Clients are always active""")
+
+    def deactivate(self):
+        """You cannot deactivate client"""
+        self.logger.info("""You cannot deactivate any client""")
 
     def description(self) -> Dict[str, Any]:
         # TODO: add functionality
@@ -379,14 +395,11 @@ class Client(Device):
             self.messenger.subscribe_sub(address=adr)
 
     def start(self):
-        """Power is ON by default"""
         super().start()
-        self.power(True)
 
     def power(self, flag: bool):
-        """Power of client is alway on"""
+        """Power of client is alway ON"""
         self.logger.info('Power is ON')
-        self.device_status.power = True
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
@@ -432,10 +445,11 @@ class Service(Device):
         """realization must be done in real hardware controllers"""
         pass
 
-    @abstractmethod
     def power(self, flag: bool):
-        """realization must be done in real hardware controllers"""
-        pass
+        from communication.messaging.message_utils import MsgGenerator
+        msg = MsgGenerator.power_on_demand(self, flag)
+        self.send_msg_externally(msg)
+
 
     def messenger_settings(self):
         for adr in self.messenger.addresses['server_publisher']:

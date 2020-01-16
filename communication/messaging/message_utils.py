@@ -19,11 +19,12 @@ FORWARD = 'forward'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
-    # TODO: change to dataclasses
-    _COMMANDS = ['available_services_demand', 'available_services_reply', 'do_it', 'done_it', 'error', 'forward_msg',
+    _COMMANDS = ['activate_controller', 'available_services_demand', 'available_services_reply', 'do_it', 'done_it',
+                 'error', 'forward_msg',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
-                 'reply_on_forwarded_demand', 'status_client_info','status_client_demand', 'status_client_reply',
+                 'reply_on_forwarded_demand', 'power_on_demand', 'power_on_reply',
+                 'status_client_info','status_client_demand', 'status_client_reply',
                  'shutdown_info', 'welcome_info']
 
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
@@ -41,9 +42,12 @@ class MsgGenerator:
     STATUS_SERVICE_INFO = mes.MessageStructure(INFO, mes.ServiceStatusMes, 'status_service_info')
     INFO_SERVICE_DEMAND = mes.MessageStructure(DEMAND, None, 'info_service_demand')
     INFO_SERVICE_REPLY = mes.MessageStructure(REPLY, mes.ServiceInfoMes, 'info_service_reply')
+    POWER_ON_DEMAND = mes.MessageStructure(DEMAND, mes.PowerOnDemand, 'power_on_demand')
+    POWER_ON_REPLY = mes.MessageStructure(REPLY, mes.PowerOnReply, 'power_on_reply')
     STATUS_CLIENT_INFO = mes.MessageStructure(INFO, mes.ClientStatusMes, 'status_client_info')
     STATUS_CLIENT_DEMAND = mes.MessageStructure(DEMAND, mes.CheckClient, 'status_client_demand')
     STATUS_CLIENT_REPLY = mes.MessageStructure(REPLY, mes.ClientStatusMes, 'status_client_reply')
+    # TODO: fix shutdown_info
     SHUTDOWN_INFO = mes.MessageStructure(INFO, mes.ShutDownMes, 'shutdown_info')
     REPLY_ON_FORWARDED_DEMAND = mes.MessageStructure(REPLY, None, 'reply_on_forwarded_demand')
     WELCOME_INFO = mes.MessageStructure(REPLY, mes.WelcomeServer, 'welcome_info')
@@ -79,6 +83,15 @@ class MsgGenerator:
     @staticmethod
     def hello(device):
         return MsgGenerator._gen_msg(MsgGenerator.HELLO, device=device)
+
+    @staticmethod
+    def power_on_demand(device, flag: bool):
+        return MsgGenerator._gen_msg(MsgGenerator.POWER_ON_DEMAND, device=device, on=flag)
+
+    @staticmethod
+    def power_on_reply(device, msg_i: mes.Message, flag: bool, comments=''):
+        return MsgGenerator._gen_msg(MsgGenerator.POWER_ON_REPLY, device=device, msg_i=msg_i, on=flag,
+                                     comments=comments)
 
     @staticmethod
     def status_server_info(device):
@@ -212,6 +225,14 @@ class MsgGenerator:
                                            device_status=device.device_status,
                                            public_key=device.messenger.public_key,
                                            public_sockets=device.messenger.public_sockets)
+            elif com_name == MsgGenerator.POWER_ON_DEMAND.mes_name:
+                data_info = mes_info_class(device_id=device.id,
+                                           power_on=kwargs['on'])
+            elif com_name == MsgGenerator.POWER_ON_REPLY.mes_name:
+                device_id = msg_i.data.info.device_id
+                data_info = mes_info_class(device_id=device_id,
+                                           power_on=kwargs['on'],
+                                           comments=kwargs['comments'])
             elif com_name == MsgGenerator.STATUS_SERVER_INFO.mes_name:
                 data_info = mes_info_class(device.device_status,
                                            services_running=device.services_running,

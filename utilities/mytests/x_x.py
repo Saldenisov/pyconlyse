@@ -20,17 +20,8 @@ class C(B):
         super().a()
         print(100)
 
-    @property
-    def c(self):
-        return self._c
-
-    @c.setter
-    def c(self, value):
-        print('setting item of _c')
-        self._c = value
 
 c = C()
-c.a()
-c.c = [0]
+c._c[1] = [20]
 
-print(c.c)
+print(c._c)

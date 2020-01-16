@@ -1,6 +1,6 @@
 from devices.devices import Service
 from abc import abstractmethod
-from typing import Union, Dict, Iterable, List, Tuple, Any
+from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar
 import logging
 
 module_logger = logging.getLogger(__name__)
@@ -61,7 +61,10 @@ class StpMtrController(Service):
         self._pos = value
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        return {'activate_axis': {'axis': 0, 'flag': True},
+        """"These functions are default for any stpmtr controller
+        e.g.: A9098, OWIS controller"""
+        return {'activate_controller': {'flag': True},
+                'activate_axis': {'axis': 0, 'flag': True},
                 'move_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
                 'get_pos': {'axis': 0},
                 'get_controller_state': {}
@@ -88,26 +91,49 @@ class StpMtrController(Service):
         else:
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
 
+    @abstractmethod
+    def _set_axes_status(self):
+            pass
+
+    def _set_number_axes(self):
+        pass
+
+    def _set_limits(self):
+        try:
+            limits_s: str = self.config.config_to_dict(self.name)['Parameters']['limits']
+            limits: List[Tuple[Union[float, int]]] = limits_s.replace(" ", "").split('),(')
+            return limits
+        except KeyError:
+            raise stpmtr_error(self, text="Limits could not be set, limits filed is absent in the DB")
+
+    @abstractmethod
+    def _get_pos(self) -> List[Union[int, float]]:
+        # Read from hardware controller if possible and compare it with file
+        pass
+
+    def _get_pos_from_file(self) -> List[Union[int, float]]:
+        # TODO: to be realized
+        return []
+
+    def _set_pos(self):
+        pass
+
+    def _set_preset_values(self):
+        try:
+            preset_values: str = self.config.config_to_dict(self.name)['Controller_parameters']['preset_values']
+        except KeyError:
+            return ()
+        return
+
     def _set_parameters(self) -> Tuple[bool, str]:
-        from DB.tools import create_connectionDB
-        from sqlite3 import Cursor
-        #  Device DB is read to set parameters from it
-
-        def get_axes_status(self, cur: Cursor) -> List[bool]:
-            pass
-
-        def get_limits(self, cur: Cursor) -> List[Tuple[Union[int, float]]]:
-            pass
-
-        def get_pos(self, cur: Cursor) -> List[Union[int, float]]:
-            # Read from hardware controller if possible and compare it with file
-            pass
-
-        conn, cur = create_connectionDB(self.db_path)
-        self._axes_status = get_axes_status(cur=cur)
-        self._axis_number = len(self._axes_status)
-        self._limits = get_limits(cur=cur)
-        self._pos = get_pos(cur=cur)
+        try:
+            self._set_axes_status()
+            self._set_number_axes()
+            self._set_limits()
+            self._set_pos()
+        except stpmtr_error as e:
+            self.logger.error(e)
+            return False, str(e)
 
     def _within_limits(self, axis: int, pos: Union[int, float]) -> Tuple[bool, str]:
         if pos>=self._limits[axis][0] and pos<=self._limits[axis][1]:
@@ -116,5 +142,9 @@ class StpMtrController(Service):
             comments = f'pos: {pos} for axis {axis} is in the range {self._limits[axis]}'
             return False, comments
 
+
+class stpmtr_error(BaseException):
+    def __init__(self, controller: StpMtrController, text: str):
+        super().__init__(f'{controller.name}:{controller.id}:{text}')
 
 
