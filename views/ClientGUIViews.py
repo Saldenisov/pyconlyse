@@ -70,7 +70,7 @@ class SuperUserView(QMainWindow):
             widget.clear()
             names = []
             for key, item in info.running_services.items():
-                names.append(f'{item}:{key}')
+                names.append(f'{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
         elif com == MsgGenerator.ERROR.mes_name:

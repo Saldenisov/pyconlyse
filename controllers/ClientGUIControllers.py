@@ -55,7 +55,7 @@ class SuperClientGUIcontroller():
                 os.system(exc)
 
     def create_service_gui(self):
-        service_id = self.view.ui.lW_devices.currentItem().text().split(':')[2]
+        service_id = self.view.ui.lW_devices.currentItem().text()
         try:
             parameters = self.model.service_parameters[service_id]
         except KeyError as e:
@@ -74,7 +74,7 @@ class SuperClientGUIcontroller():
         self.device.send_msg_externally(msg)
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
-        service_id = item.text().split(':')[2]
+        service_id = item.text()
         msg = MsgGenerator.info_service_demand(device=self.device, service_id=service_id)
         self.device.send_msg_externally(msg)
 
