@@ -1,5 +1,6 @@
-from devices.devices import Service
 from abc import abstractmethod
+from os import path
+from devices.devices import Service
 from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar
 import logging
 
@@ -9,9 +10,14 @@ module_logger = logging.getLogger(__name__)
 class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._axes_number = 1
         self._pos: List[float] = []  # Keeps actual position for axes for controller
         self._axes_status: List[bool] = []  # Keeps axes status, active or not
         self._limits: List[Tuple[int, int]] = []  # Limits for each axis
+        self._file_pos = f"{self.name}:positions"
+        if not path.exists(self._file_pos):
+            file = open(self._file_pos, "w+")
+            file.close()
         self._set_parameters()  # OBLIGATORY STEP
 
     @abstractmethod
@@ -93,44 +99,92 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _set_axes_status(self):
-            pass
+        """To be realized in real controllers"""
+        pass
 
     def _set_number_axes(self):
-        pass
+        try:
+            axes_number = int(self.config.config_to_dict(self.name)['Parameters']['axes_number'])
+            self._axes_number = axes_number
+        except KeyError:
+            raise stpmtr_error(self, text="Axes_number could not be set, axes_number field is absent in the DB")
+        except ValueError:
+            raise stpmtr_error(self, text="Check axes number in DB, must be axex_number = 1 or any number")
 
     def _set_limits(self):
         try:
-            limits_s: str = self.config.config_to_dict(self.name)['Parameters']['limits']
-            limits: List[Tuple[Union[float, int]]] = limits_s.replace(" ", "").split('),(')
-            return limits
+            limits: List[Tuple[Union[float, int]]] = []
+            limits_s: List[str] = self.config.config_to_dict(self.name)['Parameters']['limits'].replace(" ", "").split('),(')
+            for exp in limits_s:
+                val = eval(exp)
+                if not isinstance(val, tuple):
+                    raise TypeError()
+                limits.append(val)
+            self._limits = limits
         except KeyError:
-            raise stpmtr_error(self, text="Limits could not be set, limits filed is absent in the DB")
+            raise stpmtr_error(self, text="Limits could not be set, limits field is absent in the DB")
+        except (TypeError, SyntaxError):
+            raise stpmtr_error(self, text="Check limits field in DB, must be limits = (x1, x2), (x3, x4),...")
+
 
     @abstractmethod
     def _get_pos(self) -> List[Union[int, float]]:
-        # Read from hardware controller if possible and compare it with file
-        pass
-
-    def _get_pos_from_file(self) -> List[Union[int, float]]:
-        # TODO: to be realized
+        """Returns [] if controller not available"""
         return []
 
+    def _get_pos_from_file(self) -> List[Union[int, float]]:
+        # TODO: to be realized, check if there is n values, where n = self._axes_number
+        with open(self._file_pos) as f:
+            content = f.readlines()
+        if len(content) != 0:
+            values: List[str] = content[0].split(',')
+            pos: List[Union[float, int]] = []
+            for val in values:
+                pos.append(xxxx)
+            if len(pos) < self._axes_number:
+                self.logger.error(f"There is less positions {len(pos)} in log file, that axes_number {self._axes_number} in DB")
+                return []
+            else:
+                return pos
+        else:
+            return []
+
     def _set_pos(self):
-        pass
+        controller_pos: List[Union[int, float]] = self._get_pos()
+        file_pos: List[Union[int, float]] = self._get_pos_from_file()
+        if len(controller_pos) == 0 and len(file_pos):
+            self.logger.error("Axes positions could not be set, setting everything to 0")
+            self._pos = [0.0] * self._axes_number
+            if controller_pos != file_pos:
+                self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+        elif len(controller_pos) == 0:
+            self._pos = file_pos
+        else:
+            self._pos = controller_pos
+
 
     def _set_preset_values(self):
         try:
-            preset_values: str = self.config.config_to_dict(self.name)['Controller_parameters']['preset_values']
+            preset_values: List[Tuple[Union[float, int]]] = []
+            preset_values_s: List[str] = self.config.config_to_dict(self.name)['Parameters']['preset_values'].replace(" ", "").split('),(')
+            for exp in preset_values_s:
+                val = eval(exp)
+                if not isinstance(val, tuple):
+                    raise TypeError()
+                preset_values.append(val)
+            self._limits = preset_values
         except KeyError:
-            return ()
-        return
+            raise stpmtr_error(self, text="Preset values could not be set, preset_values field is absent in the DB")
+        except (TypeError, SyntaxError):
+            raise stpmtr_error(self, text="Check preset_values field in DB, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
 
     def _set_parameters(self) -> Tuple[bool, str]:
         try:
-            self._set_axes_status()
             self._set_number_axes()
+            self._set_axes_status()
             self._set_limits()
             self._set_pos()
+            self._set_preset_values()
         except stpmtr_error as e:
             self.logger.error(e)
             return False, str(e)
