@@ -111,8 +111,8 @@ class Ui_StpMtrGUI(object):
             title = self.parameters.device_description['GUI_title']
             axis = int(self.spinBox_axis.value())
             name = self.parameters.device_description['axes_names'][axis]
-            ranges = str(self.parameters.device_description['ranges'][axis][0:2])
-            preset = self.parameters.device_description['ranges'][axis][2]
+            ranges = str(self.parameters.device_description['ranges'][axis][0])
+            preset = self.parameters.device_description['ranges'][axis][1]
             preset_list_str = []
             i = 0
             for item in preset:
