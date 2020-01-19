@@ -125,11 +125,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         pass
 
     @abstractmethod
-    def activate(self):
-        pass
-
-    @abstractmethod
-    def deactivate(self):
+    def activate(self, flag: bool):
         pass
 
     @abstractmethod
@@ -320,13 +316,9 @@ class Server(Device):
         # TODO: realize
         return {}
 
-    def activate(self):
+    def activate(self, flag: bool):
         """Server is always active"""
         self.logger.info("""Server is always active""")
-
-    def deactivate(self):
-        """You cannot deactivate server"""
-        self.logger.info("""You cannot deactivate server""")
 
     def description(self) -> Dict[str, Any]:
         # TODO: realize
@@ -375,13 +367,9 @@ class Client(Device):
         # TODO: add functionality
         pass
 
-    def activate(self):
-        """Client is always active"""
-        self.logger.info("""Clients are always active""")
-
-    def deactivate(self):
-        """You cannot deactivate client"""
-        self.logger.info("""You cannot deactivate any client""")
+    def activate(self, flag: bool):
+        """Server is always active"""
+        self.logger.info("""Client is always active""")
 
     def description(self) -> Dict[str, Any]:
         # TODO: add functionality
@@ -436,12 +424,7 @@ class Service(Device):
         pass
 
     @abstractmethod
-    def activate(self):
-        """realization must be done in real hardware controllers"""
-        pass
-
-    @abstractmethod
-    def deactivate(self):
+    def activate(self, flag: bool):
         """realization must be done in real hardware controllers"""
         pass
 
@@ -449,7 +432,6 @@ class Service(Device):
         from communication.messaging.message_utils import MsgGenerator
         msg = MsgGenerator.power_on_demand(self, flag)
         self.send_msg_externally(msg)
-
 
     def messenger_settings(self):
         for adr in self.messenger.addresses['server_publisher']:

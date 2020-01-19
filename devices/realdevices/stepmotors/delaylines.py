@@ -1,7 +1,7 @@
-from typing import Dict, Union, Any
+from typing import Dict, Union, Any, List, Tuple
 
 from devices.devices import Service
-from .stpmtr_controller import StpMtrController
+from .stpmtr_controller import StpMtrController, StpmtrError
 import logging
 import ctypes
 from inspect import signature
@@ -301,11 +301,37 @@ class StpMtrCtrl_2axis(StpMtrController):
 class StpMtrCtrl_emulate(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._axis_number = 4
-        self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
-        self._pos = [0.0, 0.0, 0.0, 0.0]
-        self._axes_status = [False, False, False, False]
         self._moving = False
+
+    def activate(self, flag: bool):
+        pass
+
+    def power(self, flag: bool):
+        pass
+
+    def _get_axes_status(self) -> List[bool]:
+        if self._axes_status:
+            return self._axes_status
+        else:
+            return [False] * self._axes_number
+
+    def _get_number_axes(self) -> int:
+        return 4
+
+    def _get_limits(self) -> List[Tuple[Union[float, int]]]:
+        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+
+    def _get_pos(self) -> List[Union[int, float]]:
+        if self._pos:
+            return self._pos
+        else:
+            return [0] * self._axes_number
+
+    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
+        return [(0, 91),
+                (0, 50),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
@@ -327,7 +353,7 @@ class StpMtrCtrl_emulate(StpMtrController):
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
-    def _within_limits(self, axis:int, pos) -> bool:
+    def _is_within_limits(self, axis:int, pos) -> bool:
         comments = ''
         return True, comments
 
@@ -370,7 +396,7 @@ class StpMtrCtrl_emulate(StpMtrController):
                 pos = self._pos[axis] + pos
             else:
                 return False, f'how {how} is wrong, could be only absolute and relative'
-            chk_lmt, comments = self._within_limits(axis, pos)
+            chk_lmt, comments = self._is_within_limits(axis, pos)
             if chk_lmt:
                 if not self._moving:
                     self._moving = True
