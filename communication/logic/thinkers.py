@@ -249,6 +249,6 @@ class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
             reply = True
         elif data.com == MsgGenerator.DO_IT.mes_name:
             reply = False
-            info: mes.DoIt = data.info
-            self.parent.add_to_executor(self.parent.execute_com, msg=msg)
+            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                self.logger.error(f'Adding to executor {msg.data.info} failed')
         self.msg_out(reply, msg_i)

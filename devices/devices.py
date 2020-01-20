@@ -163,16 +163,23 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             pass  # should be send back or whereever
 
-    def execute_com(self, com: str, parameters: dict) -> Tuple[Dict[str, Any], str]:
+    def execute_com(self, msg: Message):
+        msg_i: Message = None
+        com: str = msg.data.info.com
+        parameters: Dict[str, Any] = msg.data.info.parameters
         if com in self.available_public_functions():
             f = getattr(self, com)
             if parameters.keys() == signature(f).parameters.keys():
-                return f(**parameters)
+                result, comments = f(**parameters)
+                if result:
+                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
             else:
-                return False, f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-
+                comments = f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
         else:
-            return False, f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+        if not msg_i:
+            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
+        self.thinker.msg_out(True, msg_i)
 
     @staticmethod
     def exec_mes_every_n_sec(f=None, flag=True, delay=5, n_max=10, specific={}) -> None:

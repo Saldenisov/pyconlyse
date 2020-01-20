@@ -75,6 +75,7 @@ class StpMtrController(Service):
         return {'activate': {'flag': True},
                 'activate_axis': {'axis': 0, 'flag': True},
                 'move_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
+                'stop': {'axis': 0},
                 'get_pos': {'axis': 0},
                 'get_controller_state': {}
                 }
