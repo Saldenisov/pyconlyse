@@ -1,11 +1,10 @@
-from devices.devices import Service
+from typing import Dict, Union, Any, List, Tuple
+
+from .stpmtr_controller import StpMtrController, StpmtrError
 import logging
 import ctypes
-from inspect import signature
-import utilities.data.messages as mes
-from concurrent.futures import ThreadPoolExecutor
-from communication.messaging.message_utils import MsgGenerator
 from time import sleep
+from deprecated import deprecated
 module_logger = logging.getLogger(__name__)
 
 control = 'control'
@@ -13,9 +12,10 @@ observe = 'observe'
 info = 'info'
 
 
-# is not working anymore, no support is available
-class StpMtrCtrl_2axis(Service):
+@deprecated(version='1.0', reason="Class is not supported, the hardware controller is out of order")
+class StpMtrCtrl_2axis(StpMtrController):
     """
+    It is not working anymore, no support is available
     Defines class of Delay line
     """
 
@@ -293,56 +293,62 @@ class StpMtrCtrl_2axis(Service):
             self.logger.info('Connect stepmotors before applying settings')
 
 
-class StpMtrCtrl_emulate(Service):
+class StpMtrCtrl_emulate(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._axis_number = 4
-        self._limits = [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
-        self._pos = [0.0, 0.0, 0.0, 0.0]
-        self._axes_status = [False, False, False, False]
-        self._moving = False
 
-    def available_public_functions(self):
-        return {'activate_axis': {'axis': 0, 'flag': True},
-                'move_to': {'axis': 0, 'pos': 0, 'how': 'absolute'},
-                'get_pos': {'axis': 0},
-                'get_controller_state': {}
-                }
+    def activate(self, flag: bool):
+        self.device_status.active = flag
+        return True, f'{self.id}:{self.name} is active'
 
-    def GUI_bounds(self):
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+    def power(self, flag: bool):
+        pass
+
+    def _get_axes_status(self) -> List[int]:
+        if self._axes_status:
+            return self._axes_status
+        else:
+            return [0] * self._axes_number
+
+    def _get_number_axes(self) -> int:
+        return 4
+
+    def _get_limits(self) -> List[Tuple[Union[float, int]]]:
+        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+
+    def _get_pos(self) -> List[Union[int, float]]:
+        if self._pos:
+            return self._pos
+        else:
+            return [0] * self._axes_number
+
+    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
+        return [(0, 91),
+                (0, 50),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
+
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        # TODO: realized extension of public functions
+        pub_func = super().available_public_functions()
+        # pub_func = extend(pub_func, thisclass_public_functions())
+        return pub_func
 
     def description(self):
         desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
                 'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
                 'axes_values': [0, 3],
-                'ranges': [(0.0, 100.0, [0, 91]),
-                           (-100.0, 100.0, [0, 50]),
-                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360]),
-                           (0.0, 360.0, [0, 45, 90, 135, 180, 225, 270, 315, 360])]}
+                'ranges': [((0.0, 100.0), (0, 91)),
+                           ((-100.0, 100.0), (0, 50)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
+                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
         return desc
 
-    def execute_com(self, msg: mes.Message):
-        msg_i=None
-        com = msg.data.info.com
-        parameters = msg.data.info.parameters
-        if com in self.available_public_functions():
-            f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
-                executor = ThreadPoolExecutor(max_workers=10)
-                results = executor.submit(f, **parameters)
-                result, comments = results.result()
-                if result:
-                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
-            else:
-                comments = f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
-        else:
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-        if not msg_i:
-            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
-        self.thinker.msg_out(True, msg_i)
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
-    def _within_limits(self, axis:int, pos) -> bool:
+    def _is_within_limits(self, axis:int, pos) -> bool:
         comments = ''
         return True, comments
 
@@ -353,16 +359,17 @@ class StpMtrCtrl_emulate(Service):
         else:
             return res, comments
 
+
     def _check_axis_range(self, axis: int) -> bool:
         comments = ''
-        if axis in range(self._axis_number):
+        if axis in range(self._axes_number):
             return True, comments
         else:
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
 
     def _check_axis_active(self, axis: int) -> bool:
         comments = ''
-        if self._axes_status[axis]:
+        if self._axes_status[axis] > 0:
             return True, comments
         else:
             return False, f'axis {axis} is not active, activate it first'
@@ -370,13 +377,16 @@ class StpMtrCtrl_emulate(Service):
     def activate_axis(self, axis: int, flag: bool):
         chk_axis, comments = self._check_axis_range(axis)
         if chk_axis:
-            self._axes_status[axis] = flag
+            if flag:
+                status = 1
+            else:
+                status = 0
+            self._axes_status[axis] = status
             return {'axis': axis, 'flag': flag}, comments
         else:
             return False, comments
 
-    def move_to(self, axis: int, pos: float, how='absolute'):
-        print(axis, pos, how)
+    def move_axis_to(self, axis: int, pos: float, how='absolute'):
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
             if how == 'absolute':
@@ -385,10 +395,10 @@ class StpMtrCtrl_emulate(Service):
                 pos = self._pos[axis] + pos
             else:
                 return False, f'how {how} is wrong, could be only absolute and relative'
-            chk_lmt, comments = self._within_limits(axis, pos)
+            chk_lmt, comments = self._is_within_limits(axis, pos)
             if chk_lmt:
-                if not self._moving:
-                    self._moving = True
+                if self._axes_status[axis] == 1:
+                    self._axes_status[axis] = 2
                     if pos - self._pos[axis] > 0:
                         dir = 1
                     else:
@@ -396,15 +406,28 @@ class StpMtrCtrl_emulate(Service):
                     steps = int(abs(pos - self._pos[axis]))
                     print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
                     for i in range(steps):
-                        self._pos[axis] = self._pos[axis] + dir
-                        sleep(0.1)
-                    self._moving = False
+                        if self._axes_status[axis] == 2:
+                            self._pos[axis] = self._pos[axis] + dir
+                            sleep(0.1)
+                        else:
+                            comments = 'movement was interrupted'
+                            break
+                    self._axes_status[axis] = 1
                     return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
                     comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
                     return False, comments
             else:
                 return False, comments
+        else:
+            return False, comments
+
+    def stop_axis(self, axis: int):
+        chk_axis, comments = self._check_axis(axis)
+        if chk_axis:
+            self._axes_status[axis] = 1
+            comments = 'stopped by user'
+            return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments
 
@@ -419,16 +442,3 @@ class StpMtrCtrl_emulate(Service):
     def get_controller_state(self):
         comments = ''
         return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
-
-
-class StpMtrCtrl_emulate2(Service):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    def moveto(self, pos: float):
-        from time import sleep
-        sleep(pos/1000. * 5)
-        self.pos = pos
-
-    def getpos(self) -> float:
-        return self.pos

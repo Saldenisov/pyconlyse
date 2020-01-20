@@ -153,24 +153,35 @@ class CheckService:
 
 
 @dataclass(frozen=True, order=True)
-class CheckClient:
-    client_id: str
-
-
-@dataclass(frozen=True, order=True)
-class Unknown:
-    comment: str = ''
-
-
-@dataclass(frozen=True, order=True)
 class Error:
     comments: str = ''
+
+
+@dataclass(frozen=True, order=True)
+class CheckClient:
+    client_id: str
 
 
 @dataclass(frozen=True, order=True)
 class InfoViewUpdate:
     widget_name: str
     parameters: dict
+
+
+@dataclass(frozen=True, order=True)
+class PowerOnDemand:
+    device_id: str
+    power_on: bool
+
+@dataclass(frozen=True, order=True)
+class PowerOnReply:
+    device_id: str
+    power_on: bool
+    comments: str = ""
+
+@dataclass(frozen=True, order=True)
+class Unknown:
+    comment: str = ''
 
 
 @dataclass(frozen=True, order=True)
@@ -215,7 +226,8 @@ class Message(MessageInter):
                 'reply_to': self.reply_to,
                 'id': self.id}
 
-    def json_repr(self, compression=True):
+    def json_repr(self, compression=True) -> bytes:
+        # FIXME: Something should be done with this...
         def message_to_json(msg: Message, compression: bool) -> bytes:
             try:
                 json_str = dumps(repr(msg)).encode('utf-8')
@@ -236,6 +248,7 @@ class MessageStructure(NamedTuple):
     type: str
     mes_class: object  # DataClass
     mes_name: str = ""
+
 
 @dataclass
 class Test():

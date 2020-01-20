@@ -68,7 +68,7 @@ class SuperClientGUIcontroller():
                                      parameters={})
             self.device.send_msg_externally(msg)
         except Exception as e:
-            print(e)
+            print(f'in create_service_gui {e}')
 
     def send_request_to_server(self, msg: Message):
         self.device.send_msg_externally(msg)
@@ -117,7 +117,7 @@ class StepMotorsController:
             event.ignore()
 
     def connect_stpmtrctrl(self, motor_controller_name: str):
-        on = self.model.dlines[motor_controller_name].on
+        on = self.model.dlines[motor_controller_name].start
         active = self.model.dlines[motor_controller_name].active
         if not active:
             self.model.dlines[motor_controller_name].check()

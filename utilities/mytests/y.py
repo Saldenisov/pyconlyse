@@ -4,7 +4,6 @@ from cryptography.hazmat.primitives.asymmetric import dh
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 # Generate some parameters. These can be reused.
 parameters = dh.generate_parameters(generator=2, key_size=512, backend=default_backend())
-
 # Generate a private key for use in the exchange.
 private_key = parameters.generate_private_key()
 print(private_key.private_numbers())

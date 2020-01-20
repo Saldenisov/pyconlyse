@@ -3,6 +3,7 @@ import sqlite3 as sq3
 from hashlib import md5
 from pathlib import Path
 from time import sleep
+from typing import Tuple, Any
 
 module_logger = logging.getLogger(__name__)
 
@@ -17,40 +18,36 @@ def check_DB_update(parent, tick: int, DB_path: Path):
             parent.update_config('DB is changed externally')
 
 
-def executeDBcomm(cur, command: str):
-    if cur:
-        try:
-            cur.execute(command)
-            return cur.fetchone()
-        except sq3.OperationalError as e:
-            module_logger.error(e)
-    else:
-        return None
+def executeDBcomm(cur: sq3.Cursor, command: str) -> Any:
+    try:
+        cur.execute(command)
+        return cur.fetchone()
+    except sq3.OperationalError as e:
+        module_logger.error(e)
+        raise e
 
 
-def create_connectionDB(DBfile: Path):
-        """ create tests_hardware database connection to the SQLite database
+def create_connectionDB(DBfile: Path) -> Tuple[sq3.Connection, sq3.Cursor]:
+        """create tests_hardware database connection to the SQLite database
             specified by the db_file
         :param db_file: database file
         :return: Connection object or None
         """
         try:
-            conn = sq3.connect(str(DBfile))
-            cur = conn.cursor()
+            conn: sq3.Connection = sq3.connect(str(DBfile))
+            cur: sq3.Cursor = conn.cursor()
+            return conn, cur
         except sq3.Error as e:
             module_logger.error(e)
-        finally:
-            return conn, cur
+            raise e
 
 
-def close_connDB(conn: sq3.Connection, logger=None):
+def close_connDB(conn: sq3.Connection):
     try:
         conn.close()
-        conn = None
     except Exception as e:
         module_logger.error(e)
-    finally:
-        return conn
+        raise e
 
 
 def calc_DB_hash(DB_path: Path):

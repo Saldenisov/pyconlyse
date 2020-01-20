@@ -125,7 +125,7 @@ def get_local_ip() -> str:
         for ip in ips_l:
             if '129.' in ip:
                 return ip
-            elif '127' in ip:
+            elif '127.' in ip:
                 return ip
         return None
     # was before return str(gethostbyname(gethostname()))

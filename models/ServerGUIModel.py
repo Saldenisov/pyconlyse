@@ -47,7 +47,7 @@ class ServerGUIModel(QObject):
                                                         logger_new=False,
                                                         id="Server:Main:sfqvtyjsdf23qa23xcv")
                 self.server.start()
-            except (DeviceError) as e:
+            except DeviceError as e:
                 self.logger.error(e)
         else:
             if not self.server.active:

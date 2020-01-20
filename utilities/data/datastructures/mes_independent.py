@@ -7,9 +7,10 @@ from devices.interfaces import DeciderInter, ExecutorInter
 
 @dataclass
 class DeviceStatus(DataClass_unfrozen):
-    on: bool = False
     active: bool = False
-    paused: bool = False
+    messaging_on: bool = False
+    messaging_paused: bool = False
+    power: bool = False
 
 
 @dataclass(frozen=True)

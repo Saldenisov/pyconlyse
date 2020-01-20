@@ -81,7 +81,9 @@ class SuperUserView(QMainWindow):
 
 
 from dataclasses import dataclass, field
+from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
 from utilities.data.datastructures.mes_independent import DeviceStatus
+
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
     device_status: DeviceStatus = DeviceStatus()
@@ -106,7 +108,9 @@ class StepMotorsView(QMainWindow):
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
+        self.ui.activateButton.clicked.connect(self.activate)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
+        self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
         self.ui.closeEvent = self.closeEvent
@@ -122,67 +126,89 @@ class StepMotorsView(QMainWindow):
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
-    def activate_axis(self) -> Message:
-        msg = MsgGenerator.do_it(device=self.device, com='activate_axis', service_id=self.parameters.device_id,
+    def activate(self):
+        com = StpMtrController.ACTIVATE.name
+        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+                                  parameters={'flag': True})
+        self.device.send_msg_externally(msg)
+
+    def activate_axis(self):
+        com = StpMtrController.ACTIVATE_AXIS.name
+        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
                                   parameters={'axis': int(self.ui.spinBox_axis.value()),
                                               'flag': self.ui.checkBox_On.isChecked()})
         self.device.send_msg_externally(msg)
 
-    def move_axis(self) -> Message:
+    def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
             how = 'absolute'
         else:
             how = 'relative'
-        msg = MsgGenerator.do_it(com='move_to', device=self.device, service_id=self.parameters.device_id,
+        com = StpMtrController.MOVE_AXIS_TO.name
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
                                              'pos': float(self.ui.lineEdit_value.text()),
                                              'how': how})
         self.device.send_msg_externally(msg)
         self._moving = True
-        # TODO: need to find a way to stop this executor
-        self.device.add_to_executor(self.device._exec_mes_every_n_sec, f=self.get_pos,
-                             flag=self._moving, delay=1, n_max=5,
-                             specific={'axis': int(self.ui.spinBox_axis.value())})
+        # TODO: need to find a way to stop this executor, when movement is done
+        self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos,
+                                    flag=self._moving, delay=1, n_max=5,
+                                    specific={'axis': int(self.ui.spinBox_axis.value())})
 
-
-    def get_pos(self, axis=None) -> Message:
+    def get_pos(self, axis=None):
         if not axis:
             axis = int(self.ui.spinBox_axis.value())
-        msg = MsgGenerator.do_it(com='get_pos', device=self.device, service_id=self.parameters.device_id,
+        com = StpMtrController.GET_POS.name
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
 
-
-    def stop_axis(self) -> Message:
-        pass
-        #return gen_msg(com='move_pos', device=self.device, where=None, how=None)
+    def stop_axis(self):
+        axis = int(self.ui.spinBox_axis.value())
+        com = StpMtrController.STOP_AXIS.name
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+                                 parameters={'axis': axis})
+        self.device.send_msg_externally(msg)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.DONE_IT.mes_name:
-            if info.com == 'activate_axis':
+            if info.com == StpMtrController.ACTIVATE.name:
+                self.ui.comments.setText(info.comments)
+            elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                 flag = info.result['flag']
                 self.ui.checkBox_On.setChecked(flag)
                 self.controller_status.axes_status[info.result['axis']] = flag
                 self.ui.retranslateUi(self, self.controller_status)
-            elif info.com == 'move_to':
+            elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                 self._moving = False
                 pos = info.result['pos']
+                self.ui.comments.setText(info.comments)
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[info.result['axis']] = pos
                 self.ui.retranslateUi(self, self.controller_status)
-            elif info.com == 'get_pos':
+            elif info.com == StpMtrController.STOP_AXIS.name:
+                self._moving = False
+                self.ui.comments.setText(info.comments)
                 pos = info.result['pos']
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[info.result['axis']] = pos
                 self.ui.retranslateUi(self, self.controller_status)
-            elif info.com == 'get_controller_state':
+            elif info.com == StpMtrController.GET_POS.name:
+                pos = info.result['pos']
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[info.result['axis']] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                 self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
                 self.ui.retranslateUi(self, self.controller_status)
         elif com == MsgGenerator.ERROR.mes_name:
+            self.ui.comments.setText(info.comments)
             #self.ui.tE_info.setText(info.comments)
-            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+            com = StpMtrController.GET_CONTROLLER_STATE.name
+            msg = MsgGenerator.do_it(com=com, device=self.device,
                                      service_id=self.parameters.device_id,
                                      parameters={})
             self.device.send_msg_externally(msg)
