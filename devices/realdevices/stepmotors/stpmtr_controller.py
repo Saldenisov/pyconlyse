@@ -1,6 +1,7 @@
 from abc import abstractmethod
 from os import path
 from pathlib import Path
+from devices import CmdStruct
 from devices.devices import Service
 from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar
 import logging
@@ -9,6 +10,14 @@ module_logger = logging.getLogger(__name__)
 
 
 class StpMtrController(Service):
+    ACTIVATE = CmdStruct('activate', {'flag': True})
+    ACTIVATE_AXIS = CmdStruct('activate_axis', {'axis': 0, 'flag': True})
+    MOVE_AXIS_TO = CmdStruct('move_axis_to', {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'})
+    STOP_AXIS = CmdStruct('stop_axis', {'axis': 0})
+    GET_POS = CmdStruct('get_pos', {'axis': 0})
+    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', {})
+
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._axes_number = 1
@@ -48,8 +57,12 @@ class StpMtrController(Service):
         pass
 
     @abstractmethod
-    def move_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[Union[bool,
+    def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[Union[bool,
                                                                             Dict[str, Union[int, float, str]]], str]:
+        pass
+
+    @abstractmethod
+    def stop_axis(self, axis: int) -> Tuple[Union[bool, Dict[str, Union[int, float, str]]], str]:
         pass
 
     @abstractmethod
@@ -74,8 +87,8 @@ class StpMtrController(Service):
         e.g.: A9098, OWIS controller"""
         return {'activate': {'flag': True},
                 'activate_axis': {'axis': 0, 'flag': True},
-                'move_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
-                'stop': {'axis': 0},
+                'move_axis_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
+                'stop_axis': {'axis': 0},
                 'get_pos': {'axis': 0},
                 'get_controller_state': {}
                 }
@@ -102,12 +115,12 @@ class StpMtrController(Service):
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
 
     @abstractmethod
-    def _get_axes_status(self) -> List[bool]:
+    def _get_axes_status(self) -> List[int]:
         """To be realized in real controllers"""
         return []
 
-    def _get_axes_status_db(self) -> List[bool]:
-        return [False] * self._axes_number
+    def _get_axes_status_db(self) -> List[int]:
+        return [0] * self._axes_number
 
     def _set_axes_status(self):
         if self.device_status.active:

@@ -249,6 +249,7 @@ class MessageStructure(NamedTuple):
     mes_class: object  # DataClass
     mes_name: str = ""
 
+
 @dataclass
 class Test():
     filed1: str = 'test'

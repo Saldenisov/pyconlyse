@@ -170,7 +170,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         if com in self.available_public_functions():
             f = getattr(self, com)
             if parameters.keys() == signature(f).parameters.keys():
-                result, comments = f(**parameters)
+                if self.device_status.active:
+                    result, comments = f(**parameters)
+                else:
+                    result, comments = (False, 'Device is not active. Activate')
                 if result:
                     msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
             else:

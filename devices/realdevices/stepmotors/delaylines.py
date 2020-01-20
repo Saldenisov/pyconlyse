@@ -298,13 +298,13 @@ class StpMtrCtrl_emulate(StpMtrController):
         super().__init__(**kwargs)
 
     def activate(self, flag: bool):
-        comments = ''
-        return True, comments
+        self.device_status.active = flag
+        return True, f'{self.id}:{self.name} is active'
 
     def power(self, flag: bool):
         pass
 
-    def _get_axes_status(self) -> List[bool]:
+    def _get_axes_status(self) -> List[int]:
         if self._axes_status:
             return self._axes_status
         else:
@@ -359,6 +359,7 @@ class StpMtrCtrl_emulate(StpMtrController):
         else:
             return res, comments
 
+
     def _check_axis_range(self, axis: int) -> bool:
         comments = ''
         if axis in range(self._axes_number):
@@ -368,7 +369,7 @@ class StpMtrCtrl_emulate(StpMtrController):
 
     def _check_axis_active(self, axis: int) -> bool:
         comments = ''
-        if self._axes_status[axis]:
+        if self._axes_status[axis] > 0:
             return True, comments
         else:
             return False, f'axis {axis} is not active, activate it first'
@@ -376,12 +377,16 @@ class StpMtrCtrl_emulate(StpMtrController):
     def activate_axis(self, axis: int, flag: bool):
         chk_axis, comments = self._check_axis_range(axis)
         if chk_axis:
-            self._axes_status[axis] = flag
+            if flag:
+                status = 1
+            else:
+                status = 0
+            self._axes_status[axis] = status
             return {'axis': axis, 'flag': flag}, comments
         else:
             return False, comments
 
-    def move_to(self, axis: int, pos: float, how='absolute'):
+    def move_axis_to(self, axis: int, pos: float, how='absolute'):
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
             if how == 'absolute':
@@ -401,8 +406,12 @@ class StpMtrCtrl_emulate(StpMtrController):
                     steps = int(abs(pos - self._pos[axis]))
                     print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
                     for i in range(steps):
-                        self._pos[axis] = self._pos[axis] + dir
-                        sleep(0.1)
+                        if self._axes_status[axis] == 2:
+                            self._pos[axis] = self._pos[axis] + dir
+                            sleep(0.1)
+                        else:
+                            comments = 'movement was interrupted'
+                            break
                     self._axes_status[axis] = 1
                     return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
@@ -413,35 +422,12 @@ class StpMtrCtrl_emulate(StpMtrController):
         else:
             return False, comments
 
-    def stop(self, axis: int):
+    def stop_axis(self, axis: int):
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
-            if how == 'absolute':
-                pass
-            elif how == 'relative':
-                pos = self._pos[axis] + pos
-            else:
-                return False, f'how {how} is wrong, could be only absolute and relative'
-            chk_lmt, comments = self._is_within_limits(axis, pos)
-            if chk_lmt:
-                if not self._moving:
-                    self._moving = True
-                    if pos - self._pos[axis] > 0:
-                        dir = 1
-                    else:
-                        dir = -1
-                    steps = int(abs(pos - self._pos[axis]))
-                    print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
-                    for i in range(steps):
-                        self._pos[axis] = self._pos[axis] + dir
-                        sleep(0.1)
-                    self._moving = False
-                    return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
-                else:
-                    comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
-                    return False, comments
-            else:
-                return False, comments
+            self._axes_status[axis] = 1
+            comments = 'stopped by user'
+            return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments
 
