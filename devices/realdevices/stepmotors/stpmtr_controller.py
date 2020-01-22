@@ -37,7 +37,7 @@ class StpMtrController(Service):
         self._set_parameters()  # OBLIGATORY STEP
 
     @abstractmethod
-    def activate(self, flag: bool):
+    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
         pass
 
     @abstractmethod

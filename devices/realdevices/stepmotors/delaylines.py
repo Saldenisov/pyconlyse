@@ -297,84 +297,15 @@ class StpMtrCtrl_emulate(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def activate(self, flag: bool):
+    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
         self.device_status.active = flag
         return True, f'{self.id}:{self.name} active state is {flag}'
-
-    def power(self, flag: bool):
-        pass
-
-    def _get_axes_status(self) -> List[int]:
-        if self._axes_status:
-            return self._axes_status
-        else:
-            return [0] * self._axes_number
-
-    def _get_number_axes(self) -> int:
-        return 4
-
-    def _get_limits(self) -> List[Tuple[Union[float, int]]]:
-        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
-
-    def _get_pos(self) -> List[Union[int, float]]:
-        if self._pos:
-            return self._pos
-        else:
-            return [0] * self._axes_number
-
-    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        return [(0, 91),
-                (0, 50),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
         pub_func = super().available_public_functions()
         # pub_func = extend(pub_func, thisclass_public_functions())
         return pub_func
-
-    def description(self):
-        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
-                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
-                'axes_values': [0, 3],
-                'ranges': [((0.0, 100.0), (0, 91)),
-                           ((-100.0, 100.0), (0, 50)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
-                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
-        return desc
-
-    def GUI_bounds(self):
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
-
-    def _is_within_limits(self, axis:int, pos) -> bool:
-        comments = ''
-        return True, comments
-
-    def _check_axis(self, axis: int) -> bool:
-        if self.device_status.active:
-            res, comments = self._check_axis_range(axis)
-            if res:
-                return self._check_axis_active(axis)
-            else:
-                return res, comments
-        else:
-            result, comments = (False, 'Device is not active. Activate')
-
-    def _check_axis_range(self, axis: int) -> bool:
-        comments = ''
-        if axis in range(self._axes_number):
-            return True, comments
-        else:
-            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
-
-    def _check_axis_active(self, axis: int) -> bool:
-        comments = ''
-        if self._axes_status[axis] > 0:
-            return True, comments
-        else:
-            return False, f'axis {axis} is not active, activate it first'
 
     def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         """
@@ -444,3 +375,74 @@ class StpMtrCtrl_emulate(StpMtrController):
     def get_controller_state(self):
         comments = ''
         return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
+
+    def description(self):
+        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
+                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
+                'axes_values': [0, 3],
+                'ranges': [((0.0, 100.0), (0, 91)),
+                           ((-100.0, 100.0), (0, 50)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
+                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
+        return desc
+
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+
+    def power(self, flag: bool):
+        # TODO: realize
+        pass
+
+    def _get_axes_status(self) -> List[int]:
+        if self._axes_status:
+            return self._axes_status
+        else:
+            return [0] * self._axes_number
+
+    def _get_number_axes(self) -> int:
+        return 4
+
+    def _get_limits(self) -> List[Tuple[Union[float, int]]]:
+        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+
+    def _get_pos(self) -> List[Union[int, float]]:
+        if self._pos:
+            return self._pos
+        else:
+            return [0] * self._axes_number
+
+    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
+        return [(0, 91),
+                (0, 50),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360),
+                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
+
+    def _is_within_limits(self, axis:int, pos) -> bool:
+        comments = ''
+        return True, comments
+
+    def _check_axis(self, axis: int) -> bool:
+        if self.device_status.active:
+            res, comments = self._check_axis_range(axis)
+            if res:
+                return self._check_axis_active(axis)
+            else:
+                return res, comments
+        else:
+            result, comments = (False, 'Device is not active. Activate')
+
+    def _check_axis_range(self, axis: int) -> bool:
+        comments = ''
+        if axis in range(self._axes_number):
+            return True, comments
+        else:
+            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
+
+    def _check_axis_active(self, axis: int) -> bool:
+        comments = ''
+        if self._axes_status[axis] > 0:
+            return True, comments
+        else:
+            return False, f'axis {axis} is not active, activate it first'
+
