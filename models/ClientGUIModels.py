@@ -28,7 +28,7 @@ class SuperUserGUIModel(QObject):
         self.logger = module_logger
         self.db_path = Path(app_folder / 'DB' / 'Devices.db')
         info_msg(self, 'INITIALIZING')
-        self.superuser = DeviceFactory.make_device(device_id="37cc841a6f8f907deaa49f117aa1a2f9",
+        self.superuser = DeviceFactory.make_device(device_id="SuperUser:37cc841a6f8f907deaa49f117aa1a2f9",
                                                    db_path=self.db_path,
                                                    pyqtslot=self.treat_pyqtsignals,
                                                    logger_new=False)

@@ -83,6 +83,13 @@ class Ui_StpMtrGUI(object):
         self.progressBar_movement.setProperty("value", 0)
         self.progressBar_movement.setObjectName("progressBar_movement")
         self.verticalLayout.addWidget(self.progressBar_movement)
+        self.comments = QtWidgets.QTextEdit(self.centralwidget)
+        self.verticalLayout.addWidget(self.comments)
+        self.checkBox_activate = QtWidgets.QCheckBox(self.centralwidget)
+        self.checkBox_activate.setObjectName("checkBox_activate")
+        self.verticalLayout.addWidget(self.checkBox_activate)
+
+
         StpMtrGUI.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(StpMtrGUI)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 431, 21))
@@ -108,11 +115,12 @@ class Ui_StpMtrGUI(object):
     def retranslateUi(self, StpMtrGUI, controller_status=None):
         _translate = QtCore.QCoreApplication.translate
         try:
+            self.checkBox_activate.setChecked(self.parameters.device_status.active)
             title = self.parameters.device_description['GUI_title']
             axis = int(self.spinBox_axis.value())
             name = self.parameters.device_description['axes_names'][axis]
-            ranges = str(self.parameters.device_description['ranges'][axis][0:2])
-            preset = self.parameters.device_description['ranges'][axis][2]
+            ranges = str(self.parameters.device_description['ranges'][axis][0])
+            preset = self.parameters.device_description['ranges'][axis][1]
             preset_list_str = []
             i = 0
             for item in preset:
@@ -142,6 +150,7 @@ class Ui_StpMtrGUI(object):
         self.checkBox_On.setText(_translate("StpMtrGUI", "On"))
         self.pushButton_move.setText(_translate("StpMtrGUI", "MOVE"))
         self.pushButton_stop.setText(_translate("StpMtrGUI", "STOP"))
+        self.checkBox_activate.setText(_translate("StpMtrGUI", "Activate controller"))
         self.menuSettings.setTitle(_translate("StpMtrGUI", "Settings"))
 
 if __name__ == "__main__":

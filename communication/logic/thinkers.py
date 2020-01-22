@@ -50,17 +50,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_reply(self, msg: Message):
         data = msg.data
-        self.logger.info(msg.short())
-        try:
-            if data.com == 'welcome':
-                if data.info.id in self.parent.connections:
-                    self.logger.info(f'Server {data.info.id} is active. Handshake was undertaken')
-                    del self.demands_pending_answer[msg.reply_to]
-                    connection: Connection = self.parent.connections[data.info.id]
-                    connection.device_info = data.info
-        except KeyError as e:
-            self.logger.error(e)
-        info_msg(self, 'REPLY_IN', extra=str(msg))
+        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
         if msg.reply_to in self.demands_pending_answer:
             del self.demands_pending_answer[msg.reply_to]
@@ -71,9 +61,11 @@ class GeneralCmdLogic(Thinker):
                 self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
                 connection: Connection = self.parent.connections[data.info.device_id]
                 connection.device_info = data.info
+                session_key = self.parent.messenger.decrypt_with_private(data.info.session_key)
+                self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
 
     def react_demand(self, msg: Message):
-        info_msg(self, 'REQUEST', extra=str(msg))
+        info_msg(self, 'REQUEST', extra=str(msg.short()))
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
@@ -150,7 +142,11 @@ class ServerCmdLogic(Thinker):
                                                 event_id=f'heartbeat:{data.info.device_id}',
                                                 original_owner=device_info.device_id,
                                                 start_now=True)
-                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
+                        session_key = self.parent.messenger.gen_symmetric_key(device_info.device_id)
+                        session_key_encrypted = self.parent.messenger.encrypt_with_public(session_key,
+                                                                                          device_info.public_key)
+                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg,
+                                                          session_key=session_key_encrypted)
                         self.parent.send_status_pyqt(com='status_server_info_full')
                     else:
                         msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
@@ -159,10 +155,15 @@ class ServerCmdLogic(Thinker):
                     msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
             elif cmd == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
                 msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
+            elif cmd == MsgGenerator.POWER_ON_DEMAND.mes_name:
+                # TODO: service must be realized instead
+                # Server here always replied the same way to all services
+                comments = """"I always say, that power is ON, I hope the user have turned on power already"""
+                msg_i = MsgGenerator.power_on_reply(self.parent, msg_i=msg, flag=True, comments=comments)
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')
-        self.reply_msg(reply, msg_i)
+        self.msg_out(reply, msg_i)
 
     def react_reply(self,  msg: Message):
         data = msg.data
@@ -180,7 +181,7 @@ class ServerCmdLogic(Thinker):
 
         else:
             pass
-        self.reply_msg(reply, msg_i)
+        self.msg_out(reply, msg_i)
 
     def react_unknown(self, msg: Message):
         msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
@@ -226,18 +227,17 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
             self.add_task_out(msg)
 
 
+class ServiceCmdLogic(GeneralCmdLogic):
+
+    def react_reply(self, msg: Message):
+        super().react_reply(msg)
+        data = msg.data
+        if data.com == MsgGenerator.POWER_ON_REPLY.mes_name:
+            self.parent.device_status.power = data.info.power_on
+            self.logger.info(data.info.comments)
 
 
-class StpMtrCmdLogic(GeneralCmdLogic):
-    pass
-
-
-class StpMtrClientCmdLogic(StpMtrCmdLogic):
-
-    pass
-
-
-class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
+class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
 
     def react_demand(self, msg: Message):
         super().react_demand(msg)
@@ -248,11 +248,7 @@ class StpMtrCtrlServiceCmdLogic(StpMtrCmdLogic):
             msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
             reply = True
         elif data.com == MsgGenerator.DO_IT.mes_name:
-            reply = True
-            info: mes.DoIt = data.info
-            result, comments = self.parent.execute_com(com=info.com, parameters=info.parameters)
-            if result:
-                msg_i = MsgGenerator.done_it(self.parent, msg_i=msg, result=result, comments=comments)
-            else:
-                msg_i = MsgGenerator.error(self.parent, msg_i=msg, comments=comments)
-        self.reply_msg(reply, msg_i)
+            reply = False
+            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                self.logger.error(f'Adding to executor {msg.data.info} failed')
+        self.msg_out(reply, msg_i)

@@ -11,7 +11,6 @@ sys.path.append(app_folder)
 from devices.devices import DeviceFactory
 
 
-from time import sleep
 from devices.devices import DeviceFactory
 
 

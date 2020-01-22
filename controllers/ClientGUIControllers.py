@@ -55,7 +55,7 @@ class SuperClientGUIcontroller():
                 os.system(exc)
 
     def create_service_gui(self):
-        service_id = self.view.ui.lW_devices.currentItem().text().split(':')[2]
+        service_id = self.view.ui.lW_devices.currentItem().text()
         try:
             parameters = self.model.service_parameters[service_id]
         except KeyError as e:
@@ -68,13 +68,13 @@ class SuperClientGUIcontroller():
                                      parameters={})
             self.device.send_msg_externally(msg)
         except Exception as e:
-            print(e)
+            print(f'in create_service_gui {e}')
 
     def send_request_to_server(self, msg: Message):
         self.device.send_msg_externally(msg)
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
-        service_id = item.text().split(':')[2]
+        service_id = item.text()
         msg = MsgGenerator.info_service_demand(device=self.device, service_id=service_id)
         self.device.send_msg_externally(msg)
 
@@ -117,7 +117,7 @@ class StepMotorsController:
             event.ignore()
 
     def connect_stpmtrctrl(self, motor_controller_name: str):
-        on = self.model.dlines[motor_controller_name].on
+        on = self.model.dlines[motor_controller_name].start
         active = self.model.dlines[motor_controller_name].active
         if not active:
             self.model.dlines[motor_controller_name].check()

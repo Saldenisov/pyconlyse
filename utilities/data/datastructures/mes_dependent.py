@@ -12,6 +12,8 @@ from utilities.data.messages import Message
 class Connection(DataClass_unfrozen):
     heartbeat_info: mes.EventInfoMes = None
     device_info: mes.DeviceInfoMes = None
+    # TODO: I do not know if session_key should be here
+    session_key: bytes = b''
 
 
 @dataclass(frozen=False, order=True)

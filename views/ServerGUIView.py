@@ -10,6 +10,7 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
 from utilities.data.messages import Message
+from utilities.data.datastructures.mes_independent import DeviceStatus
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.ServerGUI_ui import Ui_ServerGUI
@@ -38,7 +39,7 @@ class ServerGUIView(QMainWindow):
         self.ui.pB_pause.clicked.connect(self.controller.pause_server)
         self.ui.pB_execute.clicked.connect(partial(self.controller.exec_user_com, widget=self.ui.lE_execute))
         self.ui.pB_status.clicked.connect(self.controller.check_status)
-        self.ui.lE_execute.setText('-start_service b8b10026214c373bffe2b2847a9538dd Devices.db')  # ; -start StepMotorsGUI.py')
+        self.ui.lE_execute.setText('-start_service StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd Devices.db')  # ; -start StepMotorsGUI.py')
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 
@@ -49,7 +50,8 @@ class ServerGUIView(QMainWindow):
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.STATUS_SERVER_INFO_FULL.mes_name:
-            if info.device_status.active:
+            device_status: DeviceStatus = info.device_status
+            if device_status.active:
                 text_widget = "Click to stop..."
                 color = 'background-color: green'
                 self.ui.pB_pause.setEnabled(True)
@@ -63,7 +65,7 @@ class ServerGUIView(QMainWindow):
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
 
-            if info.device_status.paused:
+            if device_status.messaging_paused:
                 text_widget = "click to unpause..."
                 color = 'background-color: yellow'
             else:
@@ -73,7 +75,7 @@ class ServerGUIView(QMainWindow):
             _translate = QtCore.QCoreApplication.translate
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
-            text_info = f'{info.device_status}'
+            text_info = f'{device_status}'
             self.ui.lE_serverinfo.setText(text_info)
 
             # setting info on running services, clients, events
@@ -81,6 +83,7 @@ class ServerGUIView(QMainWindow):
             self.ui.tE_events_running.setText(list_to_str_repr(list(info.events_running.keys())))
             self.ui.tE_clients_running.setText(list_to_str_repr(list(info.clients_running.keys())))
         elif com == 'server_queues_tasks_keys':
+            # TODO: change MsgGenerator naming
             self.ui.tE_queue_in.setText(list_to_str_repr(list(info.queue_in_keys)))
             self.ui.tE_queue_out.setText(list_to_str_repr(list(info.queue_out_keys)))
             self.ui.tE_queue_in_pending.setText(list_to_str_repr(list(info.queue_in_pending_keys)))

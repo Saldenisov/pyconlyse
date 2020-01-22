@@ -80,7 +80,18 @@ class DeviceInfoMes:
     type: str = None  # service, client, server
     class_type: str = None
     device_status: DeviceStatus = None
+    public_key: bytes = b''
     public_sockets: dict = field(default_factory=dict)
+
+
+@dataclass(order=True)
+class WelcomeServer:
+    device_id: str
+    messenger_id: str
+    session_key: str
+    name: str
+    device_status: DeviceStatus
+    public_sockets: dict
 
 
 @dataclass(frozen=True, order=True)
@@ -142,24 +153,35 @@ class CheckService:
 
 
 @dataclass(frozen=True, order=True)
-class CheckClient:
-    client_id: str
-
-
-@dataclass(frozen=True, order=True)
-class Unknown:
-    comment: str = ''
-
-
-@dataclass(frozen=True, order=True)
 class Error:
     comments: str = ''
+
+
+@dataclass(frozen=True, order=True)
+class CheckClient:
+    client_id: str
 
 
 @dataclass(frozen=True, order=True)
 class InfoViewUpdate:
     widget_name: str
     parameters: dict
+
+
+@dataclass(frozen=True, order=True)
+class PowerOnDemand:
+    device_id: str
+    power_on: bool
+
+@dataclass(frozen=True, order=True)
+class PowerOnReply:
+    device_id: str
+    power_on: bool
+    comments: str = ""
+
+@dataclass(frozen=True, order=True)
+class Unknown:
+    comment: str = ''
 
 
 @dataclass(frozen=True, order=True)
@@ -195,13 +217,17 @@ class Message(MessageInter):
             object.__setattr__(self, 'id', unique_id())
 
     def short(self):
-        return {'sender_id':  self.body.sender_id,
-                'rec_id': self.body.receiver_id,
-                'data': self.data.com,
+        t = str(self.data.info)
+        l = len(t)
+        if l > 300:
+            l = int(0.8*l)
+        return {'path':  f'{self.body.sender_id}->{self.body.receiver_id}',
+                'data': f'{self.data.com}: {t[0:l]}...',
                 'reply_to': self.reply_to,
                 'id': self.id}
 
-    def json_repr(self, compression=True):
+    def json_repr(self, compression=True) -> bytes:
+        # FIXME: Something should be done with this...
         def message_to_json(msg: Message, compression: bool) -> bytes:
             try:
                 json_str = dumps(repr(msg)).encode('utf-8')
@@ -222,6 +248,7 @@ class MessageStructure(NamedTuple):
     type: str
     mes_class: object  # DataClass
     mes_name: str = ""
+
 
 @dataclass
 class Test():

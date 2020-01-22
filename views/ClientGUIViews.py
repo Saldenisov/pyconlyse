@@ -6,16 +6,17 @@ Created on 15.11.2019
 import logging
 from _functools import partial
 
-from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QPushButton, QVBoxLayout, QHBoxLayout,
                              QTextEdit, QRadioButton,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
+from typing import List
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
+from devices.devices import Device
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
 from communication.messaging.message_utils import MsgGenerator
@@ -69,7 +70,7 @@ class SuperUserView(QMainWindow):
             widget.clear()
             names = []
             for key, item in info.running_services.items():
-                names.append(f'{item}:{key}')
+                names.append(f'{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
         elif com == MsgGenerator.ERROR.mes_name:
@@ -80,12 +81,15 @@ class SuperUserView(QMainWindow):
 
 
 from dataclasses import dataclass, field
+from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
 from utilities.data.datastructures.mes_independent import DeviceStatus
+
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
     device_status: DeviceStatus = DeviceStatus()
     axes_status: list = field(default_factory=list)
     positions: list = field(default_factory=list)
+    start_stop: list = field(default_factory=list)
 
 class StepMotorsView(QMainWindow):
 
@@ -98,68 +102,136 @@ class StepMotorsView(QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
         self.model = in_model
-        self.device = self.model.superuser
+        self.device: Device = self.model.superuser
+        self._axes_status: List[int] = []
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, parameters)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
+        self.ui.checkBox_activate.clicked.connect(self.activate)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
+        self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(self.axis_value_change)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 
-    def test(self):
-        #partial(self.controller.send_request_to_server, self.gen_activate_axis())
-        print(self.ui.checkBox_On.isChecked())
 
     def axis_value_change(self):
         self.ui.retranslateUi(self, self.controller_status)
 
-
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
-    def activate_axis(self) -> Message:
-        msg = MsgGenerator.do_it(device=self.device, com='activate_axis', service_id=self.parameters.device_id,
-                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
-                                              'flag': self.ui.checkBox_On.isChecked()})
+    def activate(self):
+        com = StpMtrController.ACTIVATE.name
+        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+                                  parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
 
-    def move_axis(self) -> Message:
+    def activate_axis(self):
+        com = StpMtrController.ACTIVATE_AXIS.name
+        flag = 1 if self.ui.checkBox_On.isChecked() else 0
+        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                              'flag': flag})
+        self.device.send_msg_externally(msg)
+
+    def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
             how = 'absolute'
         else:
             how = 'relative'
-        msg = MsgGenerator.do_it(com='move_to', device=self.device, service_id=self.parameters.device_id,
-                                      parameters={'axis': int(self.ui.spinBox_axis.value()),
-                                                  'pos': float(self.ui.lineEdit_value.text()),
-                                                  'how': how})
+        com = StpMtrController.MOVE_AXIS_TO.name
+        axis = int(self.ui.spinBox_axis.value())
+        pos = float(self.ui.lineEdit_value.text())
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+                                 parameters={'axis': axis,
+                                             'pos': pos,
+                                             'how': how})
+        self.controller_status.start_stop[axis] = [self.controller_status.positions[axis], pos]
         self.device.send_msg_externally(msg)
+        self.controller_status.axes_status[axis] = 2
+        # TODO: need to find a way to stop this executor, when movement is done
+        try:
+            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=10,
+                                        specific={'axis': axis, 'with_return': True})
+        except Exception as e:
+            print(e)
 
-    def stop_axis(self) -> Message:
-        pass
-        #return gen_msg(com='move_pos', device=self.device, where=None, how=None)
+    def get_pos(self, axis=None, with_return=False):
+        if not axis:
+            axis = int(self.ui.spinBox_axis.value())
+        com = StpMtrController.GET_POS.name
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+                                 parameters={'axis': axis})
+        self.device.send_msg_externally(msg)
+        if with_return:
+            if self.controller_status.axes_status[axis] == 2:
+                return True
+            else:
+                return False
+
+    def stop_axis(self):
+        axis = int(self.ui.spinBox_axis.value())
+        com = StpMtrController.STOP_AXIS.name
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+                                 parameters={'axis': axis})
+        self.device.send_msg_externally(msg)
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.DONE_IT.mes_name:
-            if info.com == 'activate_axis':
+            if info.com == StpMtrController.ACTIVATE.name:
+                self.ui.comments.setText(info.comments)
+            elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                 flag = info.result['flag']
+                self.ui.comments.setText(info.comments)
                 self.ui.checkBox_On.setChecked(flag)
                 self.controller_status.axes_status[info.result['axis']] = flag
                 self.ui.retranslateUi(self, self.controller_status)
-            elif info.com == 'move_to':
+            elif info.com == StpMtrController.MOVE_AXIS_TO.name:
+                axis = info.result['axis']
                 pos = info.result['pos']
+                self.ui.comments.setText(info.comments)
                 self.ui.lcdNumber_position.display(pos)
-                self.controller_status.positions[info.result['axis']] = pos
+                self.controller_status.positions[axis] = pos
+                self.controller_status.axes_status[axis] = 1
                 self.ui.retranslateUi(self, self.controller_status)
-            elif info.com == 'get_controller_state':
+            elif info.com == StpMtrController.STOP_AXIS.name:
+                self.ui.comments.setText(info.comments)
+                pos = info.result['pos']
+                axis = info.result['axis']
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[axis] = pos
+                self.controller_status.axes_status[axis] = 1
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == StpMtrController.GET_POS.name:
+                axis = info.result['axis']
+                pos = info.result['pos']
+                if self.controller_status.axes_status[axis] == 2:
+                    start = self.controller_status.start_stop[axis][0]
+                    stop = self.controller_status.start_stop[axis][1]
+                    per = (pos - start) / (stop - start) * 100.0
+                    self.ui.progressBar_movement.setValue(per)
+                self.ui.lcdNumber_position.display(pos)
+                self.controller_status.positions[axis] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                 self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
+                if not self.controller_status.start_stop:
+                    self.controller_status.start_stop = [[0, 0]] * len(self.controller_status.axes_status)
                 self.ui.retranslateUi(self, self.controller_status)
+        elif com == MsgGenerator.ERROR.mes_name:
+            self.ui.comments.setText(info.comments)
+            com = StpMtrController.GET_CONTROLLER_STATE.name
+            msg = MsgGenerator.do_it(com=com, device=self.device,
+                                     service_id=self.parameters.device_id,
+                                     parameters={})
+            self.device.send_msg_externally(msg)
 
 
 class StepMotorsView_old(QWidget):
