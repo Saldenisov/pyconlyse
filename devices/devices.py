@@ -183,7 +183,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @staticmethod
     def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
-        print("_exec_mes_every_n_se")
         i = 0
         if delay > 5:
             delay = 5

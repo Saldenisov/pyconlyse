@@ -156,7 +156,7 @@ class StepMotorsView(QMainWindow):
         self.controller_status.axes_status[axis] = 2
         # TODO: need to find a way to stop this executor, when movement is done
         try:
-            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=10,
+            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                         specific={'axis': axis, 'with_return': True})
         except Exception as e:
             print(e)
