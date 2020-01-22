@@ -5,7 +5,7 @@ from pathlib import Path
 from abc import abstractmethod
 from pathlib import Path
 from time import sleep
-from typing import Union, Dict, List, Tuple, Any
+from typing import Union, Dict, List, Tuple, Any, Callable
 from inspect import signature, isclass
 from PyQt5.QtCore import QObject, pyqtSignal
 from concurrent.futures import ThreadPoolExecutor
@@ -170,10 +170,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         if com in self.available_public_functions():
             f = getattr(self, com)
             if parameters.keys() == signature(f).parameters.keys():
-                if self.device_status.active:
-                    result, comments = f(**parameters)
-                else:
-                    result, comments = (False, 'Device is not active. Activate')
+                result, comments = f(**parameters)
                 if result:
                     msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
             else:
@@ -185,17 +182,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.thinker.msg_out(True, msg_i)
 
     @staticmethod
-    def exec_mes_every_n_sec(f=None, flag=True, delay=5, n_max=10, specific={}) -> None:
+    def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
         print("_exec_mes_every_n_se")
         i = 0
         if delay > 5:
             delay = 5
         from time import sleep
+        flag = True
         while flag and i <= n_max:
             i += 1
             sleep(delay)
             if f:
-                f(**specific)
+                flag = f(**specific)
 
     def start(self):
         self._start_messaging()
