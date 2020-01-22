@@ -299,7 +299,7 @@ class StpMtrCtrl_emulate(StpMtrController):
 
     def activate(self, flag: bool):
         self.device_status.active = flag
-        return True, f'{self.id}:{self.name} is active'
+        return True, f'{self.id}:{self.name} active state is {flag}'
 
     def power(self, flag: bool):
         pass
@@ -353,12 +353,14 @@ class StpMtrCtrl_emulate(StpMtrController):
         return True, comments
 
     def _check_axis(self, axis: int) -> bool:
-        res, comments = self._check_axis_range(axis)
-        if res:
-            return self._check_axis_active(axis)
+        if self.device_status.active:
+            res, comments = self._check_axis_range(axis)
+            if res:
+                return self._check_axis_active(axis)
+            else:
+                return res, comments
         else:
-            return res, comments
-
+            result, comments = (False, 'Device is not active. Activate')
 
     def _check_axis_range(self, axis: int) -> bool:
         comments = ''
@@ -374,19 +376,20 @@ class StpMtrCtrl_emulate(StpMtrController):
         else:
             return False, f'axis {axis} is not active, activate it first'
 
-    def activate_axis(self, axis: int, flag: bool):
+    def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+        """
+        :param axis: 0-4
+        :param flag: 0, 1, 2
+        :return: Tuple[Union[bool, Dict[str, Union[int, bool]]], str]
+        """
         chk_axis, comments = self._check_axis_range(axis)
         if chk_axis:
-            if flag:
-                status = 1
-            else:
-                status = 0
-            self._axes_status[axis] = status
-            return {'axis': axis, 'flag': flag}, comments
+            self._axes_status[axis] = flag
+            return {'axis': axis, 'flag': flag}, f'axis {axis} state is {flag}'
         else:
             return False, comments
 
-    def move_axis_to(self, axis: int, pos: float, how='absolute'):
+    def move_axis_to(self, axis: int, pos: float, how='absolute')-> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
             if how == 'absolute':
@@ -434,7 +437,6 @@ class StpMtrCtrl_emulate(StpMtrController):
     def get_pos(self, axis=0):
         res, comments = self._check_axis(axis)
         if res:
-            print(f' axis{axis} getting {print(self._pos[axis])} {self._pos}')
             return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments

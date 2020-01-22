@@ -85,9 +85,9 @@ class Ui_StpMtrGUI(object):
         self.verticalLayout.addWidget(self.progressBar_movement)
         self.comments = QtWidgets.QTextEdit(self.centralwidget)
         self.verticalLayout.addWidget(self.comments)
-        self.activateButton = QtWidgets.QPushButton(self.centralwidget)
-        self.activateButton.setObjectName("activateButton_stop")
-        self.verticalLayout.addWidget(self.activateButton)
+        self.checkBox_activate = QtWidgets.QCheckBox(self.centralwidget)
+        self.checkBox_activate.setObjectName("checkBox_activate")
+        self.verticalLayout.addWidget(self.checkBox_activate)
 
 
         StpMtrGUI.setCentralWidget(self.centralwidget)
@@ -115,6 +115,7 @@ class Ui_StpMtrGUI(object):
     def retranslateUi(self, StpMtrGUI, controller_status=None):
         _translate = QtCore.QCoreApplication.translate
         try:
+            self.checkBox_activate.setChecked(self.parameters.device_status.active)
             title = self.parameters.device_description['GUI_title']
             axis = int(self.spinBox_axis.value())
             name = self.parameters.device_description['axes_names'][axis]
@@ -149,7 +150,7 @@ class Ui_StpMtrGUI(object):
         self.checkBox_On.setText(_translate("StpMtrGUI", "On"))
         self.pushButton_move.setText(_translate("StpMtrGUI", "MOVE"))
         self.pushButton_stop.setText(_translate("StpMtrGUI", "STOP"))
-        self.activateButton.setText(_translate("StpMtrGUI", "Activate controller"))
+        self.checkBox_activate.setText(_translate("StpMtrGUI", "Activate controller"))
         self.menuSettings.setTitle(_translate("StpMtrGUI", "Settings"))
 
 if __name__ == "__main__":
