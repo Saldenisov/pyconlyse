@@ -61,6 +61,12 @@ class StpMtrController(Service):
                                                                             Dict[str, Union[int, float, str]]], str]:
         pass
 
+    @staticmethod
+    def _write_to_file(text: str, file: Path):
+        with open(file, 'w') as opened_file:
+            print('writing text')
+            opened_file.write(text)
+
     @abstractmethod
     def stop_axis(self, axis: int) -> Tuple[Union[bool, Dict[str, Union[int, float, str]]], str]:
         pass

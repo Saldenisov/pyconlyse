@@ -347,6 +347,8 @@ class StpMtrCtrl_emulate(StpMtrController):
                             comments = 'movement was interrupted'
                             break
                     self._axes_status[axis] = 1
+                    print('movement finished')
+                    StpMtrController._write_to_file(str(self._pos), self._file_pos)
                     return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
                     comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
