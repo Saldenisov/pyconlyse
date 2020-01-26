@@ -182,6 +182,7 @@ class StepMotorsView(QMainWindow):
         self.device.send_msg_externally(msg)
 
     def model_is_changed(self, msg: Message):
+        # TODO: movement_status is not updated correctly, when movement is small or not x % 10 = 0 or stopped
         com = msg.data.com
         info = msg.data.info
         if com == MsgGenerator.DONE_IT.mes_name:

@@ -347,7 +347,6 @@ class StpMtrCtrl_emulate(StpMtrController):
                             comments = 'movement was interrupted'
                             break
                     self._axes_status[axis] = 1
-                    print('movement finished')
                     StpMtrController._write_to_file(str(self._pos), self._file_pos)
                     return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
@@ -447,4 +446,7 @@ class StpMtrCtrl_emulate(StpMtrController):
             return True, comments
         else:
             return False, f'axis {axis} is not active, activate it first'
+
+    def _set_controller_activity(self):
+        self.device_status.active = True
 

@@ -10,7 +10,7 @@ under windows with no problems
 """
 from typing import List, Tuple, Union, Iterable, Dict, Any
 
-import gpiozero
+from gpiozero import LED
 from devices.devices import Service
 import logging
 from time import sleep
@@ -22,12 +22,23 @@ module_logger = logging.getLogger(__name__)
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
+    ON = 0
+    OFF = 1
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
     def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
-        self.device_status.active = flag
-        return True, f'{self.id}:{self.name} active state is {flag}'
+        res, comments = self._setup_pins()
+        if res:
+            self.device_status.active = flag
+            return True, f'{self.id}:{self.name} active state is {flag}'
+        else:
+            self.device_status.active = False
+            return True, f'{self.id}:{self.name} active state is {False}; {comments}'
+
+    def _set_controller_activity(self):
+        self.device_status.active = True
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
@@ -43,13 +54,23 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         """
         chk_axis, comments = self._check_axis_range(axis)
         if chk_axis:
-            self._axes_status[axis] = flag
-            return {'axis': axis, 'flag': flag}, f'axis {axis} state is {flag}'
+            if 2 in self._axes_status:
+                return False, f'Cannot deactivate other axis while it is running'
+            else:
+                try:
+                    idx = self._axes_status.index(1)
+                    self._axes_status[idx] = 0  #Deactivate another axis
+                    self._deactivate_relay(idx)
+                except ValueError:
+                    pass
+                finally:
+                    self._axes_status[axis] = flag
+                    self._activate_relay(axis)
+                    return {'axis': axis, 'flag': flag}, f'axis {axis} state is {flag}, axis {idx} is deactivated'
         else:
             return False, comments
 
-    def move_axis_to(self, axis: int, pos: float, how='absolute') -> Tuple[
-        Union[bool, Dict[str, Union[int, bool]]], str]:
+    def move_axis_to(self, axis: int, pos: float, how='absolute') -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
             if how == 'absolute':
@@ -62,20 +83,36 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             if chk_lmt:
                 if self._axes_status[axis] == 1:
                     self._axes_status[axis] = 2
-                    if pos - self._pos[axis] > 0:
+                    if pos - self._pos[axis] >= 0:
                         dir = 1
+                        self._direction('top')
                     else:
                         dir = -1
+                        self._direction('bottom')
                     steps = int(abs(pos - self._pos[axis]))
                     print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
-                    for i in range(steps):
+
+                    self._enable_controller()
+                    self._activate_relay(axis)
+
+                    width = self._TTL_width[axis] / self._microsteps[axis]
+                    delay = self._delay_TTL[axis] / self._microsteps[axis]
+
+                    for _ in range(steps):
                         if self._axes_status[axis] == 2:
+                            for _ in range(self._microsteps[axis]):
+                                self._set_led(self._ttl, 1)
+                                sleep(width)
+                                self._set_led(self._ttl, 0)
+                                sleep(delay)
                             self._pos[axis] = self._pos[axis] + dir
-                            sleep(0.1)
                         else:
                             comments = 'movement was interrupted'
                             break
+                    self._disable_controller()
+                    self._deactivate_all_relay()
                     self._axes_status[axis] = 1
+                    sleep(0.3)
                     return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
                     comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
@@ -102,10 +139,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return False, comments
 
     def get_controller_state(self):
-        comments = ''
+        comments = 'Controller state is obtained.'
         return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
 
     def description(self):
+        # TODO: read from DB
         desc = {'GUI_title': """StpMtrCtrl_A4988_newport, 4 axes""",
                 'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
                 'axes_values': [0, 3],
@@ -117,6 +155,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return desc
 
     def GUI_bounds(self):
+        # TODO: to be done something with this
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def power(self, flag: bool):
@@ -130,10 +169,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return [0] * self._axes_number
 
     def _get_number_axes(self) -> int:
-        return 4
+        return self._get_number_axes_db()
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
-        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+        return self._get_limits_db()
 
     def _get_pos(self) -> List[Union[int, float]]:
         if self._pos:
@@ -142,10 +181,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return [0] * self._axes_number
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        return [(0, 91),
-                (0, 50),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
+        return self._get_preset_values_db()
 
     def _is_within_limits(self, axis: int, pos) -> bool:
         comments = ''
@@ -166,9 +202,9 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         if axis in range(self._axes_number):
             return True, comments
         else:
-            return False, f'axis {axis} is out of range {list(range(self._axis_number))}' \
- \
-                    def _check_axis_active(self, axis: int) -> bool:
+            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
+
+    def _check_axis_active(self, axis: int) -> bool:
         comments = ''
         if self._axes_status[axis] > 0:
             return True, comments
@@ -176,8 +212,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return False, f'axis {axis} is not active, activate it first'
 
     def _setup_pins(self):
-        GPIO.setmode(GPIO.BCM)  # choose BCM or BOARD
-
+        parameters = self.get_settings('Parameters')
         TTL_pin = 19
         DIR_pin = 26
         enable_pin = 12
@@ -193,64 +228,98 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         relayIVa = 9  # blue
         relayIVb = 11  # green
 
-        GPIO.setup(TTL_pin, GPIO.OUT)
-        GPIO.setup(DIR_pin, GPIO.OUT)
-        GPIO.setup(enable_pin, GPIO.OUT)
-        GPIO.setup(ms1, GPIO.OUT)
-        GPIO.setup(ms2, GPIO.OUT)
-        GPIO.setup(ms3, GPIO.OUT)
-        GPIO.setup(relayIa, GPIO.OUT)
-        GPIO.setup(relayIb, GPIO.OUT)
-        GPIO.setup(relayIIa, GPIO.OUT)
-        GPIO.setup(relayIIb, GPIO.OUT)
-        GPIO.setup(relayIIIa, GPIO.OUT)
-        GPIO.setup(relayIIIb, GPIO.OUT)
-        GPIO.setup(relayIVa, GPIO.OUT)
-        GPIO.setup(relayIVb, GPIO.OUT)
+        self._ttl = LED(TTL_pin,)
+        self._dir = LED(DIR_pin)
+        self._enable = LED(enable_pin)
+        self._ms1 = LED(ms1)
+        self._ms2 = LED(ms2)
+        self._ms3 = LED(ms3)
+        self._relayIa = LED(relayIa, initial_value=True)
+        self._relayIb = LED(relayIb, initial_value=True)
+        self._relayIIa = LED(relayIIa, initial_value=True)
+        self._relayIIb = LED(relayIIb, initial_value=True)
+        self._relayIIIa = LED(relayIIIa, initial_value=True)
+        self._relayIIIb = LED(relayIIIb, initial_value=True)
+        self._relayIVa = LED(relayIVa, initial_value=True)
+        self._relayIVb = LED(relayIVb, initial_value=True)
 
-        # On/Off for relay normally closed
-        On = 0
-        Off = 1
+    def _setup_led_parameters(self, com='Full'):
+        steps = [(90, 0), (90, 0), (90, 0), (90, 0)],
+        self._TTL_width = {1: 30. / 1000,
+                           2: 3. / 1000,
+                           3: 5. / 1000,
+                           4: 5. / 1000}  # s
+        self._delay_TTL = {1: 5. / 1000,
+                           2: 1. / 1000,
+                           3: 5. / 1000,
+                           4: 5. / 1000}  # s
+        microstep_settings = {'Full': [[0, 0, 0], 1],
+                              'Half': [[1, 0, 0], 2],
+                              'Quarter': [[0, 1, 0], 4],
+                              'Eight': [[1, 1, 0], 8],
+                              'Sixteen': [[1, 1, 1], 16]}
+        self._set_led(self._ms1, microstep_settings[com][0][0])
+        self._set_led(self._ms2, microstep_settings[com][0][1])
+        self._set_led(self._ms3, microstep_settings[com][0][2])
+        self._microsteps = microstep_settings[com][1]
 
-        GPIO.output(TTL_pin, 0)
-        GPIO.output(DIR_pin, 0)
-        GPIO.output(enable_pin, 0)
 
-        GPIO.output(relayIa, Off)
-        GPIO.output(relayIb, Off)
-
-        GPIO.output(relayIIa, Off)
-        GPIO.output(relayIIb, Off)
-
-        GPIO.output(relayIIIa, Off)
-        GPIO.output(relayIIIb, Off)
-
-        GPIO.output(relayIVa, Off)
-        GPIO.output(relayIVb, Off)
+    def _set_led(self, led: LED, value: Union[bool, int]):
+        if value == 1:
+            led.on()
+        elif value == 0:
+            led.off()
+        else:
+            self.logger.info(f'func _set_led value {value} is not known')
 
     def _enable_controller(self):
-        GPIO.output(enable_pin, 0)
+        self._set_led(self._enable, 0)
         sleep(0.05)
 
     def _disable_controller(self):
-        GPIO.output(enable_pin, 1)
+        self._set_led(self._enable, 1)
         sleep(0.05)
 
     def _direction(self, orientation='top'):
         if orientation == 'top':
-            GPIO.output(DIR_pin, 1)
+            self._set_led(self._dir, 1)
         elif orientation == 'bottom':
-            GPIO.output(DIR_pin, 0)
+            self._set_led(self._dir, 0)
         sleep(0.05)
 
-    def _activate_relay(self, n):
-        """
-        activate relay #n
-        :return:
-        """
-        pass
-
-    def _deactivate_all_relay(self):
-        pass
+    def _activate_relay(self, n: int):
+        # TODO: better to remove _deactivate_all_relay and use _deactivate_relay
+        self._deactivate_all_relay()
+        if n == 0:
+            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 1:
+            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 2:
+            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 3:
+            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
         sleep(0.1)
 
+    def _deactivate_relay(self, n: int):
+        if n == 0:
+            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 1:
+            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 2:
+            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 3:
+            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
+        sleep(0.1)
+
+    def _deactivate_all_relay(self):
+        for axis in range(4):
+            self._deactivate_relay(axis)
+        sleep(0.1)

@@ -67,7 +67,7 @@ GPIO.output(relayIVb, Off)
 
 
 def set_settings(com='Full'):
-    steps = [(90,0), (90,0), (90,0), (90,0)],
+    steps = [(90,0), (90,0), (90,0), (90,0)]
     TTL_width = {1: 30./1000,
                  2: 3./1000,
                  3: 5./1000,
@@ -84,7 +84,7 @@ def set_settings(com='Full'):
     GPIO.output(ms1, settings[com][0][0])
     GPIO.output(ms2, settings[com][0][1])
     GPIO.output(ms3, settings[com][0][2])
-    return  settings[com][1], TTL_width,  delay_TTL, steps
+    return settings[com][1], TTL_width,  delay_TTL, steps
 
 
 

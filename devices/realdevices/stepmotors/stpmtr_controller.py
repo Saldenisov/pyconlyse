@@ -64,7 +64,6 @@ class StpMtrController(Service):
     @staticmethod
     def _write_to_file(text: str, file: Path):
         with open(file, 'w') as opened_file:
-            print('writing text')
             opened_file.write(text)
 
     @abstractmethod
@@ -190,23 +189,24 @@ class StpMtrController(Service):
 
     def _get_pos_file(self) -> List[Union[int, float]]:
         """Return [] if error (file is empty, number of positions is less than self._axes_number"""
-        from ast import literal_eval
-        with open(self._file_pos) as f:
-            content = f.readlines()
-        if len(content) != 0:
-            values: List[str] = content[0].split(',')
-            pos: List[Union[float, int]] = []
-            try:
-                for val in values:
-                    pos.append(literal_eval(val))
-            except SyntaxError:
-                return []
-            if len(pos) != self._axes_number:
-                self.logger.error(f"There is {len(pos)} positions in log file, instead of axes_number {self._axes_number} in DB")
-                return []
+        try:
+            with open(self._file_pos, 'r') as file_pos:
+                pos_s = file_pos.readline()
+            if not pos_s:
+                raise StpmtrError('file with pos is empty')
+            pos = eval(pos_s)
+            if not isinstance(pos, list):
+                raise StpmtrError('is not a list')
             else:
-                return pos
-        else:
+                if len(pos) != self._axes_number:
+                    raise StpmtrError(f"There is {len(pos)} positions in file, instead of {self._axes_number}")
+                else:
+                    for val in pos:
+                        if not (isinstance(val, int) or isinstance(val, float)):
+                            raise StpmtrError(f"val {val} is not a number")
+                    return pos
+        except (StpmtrError, FileNotFoundError, SyntaxError) as e:
+            self.logger.error(f'in _get_pos_file error: {e}')
             return []
 
     def _set_pos(self):
@@ -215,10 +215,11 @@ class StpMtrController(Service):
         if len(controller_pos) == 0 and len(file_pos) == 0:
             self.logger.error("Axes positions could not be set, setting everything to 0")
             self._pos = [0.0] * self._axes_number
-            if controller_pos != file_pos:
-                self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-        elif len(controller_pos) == 0:
+        elif not controller_pos:
             self._pos = file_pos
+        elif controller_pos != file_pos:
+            self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            raise StpmtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
         else:
             self._pos = controller_pos
 
@@ -235,7 +236,7 @@ class StpMtrController(Service):
                 if not isinstance(val, tuple):
                     raise TypeError()
                 preset_values.append(val)
-            self._limits = preset_values
+            return preset_values
         except KeyError:
             raise StpmtrError(self, text="Preset values could not be set, preset_values field is absent in the DB")
         except (TypeError, SyntaxError):
@@ -244,13 +245,22 @@ class StpMtrController(Service):
     def _set_preset_values(self):
         if self.device_status.active:
             preset_values = self._get_preset_values()
-
         else:
             preset_values = self._get_preset_values_db()
         self._preset_values = preset_values
 
+    @abstractmethod
+    def _set_controller_activity(self):
+        """
+        Checks weather hardware controller is active = is ready to recieve and respond
+        and sets self.device_status.active
+        :return:
+        """
+        pass
+
     def _set_parameters(self) -> Tuple[bool, str]:
         try:
+            self._set_controller_activity()
             self._set_number_axes()
             self._set_axes_status()
             self._set_limits()

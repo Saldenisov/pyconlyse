@@ -148,12 +148,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         except:
             return False
 
+    def get_settings(self, name: str) -> Dict[str, Union[str, List[str]]]:
+        try:
+            return self.config.config_to_dict(self.name)[name]
+        except ValueError as e:
+            self.logger.error(e)
+            raise
+
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
-        return self.config.config_to_dict(self.name)['General']
+        return self.get_settings('General')
 
     def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
-        res = self.config.config_to_dict(self.name)['Addresses']
-        return res
+        return self.get_settings('Addresses')
 
     def decide_on_msg(self, msg: Message) -> None:
         # TODO : realise logic
