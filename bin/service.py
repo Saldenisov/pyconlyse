@@ -21,12 +21,32 @@ def init(device_id: str, db_name: str):
 
 if __name__ == "__main__":
     """
-    python service.py StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b Devices.db 
+    python service.py -id StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b -db Devices.db 
     """
-    if len(sys.argv) >= 3:
-        init(device_id=sys.argv[1], db_name=sys.argv[2])
+    preselection = {'newport_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db']}
+
+    if '-id' in sys.argv and '-db' in sys.argv:
+        try:
+            device_id_idx = sys.argv.index('-id') + 1
+            device_id = sys.argv[device_id_idx]
+            db_idx = sys.argv.index('-db') + 1
+            db = sys.argv[db_idx]
+            device_id = device_id
+            db = db
+
+        except (KeyError, IndexError):
+            raise Exception('Not enough arguments were passed')
+    elif '-s' in sys.argv:
+        try:
+            selection_idx = sys.argv.index('-s') + 1
+            selection = sys.argv[selection_idx]
+            device_id = preselection[selection][0]
+            db = preselection[selection][1]
+        except (KeyError, IndexError):
+            raise Exception('Not enough arguments were passed')
     else:
         raise Exception('Not enough arguments were passed')
 
+    init(device_id=device_id, db_name=db)
 
 
