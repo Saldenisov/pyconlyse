@@ -69,7 +69,7 @@ class GeneralCmdLogic(Thinker):
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
-            if event.counter_timeout > 5:
+            if event.counter_timeout > 10:
                 self.logger.info('Server was away for too long...deleting info about Server')
                 del self.parent.connections[event.original_owner]
                 self.unregister_event(event.id)
@@ -93,6 +93,7 @@ class ServerCmdLogic(Thinker):
 
     def react_info(self, msg: Message):
         data = msg.data
+        print(msg)
         # TODO: if section should be added to check weather device which send cmd is in connections or not
         # at this moment connections is dict with key = device_id
         if msg.body.sender_id in self.parent.connections:
