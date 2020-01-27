@@ -93,7 +93,6 @@ class ServerCmdLogic(Thinker):
 
     def react_info(self, msg: Message):
         data = msg.data
-        print(msg)
         # TODO: if section should be added to check weather device which send cmd is in connections or not
         # at this moment connections is dict with key = device_id
         if msg.body.sender_id in self.parent.connections:
