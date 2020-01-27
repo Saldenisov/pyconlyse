@@ -21,7 +21,7 @@ def init(device_id: str, db_name: str):
 
 if __name__ == "__main__":
     """
-    python service.py -id StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b -db Devices.db 
+    python service.py -id StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd -db Devices.db 
     """
     preselection = {'newport_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
                     'stpmtr_emulate': ['StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', 'Devices.db']}
