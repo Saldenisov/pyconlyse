@@ -121,6 +121,8 @@ def get_local_ip() -> str:
             if ip.network_prefix < 64:
                 ips_l.append(ip.ip)
 
+    ips_ls = sorted(ips_l)
+
     def get(ips_l):
         for ip in ips_l:
             if '129.' in ip:
@@ -129,7 +131,7 @@ def get_local_ip() -> str:
                 return ip
         return None
     # was before return str(gethostbyname(gethostname()))
-    return get(ips_l)
+    return get(ips_ls)
 
 def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
