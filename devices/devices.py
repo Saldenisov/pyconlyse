@@ -196,9 +196,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         flag = True
         while flag and i <= n_max:
             i += 1
+            print(f'i = {i}')
             sleep(delay)
             if f:
                 flag = f(**specific)
+
 
     def start(self):
         self._start_messaging()

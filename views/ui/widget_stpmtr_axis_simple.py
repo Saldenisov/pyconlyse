@@ -136,7 +136,8 @@ class Ui_StpMtrGUI(object):
         if controller_status:
             try:
                 self.checkBox_On.setChecked(controller_status.axes_status[axis])
-                self.lcdNumber_position.display(controller_status.positions[axis])
+                if controller_status.axes_status[axis] != 2:  # if it moves do not update
+                    self.lcdNumber_position.display(controller_status.positions[axis])
             except Exception as e:
                 print(e)
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))

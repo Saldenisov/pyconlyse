@@ -360,8 +360,12 @@ class StpMtrCtrl_emulate(StpMtrController):
     def stop_axis(self, axis: int):
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
-            self._axes_status[axis] = 1
-            comments = 'stopped by user'
+            if self._axes_status[axis] == 2:
+                self._axes_status[axis] = 1
+                comments = 'stopped by user'
+            elif self._axes_status[axis] == 1:
+                comments = 'was already stopped'
+
             return {'axis': axis, 'pos': self._pos[axis]}, comments
         else:
             return False, comments

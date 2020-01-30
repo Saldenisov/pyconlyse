@@ -210,7 +210,7 @@ class ClientMessenger(Messenger):
             dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
             # SOCKET SUBSCRIBER
             sub = self.context.socket(zmq.SUB)
-            sub.setsockopt(zmq., 3)
+            sub.setsockopt(zmq.RCVHWM, 3)
             # SOCKET PUBLISHER
             if self._pub_option:
                 publisher = self.context.socket(zmq.PUB)
