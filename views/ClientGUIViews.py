@@ -104,6 +104,7 @@ class StepMotorsView(QMainWindow):
         self.model = in_model
         self.device: Device = self.model.superuser
         self._axes_status: List[int] = []
+        self._asked_status = 0
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, parameters)
@@ -122,6 +123,11 @@ class StepMotorsView(QMainWindow):
     def axis_value_change(self):
         self.ui.retranslateUi(self, self.controller_status)
         self.ui.progressBar_movement.setValue(0)
+        if not self._asked_status:
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=self.parameters.device_id,
+                                 parameters={})
+            self.device.send_msg_externally(msg)
+            self._asked_status = 1
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
@@ -131,6 +137,7 @@ class StepMotorsView(QMainWindow):
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
                                   parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
+        self._asked_status = 0
 
     def activate_axis(self):
         com = StpMtrController.ACTIVATE_AXIS.name
@@ -139,6 +146,7 @@ class StepMotorsView(QMainWindow):
                                   parameters={'axis': int(self.ui.spinBox_axis.value()),
                                               'flag': flag})
         self.device.send_msg_externally(msg)
+        self._asked_status = 0
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
@@ -159,6 +167,7 @@ class StepMotorsView(QMainWindow):
         try:
             self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                         specific={'axis': axis, 'with_return': True})
+            self._asked_status = 0
         except Exception as e:
             print(e)
 
@@ -181,6 +190,7 @@ class StepMotorsView(QMainWindow):
         msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
+        self._asked_status = 0
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
