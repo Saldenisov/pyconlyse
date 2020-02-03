@@ -201,6 +201,7 @@ class Messenger(MessengerInter):
 class ClientMessenger(Messenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._alive_request_server = False
 
     def _create_sockets(self):
         try:

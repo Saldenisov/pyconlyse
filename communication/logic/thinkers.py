@@ -70,9 +70,13 @@ class GeneralCmdLogic(Thinker):
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
             if event.counter_timeout > 10:
-                self.logger.info('Server was away for too long...deleting info about Server')
-                del self.parent.connections[event.original_owner]
-                self.unregister_event(event.id)
+                if self.parent.messenger._alive_reques_server:
+                    self.logger.info('Server was away for too long...deleting info about Server')
+                    del self.parent.connections[event.original_owner]
+                    self.unregister_event(event.id)
+                else:
+                    self.logger.info('Server is away...trying to change sub socket to dealer for heartbeating')
+                    event.counter_timeout = 0
         else:
             self.logger.info('react_internal: I do not know what to do')
 

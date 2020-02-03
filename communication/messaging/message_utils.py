@@ -19,14 +19,16 @@ FORWARD = 'forward'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
-    _COMMANDS = ['activate_controller', 'available_services_demand', 'available_services_reply', 'do_it', 'done_it',
-                 'error', 'forward_msg',
+    _COMMANDS = ['activate_controller', 'available_services_demand', 'available_services_reply',
+                 'are_you_alive_demand', 'are_you_alive_reply',
+                 'do_it', 'done_it', 'error', 'forward_msg',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
                  'reply_on_forwarded_demand', 'power_on_demand', 'power_on_reply',
                  'status_client_info','status_client_demand', 'status_client_reply',
                  'shutdown_info', 'welcome_info']
-
+    ARE_YOU_ALIVE_DEMAND = mes.MessageStructure(DEMAND, mes.AreYouAlive, 'are_you_alive_demand')
+    ARE_YOU_ALIVE_REPLY = mes.MessageStructure(REPLY, None, 'are_you_alive_reply')
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     DO_IT = mes.MessageStructure(DEMAND, mes.DoIt, 'do_it')
@@ -51,6 +53,14 @@ class MsgGenerator:
     SHUTDOWN_INFO = mes.MessageStructure(INFO, mes.ShutDownMes, 'shutdown_info')
     REPLY_ON_FORWARDED_DEMAND = mes.MessageStructure(REPLY, None, 'reply_on_forwarded_demand')
     WELCOME_INFO = mes.MessageStructure(REPLY, mes.WelcomeServer, 'welcome_info')
+
+    @staticmethod
+    def are_you_alive_demand(device):
+        return MsgGenerator._gen_msg(MsgGenerator.ARE_YOU_ALIVE_DEMAND, device)
+
+    @staticmethod
+    def are_you_alive_reply(device, msg_i: mes.Message):
+        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
     def available_services_demand(device):
@@ -194,6 +204,10 @@ class MsgGenerator:
                 data_info = None
             elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
                 data_info = mes_info_class(device.services_running, all_services={})
+            elif com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+                data_info = None ds
+            elif com_name == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
+                data_info = mes_info_class(device.services_running, all_services={}) sdf
             elif com_name == MsgGenerator.DO_IT.mes_name:
                 body.receiver_id = kwargs['rec_id']
                 data_info = mes_info_class(com=kwargs['com'], parameters=kwargs['parameters'])
