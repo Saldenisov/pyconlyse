@@ -9,7 +9,7 @@ import logging
 import pathlib
 from PyQt5.QtWidgets import QApplication
 
-from views.ServerGUIView import ServerGUIView
+from views.ServerGUIViews import ServerGUIView
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
