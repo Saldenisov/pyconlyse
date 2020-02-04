@@ -234,13 +234,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._delay_TTL = eval(parameters['delay_ttl'])
             self._microsteps = eval(parameters['microstep_settings'])[com][1]
             return True, ''
-        except (KeyError, SyntaxError) as e:
+        except (KeyError, SyntaxError, Exception) as e:
             self.logger.error(e)
             return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
 
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _setup_pins(self):
         try:
+            self.logger.info('setting up pins')
             parameters = self.get_settings('Parameters')
             com = parameters['com']
             self._ttl = LED(parameters['ttl_pin'])
@@ -249,19 +250,20 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._ms1 = LED(parameters['ms1'])
             self._ms2 = LED(parameters['ms2'])
             self._ms3 = LED(parameters['ms3'])
-            self._relayIa = LED(parameters['relayIa'], initial_value=True)
-            self._relayIb = LED(parameters['relayIb'], initial_value=True)
-            self._relayIIa = LED(parameters['relayIIa'], initial_value=True)
-            self._relayIIb = LED(parameters['relayIIb'], initial_value=True)
-            self._relayIIIa = LED(parameters['relayIIIa'], initial_value=True)
-            self._relayIIIb = LED(parameters['relayIIIb'], initial_value=True)
-            self._relayIVa = LED(parameters['relayIVa'], initial_value=True)
-            self._relayIVb = LED(parameters['relayIVb'], initial_value=True)
-            self._set_led(self._ms1, parameters['microstep_settings'][com][0][0])
-            self._set_led(self._ms2, parameters['microstep_settings'][com][0][1])
-            self._set_led(self._ms3, parameters['microstep_settings'][com][0][2])
+            self._relayIa = LED(parameters['relayia'], initial_value=True)
+            self._relayIb = LED(parameters['relayib'], initial_value=True)
+            self._relayIIa = LED(parameters['relayiia'], initial_value=True)
+            self._relayIIb = LED(parameters['relayiib'], initial_value=True)
+            self._relayIIIa = LED(parameters['relayiiia'], initial_value=True)
+            self._relayIIIb = LED(parameters['relayiiib'], initial_value=True)
+            self._relayIVa = LED(parameters['relayiva'], initial_value=True)
+            self._relayIVb = LED(parameters['relayivb'], initial_value=True)
+            pins_microstep = eval(parameters['microstep_settings'])
+            self._set_led(self._ms1, pins_microstep[com][0][0])
+            self._set_led(self._ms2, pins_microstep[com][0][1])
+            self._set_led(self._ms3, pins_microstep[com][0][2])
             return True, ''
-        except (KeyError, ValueError, SyntaxError) as e:
+        except (KeyError, ValueError, SyntaxError, Exception) as e:
             self.logger.error(e)
             return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
 
