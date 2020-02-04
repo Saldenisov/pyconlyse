@@ -205,9 +205,9 @@ class MsgGenerator:
             elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
                 data_info = mes_info_class(device.services_running, all_services={})
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
-                data_info = None ds
+                data_info = None
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
-                data_info = mes_info_class(device.services_running, all_services={}) sdf
+                data_info = mes_info_class(device.services_running, all_services={})
             elif com_name == MsgGenerator.DO_IT.mes_name:
                 body.receiver_id = kwargs['rec_id']
                 data_info = mes_info_class(com=kwargs['com'], parameters=kwargs['parameters'])

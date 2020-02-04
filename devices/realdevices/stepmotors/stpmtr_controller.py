@@ -41,7 +41,7 @@ class StpMtrController(Service):
         pass
 
     @abstractmethod
-    def activate_axis(self, axis: int, flag: bool) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+    def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         pass
 
     @abstractmethod

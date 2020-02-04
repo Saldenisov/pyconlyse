@@ -5,4 +5,7 @@ zmq>=0.0.0
 cryptography
 ifaddr
 PyQt5==5.13.1
+gpiozero
+rpio
+pirpio
 
