@@ -133,9 +133,29 @@ class Messenger(MessengerInter):
         try:
             self.sockets['sub'].connect(address)
             self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
+<<<<<<< HEAD
             self.sockets['sub'].setsockopt(zmq.RCVHWM, 10)
+=======
+            self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
+>>>>>>> develop
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
+
+    def restart_socket(self, socket_name:str, connect_to: str):
+        #TODO: realize other sockets
+        self.logger.info(f'restarting {socket_name} socket')
+        self.pause()
+        sock = self.sockets[socket_name]
+        self.poller.unregister(sock)
+        if socket_name == 'sub':
+            sock = self.context.socket(zmq.SUB)
+            self.poller.register(sock, zmq.POLLIN)
+            self.sockets['sub'] = sock
+            self.logger.info(f'socket {socket_name} is restarted')
+        else:
+            pass
+
+        self.unpause()
 
     @abstractmethod
     def _verify_addresses(self, addresses: dict):
@@ -166,11 +186,13 @@ class Messenger(MessengerInter):
     def pause(self):
         "put executation of thread on pause"
         self.paused = True
+        self.logger.info(f'{self.name} is paused')
         sleep(0.01)
 
     def unpause(self):
         "unpauses executation of thread"
         self.paused = False
+        self.logger.info(f'{self.name} is unpaused')
 
     @abstractmethod
     def info(self):
@@ -201,6 +223,8 @@ class Messenger(MessengerInter):
 class ClientMessenger(Messenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._attempts_to_restart_sub = 1
+        self._are_you_alive_send = False
 
     def _create_sockets(self):
         try:
@@ -210,6 +234,7 @@ class ClientMessenger(Messenger):
             dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
             # SOCKET SUBSCRIBER
             sub = self.context.socket(zmq.SUB)
+            sub.setsockopt(zmq.RCVHWM, 3)
             # SOCKET PUBLISHER
             if self._pub_option:
                 publisher = self.context.socket(zmq.PUB)
@@ -265,11 +290,8 @@ class ClientMessenger(Messenger):
             wait = False
 
         while wait and self.active:
-            i += 1
-            if i > 5000:
-                i = 0
-                self.logger.info(f'{self.name} could not connect to server, no sockets, restart {self.parent.name}')
-            sockets = dict(self.poller.poll(self._polling_time * 1000))
+            self.logger.info(f'{self.name} could not connect to server, no sockets, try to restart {self.parent.name}')
+            sockets = dict(self.poller.poll(10000))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
                 mes: Message = MsgGenerator.json_to_message(mes)
@@ -281,10 +303,9 @@ class ClientMessenger(Messenger):
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
                         self.parent.server_msgn_id = mes.body.sender_id
-                        break
+                        wait = False
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
-
 
         try:
             if self.active:

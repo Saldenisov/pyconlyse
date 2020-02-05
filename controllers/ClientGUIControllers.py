@@ -7,12 +7,11 @@ Created on 15.11.2019
 import os
 import logging
 import pathlib
-from time import sleep
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message
-from views.ClientGUIViews import SuperUserView, StepMotorsView
+from views.ClientsGUIViews import SuperUserView, StepMotorsView
 from devices.devices import Device
 
 

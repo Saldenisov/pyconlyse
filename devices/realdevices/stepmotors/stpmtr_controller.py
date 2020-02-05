@@ -37,11 +37,19 @@ class StpMtrController(Service):
         self._set_parameters()  # OBLIGATORY STEP
 
     @abstractmethod
+<<<<<<< HEAD
     def activate(self, flag: bool):
         pass
 
     @abstractmethod
     def activate_axis(self, axis: int, flag: bool) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+=======
+    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
+        pass
+
+    @abstractmethod
+    def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+>>>>>>> develop
         pass
 
     @abstractmethod
@@ -61,6 +69,14 @@ class StpMtrController(Service):
                                                                             Dict[str, Union[int, float, str]]], str]:
         pass
 
+<<<<<<< HEAD
+=======
+    @staticmethod
+    def _write_to_file(text: str, file: Path):
+        with open(file, 'w') as opened_file:
+            opened_file.write(text)
+
+>>>>>>> develop
     @abstractmethod
     def stop_axis(self, axis: int) -> Tuple[Union[bool, Dict[str, Union[int, float, str]]], str]:
         pass
@@ -184,6 +200,7 @@ class StpMtrController(Service):
 
     def _get_pos_file(self) -> List[Union[int, float]]:
         """Return [] if error (file is empty, number of positions is less than self._axes_number"""
+<<<<<<< HEAD
         from ast import literal_eval
         with open(self._file_pos) as f:
             content = f.readlines()
@@ -201,6 +218,26 @@ class StpMtrController(Service):
             else:
                 return pos
         else:
+=======
+        try:
+            with open(self._file_pos, 'r') as file_pos:
+                pos_s = file_pos.readline()
+            if not pos_s:
+                raise StpmtrError('file with pos is empty')
+            pos = eval(pos_s)
+            if not isinstance(pos, list):
+                raise StpmtrError('is not a list')
+            else:
+                if len(pos) != self._axes_number:
+                    raise StpmtrError(f"There is {len(pos)} positions in file, instead of {self._axes_number}")
+                else:
+                    for val in pos:
+                        if not (isinstance(val, int) or isinstance(val, float)):
+                            raise StpmtrError(f"val {val} is not a number")
+                    return pos
+        except (StpmtrError, FileNotFoundError, SyntaxError) as e:
+            self.logger.error(f'in _get_pos_file error: {e}')
+>>>>>>> develop
             return []
 
     def _set_pos(self):
@@ -209,10 +246,18 @@ class StpMtrController(Service):
         if len(controller_pos) == 0 and len(file_pos) == 0:
             self.logger.error("Axes positions could not be set, setting everything to 0")
             self._pos = [0.0] * self._axes_number
+<<<<<<< HEAD
             if controller_pos != file_pos:
                 self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
         elif len(controller_pos) == 0:
             self._pos = file_pos
+=======
+        elif not controller_pos:
+            self._pos = file_pos
+        elif controller_pos != file_pos:
+            self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            raise StpmtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+>>>>>>> develop
         else:
             self._pos = controller_pos
 
@@ -229,7 +274,11 @@ class StpMtrController(Service):
                 if not isinstance(val, tuple):
                     raise TypeError()
                 preset_values.append(val)
+<<<<<<< HEAD
             self._limits = preset_values
+=======
+            return preset_values
+>>>>>>> develop
         except KeyError:
             raise StpmtrError(self, text="Preset values could not be set, preset_values field is absent in the DB")
         except (TypeError, SyntaxError):
@@ -238,13 +287,31 @@ class StpMtrController(Service):
     def _set_preset_values(self):
         if self.device_status.active:
             preset_values = self._get_preset_values()
+<<<<<<< HEAD
 
+=======
+>>>>>>> develop
         else:
             preset_values = self._get_preset_values_db()
         self._preset_values = preset_values
 
+<<<<<<< HEAD
     def _set_parameters(self) -> Tuple[bool, str]:
         try:
+=======
+    @abstractmethod
+    def _set_controller_activity(self):
+        """
+        Checks weather hardware controller is active = is ready to recieve and respond
+        and sets self.device_status.active
+        :return:
+        """
+        pass
+
+    def _set_parameters(self) -> Tuple[bool, str]:
+        try:
+            self._set_controller_activity()
+>>>>>>> develop
             self._set_number_axes()
             self._set_axes_status()
             self._set_limits()

@@ -27,7 +27,7 @@ class Thinker(ThinkerInter):
         self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         self.name = f'{self.__class__.__name__}:{parent.name}:{Thinker.n_instance}'
         self.id = f'{self.name}:{unique_id(self.name)}'
-        self.parent = parent
+        self.parent: dev.Device = parent
         self._counter = 0
         self.events = Events_Dict()
         self._tasks_in = OrderedDictMod(name='tasks_in')

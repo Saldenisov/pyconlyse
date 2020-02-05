@@ -148,12 +148,27 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         except:
             return False
 
+<<<<<<< HEAD
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
         return self.config.config_to_dict(self.name)['General']
 
     def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
         res = self.config.config_to_dict(self.name)['Addresses']
         return res
+=======
+    def get_settings(self, name: str) -> Dict[str, Union[str, List[str]]]:
+        try:
+            return self.config.config_to_dict(self.name)[name]
+        except ValueError as e:
+            self.logger.error(e)
+            raise
+
+    def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
+        return self.get_settings('General')
+
+    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
+        return self.get_settings('Addresses')
+>>>>>>> develop
 
     def decide_on_msg(self, msg: Message) -> None:
         # TODO : realise logic
@@ -183,7 +198,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @staticmethod
     def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
+<<<<<<< HEAD
         print("_exec_mes_every_n_se")
+=======
+>>>>>>> develop
         i = 0
         if delay > 5:
             delay = 5
@@ -191,10 +209,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         flag = True
         while flag and i <= n_max:
             i += 1
+<<<<<<< HEAD
+=======
+            print(f'i = {i}')
+>>>>>>> develop
             sleep(delay)
             if f:
                 flag = f(**specific)
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> develop
     def start(self):
         self._start_messaging()
 

@@ -3,7 +3,7 @@ Created on 10 Jan 2017
 
 @author: Sergey Denisov
 '''
-
+from typing import Union, Any
 from functools import wraps
 
 def once(func):
@@ -58,6 +58,19 @@ def save_parameters(commands: {}, messenger, logger, path):
             return func(*args, **kwargs)
         return inner
     return decorator
+
+
+def development_mode(dev: bool, with_return: Any):
+    def decorator_function(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            if not dev:
+                return func(*args, **kwargs)
+            else:
+                if with_return != None:
+                    return with_return
+        return inner
+    return decorator_function
 
 
 

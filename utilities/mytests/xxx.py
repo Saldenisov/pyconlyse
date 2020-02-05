@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
 class A:
@@ -40,3 +41,19 @@ a.flag = False
 
 
 
+=======
+from functools import wraps
+
+
+
+dev = False
+class A:
+
+    @decor(dev=dev)
+    def f(self):
+        print('Dev is set to false')
+
+
+a = A()
+a.f()
+>>>>>>> develop

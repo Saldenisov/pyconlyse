@@ -12,7 +12,11 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
+<<<<<<< HEAD:views/ClientGUIViews.py
 from typing import List
+=======
+from typing import List, Union
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
@@ -22,12 +26,15 @@ from utilities.data.messages import Message
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
-from views.ui.SuperUser_ui import Ui_SuperUser
+from dataclasses import dataclass, field
+from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
+from utilities.data.datastructures.mes_independent import DeviceStatus
 
 
 module_logger = logging.getLogger(__name__)
 
 
+<<<<<<< HEAD:views/ClientGUIViews.py
 class SuperUserView(QMainWindow):
 
     def __init__(self, in_controller, in_model, parent=None):
@@ -84,6 +91,8 @@ from dataclasses import dataclass, field
 from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
 from utilities.data.datastructures.mes_independent import DeviceStatus
 
+=======
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
     device_status: DeviceStatus = DeviceStatus()
@@ -104,6 +113,10 @@ class StepMotorsView(QMainWindow):
         self.model = in_model
         self.device: Device = self.model.superuser
         self._axes_status: List[int] = []
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+        self._asked_status = 0
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, parameters)
@@ -121,6 +134,15 @@ class StepMotorsView(QMainWindow):
 
     def axis_value_change(self):
         self.ui.retranslateUi(self, self.controller_status)
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+        self.ui.progressBar_movement.setValue(0)
+        if not self._asked_status:
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=self.parameters.device_id,
+                                 parameters={})
+            self.device.send_msg_externally(msg)
+            self._asked_status = 1
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
@@ -130,6 +152,10 @@ class StepMotorsView(QMainWindow):
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
                                   parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+        self._asked_status = 0
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 
     def activate_axis(self):
         com = StpMtrController.ACTIVATE_AXIS.name
@@ -138,6 +164,7 @@ class StepMotorsView(QMainWindow):
                                   parameters={'axis': int(self.ui.spinBox_axis.value()),
                                               'flag': flag})
         self.device.send_msg_externally(msg)
+        self._asked_status = 0
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
@@ -154,15 +181,27 @@ class StepMotorsView(QMainWindow):
         self.controller_status.start_stop[axis] = [self.controller_status.positions[axis], pos]
         self.device.send_msg_externally(msg)
         self.controller_status.axes_status[axis] = 2
+<<<<<<< HEAD:views/ClientGUIViews.py
         # TODO: need to find a way to stop this executor, when movement is done
         try:
             self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=10,
                                         specific={'axis': axis, 'with_return': True})
+=======
+        self.ui.progressBar_movement.setValue(0)
+        try:
+            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
+                                        specific={'axis': axis, 'with_return': True})
+            self._asked_status = 0
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
         except Exception as e:
             print(e)
 
     def get_pos(self, axis=None, with_return=False):
+<<<<<<< HEAD:views/ClientGUIViews.py
         if not axis:
+=======
+        if axis == None:
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
             axis = int(self.ui.spinBox_axis.value())
         com = StpMtrController.GET_POS.name
         msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
@@ -180,6 +219,10 @@ class StepMotorsView(QMainWindow):
         msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+        self._asked_status = 0
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 
     def model_is_changed(self, msg: Message):
         com = msg.data.com
@@ -196,6 +239,10 @@ class StepMotorsView(QMainWindow):
             elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                 axis = info.result['axis']
                 pos = info.result['pos']
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+                self._update_progessbar_pos(axis, pos)
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
                 self.ui.comments.setText(info.comments)
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[axis] = pos
@@ -208,6 +255,7 @@ class StepMotorsView(QMainWindow):
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[axis] = pos
                 self.controller_status.axes_status[axis] = 1
+<<<<<<< HEAD:views/ClientGUIViews.py
                 self.ui.retranslateUi(self, self.controller_status)
             elif info.com == StpMtrController.GET_POS.name:
                 axis = info.result['axis']
@@ -220,6 +268,15 @@ class StepMotorsView(QMainWindow):
                 self.ui.lcdNumber_position.display(pos)
                 self.controller_status.positions[axis] = pos
                 self.ui.retranslateUi(self, self.controller_status)
+=======
+                self.ui.retranslateUi(self, self.controller_status)
+            elif info.com == StpMtrController.GET_POS.name:
+                axis = info.result['axis']
+                pos = info.result['pos']
+                self._update_progessbar_pos(axis, pos)
+                self.controller_status.positions[axis] = pos
+                self.ui.retranslateUi(self, self.controller_status)
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
             elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                 self.controller_status = StpMtrCtrlStatusMultiAxes(**info.result)
                 if not self.controller_status.start_stop:
@@ -233,6 +290,16 @@ class StepMotorsView(QMainWindow):
                                      parameters={})
             self.device.send_msg_externally(msg)
 
+<<<<<<< HEAD:views/ClientGUIViews.py
+=======
+    def _update_progessbar_pos(self, axis: int, pos: Union[float, int]):
+        if self.controller_status.axes_status[axis] == 2 and self.ui.spinBox_axis.value() == axis:
+            start = self.controller_status.start_stop[axis][0]
+            stop = self.controller_status.start_stop[axis][1]
+            per = int((pos - start) / (stop - start) * 100.0)
+            self.ui.progressBar_movement.setValue(per)
+            self.ui.lcdNumber_position.display(pos)
+>>>>>>> develop:views/ClientsGUIViews/StepMotors.py
 
 class StepMotorsView_old(QWidget):
     '''
