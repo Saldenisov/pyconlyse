@@ -133,9 +133,25 @@ class Messenger(MessengerInter):
         try:
             self.sockets['sub'].connect(address)
             self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
-            self.sockets['sub'].setsockopt(zmq.RCVHWM, 10)
+            self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
+
+    def restart_socket(self, socket_name:str, connect_to: str):
+        #TODO: realize other sockets
+        self.logger.info(f'restarting {socket_name} socket')
+        self.pause()
+        sock = self.sockets[socket_name]
+        self.poller.unregister(sock)
+        if socket_name == 'sub':
+            sock = self.context.socket(zmq.SUB)
+            self.poller.register(sock, zmq.POLLIN)
+            self.sockets['sub'] = sock
+            self.logger.info(f'socket {socket_name} is restarted')
+        else:
+            pass
+
+        self.unpause()
 
     @abstractmethod
     def _verify_addresses(self, addresses: dict):
@@ -166,11 +182,13 @@ class Messenger(MessengerInter):
     def pause(self):
         "put executation of thread on pause"
         self.paused = True
+        self.logger.info(f'{self.name} is paused')
         sleep(0.01)
 
     def unpause(self):
         "unpauses executation of thread"
         self.paused = False
+        self.logger.info(f'{self.name} is unpaused')
 
     @abstractmethod
     def info(self):
@@ -201,7 +219,8 @@ class Messenger(MessengerInter):
 class ClientMessenger(Messenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._alive_request_server = False
+        self._attempts_to_restart_sub = 1
+        self._are_you_alive_send = False
 
     def _create_sockets(self):
         try:

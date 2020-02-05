@@ -1,11 +1,8 @@
 numpy>=1.15.3
 matplotlib>=3.0.2
 configobj>=5.0.2
-zmq>=0.0.0
-cryptography
-ifaddr
 PyQt5==5.13.1
+cryptography
+zmq>=0.0.0
+ifaddr
 gpiozero
-rpio
-pirpio
-

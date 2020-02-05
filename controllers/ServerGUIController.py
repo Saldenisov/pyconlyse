@@ -39,7 +39,7 @@ class ServerGUIController:
     def pause_server(self):
         try:
             if self.model.server:
-                if self.model.server.device_status.paused:
+                if self.model.server.device_status.messaging_paused:
                     self.model.server.unpause()
                 else:
                     self.model.server.pause()

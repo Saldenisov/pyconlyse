@@ -27,7 +27,7 @@ class MsgGenerator:
                  'reply_on_forwarded_demand', 'power_on_demand', 'power_on_reply',
                  'status_client_info','status_client_demand', 'status_client_reply',
                  'shutdown_info', 'welcome_info']
-    ARE_YOU_ALIVE_DEMAND = mes.MessageStructure(DEMAND, mes.AreYouAlive, 'are_you_alive_demand')
+    ARE_YOU_ALIVE_DEMAND = mes.MessageStructure(DEMAND, mes.AreYouAliveDemand, 'are_you_alive_demand')
     ARE_YOU_ALIVE_REPLY = mes.MessageStructure(REPLY, None, 'are_you_alive_reply')
     AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
     AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
@@ -55,12 +55,12 @@ class MsgGenerator:
     WELCOME_INFO = mes.MessageStructure(REPLY, mes.WelcomeServer, 'welcome_info')
 
     @staticmethod
-    def are_you_alive_demand(device):
-        return MsgGenerator._gen_msg(MsgGenerator.ARE_YOU_ALIVE_DEMAND, device)
+    def are_you_alive_demand(device, context=''):
+        return MsgGenerator._gen_msg(MsgGenerator.ARE_YOU_ALIVE_DEMAND, device, context=context)
 
     @staticmethod
     def are_you_alive_reply(device, msg_i: mes.Message):
-        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
+        return MsgGenerator._gen_msg(MsgGenerator.ARE_YOU_ALIVE_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
     def available_services_demand(device):
@@ -205,9 +205,9 @@ class MsgGenerator:
             elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
                 data_info = mes_info_class(device.services_running, all_services={})
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
-                data_info = None
+                data_info = mes_info_class(context=kwargs['context'])
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
-                data_info = mes_info_class(device.services_running, all_services={})
+                data_info = None
             elif com_name == MsgGenerator.DO_IT.mes_name:
                 body.receiver_id = kwargs['rec_id']
                 data_info = mes_info_class(com=kwargs['com'], parameters=kwargs['parameters'])

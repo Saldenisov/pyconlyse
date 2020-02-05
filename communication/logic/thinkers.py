@@ -3,6 +3,7 @@ from time import time
 
 import utilities.data.messages as mes
 from communication.messaging.message_utils import MsgGenerator
+from communication.messaging.messengers import Messenger
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.messages import Message, DeviceInfoMes
 from utilities.myfunc import info_msg, error_logger
@@ -37,8 +38,8 @@ class GeneralCmdLogic(Thinker):
                                     start_now=True)
                 self.parent.connections[data.info.device_id] = Connection(DeviceInfoMes(device_id=data.info.device_id,
                                                                                         messenger_id=msg.body.sender_id))
-                msg = MsgGenerator.hello(device=self.parent)
-                self.add_task_out(msg)
+                msg_i = MsgGenerator.hello(device=self.parent)
+                self.msg_out(True, msg_i)
             else:
                 # TODO: potential danger of calling non-existing event
                 self.events[data.info.event_id].time = time()
@@ -63,22 +64,35 @@ class GeneralCmdLogic(Thinker):
                 connection.device_info = data.info
                 session_key = self.parent.messenger.decrypt_with_private(data.info.session_key)
                 self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
+        elif data.com == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
+            self.events['server_heartbeat'].time = time()
+            self.parent.messenger._are_you_alive_send = False
 
     def react_demand(self, msg: Message):
         info_msg(self, 'REQUEST', extra=str(msg.short()))
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
-            if event.counter_timeout > 10:
-                if self.parent.messenger._alive_reques_server:
-                    self.logger.info('Server was away for too long...deleting info about Server')
-                    del self.parent.connections[event.original_owner]
-                    self.unregister_event(event.id)
-                else:
-                    self.logger.info('Server is away...trying to change sub socket to dealer for heartbeating')
+            if event.counter_timeout > int( self.parent.get_general_settings()['timeout']):
+                if self.parent.messenger._attempts_to_restart_sub > 0:
+                    self.logger.info('Server is away...trying to restart sub socket')
+                    self.logger.info('Setting event.counter_timeout to 0')
+                    self.parent.messenger._attempts_to_restart_sub -= 1
                     event.counter_timeout = 0
-        else:
-            self.logger.info('react_internal: I do not know what to do')
+                    addr = self.parent.connections[event.original_owner].device_info.public_sockets['publisher']
+                    self.parent.messenger.restart_socket('sub', addr)
+
+                else:
+                    if not self.parent.messenger._are_you_alive_send:
+                        self.logger.info('restart of sub socket did work, switching to demand pathway')
+                        event.counter_timeout = 0
+                        msg_i = MsgGenerator.are_you_alive_demand(device=self.parent, context=f'EVENT:{event.id}')
+                        self.parent.messenger._are_you_alive_send = True
+                        self.msg_out(True, msg_i)
+                    else:
+                        self.logger.info('Server was away for too long...deleting info about Server')
+                        del self.parent.connections[event.original_owner]
+                        self.unregister_event(event.id)
 
 
 class ServerCmdLogic(Thinker):
@@ -164,6 +178,8 @@ class ServerCmdLogic(Thinker):
                 # Server here always replied the same way to all services
                 comments = """"I always say, that power is ON, I hope the user have turned on power already"""
                 msg_i = MsgGenerator.power_on_reply(self.parent, msg_i=msg, flag=True, comments=comments)
+            elif cmd == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+                msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')

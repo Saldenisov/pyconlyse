@@ -36,8 +36,13 @@ class AvailableServices:
     all_services: dict = field(default_factory=dict)
 
 @dataclass(frozen=True, order=True)
-class AreYouAlive:
+class AreYouAliveDemand:
     context: str = ''
+
+@dataclass(frozen=True, order=True)
+class AreYouAliveReply:
+    context: str = ''
+    extra: object = None
 
 @dataclass(frozen=True, order=True)
 class DoIt:
