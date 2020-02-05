@@ -286,11 +286,8 @@ class ClientMessenger(Messenger):
             wait = False
 
         while wait and self.active:
-            i += 1
-            if i > 5000:
-                i = 0
-                self.logger.info(f'{self.name} could not connect to server, no sockets, restart {self.parent.name}')
-            sockets = dict(self.poller.poll(self._polling_time * 1000))
+            self.logger.info(f'{self.name} could not connect to server, no sockets, try to restart {self.parent.name}')
+            sockets = dict(self.poller.poll(10000))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
                 mes: Message = MsgGenerator.json_to_message(mes)
@@ -302,10 +299,9 @@ class ClientMessenger(Messenger):
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
                         self.parent.server_msgn_id = mes.body.sender_id
-                        break
+                        wait = False
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
-
 
         try:
             if self.active:

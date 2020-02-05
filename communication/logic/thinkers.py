@@ -1,16 +1,14 @@
 import logging
 from time import time
 
-import utilities.data.messages as mes
 from communication.messaging.message_utils import MsgGenerator
+from communication.logic import Thinker, ThinkerEvent
 from communication.messaging.messengers import Messenger
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.messages import Message, DeviceInfoMes
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)
-
-from communication.logic import Thinker, ThinkerEvent
 
 
 class GeneralCmdLogic(Thinker):
