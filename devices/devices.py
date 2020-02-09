@@ -201,7 +201,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             if f:
                 flag = f(**specific)
 
-
     def start(self):
         self._start_messaging()
 

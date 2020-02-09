@@ -297,9 +297,9 @@ class StpMtrCtrl_emulate(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
+    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Union[Any]], str]]:
         self.device_status.active = flag
-        return True, f'{self.id}:{self.name} active state is {flag}'
+        return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions

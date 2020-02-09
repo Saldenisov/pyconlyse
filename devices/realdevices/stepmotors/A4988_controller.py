@@ -30,17 +30,17 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._ttl = None  # to make controller work when dev_mode is ON
         self._pins = []
 
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
+    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
         if flag:
             res, comments = self._setup()
         else:
             res, comments = self._pins_off()
         if res:
             self.device_status.active = flag
-            return True, f'{self.id}:{self.name} active state is {flag}'
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
         else:
             self.device_status.active = False
-            return True, f'{self.id}:{self.name} active state is {False}; {comments}'
+            return {'flag': False}, f'{self.id}:{self.name} active state is {False}; {comments}'
 
     def _set_controller_activity(self):
         self.device_status.active = False
