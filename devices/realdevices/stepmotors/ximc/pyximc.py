@@ -1,6 +1,9 @@
 from ctypes import *
 import os
 import platform
+import win32api
+import win32con
+
 
 # Load library
 
@@ -13,7 +16,9 @@ def ximc_shared_lib():
     elif platform.system() == "Darwin":
         return CDLL("libximc.framework/libximc")
     elif platform.system() == "Windows":
-        return WinDLL("libximc.dll")
+        dll_name = r'libximc.dll'
+        dll_handle = win32api.LoadLibraryEx(dll_name, 0, win32con.LOAD_WITH_ALTERED_SEARCH_PATH)
+        return WinDLL(dll_name, handle=dll_handle)
     else:
         return None
 
@@ -55,6 +60,7 @@ class device_network_information_t(LittleEndianStructure):
 
 lib.enumerate_devices.restype = POINTER(device_enumeration_t)
 lib.get_device_name.restype = c_char_p
+
 
 
 # ---------------------------

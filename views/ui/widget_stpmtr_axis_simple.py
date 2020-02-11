@@ -135,6 +135,7 @@ class Ui_StpMtrGUI(object):
             preset = str([0, 100])
         if controller_status:
             try:
+                self.checkBox_activate.setChecked(controller_status.device_status.active)
                 self.checkBox_On.setChecked(controller_status.axes_status[axis])
                 if controller_status.axes_status[axis] != 2:  # if it moves do not update
                     self.lcdNumber_position.display(controller_status.positions[axis])

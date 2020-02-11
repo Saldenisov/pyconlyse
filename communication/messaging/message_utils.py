@@ -205,8 +205,10 @@ class MsgGenerator:
             elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
                 data_info = mes_info_class(device.services_running, all_services={})
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+                crypted = False
                 data_info = mes_info_class(context=kwargs['context'])
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
+                crypted = False
                 data_info = None
             elif com_name == MsgGenerator.DO_IT.mes_name:
                 body.receiver_id = kwargs['rec_id']
@@ -216,6 +218,7 @@ class MsgGenerator:
                 com = msg_i.data.info.com
                 data_info = mes_info_class(com=com, result=kwargs['result'], comments=kwargs['comments'])
             elif com_name == MsgGenerator.ERROR.mes_name:
+                crypted = False
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
             elif com_name == MsgGenerator.FORWARD_MSG.mes_name:

@@ -38,6 +38,8 @@ class Messenger(MessengerInter):
                  pub_option: bool,
                  **kwargs):
         super().__init__()
+        self._attempts_to_restart_sub = 1
+        self._are_you_alive_send = False
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
@@ -134,10 +136,11 @@ class Messenger(MessengerInter):
             self.sockets['sub'].connect(address)
             self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
             self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
+            self.logger.info(f'socket sub is connected to {address}')
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
 
-    def restart_socket(self, socket_name:str, connect_to: str):
+    def restart_socket(self, socket_name: str, connect_to: str):
         #TODO: realize other sockets
         self.logger.info(f'restarting {socket_name} socket')
         self.pause()
@@ -147,6 +150,7 @@ class Messenger(MessengerInter):
             sock = self.context.socket(zmq.SUB)
             self.poller.register(sock, zmq.POLLIN)
             self.sockets['sub'] = sock
+            self.subscribe_sub(connect_to)
             self.logger.info(f'socket {socket_name} is restarted')
         else:
             pass
@@ -219,8 +223,6 @@ class Messenger(MessengerInter):
 class ClientMessenger(Messenger):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._attempts_to_restart_sub = 1
-        self._are_you_alive_send = False
 
     def _create_sockets(self):
         try:
@@ -524,7 +526,6 @@ class ServerMessenger(Messenger):
                     self.logger.info(f'{msg.body.type} msg {msg.id} is send from backend')
                 else:
                     error_logger(self, self.send_msg, f'Receiver ID does not exist: {msg.body.receiver_id}')
-                    raise MessengerError(f' {self.name}. Receiver ID does not exist: {msg.body.receiver_id}')
             else:
                 error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
         except zmq.ZMQError as e:

@@ -144,6 +144,9 @@ class StepMotorsView(QMainWindow):
         if com == MsgGenerator.DONE_IT.mes_name:
             if info.com == StpMtrController.ACTIVATE.name:
                 self.ui.comments.setText(info.comments)
+                self.ui.checkBox_activate.setChecked(info.result['flag'])
+                self.controller_status.device_status.active = info.result['flag']
+                self.ui.retranslateUi(self, self.controller_status)
             elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                 flag = info.result['flag']
                 self.ui.comments.setText(info.comments)
