@@ -155,11 +155,27 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             raise
 
+    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
+        return self.get_settings('Addresses')
+
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('General')
 
-    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
-        return self.get_settings('Addresses')
+    def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict]) \
+            -> List[Tuple[Union[float, int]]]:
+        try:
+            listed_param: List[Tuple[Union[float, int]]] = []
+            listed_param_s: List[str] = self.config.config_to_dict(self.name)[from_section][what].replace(" ", "").split(';')
+            for exp in listed_param_s:
+                val = eval(exp)
+                if not isinstance(val, type_value):
+                    raise TypeError()
+                listed_param.append(val)
+            return listed_param
+        except KeyError:
+            raise DeviceError(f"_get_list_db: field {what} or section {from_section} is absent in the DB", self.name)
+        except (TypeError, SyntaxError):
+            raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
     def decide_on_msg(self, msg: Message) -> None:
         # TODO : realise logic
