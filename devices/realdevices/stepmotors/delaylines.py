@@ -460,7 +460,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         super().__init__(**kwargs)
         self._PS90: ctypes.WinDLL = None
 
-
     def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
         pass
 
@@ -518,11 +517,15 @@ class StpMtrCtrl_OWIS(StpMtrController):
         pass
 
     def _setup(self):
-        self._DLpath = self.get_general_settings()['DLL_path']
+        list_param = ['DLL_path', 'interface', 'baudrate', 'port']
+        settings = self.get_general_settings()
+        self._DLpath = settings['DLL_path']
         self._PS90 = ctypes.WinDLL(self._DLpath)
-        self._interface = int(self.get_general_settings()['interface'])
-        self._baudrate = int(self.get_general_settings()['baudrate'])
-        self._port = int(self.get_general_settings()['port'])
+        self._interface = int(settings['interface'])
+        self._baudrate = int(settings['baudrate'])
+        self._port = int(settings['port'])
+        self._axes_speeds: List[float] = xxx
+        self._axes_red_ratios: List[int] = xxx
 
     #TODO add documention to all functionsof PS90, what parameters
     def _connect(self, control_unit: int, interface: int, port: int, baudrate: int,
@@ -635,6 +638,21 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_int(axis)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetTargetEx(control_unit, axis, value)
+        success = True if res else False
+        return success, self._error(res, 1), 0
+
+    def _set_pos_Fex(self, control_unit: int, axis: int, speed: float) -> Tuple[Union[bool, str]]:
+        """
+        Sets the speed of the axis
+        :param control_unit: usually 1 if one controller is available
+        :param axis: could be 1-3
+        :param speed: in mm/s
+        :return:
+        """
+        control_unit = ctypes.c_int(control_unit)
+        axis = ctypes.c_int(axis)
+        speed = ctypes.c_double(speed)
+        res = self._PS90.PS90_SetPosFEx(control_unit, axis, speed)
         success = True if res else False
         return success, self._error(res, 1), 0
 
