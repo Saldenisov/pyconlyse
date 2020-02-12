@@ -23,18 +23,28 @@ class StpMtrCtrl_OWIS(StpMtrController):
         self._PS90: ctypes.WinDLL = None
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
-        res, comments = self._setup()
-        if res:
-            res, comments = self._connect(1, self._interface, self._port, self._baudrate)
-            if res:
-                self.device_status.active = flag
-                return True, f'{self.id}:{self.name} active state is {flag}'
-            else:
-                return True, f'{self.id}:{self.name} active state is {flag}'
+    def activate(self, flag: bool) -> Tuple[Dict[str, bool], str]:
+        """
+        activation of controller is done here, when True init is done when False disconnect
+        :param flag: True / False
+        :return: {'flag': flag}, comments
+        """
+        if flag and not self.device_status.active:
+            res, comments = self._init()
         else:
-            self.device_status.active = False
-            return True, f'{self.id}:{self.name} active state is {False}; {comments}'
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
+                                   'WAS active BEFORE'
+        if not flag and self.device_status.active:
+            res, comments = self._disconnect(1)
+        else:
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
+                                   'WAS active BEFORE'
+
+        if res:
+            self.device_status.active = flag
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
+        else:
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active}; {comments}'
 
     def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         pass
@@ -89,10 +99,29 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def _set_controller_activity(self):
         pass
 
-    def _setup(self):
+    def _init(self) -> Tuple[Union[bool, str]]:
+        """
+        primary initialization of hardware controller is done
+        :return:
+        """
+        res, comments = self._setup()
+
+        if res:
+            return self._connect(1, self._interface, self._port, self._baudrate)
+        else:
+            return False, comments
+
+    def _setup(self)-> Tuple[Union[bool, str]]:
+        """
+        essential parameters for controller operation are read rom DB
+        :return: bool, comment
+        """
         try:
             list_param = ['DLL_path', 'interface', 'baudrate', 'port']
             settings = self.get_general_settings()
+            for param in list_param:
+                if param not in settings:
+                    raise KeyError(f'{param} is not found in settings. Check DB')
             self._DLpath = settings['DLL_path']
             self._PS90 = ctypes.WinDLL(self._DLpath)
             self._interface = int(settings['interface'])
@@ -101,10 +130,11 @@ class StpMtrCtrl_OWIS(StpMtrController):
             self._axes_speeds: List[float] = self._get_list_db("Parameters", 'speeds', float)
             self._axes_gear_ratios: List[int] = self._get_list_db("Parameters", 'gear_ratios', int)
             return True, ''
-        except:
-            return False, "_setup did not work"
+        except KeyError as e:
+            return False, f"_setup did not work; {e}"
 
-    #TODO add documention to all functionsof PS90, what parameters
+    # TODO add documention to all functionsof PS90, what parameters
+    # TODO: remover success local variable from all functions
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _connect(self, control_unit: int, interface: int, port: int, baudrate: int,
                  par3=0, par4=0, par5=0, par6=0) -> Tuple[Union[bool, str]]:
@@ -117,15 +147,13 @@ class StpMtrCtrl_OWIS(StpMtrController):
         par5 = ctypes.c_int(par5)
         par6 = ctypes.c_int(par6)
         res = self._PS90.PS90_Connect(control_unit, interface, port, baudrate, par3, par4, par5, par6)
-        success = True if res else False
-        return success, self._error(res, 0), 0
+        return True if res else False, self._error(res, 0), 0
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _disconnect(self, control_unit: int) -> Tuple[Union[bool, str]]:
         control_unit = ctypes.c_int(control_unit)
         res = self._PS90.PS90_Disconnect(control_unit)
-        success = True if res else False
-        return success, self._error(res, 0), 0
+        return True if res else False, self._error(res, 0), 0
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _get_axis_state(self, control_unit: int, axis: int) -> Tuple[Union[bool, str, int]]:
@@ -133,8 +161,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_int(axis)
         res = self._PS90.PS90_GetAxisState(control_unit, axis)
         error = self.__get_read_error(control_unit)
-        success = True if error == 0 else False
-        return success, self._error(res, 1), res
+        return True if error == 0 else False, self._error(res, 1), res
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _get_position_ex(self, control_unit: int, axis: int) -> Tuple[Union[bool, str, float]]:
@@ -142,16 +169,14 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_int(axis)
         res = self._PS90.PS90_GetPositionEx(control_unit, axis)
         error = self.__get_read_error(control_unit)
-        success = True if error == 0 else False
-        return success, self._error(res, 1), res
+        return True if error == 0 else False, self._error(res, 1), res
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _go_target(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
         control_unit = ctypes.c_int(control_unit)
         axis = ctypes.c_int(axis)
         res = self._PS90.PS90_GoTarget(control_unit, axis)
-        success = True if res else False
-        return success, self._error(res, 1), 0
+        return True if res else False, self._error(res, 1), 0
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def __get_read_error(self, control_unit: int) -> int:
