@@ -28,15 +28,19 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._ttl = None  # to make controller work when dev_mode is ON
+        self._pins = []
 
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
-        res, comments = self._setup()
+    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
+        if flag:
+            res, comments = self._setup()
+        else:
+            res, comments = self._pins_off()
         if res:
             self.device_status.active = flag
-            return True, f'{self.id}:{self.name} active state is {flag}'
+            return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
         else:
             self.device_status.active = False
-            return True, f'{self.id}:{self.name} active state is {False}; {comments}'
+            return {'flag': False}, f'{self.id}:{self.name} active state is {False}; {comments}'
 
     def _set_controller_activity(self):
         self.device_status.active = False
@@ -191,11 +195,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _is_within_limits(self, axis: int, pos) -> bool:
+    def _is_within_limits(self, axis: int, pos) -> Tuple[Union[bool, str]]:
         comments = ''
         return True, comments
 
-    def _check_axis(self, axis: int) -> bool:
+    def _check_axis(self, axis: int) -> Tuple[Union[bool, str]]:
         if self.device_status.active:
             res, comments = self._check_axis_range(axis)
             if res:
@@ -205,28 +209,28 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         else:
             result, comments = (False, 'Device is not active. Activate')
 
-    def _check_axis_range(self, axis: int) -> bool:
+    def _check_axis_range(self, axis: int) -> Tuple[Union[bool, str]]:
         comments = ''
         if axis in range(self._axes_number):
             return True, comments
         else:
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
 
-    def _check_axis_active(self, axis: int) -> bool:
+    def _check_axis_active(self, axis: int) -> Tuple[Union[bool, str]]:
         comments = ''
         if self._axes_status[axis] > 0:
             return True, comments
         else:
             return False, f'axis {axis} is not active, activate it first'
 
-    def _setup(self):
+    def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
         if res:
             return self._setup_pins()
         else:
             return res, comments
 
-    def _set_move_parameters(self, com='full'):
+    def _set_move_parameters(self, com='full') -> Tuple[Union[bool, str]]:
         try:
             parameters = self.get_settings('Parameters')
             com = parameters['com']
@@ -239,25 +243,39 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
 
     @development_mode(dev=dev_mode, with_return=(True, ''))
-    def _setup_pins(self):
+    def _setup_pins(self) -> Tuple[Union[bool, str]]:
         try:
             self.logger.info('setting up pins')
             parameters = self.get_settings('Parameters')
             com = parameters['com']
             self._ttl = LED(parameters['ttl_pin'])
+            self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
+            self._pins.append(self._dir)
             self._enable = LED(parameters['enable_pin'])
+            self._pins.append(self._enable)
             self._ms1 = LED(parameters['ms1'])
+            self._pins.append(self._ms1)
             self._ms2 = LED(parameters['ms2'])
+            self._pins.append(self._ms2)
             self._ms3 = LED(parameters['ms3'])
+            self._pins.append(self._ms3)
             self._relayIa = LED(parameters['relayia'], initial_value=True)
+            self._pins.append(self._relayIa)
             self._relayIb = LED(parameters['relayib'], initial_value=True)
+            self._pins.append(self._relayIb)
             self._relayIIa = LED(parameters['relayiia'], initial_value=True)
+            self._pins.append(self._relayIIa)
             self._relayIIb = LED(parameters['relayiib'], initial_value=True)
+            self._pins.append(self._relayIIb)
             self._relayIIIa = LED(parameters['relayiiia'], initial_value=True)
+            self._pins.append(self._relayIIIa)
             self._relayIIIb = LED(parameters['relayiiib'], initial_value=True)
+            self._pins.append(self._relayIIIb)
             self._relayIVa = LED(parameters['relayiva'], initial_value=True)
+            self._pins.append(self._relayIVa)
             self._relayIVb = LED(parameters['relayivb'], initial_value=True)
+            self._pins.append(self._relayIVb)
             pins_microstep = eval(parameters['microstep_settings'])
             self._set_led(self._ms1, pins_microstep[com][0][0])
             self._set_led(self._ms2, pins_microstep[com][0][1])
@@ -266,6 +284,21 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         except (KeyError, ValueError, SyntaxError, Exception) as e:
             self.logger.error(e)
             return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
+
+    def _pins_off(self) -> Tuple[Union[bool, str]]:
+        if len(self._pins) == 0:
+            return True, 'No pins to close()'
+        else:
+            error = []
+            for pin in self._pins:
+                try:
+                    pin.close()
+                except Exception as e:
+                    error.append(str(e))
+            self._pins = []
+            return True, '' if len(error)== 0 else str(error)
+
+
 
     @development_mode(dev=dev_mode, with_return=None)
     def _set_led(self, led: LED, value: Union[bool, int]):
