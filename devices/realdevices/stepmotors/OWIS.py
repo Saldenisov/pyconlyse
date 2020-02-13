@@ -15,36 +15,35 @@ module_logger = logging.getLogger(__name__)
 
 
 dev_mode = False
-
+# TODO: add func_success to return dict for primary functions for other controllers
 class StpMtrCtrl_OWIS(StpMtrController):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._PS90: ctypes.WinDLL = None
 
-    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def activate(self, flag: bool) -> Tuple[Dict[str, bool], str]:
         """
-        activation of controller is done here, when True init is done when False disconnect
+        activation of controller is done here, when True init is done, when False disconnect
         :param flag: True / False
-        :return: {'flag': flag}, comments
+        :return: {'flag': flag, 'func_success': bool}, comments
         """
         if flag and not self.device_status.active:
             res, comments = self._init()
         else:
-            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
+            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
                                    'WAS active BEFORE'
         if not flag and self.device_status.active:
             res, comments = self._disconnect(1)
         else:
-            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
+            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
                                    'WAS active BEFORE'
-
         if res:
             self.device_status.active = flag
-            return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
+            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {flag}'
         else:
-            return {'flag': flag}, f'{self.id}:{self.name} active state is {self.device_status.active}; {comments}'
+            return {'flag': flag, 'func_success': False}, \
+                   f'{self.id}:{self.name} active state is {self.device_status.active}; {comments}'
 
     def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         pass
@@ -52,17 +51,18 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def description(self) -> Dict[str, Any]:
         # TODO: change ranges and
         desc = {'GUI_title': """StpMtrCtrl_OWIS service, 3 axes""",
-                'axes_names': ['DL_VD2', 'DL_VD_samples', 'DL_VD_pp'],
+                'axes_names': ['DL_VD2_samples', 'DL_VD_samples', 'DL_VD_pp'],
                 'axes_values': [0, 3],
                 'ranges': [((-10.0, 100.0), (0, 91)),
                            ((-100.0, 100.0), (0, 50)),
                            ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
                            ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
-                'info': "StpMtrCtrl_OWIS controller, it controls OWIS controller with 3 axes"}
+                'info': "StpMtrCtrl_OWIS controller controls OWIS controller with 3 axes"}
         return desc
 
     def power(self, flag: bool):
-        pass
+        #TODO: to be realized in metal someday
+        return {'flag': True, 'func_success': True}, f'User switch power manully...this func always return True'
 
     def GUI_bounds(self) -> Dict[str, Any]:
         pass

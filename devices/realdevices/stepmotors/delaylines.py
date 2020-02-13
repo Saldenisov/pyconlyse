@@ -297,8 +297,17 @@ class StpMtrCtrl_emulate(StpMtrController):
         super().__init__(**kwargs)
 
     def activate(self, flag: bool) -> Tuple[Union[Dict[str, Union[Any]], str]]:
-        self.device_status.active = flag
-        return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
+        func_suc = False
+        if not self.device_status.power:
+            _, _ = self.power(flag)
+        if flag and self.device_status.power:
+            res, comments = self._set_parameters()
+            if res:
+                self.device_status.active = flag
+                func_suc = True
+        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
+        self.logger.info(info)
+        return {'flag': self.device_status.active, 'func_success': func_suc}, info
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
@@ -312,22 +321,32 @@ class StpMtrCtrl_emulate(StpMtrController):
         :param flag: 0, 1, 2
         :return: Tuple[Union[bool, Dict[str, Union[int, bool]]], str]
         """
-        chk_axis, comments = self._check_axis_range(axis)
-        if chk_axis:
+        check_axis, comments = self._check_axis_range(axis)
+        if check_axis:
             self._axes_status[axis] = flag
-            return {'axis': axis, 'flag': flag}, f'axis {axis} state is {flag}'
+            return {'axis': axis, 'flag': self._axes_status[axis], 'func_success': check_axis},  f'axis {axis} state is {flag}'
         else:
-            return False, comments
+            return {'axis': axis, 'flag': None, 'func_success': check_axis}, comments
 
-    def move_axis_to(self, axis: int, pos: float, how='absolute')-> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+    def description(self):
+        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
+                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
+                'axes_values': [0, 3],
+                'ranges': [((0.0, 100.0), (0, 91)),
+                           ((-100.0, 100.0), (0, 50)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
+                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
+                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
+        return desc
+
+    def GUI_bounds(self):
+        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+
+    def move_axis_to(self, axis: int, pos: float, how='absolute') -> Tuple[Union[Dict[str, Union[int, bool]]], str]:
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
-            if how == 'absolute':
-                pass
-            elif how == 'relative':
+            if how == 'relative':
                 pos = self._pos[axis] + pos
-            else:
-                return False, f'how {how} is wrong, could be only absolute and relative'
             chk_lmt, comments = self._is_within_limits(axis, pos)
             if chk_lmt:
                 if self._axes_status[axis] == 1:
@@ -347,14 +366,11 @@ class StpMtrCtrl_emulate(StpMtrController):
                             break
                     self._axes_status[axis] = 1
                     StpMtrController._write_to_file(str(self._pos), self._file_pos)
-                    return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
                 else:
                     comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
-                    return False, comments
-            else:
-                return False, comments
+            return {'axis': axis, 'pos': self._pos[axis], 'how': how, 'func_success': chk_lmt}, comments
         else:
-            return False, comments
+            return {'axis': axis, 'pos': None, 'how': how, 'func_success': chk_axis}, comments
 
     def stop_axis(self, axis: int):
         chk_axis, comments = self._check_axis(axis)
@@ -364,39 +380,25 @@ class StpMtrCtrl_emulate(StpMtrController):
                 comments = 'stopped by user'
             elif self._axes_status[axis] == 1:
                 comments = 'was already stopped'
-
-            return {'axis': axis, 'pos': self._pos[axis]}, comments
+            return {'axis': axis, 'pos': self._pos[axis], 'func_success': chk_axis}, comments
         else:
-            return False, comments
+            return {'axis': axis, 'pos': None, 'func_success': chk_axis}, comments
 
     def get_pos(self, axis=0):
-        res, comments = self._check_axis(axis)
-        if res:
-            return {'axis': axis, 'pos': self._pos[axis]}, comments
+        chk_axis, comments = self._check_axis(axis)
+        if chk_axis:
+            return {'axis': axis, 'pos': self._pos[axis], 'func_success': chk_axis}, comments
         else:
-            return False, comments
+            return {'axis': axis, 'pos': None, 'func_success': chk_axis}, comments
 
     def get_controller_state(self):
-        comments = ''
-        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
+        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, ""
 
-    def description(self):
-        desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
-                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
-                'axes_values': [0, 3],
-                'ranges': [((0.0, 100.0), (0, 91)),
-                           ((-100.0, 100.0), (0, 50)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
-                'info': "StpMtrCtrl_emulate controller, it emulates stepmotor controller with 4 axes"}
-        return desc
-
-    def GUI_bounds(self):
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
-
-    def power(self, flag: bool):
-        # TODO: realize
-        pass
+    def power(self, flag: bool) -> Tuple[Union[Dict[str, Union[Any]], str]]:
+        self.device_status.power = flag
+        info = f'Power of device is set to {flag}'
+        self.logger.info(info)
+        return {'flag': self.device_status.power, 'func_success': True}, info
 
     def _get_axes_status(self) -> List[int]:
         if self._axes_status:
@@ -452,3 +454,4 @@ class StpMtrCtrl_emulate(StpMtrController):
 
     def _set_controller_activity(self):
         self.device_status.active = True
+        self.device_status.power = True

@@ -31,19 +31,23 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._pins = []
 
     def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
+        super().activate()
         if flag:
             res, comments = self._setup()
         else:
             res, comments = self._pins_off()
         if res:
             self.device_status.active = flag
-            return {'flag': flag}, f'{self.id}:{self.name} active state is {flag}'
+            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {flag}'
         else:
             self.device_status.active = False
-            return {'flag': False}, f'{self.id}:{self.name} active state is {False}; {comments}'
+            return {'flag': False, 'func_success': False}, f'{self.id}:{self.name} active state is {False}; {comments}'
+
 
     def _set_controller_activity(self):
         self.device_status.active = False
+        self.device_status.sdfpower = True
+        self.logger.info(self.device_status)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
@@ -171,8 +175,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def power(self, flag: bool):
-        # TODO: realize
-        pass
+        #TODO: to be realized in metal someday
+        return {'flag': True, 'func_success': True}, f'User switch power manully...this func always return True'
 
     def _get_axes_status(self) -> List[int]:
         if self._axes_status:
@@ -297,8 +301,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     error.append(str(e))
             self._pins = []
             return True, '' if len(error)== 0 else str(error)
-
-
 
     @development_mode(dev=dev_mode, with_return=None)
     def _set_led(self, led: LED, value: Union[bool, int]):

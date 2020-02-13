@@ -34,7 +34,7 @@ class StpMtrController(Service):
             except Exception as e:
                 print(e)
 
-        self._set_parameters()  # OBLIGATORY STEP
+
 
     @abstractmethod
     def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
@@ -95,7 +95,8 @@ class StpMtrController(Service):
                 'move_axis_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
                 'stop_axis': {'axis': 0},
                 'get_pos': {'axis': 0},
-                'get_controller_state': {}
+                'get_controller_state': {},
+                'power': {'flag': True}
                 }
 
     def _check_axis(self, axis: int) -> Tuple[bool, str]:
@@ -249,23 +250,14 @@ class StpMtrController(Service):
             preset_values = self._get_preset_values_db()
         self._preset_values = preset_values
 
-    @abstractmethod
-    def _set_controller_activity(self):
-        """
-        Checks weather hardware controller is active = is ready to recieve and respond
-        and sets self.device_status.active
-        :return:
-        """
-        pass
-
     def _set_parameters(self) -> Tuple[bool, str]:
         try:
-            self._set_controller_activity()
             self._set_number_axes()
             self._set_axes_status()
             self._set_limits()
             self._set_pos()
             self._set_preset_values()
+            return True, ''
         except StpmtrError as e:
             self.logger.error(e)
             return False, str(e)
