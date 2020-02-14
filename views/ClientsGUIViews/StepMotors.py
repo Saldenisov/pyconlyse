@@ -37,6 +37,7 @@ class StpMtrCtrlStatusMultiAxes:
     positions: list = field(default_factory=list)
     start_stop: list = field(default_factory=list)
 
+
 class StepMotorsView(QMainWindow):
 
     def __init__(self, in_controller, in_model, parameters, parent=None):
@@ -81,7 +82,7 @@ class StepMotorsView(QMainWindow):
     def activate(self):
         com = StpMtrController.ACTIVATE.name
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
-                                  parameters={'flag': self.ui.checkBox_activate.isChecked()})
+                                 parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
         self._asked_status = 0
 
@@ -89,8 +90,8 @@ class StepMotorsView(QMainWindow):
         com = StpMtrController.ACTIVATE_AXIS.name
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
-                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
-                                              'flag': flag})
+                                 parameters={'axis': int(self.ui.spinBox_axis.value()),
+                                             'flag': flag})
         self.device.send_msg_externally(msg)
         self._asked_status = 0
 
@@ -196,6 +197,7 @@ class StepMotorsView(QMainWindow):
             per = int((pos - start) / (stop - start) * 100.0)
             self.ui.progressBar_movement.setValue(per)
             self.ui.lcdNumber_position.display(pos)
+
 
 class StepMotorsView_old(QWidget):
     '''
@@ -397,18 +399,3 @@ class StepMotorsView_old(QWidget):
             widget.setText(text)
         except Exception as e:
             error_logger(self, self._update_text_edit, e)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

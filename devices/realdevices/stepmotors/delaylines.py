@@ -305,6 +305,9 @@ class StpMtrCtrl_emulate(StpMtrController):
             if res:
                 self.device_status.active = flag
                 func_suc = True
+        else:
+            self.device_status.active = flag
+            func_suc = True
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': func_suc}, info

@@ -70,7 +70,8 @@ class GeneralCmdLogic(Thinker):
         data = msg.data
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg.short()))
-        reply = True
+        reply = False
+        msg_i = []
         if cmd == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
             if msg.body.sender_id in self.parent.connections:
                 msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
@@ -78,10 +79,7 @@ class GeneralCmdLogic(Thinker):
                 msg_i = MsgGenerator.error(device=self.parent,
                                        comments=f'service/client {msg.body.sender_id} is not known to server',
                                        msg_i=msg)
-
-        else:
-            msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
-
+            reply = True
 
         self.msg_out(reply, msg_i)
 
@@ -144,7 +142,6 @@ class ServerCmdLogic(Thinker):
         cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg.short()))
         reply = True
-
         if msg.body.receiver_id != self.parent.id:
             if msg.body.receiver_id in self.parent.connections:
                 msg_i = MsgGenerator.forward_msg(device=self.parent,
@@ -154,7 +151,6 @@ class ServerCmdLogic(Thinker):
                          MsgGenerator.error(device=self.parent,
                                             comments=f'service {data.info.service_id} is not available anymore',
                                             msg_i=msg)]
-
         else:
             if cmd == MsgGenerator.HELLO.mes_name:
                 try:
@@ -237,18 +233,18 @@ class ServerCmdLogic(Thinker):
                     event.counter_timeout = 0
                     addr = self.parent.connections[event.original_owner].device_info.public_sockets['publisher']
                     self.parent.messenger.restart_socket('sub', addr)
-
                 else:
                     if not self.parent.messenger._are_you_alive_send:
-                        self.logger.info('restart of sub socket did work, switching to demand pathway')
+                        self.logger.info('restart of sub socket did not work, switching to demand pathway')
+                        self.parent.messenger._are_you_alive_send = True
                         event.counter_timeout = 0
                         msg_i = MsgGenerator.are_you_alive_demand(device=self.parent, context=f'EVENT:{event.id}')
-                        self.parent.messenger._are_you_alive_send = True
                         self.msg_out(True, msg_i)
                     else:
-                        self.logger.info('Server was away for too long...deleting info about Server')
+                        self.logger.info('Service was away for too long...deleting info about service')
                         del self.parent.connections[event.original_owner]
                         self.unregister_event(event.id)
+                        self.parent.send_status_pyqt(com='status_server_info_full')
 
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
@@ -274,6 +270,23 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 class ServiceCmdLogic(GeneralCmdLogic):
 
+    def react_demand(self, msg: Message):
+        super().react_demand(msg)
+        reply = False
+        data = msg.data
+        msg_i = []
+        if data.com == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
+            msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
+            reply = True
+        elif data.com == MsgGenerator.DO_IT.mes_name:
+            reply = False
+            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                self.logger.error(f'Adding to executor {msg.data.info} failed')
+        else:
+            reply = True
+            msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
+        self.msg_out(reply, msg_i)
+
     def react_reply(self, msg: Message):
         super().react_reply(msg)
         data = msg.data
@@ -283,17 +296,4 @@ class ServiceCmdLogic(GeneralCmdLogic):
 
 
 class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
-
-    def react_demand(self, msg: Message):
-        super().react_demand(msg)
-        data = msg.data
-        reply = False
-        msg_i = []
-        if data.com == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
-            msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
-            reply = True
-        elif data.com == MsgGenerator.DO_IT.mes_name:
-            reply = False
-            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                self.logger.error(f'Adding to executor {msg.data.info} failed')
-        self.msg_out(reply, msg_i)
+    pass
