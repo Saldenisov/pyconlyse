@@ -84,6 +84,7 @@ class StepMotorsView(QMainWindow):
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
                                  parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
+        print(msg)
         self._asked_status = 0
 
     def activate_axis(self):

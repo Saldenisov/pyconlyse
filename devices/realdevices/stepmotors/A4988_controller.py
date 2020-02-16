@@ -30,30 +30,30 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._ttl = None  # to make controller work when dev_mode is ON
         self._pins = []
 
-    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
-        super().activate()
-        if flag:
-            res, comments = self._setup()
-        else:
-            res, comments = self._pins_off()
-        if res:
-            self.device_status.active = flag
-            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {flag}'
-        else:
-            self.device_status.active = False
-            return {'flag': False, 'func_success': False}, f'{self.id}:{self.name} active state is {False}; {comments}'
-
-
-    def _set_controller_activity(self):
-        self.device_status.active = False
-        self.device_status.sdfpower = True
-        self.logger.info(self.device_status)
-
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # TODO: realized extension of public functions
         pub_func = super().available_public_functions()
         # pub_func = extend(pub_func, thisclass_public_functions())
         return pub_func
+
+    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
+        func_suc = False
+        comments = ''
+        if not self.device_status.power:
+            _, _ = self.power(flag)
+        if flag and self.device_status.power:
+            res, comments = self._setup()
+            if res:
+                self.device_status.active = flag
+                func_suc = True
+        else:
+            res, comments = self._pins_off()
+            if res:
+                self.device_status.active = flag
+                func_suc = True
+        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
+        self.logger.info(info)
+        return {'flag': self.device_status.active, 'func_success': func_suc}, info
 
     def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         """
@@ -62,36 +62,32 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         :return: Tuple[Union[bool, Dict[str, Union[int, bool]]], str]
         """
         comments = ''
-        if self.device_status.active:
-            chk_axis, comments = self._check_axis_range(axis)
-            if chk_axis:
-                if 2 in self._axes_status:
-                    return False, f'Cannot deactivate other axis while it is running'
-                else:
-                    try:
-                        idx = self._axes_status.index(1)
-                        self._axes_status[idx] = 0  # Deactivate another axis
-                        self._deactivate_relay(idx)
-                        comments = f'axis {axis} state is {flag}, axis {idx} is deactivated'
-                    except ValueError:
-                        pass
-                    self._axes_status[axis] = flag
-                    self._activate_relay(axis)
-                    if not comments:
-                        comments = f'axis {axis} state is {flag}'
-                    return {'axis': axis, 'flag': flag}, comments
+        chk_axis, comments = self._check_axis_range(axis)
+        if chk_axis:
+            if 2 in self._axes_status:
+                comments = f'Cannot deactivate other axis while it is running'
+            else:
+                try:
+                    idx = self._axes_status.index(1)
+                    self._axes_status[idx] = 0  # Deactivate another axis
+                    self._deactivate_relay(idx)
+                    comments = comments + '; ' + f'axis {axis} state is {flag}, axis {idx} is deactivated'
+                except ValueError:
+                    pass
+            self._axes_status[axis] = flag
+            self._activate_relay(axis)
+            comments = comments + '; ' + f'axis {axis} state is {flag}'
+            return {'axis': axis, 'flag': self._axes_status[axis],
+                    'func_success': chk_axis}, comments
         else:
-            return False, f'Device {self.name} is not active, first activate'
+            return {'axis': axis, 'flag': None, 'func_success': chk_axis}, comments
 
     def move_axis_to(self, axis: int, pos: Union[int, float], how='absolute') -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
+        # TODO everything lower should be redone
         chk_axis, comments = self._check_axis(axis)
         if chk_axis:
-            if how == 'absolute':
-                pass
-            elif how == 'relative':
+            if how == 'relative':
                 pos = self._pos[axis] + pos
-            else:
-                return False, f'how {how} is wrong, could be only absolute and relative'
             chk_lmt, comments = self._is_within_limits(axis, pos)
             if chk_lmt:
                 if self._axes_status[axis] == 1:
@@ -103,14 +99,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                         dir = -1
                         self._direction('bottom')
                     steps = int(abs(pos - self._pos[axis]))
-                    print(f'steps{steps} axis{axis} dir {dir} {self._pos}')
-
                     self._enable_controller()
                     self._activate_relay(axis)
-
                     width = self._TTL_width[axis] / self._microsteps
                     delay = self._delay_TTL[axis] / self._microsteps
-
                     for _ in range(steps):
                         if self._axes_status[axis] == 2:
                             for _ in range(self._microsteps):
@@ -174,10 +166,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         # TODO: to be done something with this
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
-    def power(self, flag: bool):
-        #TODO: to be realized in metal someday
-        return {'flag': True, 'func_success': True}, f'User switch power manully...this func always return True'
-
     def _get_axes_status(self) -> List[int]:
         if self._axes_status:
             return self._axes_status
@@ -200,6 +188,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return self._get_preset_values_db()
 
     def _is_within_limits(self, axis: int, pos) -> Tuple[Union[bool, str]]:
+        # TODO: must be done
         comments = ''
         return True, comments
 
@@ -215,10 +204,13 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _check_axis_range(self, axis: int) -> Tuple[Union[bool, str]]:
         comments = ''
-        if axis in range(self._axes_number):
-            return True, comments
+        if self.device_status.active:
+            if axis in range(self._axes_number):
+                return True, comments
+            else:
+                return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
         else:
-            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
+            return False, f'Please activate device first'
 
     def _check_axis_active(self, axis: int) -> Tuple[Union[bool, str]]:
         comments = ''
@@ -241,6 +233,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._TTL_width = eval(parameters['ttl_width'])
             self._delay_TTL = eval(parameters['delay_ttl'])
             self._microsteps = eval(parameters['microstep_settings'])[com][1]
+            # TODO set limits here, presetvalues
             return True, ''
         except (KeyError, SyntaxError, Exception) as e:
             self.logger.error(e)

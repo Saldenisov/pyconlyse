@@ -226,26 +226,10 @@ class ServerCmdLogic(Thinker):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > int(self.parent.get_general_settings()['timeout']):
-                if self.parent.messenger._attempts_to_restart_sub > 0:
-                    self.logger.info('Server is away...trying to restart sub socket')
-                    self.logger.info('Setting event.counter_timeout to 0')
-                    self.parent.messenger._attempts_to_restart_sub -= 1
-                    event.counter_timeout = 0
-                    addr = self.parent.connections[event.original_owner].device_info.public_sockets['publisher']
-                    self.parent.messenger.restart_socket('sub', addr)
-                else:
-                    if not self.parent.messenger._are_you_alive_send:
-                        self.logger.info('restart of sub socket did not work, switching to demand pathway')
-                        self.parent.messenger._are_you_alive_send = True
-                        event.counter_timeout = 0
-                        msg_i = MsgGenerator.are_you_alive_demand(device=self.parent, context=f'EVENT:{event.id}')
-                        self.msg_out(True, msg_i)
-                    else:
-                        self.logger.info('Service was away for too long...deleting info about service')
-                        del self.parent.connections[event.original_owner]
-                        self.unregister_event(event.id)
-                        self.parent.send_status_pyqt(com='status_server_info_full')
-
+                self.logger.info('Service was away for too long...deleting info about service')
+                self.unregister_event(event.id)
+                del self.parent.connections[event.original_owner]
+                self.parent.send_status_pyqt(com='status_server_info_full')
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 

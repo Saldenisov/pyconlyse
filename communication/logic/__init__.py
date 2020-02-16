@@ -294,7 +294,6 @@ class ThinkerEvent(Thread):
             self.logic_func(self)
         except Exception as e:
             error_logger(self, self.run, e)
-            raise ThinkerEventFuncError(self)
         finally:
             info_msg(self, 'STOPPED', extra=f' of {self.parent.name}')
 

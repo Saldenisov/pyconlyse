@@ -1,6 +1,6 @@
 from typing import Dict, Union, Any, List, Tuple, Iterable
 
-from .stpmtr_controller import StpMtrController, StpmtrError
+from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController, StpmtrError
 import logging
 import ctypes
 from time import sleep
@@ -293,11 +293,19 @@ class StpMtrCtrl_2axis(StpMtrController):
 
 
 class StpMtrCtrl_emulate(StpMtrController):
+    #TODO  ranges, preset values must be set
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        # TODO: realized extension of public functions
+        pub_func = super().available_public_functions()
+        # pub_func = extend(pub_func, thisclass_public_functions())
+        return pub_func
+
     def activate(self, flag: bool) -> Tuple[Union[Dict[str, Union[Any]], str]]:
         func_suc = False
+        comments = ''
         if not self.device_status.power:
             _, _ = self.power(flag)
         if flag and self.device_status.power:
@@ -311,12 +319,6 @@ class StpMtrCtrl_emulate(StpMtrController):
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': func_suc}, info
-
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        # TODO: realized extension of public functions
-        pub_func = super().available_public_functions()
-        # pub_func = extend(pub_func, thisclass_public_functions())
-        return pub_func
 
     def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
         """
@@ -395,13 +397,8 @@ class StpMtrCtrl_emulate(StpMtrController):
             return {'axis': axis, 'pos': None, 'func_success': chk_axis}, comments
 
     def get_controller_state(self):
-        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, ""
-
-    def power(self, flag: bool) -> Tuple[Union[Dict[str, Union[Any]], str]]:
-        self.device_status.power = flag
-        info = f'Power of device is set to {flag}'
-        self.logger.info(info)
-        return {'flag': self.device_status.power, 'func_success': True}, info
+        return {'device_status': self.device_status, 'axes_status': self._axes_status,
+                'positions': self._pos, 'func_success': True}, ""
 
     def _get_axes_status(self) -> List[int]:
         if self._axes_status:
@@ -443,10 +440,13 @@ class StpMtrCtrl_emulate(StpMtrController):
 
     def _check_axis_range(self, axis: int) -> bool:
         comments = ''
-        if axis in range(self._axes_number):
-            return True, comments
+        if self.device_status.active:
+            if axis in range(self._axes_number):
+                return True, comments
+            else:
+                return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
         else:
-            return False, f'axis {axis} is out of range {list(range(self._axis_number))}'\
+            return False, f'Please activate device first'
 
     def _check_axis_active(self, axis: int) -> bool:
         comments = ''

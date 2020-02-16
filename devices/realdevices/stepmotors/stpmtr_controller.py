@@ -34,8 +34,6 @@ class StpMtrController(Service):
             except Exception as e:
                 print(e)
 
-
-
     @abstractmethod
     def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
         pass
@@ -46,10 +44,6 @@ class StpMtrController(Service):
 
     @abstractmethod
     def description(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def power(self, flag: bool):
         pass
 
     @abstractmethod
@@ -243,6 +237,13 @@ class StpMtrController(Service):
         except (TypeError, SyntaxError):
             raise StpmtrError(self, text="Check preset_values field in DB, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
 
+    def _is_within_limits(self, axis: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        if self._limits[axis][0] <= pos <= self._limits[axis][1]:
+            return True, ''
+        else:
+            comments = f'pos: {pos} for axis {axis} is in the range {self._limits[axis]}'
+            return False, comments
+
     def _set_preset_values(self):
         if self.device_status.active:
             preset_values = self._get_preset_values()
@@ -261,13 +262,6 @@ class StpMtrController(Service):
         except StpmtrError as e:
             self.logger.error(e)
             return False, str(e)
-
-    def _is_within_limits(self, axis: int, pos: Union[int, float]) -> Tuple[bool, str]:
-        if self._limits[axis][0] <= pos <= self._limits[axis][1]:
-            return True, ''
-        else:
-            comments = f'pos: {pos} for axis {axis} is in the range {self._limits[axis]}'
-            return False, comments
 
 
 class StpmtrError(BaseException):
