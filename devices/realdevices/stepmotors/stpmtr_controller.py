@@ -59,9 +59,7 @@ class StpMtrController(Service):
         if res:
             self.device_status.active = flag
             if not flag:
-                for axis in range(self._axes_number):
-                    self._change_axis_status(axis, 0, force=True)
-                self._parameters_set = False
+                res, comments = self._shutdown()
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': res}, info
@@ -74,14 +72,15 @@ class StpMtrController(Service):
         """
         res, comments = self._check_axis_range(axis)
         if res:
+            res, comments = self._check_controller_activity()
+        if res:
             res, comments = self._activate_axis(axis, flag)
-            return {'axis': axis, 'flag': self._axes_status[axis], 'func_success': res}, f'Axis {axis} is ' \
-                                                                                         f'{self._axes_status[axis]}'
+            return {'axis': axis, 'flag': self._axes_status[axis], 'func_success': res}, comments
         else:
             return {'axis': axis, 'flag': flag, 'func_success': res}, comments
 
     @abstractmethod
-    def _activate_axis(self, axis: int, flag: int):
+    def _activate_axis(self, axis: int, flag: int) -> Tuple[bool, str]:
         pass
 
     @abstractmethod
@@ -100,10 +99,7 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        if self._axes_status[axis] != 2 and not force:
-            self._axes_status[axis] = flag
-            return True, ''
-        elif self._axes_status[axis] == 2 and force:
+        if self._axes_status[axis] != 2 or force:
             self._axes_status[axis] = flag
             return True, ''
         else:
@@ -343,13 +339,19 @@ class StpMtrController(Service):
             self.logger.error(e)
             return False, str(e)
 
+    @abstractmethod
+    def _shutdown(self):
+        for axis in range(self._axes_number):
+            self._change_axis_status(axis, 0, force=True)
+        self._parameters_set = False
+        return True, ''
+
     @staticmethod
     def _write_to_file(text: str, file: Path):
         with open(file, 'w') as opened_file:
             opened_file.write(text)
 
+
 class StpmtrError(BaseException):
     def __init__(self, controller: StpMtrController, text: str):
         super().__init__(f'{controller.name}:{controller.id}:{text}')
-
-

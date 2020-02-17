@@ -87,4 +87,7 @@ class StpMtrCtrl_emulate(StpMtrController):
     def _stop_axis(self, axis) -> Tuple[bool, str]:
         return self._change_axis_status(axis, 1, force=True)
 
+    def _shutdown(self):
+        return super()._shutdown()
+
 

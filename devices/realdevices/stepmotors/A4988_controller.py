@@ -8,7 +8,7 @@ so current does not run during waiting time
 INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
-from typing import List, Tuple, Union, Iterable, Dict, Any
+from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 
 from gpiozero import LED
 import logging
@@ -19,7 +19,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = False
+dev_mode = True
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
     ON = 0
@@ -30,125 +30,28 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._ttl = None  # to make controller work when dev_mode is ON
         self._pins = []
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        # TODO: realized extension of public functions
-        pub_func = super().available_public_functions()
-        # pub_func = extend(pub_func, thisclass_public_functions())
-        return pub_func
-
-    def activate(self, flag: bool) -> Tuple[Union[Dict[str, Any], str]]:
-        func_suc = False
-        comments = ''
-        if not self.device_status.power:
-            _, _ = self.power(flag)
-        if flag and self.device_status.power:
-            res, comments = self._setup()
-            if res:
-                self.device_status.active = flag
-                func_suc = True
+    def _activate_axis(self, axis: int, flag: int) -> Tuple[bool, str]:
+        if 2 in self._axes_status:
+            idx = self._axes_status.index(2)
+            res, comments = False, f'Stop axis {idx} to be able activate axis {axis}'
         else:
-            res, comments = self._pins_off()
-            if res:
-                self.device_status.active = flag
-                func_suc = True
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
-        self.logger.info(info)
-        return {'flag': self.device_status.active, 'func_success': func_suc}, info
-
-    def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
-        """
-        :param axis: 0-4
-        :param flag: 0, 1, 2
-        :return: Tuple[Union[bool, Dict[str, Union[int, bool]]], str]
-        """
-        comments = ''
-        chk_axis, comments = self._check_axis_range(axis)
-        if chk_axis:
-            if 2 in self._axes_status:
-                comments = f'Cannot deactivate other axis while it is running'
-            else:
-                try:
-                    idx = self._axes_status.index(1)
-                    self._axes_status[idx] = 0  # Deactivate another axis
-                    self._deactivate_relay(idx)
-                    comments = comments + '; ' + f'axis {axis} state is {flag}, axis {idx} is deactivated'
-                except ValueError:
-                    pass
-            self._axes_status[axis] = flag
+            try:
+                idx = self._axes_status.index(1)
+                self._deactivate_relay(idx)
+                _, _ = self._change_axis_status(idx, 0)  # Deactivate another active axis
+                comments = f'Axis {idx} is deactivated'
+            except ValueError as e:
+                res, comments = False, ' Nothing to deactivate.'
+            _, _ = self._change_axis_status(axis, flag)
             self._activate_relay(axis)
-            comments = comments + '; ' + f'axis {axis} state is {flag}'
-            return {'axis': axis, 'flag': self._axes_status[axis],
-                    'func_success': chk_axis}, comments
-        else:
-            return {'axis': axis, 'flag': None, 'func_success': chk_axis}, comments
+            res, comments = True, f'axis {axis} state is {flag}.{comments}'
+        return res, comments
 
-    def move_axis_to(self, axis: int, pos: Union[int, float], how='absolute') -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
-        # TODO everything lower should be redone
-        chk_axis, comments = self._check_axis(axis)
-        if chk_axis:
-            if how == 'relative':
-                pos = self._pos[axis] + pos
-            chk_lmt, comments = self._is_within_limits(axis, pos)
-            if chk_lmt:
-                if self._axes_status[axis] == 1:
-                    self._axes_status[axis] = 2
-                    if pos - self._pos[axis] >= 0:
-                        dir = 1
-                        self._direction('top')
-                    else:
-                        dir = -1
-                        self._direction('bottom')
-                    steps = int(abs(pos - self._pos[axis]))
-                    self._enable_controller()
-                    self._activate_relay(axis)
-                    width = self._TTL_width[axis] / self._microsteps
-                    delay = self._delay_TTL[axis] / self._microsteps
-                    for _ in range(steps):
-                        if self._axes_status[axis] == 2:
-                            for _ in range(self._microsteps):
-                                self._set_led(self._ttl, 1)
-                                sleep(width)
-                                self._set_led(self._ttl, 0)
-                                sleep(delay)
-                            self._pos[axis] = self._pos[axis] + dir
-                        else:
-                            comments = 'movement was interrupted'
-                            break
-                    StpMtrController._write_to_file(str(self._pos), self._file_pos)
-                    self._disable_controller()
-                    self._deactivate_all_relay()
-                    self._axes_status[axis] = 1
-                    sleep(0.3)
-                    return {'axis': axis, 'pos': self._pos[axis], 'how': how}, comments
-                else:
-                    comments = f'Controller is working on another task. axis:{axis} cannot be moved at this moment'
-                    return False, comments
-            else:
-                return False, comments
-        else:
-            return False, comments
+    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+        return super()._change_axis_status(axis, flag, force)
 
-    def stop_axis(self, axis: int):
-        chk_axis, comments = self._check_axis(axis)
-        if chk_axis:
-            self._axes_status[axis] = 1
-            self._deactivate_relay[axis]
-            self._disable_controller()
-            comments = 'stopped by user'
-            return {'axis': axis, 'pos': self._pos[axis]}, comments
-        else:
-            return False, comments
-
-    def get_pos(self, axis=0):
-        res, comments = self._check_axis(axis)
-        if res:
-            return {'axis': axis, 'pos': self._pos[axis]}, comments
-        else:
-            return False, comments
-
-    def get_controller_state(self):
-        comments = 'Controller state is obtained.'
-        return {'device_status': self.device_status, 'axes_status': self._axes_status, 'positions': self._pos}, comments
+    def _connect_controller(self, flag: bool) -> Tuple[bool, str]:
+        return super()._connect_controller(flag)
 
     def description(self):
         # TODO: read from DB
@@ -187,37 +90,48 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _is_within_limits(self, axis: int, pos) -> Tuple[Union[bool, str]]:
-        # TODO: must be done
-        comments = ''
-        return True, comments
-
-    def _check_axis(self, axis: int) -> Tuple[Union[bool, str]]:
-        if self.device_status.active:
-            res, comments = self._check_axis_range(axis)
-            if res:
-                return self._check_axis_active(axis)
+    def _move_axis_to(self, axis: int, pos: int, how='absolute') -> Tuple[bool, str]:
+        res, comments = self._change_axis_status(axis, 2)
+        if res:
+            if pos - self._pos[axis] > 0:
+                dir = 1
+                self._direction('top')
             else:
-                return res, comments
-        else:
-            result, comments = (False, 'Device is not active. Activate')
-
-    def _check_axis_range(self, axis: int) -> Tuple[Union[bool, str]]:
-        comments = ''
-        if self.device_status.active:
-            if axis in range(self._axes_number):
-                return True, comments
-            else:
-                return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
-        else:
-            return False, f'Please activate device first'
-
-    def _check_axis_active(self, axis: int) -> Tuple[Union[bool, str]]:
-        comments = ''
-        if self._axes_status[axis] > 0:
+                dir = -1
+                self._direction('bottom')
+            steps = int(abs(pos - self._pos[axis]))
+            self._enable_controller()
+            width = self._TTL_width[axis] / self._microsteps
+            delay = self._delay_TTL[axis] / self._microsteps
+            for i in range(steps):
+                if self._axes_status[axis] == 2:
+                    for _ in range(self._microsteps):
+                        self._set_led(self._ttl, 1)
+                        sleep(width)
+                        self._set_led(self._ttl, 0)
+                        sleep(delay)
+                    self._pos[axis] = self._pos[axis] + dir
+                else:
+                    comments = 'movement was interrupted'
+                    break
+            _, _ = self._change_axis_status(axis, 1, force=True)
+            self._disable_controller()
+            StpMtrController._write_to_file(str(self._pos), self._file_pos)
             return True, comments
         else:
-            return False, f'axis {axis} is not active, activate it first'
+            return False, comments
+
+    def _stop_axis(self, axis) -> Tuple[bool, str]:
+        return self._change_axis_status(axis, 1, force=True)
+
+    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
+        return super()._set_parameters(extra_func=[self._setup])
+
+    def _shutdown(self):
+        res, comments = super()._shutdown()
+        if res:
+            res, comments = self._pins_off()
+        return res, comments
 
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
@@ -233,7 +147,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._TTL_width = eval(parameters['ttl_width'])
             self._delay_TTL = eval(parameters['delay_ttl'])
             self._microsteps = eval(parameters['microstep_settings'])[com][1]
-            # TODO set limits here, presetvalues
             return True, ''
         except (KeyError, SyntaxError, Exception) as e:
             self.logger.error(e)
