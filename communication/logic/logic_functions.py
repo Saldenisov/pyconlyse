@@ -179,9 +179,9 @@ def pending_replies(event: ThinkerEvent):
                                 event.logger.error(f'Timeout for reply msg: {msg}')
                                 event.logger.info(f'Msg: {msg.id} is deleted')
                             except KeyError:
-                                info_msg(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_replies')
+                                error_logger(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_replies')
                 except (ThinkerErrorReact, Exception) as e:
-                    info_msg(event, event.run, e)
+                    error_logger(event, event.run, e)
         else:
             sleep(0.5)
 

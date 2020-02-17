@@ -60,10 +60,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 'info': "StpMtrCtrl_OWIS controller controls OWIS controller with 3 axes"}
         return desc
 
-    def power(self, flag: bool):
-        #TODO: to be realized in metal someday
-        return {'flag': True, 'func_success': True}, f'User switch power manully...this func always return True'
-
     def GUI_bounds(self) -> Dict[str, Any]:
         pass
 

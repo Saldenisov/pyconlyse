@@ -1,14 +1,14 @@
 import logging
-import sys
 import sqlite3 as sq3
-from pathlib import Path
+import sys
 from abc import abstractmethod
+from concurrent.futures import ThreadPoolExecutor
+from inspect import signature, isclass
 from pathlib import Path
 from time import sleep
 from typing import Union, Dict, List, Tuple, Any, Callable
-from inspect import signature, isclass
+
 from PyQt5.QtCore import QObject, pyqtSignal
-from concurrent.futures import ThreadPoolExecutor
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
@@ -75,7 +75,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, DeciderInter, ExecutorInter]] = cls_parts
 
-        self.device_status: DeviceStatus = DeviceStatus(*[False] * 4)
+        self.device_status: DeviceStatus = DeviceStatus(*[False] * 5)
 
         try:
             assert len(self.cls_parts) == 3
@@ -128,18 +128,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def activate(self, flag: bool):
         pass
 
-    @abstractmethod
-    def description(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def messenger_settings(self):
-        pass
-
-    @abstractmethod
-    def power(self, flag: bool):
-        pass
-
     def add_to_executor(self, func, **kwargs) -> bool:
         # used for slow methods and functions
         try:
@@ -147,6 +135,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             return True
         except:
             return False
+
+    def decide_on_msg(self, msg: Message) -> None:
+        # TODO : realise logic
+        decision = self.decider.decide(msg)
+        if decision.allowed:
+            self.thinker.add_task_in(msg)
+        else:
+            pass  # should be send back or whereever
+
+    @abstractmethod
+    def description(self) -> Dict[str, Any]:
+        pass
 
     def get_settings(self, name: str) -> Dict[str, Union[str, List[str]]]:
         try:
@@ -165,7 +165,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             -> List[Tuple[Union[float, int]]]:
         try:
             listed_param: List[Tuple[Union[float, int]]] = []
-            listed_param_s: List[str] = self.config.config_to_dict(self.name)[from_section][what].replace(" ", "").split(';')
+            listed_param_s: List[str] = self.config.config_to_dict(self.name)[from_section][what].replace(" ",
+                                                                                                          "").split(';')
             for exp in listed_param_s:
                 val = eval(exp)
                 if not isinstance(val, type_value):
@@ -176,14 +177,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(f"_get_list_db: field {what} or section {from_section} is absent in the DB", self.name)
         except (TypeError, SyntaxError):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
-
-    def decide_on_msg(self, msg: Message) -> None:
-        # TODO : realise logic
-        decision = self.decider.decide(msg)
-        if decision.allowed:
-            self.thinker.add_task_in(msg)
-        else:
-            pass  # should be send back or whereever
 
     def execute_com(self, msg: Message):
         msg_i: Message = None
@@ -216,6 +209,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             sleep(delay)
             if f:
                 flag = f(**specific)
+
+    def info(self) -> Dict[str, Union[DeviceStatus, Any]]:
+        from collections import OrderedDict as od
+        info = od()
+        info['device_status'] = self.device_status
+        info['messenger_status'] = self.messenger.info()
+        info['thinker_status'] = self.thinker.info()
+        info['decider_status'] = self.decider.info()
+        return info
+
+    @abstractmethod
+    def messenger_settings(self):
+        pass
 
     def start(self):
         self._start_messaging()
@@ -274,15 +280,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def send_msg_externally(self, msg: Message):
         self.messenger.add_msg_out(msg)
 
-    def info(self) -> Dict[str, Union[DeviceStatus, Any]]:
-        from collections import OrderedDict as od
-        info = od()
-        info['device_status'] = self.device_status
-        info['messenger_status'] = self.messenger.info()
-        info['thinker_status'] = self.thinker.info()
-        info['decider_status'] = self.decider.info()
-        return info
-
     def pause(self):
         self.thinker.pause()
         self.messenger.pause()
@@ -294,6 +291,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.thinker.unpause()
         self.device_status.messaging_paused = False
         self.send_status_pyqt()
+
+    def power(self, flag: bool) -> Tuple[Dict[str, bool], str]:
+        # TODO: to be realized in metal someday
+        self.device_status.power = flag
+        if not flag:
+            self.device_status.connected = False
+            self.device_status.active = False
+        return {'flag': self.device_status.power, 'func_success': True}, \
+               f'Power is {self.device_status.power}. But remember, that user switches power manually...'
 
     def update_config(self, message: str):
         # TODO: realize
@@ -361,10 +367,6 @@ class Server(Device):
     def start(self):
         super().start()
 
-    def power(self, flag: bool):
-        """Power of server is always ON"""
-        self.logger.info("""Power of server is always ON, """)
-
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_server_info_full')
 
@@ -415,10 +417,6 @@ class Client(Device):
     def start(self):
         super().start()
 
-    def power(self, flag: bool):
-        """Power of client is alway ON"""
-        self.logger.info('Power is ON')
-
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
 
@@ -457,11 +455,6 @@ class Service(Device):
     def activate(self, flag: bool):
         """realization must be done in real hardware controllers"""
         pass
-
-    def power(self, flag: bool):
-        from communication.messaging.message_utils import MsgGenerator
-        msg = MsgGenerator.power_on_demand(self, flag)
-        self.send_msg_externally(msg)
 
     def messenger_settings(self):
         for adr in self.messenger.addresses['server_publisher']:

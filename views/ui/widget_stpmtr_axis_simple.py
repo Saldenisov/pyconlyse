@@ -88,6 +88,9 @@ class Ui_StpMtrGUI(object):
         self.checkBox_activate = QtWidgets.QCheckBox(self.centralwidget)
         self.checkBox_activate.setObjectName("checkBox_activate")
         self.verticalLayout.addWidget(self.checkBox_activate)
+        self.checkBox_power = QtWidgets.QCheckBox(self.centralwidget)
+        self.checkBox_power.setObjectName("checkBox_power")
+        self.verticalLayout.addWidget(self.checkBox_power)
 
 
         StpMtrGUI.setCentralWidget(self.centralwidget)
@@ -116,6 +119,7 @@ class Ui_StpMtrGUI(object):
         _translate = QtCore.QCoreApplication.translate
         try:
             self.checkBox_activate.setChecked(self.parameters.device_status.active)
+            self.checkBox_power.setChecked(self.parameters.device_status.power)
             title = self.parameters.device_description['GUI_title']
             axis = int(self.spinBox_axis.value())
             name = self.parameters.device_description['axes_names'][axis]
@@ -136,6 +140,7 @@ class Ui_StpMtrGUI(object):
         if controller_status:
             try:
                 self.checkBox_activate.setChecked(controller_status.device_status.active)
+                self.checkBox_power.setChecked(controller_status.device_status.power)
                 self.checkBox_On.setChecked(controller_status.axes_status[axis])
                 if controller_status.axes_status[axis] != 2:  # if it moves do not update
                     self.lcdNumber_position.display(controller_status.positions[axis])
@@ -153,6 +158,7 @@ class Ui_StpMtrGUI(object):
         self.pushButton_move.setText(_translate("StpMtrGUI", "MOVE"))
         self.pushButton_stop.setText(_translate("StpMtrGUI", "STOP"))
         self.checkBox_activate.setText(_translate("StpMtrGUI", "Activate controller"))
+        self.checkBox_power.setText(_translate("StpMtrGUI", "Power controller"))
         self.menuSettings.setTitle(_translate("StpMtrGUI", "Settings"))
 
 if __name__ == "__main__":
