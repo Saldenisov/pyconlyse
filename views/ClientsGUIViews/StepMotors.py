@@ -103,10 +103,7 @@ class StepMotorsView(QMainWindow):
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
         if with_return:
-            if self.controller_status.axes_status[axis] == 2:
-                return True
-            else:
-                return False
+            return True if self.controller_status.axes_status[axis] == 2 else False
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
@@ -124,12 +121,9 @@ class StepMotorsView(QMainWindow):
         self.device.send_msg_externally(msg)
         self.controller_status.axes_status[axis] = 2
         self.ui.progressBar_movement.setValue(0)
-        try:
-            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
-                                        specific={'axis': axis, 'with_return': True})
-            self._asked_status = 0
-        except Exception as e:
-            print(e)
+        self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
+                                    specific={'axis': axis, 'with_return': True})
+        self._asked_status = 0
 
     def stop_axis(self):
         axis = int(self.ui.spinBox_axis.value())
@@ -150,6 +144,8 @@ class StepMotorsView(QMainWindow):
         info = msg.data.info
         if com == MsgGenerator.DONE_IT.mes_name:
             self.ui.comments.setText(info.comments)
+            if not info.result['func_success']:
+                self.update_state()
             if info.com == StpMtrController.ACTIVATE.name:
                 self.ui.checkBox_activate.setChecked(info.result['flag'])
                 self.controller_status.device_status.active = info.result['flag']

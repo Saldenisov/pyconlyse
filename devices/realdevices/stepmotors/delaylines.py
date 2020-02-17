@@ -36,33 +36,6 @@ class StpMtrCtrl_emulate(StpMtrController):
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
         return super()._change_axis_status(axis, flag, force)
 
-    def _check_axis(self, axis: int) -> bool:
-        if self.device_status.active:
-            res, comments = self._check_axis_range(axis)
-            if res:
-                return self._check_axis_active(axis)
-            else:
-                return res, comments
-        else:
-            result, comments = (False, 'Device is not active. Activate')
-
-    def _check_axis_range(self, axis: int) -> bool:
-        comments = ''
-        if self.device_status.active:
-            if axis in range(self._axes_number):
-                return True, comments
-            else:
-                return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
-        else:
-            return False, f'Please activate device first'
-
-    def _check_axis_active(self, axis: int) -> bool:
-        comments = ''
-        if self._axes_status[axis] > 0:
-            return True, comments
-        else:
-            return False, f'axis {axis} is not active, activate it first'
-
     def _connect_controller(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect_controller(flag)
 

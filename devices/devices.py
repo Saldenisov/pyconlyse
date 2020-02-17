@@ -205,7 +205,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         flag = True
         while flag and i <= n_max:
             i += 1
-            print(f'i = {i}')
             sleep(delay)
             if f:
                 flag = f(**specific)
@@ -292,12 +291,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = False
         self.send_status_pyqt()
 
+    @abstractmethod
+    def set_default(self):
+        pass
+
     def power(self, flag: bool) -> Tuple[Dict[str, bool], str]:
         # TODO: to be realized in metal someday
         self.device_status.power = flag
         if not flag:
             self.device_status.connected = False
             self.device_status.active = False
+            self.set_default()
         return {'flag': self.device_status.power, 'func_success': True}, \
                f'Power is {self.device_status.power}. But remember, that user switches power manually...'
 
@@ -370,6 +374,9 @@ class Server(Device):
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_server_info_full')
 
+    def set_default(self):
+        pass
+
 
 class Client(Device):
     """
@@ -420,6 +427,9 @@ class Client(Device):
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_client_info')
 
+    def set_default(self):
+        pass
+
 
 class Service(Device):
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
@@ -466,6 +476,9 @@ class Service(Device):
 
     def send_status_pyqt(self, com=''):
         super().send_status_pyqt(com='status_service_info')
+
+    def set_default(self):
+        pass
 
 
 class DeviceFactory:

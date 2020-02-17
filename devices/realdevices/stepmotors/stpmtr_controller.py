@@ -58,6 +58,10 @@ class StpMtrController(Service):
             res, comments = self._set_parameters()
         if res:
             self.device_status.active = flag
+            if not flag:
+                for axis in range(self._axes_number):
+                    self._change_axis_status(axis, 0, force=True)
+                self._parameters_set = False
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': res}, info
@@ -88,6 +92,12 @@ class StpMtrController(Service):
     def GUI_bounds(self) -> Dict[str, Any]:
         pass
 
+    def _check_controller_activity(self):
+        if self.device_status.active:
+            return True, ''
+        else:
+            return False, f'Controller is not active. Power is {self.device_status.power}'
+
     @abstractmethod
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
         if self._axes_status[axis] != 2 and not force:
@@ -101,7 +111,9 @@ class StpMtrController(Service):
 
     def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> \
             Tuple[Dict[str, Union[int, float, str]], str]:
-        res, comments = self._check_axis(axis)
+        res, comments = self._check_controller_activity()
+        if res:
+            res, comments = self._check_axis(axis)
         if res:
             if how == 'relative':
                 pos = self._pos[axis] + pos
@@ -142,7 +154,9 @@ class StpMtrController(Service):
 
     def get_controller_state(self) -> Tuple[Dict[str, Union[int, str]], str]:
         return {'device_status': self.device_status, 'axes_status': self._axes_status,
-                'positions': self._pos, 'func_success': True}, ""
+                'positions': self._pos, 'func_success': True}, f'Controller is {self.device_status.active}. ' \
+                                                               f'Power is {self.device_status.power}. ' \
+                                                               f'Axes are {self._axes_status}'
 
     @abstractmethod
     def _connect_controller(self, flag: bool) -> Tuple[bool, str]:
@@ -160,13 +174,13 @@ class StpMtrController(Service):
             return res, comments
 
     def _check_axis_active(self, axis: int) -> Tuple[bool, str]:
-        if self._axes_status[axis] != 0:
+        if self._axes_status[axis]:
             return True, ''
         else:
             return False, f'axis {axis} is not active, activate it first'
 
     def _check_axis_range(self, axis: int) -> Tuple[bool, str]:
-        if axis in range(self._axis_number):
+        if axis in range(self._axes_number):
             return True, ''
         else:
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
@@ -300,6 +314,12 @@ class StpMtrController(Service):
         else:
             comments = f'pos: {pos} for axis {axis} is not in the range {self._limits[axis]}'
             return False, comments
+
+    def set_default(self):
+        self._pos: List[float] = [0] * self._axes_number
+        self._axes_status: List[bool] = [0] * self._axes_number  # Keeps axes status, active or not
+        self._limits: List[Tuple[int, int]] = [(0, 0)] * self._axes_number  # Limits for each axis
+        self._preset_values: List[Tuple[int, int]] = [(0, 0)] * self._axes_number  # Preset values for each axis
 
     def _set_preset_values(self):
         if self.device_status.connected:
