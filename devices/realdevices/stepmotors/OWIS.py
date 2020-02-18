@@ -22,34 +22,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
         super().__init__(**kwargs)
         self._PS90: ctypes.WinDLL = None
 
-    def activate(self, flag: bool) -> Tuple[Dict[str, bool], str]:
-        """
-        activation of controller is done here, when True init is done, when False disconnect
-        :param flag: True / False
-        :return: {'flag': flag, 'func_success': bool}, comments
-        """
-        if flag and not self.device_status.active:
-            res, comments = self._init()
-        else:
-            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
-                                   'WAS active BEFORE'
-        if not flag and self.device_status.active:
-            res, comments = self._disconnect(1)
-        else:
-            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {self.device_status.active};'\
-                                   'WAS active BEFORE'
-        if res:
-            self.device_status.active = flag
-            return {'flag': flag, 'func_success': True}, f'{self.id}:{self.name} active state is {flag}'
-        else:
-            return {'flag': flag, 'func_success': False}, \
-                   f'{self.id}:{self.name} active state is {self.device_status.active}; {comments}'
-
-    def activate_axis(self, axis: int, flag: int) -> Tuple[Union[bool, Dict[str, Union[int, bool]]], str]:
-        pass
-
     def description(self) -> Dict[str, Any]:
-        # TODO: change ranges and
+        # TODO: change ranges and should be read from DB
         desc = {'GUI_title': """StpMtrCtrl_OWIS service, 3 axes""",
                 'axes_names': ['DL_VD2_samples', 'DL_VD_samples', 'DL_VD_pp'],
                 'axes_values': [0, 3],
@@ -74,9 +48,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def get_pos(self, axis: int) -> Tuple[Union[Dict[str, Union[int, float, str]], str]]:
         pass
 
-    def get_controller_state(self) -> Iterable[Union[Dict[str, Union[int, str]], str]]:
-        pass
-
     def _get_axes_status(self) -> List[int]:
         pass
 
@@ -90,9 +61,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         pass
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        pass
-
-    def _set_controller_activity(self):
         pass
 
     def _init(self) -> Tuple[Union[bool, str]]:

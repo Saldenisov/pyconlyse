@@ -55,11 +55,12 @@ class StpMtrController(Service):
         """
         res, comments = self._connect_controller(flag)  # gurantees that parameters could be read from controller
         if res and not self._parameters_set:
-            res, comments = self._set_parameters()
+            res, comments = self._set_parameters()  # This must be realized for all controllers
         if res:
-            self.device_status.active = flag
             if not flag:
-                res, comments = self._shutdown()
+                res, comments = self._shutdown()  # This must be realized for all controllers
+            if res:
+                self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': res}, info
@@ -342,7 +343,10 @@ class StpMtrController(Service):
     @abstractmethod
     def _shutdown(self):
         for axis in range(self._axes_number):
-            self._change_axis_status(axis, 0, force=True)
+            self.logger.info(f'Moving {axis} back to 0')
+            _, _ = self._change_axis_status(axis, 1)
+            _, _ = self.move_axis_to(axis, 0)
+            _, _ = self._change_axis_status(axis, 0, force=True)
         self._parameters_set = False
         return True, ''
 
