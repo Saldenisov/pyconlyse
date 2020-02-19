@@ -27,13 +27,19 @@ class StpMtrController(Service):
         self._preset_values: List[Tuple[int, int]] = []  # Preset values for each axis
         path_to_service = Path(__file__).resolve().parents[0]
         self._file_pos = Path(path_to_service / f"{self.name}:positions.stpmtr".replace(":","_"))
-        self._parameters_set = False
+        self._parameters_set_hardware = False
         if not path.exists(self._file_pos):
             try:
                 file = open(self._file_pos, "w+")
                 file.close()
             except Exception as e:
                 self.logger.error(e)
+
+        res, comments = self._set_parameters()  # Set parameters from DB first and after connection is done update
+                                                # from hardware controller if possible
+
+        if not res:
+            raise StpmtrError(comments)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         """"These functions are default for any stpmtr controller
@@ -53,14 +59,15 @@ class StpMtrController(Service):
         P.S.
         when flag==False, power is not set to False
         """
-        res, comments = self._connect_controller(flag)  # gurantees that parameters could be read from controller
-        if res and not self._parameters_set:
+
+        res, comments = self._connect(flag)  # gurantees that parameters could be read from controller
+        if res and not self._parameters_set_hardware:  # parameters should be set from hardware controller if possible
             res, comments = self._set_parameters()  # This must be realized for all controllers
         if res:
             if not flag:
-                res, comments = self._shutdown()  # This must be realized for all controllers
-            if res:
-                self.device_status.active = flag
+                self._move_all_home()
+                self._parameters_set_hardware = False
+            self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
         return {'flag': self.device_status.active, 'func_success': res}, info
@@ -85,81 +92,10 @@ class StpMtrController(Service):
         pass
 
     @abstractmethod
-    def description(self) -> Dict[str, Any]:
-        pass
-
-    @abstractmethod
-    def GUI_bounds(self) -> Dict[str, Any]:
-        pass
-
-    def _check_controller_activity(self):
-        if self.device_status.active:
-            return True, ''
-        else:
-            return False, f'Controller is not active. Power is {self.device_status.power}'
-
-    @abstractmethod
-    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        if self._axes_status[axis] != 2 or force:
-            self._axes_status[axis] = flag
-            return True, ''
-        else:
-            return False, f'axis {axis} is running, its status cannot be changed'
-
-    def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> \
-            Tuple[Dict[str, Union[int, float, str]], str]:
-        res, comments = self._check_controller_activity()
-        if res:
-            res, comments = self._check_axis(axis)
-        if res:
-            if how == 'relative':
-                pos = self._pos[axis] + pos
-            res, comments = self._is_within_limits(axis, pos)
-        if res:
-            if self._axes_status[axis] == 1:
-                res, comments = self._move_axis_to(axis, pos, how)
-                if res:
-                    pos = self._pos[axis]
-            elif self._axes_status[axis] == 2:
-                res, comments = False, f'Axis {axis} is running. Please, stop it before new request.'
-        return {'axis': axis, 'pos': pos, 'how': how, 'func_success': res}, comments
-
-    @abstractmethod
-    def _move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
-        pass
-
-    def stop_axis(self, axis: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
-        res, comments = self._check_axis(axis)
-        if res:
-            if self._axes_status[axis] == 2:
-                res, comments = self._stop_axis(axis)
-                if res:
-                    comments = 'stopped by user'
-            elif self._axes_status[axis] == 1:
-                comments = f'Axis {axis} was already stopped'
-        return {'axis': axis, 'func_success': res}, comments
-
-    @abstractmethod
-    def _stop_axis(self, axis) -> Tuple[bool, str]:
-        pass
-
-    def get_pos(self, axis: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
-        res, comments = self._check_axis(axis)
-        if res:
-            pos = self._pos[axis]
-        return {'axis': axis, 'pos': pos, 'func_success': res}, comments
-
-    def get_controller_state(self) -> Tuple[Dict[str, Union[int, str]], str]:
-        return {'device_status': self.device_status, 'axes_status': self._axes_status,
-                'positions': self._pos, 'func_success': True}, f'Controller is {self.device_status.active}. ' \
-                                                               f'Power is {self.device_status.power}. ' \
-                                                               f'Axes are {self._axes_status}'
-
-    @abstractmethod
-    def _connect_controller(self, flag: bool) -> Tuple[bool, str]:
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
             self.device_status.connected = flag
-            return True, ''
+            return True, ""
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
@@ -183,19 +119,39 @@ class StpMtrController(Service):
             return False, f'axis {axis} is out of range {list(range(self._axis_number))}'
 
     @abstractmethod
+    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+        if self._axes_status[axis] != 2 or force:
+            self._axes_status[axis] = flag
+            return True, ''
+        else:
+            return False, f'axis {axis} is running, its status cannot be changed'
+
+    def _check_controller_activity(self):
+        if self.device_status.active:
+            return True, ''
+        else:
+            return False, f'Controller is not active. Power is {self.device_status.power}'
+
+    @abstractmethod
+    def description(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
+    def GUI_bounds(self) -> Dict[str, Any]:
+        pass
+
+    @abstractmethod
     def _get_axes_status(self) -> List[int]:
         pass
 
     def _get_axes_status_db(self) -> List[int]:
         return [0] * self._axes_number
 
-    def _set_axes_status(self):
-        if self.device_status.connected:
-            status = self._get_axes_status()
-        else:
-            status = self._get_axes_status_db()
-
-        self._axes_status = status
+    def get_controller_state(self) -> Tuple[Dict[str, Union[int, str]], str]:
+        return {'device_status': self.device_status, 'axes_status': self._axes_status,
+                'positions': self._pos, 'func_success': True}, f'Controller is {self.device_status.active}. ' \
+                                                               f'Power is {self.device_status.power}. ' \
+                                                               f'Axes are {self._axes_status}'
 
     @abstractmethod
     def _get_number_axes(self) -> int:
@@ -211,12 +167,45 @@ class StpMtrController(Service):
         except ValueError:
             raise StpmtrError(self, text="Check axes number in DB, must be axex_number = 1 or any number")
 
-    def _set_number_axes(self):
-        if self.device_status.connected:
-            axes_number = self._get_number_axes()
-        else:
-            axes_number = self._get_number_axes_db()
-        self._axes_number = axes_number
+    def get_pos(self, axis: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
+        res, comments = self._check_axis(axis)
+        if res:
+            pos = self._pos[axis]
+        return {'axis': axis, 'pos': pos, 'func_success': res}, comments
+
+
+    def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> \
+            Tuple[Dict[str, Union[int, float, str]], str]:
+        res, comments = self._check_controller_activity()
+        if res:
+            res, comments = self._check_axis(axis)
+        if res:
+            if how == 'relative':
+                pos = self._pos[axis] + pos
+            res, comments = self._is_within_limits(axis, pos)
+        if res:
+            if self._axes_status[axis] == 1:
+                res, comments = self._move_axis_to(axis, pos, how)
+                if res:
+                    pos = self._pos[axis]
+            elif self._axes_status[axis] == 2:
+                res, comments = False, f'Axis {axis} is running. Please, stop it before new request.'
+        return {'axis': axis, 'pos': pos, 'how': how, 'func_success': res}, comments
+
+    @abstractmethod
+    def _move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+        pass
+
+    def _move_all_home(self) -> Tuple[bool, str]:
+        """
+        move all lines to zero
+        :return: res, comments
+        """
+        for axis in range(self._axes_number):
+            self.logger.info(f'Moving {axis} back to 0')
+            _, _ = self._change_axis_status(axis, 1)
+            _, _ = self.move_axis_to(axis, 0)
+            _, _ = self._change_axis_status(axis, 0, force=True)
 
     @abstractmethod
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
@@ -270,22 +259,6 @@ class StpMtrController(Service):
             self.logger.error(f'in _get_pos_file error: {e}')
             return []
 
-    def _set_pos(self):
-        controller_pos: List[Union[int, float]] = []
-        if self.device_status.connected:
-             controller_pos = self._get_pos()
-        file_pos: List[Union[int, float]] = self._get_pos_file()
-        if len(controller_pos) == 0 and len(file_pos) == 0:
-            self.logger.error("Axes positions could not be set, setting everything to 0")
-            self._pos = [0.0] * self._axes_number
-        elif not controller_pos:
-            self._pos = file_pos
-        elif controller_pos != file_pos:
-            self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-            raise StpmtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-        else:
-            self._pos = controller_pos
-
     @abstractmethod
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         pass
@@ -312,6 +285,37 @@ class StpMtrController(Service):
             comments = f'pos: {pos} for axis {axis} is not in the range {self._limits[axis]}'
             return False, comments
 
+    def _set_axes_status(self):
+        if self.device_status.connected:
+            status = self._get_axes_status()
+        else:
+            status = self._get_axes_status_db()
+
+        self._axes_status = status
+
+    def _set_number_axes(self):
+        if self.device_status.connected:
+            axes_number = self._get_number_axes()
+        else:
+            axes_number = self._get_number_axes_db()
+        self._axes_number = axes_number
+
+    def _set_pos(self):
+        controller_pos: List[Union[int, float]] = []
+        if self.device_status.connected:
+             controller_pos = self._get_pos()
+        file_pos: List[Union[int, float]] = self._get_pos_file()
+        if len(controller_pos) == 0 and len(file_pos) == 0:
+            self.logger.error("Axes positions could not be set, setting everything to 0")
+            self._pos = [0.0] * self._axes_number
+        elif not controller_pos:
+            self._pos = file_pos
+        elif controller_pos != file_pos:
+            self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            raise StpmtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+        else:
+            self._pos = controller_pos
+
     def set_default(self):
         self._pos: List[float] = [0] * self._axes_number
         self._axes_status: List[bool] = [0] * self._axes_number  # Keeps axes status, active or not
@@ -332,23 +336,38 @@ class StpMtrController(Service):
             self._set_limits()
             self._set_preset_values()
             self._set_pos()
+            res = []
             if extra_func:
+                comments = ''
                 for func in extra_func:
-                    func()  # TODO: it should return StpmtrError, but for simplicyt reason I've added Exception
-            return True, ''
-        except (StpmtrError, Exception) as e:
+                    r, com = func()
+                    res.append(r)
+                    comments = comments + com
+
+            if self.device_status.connected:
+                self._parameters_set_hardware = True
+            if all(res):
+                return True, ''
+            else:
+                raise StpmtrError(self, comments)
+        except StpmtrError as e:
             self.logger.error(e)
             return False, str(e)
 
+    def stop_axis(self, axis: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
+        res, comments = self._check_axis(axis)
+        if res:
+            if self._axes_status[axis] == 2:
+                res, comments = self._stop_axis(axis)
+                if res:
+                    comments = 'stopped by user'
+            elif self._axes_status[axis] == 1:
+                comments = f'Axis {axis} was already stopped'
+        return {'axis': axis, 'func_success': res}, comments
+
     @abstractmethod
-    def _shutdown(self):
-        for axis in range(self._axes_number):
-            self.logger.info(f'Moving {axis} back to 0')
-            _, _ = self._change_axis_status(axis, 1)
-            _, _ = self.move_axis_to(axis, 0)
-            _, _ = self._change_axis_status(axis, 0, force=True)
-        self._parameters_set = False
-        return True, ''
+    def _stop_axis(self, axis) -> Tuple[bool, str]:
+        pass
 
     @staticmethod
     def _write_to_file(text: str, file: Path):

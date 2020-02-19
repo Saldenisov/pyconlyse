@@ -47,11 +47,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             res, comments = True, f'axis {axis} state is {flag}.{comments}'
         return res, comments
 
+    def _activate(self, flag: bool) -> Tuple[bool, str]:
+        return super()._activate(flag)
+
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
+        return super()._connect(flag)
+
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
         return super()._change_axis_status(axis, flag, force)
-
-    def _connect_controller(self, flag: bool) -> Tuple[bool, str]:
-        return super()._connect_controller(flag)
 
     def description(self):
         # TODO: read from DB
@@ -127,12 +130,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         return super()._set_parameters(extra_func=[self._setup])
 
-    def _shutdown(self):
-        res, comments = super()._shutdown()
-        if res:
-            res, comments = self._pins_off()
-        return res, comments
-
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
         if res:
@@ -148,9 +145,68 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._delay_TTL = eval(parameters['delay_ttl'])
             self._microsteps = eval(parameters['microstep_settings'])[com][1]
             return True, ''
-        except (KeyError, SyntaxError, Exception) as e:
+        except (KeyError, SyntaxError) as e:
             self.logger.error(e)
             return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
+
+    #Contoller hardware functions
+    @development_mode(dev=dev_mode, with_return=None)
+    def _activate_relay(self, n: int):
+        # TODO: better to remove _deactivate_all_relay and use _deactivate_relay
+        self._deactivate_all_relay()
+        if n == 0:
+            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 1:
+            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 2:
+            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
+        elif n == 3:
+            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
+            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
+        sleep(0.1)
+
+    @development_mode(dev=dev_mode, with_return=None)
+    def _deactivate_relay(self, n: int):
+        if n == 0:
+            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 1:
+            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 2:
+            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
+        elif n == 3:
+            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
+            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
+        sleep(0.1)
+
+    @development_mode(dev=dev_mode, with_return=None)
+    def _deactivate_all_relay(self):
+        for axis in range(4):
+            self._deactivate_relay(axis)
+        sleep(0.1)
+
+    @development_mode(dev=dev_mode, with_return=None)
+    def _disable_controller(self):
+        self._set_led(self._enable, 1)
+        sleep(0.05)
+
+    @development_mode(dev=dev_mode, with_return=None)
+    def _direction(self, orientation='top'):
+        if orientation == 'top':
+            self._set_led(self._dir, 1)
+        elif orientation == 'bottom':
+            self._set_led(self._dir, 0)
+        sleep(0.05)
+
+    @development_mode(dev=dev_mode, with_return=None)
+    def _enable_controller(self):
+        self._set_led(self._enable, 0)
+        sleep(0.05)
 
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _setup_pins(self) -> Tuple[Union[bool, str]]:
@@ -195,6 +251,15 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self.logger.error(e)
             return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
 
+    @development_mode(dev=dev_mode, with_return=None)
+    def _set_led(self, led: LED, value: Union[bool, int]):
+        if value == 1:
+            led.on()
+        elif value == 0:
+            led.off()
+        else:
+            self.logger.info(f'func _set_led value {value} is not known')
+
     def _pins_off(self) -> Tuple[Union[bool, str]]:
         if len(self._pins) == 0:
             return True, 'No pins to close()'
@@ -207,70 +272,3 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     error.append(str(e))
             self._pins = []
             return True, '' if len(error)== 0 else str(error)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _set_led(self, led: LED, value: Union[bool, int]):
-        if value == 1:
-            led.on()
-        elif value == 0:
-            led.off()
-        else:
-            self.logger.info(f'func _set_led value {value} is not known')
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _enable_controller(self):
-        self._set_led(self._enable, 0)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _disable_controller(self):
-        self._set_led(self._enable, 1)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _direction(self, orientation='top'):
-        if orientation == 'top':
-            self._set_led(self._dir, 1)
-        elif orientation == 'bottom':
-            self._set_led(self._dir, 0)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _activate_relay(self, n: int):
-        # TODO: better to remove _deactivate_all_relay and use _deactivate_relay
-        self._deactivate_all_relay()
-        if n == 0:
-            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 1:
-            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 2:
-            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 3:
-            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
-        sleep(0.1)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _deactivate_relay(self, n: int):
-        if n == 0:
-            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 1:
-            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 2:
-            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 3:
-            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
-        sleep(0.1)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _deactivate_all_relay(self):
-        for axis in range(4):
-            self._deactivate_relay(axis)
-        sleep(0.1)
