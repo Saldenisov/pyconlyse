@@ -21,7 +21,8 @@ def init(device_id: str, db_name: str):
 
 if __name__ == "__main__":
     """
-    python service.py -id StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd -db Devices.db 
+    python service.py -id StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd -db Devices.db
+    python service.py -s newport_4axes stpmtr_emulate
     """
     preselection = {'newport_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
                     'stpmtr_emulate': ['StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', 'Devices.db'],
@@ -40,15 +41,16 @@ if __name__ == "__main__":
             raise Exception('Not enough arguments were passed')
     elif '-s' in sys.argv:
         try:
-            selection_idx = sys.argv.index('-s') + 1
-            selection = sys.argv[selection_idx]
-            device_id = preselection[selection][0]
-            db = preselection[selection][1]
+            selections = sys.argv[sys.argv.index('-s')+1:]
+            for device_name in selections:
+                device_id = preselection[device_name][0]
+                db = preselection[device_name][1]
+                init(device_id=device_id, db_name=db)
         except (KeyError, IndexError):
             raise Exception('Not enough arguments were passed')
     else:
         raise Exception('Not enough arguments were passed')
 
-    init(device_id=device_id, db_name=db)
+
 
 

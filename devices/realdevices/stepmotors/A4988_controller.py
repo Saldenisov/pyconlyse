@@ -30,31 +30,41 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._ttl = None  # to make controller work when dev_mode is ON
         self._pins = []
 
-    def _activate_axis(self, axis: int, flag: int) -> Tuple[bool, str]:
-        if 2 in self._axes_status:
-            idx = self._axes_status.index(2)
-            res, comments = False, f'Stop axis {idx} to be able activate axis {axis}'
-        else:
-            try:
-                idx = self._axes_status.index(1)
-                self._deactivate_relay(idx)
-                _, _ = self._change_axis_status(idx, 0)  # Deactivate another active axis
-                comments = f'Axis {idx} is deactivated'
-            except ValueError as e:
-                res, comments = False, ' Nothing to deactivate.'
-            _, _ = self._change_axis_status(axis, flag)
-            self._activate_relay(axis)
-            res, comments = True, f'axis {axis} state is {flag}.{comments}'
-        return res, comments
-
-    def _activate(self, flag: bool) -> Tuple[bool, str]:
-        return super()._activate(flag)
-
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        return super()._change_axis_status(axis, flag, force)
+        res, comments = super()._change_axis_status(axis, flag, force)
+        if res:
+            if self._axes_status[axis] != flag:
+                idx = None
+                info = ''
+                if 1 in self._axes_status:
+                    idx = self._axes_status.index(1)
+                elif 2 in self._axes_status:
+                    idx = self._axes_status.index(2)
+                    if force:
+                        res, comments = self._stop_axis(idx)
+                        if res:
+                            info = f' Axis {idx} was stopped.'
+                        else:
+                            return res, f'Cannot stop axis {axis}. {comments}'
+                    else:
+                        return False, f'Stop axis {idx} to be able activate axis {axis}. Use force, or wait movement ' \
+                                      f'to complete.'
+                if idx != None:
+                    if idx != axis:
+                        self._axes_status[idx] = 0
+                        self._change_relay_state(idx, 0)
+                        info = f' Axis {idx} is set 0.'
+
+                if not (self._axes_status[axis] > 0 and flag > 0):
+                    self._change_relay_state(axis, flag)
+                self._axes_status[axis] = flag
+                res, comments = True, f'Axis {axis} is set to {flag}.' + info
+            else:
+                res, comments = True, f'Axis {axis} is already set to {flag}'
+        return res, comments
 
     def description(self):
         # TODO: read from DB
@@ -97,10 +107,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         res, comments = self._change_axis_status(axis, 2)
         if res:
             if pos - self._pos[axis] > 0:
-                dir = 1
+                pas = 1
                 self._direction('top')
             else:
-                dir = -1
+                pas = -1
                 self._direction('bottom')
             steps = int(abs(pos - self._pos[axis]))
             self._enable_controller()
@@ -113,19 +123,22 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                         sleep(width)
                         self._set_led(self._ttl, 0)
                         sleep(delay)
-                    self._pos[axis] = self._pos[axis] + dir
+                    self._pos[axis] = self._pos[axis] + pas
                 else:
                     comments = 'movement was interrupted'
                     break
-            _, _ = self._change_axis_status(axis, 1, force=True)
             self._disable_controller()
+            _, _ = self._change_axis_status(axis, 1, force=True)
             StpMtrController._write_to_file(str(self._pos), self._file_pos)
-            return True, comments
-        else:
-            return False, comments
+            res, comments = True, ''
+        return res, comments
 
     def _stop_axis(self, axis) -> Tuple[bool, str]:
-        return self._change_axis_status(axis, 1, force=True)
+        res, comments = self._check_axis(axis)
+        if res:
+            self._axes_status[axis] = 1
+            res, comments = True, ''
+        return res, comments
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         return super()._set_parameters(extra_func=[self._setup])
@@ -151,43 +164,40 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
-    def _activate_relay(self, n: int):
-        # TODO: better to remove _deactivate_all_relay and use _deactivate_relay
-        self._deactivate_all_relay()
-        if n == 0:
-            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 1:
-            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 2:
-            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
-        elif n == 3:
-            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
-            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
-        sleep(0.1)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _deactivate_relay(self, n: int):
-        if n == 0:
-            self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 1:
-            self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 2:
-            self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
-        elif n == 3:
-            self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
-            self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
-        sleep(0.1)
+    def _change_relay_state(self, n: int, flag: int):
+        if flag:
+            if n == 0:
+                self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
+                self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
+            elif n == 1:
+                self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
+                self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
+            elif n == 2:
+                self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
+                self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
+            elif n == 3:
+                self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
+                self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
+            sleep(0.1)
+        elif flag:
+            if n == 0:
+                self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
+                self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
+            elif n == 1:
+                self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
+                self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
+            elif n == 2:
+                self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
+                self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
+            elif n == 3:
+                self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
+                self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
+            sleep(0.1)
 
     @development_mode(dev=dev_mode, with_return=None)
     def _deactivate_all_relay(self):
         for axis in range(4):
-            self._deactivate_relay(axis)
+            self._change_relay_state(axis, 0)
         sleep(0.1)
 
     @development_mode(dev=dev_mode, with_return=None)

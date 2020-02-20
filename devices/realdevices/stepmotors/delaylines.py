@@ -12,18 +12,22 @@ info = 'info'
 
 
 class StpMtrCtrl_emulate(StpMtrController):
-    # TODO  ranges, preset values must be set
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-
-    def _activate_axis(self, axis: int, flag: int):
-        return self._change_axis_status(axis, flag)
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        return super()._change_axis_status(axis, flag, force)
+        res, comments = super()._change_axis_status(axis, flag, force)
+        if res:
+            if self._axes_status[axis] != 2 or force:
+                self._axes_status[axis] = flag
+                res, comments = True, ''
+            else:
+                res, comments = False, f'axis {axis} is running, its status cannot be changed'
+        return res, comments
 
     def description(self):
         desc = {'GUI_title': """StpMtrCtrl_emulate service, 4 axes""",
@@ -80,9 +84,8 @@ class StpMtrCtrl_emulate(StpMtrController):
                     break
             _, _ = self._change_axis_status(axis, 1, force=True)
             StpMtrController._write_to_file(str(self._pos), self._file_pos)
-            return True, comments
-        else:
-            return False, comments
+            res, comments = True, ''
+        return res, comments
 
     def _stop_axis(self, axis) -> Tuple[bool, str]:
         return self._change_axis_status(axis, 1, force=True)

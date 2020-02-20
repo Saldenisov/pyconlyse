@@ -42,8 +42,7 @@ class StpMtrController(Service):
             raise StpmtrError(comments)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        """"These functions are default for any stpmtr controller
-        e.g.: A9098, OWIS controller"""
+        # These functions are default for any stpmtr controller, e.g.: A4098, OWIS
         return {'activate': {'flag': True},
                 'activate_axis': {'axis': 0, 'flag': True},
                 'move_axis_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
@@ -54,12 +53,6 @@ class StpMtrController(Service):
                 }
 
     def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
-        """
-        1) chk power 2) connect to hardware controller 3) run _set_settings if flag==True 4) update status
-        P.S.
-        when flag==False, power is not set to False
-        """
-
         res, comments = self._connect(flag)  # gurantees that parameters could be read from controller
         if res and not self._parameters_set_hardware:  # parameters should be set from hardware controller if possible
             res, comments = self._set_parameters()  # This must be realized for all controllers
@@ -76,23 +69,24 @@ class StpMtrController(Service):
         """
         :param axis: 0-n
         :param flag: 0=non-active, 1=ready to work, 2=running
-        :return: Tuple[Dict[str, Union[int, bool]], str]
+        :return: res, comments='' if True, else error_message
         """
         res, comments = self._check_axis_range(axis)
         if res:
             res, comments = self._check_controller_activity()
         if res:
-            res, comments = self._activate_axis(axis, flag)
+            res, comments = self._change_axis_status(axis, flag)
             return {'axis': axis, 'flag': self._axes_status[axis], 'func_success': res}, comments
         else:
             return {'axis': axis, 'flag': flag, 'func_success': res}, comments
 
     @abstractmethod
-    def _activate_axis(self, axis: int, flag: int) -> Tuple[bool, str]:
-        pass
-
-    @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:
+        """
+        Connect/Disconnect to hardware controller
+        :param flag: True/False
+        :return: res, comments='' if True, else error_message
+        """
         if self.device_status.power:
             self.device_status.connected = flag
             return True, ""
@@ -100,6 +94,11 @@ class StpMtrController(Service):
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
     def _check_axis(self, axis: int) -> Tuple[bool, str]:
+        """
+        Checks if axis n is a valid axis for this controller and if it is active
+        :param axis:
+        :return: res, comments='' if True, else error_message
+        """
         res, comments = self._check_axis_range(axis)
         if res:
             return self._check_axis_active(axis)
@@ -120,11 +119,19 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        if self._axes_status[axis] != 2 or force:
-            self._axes_status[axis] = flag
-            return True, ''
+        """
+        Changes axis status on software/hardware level
+        :param axis: 0-n
+        :param flag: 0, 1, 2
+        :param force: True/False is required to force axis status to be changed from 2 to 1 or 0 for controllers, which
+        do not support parallel axis moving
+        :return: res, comments='' if True, else error_message
+        """
+        FLAGS = [0, 1, 2]
+        if flag not in FLAGS:
+            return False, f'Wrong flag {flag} was passed. Must be in range {FLAGS}'
         else:
-            return False, f'axis {axis} is running, its status cannot be changed'
+            return True, ''
 
     def _check_controller_activity(self):
         if self.device_status.active:
@@ -132,12 +139,19 @@ class StpMtrController(Service):
         else:
             return False, f'Controller is not active. Power is {self.device_status.power}'
 
-    @abstractmethod
     def description(self) -> Dict[str, Any]:
+        """
+        Description with important parameters
+        :return: Dict with parameters essential for understanding what this device is used for
+        """
         pass
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
+        """
+        ????
+        :return:
+        """
         pass
 
     @abstractmethod
@@ -148,6 +162,13 @@ class StpMtrController(Service):
         return [0] * self._axes_number
 
     def get_controller_state(self) -> Tuple[Dict[str, Union[int, str]], str]:
+        """
+        State of cotroller is returned
+        :return:  {'device_status': self.device_status, 'axes_status': self._axes_status,
+                   'positions': self._pos, 'func_success': True}, f'Controller is {self.device_status.active}. ' \
+                                                               f'Power is {self.device_status.power}. ' \
+                                                               f'Axes are {self._axes_status}'
+        """
         return {'device_status': self.device_status, 'axes_status': self._axes_status,
                 'positions': self._pos, 'func_success': True}, f'Controller is {self.device_status.active}. ' \
                                                                f'Power is {self.device_status.power}. ' \
@@ -155,7 +176,6 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _get_number_axes(self) -> int:
-        """Realize for real controllers"""
         pass
 
     def _get_number_axes_db(self) -> int:
@@ -172,7 +192,6 @@ class StpMtrController(Service):
         if res:
             pos = self._pos[axis]
         return {'axis': axis, 'pos': pos, 'func_success': res}, comments
-
 
     def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> \
             Tuple[Dict[str, Union[int, float, str]], str]:

@@ -23,17 +23,36 @@ class StpMtrCtrl_OWIS(StpMtrController):
         super().__init__(**kwargs)
         self._PS90: ctypes.WinDLL = None
 
-    def _activate(self, flag: bool) -> Tuple[bool, str]:
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
             if flag:
-                res, comments = self._connect(1, self._interface, self._port, self._baudrate)
+                res, comments = self._connect_ps90(1, self._interface, self._port, self._baudrate)
+                if not res:
+                    res, comments = self._connect_simple_ps90(1)
             else:
-                res, comments
+                res, comments = self._disconnect_ps90(1)
+
             if res:
                 self.device_status.connected = flag
             return res, comments
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+
+    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+        """
+        Changes axis status on software/hardware level
+        :param axis: 0-n
+        :param flag: 0, 1, 2
+        :param force: True/False is required to force axis status to be changed from 2 to 1 or 0
+        :return:
+        """
+        if self._axes_status[axis] != 2 or force:
+            if self._axes_status[axis] == 2:
+                res, comments
+            self._axes_status[axis] = flag
+            return True, ''
+        else:
+            return False, f'axis {axis} is running, its status cannot be changed'
 
     def description(self) -> Dict[str, Any]:
         # TODO: change ranges and should be read from DB
@@ -100,8 +119,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
             res, comments = self._pins_off()
         return res, comments
 
-
-@development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    #Hardware controller functions
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _connect_ps90(self, control_unit: int, interface: int, port: int, baudrate: int,
                  par3=0, par4=0, par5=0, par6=0) -> Tuple[Union[bool, str]]:
         """
@@ -143,6 +162,60 @@ class StpMtrCtrl_OWIS(StpMtrController):
         return True if res == 0 else False, self._error_OWIS(res, 0)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _connect_simple_ps90(self, control_unit: int, sernum = "") -> Tuple[Union[bool, str]]:
+        """
+        long PS90_SimpleConnect (long Index, const char* pszSerNum)
+        Description
+        find control unit with the specified serial number and connect to it.
+        Serial interface (communication via USB or serial port)
+        The application software can access this interface in the same way as it would access a standard serial port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
+        The software handshake character is CR.
+        Ethernet interface (communication via Com-Server)
+        As Com-Server the OWIS software tool “OWISerialServer.exe” may be used (..\OWISoft\Application\system). Alternatively, you can use other commercial products (hardware/software). The application software can access this interface via Windows TCP socket: special communication for OWIS software (command + delay). The software handshake character is CR.
+        Example
+        Find control unit and connect to it (empty string, COMx):
+        long error = PS90_SimpleConnect(1, “”);
+        :param control_unit: Index control unit index 1-10 (default=1, range=1...20)
+                             11...20 – debug mode
+                             1...10 – standard mode
+        :param sernum: pszSerNum control unit serial number (default=empty string)
+                       USB or serial port
+                       empty string – the first found control unit is connected;
+                       “12345678” – control unit with the specified serial number is connected;
+                       Ethernet interface
+                       “net” – control unit is connected to the Com-Server (local application) by the first found local IP address and port number 1200.
+        :return: 0 – function was successful
+                 1...9 – error
+                 1 function error (invalid parameters)
+                 5 no response from control unit (check cable, connection or reset control unit)
+                 7 control unit with the specified serial number is not found
+                 9 no connection to tcp/ip socket
+
+        """
+        control_unit = ctypes.c_long(control_unit)
+        sernum = ctypes.c_char_p(sernum)
+
+        res = self._PS90.PS90_SimpleConnect(control_unit, sernum) * -1  # *-1 is according official documentation
+        return True if res == 0 else False, self._error_OWIS(res, 0)
+
+
+    def _convert_axis_state_format_ps90(self, axis_state_OWIS: int) -> int:
+        """
+        Converts OWIS controller axis state to the used for stpmtr_contoller
+        :param axis_state_OWIS: 0     axis is not active
+                                1     axis is not initialized
+                                2     axis is switched off
+                                3     axis is active and initialized and switched on
+        :return: 0 - axis is not initialized, 1 - is active
+        """
+        if axis_state_OWIS in [0, 1, 2]:
+            return 0
+        elif axis_state_OWIS ==3:
+            return 1
+        else:
+            return 0
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _disconnect_ps90(self, control_unit: int) -> Tuple[Union[bool, str]]:
         """
         long PS90_Disconnect (long Index)
@@ -157,6 +230,33 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         control_unit = ctypes.c_long(control_unit)
         res = self._PS90.PS90_Disconnect(control_unit)
+        return True if res == 0 else False, self._error_OWIS(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _free_switch_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
+        """
+        long PS90_FreeSwitch (long Index, long AxisId)
+        Description
+        release active limit switches of an axis.
+        After an axis has driven into a limit switch, it can release a limit switch with this function. This is valid only for released axes. Besides, the direction of the movement is selected automatically, depending on whether a positive or negative limit switch is activated.
+        Example
+        Release active limit switches of an axis of the control unit (Index=1, Axis=1):
+        long error = PS90_SetLimitSwitch(1,1,15);
+        error = PS90_SetLimitSwitchMode(1,1,15);
+        long state = PS90_GetSwitchState(1,1);
+        if( state & 15 ) error = PS90_FreeSwitch(1,1);
+        :param control_unit: Index control unit index (1-10)
+        :param axis: AxisId axis number (1...9)
+        :return: 0 – function was successful
+                -1 – function error
+                -2 – communication error
+                -3 – syntax error
+                -4 – axis in wrong state
+        """
+
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(axis)
+        res = self._PS90.PS90_FreeSwitch(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(3, 'DEV MODE'))
@@ -188,22 +288,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         if error != 0:
             res = False
         return res, self._error_OWIS(error, 1)
-
-    def _convert_axis_state_format_ps90(self, axis_state_OWIS: int) -> int:
-        """
-        Converts OWIS controller axis state to the used for stpmtr_contoller
-        :param axis_state_OWIS: 0     axis is not active
-                                1     axis is not initialized
-                                2     axis is switched off
-                                3     axis is active and initialized and switched on
-        :return: 0 - axis is not initialized, 1 - is active
-        """
-        if axis_state_OWIS in [0, 1, 2]:
-            return 0
-        elif axis_state_OWIS ==3:
-            return 1
-        else:
-            return 0
 
     @development_mode(dev=dev_mode, with_return=(0.0, 'DEV MODE'))
     def _get_position_ex_ps90(self, control_unit: int, axis: int) -> Tuple[Union[float, bool, str]]:
@@ -259,33 +343,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def __get_read_error_ps90(self, control_unit: int) -> int:
         control_unit = ctypes.c_int(control_unit)
         return self._PS90.PS90_GetReadError(control_unit)
-
-    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
-    def _free_switch_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
-        """
-        long PS90_FreeSwitch (long Index, long AxisId)
-        Description
-        release active limit switches of an axis.
-        After an axis has driven into a limit switch, it can release a limit switch with this function. This is valid only for released axes. Besides, the direction of the movement is selected automatically, depending on whether a positive or negative limit switch is activated.
-        Example
-        Release active limit switches of an axis of the control unit (Index=1, Axis=1):
-        long error = PS90_SetLimitSwitch(1,1,15);
-        error = PS90_SetLimitSwitchMode(1,1,15);
-        long state = PS90_GetSwitchState(1,1);
-        if( state & 15 ) error = PS90_FreeSwitch(1,1);
-        :param control_unit: Index control unit index (1-10)
-        :param axis: AxisId axis number (1...9)
-        :return: 0 – function was successful
-                -1 – function error
-                -2 – communication error
-                -3 – syntax error
-                -4 – axis in wrong state
-        """
-
-        control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
-        res = self._PS90.PS90_FreeSwitch(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _motor_init_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -356,39 +413,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
-    def _set_stage_attributes_ps90(self, control_unit: int, axis: int, dpitch: float, increv: int,
-                            dratio: float) -> Tuple[Union[bool, str]]:
-        """
-        long PS90_SetStageAttributes (long Index, long AxisId, double dPitch, long IncRev, double dRatio)
-        Description
-        set stage attributes for an axis.
-        The control unit uses for positioning of the axes internal values (increments). To allow the positioning in other units (e.g., for linear measuring stages - mm, µm, for rotary measuring stages - degrees, mrad etc.), these parameters should be defined. Then one is able to use the extended functions (...Ex) with a desired unit. The specified values are converted internally into increments. The movement of the slide per spindle revolution (pitch) is specified in a desired unit (e.g., 1 mm), as the first parameter for linear measuring stages. With rotary measuring stages a revolution of the rotary table is specified in a desired unit (e.g., 360 degrees). The number of the increments per motor revolution is defined as the second parameter. With the step motors it is the number of the full steps per revolution (e.g., 200). If a motor with the encoder is controlled, it is the number of the increments per revolution (e.g., encoder with 4-fold evaluation: encoder lines number x 4 = 500x4). The whole gear reduction ratio specified as the third parameter.
-        Example
-        Define stage attributes of the control unit (Index=1, Axis=1)
-        (linear measuring stage + servo motor with encoder: pitch = 1.0 mm, pulses/rev = 2000, ratio =1.0):
-        long error = PS90_SetStageAttributes(1,1,1.0,2000,1.0);
-        double dValue = PS90_GetPositionEx(1,1);
-        Define stage attributes of the control unit (Index=1, Axis=2)
-        (rotary measuring stage + step motor without encoder: revolution = 360.0 degrees, full steps/rev = 200, ratio =180.0):
-        error = PS90_SetStageAttributes(1,2,360.0,200,180.0);
-        dValue = PS90_GetPositionEx(1,2);
-        :param control_unit:Index control unit index (1-10)
-        :param axis: AxisId axis number (1...9)
-        :param dpitch: dPitch pitch
-        :param increv: IncRev pulses/steps per motor revolution
-        :param dratio: dRatio gear reduction ratio
-        :return: 0 – function was successful
-                -1 – function error
-        """
-        control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
-        dpitch = ctypes.c_double(dpitch)
-        increv = ctypes.c_long(increv)
-        dratio = ctypes.c_double(dratio)
-        res = self._PS90.PS90_SetStageAttributes(control_unit, axis, dpitch, increv, dratio)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
-
-    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_limit_min_ps90(self, control_unit: int, axis: int, value: float) -> Tuple[Union[bool, str]]:
         """
         long PS90_SetLimitMinEx (long Index, long AxisId, double dValue)
@@ -441,6 +465,32 @@ class StpMtrCtrl_OWIS(StpMtrController):
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _set_pos_fex_ps90(self, control_unit: int, axis: int, speed: float) -> Tuple[Union[bool, str]]:
+        """
+        long PS90_SetPosFEx (long Index, long AxisId, double dValue)
+        Description
+        set positioning velocity of an axis (values in selected unit).
+        It is used for a trapezoidal and a S-curve profile.
+        velocity = unit/s
+        Example
+        Set positioning velocity of an axis of the control unit (Index=1, Axis=1):
+        long error = PS90_SetCalcResol(1,1,0.0001);
+        error = PS90_SetPosFEx(1,1,10.0);
+        :param control_unit: Index control unit index (1-10)
+        :param axis: AxisId axis number (1...9)
+        :param speed: dValue positioning velocity (values in selected unit)
+        :return: 0 – function was successful
+                -1 – function error
+                -2 – communication error
+                -3 – syntax error
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(axis)
+        speed = ctypes.c_double(speed)
+        res = self._PS90.PS90_SetPosFEx(control_unit, axis, speed)
+        return True if res == 0 else False, self._error_OWIS(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_pos_mode_ps90(self, control_unit: int, axis: int, mode: int) -> Tuple[Union[bool, str]]:
         """
         long PS90_SetPosMode (long Index, long AxisId, long Mode)
@@ -461,29 +511,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         res = self._PS90.PS90_SetPosMode(control_unit, axis, mode)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
-
-    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
-    def _set_target_mode_ps90(self, control_unit: int, axis: int, mode: int) -> Tuple[Union[bool, str]]:
-        """
-        long PS90_SetTargetMode (long Index, long AxisId, long Mode)
-        Description
-        set target mode of an axis
-        Example
-        Set target mode of the control unit (Index=1, Axis=1) for relative positioning:
-        long error = PS90_SetTargetMode(1,1,0);
-        :param control_unit: Index control unit index (1-10)
-        :param axis: AxisId axis number (1...9)
-        :param value: Mode target mode Mode=0 relative positioning (target value is distance) Mode=1 absolute positioning (target value is target position)
-        :return: 0 – function was successful
-                -1 – function error
-                -2 – communication error
-                -3 – syntax error
-        """
-        control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
-        mode = ctypes.c_long(mode)
-        res = self._PS90.PS90_SetTargetMode(control_unit, axis, mode)
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -508,6 +535,62 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_long(value)
         res = self._PS90.PS90_SetPosVel(control_unit, axis, value)
+        return True if res == 0 else False, self._error_OWIS(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _set_stage_attributes_ps90(self, control_unit: int, axis: int, dpitch: float, increv: int,
+                            dratio: float) -> Tuple[Union[bool, str]]:
+        """
+        long PS90_SetStageAttributes (long Index, long AxisId, double dPitch, long IncRev, double dRatio)
+        Description
+        set stage attributes for an axis.
+        The control unit uses for positioning of the axes internal values (increments). To allow the positioning in other units (e.g., for linear measuring stages - mm, µm, for rotary measuring stages - degrees, mrad etc.), these parameters should be defined. Then one is able to use the extended functions (...Ex) with a desired unit. The specified values are converted internally into increments. The movement of the slide per spindle revolution (pitch) is specified in a desired unit (e.g., 1 mm), as the first parameter for linear measuring stages. With rotary measuring stages a revolution of the rotary table is specified in a desired unit (e.g., 360 degrees). The number of the increments per motor revolution is defined as the second parameter. With the step motors it is the number of the full steps per revolution (e.g., 200). If a motor with the encoder is controlled, it is the number of the increments per revolution (e.g., encoder with 4-fold evaluation: encoder lines number x 4 = 500x4). The whole gear reduction ratio specified as the third parameter.
+        Example
+        Define stage attributes of the control unit (Index=1, Axis=1)
+        (linear measuring stage + servo motor with encoder: pitch = 1.0 mm, pulses/rev = 2000, ratio =1.0):
+        long error = PS90_SetStageAttributes(1,1,1.0,2000,1.0);
+        double dValue = PS90_GetPositionEx(1,1);
+        Define stage attributes of the control unit (Index=1, Axis=2)
+        (rotary measuring stage + step motor without encoder: revolution = 360.0 degrees, full steps/rev = 200, ratio =180.0):
+        error = PS90_SetStageAttributes(1,2,360.0,200,180.0);
+        dValue = PS90_GetPositionEx(1,2);
+        :param control_unit:Index control unit index (1-10)
+        :param axis: AxisId axis number (1...9)
+        :param dpitch: dPitch pitch
+        :param increv: IncRev pulses/steps per motor revolution
+        :param dratio: dRatio gear reduction ratio
+        :return: 0 – function was successful
+                -1 – function error
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(axis)
+        dpitch = ctypes.c_double(dpitch)
+        increv = ctypes.c_long(increv)
+        dratio = ctypes.c_double(dratio)
+        res = self._PS90.PS90_SetStageAttributes(control_unit, axis, dpitch, increv, dratio)
+        return True if res == 0 else False, self._error_OWIS(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _set_target_mode_ps90(self, control_unit: int, axis: int, mode: int) -> Tuple[Union[bool, str]]:
+        """
+        long PS90_SetTargetMode (long Index, long AxisId, long Mode)
+        Description
+        set target mode of an axis
+        Example
+        Set target mode of the control unit (Index=1, Axis=1) for relative positioning:
+        long error = PS90_SetTargetMode(1,1,0);
+        :param control_unit: Index control unit index (1-10)
+        :param axis: AxisId axis number (1...9)
+        :param value: Mode target mode Mode=0 relative positioning (target value is distance) Mode=1 absolute positioning (target value is target position)
+        :return: 0 – function was successful
+                -1 – function error
+                -2 – communication error
+                -3 – syntax error
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(axis)
+        mode = ctypes.c_long(mode)
+        res = self._PS90.PS90_SetTargetMode(control_unit, axis, mode)
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -559,32 +642,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetTargetEx(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
-
-    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
-    def _set_pos_Fex_ps90(self, control_unit: int, axis: int, speed: float) -> Tuple[Union[bool, str]]:
-        """
-        long PS90_SetPosFEx (long Index, long AxisId, double dValue)
-        Description
-        set positioning velocity of an axis (values in selected unit).
-        It is used for a trapezoidal and a S-curve profile.
-        velocity = unit/s
-        Example
-        Set positioning velocity of an axis of the control unit (Index=1, Axis=1):
-        long error = PS90_SetCalcResol(1,1,0.0001);
-        error = PS90_SetPosFEx(1,1,10.0);
-        :param control_unit: Index control unit index (1-10)
-        :param axis: AxisId axis number (1...9)
-        :param speed: dValue positioning velocity (values in selected unit)
-        :return: 0 – function was successful
-                -1 – function error
-                -2 – communication error
-                -3 – syntax error
-        """
-        control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
-        speed = ctypes.c_double(speed)
-        res = self._PS90.PS90_SetPosFEx(control_unit, axis, speed)
         return True if res == 0 else False, self._error_OWIS(res, 1)
 
     def _error_OWIS_ps90(self, code: int, type: int) -> str:

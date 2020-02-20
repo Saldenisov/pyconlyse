@@ -122,11 +122,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @abstractmethod
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+        """
+        Return dict of all functions available to user
+        :return: dictionary of functions {name: description}, e.g. {'activate': {'flag': True}}
+        """
         pass
 
     @abstractmethod
-    def activate(self, flag: bool):
-        pass
+    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
+        """
+        Activates service, by connecting to hardware controller and reading settings
+        :param flag: True/False
+        :return: res, comments='' if True, else error_message
+        """
 
     def add_to_executor(self, func, **kwargs) -> bool:
         # used for slow methods and functions
@@ -146,6 +154,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @abstractmethod
     def description(self) -> Dict[str, Any]:
+        """
+
+        :return:
+        """
         pass
 
     def get_settings(self, name: str) -> Dict[str, Union[str, List[str]]]:
@@ -222,6 +234,28 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def messenger_settings(self):
         pass
 
+    def pause(self):
+        self.thinker.pause()
+        self.messenger.pause()
+        self.device_status.messaging_paused = True
+        self.send_status_pyqt()
+
+    def unpause(self):
+        self.messenger.unpause()
+        self.thinker.unpause()
+        self.device_status.messaging_paused = False
+        self.send_status_pyqt()
+
+    def power(self, flag: bool) -> Tuple[Dict[str, bool], str]:
+        # TODO: to be realized in metal someday
+        self.device_status.power = flag
+        if not flag:
+            self.device_status.connected = False
+            self.device_status.active = False
+            self.set_default()
+        return {'flag': self.device_status.power, 'func_success': True}, \
+               f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+
     def start(self):
         self._start_messaging()
 
@@ -279,31 +313,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def send_msg_externally(self, msg: Message):
         self.messenger.add_msg_out(msg)
 
-    def pause(self):
-        self.thinker.pause()
-        self.messenger.pause()
-        self.device_status.messaging_paused = True
-        self.send_status_pyqt()
-
-    def unpause(self):
-        self.messenger.unpause()
-        self.thinker.unpause()
-        self.device_status.messaging_paused = False
-        self.send_status_pyqt()
-
     @abstractmethod
     def set_default(self):
         pass
-
-    def power(self, flag: bool) -> Tuple[Dict[str, bool], str]:
-        # TODO: to be realized in metal someday
-        self.device_status.power = flag
-        if not flag:
-            self.device_status.connected = False
-            self.device_status.active = False
-            self.set_default()
-        return {'flag': self.device_status.power, 'func_success': True}, \
-               f'Power is {self.device_status.power}. But remember, that user switches power manually...'
 
     def update_config(self, message: str):
         # TODO: realize
@@ -463,7 +475,6 @@ class Service(Device):
 
     @abstractmethod
     def activate(self, flag: bool):
-        """realization must be done in real hardware controllers"""
         pass
 
     def messenger_settings(self):
