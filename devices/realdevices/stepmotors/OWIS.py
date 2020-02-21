@@ -1,5 +1,6 @@
 """
-This controller is dedicated to control OWIS PS90 control unit
+This controller is dedicated to control OWIS PS90 controller hardware
+On ELYSE there are 3 cards dedicated to delaylines
 """
 
 
@@ -18,10 +19,34 @@ dev_mode = False
 
 
 class StpMtrCtrl_OWIS(StpMtrController):
-
+    #TODO: should be checked with dev_mode False and True
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._PS90: ctypes.WinDLL = None
+
+    def _activate_axis(self, axis: int) -> Tuple[bool, str]:
+        """
+        Init, Set Stage Attributes, Pos mode set, Target mode set,  Free switch, Motor off
+        :param axis: 1-n
+        :return: True/False, comments
+        """
+        res, comments = self._check_axis_range(axis)
+        if res:
+            res, comments = self._motor_init_ps90(1, axis)
+            if res:
+                #TODO check parameters
+                res, comments = self._set_stage_attributes_ps90(1, axis)
+            if res:
+                res, comments = self._set_pos_mode_ps90(1, axis, mode=0)
+            if res:
+                res, comments = self._set_target_mode_ps90(1, axis, mode=1)
+            if res:
+                res, comments = self._free_switch_ps90(1, axis)
+            if res:
+                res, comments = self._motor_off_ps90(1, axis)
+            if res:
+                res, comments = res, f'Axis {axis} pos_mode is 0, target_mode is 1, switch if free, motor is off.'
+        return res, comments
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -31,7 +56,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
                     res, comments = self._connect_simple_ps90(1)
             else:
                 res, comments = self._disconnect_ps90(1)
-
             if res:
                 self.device_status.connected = flag
             return res, comments
@@ -43,16 +67,30 @@ class StpMtrCtrl_OWIS(StpMtrController):
         Changes axis status on software/hardware level
         :param axis: 0-n
         :param flag: 0, 1, 2
-        :param force: True/False is required to force axis status to be changed from 2 to 1 or 0
-        :return:
+        :param force: is not needed for this controller
+        :return: res, comments='' if True, else error_message
         """
-        if self._axes_status[axis] != 2 or force:
-            if self._axes_status[axis] == 2:
-                res, comments
-            self._axes_status[axis] = flag
-            return True, ''
-        else:
-            return False, f'axis {axis} is running, its status cannot be changed'
+        res, comments = super()._check_axis_flag(flag)
+        if res:
+            if self._axes_status[axis] != flag:
+                local_axis_state = self._axes_status[axis]
+                if self._axes_status[axis] == 0:
+                    res, comments = self._activate_axis(axis)
+                else:
+                    self._axes_status[axis] = flag
+                    res, comments = True, ''
+                if flag == 2:
+                    res, comments = self._motor_on_ps90(1, axis)
+                elif (flag == 0 or flag == 1) and local_axis_state == 2:
+                    _, info = self._stop_axis_ps90(1, axis)
+                    res, comments = self._motor_off_ps90(1, axis)
+                    res, comments = res, f'{info}. {comments}'
+                if res:
+                    res, comments = res, f'Axis {axis} is set to {flag}. {comments}'
+            else:
+                res, comments = True, f'Axis {axis} is already set to {flag}'
+
+        return res, comments
 
     def description(self) -> Dict[str, Any]:
         # TODO: change ranges and should be read from DB
@@ -85,13 +123,46 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _setup(self)-> Tuple[Union[bool, str]]:
+    def _move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+        """
+        Move selected axis to set position. Turns on motor, set target, go target and checks position every 25ms for
+        1000 cycles. Motor off when position is within 0.001mm accuracy
+        :param axis: 1-n
+        :param pos: position in mm
+        :param how: absolute, relative
+        :return: True/False, comments
+        """
+        res, comments = self._change_axis_status(axis, 2)
+        if res:
+            res, comments = self._set_target_ex_ps90(1, axis, pos)
+            if res:
+                res, comments = self._go_target_ps90(1, axis)
+            if res:
+                for i in range(1000):
+                    sleep(50. / 1000)
+                    res, comments = self._get_position_ex_ps90(1, axis)
+                    if not res:
+                        pass
+                    else:
+                        self._pos[axis] = res
+                    if abs(res - pos) <= 0.001:
+                        res, comments = True, f'Axis {axis} is stopped. Actual position is {res}'
+                        break
+                    if i == 999:
+                        res, comments = False, f'Waited for to long axis {axis} to stop. ' \
+                                              f'Last position was {self._pos[axis]}. Motor is Off'
+                        break
+                    _, _ = self._change_axis_status(axis, 1)
+        return res, comments
+
+    def _setup(self) -> Tuple[Union[bool, str]]:
         """
         essential parameters for controller operation are read from DB
         :return: bool, comment
         """
+        # TODO: not all parameters are set
         try:
-            list_param = ['DLL_path', 'interface', 'baudrate', 'port']
+            list_param = ['DLL_path', 'interface', 'baudrate', 'port', 'speeds', 'gear_ratios', 'pitches']
             settings = self.get_general_settings()
             for param in list_param:
                 if param not in settings:
@@ -113,21 +184,15 @@ class StpMtrCtrl_OWIS(StpMtrController):
         else:
             return super()._set_parameters()
 
-    def _shutdown(self):
-        res, comments = super()._shutdown()
-        if res:
-            res, comments = self._pins_off()
-        return res, comments
-
-    #Hardware controller functions
+    # Hardware controller functions
+    # Be aware that OWIS PS90 counts axis from 1, not from 0!!!
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _connect_ps90(self, control_unit: int, interface: int, port: int, baudrate: int,
                  par3=0, par4=0, par5=0, par6=0) -> Tuple[Union[bool, str]]:
         """
         long PS90_Connect (long Index, long Interface, long p1, long p2, long p3, long p4, long p5, long p6)
         Description
-        open interface and connect to PS 90.
-        Serial interface (communication via USB or serial port)
+        open interface and connect to PS 90. Serial interface (communication via USB or serial port)
         The application software can access this interface in the same way as it would access a standard serial port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
         Example
         Open COM3 and connect to PS 90 (Index=1):
@@ -159,7 +224,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         par6 = ctypes.c_long(par6)
         res = self._PS90.PS90_Connect(control_unit, interface, port,
                                       baudrate, par3, par4, par5, par6) * -1  # *-1 is according official documentation
-        return True if res == 0 else False, self._error_OWIS(res, 0)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _connect_simple_ps90(self, control_unit: int, sernum = "") -> Tuple[Union[bool, str]]:
@@ -196,8 +261,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         sernum = ctypes.c_char_p(sernum)
 
         res = self._PS90.PS90_SimpleConnect(control_unit, sernum) * -1  # *-1 is according official documentation
-        return True if res == 0 else False, self._error_OWIS(res, 0)
-
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     def _convert_axis_state_format_ps90(self, axis_state_OWIS: int) -> int:
         """
@@ -230,7 +294,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         control_unit = ctypes.c_long(control_unit)
         res = self._PS90.PS90_Disconnect(control_unit)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _free_switch_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -255,9 +319,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
 
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_FreeSwitch(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(3, 'DEV MODE'))
     def _get_axis_state_ps90(self, control_unit: int, axis: int) -> Tuple[Union[int, bool, str]]:
@@ -282,12 +346,12 @@ class StpMtrCtrl_OWIS(StpMtrController):
                         3     axis is active and initialized and switched on
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_GetAxisState(control_unit, axis)
         error = self.__get_read_error(control_unit)
         if error != 0:
             res = False
-        return res, self._error_OWIS(error, 1)
+        return res, self._error_OWIS_ps90(error, 1)
 
     @development_mode(dev=dev_mode, with_return=(0.0, 'DEV MODE'))
     def _get_position_ex_ps90(self, control_unit: int, axis: int) -> Tuple[Union[float, bool, str]]:
@@ -302,16 +366,16 @@ class StpMtrCtrl_OWIS(StpMtrController):
         error = PS90_GetReadError(1);
         :param control_unit: Index control unit index (1-10)
         :param axis: AxisId axis number (1...9)
-        :return: value of the current position (values in selected unit)
+        :return: value of the current position (values in selected unit) or False if error
 
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_GetPositionEx(control_unit, axis)
         error = self.__get_read_error(control_unit)
         if error != 0:
             res = False
-        return res, self._error_OWIS(error, 1)
+        return res, self._error_OWIS_ps90(error, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _go_target_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -335,9 +399,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -4 – axis in wrong state
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_GoTarget(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def __get_read_error_ps90(self, control_unit: int) -> int:
@@ -362,9 +426,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_MotorInit(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis - 1} is initialized')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _motor_on_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -385,9 +449,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         res = self._PS90.PS90_MotorOn(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis - 1} is on.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _motor_off_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -408,9 +472,29 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
         """
         control_unit = ctypes.c_int(control_unit)
-        axis = ctypes.c_int(axis)
+        axis = ctypes.c_int(axis + 1)
         res = self._PS90.PS90_MotorOff(control_unit, axis)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis - 1} is off.')
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _stop_axis_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
+        """
+        long PS90_Stop (long Index, long AxisId)
+        Description
+        stop movement of an axis.
+        Any active movement of an axis is terminated. The axis is stopped with the programmed brake ramp and stands still.
+        Example
+        Stop movement of an axis of the control unit (Index=1, Axis=1):
+        long error = PS90_Stop(1,1);
+        :param control_unit: Index control unit index (1-10)
+        :param axis: AxisId axis number (1...9)
+        :return:  0 – function was successful -1 – function error -2 – communication error -3 – syntax error
+
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(axis + 1)
+        res = self._PS90.PS90_Stop(control_unit, axis)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Axis {axis} movement is stopped.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_limit_min_ps90(self, control_unit: int, axis: int, value: float) -> Tuple[Union[bool, str]]:
@@ -433,10 +517,10 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetLimitMinEx(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_limit_max_ps90(self, control_unit: int, axis: int, value: float) -> Tuple[Union[bool, str]]:
@@ -459,10 +543,10 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetLimitMaxEx(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_pos_fex_ps90(self, control_unit: int, axis: int, speed: float) -> Tuple[Union[bool, str]]:
@@ -485,10 +569,10 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         speed = ctypes.c_double(speed)
         res = self._PS90.PS90_SetPosFEx(control_unit, axis, speed)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_pos_mode_ps90(self, control_unit: int, axis: int, mode: int) -> Tuple[Union[bool, str]]:
@@ -501,17 +585,14 @@ class StpMtrCtrl_OWIS(StpMtrController):
         long error = PS90_SetPosMode(1,1,0);
         :param control_unit: Index control unit index (1-10)
         :param axis: AxisId axis number (1...9)
-        :param value: Mode positioning mode Mode=0 trapezoidal profile Mode=1 S-curve profile
-        :return: 0 – function was successful
-                -1 – function error
-                -2 – communication error
-                -3 – syntax error
+        :param mode: Mode positioning mode Mode=0 trapezoidal profile Mode=1 S-curve profile
+        :return: 0 – function was successful -1 – function error -2 – communication error -3 – syntax error
         """
         control_unit = ctypes.c_int(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         mode = ctypes.c_long(mode)
         res = self._PS90.PS90_SetPosMode(control_unit, axis, mode)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_pos_velocity_ps90(self, control_unit: int, axis: int, value: int) -> Tuple[Union[bool, str]]:
@@ -532,10 +613,10 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         value = ctypes.c_long(value)
         res = self._PS90.PS90_SetPosVel(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_stage_attributes_ps90(self, control_unit: int, axis: int, dpitch: float, increv: int,
@@ -563,12 +644,12 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -1 – function error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         dpitch = ctypes.c_double(dpitch)
         increv = ctypes.c_long(increv)
         dratio = ctypes.c_double(dratio)
         res = self._PS90.PS90_SetStageAttributes(control_unit, axis, dpitch, increv, dratio)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_target_mode_ps90(self, control_unit: int, axis: int, mode: int) -> Tuple[Union[bool, str]]:
@@ -581,17 +662,17 @@ class StpMtrCtrl_OWIS(StpMtrController):
         long error = PS90_SetTargetMode(1,1,0);
         :param control_unit: Index control unit index (1-10)
         :param axis: AxisId axis number (1...9)
-        :param value: Mode target mode Mode=0 relative positioning (target value is distance) Mode=1 absolute positioning (target value is target position)
+        :param mode: Mode target mode Mode=0 relative positioning (target value is distance) Mode=1 absolute positioning (target value is target position)
         :return: 0 – function was successful
                 -1 – function error
                 -2 – communication error
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         mode = ctypes.c_long(mode)
         res = self._PS90.PS90_SetTargetMode(control_unit, axis, mode)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_target_ps90(self, control_unit: int, axis: int, value: int) -> Tuple[Union[bool, str]]:
@@ -613,10 +694,10 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         value = ctypes.c_long(value)
         res = self._PS90.PS90_SetTarget(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_target_ex_ps90(self, control_unit: int, axis: int, value: float) -> Tuple[Union[bool, str]]:
@@ -639,12 +720,12 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
-        axis = ctypes.c_long(axis)
+        axis = ctypes.c_long(axis + 1)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetTargetEx(control_unit, axis, value)
-        return True if res == 0 else False, self._error_OWIS(res, 1)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
-    def _error_OWIS_ps90(self, code: int, type: int) -> str:
+    def _error_OWIS_ps90(self, code: int, type: int, user_def='') -> str:
         """
         :param code: <=0
         :param type: 0 for Connection error codes, 1 for Function error codes
@@ -662,4 +743,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         elif type not in [0, 1]:
             return "Wrong type of error"
         else:
-            return errors_connections[code] if type == 0 else errors_functions[code]
+            if code != 0:
+                return errors_connections[code] if type == 0 else errors_functions[code]
+            else:
+                return user_def

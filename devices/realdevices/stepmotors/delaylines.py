@@ -20,7 +20,7 @@ class StpMtrCtrl_emulate(StpMtrController):
         return super()._connect(flag)
 
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._change_axis_status(axis, flag, force)
+        res, comments = super()._check_axis_flag(flag)
         if res:
             if self._axes_status[axis] != 2 or force:
                 self._axes_status[axis] = flag
@@ -86,6 +86,3 @@ class StpMtrCtrl_emulate(StpMtrController):
             StpMtrController._write_to_file(str(self._pos), self._file_pos)
             res, comments = True, ''
         return res, comments
-
-    def _stop_axis(self, axis) -> Tuple[bool, str]:
-        return self._change_axis_status(axis, 1, force=True)

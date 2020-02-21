@@ -34,7 +34,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return super()._connect(flag)
 
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._change_axis_status(axis, flag, force)
+        res, comments = super()._check_axis_flag(flag)
         if res:
             if self._axes_status[axis] != flag:
                 idx = None
@@ -44,11 +44,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 elif 2 in self._axes_status:
                     idx = self._axes_status.index(2)
                     if force:
-                        res, comments = self._stop_axis(idx)
-                        if res:
-                            info = f' Axis {idx} was stopped.'
-                        else:
-                            return res, f'Cannot stop axis {axis}. {comments}'
+                        self._axes_status[idx] = 1
+                        info = f' Axis {idx} was stopped.'
                     else:
                         return False, f'Stop axis {idx} to be able activate axis {axis}. Use force, or wait movement ' \
                                       f'to complete.'
@@ -130,13 +127,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._disable_controller()
             _, _ = self._change_axis_status(axis, 1, force=True)
             StpMtrController._write_to_file(str(self._pos), self._file_pos)
-            res, comments = True, ''
-        return res, comments
-
-    def _stop_axis(self, axis) -> Tuple[bool, str]:
-        res, comments = self._check_axis(axis)
-        if res:
-            self._axes_status[axis] = 1
             res, comments = True, ''
         return res, comments
 

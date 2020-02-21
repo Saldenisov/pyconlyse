@@ -120,13 +120,15 @@ class StpMtrController(Service):
     @abstractmethod
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
         """
-        Changes axis status on software/hardware level
+        Changes axis status on software/hardware level.
         :param axis: 0-n
         :param flag: 0, 1, 2
         :param force: True/False is required to force axis status to be changed from 2 to 1 or 0 for controllers, which
         do not support parallel axis moving
         :return: res, comments='' if True, else error_message
         """
+
+    def _check_axis_flag(self, flag: int):
         FLAGS = [0, 1, 2]
         if flag not in FLAGS:
             return False, f'Wrong flag {flag} was passed. Must be in range {FLAGS}'
@@ -195,9 +197,10 @@ class StpMtrController(Service):
 
     def move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> \
             Tuple[Dict[str, Union[int, float, str]], str]:
-        res, comments = self._check_controller_activity()
+        res, comments = self._check_axis(axis)
+        chk_axis = res
         if res:
-            res, comments = self._check_axis(axis)
+            res, comments = self._check_controller_activity()
         if res:
             if how == 'relative':
                 pos = self._pos[axis] + pos
@@ -205,10 +208,12 @@ class StpMtrController(Service):
         if res:
             if self._axes_status[axis] == 1:
                 res, comments = self._move_axis_to(axis, pos, how)
-                if res:
-                    pos = self._pos[axis]
             elif self._axes_status[axis] == 2:
                 res, comments = False, f'Axis {axis} is running. Please, stop it before new request.'
+        if chk_axis:
+            pos = self._pos[axis]
+        else:
+            pos = None
         return {'axis': axis, 'pos': pos, 'how': how, 'func_success': res}, comments
 
     @abstractmethod
@@ -377,16 +382,13 @@ class StpMtrController(Service):
         res, comments = self._check_axis(axis)
         if res:
             if self._axes_status[axis] == 2:
-                res, comments = self._stop_axis(axis)
+                res, comments = self._change_axis_status(axis, 1, force=True)
                 if res:
-                    comments = 'stopped by user'
+                    comments = f'Axis {axis} was stopped by user'
             elif self._axes_status[axis] == 1:
                 comments = f'Axis {axis} was already stopped'
         return {'axis': axis, 'func_success': res}, comments
 
-    @abstractmethod
-    def _stop_axis(self, axis) -> Tuple[bool, str]:
-        pass
 
     @staticmethod
     def _write_to_file(text: str, file: Path):
