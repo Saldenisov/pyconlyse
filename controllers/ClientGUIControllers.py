@@ -25,6 +25,7 @@ class SuperClientGUIcontroller():
         """
         self.logger = module_logger
         self.name = 'SuperClientGUI:controller: ' + get_local_ip()
+        self.services_views = {}
         info_msg(self, 'INITIALIZING')
         self.model = in_model
         self.device = self.model.superuser
@@ -60,8 +61,9 @@ class SuperClientGUIcontroller():
         except KeyError as e:
             self.logger.error(f'Service with id {service_id} does not have parameters')
         try:
-            view_stpmtr = StepMotorsView(in_controller=self, in_model=self.model, parameters=parameters)
-            view_stpmtr.show()
+            self.services_views[service_id] = StepMotorsView(in_controller=self, in_model=self.model,
+                                                             parameters=parameters)
+            self.services_views[service_id].show()
             self.logger.info(f'GUI for service {service_id} is started')
             msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,
                                      parameters={})

@@ -86,6 +86,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             raise e
 
+        # Pyqt slot and signal are connected
         try:
             self.signal.connect(kwargs['pyqtslot'])
             self.pyqtsignal_connected = True

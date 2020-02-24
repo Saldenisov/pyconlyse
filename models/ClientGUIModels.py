@@ -42,12 +42,6 @@ class SuperUserGUIModel(QObject):
     def remove_observer(self, inObserver):
         self.observers.remove(inObserver)
 
-    def start_server(self):
-        pass
-
-    def stop_server(self):
-        pass
-
     def treat_pyqtsignals(self, msg: Message):
         self.model_changed.emit(msg)
 
