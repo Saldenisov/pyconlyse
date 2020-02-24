@@ -1,4 +1,5 @@
 from ctypes import *
+from pathlib import Path
 import time
 import os
 import sys
@@ -10,21 +11,20 @@ import re
 if sys.version_info >= (3, 0):
     import urllib.parse
 
-cur_dir = os.path.abspath(os.path.dirname(__file__))
-ximc_dir = os.path.join(cur_dir, "..", "DLLs", "ximc")
-#ximc_package_dir = os.path.join(ximc_dir, "crossplatform", "wrappers", "python")
-#sys.path.append(ximc_package_dir)  # add ximc.py wrapper to python path
+cur_dir = Path(os.path.dirname(__file__))
+ximc_dir = Path(cur_dir / "ximc")
+sys.path.append(ximc_dir)  # add ximc.py wrapper to python path
 
 if platform.system() == "Windows":
     arch_dir = "win64" if "64" in platform.architecture()[0] else "win32"
-    libdir = os.path.join(ximc_dir, arch_dir)
+    libdir = os.path.join(Path(ximc_dir / arch_dir))
     os.environ["Path"] = libdir + ";" + os.environ["Path"]  # add dll
 
 try:
-    from devices.step_motors.ximc.pyximc import (lib, device_information_t, Result, status_t,
-                                                 get_position_t, motor_settings_t, move_settings_t,
-                                                 engine_settings_t, MicrostepMode, EnumerateFlags,
-                                                 controller_name_t)
+    from devices.realdevices.stepmotors.ximc import (lib, device_information_t, Result, status_t,
+                                                      get_position_t, motor_settings_t, move_settings_t,
+                                                      engine_settings_t, MicrostepMode, EnumerateFlags,
+                                                      controller_name_t)
 except ImportError as err:
     print("Can't import pyximc module."
           "The most probable reason is that you changed the relative location of the testpython.py and pyximc.py files. "

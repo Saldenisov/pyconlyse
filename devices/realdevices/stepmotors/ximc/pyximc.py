@@ -16,9 +16,7 @@ def ximc_shared_lib():
     elif platform.system() == "Darwin":
         return CDLL("libximc.framework/libximc")
     elif platform.system() == "Windows":
-        dll_name = r'libximc.dll'
-        dll_handle = win32api.LoadLibraryEx(dll_name, 0, win32con.LOAD_WITH_ALTERED_SEARCH_PATH)
-        return WinDLL(dll_name, handle=dll_handle)
+        return WinDLL("libximc.dll")
     else:
         return None
 
