@@ -21,13 +21,14 @@ class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._axes_number = 1
-        self._pos: List[float] = []  # Keeps actual position for axes for controller
+        self._axes_names: List[str] = []  # TODO: read from DB
+        self._axes_id: List[int] = []  # TODO: read from DB
         self._axes_status: List[bool] = []  # Keeps axes status, active or not
+        self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._limits: List[Tuple[int, int]] = []  # Limits for each axis
-        self._preset_values: List[Tuple[int, int]] = []  # Preset values for each axis
-        path_to_service = Path(__file__).resolve().parents[0]
-        self._file_pos = Path(path_to_service / f"{self.name}:positions.stpmtr".replace(":","_"))
         self._parameters_set_hardware = False
+        self._pos: List[float] = []  # Keeps actual position for axes for controller
+        self._preset_values: List[Tuple[int, int]] = []  # Preset values for each axis
         if not path.exists(self._file_pos):
             try:
                 file = open(self._file_pos, "w+")

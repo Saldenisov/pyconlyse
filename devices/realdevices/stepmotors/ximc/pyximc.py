@@ -39,8 +39,10 @@ class calibration_t(LittleEndianStructure):
         ('MicrostepMode', c_uint)
     ]
 
+
 class device_enumeration_t(LittleEndianStructure):
     pass
+
 
 class device_network_information_t(LittleEndianStructure):
     _pack_ = 1
@@ -59,8 +61,6 @@ class device_network_information_t(LittleEndianStructure):
 lib.enumerate_devices.restype = POINTER(device_enumeration_t)
 lib.get_device_name.restype = c_char_p
 
-
-
 # ---------------------------
 # BEGIN OF GENERATED code
 # ---------------------------
@@ -69,13 +69,16 @@ class EnumerateFlags:
 	ENUMERATE_ALL_COM    = 0x02
 	ENUMERATE_NETWORK    = 0x04
 
+
 class MoveState:
 	MOVE_STATE_MOVING          = 0x01
 	MOVE_STATE_TARGET_SPEED    = 0x02
 	MOVE_STATE_ANTIPLAY        = 0x04
 
+
 class ControllerFlags:
 	EEPROM_PRECEDENCE    = 0x01
+
 
 class PowerState:
 	PWR_STATE_UNKNOWN    = 0x00
@@ -83,6 +86,7 @@ class PowerState:
 	PWR_STATE_NORM       = 0x03
 	PWR_STATE_REDUCT     = 0x04
 	PWR_STATE_MAX        = 0x05
+
 
 class StateFlags:
 	STATE_CONTR                     = 0x00003F
@@ -113,6 +117,7 @@ class StateFlags:
 	STATE_ENCODER_FAULT             = 0x200000
 	STATE_MOTOR_CURRENT_LIMIT       = 0x400000
 
+
 class GPIOFlags:
 	STATE_DIG_SIGNAL      = 0xFFFF
 	STATE_RIGHT_EDGE      = 0x0001
@@ -128,12 +133,14 @@ class GPIOFlags:
 	STATE_ENC_A           = 0x2000
 	STATE_ENC_B           = 0x4000
 
+
 class EncodeStatus:
 	ENC_STATE_ABSENT     = 0x00
 	ENC_STATE_UNKNOWN    = 0x01
 	ENC_STATE_MALFUNC    = 0x02
 	ENC_STATE_REVERS     = 0x03
 	ENC_STATE_OK         = 0x04
+
 
 class WindStatus:
 	WIND_A_STATE_ABSENT     = 0x00
@@ -144,6 +151,7 @@ class WindStatus:
 	WIND_B_STATE_UNKNOWN    = 0x10
 	WIND_B_STATE_MALFUNC    = 0x20
 	WIND_B_STATE_OK         = 0x30
+
 
 class MvcmdStatus:
 	MVCMD_NAME_BITS    = 0x3F
@@ -159,6 +167,7 @@ class MvcmdStatus:
 	MVCMD_ERROR        = 0x40
 	MVCMD_RUNNING      = 0x80
 
+
 class EngineFlags:
 	ENGINE_REVERSE           = 0x01
 	ENGINE_CURRENT_AS_RMS    = 0x02
@@ -168,6 +177,7 @@ class EngineFlags:
 	ENGINE_LIMIT_VOLT        = 0x20
 	ENGINE_LIMIT_CURR        = 0x40
 	ENGINE_LIMIT_RPM         = 0x80
+
 
 class MicrostepMode:
 	MICROSTEP_MODE_FULL        = 0x01
@@ -180,6 +190,7 @@ class MicrostepMode:
 	MICROSTEP_MODE_FRAC_128    = 0x08
 	MICROSTEP_MODE_FRAC_256    = 0x09
 
+
 class EngineType:
 	ENGINE_TYPE_NONE         = 0x00
 	ENGINE_TYPE_DC           = 0x01
@@ -188,15 +199,18 @@ class EngineType:
 	ENGINE_TYPE_TEST         = 0x04
 	ENGINE_TYPE_BRUSHLESS    = 0x05
 
+
 class DriverType:
 	DRIVER_TYPE_DISCRETE_FET    = 0x01
 	DRIVER_TYPE_INTEGRATE       = 0x02
 	DRIVER_TYPE_EXTERNAL        = 0x03
 
+
 class PowerFlags:
 	POWER_REDUCT_ENABLED    = 0x01
 	POWER_OFF_ENABLED       = 0x02
 	POWER_SMOOTH_CURRENT    = 0x04
+
 
 class SecureFlags:
 	ALARM_ON_DRIVER_OVERHEATING     = 0x01
@@ -206,14 +220,17 @@ class SecureFlags:
 	ALARM_FLAGS_STICKING            = 0x10
 	USB_BREAK_RECONNECT             = 0x20
 
+
 class PositionFlags:
 	SETPOS_IGNORE_POSITION    = 0x01
 	SETPOS_IGNORE_ENCODER     = 0x02
+
 
 class FeedbackType:
 	FEEDBACK_ENCODER    = 0x01
 	FEEDBACK_EMF        = 0x04
 	FEEDBACK_NONE       = 0x05
+
 
 class FeedbackFlags:
 	FEEDBACK_ENC_REVERSE              = 0x01
@@ -222,10 +239,12 @@ class FeedbackFlags:
 	FEEDBACK_ENC_TYPE_SINGLE_ENDED    = 0x40
 	FEEDBACK_ENC_TYPE_DIFFERENTIAL    = 0x80
 
+
 class SyncInFlags:
 	SYNCIN_ENABLED         = 0x01
 	SYNCIN_INVERT          = 0x02
 	SYNCIN_GOTOPOSITION    = 0x04
+
 
 class SyncOutFlags:
 	SYNCOUT_ENABLED     = 0x01
@@ -236,9 +255,11 @@ class SyncOutFlags:
 	SYNCOUT_ONSTOP      = 0x20
 	SYNCOUT_ONPERIOD    = 0x40
 
+
 class ExtioSetupFlags:
 	EXTIO_SETUP_OUTPUT    = 0x01
 	EXTIO_SETUP_INVERT    = 0x02
+
 
 class ExtioModeFlags:
 	EXTIO_SETUP_MODE_IN_BITS            = 0x0F
@@ -256,20 +277,24 @@ class ExtioModeFlags:
 	EXTIO_SETUP_MODE_OUT_MOTOR_ON       = 0x40
 	EXTIO_SETUP_MODE_OUT_MOTOR_FOUND    = 0x50
 
+
 class BorderFlags:
 	BORDER_IS_ENCODER                = 0x01
 	BORDER_STOP_LEFT                 = 0x02
 	BORDER_STOP_RIGHT                = 0x04
 	BORDERS_SWAP_MISSET_DETECTION    = 0x08
 
+
 class EnderFlags:
 	ENDER_SWAP              = 0x01
 	ENDER_SW1_ACTIVE_LOW    = 0x02
 	ENDER_SW2_ACTIVE_LOW    = 0x04
 
+
 class BrakeFlags:
 	BRAKE_ENABLED       = 0x01
 	BRAKE_ENG_PWROFF    = 0x02
+
 
 class ControlFlags:
 	CONTROL_MODE_BITS                = 0x03
@@ -279,8 +304,10 @@ class ControlFlags:
 	CONTROL_BTN_LEFT_PUSHED_OPEN     = 0x04
 	CONTROL_BTN_RIGHT_PUSHED_OPEN    = 0x08
 
+
 class JoyFlags:
 	JOY_REVERSE    = 0x01
+
 
 class CtpFlags:
 	CTP_ENABLED             = 0x01
@@ -288,6 +315,7 @@ class CtpFlags:
 	CTP_ALARM_ON_ERROR      = 0x04
 	REV_SENS_INV            = 0x08
 	CTP_ERROR_CORRECTION    = 0x10
+
 
 class HomeFlags:
 	HOME_DIR_FIRST           = 0x001
@@ -304,6 +332,7 @@ class HomeFlags:
 	HOME_STOP_SECOND_LIM     = 0x0C0
 	HOME_USE_FAST            = 0x100
 
+
 class UARTSetupFlags:
 	UART_PARITY_BITS         = 0x03
 	UART_PARITY_BIT_EVEN     = 0x00
@@ -313,11 +342,13 @@ class UARTSetupFlags:
 	UART_PARITY_BIT_USE      = 0x04
 	UART_STOP_BIT            = 0x08
 
+
 class MotorTypeFlags:
 	MOTOR_TYPE_UNKNOWN    = 0x00
 	MOTOR_TYPE_STEP       = 0x01
 	MOTOR_TYPE_DC         = 0x02
 	MOTOR_TYPE_BLDC       = 0x03
+
 
 class EncoderSettingsFlags:
 	ENCSET_DIFFERENTIAL_OUTPUT             = 0x001
@@ -326,9 +357,11 @@ class EncoderSettingsFlags:
 	ENCSET_REVOLUTIONSENSOR_PRESENT        = 0x040
 	ENCSET_REVOLUTIONSENSOR_ACTIVE_HIGH    = 0x100
 
+
 class MBSettingsFlags:
 	MB_AVAILABLE       = 0x01
 	MB_POWERED_HOLD    = 0x02
+
 
 class TSSettingsFlags:
 	TS_TYPE_BITS             = 0x07
@@ -337,13 +370,13 @@ class TSSettingsFlags:
 	TS_TYPE_SEMICONDUCTOR    = 0x02
 	TS_AVAILABLE             = 0x08
 
+
 class LSFlags:
 	LS_ON_SW1_AVAILABLE    = 0x01
 	LS_ON_SW2_AVAILABLE    = 0x02
 	LS_SW1_ACTIVE_LOW      = 0x04
 	LS_SW2_ACTIVE_LOW      = 0x08
 	LS_SHORTED             = 0x10
-
 
 class feedback_settings_t(Structure):
 	_fields_ = [
@@ -352,6 +385,7 @@ class feedback_settings_t(Structure):
 		("FeedbackFlags", c_uint),
 		("CountsPerTurn", c_uint),
 	]
+
 
 class home_settings_t(Structure):
 	_fields_ = [
@@ -364,6 +398,7 @@ class home_settings_t(Structure):
 		("HomeFlags", c_uint),
 	]
 
+
 class home_settings_calb_t(Structure):
 	_fields_ = [
 		("FastHome", c_float),
@@ -371,6 +406,7 @@ class home_settings_calb_t(Structure):
 		("HomeDelta", c_float),
 		("HomeFlags", c_uint),
 	]
+
 
 class move_settings_t(Structure):
 	_fields_ = [
@@ -382,6 +418,7 @@ class move_settings_t(Structure):
 		("uAntiplaySpeed", c_uint),
 	]
 
+
 class move_settings_calb_t(Structure):
 	_fields_ = [
 		("Speed", c_float),
@@ -389,6 +426,7 @@ class move_settings_calb_t(Structure):
 		("Decel", c_float),
 		("AntiplaySpeed", c_float),
 	]
+
 
 class engine_settings_t(Structure):
 	_fields_ = [
@@ -402,6 +440,7 @@ class engine_settings_t(Structure):
 		("StepsPerRev", c_uint),
 	]
 
+
 class engine_settings_calb_t(Structure):
 	_fields_ = [
 		("NomVoltage", c_uint),
@@ -413,11 +452,13 @@ class engine_settings_calb_t(Structure):
 		("StepsPerRev", c_uint),
 	]
 
+
 class entype_settings_t(Structure):
 	_fields_ = [
 		("EngineType", c_uint),
 		("DriverType", c_uint),
 	]
+
 
 class power_settings_t(Structure):
 	_fields_ = [
@@ -427,6 +468,7 @@ class power_settings_t(Structure):
 		("CurrentSetTime", c_uint),
 		("PowerFlags", c_uint),
 	]
+
 
 class secure_settings_t(Structure):
 	_fields_ = [
@@ -440,6 +482,7 @@ class secure_settings_t(Structure):
 		("Flags", c_uint),
 	]
 
+
 class edges_settings_t(Structure):
 	_fields_ = [
 		("BorderFlags", c_uint),
@@ -450,6 +493,7 @@ class edges_settings_t(Structure):
 		("uRightBorder", c_int),
 	]
 
+
 class edges_settings_calb_t(Structure):
 	_fields_ = [
 		("BorderFlags", c_uint),
@@ -457,6 +501,7 @@ class edges_settings_calb_t(Structure):
 		("LeftBorder", c_float),
 		("RightBorder", c_float),
 	]
+
 
 class pid_settings_t(Structure):
 	_fields_ = [
@@ -468,6 +513,7 @@ class pid_settings_t(Structure):
 		("Kdf", c_float),
 	]
 
+
 class sync_in_settings_t(Structure):
 	_fields_ = [
 		("SyncInFlags", c_uint),
@@ -478,6 +524,7 @@ class sync_in_settings_t(Structure):
 		("uSpeed", c_uint),
 	]
 
+
 class sync_in_settings_calb_t(Structure):
 	_fields_ = [
 		("SyncInFlags", c_uint),
@@ -485,6 +532,7 @@ class sync_in_settings_calb_t(Structure):
 		("Position", c_float),
 		("Speed", c_float),
 	]
+
 
 class sync_out_settings_t(Structure):
 	_fields_ = [
@@ -495,6 +543,7 @@ class sync_out_settings_t(Structure):
 		("uAccuracy", c_uint),
 	]
 
+
 class sync_out_settings_calb_t(Structure):
 	_fields_ = [
 		("SyncOutFlags", c_uint),
@@ -503,11 +552,13 @@ class sync_out_settings_calb_t(Structure):
 		("Accuracy", c_float),
 	]
 
+
 class extio_settings_t(Structure):
 	_fields_ = [
 		("EXTIOSetupFlags", c_uint),
 		("EXTIOModeFlags", c_uint),
 	]
+
 
 class brake_settings_t(Structure):
 	_fields_ = [
@@ -517,6 +568,7 @@ class brake_settings_t(Structure):
 		("t4", c_uint),
 		("BrakeFlags", c_uint),
 	]
+
 
 class control_settings_t(Structure):
 	_fields_ = [
@@ -529,6 +581,7 @@ class control_settings_t(Structure):
 		("uDeltaPosition", c_int),
 	]
 
+
 class control_settings_calb_t(Structure):
 	_fields_ = [
 		("MaxSpeed", c_float * 10),
@@ -537,6 +590,7 @@ class control_settings_calb_t(Structure):
 		("Flags", c_uint),
 		("DeltaPosition", c_float),
 	]
+
 
 class joystick_settings_t(Structure):
 	_fields_ = [
@@ -548,17 +602,20 @@ class joystick_settings_t(Structure):
 		("JoyFlags", c_uint),
 	]
 
+
 class ctp_settings_t(Structure):
 	_fields_ = [
 		("CTPMinError", c_uint),
 		("CTPFlags", c_uint),
 	]
 
+
 class uart_settings_t(Structure):
 	_fields_ = [
 		("Speed", c_uint),
 		("UARTSetupFlags", c_uint),
 	]
+
 
 class calibration_settings_t(Structure):
 	_fields_ = [
@@ -570,16 +627,19 @@ class calibration_settings_t(Structure):
 		("FullCurrent_B", c_float),
 	]
 
+
 class controller_name_t(Structure):
 	_fields_ = [
 		("ControllerName", c_char * 17),
 		("CtrlFlags", c_uint),
 	]
 
+
 class nonvolatile_memory_t(Structure):
 	_fields_ = [
 		("UserData", c_uint * 7),
 	]
+
 
 class command_add_sync_in_action_t(Structure):
 	_fields_ = [
@@ -588,11 +648,13 @@ class command_add_sync_in_action_t(Structure):
 		("Time", c_uint),
 	]
 
+
 class command_add_sync_in_action_calb_t(Structure):
 	_fields_ = [
 		("Position", c_float),
 		("Time", c_uint),
 	]
+
 
 class get_position_t(Structure):
 	_fields_ = [
@@ -601,11 +663,13 @@ class get_position_t(Structure):
 		("EncPosition", c_longlong),
 	]
 
+
 class get_position_calb_t(Structure):
 	_fields_ = [
 		("Position", c_float),
 		("EncPosition", c_longlong),
 	]
+
 
 class set_position_t(Structure):
 	_fields_ = [
@@ -615,12 +679,14 @@ class set_position_t(Structure):
 		("PosFlags", c_uint),
 	]
 
+
 class set_position_calb_t(Structure):
 	_fields_ = [
 		("Position", c_float),
 		("EncPosition", c_longlong),
 		("PosFlags", c_uint),
 	]
+
 
 class status_t(Structure):
 	_fields_ = [
@@ -644,6 +710,7 @@ class status_t(Structure):
 		("CmdBufFreeSpace", c_uint),
 	]
 
+
 class status_calb_t(Structure):
 	_fields_ = [
 		("MoveSts", c_uint),
@@ -664,12 +731,14 @@ class status_calb_t(Structure):
 		("CmdBufFreeSpace", c_uint),
 	]
 
+
 class measurements_t(Structure):
 	_fields_ = [
 		("Speed", c_int * 25),
 		("Error", c_int * 25),
 		("Length", c_uint),
 	]
+
 
 class chart_data_t(Structure):
 	_fields_ = [
@@ -684,6 +753,7 @@ class chart_data_t(Structure):
 		("DutyCycle", c_int),
 	]
 
+
 class device_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 5),
@@ -694,6 +764,7 @@ class device_information_t(Structure):
 		("Release", c_uint),
 	]
 
+
 class serial_number_t(Structure):
 	_fields_ = [
 		("SN", c_uint),
@@ -702,6 +773,7 @@ class serial_number_t(Structure):
 		("Minor", c_uint),
 		("Release", c_uint),
 	]
+
 
 class analog_data_t(Structure):
 	_fields_ = [
@@ -736,26 +808,31 @@ class analog_data_t(Structure):
 		("L", c_int),
 	]
 
+
 class debug_read_t(Structure):
 	_fields_ = [
 		("DebugData", c_ubyte * 128),
 	]
+
 
 class debug_write_t(Structure):
 	_fields_ = [
 		("DebugData", c_ubyte * 128),
 	]
 
+
 class stage_name_t(Structure):
 	_fields_ = [
 		("PositionerName", c_char * 17),
 	]
+
 
 class stage_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 17),
 		("PartNumber", c_char * 25),
 	]
+
 
 class stage_settings_t(Structure):
 	_fields_ = [
@@ -770,11 +847,13 @@ class stage_settings_t(Structure):
 		("VerticalLoadCapacity", c_float),
 	]
 
+
 class motor_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 17),
 		("PartNumber", c_char * 25),
 	]
+
 
 class motor_settings_t(Structure):
 	_fields_ = [
@@ -803,11 +882,13 @@ class motor_settings_t(Structure):
 		("NoLoadSpeed", c_float),
 	]
 
+
 class encoder_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 17),
 		("PartNumber", c_char * 25),
 	]
+
 
 class encoder_settings_t(Structure):
 	_fields_ = [
@@ -819,11 +900,13 @@ class encoder_settings_t(Structure):
 		("EncoderSettings", c_uint),
 	]
 
+
 class hallsensor_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 17),
 		("PartNumber", c_char * 25),
 	]
+
 
 class hallsensor_settings_t(Structure):
 	_fields_ = [
@@ -834,11 +917,13 @@ class hallsensor_settings_t(Structure):
 		("PPR", c_uint),
 	]
 
+
 class gear_information_t(Structure):
 	_fields_ = [
 		("Manufacturer", c_char * 17),
 		("PartNumber", c_char * 25),
 	]
+
 
 class gear_settings_t(Structure):
 	_fields_ = [
@@ -850,6 +935,7 @@ class gear_settings_t(Structure):
 		("InputInertia", c_float),
 		("Efficiency", c_float),
 	]
+
 
 class accessories_settings_t(Structure):
 	_fields_ = [
@@ -866,10 +952,12 @@ class accessories_settings_t(Structure):
 		("LimitSwitchesSettings", c_uint),
 	]
 
+
 class init_random_t(Structure):
 	_fields_ = [
 		("key", c_ubyte * 16),
 	]
+
 
 class globally_unique_identifier_t(Structure):
 	_fields_ = [
@@ -878,6 +966,7 @@ class globally_unique_identifier_t(Structure):
 		("UniqueID2", c_uint),
 		("UniqueID3", c_uint),
 	]
+
 
 class command_change_motor_t(Structure):
 	_fields_ = [

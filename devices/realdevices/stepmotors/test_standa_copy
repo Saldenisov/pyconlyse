@@ -153,11 +153,9 @@ def test_set_microstep_mode_256(lib, device_id):
 
 # variable 'lib' points to tests_hardware loaded library
 # note that ximc uses stdcall on win
-print("Library loaded")
 
 sbuf = create_string_buffer(64)
 lib.ximc_version(sbuf)
-print("Library version: " + sbuf.raw.decode().rstrip("\0"))
 
 """
 Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device" if you
@@ -172,64 +170,37 @@ probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
 enum_hints = b"addr=192.168.0.1,172.16.2.3"
 # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
 devenum = lib.enumerate_devices(probe_flags, enum_hints)
-print("Device enum handle: " + repr(devenum))
-print("Device enum handle type: " + repr(type(devenum)))
-
+print(type(devenum))
 dev_count = lib.get_device_count(devenum)
-print("Device count: " + repr(dev_count))
 
-controller_name = controller_name_t()
-for dev_ind in range(0, dev_count):
-    enum_name = lib.get_device_name(devenum, dev_ind)
-    result = lib.get_enumerate_device_controller_name(devenum, dev_ind, byref(controller_name))
-    if result == Result.Ok:
-        print("Enumerated device #{} name (port name): ".format(dev_ind)
-              + repr(enum_name)
-              + ". Friendly name: "
-              + repr(controller_name.ControllerName) + ".")
+names = []
+device_ids = {}
+pos = {}
+for i in range(dev_count):
+    name = lib.get_device_name(devenum, i)
+    names.append(name)
+    device_id = lib.open_device(name)
+    device_ids[name] = device_id
+    pos[name] = test_get_position(lib, device_ids[name])
 
-open_name = None
-if len(sys.argv) > 1:
-    open_name = sys.argv[1]
-elif dev_count > 0:
-    open_name = lib.get_device_name(devenum, 0)
-elif sys.version_info >= (3, 0):
-    # use URI for virtual device when there is new urllib python3 API
-    tempdir = tempfile.gettempdir() + "/testdevice.bin"
-    if os.altsep:
-        tempdir = tempdir.replace(os.sep, os.altsep)
-    # urlparse build wrong path if scheme is not file
-    uri = urllib.parse.urlunparse(urllib.parse.ParseResult(scheme="file", \
-                                                           netloc=None, path=tempdir, params=None, query=None,
-                                                           fragment=None))
-    open_name = re.sub(r'^file', 'xi-emu', uri).encode()
+from time import sleep
+from random import randint
+for i in range(3):
+    for name in device_ids.keys():
+        x, y = randint(10, 1000), randint(10, 256)
+        test_move(lib, device_ids[name], x, y)
+    sleep(1)
 
-if not open_name:
-    exit(1)
+for name in device_ids.keys():
+    pos[name] = test_get_position(lib, device_ids[name])
 
-if type(open_name) is str:
-    open_name = open_name.encode()
+print(pos)
 
-print("\nOpen device " + repr(open_name))
-device_id = lib.open_device(open_name)
-print("Device id: " + repr(device_id))
-test_move(lib, device_id, 100, 100)
-test_info(lib, device_id)
-test_status(lib, device_id)
-test_set_microstep_mode_256(lib, device_id)
-startpos, ustartpos = test_get_position(lib, device_id)
-# first move
-test_left(lib, device_id)
-time.sleep(3)
-test_get_position(lib, device_id)
-# second move
-current_speed = test_get_speed(lib, device_id)
-test_set_speed(lib, device_id, current_speed / 2)
-test_move(lib, device_id, startpos, ustartpos)
-test_wait_for_stop(lib, device_id, 100)
-test_status(lib, device_id)
-test_serial_number(lib, device_id)
+for name in device_ids.keys():
+    x, y = pos[name]
+    #test_move(lib, device_ids[name], x, y)
+    #test_wait_for_stop(lib, device_ids[name], 100)
 
-print("\nClosing")
+
+
 lib.close_device(byref(cast(device_id, POINTER(c_int))))
-print("Done")
