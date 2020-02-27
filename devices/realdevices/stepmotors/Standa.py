@@ -29,6 +29,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         file_folder = Path(__file__).resolve().parents[0]
         self._ximc_dir = Path(file_folder / 'ximc')
         self._devenum = None  # LP_device_enumeration_t
+        self._devices_list: Dict[int, Tuple[str]] = {}
         if system() == "Windows":
             self._arch_dir = "win64" if "64" in architecture()[0] else "win32"
             libdir = self._ximc_dir / self._arch_dir
@@ -38,17 +39,9 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
 
-        # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
-        lib.set_bindy_key(str(Path(self._ximc_dir / self._arch_dir / "keyfile.sqlite")).encode("utf-8"))
-        # Enumerate devices
-        # This is device search and enumeration with probing. It gives more information about soft.
-        probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-        # TODO: change to DB readings
-        enum_hints = b"addr=192.168.0.1, 129.175.100.137"
-        # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
-        self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
-        device_counts = lib.get_device_count(self._devenum)
-        res, comments = True, ''
+
+
+        res, comments = self._form_devices_list()
         # Check enumerated devices in accordance with DB data
         if not res:
             pass
@@ -59,6 +52,28 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
         pass
+
+    def _form_devices_list(self) -> Tuple[bool, str]:
+        """
+        1) enumerates devices 2) count devices 3) checks vs DB 4) form dict of devices {id: (long name, short name)}
+        :return:
+        """
+        # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
+        lib.set_bindy_key(str(Path(self._ximc_dir / self._arch_dir / "keyfile.sqlite")).encode("utf-8"))
+        # Enumerate devices
+        # This is device search and enumeration with probing. It gives more information about soft.
+        probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
+        # TODO: change to DB readings
+        enum_hints = b"addr=192.168.0.1, 129.175.100.137"
+        # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
+        self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
+        device_counts = lib.get_device_count(self._devenum)
+        if device_counts != self._axes_number:
+            res, comments = False, f'Number of available axes {device_counts} does not correspond to ' \
+                                   f'DB value {self._axes_number}'
+        if res:
+            
+        return res, comments
 
     def GUI_bounds(self) -> Dict[str, Any]:
         pass

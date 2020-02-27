@@ -92,18 +92,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
         return res, comments
 
-    def description(self) -> Dict[str, Any]:
-        # TODO: change ranges and should be read from DB
-        desc = {'GUI_title': """StpMtrCtrl_OWIS service, 3 axes""",
-                'axes_names': ['DL_VD2_samples', 'DL_VD_samples', 'DL_VD_pp'],
-                'axes_values': [0, 3],
-                'ranges': [((-10.0, 100.0), (0, 91)),
-                           ((-100.0, 100.0), (0, 50)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
-                'info': "StpMtrCtrl_OWIS controller controls OWIS controller with 3 axes"}
-        return desc
-
     def GUI_bounds(self) -> Dict[str, Any]:
         pass
 

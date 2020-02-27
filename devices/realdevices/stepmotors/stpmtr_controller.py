@@ -1,7 +1,9 @@
 from abc import abstractmethod
 from os import path
+from collections import OrderedDict as od
 from pathlib import Path
 from devices import CmdStruct
+from errors.myexceptions import DeviceError
 from devices.devices import Service
 from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar, Callable
 import logging
@@ -38,7 +40,6 @@ class StpMtrController(Service):
 
         res, comments = self._set_parameters()  # Set parameters from DB first and after connection is done update
                                                 # from hardware controller if possible
-
         if not res:
             raise StpmtrError(comments)
 
@@ -147,7 +148,18 @@ class StpMtrController(Service):
         Description with important parameters
         :return: Dict with parameters essential for understanding what this device is used for
         """
-        pass
+        try:
+            parameters = self.get_settings('Parameters')
+            desc = od()
+            desc['GUI_title'] = parameters['title']
+            desc['info'] = parameters['info']
+            desc['axes_names'] = self._get_list_db('Parameters', 'axes_names', type_value=str)
+            desc['axes_id'] = self._get_list_db('Parameters', 'axes_id', int)
+            desc['limits'] = self._get_list_db('Parameters', 'limits', tuple)
+            desc['preset_values'] = self._get_list_db('Parameters', 'preset_values', tuple)
+            return desc
+        except (KeyError, DeviceError) as e:
+            return StpmtrError(self, f'Could not set description of controller from DB: {e}')
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
@@ -183,8 +195,7 @@ class StpMtrController(Service):
 
     def _get_number_axes_db(self) -> int:
         try:
-            axes_number = int(self.config.config_to_dict(self.name)['Parameters']['axes_number'])
-            return axes_number
+            return self.get_settings('Parameters')['axes_number']
         except KeyError:
             raise StpmtrError(self, text="Axes_number could not be set, axes_number field is absent in the DB")
         except ValueError:

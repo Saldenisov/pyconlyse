@@ -156,8 +156,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     @abstractmethod
     def description(self) -> Dict[str, Any]:
         """
-
-        :return:
+        return descirption of device, configuration depends on device type: stpmtr, detector, etc.
+        :return: Dict[str, Any]
         """
         pass
 
@@ -174,7 +174,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('General')
 
-    def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict]) \
+    def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict, str]) \
             -> List[Tuple[Union[float, int]]]:
         try:
             listed_param: List[Tuple[Union[float, int]]] = []

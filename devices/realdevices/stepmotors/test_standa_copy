@@ -185,11 +185,12 @@ for i in range(dev_count):
 
 from time import sleep
 from random import randint
-for i in range(3):
+for i in range(1000):
+    print(f'i: {i}')
     for name in device_ids.keys():
-        x, y = randint(10, 1000), randint(10, 256)
+        x, y = randint(10, 4000), randint(10, 256)
         test_move(lib, device_ids[name], x, y)
-    sleep(1)
+    sleep(2)
 
 for name in device_ids.keys():
     pos[name] = test_get_position(lib, device_ids[name])

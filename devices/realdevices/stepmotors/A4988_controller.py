@@ -63,18 +63,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 res, comments = True, f'Axis {axis} is already set to {flag}'
         return res, comments
 
-    def description(self):
-        # TODO: read from DB
-        desc = {'GUI_title': """StpMtrCtrl_A4988_newport, 4 axes""",
-                'axes_names': ['0/90 mirror', 'iris', 'filter wheel 1', 'filter wheel 2'],
-                'axes_values': [0, 3],
-                'ranges': [((0.0, 100.0), (0, 91)),
-                           ((-100.0, 100.0), (0, 50)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360)),
-                           ((0.0, 360.0), (0, 45, 90, 135, 180, 225, 270, 315, 360))],
-                'info': "StpMtrCtrl_A4988_newport, it controls 4 axes"}
-        return desc
-
     def GUI_bounds(self):
         # TODO: to be done something with this
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
