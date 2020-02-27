@@ -7,3 +7,5 @@ cryptography
 zmq>=0.0.0
 ifaddr
 gpiozero
+win32api
+win32con
