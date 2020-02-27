@@ -72,7 +72,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             res, comments = False, f'Number of available axes {device_counts} does not correspond to ' \
                                    f'DB value {self._axes_number}'
         if res:
-            
+
         return res, comments
 
     def GUI_bounds(self) -> Dict[str, Any]:
