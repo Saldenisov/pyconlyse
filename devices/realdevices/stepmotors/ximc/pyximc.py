@@ -1,7 +1,6 @@
 from ctypes import *
-import os
 import platform
-import win32api
+import win32api  # I have no idea if it is needed to operate
 import win32con
 
 

@@ -170,7 +170,6 @@ probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
 enum_hints = b"addr=192.168.0.1,172.16.2.3"
 # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
 devenum = lib.enumerate_devices(probe_flags, enum_hints)
-print(type(devenum))
 dev_count = lib.get_device_count(devenum)
 
 names = []
