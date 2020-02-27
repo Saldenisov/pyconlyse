@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from dataclasses import dataclass, field
 from os import path
 from collections import OrderedDict as od
 from pathlib import Path
@@ -9,6 +10,14 @@ from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar, Callable
 import logging
 
 module_logger = logging.getLogger(__name__)
+
+
+@dataclass(order=True, frozen=False)
+class AxisState:
+    name: str
+    position: float
+    limits: tuple
+    status: int = 0
 
 
 class StpMtrController(Service):
@@ -22,15 +31,10 @@ class StpMtrController(Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._axes_number = 1
-        self._axes_names: List[str] = []  # TODO: read from DB
-        self._axes_id: List[int] = []  # TODO: read from DB
-        self._axes_status: List[bool] = []  # Keeps axes status, active or not
+        self._axes: Dict[int, Dict[str, Any]] = {}  # {device_id: {'pos': value, 'status': value, 'name': value,
+                                                    # 'limits': (,), 'preset': [,,,]}}
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
-        self._limits: List[Tuple[int, int]] = []  # Limits for each axis
         self._parameters_set_hardware = False
-        self._pos: List[float] = []  # Keeps actual position for axes for controller
-        self._preset_values: List[Tuple[int, int]] = []  # Preset values for each axis
         if not path.exists(self._file_pos):
             try:
                 file = open(self._file_pos, "w+")
@@ -44,7 +48,7 @@ class StpMtrController(Service):
             raise StpmtrError(comments)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        # These functions are default for any stpmtr controller, e.g.: A4098, OWIS
+        # These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
         return {'activate': {'flag': True},
                 'activate_axis': {'axis': 0, 'flag': True},
                 'move_axis_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
@@ -95,23 +99,23 @@ class StpMtrController(Service):
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
-    def _check_axis(self, axis: int) -> Tuple[bool, str]:
+    def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
         """
         Checks if axis n is a valid axis for this controller and if it is active
-        :param axis:
+        :param axis_id:
         :return: res, comments='' if True, else error_message
         """
-        res, comments = self._check_axis_range(axis)
+        res, comments = self._check_axis_range(axis_id)
         if res:
-            return self._check_axis_active(axis)
+            return self._check_axis_active(axis_id)
         else:
             return res, comments
 
-    def _check_axis_active(self, axis: int) -> Tuple[bool, str]:
-        if self._axes_status[axis]:
+    def _check_axis_active(self, axis_id: int) -> Tuple[bool, str]:
+        if self._axes[axis_id]['status']:
             return True, ''
         else:
-            return False, f'axis {axis} is not active, activate it first'
+            return False, f'axis {axis_id} is not active, activate it first'
 
     def _check_axis_range(self, axis: int) -> Tuple[bool, str]:
         if axis in range(self._axes_number):
