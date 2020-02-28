@@ -19,59 +19,51 @@ class StpMtrCtrl_emulate(StpMtrController):
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
-    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_axis_flag(flag)
         if res:
-            if self._axes_status[axis] != 2 or force:
-                self._axes_status[axis] = flag
+            if self.axes[axis_id].status != 2 or force:
+                self.axes[axis_id].status = flag
                 res, comments = True, ''
             else:
-                res, comments = False, f'axis {axis} is running, its status cannot be changed'
+                res, comments = False, f'Axis id={axis_id}, name={self.axes[axis_id].name} is running, ' \
+                                       f'its status cannot be changed. First stop it.'
         return res, comments
 
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def _get_axes_status(self) -> List[int]:
-        if self._axes_status:
-            return self._axes_status
-        else:
-            return [0] * self._axes_number
+        return self._axes_status
 
     def _get_number_axes(self) -> int:
         return 4
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
-        return [(0.0, 100.0), (-100.0, 100.0), (0.0, 360), (0.0, 360)]
+        return self._axes_limits
 
-    def _get_pos(self) -> List[Union[int, float]]:
-        if self._pos:
-            return self._pos
-        else:
-            return [0] * self._axes_number
+    def _get_positions(self) -> List[Union[int, float]]:
+        return self._axes_positions
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        return [(0, 91),
-                (0, 50),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360),
-                (0, 45, 90, 135, 180, 225, 270, 315, 360)]
+        return self._axes_preset_value
 
-    def _move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(axis, 2)
+    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+        res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            if pos - self._pos[axis] > 0:
+            if pos - self.axes[axis_id].position > 0:
                 dir = 1
             else:
                 dir = -1
-            steps = int(abs(pos - self._pos[axis]))
+            steps = int(abs(pos - self.axes[axis_id].position))
             for i in range(steps):
-                if self._axes_status[axis] == 2:
-                    self._pos[axis] = self._pos[axis] + dir
+                if self.axes[axis_id].status == 2:
+                    self.axes[axis_id].position = self.axes[axis_id].position + dir
                     sleep(0.1)
                 else:
                     comments = 'movement was interrupted'
                     break
-            _, _ = self._change_axis_status(axis, 1, force=True)
-            StpMtrController._write_to_file(str(self._pos), self._file_pos)
+            _, _ = self._change_axis_status(axis_id, 1, force=True)
+            StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
             res, comments = True, ''
         return res, comments

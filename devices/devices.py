@@ -253,7 +253,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         if not flag:
             self.device_status.connected = False
             self.device_status.active = False
-            self.set_default()
         return {'flag': self.device_status.power, 'func_success': True}, \
                f'Power is {self.device_status.power}. But remember, that user switches power manually...'
 
@@ -313,10 +312,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     def send_msg_externally(self, msg: Message):
         self.messenger.add_msg_out(msg)
-
-    @abstractmethod
-    def set_default(self):
-        pass
 
     def update_config(self, message: str):
         # TODO: realize

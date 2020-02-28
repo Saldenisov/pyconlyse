@@ -8,6 +8,7 @@ from communication.interfaces import MessengerInter
 from errors.myexceptions import MsgComNotKnown, MsgError
 from devices.interfaces import DeviceInter
 from utilities.data.messages import *  # This line is required for json_to_message
+from utilities.data.datastructures.mes_independent import *
 
 module_logger = logging.getLogger(__name__)
 
@@ -277,9 +278,9 @@ class MsgGenerator:
                 data_info = None
             elif com_name == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
                 data_info = mes_info_class(device.device_status,
-                                                   device.id,
-                                                   device.description(),
-                                                   available_public_functions=device.available_public_functions())
+                                           device.id,
+                                           device.description(),
+                                           available_public_functions=device.available_public_functions())
             elif com_name == MsgGenerator.REPLY_ON_FORWARDED_DEMAND.mes_name:
                 msg_reply: Message = kwargs['msg_reply']
                 data_info = msg_reply.data.info
@@ -313,7 +314,7 @@ class MsgGenerator:
 
         except (MsgComNotKnown, MsgError, Exception) as e:
             module_logger.error(f'IN gen_msg point 2 {com_name}: {e}')
-            raise e
+            #raise e
 
     @staticmethod
     def msg_verification(msg: mes.Message) -> bool:

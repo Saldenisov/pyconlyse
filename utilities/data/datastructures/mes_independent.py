@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import List, Tuple, Union
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
 from devices.interfaces import DeciderInter, ExecutorInter
-
 
 
 @dataclass
@@ -21,3 +21,11 @@ class DeviceParts(DataClass_frozen):
     decider: DeciderInter
     executor: ExecutorInter
 
+
+@dataclass(order=True, frozen=False)
+class AxisStpMtr:
+    name: str = ''
+    position: float = ''
+    status: int = 0
+    limits: Tuple[Union[int, float]] = field(default_factory=tuple)
+    preset_values: List[Union[int, float]] = field(default_factory=list)

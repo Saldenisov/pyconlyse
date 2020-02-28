@@ -62,33 +62,33 @@ class StpMtrCtrl_OWIS(StpMtrController):
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
-    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         """
         Changes axis status on software/hardware level
-        :param axis: 0-n
+        :param axis_id: 0-n
         :param flag: 0, 1, 2
         :param force: is not needed for this controller
         :return: res, comments='' if True, else error_message
         """
         res, comments = super()._check_axis_flag(flag)
         if res:
-            if self._axes_status[axis] != flag:
-                local_axis_state = self._axes_status[axis]
-                if self._axes_status[axis] == 0:
-                    res, comments = self._activate_axis(axis)
+            if self._axes_status[axis_id] != flag:
+                local_axis_state = self._axes_status[axis_id]
+                if self._axes_status[axis_id] == 0:
+                    res, comments = self._activate_axis(axis_id)
                 else:
-                    self._axes_status[axis] = flag
+                    self._axes_status[axis_id] = flag
                     res, comments = True, ''
                 if flag == 2:
-                    res, comments = self._motor_on_ps90(1, axis)
+                    res, comments = self._motor_on_ps90(1, axis_id)
                 elif (flag == 0 or flag == 1) and local_axis_state == 2:
-                    _, info = self._stop_axis_ps90(1, axis)
-                    res, comments = self._motor_off_ps90(1, axis)
+                    _, info = self._stop_axis_ps90(1, axis_id)
+                    res, comments = self._motor_off_ps90(1, axis_id)
                     res, comments = res, f'{info}. {comments}'
                 if res:
-                    res, comments = res, f'Axis {axis} is set to {flag}. {comments}'
+                    res, comments = res, f'Axis {axis_id} is set to {flag}. {comments}'
             else:
-                res, comments = True, f'Axis {axis} is already set to {flag}'
+                res, comments = True, f'Axis {axis_id} is already set to {flag}'
 
         return res, comments
 
@@ -105,42 +105,42 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         return self._get_limits_db()
 
-    def _get_pos(self) -> List[Union[int, float]]:
+    def _get_positions(self) -> List[Union[int, float]]:
         pass
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _move_axis_to(self, axis: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
         """
         Move selected axis to set position. Turns on motor, set target, go target and checks position every 25ms for
         1000 cycles. Motor off when position is within 0.001mm accuracy
-        :param axis: 1-n
+        :param axis_id: 1-n
         :param pos: position in mm
         :param how: absolute, relative
         :return: True/False, comments
         """
-        res, comments = self._change_axis_status(axis, 2)
+        res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            res, comments = self._set_target_ex_ps90(1, axis, pos)
+            res, comments = self._set_target_ex_ps90(1, axis_id, pos)
             if res:
-                res, comments = self._go_target_ps90(1, axis)
+                res, comments = self._go_target_ps90(1, axis_id)
             if res:
                 for i in range(1000):
                     sleep(50. / 1000)
-                    res, comments = self._get_position_ex_ps90(1, axis)
+                    res, comments = self._get_position_ex_ps90(1, axis_id)
                     if not res:
                         pass
                     else:
-                        self._pos[axis] = res
+                        self._pos[axis_id] = res
                     if abs(res - pos) <= 0.001:
-                        res, comments = True, f'Axis {axis} is stopped. Actual position is {res}'
+                        res, comments = True, f'Axis {axis_id} is stopped. Actual position is {res}'
                         break
                     if i == 999:
-                        res, comments = False, f'Waited for to long axis {axis} to stop. ' \
-                                              f'Last position was {self._pos[axis]}. Motor is Off'
+                        res, comments = False, f'Waited for to long axis {axis_id} to stop. ' \
+                                              f'Last position was {self._pos[axis_id]}. Motor is Off'
                         break
-                    _, _ = self._change_axis_status(axis, 1)
+                    _, _ = self._change_axis_status(axis_id, 1)
         return res, comments
 
     def _setup(self) -> Tuple[Union[bool, str]]:

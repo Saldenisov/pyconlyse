@@ -33,10 +33,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
-    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_axis_flag(flag)
         if res:
-            if self._axes_status[axis] != flag:
+            if self.axes[axis_id].status != flag:
                 idx = None
                 info = ''
                 if 1 in self._axes_status:
@@ -47,20 +47,20 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                         self._axes_status[idx] = 1
                         info = f' Axis {idx} was stopped.'
                     else:
-                        return False, f'Stop axis {idx} to be able activate axis {axis}. Use force, or wait movement ' \
+                        return False, f'Stop axis {idx} to be able activate axis {axis_id}. Use force, or wait movement ' \
                                       f'to complete.'
                 if idx != None:
-                    if idx != axis:
+                    if idx != axis_id:
                         self._axes_status[idx] = 0
                         self._change_relay_state(idx, 0)
                         info = f' Axis {idx} is set 0.'
 
-                if not (self._axes_status[axis] > 0 and flag > 0):
-                    self._change_relay_state(axis, flag)
-                self._axes_status[axis] = flag
-                res, comments = True, f'Axis {axis} is set to {flag}.' + info
+                if not (self._axes_status[axis_id] > 0 and flag > 0):
+                    self._change_relay_state(axis_id, flag)
+                self._axes_status[axis_id] = flag
+                res, comments = True, f'Axis {axis_id} is set to {flag}.' + info
             else:
-                res, comments = True, f'Axis {axis} is already set to {flag}'
+                res, comments = True, f'Axis {axis_id} is already set to {flag}'
         return res, comments
 
     def GUI_bounds(self):
@@ -79,7 +79,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         return self._get_limits_db()
 
-    def _get_pos(self) -> List[Union[int, float]]:
+    def _get_positions(self) -> List[Union[int, float]]:
         if self._pos:
             return self._pos
         else:
@@ -88,32 +88,32 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _move_axis_to(self, axis: int, pos: int, how='absolute') -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(axis, 2)
+    def _move_axis_to(self, axis_id: int, pos: int, how='absolute') -> Tuple[bool, str]:
+        res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            if pos - self._pos[axis] > 0:
+            if pos - self._pos[axis_id] > 0:
                 pas = 1
                 self._direction('top')
             else:
                 pas = -1
                 self._direction('bottom')
-            steps = int(abs(pos - self._pos[axis]))
+            steps = int(abs(pos - self._pos[axis_id]))
             self._enable_controller()
-            width = self._TTL_width[axis] / self._microsteps
-            delay = self._delay_TTL[axis] / self._microsteps
+            width = self._TTL_width[axis_id] / self._microsteps
+            delay = self._delay_TTL[axis_id] / self._microsteps
             for i in range(steps):
-                if self._axes_status[axis] == 2:
+                if self._axes_status[axis_id] == 2:
                     for _ in range(self._microsteps):
                         self._set_led(self._ttl, 1)
                         sleep(width)
                         self._set_led(self._ttl, 0)
                         sleep(delay)
-                    self._pos[axis] = self._pos[axis] + pas
+                    self._pos[axis_id] = self._pos[axis_id] + pas
                 else:
                     comments = 'movement was interrupted'
                     break
             self._disable_controller()
-            _, _ = self._change_axis_status(axis, 1, force=True)
+            _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._pos), self._file_pos)
             res, comments = True, ''
         return res, comments

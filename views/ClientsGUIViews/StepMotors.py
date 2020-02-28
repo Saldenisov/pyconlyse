@@ -19,6 +19,7 @@ from numpy import pad
 from devices.devices import Device
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message
+from utilities.data.datastructures.mes_independent import AxisStpMtr
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
@@ -32,9 +33,8 @@ module_logger = logging.getLogger(__name__)
 
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
+    axes: AxisStpMtr = None
     device_status: DeviceStatus = DeviceStatus()
-    axes_status: list = field(default_factory=list)
-    positions: list = field(default_factory=list)
     start_stop: list = field(default_factory=list)
 
 
@@ -44,14 +44,13 @@ class StepMotorsView(QMainWindow):
         super().__init__(parent)
         self.name = f'StepMotorsClient:view: {parameters.device_id} {get_local_ip()}'
         self.parameters = parameters
-        self.controller_status = StpMtrCtrlStatusMultiAxes()
         self.logger = logging.getLogger("StepMotors." + __name__)
         info_msg(self, 'INITIALIZING')
         self.controller = in_controller
         self.model = in_model
         self.device: Device = self.model.superuser
-        self._axes_status: List[int] = []
         self._asked_status = 0
+        self.controller_status = StpMtrCtrlStatusMultiAxes()
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, parameters)

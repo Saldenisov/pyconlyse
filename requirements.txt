@@ -1,9 +1,9 @@
-pypiwin32
-numpy>=1.15.3
-matplotlib>=3.0.2
-configobj>=5.0.2
-PyQt5==5.13.1
-cryptography
+pywin32
 zmq>=0.0.0
+configobj>=5.0.2
+cryptography
 ifaddr
 gpiozero
+numpy>=1.15.3
+matplotlib>=3.0.2
+PyQt5==5.13.1

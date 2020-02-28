@@ -62,8 +62,8 @@ class SuperUserView(QMainWindow):
                 names.append(f'{key}')
             widget.addItems(names)
             self.model.superuser.running_services = info.running_services
-        elif com == MsgGenerator.ERROR.mes_name:
-            self.ui.tE_info.setText(info.comments)
         elif com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             self.ui.tE_info.setText(str(info))
             self.model.service_parameters[info.device_id] = info
+        elif com == MsgGenerator.ERROR.mes_name:
+            self.ui.tE_info.setText(info.comments)

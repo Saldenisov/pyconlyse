@@ -10,4 +10,4 @@ device = DeviceFactory.make_device(device_id='StpMtrCtrl_a4988_4axes:2ecfc6712ca
 
 device.activate(True)
 
-device.activate_axis(axis=0, flag=1)
+device.activate_axis(axis_id=0, flag=1)

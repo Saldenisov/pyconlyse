@@ -29,7 +29,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         file_folder = Path(__file__).resolve().parents[0]
         self._ximc_dir = Path(file_folder / 'ximc')
         self._devenum = None  # LP_device_enumeration_t
-        self._devices_list: Dict[int, Tuple[str]] = {}
+        self._devices: Dict[int, str] = {}
         if system() == "Windows":
             self._arch_dir = "win64" if "64" in architecture()[0] else "win32"
             libdir = self._ximc_dir / self._arch_dir
@@ -50,12 +50,13 @@ class StpMtrCtrl_Standa(StpMtrController):
 
         return res, comments
 
-    def _change_axis_status(self, axis: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         pass
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         """
-        1) enumerates devices 2) count devices 3) checks vs DB 4) form dict of devices {id: (long name, short name)}
+        1) enumerates devices 2) count devices 3) checks vs DB 4) form dict of devices {id: name}
+        5) set positions
         :return:
         """
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
@@ -70,9 +71,20 @@ class StpMtrCtrl_Standa(StpMtrController):
         device_counts = lib.get_device_count(self._devenum)
         if device_counts != self._axes_number:
             res, comments = False, f'Number of available axes {device_counts} does not correspond to ' \
-                                   f'DB value {self._axes_number}'
+                                   f'DB value {self._axes_number}. Check cabling or power.'
+        else:
+            res, comments = True, ''
         if res:
+<<<<<<< HEAD
 
+=======
+            for i in range(device_counts):
+                name = lib.get_device_name(self._devenum, i)
+                device_id = lib.open_device(name)
+                self._devices[device_id] = name
+                self._pos[device_id - 1]0
+                pos[device_id] = test_get_position(lib, device_ids[name])
+>>>>>>> 4fd33b997ab328c14f6a258b4b0570a97f093b11
         return res, comments
 
     def GUI_bounds(self) -> Dict[str, Any]:
