@@ -62,7 +62,7 @@ class SuperClientGUIcontroller():
             self.logger.error(f'Service with id {service_id} does not have parameters')
         try:
             self.services_views[service_id] = StepMotorsView(in_controller=self, in_model=self.model,
-                                                             parameters=parameters)
+                                                             service_parameters=parameters)
             self.services_views[service_id].show()
             self.logger.info(f'GUI for service {service_id} is started')
             msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,

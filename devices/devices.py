@@ -20,7 +20,7 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent import DeviceStatus
+from utilities.data.datastructures.mes_independent import DeviceStatus, FuncPowerOutput
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.datastructures.dicts import Connections_Dict
 from utilities.data.messages import Message
@@ -247,14 +247,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = False
         self.send_status_pyqt()
 
-    def power(self, flag: bool) -> Tuple[Dict[str, bool], str]:
+    def power(self, flag: bool) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
         self.device_status.power = flag
         if not flag:
             self.device_status.connected = False
             self.device_status.active = False
-        return {'flag': self.device_status.power, 'func_success': True}, \
-               f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        return FuncPowerOutput(device_id=self.id, flag=self.device_status.power, func_res=True, comments=comments)
+
 
     def start(self):
         self._start_messaging()

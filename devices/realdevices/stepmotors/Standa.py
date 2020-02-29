@@ -13,7 +13,7 @@ from time import sleep
 from utilities.tools.decorators import development_mode
 from pathlib import Path
 from platform import system, architecture
-from .stpmtr_controller import StpMtrController, StpmtrError
+from .stpmtr_controller import StpMtrController, StpMtrError
 from devices.realdevices.stepmotors.ximc.pyximc import (lib, EnumerateFlags, )
 
 module_logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             libdir = self._ximc_dir / self._arch_dir
             os.environ["Path"] = str(libdir) + ";" + os.environ["Path"]  # add dll
         else:
-            raise StpmtrError(self, text=f'OS System is {system()}. Can handle only windows')
+            raise StpMtrError(self, text=f'OS System is {system()}. Can handle only windows')
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
 

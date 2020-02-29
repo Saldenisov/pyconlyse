@@ -7,7 +7,10 @@ from devices import CmdStruct
 from errors.myexceptions import DeviceError
 from devices.devices import Service
 from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar, Callable
-from utilities.data.datastructures.mes_independent import AxisStpMtr
+from utilities.data.datastructures.mes_independent import (AxisStpMtr, FuncActivateOutput, FuncActivateAxisOutput,
+                                                           FuncGetPosOutput, FuncMoveAxisToOutput, FuncStopAxisOutput,
+                                                           FuncGetStpMtrControllerStateOutput,
+                                                           StpMtrDescription)
 import logging
 
 module_logger = logging.getLogger(__name__)
@@ -38,7 +41,7 @@ class StpMtrController(Service):
         res, comments = self._set_parameters()  # Set parameters from DB first and after connection is done update
                                                 # from hardware controller if possible
         if not res:
-            raise StpmtrError(self, comments)
+            raise StpMtrError(self, comments)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         # These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
@@ -51,7 +54,7 @@ class StpMtrController(Service):
                 'power': {'flag': True}
                 }
 
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
+    def activate(self, flag: bool) -> FuncActivateOutput:
         res, comments = self._connect(flag)  # gurantees that parameters could be read from controller
         if res and not self._parameters_set_hardware:  # parameters should be set from hardware controller if possible
             res, comments = self._set_parameters()  # This must be realized for all controllers
@@ -62,9 +65,9 @@ class StpMtrController(Service):
             self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
-        return {'flag': self.device_status.active, 'func_success': res}, info
+        return FuncActivateOutput(flag=self.device_status.active, func_res=res, comments=info)
 
-    def activate_axis(self, axis_id: int, flag: int) -> Tuple[Dict[str, Union[int, bool]], str]:
+    def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
         """
         :param axis_id: 0-n
         :param flag: 0=non-active, 1=ready to work, 2=running
@@ -75,9 +78,10 @@ class StpMtrController(Service):
             res, comments = self._check_controller_activity()
         if res:
             res, comments = self._change_axis_status(axis_id, flag)
-            return {'axis': axis_id, 'flag': self.axes[axis_id], 'func_success': res}, comments
+            output = FuncActivateAxisOutput(axis_id=axis_id, flag=self.axes[axis_id], func_res=res, comments=comments)
         else:
-            return {'axis': axis_id, 'flag': flag, 'func_success': res}, comments
+            output = FuncActivateAxisOutput(axis_id=axis_id, flag=None, func_res=res, comments=comments)
+        return output
 
     @property
     def _axes_names(self) -> List[str]:
@@ -161,20 +165,16 @@ class StpMtrController(Service):
         else:
             return False, f'Controller is not active. Power is {self.device_status.power}'
 
-    def description(self) -> Dict[str, Any]:
+    def description(self) -> StpMtrDescription:
         """
         Description with important parameters
         :return: Dict with parameters essential for understanding what this device is used for
         """
         try:
             parameters = self.get_settings('Parameters')
-            desc = dict()
-            desc['axes'] = self.axes
-            desc['GUI_title'] = parameters['title']
-            desc['info'] = parameters['info']
-            return desc
+            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'])
         except (KeyError, DeviceError) as e:
-            return StpmtrError(self, f'Could not set description of controller from DB: {e}')
+            return StpMtrError(self, f'Could not set description of controller from DB: {e}')
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
@@ -191,15 +191,16 @@ class StpMtrController(Service):
     def _get_axes_status_db(self) -> List[int]:
         return [0] * self._axes_number
 
-    def get_controller_state(self) -> Tuple[Dict[str, Union[int, str]], str]:
+    def get_controller_state(self) -> FuncGetStpMtrControllerStateOutput:
         """
         State of cotroller is returned
         :return:  Dict()
         """
-        return {'device_status': self.device_status, 'axes': self.axes,
-                'func_success': True}, f'Controller is {self.device_status.active}. ' \
+        comments = f'Controller is {self.device_status.active}. ' \
                                        f'Power is {self.device_status.power}. ' \
                                        f'Axes are {self._axes_status}'
+        return FuncGetStpMtrControllerStateOutput(device_status=self.device_status, axes=self.axes,
+                                                  func_res=True, comments=comments)
 
     @abstractmethod
     def _get_number_axes(self) -> int:
@@ -209,18 +210,17 @@ class StpMtrController(Service):
         try:
             return int(self.get_settings('Parameters')['axes_number'])
         except KeyError:
-            raise StpmtrError(self, text="Axes_number could not be set, axes_number field is absent in the DB")
+            raise StpMtrError(self, text="Axes_number could not be set, axes_number field is absent in the DB")
         except (ValueError, SyntaxError):
-            raise StpmtrError(self, text="Check axes number in DB, must be axex_number = 1 or any number")
+            raise StpMtrError(self, text="Check axes number in DB, must be axex_number = 1 or any number")
 
-    def get_pos(self, axis_id: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
+    def get_pos(self, axis_id: int) -> FuncGetPosOutput:
         res, comments = self._check_axis(axis_id)
         if res:
             pos = self.axes[axis_id].position
-        return {'axis': axis_id, 'pos': pos, 'func_success': res}, comments
+        return FuncGetPosOutput(axis_id=axis_id, pos=pos, func_res=res, comments=comments)
 
-    def move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> \
-            Tuple[Dict[str, Union[int, float, str]], str]:
+    def move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> FuncMoveAxisToOutput:
         res, comments = self._check_axis(axis_id)
         chk_axis = res
         if res:
@@ -238,7 +238,7 @@ class StpMtrController(Service):
             pos = self.axes[axis_id].position
         else:
             pos = None
-        return {'axis': axis_id, 'pos': pos, 'how': how, 'func_success': res}, comments
+        return FuncMoveAxisToOutput(axis_id=axis_id, pos=pos, how=how, func_res=res, comments=comments)
 
     @abstractmethod
     def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
@@ -265,13 +265,13 @@ class StpMtrController(Service):
                     raise TypeError()
                 ids.append(val)
             if len(ids) != self._axes_number:
-                raise StpmtrError(self, f'Number of axes_ids {len(ids)} is not equal to '
+                raise StpMtrError(self, f'Number of axes_ids {len(ids)} is not equal to '
                                         f'axes_number {self._axes_number}.')
             return ids
         except KeyError:
-            raise StpmtrError(self, text="Axes ids could not be set, axes_ids field is absent in the DB.")
+            raise StpMtrError(self, text="Axes ids could not be set, axes_ids field is absent in the DB.")
         except (TypeError, SyntaxError):
-            raise StpmtrError(self, text="Check axes_ids field in DB, must be integer.")
+            raise StpMtrError(self, text="Check axes_ids field in DB, must be integer.")
 
     def _get_axes_names_db(self):
         try:
@@ -283,13 +283,13 @@ class StpMtrController(Service):
                     raise TypeError()
                 names.append(val)
             if len(names) != self._axes_number:
-                raise StpmtrError(self, f'Number of axes_names {len(names)} is not equal to '
+                raise StpMtrError(self, f'Number of axes_names {len(names)} is not equal to '
                                         f'axes_number {self._axes_number}.')
             return names
         except KeyError:
-            raise StpmtrError(self, text="Axes names could not be set, axes_names field is absent in the DB.")
+            raise StpMtrError(self, text="Axes names could not be set, axes_names field is absent in the DB.")
         except (TypeError, SyntaxError):
-            raise StpmtrError(self, text="Check axes_names field in DB.")
+            raise StpMtrError(self, text="Check axes_names field in DB.")
 
     @abstractmethod
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
@@ -306,9 +306,9 @@ class StpMtrController(Service):
                 limits.append(val)
             return limits
         except KeyError:
-            raise StpmtrError(self, text="Limits could not be set, limits field is absent in the DB")
+            raise StpMtrError(self, text="Limits could not be set, limits field is absent in the DB")
         except (TypeError, SyntaxError):
-            raise StpmtrError(self, text="Check limits field in DB, must be limits = (x1, x2), (x3, x4),...")
+            raise StpMtrError(self, text="Check limits field in DB, must be limits = (x1, x2), (x3, x4),...")
 
     def _set_limits(self):
         if self.device_status.connected:
@@ -328,19 +328,19 @@ class StpMtrController(Service):
             with open(self._file_pos, 'r') as file_pos:
                 pos_s = file_pos.readline()
             if not pos_s:
-                raise StpmtrError('file with pos is empty')
+                raise StpMtrError('file with pos is empty')
             pos = eval(pos_s)
             if not isinstance(pos, list):
-                raise StpmtrError('is not a list')
+                raise StpMtrError('is not a list')
             else:
                 if len(pos) != self._axes_number:
-                    raise StpmtrError(f"There is {len(pos)} positions in file, instead of {self._axes_number}")
+                    raise StpMtrError(f"There is {len(pos)} positions in file, instead of {self._axes_number}")
                 else:
                     for val in pos:
                         if not (isinstance(val, int) or isinstance(val, float)):
-                            raise StpmtrError(f"val {val} is not a number")
+                            raise StpMtrError(f"val {val} is not a number")
                     return pos
-        except (StpmtrError, FileNotFoundError, SyntaxError) as e:
+        except (StpMtrError, FileNotFoundError, SyntaxError) as e:
             self.logger.error(f'in _get_pos_file error: {e}')
             return []
 
@@ -359,9 +359,9 @@ class StpMtrController(Service):
                 preset_values.append(val)
             return preset_values
         except KeyError:
-            raise StpmtrError(self, text="Preset values could not be set, preset_values field is absent in the DB")
+            raise StpMtrError(self, text="Preset values could not be set, preset_values field is absent in the DB")
         except (TypeError, SyntaxError):
-            raise StpmtrError(self, text="Check preset_values field in DB, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
+            raise StpMtrError(self, text="Check preset_values field in DB, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
 
     def _is_within_limits(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
         if self.axes[axis_id].limits[0] <= pos <= self.axes[axis_id].limits[1]:
@@ -376,7 +376,7 @@ class StpMtrController(Service):
         ids = self._get_axes_ids_db()
         ids_c = ids.copy()
         if ids_c != ids:
-            e = StpmtrError(self, text=f'Axes indexes must be ascending order.')
+            e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
             self.logger.error(e)
             raise e
         for id_a in ids:
@@ -415,7 +415,7 @@ class StpMtrController(Service):
             positions = file_pos
         elif controller_pos != file_pos:
             self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-            raise StpmtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            raise StpMtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
         else:
             positions = controller_pos
 
@@ -452,12 +452,12 @@ class StpMtrController(Service):
             if all(res):
                 return True, ''
             else:
-                raise StpmtrError(self, comments)
-        except StpmtrError as e:
+                raise StpMtrError(self, comments)
+        except StpMtrError as e:
             self.logger.error(e)
             return False, str(e)
 
-    def stop_axis(self, axis_id: int) -> Tuple[Dict[str, Union[int, float, str]], str]:
+    def stop_axis(self, axis_id: int) -> FuncStopAxisOutput:
         res, comments = self._check_axis(axis_id)
         if res:
             if self.axes[axis_id].status == 2:
@@ -466,7 +466,7 @@ class StpMtrController(Service):
                     comments = f'Axis {axis_id} was stopped by user'
             elif self.axes[axis_id].status == 1:
                 comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped'
-        return {'axis': axis_id, 'func_success': res}, comments
+        return FuncStopAxisOutput(axis_id=axis_id, func_res=res, comments=comments)
 
     @staticmethod
     def _write_to_file(text: str, file: Path):
@@ -474,6 +474,6 @@ class StpMtrController(Service):
             opened_file.write(text)
 
 
-class StpmtrError(BaseException):
+class StpMtrError(BaseException):
     def __init__(self, controller: StpMtrController, text: str):
         super().__init__(f'{controller.name}:{controller.id}:{text}')

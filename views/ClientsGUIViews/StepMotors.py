@@ -12,48 +12,40 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
 
-from typing import List, Union
+from typing import List, Union, Dict
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from PyQt5.QtGui import QCloseEvent
 from numpy import pad
 from devices.devices import Device
 from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
-from utilities.data.messages import Message
-from utilities.data.datastructures.mes_independent import AxisStpMtr
+from utilities.data.messages import Message, ServiceInfoMes
+from utilities.data.datastructures.mes_independent import StpMtrCtrlStatusMultiAxes
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
-from dataclasses import dataclass, field
 from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
-from utilities.data.datastructures.mes_independent import DeviceStatus
 
 
 module_logger = logging.getLogger(__name__)
 
 
-@dataclass(order=True, frozen=False)
-class StpMtrCtrlStatusMultiAxes:
-    axes: AxisStpMtr = None
-    device_status: DeviceStatus = DeviceStatus()
-    start_stop: list = field(default_factory=list)
-
-
 class StepMotorsView(QMainWindow):
 
-    def __init__(self, in_controller, in_model, parameters, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: ServiceInfoMes, parent=None):
         super().__init__(parent)
-        self.name = f'StepMotorsClient:view: {parameters.device_id} {get_local_ip()}'
-        self.parameters = parameters
+        self._asked_status = 0
+        self.controller = in_controller
+        self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.axes,
+                                                           device_status=service_parameters.device_status)
+        self.name = f'StepMotorsClient:view: {service_parameters.device_id} {get_local_ip()}'
         self.logger = logging.getLogger("StepMotors." + __name__)
         info_msg(self, 'INITIALIZING')
-        self.controller = in_controller
         self.model = in_model
         self.device: Device = self.model.superuser
-        self._asked_status = 0
-        self.controller_status = StpMtrCtrlStatusMultiAxes()
+        self.service_parameters: ServiceInfoMes = service_parameters
 
         self.ui = Ui_StpMtrGUI()
-        self.ui.setupUi(self, parameters)
+        self.ui.setupUi(self, service_parameters)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
@@ -70,8 +62,9 @@ class StepMotorsView(QMainWindow):
         self.ui.retranslateUi(self, self.controller_status)
         self.ui.progressBar_movement.setValue(0)
         if not self._asked_status:
-            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=self.parameters.device_id,
-                                 parameters={})
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                                     service_id=self.service_parameters.device_id,
+                                     parameters={})
             self.device.send_msg_externally(msg)
             self._asked_status = 1
 
@@ -80,7 +73,8 @@ class StepMotorsView(QMainWindow):
 
     def activate(self):
         com = StpMtrController.ACTIVATE.name
-        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(device=self.device, com=com,
+                                 service_id=self.service_parameters.device_id,
                                  parameters={'flag': self.ui.checkBox_activate.isChecked()})
         self.device.send_msg_externally(msg)
         self._asked_status = 0
@@ -88,17 +82,18 @@ class StepMotorsView(QMainWindow):
     def activate_axis(self):
         com = StpMtrController.ACTIVATE_AXIS.name
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
-        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(device=self.device, com=com,
+                                 service_id=self.service_parameters.device_id,
                                  parameters={'axis': int(self.ui.spinBox_axis.value()),
                                              'flag': flag})
         self.device.send_msg_externally(msg)
         self._asked_status = 0
 
     def get_pos(self, axis=None, with_return=False):
-        if axis == None:
+        if axis is None:
             axis = int(self.ui.spinBox_axis.value())
         com = StpMtrController.GET_POS.name
-        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.service_parameters.device_id,
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
         if with_return:
@@ -112,13 +107,13 @@ class StepMotorsView(QMainWindow):
         com = StpMtrController.MOVE_AXIS_TO.name
         axis = int(self.ui.spinBox_axis.value())
         pos = float(self.ui.lineEdit_value.text())
-        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.service_parameters.device_id,
                                  parameters={'axis': axis,
                                              'pos': pos,
                                              'how': how})
-        self.controller_status.start_stop[axis] = [self.controller_status.positions[axis], pos]
+        self.controller_status.start_stop[axis] = [self.controller_status.axes[axis].position, pos]
         self.device.send_msg_externally(msg)
-        self.controller_status.axes_status[axis] = 2
+        self.controller_status.axes[axis].status = 2
         self.ui.progressBar_movement.setValue(0)
         self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                     specific={'axis': axis, 'with_return': True})
@@ -127,14 +122,15 @@ class StepMotorsView(QMainWindow):
     def stop_axis(self):
         axis = int(self.ui.spinBox_axis.value())
         com = StpMtrController.STOP_AXIS.name
-        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(com=com, device=self.device,
+                                 service_id=self.service_parameters.device_id,
                                  parameters={'axis': axis})
         self.device.send_msg_externally(msg)
         self._asked_status = 0
 
     def power(self):
         com = StpMtrController.POWER.name
-        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.parameters.device_id,
+        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.service_parameters.device_id,
                                  parameters={'flag': self.ui.checkBox_power.isChecked()})
         self.device.send_msg_externally(msg)
 
@@ -142,7 +138,7 @@ class StepMotorsView(QMainWindow):
         try:
             com = msg.data.com
             info = msg.data.info
-            if self.parameters.device_id in msg.body.sender_id:
+            if self.service_parameters.device_id in msg.body.sender_id:
                 if com == MsgGenerator.DONE_IT.mes_name:
                     self.ui.comments.setText(info.comments)
                     if not info.result['func_success']:
@@ -155,7 +151,7 @@ class StepMotorsView(QMainWindow):
                     elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                         flag = info.result['flag']
                         self.ui.checkBox_On.setChecked(flag)
-                        self.controller_status.axes_status[info.result['axis']] = flag
+                        self.controller_status.axes[info.result['axis']].status = flag
                         self.ui.retranslateUi(self, self.controller_status)
                     elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                         axis = info.result['axis']
@@ -190,14 +186,14 @@ class StepMotorsView(QMainWindow):
                     self.ui.comments.setText(info.comments)
                     com = StpMtrController.GET_CONTROLLER_STATE.name
                     msg = MsgGenerator.do_it(com=com, device=self.device,
-                                             service_id=self.parameters.device_id,
+                                             service_id=self.service_parameters.device_id,
                                              parameters={})
                     self.device.send_msg_externally(msg)
         except Exception as e:
-            print(e)
+            self.logger.error(e)
 
     def _update_progessbar_pos(self, axis: int, pos: Union[float, int]):
-        if self.controller_status.axes_status[axis] == 2 and self.ui.spinBox_axis.value() == axis:
+        if self.controller_status.axes[axis].status == 2 and self.ui.spinBox_axis.value() == axis:
             start = self.controller_status.start_stop[axis][0]
             stop = self.controller_status.start_stop[axis][1]
             per = int((pos - start) / (stop - start) * 100.0)

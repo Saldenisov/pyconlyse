@@ -8,12 +8,19 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from typing import Dict, Union
 from utilities.data.messages import ServiceInfoMes
+from utilities.data.datastructures.mes_independent import AxisStpMtr, StpMtrCtrlStatusMultiAxes
+import logging
+
+
+module_logger = logging.getLogger(__name__)
+
 
 class Ui_StpMtrGUI(object):
 
-    def setupUi(self, StpMtrGUI, parameters=ServiceInfoMes()):
-        self.parameters = parameters
+    def setupUi(self, StpMtrGUI, parameters: ServiceInfoMes):
+        self.parameters: ServiceInfoMes = parameters
         StpMtrGUI.setObjectName("StpMtrGUI")
         StpMtrGUI.resize(431, 119)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
@@ -33,11 +40,12 @@ class Ui_StpMtrGUI(object):
         self.spinBox_axis = QtWidgets.QSpinBox(self.centralwidget)
         self.spinBox_axis.setObjectName("spinBox")
         try:
-            self.spinBox_axis.setMinimum(self.parameters.device_description['axes_values'][0])
-            self.spinBox_axis.setMaximum(self.parameters.device_description['axes_values'][1])
+            ids = self.parameters.device_description.axes.keys()
+            self.spinBox_axis.setMinimum(min(ids))
+            self.spinBox_axis.setMaximum(max(ids))
         except KeyError:
-            self.spinBox_axis.setMinimum(0)
-            self.spinBox_axis.setMaximum(1)
+            self.spinBox_axis.setMinimum(1)
+            self.spinBox_axis.setMaximum(2)
         self.axis_movement_typeHL.addWidget(self.spinBox_axis)
         self.radioButton_relative = QtWidgets.QRadioButton(self.centralwidget)
         self.radioButton_relative.setObjectName("radioButton_relative")
@@ -115,37 +123,34 @@ class Ui_StpMtrGUI(object):
         self.retranslateUi(StpMtrGUI)
         QtCore.QMetaObject.connectSlotsByName(StpMtrGUI)
 
-    def retranslateUi(self, StpMtrGUI, controller_status=None):
+    def retranslateUi(self, StpMtrGUI, controller_status: StpMtrCtrlStatusMultiAxes=None):
         _translate = QtCore.QCoreApplication.translate
         try:
             self.checkBox_activate.setChecked(self.parameters.device_status.active)
             self.checkBox_power.setChecked(self.parameters.device_status.power)
-            title = self.parameters.device_description['GUI_title']
+            title = self.parameters.device_description.GUI_title
             axis = int(self.spinBox_axis.value())
-            name = self.parameters.device_description['axes_names'][axis]
-            ranges = str(self.parameters.device_description['ranges'][axis][0])
-            preset = self.parameters.device_description['ranges'][axis][1]
-            preset_list_str = []
-            i = 0
-            for item in preset:
-                preset_list_str.append(f'{i}: {item}')
-                i += 1
-            preset = str(preset_list_str)
+            axes: Dict[int, AxisStpMtr] = self.parameters.device_description.axes
+            name = axes[axis].name
+            ranges = str(axes[axis].limits)
+            preset = str(axes[axis].preset_values)
         except KeyError:
-            axis = 0
+            #TODO: modify
+            axis = 1
             title = ''
             name = 'test_name'
             ranges = str((0, 100))
             preset = str([0, 100])
         if controller_status:
             try:
+                axes: Dict[int, AxisStpMtr] = controller_status.axes
                 self.checkBox_activate.setChecked(controller_status.device_status.active)
                 self.checkBox_power.setChecked(controller_status.device_status.power)
-                self.checkBox_On.setChecked(controller_status.axes_status[axis])
-                if controller_status.axes_status[axis] != 2:  # if it moves do not update
-                    self.lcdNumber_position.display(controller_status.positions[axis])
+                self.checkBox_On.setChecked(axes[axis].status)
+                if axes[axis].status != 2:  # if it moves do not update
+                    self.lcdNumber_position.display(axes[axis].position)
             except Exception as e:
-                print(e)
+                module_logger.error(e)
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis #"))
         self.label_name.setText(_translate("StpMtrGUI", name))
@@ -160,6 +165,7 @@ class Ui_StpMtrGUI(object):
         self.checkBox_activate.setText(_translate("StpMtrGUI", "Activate controller"))
         self.checkBox_power.setText(_translate("StpMtrGUI", "Power controller"))
         self.menuSettings.setTitle(_translate("StpMtrGUI", "Settings"))
+
 
 if __name__ == "__main__":
     import sys

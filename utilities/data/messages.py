@@ -3,11 +3,11 @@ from base64 import b64encode
 from collections import deque
 from dataclasses import dataclass, field
 from json import dumps
-from typing import NamedTuple, Dict, Any
+from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from utilities.data.datastructures.mes_independent import DeviceStatus
+from utilities.data.datastructures.mes_independent import DeviceStatus, StpMtrDescription
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -116,9 +116,9 @@ class ServiceStatusMes:
 
 @dataclass(frozen=True, order=True)
 class ServiceInfoMes:
-    device_status: DeviceStatus = DeviceStatus()
-    device_id: str = ''
-    device_description: dict = field(default_factory=dict)
+    device_status: DeviceStatus
+    device_id: str
+    device_description: Union[StpMtrDescription]
     available_public_functions: dict = field(default_factory=dict)
 
 
