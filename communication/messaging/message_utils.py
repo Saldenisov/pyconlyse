@@ -76,8 +76,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.DO_IT, device, com=com, parameters=parameters, rec_id=service_id)
 
     @staticmethod
-    def done_it(device, msg_i: Message, result, comments: str):
-        return MsgGenerator._gen_msg(MsgGenerator.DONE_IT, device, msg_i=msg_i, result=result, comments=comments)
+    def done_it(device, msg_i: Message, result: FuncOutput):
+        return MsgGenerator._gen_msg(MsgGenerator.DONE_IT, device, msg_i=msg_i, result=result)
 
     @staticmethod
     def error(device, msg_i: mes.Message, comments="nothing to say about this error..."):
@@ -217,7 +217,7 @@ class MsgGenerator:
             elif com_name == MsgGenerator.DONE_IT.mes_name:
                 msg_i = kwargs['msg_i']
                 com = msg_i.data.info.com
-                data_info = mes_info_class(com=com, result=kwargs['result'], comments=kwargs['comments'])
+                data_info = mes_info_class(com=com, result=kwargs['result'])
             elif com_name == MsgGenerator.ERROR.mes_name:
                 crypted = False
                 comments: str = kwargs['comments']

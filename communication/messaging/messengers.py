@@ -1,7 +1,6 @@
 import logging
 import base64
 from abc import abstractmethod
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -14,6 +13,7 @@ from time import sleep
 from typing import Dict, Union, List
 
 import zmq
+from devices.devices import Device
 from communication.interfaces import MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
@@ -34,7 +34,7 @@ class Messenger(MessengerInter):
     def __init__(self,
                  name: str,
                  addresses: Dict[str, str],
-                 parent,
+                 parent: Union[Device],
                  pub_option: bool,
                  **kwargs):
         super().__init__()
@@ -43,9 +43,10 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
+        self.parent: Union[Device, Messenger] = None
         if parent:
-            self.id = parent.id
-            self.parent = parent
+            self.id: str = parent.id
+            self.parent: Union[Device] = parent
         else:
             self.parent = self
             self.id = f'{self.name}:{unique_id(self.name)}'

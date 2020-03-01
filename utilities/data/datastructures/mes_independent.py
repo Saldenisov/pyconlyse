@@ -45,56 +45,51 @@ class StpMtrCtrlStatusMultiAxes:
     start_stop: list = field(default_factory=list)
 
 
-@dataclass(order=True, frozen=False)
-class FuncActivateOutput:
+@dataclass
+class FuncOutput:
+    func_success: bool
+    comments: str
+
+
+@dataclass
+class FuncActivateOutput(FuncOutput):
     flag: bool
-    func_res: bool
-    comments: str
 
 
-@dataclass(order=True, frozen=False)
-class FuncActivateAxisOutput:
+@dataclass
+class FuncActivateAxisOutput(FuncOutput):
     axis_id: int
-    flag: Union[bool, None]
-    func_res: bool
-    comments: str
+    axes: Dict[int, AxisStpMtr]
 
 
-@dataclass(order=True, frozen=False)
-class FuncGetPosOutput:
+@dataclass
+class FuncGetPosOutput(FuncOutput):
     axis_id: int
-    pos: Union[int, float]
-    func_res: bool
-    comments: str
+    axes: Dict[int, AxisStpMtr]
+    position: Union[int, float]
 
 
-@dataclass(order=True, frozen=False)
-class FuncMoveAxisToOutput:
+@dataclass
+class FuncMoveAxisToOutput(FuncOutput):
     axis_id: int
     pos: Union[int, float]
     how: str
-    func_res: bool
-    comments: str
-
-
-@dataclass(order=True, frozen=False)
-class FuncStopAxisOutput:
-    axis_id: int
-    func_res: bool
-    comments: str
-
-
-@dataclass(order=True, frozen=False)
-class FuncGetStpMtrControllerStateOutput:
-    device_status: DeviceStatus
     axes: Dict[int, AxisStpMtr]
-    func_res: bool
-    comments: str
 
 
-@dataclass(order=True, frozen=False)
-class FuncPowerOutput:
+@dataclass
+class FuncGetStpMtrControllerStateOutput(FuncOutput):
+    axes: Dict[int, AxisStpMtr]
+    device_status: DeviceStatus
+
+
+@dataclass
+class FuncStopAxisOutput(FuncOutput):
+    axis_id: int
+    axes: Dict[int, AxisStpMtr]
+
+
+@dataclass
+class FuncPowerOutput(FuncOutput):
     device_id: str
     flag: bool
-    func_res: bool
-    comments: str

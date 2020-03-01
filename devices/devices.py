@@ -20,7 +20,7 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent import DeviceStatus, FuncPowerOutput
+from utilities.data.datastructures.mes_independent import DeviceStatus, FuncOutput, FuncPowerOutput
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.datastructures.dicts import Connections_Dict
 from utilities.data.messages import Message
@@ -65,7 +65,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             self.id = kwargs['id']
 
-        self.name = f'{name}:{Device.n_instance}'
+        self.name: str = name
         self.parent: QObject = parent
 
         self.db_path = db_path
@@ -142,7 +142,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             self._main_executor.submit(func, **kwargs)
             return True
-        except:
+        except Exception as e:
+            self.logger.error(e)
             return False
 
     def decide_on_msg(self, msg: Message) -> None:
@@ -198,15 +199,16 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         if com in self.available_public_functions():
             f = getattr(self, com)
             if parameters.keys() == signature(f).parameters.keys():
-                result, comments = f(**parameters)
-                if result:
-                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result, comments=comments)
-            else:
-                comments = f'Incorrect {parameters} were send. Should be {signature(f).parameters.keys()}'
+                try:
+                    result: FuncOutput = f(**parameters)
+                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result)
+                except Exception as e:
+                    self.logger.error(e)
+                    msg_i = MsgGenerator.error(self, msg_i=msg, comments=str(e))
         else:
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-        if not msg_i:
-            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
+            msg_i = MsgGenerator.error(self, msg_i=msg,
+                                       comments=f'com: {com} is not available for Service {self.id}. '
+                                                f'See {self.available_public_functions()}')
         self.thinker.msg_out(True, msg_i)
 
     @staticmethod
@@ -254,8 +256,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.device_status.connected = False
             self.device_status.active = False
         comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
-        return FuncPowerOutput(device_id=self.id, flag=self.device_status.power, func_res=True, comments=comments)
-
+        return FuncPowerOutput(device_id=self.id, flag=self.device_status.power, func_success=True, comments=comments)
 
     def start(self):
         self._start_messaging()

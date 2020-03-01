@@ -7,7 +7,7 @@ from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from utilities.data.datastructures.mes_independent import DeviceStatus, StpMtrDescription
+from utilities.data.datastructures.mes_independent import DeviceStatus, FuncOutput, StpMtrDescription
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -53,8 +53,7 @@ class DoIt:
 @dataclass(frozen=True, order=True)
 class DoneIt:
     com: str
-    result: object
-    comments: str = ''
+    result: FuncOutput
 
 
 @dataclass(frozen=True, order=True)

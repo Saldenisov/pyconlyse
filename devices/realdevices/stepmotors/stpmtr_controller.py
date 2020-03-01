@@ -55,7 +55,7 @@ class StpMtrController(Service):
                 }
 
     def activate(self, flag: bool) -> FuncActivateOutput:
-        res, comments = self._connect(flag)  # gurantees that parameters could be read from controller
+        res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
         if res and not self._parameters_set_hardware:  # parameters should be set from hardware controller if possible
             res, comments = self._set_parameters()  # This must be realized for all controllers
         if res:
@@ -65,7 +65,7 @@ class StpMtrController(Service):
             self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
-        return FuncActivateOutput(flag=self.device_status.active, func_res=res, comments=info)
+        return FuncActivateOutput(flag=self.device_status.active, func_success=res, comments=info)
 
     def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
         """
@@ -78,9 +78,11 @@ class StpMtrController(Service):
             res, comments = self._check_controller_activity()
         if res:
             res, comments = self._change_axis_status(axis_id, flag)
-            output = FuncActivateAxisOutput(axis_id=axis_id, flag=self.axes[axis_id], func_res=res, comments=comments)
+            output = FuncActivateAxisOutput(axis_id=axis_id, func_success=res,
+                                            comments=comments, axes=self.axes)
         else:
-            output = FuncActivateAxisOutput(axis_id=axis_id, flag=None, func_res=res, comments=comments)
+            output = FuncActivateAxisOutput(axis_id=axis_id, func_success=res, comments=comments,
+                                            axes=self.axes)
         return output
 
     @property
@@ -194,13 +196,12 @@ class StpMtrController(Service):
     def get_controller_state(self) -> FuncGetStpMtrControllerStateOutput:
         """
         State of cotroller is returned
-        :return:  Dict()
+        :return:  FuncOutput
         """
-        comments = f'Controller is {self.device_status.active}. ' \
-                                       f'Power is {self.device_status.power}. ' \
-                                       f'Axes are {self._axes_status}'
+        comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
+                   f'Axes are {self._axes_status}'
         return FuncGetStpMtrControllerStateOutput(device_status=self.device_status, axes=self.axes,
-                                                  func_res=True, comments=comments)
+                                                  func_success=True, comments=comments)
 
     @abstractmethod
     def _get_number_axes(self) -> int:
@@ -218,7 +219,7 @@ class StpMtrController(Service):
         res, comments = self._check_axis(axis_id)
         if res:
             pos = self.axes[axis_id].position
-        return FuncGetPosOutput(axis_id=axis_id, pos=pos, func_res=res, comments=comments)
+        return FuncGetPosOutput(axis_id=axis_id, pos=pos, func_success=res, comments=comments, axes=self.axes)
 
     def move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> FuncMoveAxisToOutput:
         res, comments = self._check_axis(axis_id)
@@ -238,7 +239,8 @@ class StpMtrController(Service):
             pos = self.axes[axis_id].position
         else:
             pos = None
-        return FuncMoveAxisToOutput(axis_id=axis_id, pos=pos, how=how, func_res=res, comments=comments)
+        return FuncMoveAxisToOutput(axis_id=axis_id, pos=pos, how=how, func_success=res, comments=comments,
+                                    axes=self.axes)
 
     @abstractmethod
     def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
@@ -415,7 +417,7 @@ class StpMtrController(Service):
             positions = file_pos
         elif controller_pos != file_pos:
             self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-            raise StpMtrError("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            raise StpMtrError(self, "Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
         else:
             positions = controller_pos
 
@@ -466,7 +468,7 @@ class StpMtrController(Service):
                     comments = f'Axis {axis_id} was stopped by user'
             elif self.axes[axis_id].status == 1:
                 comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped'
-        return FuncStopAxisOutput(axis_id=axis_id, func_res=res, comments=comments)
+        return FuncStopAxisOutput(axis_id=axis_id, func_success=res, comments=comments, axes=self.axes)
 
     @staticmethod
     def _write_to_file(text: str, file: Path):

@@ -231,6 +231,7 @@ class ServerCmdLogic(Thinker):
                 del self.parent.connections[event.original_owner]
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
+
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 
     def react_info(self, msg: Message):

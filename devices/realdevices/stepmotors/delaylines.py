@@ -43,7 +43,7 @@ class StpMtrCtrl_emulate(StpMtrController):
         return self._axes_limits
 
     def _get_positions(self) -> List[Union[int, float]]:
-        return self._axes_positions
+        return [0] * len(self.axes)
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_value
