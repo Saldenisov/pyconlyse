@@ -65,7 +65,7 @@ class StpMtrController(Service):
             self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
         self.logger.info(info)
-        return FuncActivateOutput(flag=self.device_status.active, func_success=res, comments=info)
+        return FuncActivateOutput(func_success=res, comments=info, device_status=self.device_status)
 
     def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
         """
@@ -78,16 +78,20 @@ class StpMtrController(Service):
             res, comments = self._check_controller_activity()
         if res:
             res, comments = self._change_axis_status(axis_id, flag)
-            output = FuncActivateAxisOutput(axis_id=axis_id, func_success=res,
-                                            comments=comments, axes=self.axes)
+            output = FuncActivateAxisOutput(func_success=res, comments=comments, axes=self.axes)
         else:
-            output = FuncActivateAxisOutput(axis_id=axis_id, func_success=res, comments=comments,
-                                            axes=self.axes)
+            output = FuncActivateAxisOutput(func_success=res, comments=comments, axes=self.axes_essentials)
         return output
 
     @property
     def _axes_names(self) -> List[str]:
         return [axis.name for axis in self.axes.values()]
+
+    @property
+    def axes_essentials(self):
+        essentials = {}
+        for axis_id, axis in self.axes.items():
+            essentials[axis_id] = axis.short()
 
     @property
     def _axes_limits(self) -> List[Tuple[int]]:
@@ -170,7 +174,7 @@ class StpMtrController(Service):
     def description(self) -> StpMtrDescription:
         """
         Description with important parameters
-        :return: Dict with parameters essential for understanding what this device is used for
+        :return: StpMtrDescription with parameters essential for understanding what this device is used for
         """
         try:
             parameters = self.get_settings('Parameters')
@@ -200,7 +204,7 @@ class StpMtrController(Service):
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Axes are {self._axes_status}'
-        return FuncGetStpMtrControllerStateOutput(device_status=self.device_status, axes=self.axes,
+        return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
                                                   func_success=True, comments=comments)
 
     @abstractmethod
@@ -219,7 +223,7 @@ class StpMtrController(Service):
         res, comments = self._check_axis(axis_id)
         if res:
             pos = self.axes[axis_id].position
-        return FuncGetPosOutput(axis_id=axis_id, pos=pos, func_success=res, comments=comments, axes=self.axes)
+        return FuncGetPosOutput(func_success=res, comments=comments, axes=self.axes_essentials)
 
     def move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> FuncMoveAxisToOutput:
         res, comments = self._check_axis(axis_id)
@@ -239,8 +243,7 @@ class StpMtrController(Service):
             pos = self.axes[axis_id].position
         else:
             pos = None
-        return FuncMoveAxisToOutput(axis_id=axis_id, pos=pos, how=how, func_success=res, comments=comments,
-                                    axes=self.axes)
+        return FuncMoveAxisToOutput(axes=self.axes_essentials)
 
     @abstractmethod
     def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
@@ -382,7 +385,7 @@ class StpMtrController(Service):
             self.logger.error(e)
             raise e
         for id_a in ids:
-            self.axes[id_a] = AxisStpMtr()
+            self.axes[id_a] = AxisStpMtr(id=id_a)
 
     def _set_axes_names(self):
         names = self._get_axes_names_db()
@@ -468,7 +471,7 @@ class StpMtrController(Service):
                     comments = f'Axis {axis_id} was stopped by user'
             elif self.axes[axis_id].status == 1:
                 comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped'
-        return FuncStopAxisOutput(axis_id=axis_id, func_success=res, comments=comments, axes=self.axes)
+        return FuncStopAxisOutput(func_success=res, comments=comments, axes=self.axes_essentials)
 
     @staticmethod
     def _write_to_file(text: str, file: Path):

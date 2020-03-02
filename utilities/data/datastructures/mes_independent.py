@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Dict, List, Tuple, Union
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
@@ -22,13 +23,24 @@ class DeviceParts(DataClass_frozen):
     executor: ExecutorInter
 
 
-@dataclass(order=True, frozen=False)
+@dataclass(frozen=False)
 class AxisStpMtr:
+    id: int
     name: str = ''
-    position: float = ''
-    status: int = 0
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
+    position: float = ''
     preset_values: List[Union[int, float]] = field(default_factory=list)
+    status: int = 0
+
+    def short(self):
+        return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.position)
+
+
+@dataclass(order=True, frozen=False)
+class AxisStpMtrEssentials:
+    id: int
+    position: float
+    status: int
 
 
 @dataclass(order=True, frozen=True)
@@ -42,12 +54,17 @@ class StpMtrDescription:
 class StpMtrCtrlStatusMultiAxes:
     axes: Dict[int, AxisStpMtr]
     device_status: DeviceStatus
+    axes_previous: Dict[int, AxisStpMtr] = None
+    device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)
 
 
 @dataclass
 class FuncInput:
-    pass
+
+    def __post_init__(self):
+        if not self.id:
+            object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
 
 
 @dataclass
@@ -55,17 +72,19 @@ class FuncOutput:
     func_success: bool
     comments: str
 
+    def __post_init__(self):
+        if not self.id:
+            object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
+
 
 @dataclass
 class FuncActivateInput(FuncInput):
-    # TODO: add time stamp automatically
     flag: bool
 
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
-    # TODO: add time stamp automatically
-    flag: bool
+    device_status: DeviceStatus
 
 
 @dataclass
@@ -76,8 +95,7 @@ class FuncActivateAxisInput(FuncInput):
 
 @dataclass
 class FuncActivateAxisOutput(FuncOutput):
-    axis_id: int
-    axes: Dict[int, AxisStpMtr]
+    axes: Dict[int, AxisStpMtrEssentials]
 
 
 @dataclass
@@ -92,27 +110,43 @@ class FuncGetStpMtrControllerStateOutput(FuncOutput):
 
 
 @dataclass
+class FuncGetPosInput(FuncInput):
+    pass
+
+@dataclass
 class FuncGetPosOutput(FuncOutput):
+    axes: Dict[int, AxisStpMtrEssentials]
+
+
+@dataclass
+class FuncMoveAxisToInput(FuncInput):
     axis_id: int
-    axes: Dict[int, AxisStpMtr]
-    position: Union[int, float]
+    pos: Union[int, float]
+    how: str
 
 
 @dataclass
 class FuncMoveAxisToOutput(FuncOutput):
+    axes: Dict[int, AxisStpMtrEssentials]
+
+
+@dataclass
+class FuncStopAxisInput(FuncInput):
     axis_id: int
-    pos: Union[int, float]
-    how: str
-    axes: Dict[int, AxisStpMtr]
 
 
 @dataclass
 class FuncStopAxisOutput(FuncOutput):
-    axis_id: int
-    axes: Dict[int, AxisStpMtr]
+    axes: Dict[int, AxisStpMtrEssentials]
+
+
+@dataclass
+class FuncPowerInput(FuncInput):
+    device_id: str
+    flag: bool
 
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
     device_id: str
-    flag: bool
+    device_status: DeviceStatus

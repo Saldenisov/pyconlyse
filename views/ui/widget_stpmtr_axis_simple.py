@@ -141,18 +141,8 @@ class Ui_StpMtrGUI(object):
             name = 'test_name'
             ranges = str((0, 100))
             preset = str([0, 100])
-        if controller_status:
-            try:
-                axes: Dict[int, AxisStpMtr] = controller_status.axes
-                self.checkBox_activate.setChecked(controller_status.device_status.active)
-                self.checkBox_power.setChecked(controller_status.device_status.power)
-                self.checkBox_On.setChecked(axes[axis].status)
-                if axes[axis].status != 2:  # if it moves do not update
-                    self.lcdNumber_position.display(axes[axis].position)
-            except Exception as e:
-                module_logger.error(e)
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
-        self.label.setText(_translate("StpMtrGUI", "axis #"))
+        self.label.setText(_translate("StpMtrGUI", "axis ID"))
         self.label_name.setText(_translate("StpMtrGUI", name))
         self.label_ranges.setText(_translate("StpMtrGUI", ranges))
         self.label_preset.setText(_translate("StpMtrGUI", preset))

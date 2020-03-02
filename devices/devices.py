@@ -256,7 +256,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.device_status.connected = False
             self.device_status.active = False
         comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
-        return FuncPowerOutput(device_id=self.id, flag=self.device_status.power, func_success=True, comments=comments)
+        return FuncPowerOutput(device_id=self.id, device_status=self.device_status,
+                               func_success=True, comments=comments)
 
     def start(self):
         self._start_messaging()

@@ -72,8 +72,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
-    def do_it(device, com: str, parameters: dict, service_id):
-        return MsgGenerator._gen_msg(MsgGenerator.DO_IT, device, com=com, parameters=parameters, rec_id=service_id)
+    def do_it(device, com: str, input: FuncInput, service_id: str):
+        return MsgGenerator._gen_msg(MsgGenerator.DO_IT, device, com=com, input=input, rec_id=service_id)
 
     @staticmethod
     def done_it(device, msg_i: Message, result: FuncOutput):

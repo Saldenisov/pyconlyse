@@ -1,16 +1,12 @@
-from dataclasses import dataclass, asdict
 
-@dataclass
-class FuncOutput:
-    func_res: bool
-    comments: str
+from datetime import datetime
 
-@dataclass
-class FuncActivateOutput(FuncOutput):
-    flag: bool
+# current date and time
+now = datetime.now()
 
+timestamp = datetime.timestamp(now)
+print(type(timestamp))
 
-a = FuncActivateOutput(True, 'adas', False)
+print("timestamp =", timestamp)
 
-b= asdict(a)
-print(b)
+print(datetime.fromtimestamp(timestamp))

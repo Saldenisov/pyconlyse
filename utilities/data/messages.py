@@ -7,7 +7,7 @@ from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from utilities.data.datastructures.mes_independent import DeviceStatus, FuncOutput, StpMtrDescription
+from utilities.data.datastructures.mes_independent import DeviceStatus, FuncInput, FuncOutput, StpMtrDescription
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -44,10 +44,11 @@ class AreYouAliveReply:
     context: str = ''
     extra: object = None
 
+
 @dataclass(frozen=True, order=True)
 class DoIt:
     com: str
-    parameters: dict = field(default_factory=dict)
+    input: FuncInput
 
 
 @dataclass(frozen=True, order=True)
