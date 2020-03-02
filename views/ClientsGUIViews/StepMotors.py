@@ -183,8 +183,7 @@ class StepMotorsView(QMainWindow):
                             self.controller_status.start_stop = [[0, 0]] * len(self.controller_status.axes)
                         self.ui.retranslateUi(self, self.controller_status)
                     elif info.com == StpMtrController.STOP_AXIS.name:
-                        axis_id = info.result['axis']
-                        self.controller_status.axes_status[axis_id] = 1
+                        self.controller_status.axes = result.axes
                         self.update_state()
                     elif info.com == StpMtrController.POWER.name:
                         self.ui.checkBox_power.setChecked(info.result['flag'])

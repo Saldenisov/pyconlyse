@@ -46,13 +46,31 @@ class StpMtrCtrlStatusMultiAxes:
 
 
 @dataclass
+class FuncInput:
+    pass
+
+
+@dataclass
 class FuncOutput:
     func_success: bool
     comments: str
 
 
 @dataclass
+class FuncActivateInput(FuncInput):
+    # TODO: add time stamp automatically
+    flag: bool
+
+
+@dataclass
 class FuncActivateOutput(FuncOutput):
+    # TODO: add time stamp automatically
+    flag: bool
+
+
+@dataclass
+class FuncActivateAxisInput(FuncInput):
+    axis_id: int
     flag: bool
 
 
@@ -60,6 +78,17 @@ class FuncActivateOutput(FuncOutput):
 class FuncActivateAxisOutput(FuncOutput):
     axis_id: int
     axes: Dict[int, AxisStpMtr]
+
+
+@dataclass
+class FuncGetStpMtrControllerStateInput(FuncInput):
+    pass
+
+
+@dataclass
+class FuncGetStpMtrControllerStateOutput(FuncOutput):
+    axes: Dict[int, AxisStpMtr]
+    device_status: DeviceStatus
 
 
 @dataclass
@@ -75,12 +104,6 @@ class FuncMoveAxisToOutput(FuncOutput):
     pos: Union[int, float]
     how: str
     axes: Dict[int, AxisStpMtr]
-
-
-@dataclass
-class FuncGetStpMtrControllerStateOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtr]
-    device_status: DeviceStatus
 
 
 @dataclass

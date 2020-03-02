@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 
 @dataclass
 class FuncOutput:
@@ -10,4 +10,7 @@ class FuncActivateOutput(FuncOutput):
     flag: bool
 
 
-a = FuncActivateOutput()
+a = FuncActivateOutput(True, 'adas', False)
+
+b= asdict(a)
+print(b)
