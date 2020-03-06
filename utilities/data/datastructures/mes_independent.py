@@ -52,9 +52,9 @@ class StpMtrDescription:
 
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
-    axes: Dict[int, AxisStpMtr]
+    axes: Dict[int, AxisStpMtrEssentials]
     device_status: DeviceStatus
-    axes_previous: Dict[int, AxisStpMtr] = None
+    axes_previous: Dict[int, AxisStpMtrEssentials] = None
     device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)
 
@@ -63,8 +63,7 @@ class StpMtrCtrlStatusMultiAxes:
 class FuncInput:
 
     def __post_init__(self):
-        if not self.id:
-            object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
+        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
 
 
 @dataclass
@@ -73,8 +72,7 @@ class FuncOutput:
     comments: str
 
     def __post_init__(self):
-        if not self.id:
-            object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
+        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
 
 
 @dataclass
@@ -112,6 +110,7 @@ class FuncGetStpMtrControllerStateOutput(FuncOutput):
 @dataclass
 class FuncGetPosInput(FuncInput):
     pass
+
 
 @dataclass
 class FuncGetPosOutput(FuncOutput):

@@ -3,6 +3,7 @@ import sqlite3 as sq3
 import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import asdict
 from inspect import signature, isclass
 from pathlib import Path
 from time import sleep
@@ -20,10 +21,10 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent import DeviceStatus, FuncOutput, FuncPowerOutput
+from utilities.data.datastructures.mes_independent import DeviceStatus, FuncInput, FuncOutput, FuncPowerOutput
 from utilities.data.datastructures.mes_dependent import Connection
 from utilities.data.datastructures.dicts import Connections_Dict
-from utilities.data.messages import Message
+from utilities.data.messages import Message, DoIt
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
 
@@ -193,22 +194,34 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
     def execute_com(self, msg: Message):
-        msg_i: Message = None
-        com: str = msg.data.info.com
-        parameters: Dict[str, Any] = msg.data.info.parameters
+        error = False
+        info: DoIt = msg.data.info
+        com: str = info.com
+        input: FuncInput = info.input
         if com in self.available_public_functions():
             f = getattr(self, com)
-            if parameters.keys() == signature(f).parameters.keys():
+            func_param = signature(f).parameters
+            input_dict = asdict(input)
+            if (input_dict.keys() & func_param.keys()) == set(list(func_param.keys())):
                 try:
+                    parameters = {}
+                    for key in func_param.keys():
+                        parameters[key] = input_dict[key]
                     result: FuncOutput = f(**parameters)
                     msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result)
                 except Exception as e:
                     self.logger.error(e)
-                    msg_i = MsgGenerator.error(self, msg_i=msg, comments=str(e))
+                    error = True
+                    comments = str(e)
+            else:
+                error = True
+                comments = f'Input keys: {input_dict.keys()} do not match to func keys: {func_param.keys()}'
         else:
+            error = True
+            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+        if error:
             msg_i = MsgGenerator.error(self, msg_i=msg,
-                                       comments=f'com: {com} is not available for Service {self.id}. '
-                                                f'See {self.available_public_functions()}')
+                                       comments=comments)
         self.thinker.msg_out(True, msg_i)
 
     @staticmethod

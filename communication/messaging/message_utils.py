@@ -213,7 +213,7 @@ class MsgGenerator:
                 data_info = None
             elif com_name == MsgGenerator.DO_IT.mes_name:
                 body.receiver_id = kwargs['rec_id']
-                data_info = mes_info_class(com=kwargs['com'], parameters=kwargs['parameters'])
+                data_info = mes_info_class(com=kwargs['com'], input=kwargs['input'])
             elif com_name == MsgGenerator.DONE_IT.mes_name:
                 msg_i = kwargs['msg_i']
                 com = msg_i.data.info.com

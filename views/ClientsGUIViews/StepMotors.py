@@ -185,14 +185,21 @@ class StepMotorsView(QMainWindow):
 
     def update_state(self):
         cs = self.controller_status
+        ui = self.ui
         if cs.axes != cs.axes_previous:
-            for axis_id, value
+            for now, then in zip(cs.axes.items(), cs.axes_previous.items()):
+                if now != then:
+                    axis: AxisStpMtrEssentials = now[1]
+                    ui.checkBox_On.setChecked(axis.status)
+ #                   ui.ax
 
             self.controller_status.axes_previous = self.controller_status.axes
 
-
-
         if cs.device_status != cs.device_status_previous:
+            ui.checkBox_power.setChecked(cs.device_status.power)
+            ui.checkBox_activate.setChecked(cs.device_status.active)
+            ui.lcdNumber_position.display(axis.position)
+
             self.controller_status.device_status_previous = self.controller_status.device_status
 
 

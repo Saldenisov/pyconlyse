@@ -11,6 +11,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message
+from utilities.data.datastructures.mes_independent import FuncGetStpMtrControllerStateInput
 from views.ClientsGUIViews import SuperUserView, StepMotorsView
 from devices.devices import Device
 
@@ -65,8 +66,9 @@ class SuperClientGUIcontroller():
                                                              service_parameters=parameters)
             self.services_views[service_id].show()
             self.logger.info(f'GUI for service {service_id} is started')
-            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device, service_id=service_id,
-                                     parameters={})
+            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                                     service_id=service_id,
+                                     input=FuncGetStpMtrControllerStateInput())
             self.device.send_msg_externally(msg)
         except Exception as e:
             print(f'in create_service_gui {e}')

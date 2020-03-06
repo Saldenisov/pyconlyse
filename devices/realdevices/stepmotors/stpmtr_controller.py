@@ -55,16 +55,17 @@ class StpMtrController(Service):
                 }
 
     def activate(self, flag: bool) -> FuncActivateOutput:
-        res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
-        if res and not self._parameters_set_hardware:  # parameters should be set from hardware controller if possible
-            res, comments = self._set_parameters()  # This must be realized for all controllers
-        if res:
-            if not flag:
-                self._move_all_home()
-                self._parameters_set_hardware = False
-            self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
-        self.logger.info(info)
+        res, comments = self._check_if_active()
+        if res ^ flag:  # res XOR Flag
+            if flag:
+                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
+                if res:  # parameters should be set from hardware controller if possible
+                    res, comments = self._set_parameters()  # This must be realized for all controllers
+            else:
+                res, comments = self._connect(False)
+                self.device_status.active = False
+            info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
+            self.logger.info(info)
         return FuncActivateOutput(func_success=res, comments=info, device_status=self.device_status)
 
     def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
@@ -122,6 +123,22 @@ class StpMtrController(Service):
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
+    @abstractmethod
+    def _check_if_active(self) -> Tuple[bool, str]:
+        """
+        In real devices should ask hardware controller
+        :return:
+        """
+        return self.device_status.active, ''
+
+    @abstractmethod
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        """
+        In real devices should ask hardware controller
+        :return:
+        """
+        return self.device_status.connected, ''
+
     def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
         """
         Checks if axis n is a valid axis for this controller and if it is active
@@ -135,10 +152,10 @@ class StpMtrController(Service):
             return res, comments
 
     def _check_axis_active(self, axis_id: int) -> Tuple[bool, str]:
-        if self.axes[axis_id]['status']:
+        if self.axes[axis_id].status:
             return True, ''
         else:
-            return False, f'Axis id={axis_id}, name={self.axes[axis_id].name}  is not active.'
+            return False, f'Axis id={axis_id}, name={self.axes[axis_id].name} is not active.'
 
     def _check_axis_range(self, axis_id: int) -> Tuple[bool, str]:
         if axis_id in self.axes.keys():
@@ -338,8 +355,8 @@ class StpMtrController(Service):
             if not isinstance(pos, list):
                 raise StpMtrError('is not a list')
             else:
-                if len(pos) != self._axes_number:
-                    raise StpMtrError(f"There is {len(pos)} positions in file, instead of {self._axes_number}")
+                if len(pos) != len(self.axes):
+                    raise StpMtrError(f"There is {len(pos)} positions in file, instead of {len(self.axes)}")
                 else:
                     for val in pos:
                         if not (isinstance(val, int) or isinstance(val, float)):
@@ -402,6 +419,15 @@ class StpMtrController(Service):
         for id, status in zip(self.axes.keys(), statuses):
             self.axes[id].status = status
 
+    @abstractmethod
+    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
+        """
+        This function sets user-defined positions into hardware controller.
+        :param positions: list of positions passed to hardware controller
+        :return:
+        """
+        return True, ''
+
     def _set_number_axes(self):
         if self.device_status.connected:
             axes_number = self._get_number_axes()
@@ -419,11 +445,16 @@ class StpMtrController(Service):
         elif not controller_pos:
             positions = file_pos
         elif controller_pos != file_pos:
-            self.logger.error("Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
-            raise StpMtrError(self, "Last log positions do not correspond to controller ones. CHECK REAL POSITIONS")
+            self.logger.error("Last files positions do not correspond to controller ones. "
+                              "Controller pos set to file pos.")
+            res, comments = self._set_controller_positions(positions=file_pos)
+            if res:
+                positions = file_pos
+            else:
+                positions = controller_pos
+                self.logger.error(f'_set_positions_axes: {comments}')
         else:
             positions = controller_pos
-
         for id, pos in zip(self.axes.keys(), positions):
             self.axes[id].position = pos
 
