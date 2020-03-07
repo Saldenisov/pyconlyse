@@ -1,6 +1,6 @@
-from UTILITY.OBSERVER import MObserver
-from UTILITY.META import Meta
-from VIEW.UI import Ui_MainWindow
+from prev_projects.DATAFIT.UTILITY.OBSERVER import MObserver
+from prev_projects.DATAFIT.UTILITY.META import Meta
+from prev_projects.DATAFIT.VIEW.UI import Ui_MainWindow
 
 from PyQt5.Qt import QMainWindow
 from PyQt5.QtWidgets import QListWidgetItem

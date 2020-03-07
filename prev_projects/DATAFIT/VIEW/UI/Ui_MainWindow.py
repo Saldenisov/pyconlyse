@@ -128,3 +128,13 @@ class Ui_MainWindow(object):
         self.actionDir.setText(_translate("FitWindow", "Dir"))
         self.actionHelp.setText(_translate("FitWindow", "Help"))
         self.actionAuthor.setText(_translate("FitWindow", "Author"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    window = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(window)
+    window.show()
+    sys.exit(app.exec_())

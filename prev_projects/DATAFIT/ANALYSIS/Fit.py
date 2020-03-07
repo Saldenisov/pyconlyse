@@ -3,8 +3,8 @@ Created on 12 aoÃ»t 2015
 
 @author: saldenisov
 '''
-from ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
-from ERRORS import NoSuchFittingFunction, FittingError
+from prev_projects.DATAFIT.ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
+from prev_projects.DATAFIT.ERRORS import NoSuchFittingFunction, FittingError
 from scipy.optimize import curve_fit
 from scipy.signal import fftconvolve
 from scipy.integrate import trapz

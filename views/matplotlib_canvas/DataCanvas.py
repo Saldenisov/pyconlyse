@@ -1,4 +1,4 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
+from views.matplotlib_canvas import MyMplCanvas
 import numpy as np
 
 class DataCanvas(MyMplCanvas):
@@ -8,9 +8,8 @@ class DataCanvas(MyMplCanvas):
     def __init__(self, *args, **kwargs):
         MyMplCanvas.__init__(self, *args, **kwargs)
 
-    def compute_initial_figure(self, data_model=None,
+    def compute_initial_figure(self, data_model,
                                figure_name=None):
-
         self.model = data_model
         data = data_model.data
         wavelengths = data_model.wavelengths

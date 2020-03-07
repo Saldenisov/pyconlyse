@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (QSizePolicy,
                              QListWidget,
                              QCheckBox)
 from matplotlib.widgets import Cursor, RectangleSelector
-from VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
-from VIEW import RangeSlider
+from prev_projects.DATAFIT.VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
+from prev_projects.DATAFIT.VIEW import RangeSlider
 
 
 class Ui_GraphWindow(object):
@@ -22,8 +22,12 @@ class Ui_GraphWindow(object):
     def setupUi(self, fitview, parameters=None):
         self.inParameters = parameters
         self.parent = fitview
-        self.model = fitview.model
-        self.file_path = self.model.filepath
+        try:
+            self.model = fitview.model
+            self.file_path = self.model.filepath
+        except:
+            self.model = None
+            self.file_path = ''
         fitview.setObjectName("GraphWindow")
         fitview.setGeometry(600, 50, 200, 400)
         fitview.resize(1240, 900)
@@ -280,7 +284,19 @@ class Ui_GraphWindow(object):
             'background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #222, stop:1 #333);')
         self.data_colorbar_slider.handle.setStyleSheet(
             'background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #282, stop:1 #393);')
+
     def retranslateUi(self, view):
         _translate = QtCore.QCoreApplication.translate
         view.setWindowTitle(_translate(
             "GraphWindow", "Graph Window " + self.file_path))
+
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    window = QtWidgets.QMainWindow()
+    ui = Ui_GraphWindow()
+    ui.setupUi(window)
+    window.show()
+    sys.exit(app.exec_())

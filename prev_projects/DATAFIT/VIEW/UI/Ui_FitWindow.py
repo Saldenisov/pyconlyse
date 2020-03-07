@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QSplitter,
                              QTableWidget, QHeaderView,
                              QRadioButton, QVBoxLayout)
 
-from VIEW.CANVAS import FitCanvas
+from prev_projects.DATAFIT.VIEW.CANVAS import FitCanvas
 import matplotlib
 matplotlib.use("Qt5Agg")
 

@@ -3,8 +3,8 @@ Created on 7 oct. 2015
 
 @author: saldenisov
 '''
-from ERRORS import ValidationFailed
-from HELPFUL import dict_of_dict_to_array
+from prev_projects.DATAFIT.ERRORS import ValidationFailed
+from prev_projects.DATAFIT.HELPFUL import dict_of_dict_to_array
 
 from configobj import ConfigObj
 from validate import Validator

@@ -7,7 +7,8 @@ ABCMeta - метакласс для реализации абстрактных 
 MMeta - метакласс для представления.
 """
 
-from PyQt5.QtCore import pyqtWrapperType
+from PyQt5.QtCore import QObject
+pyqtWrapperType = type(QObject)
 from abc import ABCMeta
 
 

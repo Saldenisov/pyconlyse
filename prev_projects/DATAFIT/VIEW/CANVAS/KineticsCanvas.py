@@ -1,4 +1,4 @@
-from VIEW.CANVAS import MyMplCanvas
+from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
 from itertools import islice
 
 import matplotlib.pyplot as plt

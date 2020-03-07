@@ -7,3 +7,4 @@ gpiozero
 numpy>=1.15.3
 matplotlib>=3.0.2
 PyQt5==5.13.1
+scipy

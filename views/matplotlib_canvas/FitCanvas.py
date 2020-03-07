@@ -1,4 +1,4 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
+from views.matplotlib_canvas import MyMplCanvas
 from numpy import zeros
 
 from matplotlib import gridspec

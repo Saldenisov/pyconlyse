@@ -1,5 +1,6 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
+from views.matplotlib_canvas import MyMplCanvas
 from itertools import islice
+
 
 class SpectrumCanvas(MyMplCanvas):
 

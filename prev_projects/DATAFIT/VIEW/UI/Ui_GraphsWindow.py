@@ -10,8 +10,8 @@ from PyQt5.QtWidgets import (QSizePolicy, QTabWidget, QWidget, QGridLayout, QSpl
 from matplotlib.widgets import Cursor, RectangleSelector
 
 
-from VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
-from VIEW import RangeSlider
+from prev_projects.DATAFIT.VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
+from prev_projects.DATAFIT.VIEW import RangeSlider
 
 
 class Ui_GraphsWindow(object):
