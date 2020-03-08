@@ -17,13 +17,14 @@ module_logger = logging.getLogger(__name__)
 
 
 class StpMtrController(Service):
-    ACTIVATE = CmdStruct('activate', {'flag': True})
+    """
+    See Service for more functions
+    These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
+    """
     ACTIVATE_AXIS = CmdStruct('activate_axis', {'axis': 0, 'flag': True})
     GET_POS = CmdStruct('get_pos', {'axis': 0})
-    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', {})
     MOVE_AXIS_TO = CmdStruct('move_axis_to', {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'})
     STOP_AXIS = CmdStruct('stop_axis', {'axis': 0})
-    POWER = CmdStruct('power', {'flag': True})
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -43,16 +44,9 @@ class StpMtrController(Service):
         if not res:
             raise StpMtrError(self, comments)
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        # These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
-        return {'activate': {'flag': True},
-                'activate_axis': {'axis': 0, 'flag': True},
-                'move_axis_to': {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'},
-                'stop_axis': {'axis': 0},
-                'get_pos': {'axis': 0},
-                'get_controller_state': {},
-                'power': {'flag': True}
-                }
+    def available_public_functions(self) -> List[CmdStruct]:
+        return super().available_public_functions() + [StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS,
+                                                       StpMtrController.MOVE_AXIS_TO, StpMtrController.STOP_AXIS]
 
     def activate(self, flag: bool) -> FuncActivateOutput:
         res, comments = self._check_if_active()

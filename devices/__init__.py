@@ -1,5 +1,7 @@
-from typing import NamedTuple
+from dataclasses import dataclass
 
-class CmdStruct(NamedTuple):
+
+@dataclass(frozen=True)
+class CmdStruct:
     name: str
     parameters: dict

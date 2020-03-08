@@ -14,7 +14,7 @@ from utilities.tools.decorators import development_mode
 from pathlib import Path
 from platform import system, architecture
 from .stpmtr_controller import StpMtrController, StpMtrError
-from devices.realdevices.stepmotors.ximc.pyximc import (lib, EnumerateFlags, )
+from devices.service_devices.stepmotors.ximc.pyximc import (lib, EnumerateFlags, )
 
 module_logger = logging.getLogger(__name__)
 

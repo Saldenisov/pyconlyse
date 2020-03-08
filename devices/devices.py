@@ -13,7 +13,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-
+from devices import CmdStruct
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
 from communication.interfaces import ThinkerInter, MessengerInter
 from communication.messaging.message_utils import MsgGenerator
@@ -405,7 +405,7 @@ class Server(Device):
 class Client(Device):
     """
     class Client communicates with Server to get access to Service it is bound to
-    through realdevices determined within the model of PyQT application devoted to this task.
+    through service_devices determined within the model of PyQT application devoted to this task.
     """
 
     def __init__(self, **kwargs):
@@ -456,6 +456,11 @@ class Client(Device):
 
 
 class Service(Device):
+    ACTIVATE = CmdStruct('activate', {'flag': True})
+    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', {})
+    POWER = CmdStruct('power', {'flag': True})
+
+
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServiceMessenger
@@ -478,8 +483,8 @@ class Service(Device):
         super().__init__(**kwargs)
 
     @abstractmethod
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        pass
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.POWER]
 
     @abstractmethod
     def description(self) -> Dict[str, Any]:
@@ -539,7 +544,7 @@ class DeviceFactory:
                 if project_type == 'Client':
                     module_devices = import_module('devices.virtualdevices')
                 elif project_type == 'Service':
-                    module_devices = import_module('devices.realdevices')
+                    module_devices = import_module('devices.service_devices')
                 else:
                     raise Exception(f'Project type: {project_type} is not known')
 

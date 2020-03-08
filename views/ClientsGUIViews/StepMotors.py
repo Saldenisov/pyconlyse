@@ -23,7 +23,7 @@ from utilities.data.datastructures.mes_independent import *
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
-from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
+from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 
 
 module_logger = logging.getLogger(__name__)

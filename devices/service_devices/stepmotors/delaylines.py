@@ -2,7 +2,7 @@ import logging
 from time import sleep
 from typing import Dict, Union, Any, List, Tuple
 
-from devices.realdevices.stepmotors.stpmtr_controller import StpMtrController
+from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
 

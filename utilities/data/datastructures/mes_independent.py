@@ -62,7 +62,7 @@ class StpMtrCtrlStatusMultiAxes:
 
 #Experimental Data structures
 @dataclass
-class Experiment:
+class Measurement:
     type: str  # Pulse-Probe, Pulse-Pump-Probe
     comments: str
     author: str
@@ -70,7 +70,7 @@ class Experiment:
 
 
 @dataclass
-class Map2D(Experiment):
+class Map2D(Measurement):
     data: np.ndarray
     wavelengths: np.array
     timedelays: np.array
@@ -78,7 +78,7 @@ class Map2D(Experiment):
 
 
 @dataclass
-class StroboscopicPulseProbeRaw(Experiment):
+class StroboscopicPulseProbeRaw(Measurement):
     """
     raw key=timedelay
     [[Signal_0]

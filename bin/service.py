@@ -26,7 +26,8 @@ if __name__ == "__main__":
     """
     preselection = {'newport_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
                     'stpmtr_emulate': ['StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', 'Devices.db'],
-                    'owis_3axes': ['StpMtrCtrl_OWIS:b161e87bee35bc4160f2dfeef63ef058', 'Devices.db']}
+                    'owis_3axes': ['StpMtrCtrl_OWIS:b161e87bee35bc4160f2dfeef63ef058', 'Devices.db'],
+                    'project_streak': ['ProjectStreakCamera:2d23d885d1c63ab03166ffa858b90ada', 'Devices.db']}
 
     if '-id' in sys.argv and '-db' in sys.argv:
         try:

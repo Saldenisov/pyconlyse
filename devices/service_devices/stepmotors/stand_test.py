@@ -21,10 +21,10 @@ if platform.system() == "Windows":
     os.environ["Path"] = libdir + ";" + os.environ["Path"]  # add dll
 
 try:
-    from devices.realdevices.stepmotors.ximc import (lib, device_information_t, Result, status_t,
-                                                      get_position_t, motor_settings_t, move_settings_t,
-                                                      engine_settings_t, MicrostepMode, EnumerateFlags,
-                                                      controller_name_t)
+    from devices.service_devices.stepmotors.ximc import (lib, device_information_t, Result, status_t,
+                                                         get_position_t, motor_settings_t, move_settings_t,
+                                                         engine_settings_t, MicrostepMode, EnumerateFlags,
+                                                         controller_name_t)
 except ImportError as err:
     print("Can't import pyximc module."
           "The most probable reason is that you changed the relative location of the testpython.py and pyximc.py files. "
