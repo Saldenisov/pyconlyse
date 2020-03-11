@@ -1,16 +1,15 @@
 from abc import abstractmethod
-from dataclasses import dataclass, field
 from os import path
-from collections import OrderedDict
 from pathlib import Path
 from devices import CmdStruct
 from errors.myexceptions import DeviceError
 from devices.devices import Service
-from typing import Union, Dict, Iterable, List, Tuple, Any, ClassVar, Callable
-from utilities.data.datastructures.mes_independent import (AxisStpMtr, FuncActivateOutput, FuncActivateAxisOutput,
-                                                           FuncGetPosOutput, FuncMoveAxisToOutput, FuncStopAxisOutput,
-                                                           FuncGetStpMtrControllerStateOutput,
-                                                           StpMtrDescription)
+from typing import Union, Dict, List, Tuple, Any, Callable
+from utilities.data.datastructures.mes_independent.devices import FuncActivateOutput
+from utilities.data.datastructures.mes_independent.stpmtr import (AxisStpMtr, FuncActivateAxisOutput, FuncGetPosOutput,
+                                                                  FuncMoveAxisToOutput, FuncStopAxisOutput,
+                                                                  FuncGetStpMtrControllerStateOutput,
+                                                                  StpMtrDescription)
 import logging
 
 module_logger = logging.getLogger(__name__)

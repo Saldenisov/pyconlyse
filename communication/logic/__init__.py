@@ -3,15 +3,12 @@ from abc import abstractmethod
 from threading import Thread
 from time import time
 from typing import Union, Callable
-from time import sleep
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import (ThinkerEventFuncError,
                                  ThinkerEventError,
                                  ThinkerError)
-from utilities.data.datastructures.dicts import Events_Dict
-from utilities.data.datastructures.mes_dependent import (OrderedDictMod,
-                                                         OrderedDictMesTypeCounter,
-                                                         PendingDemand, PendingReply)
+from utilities.data.datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
+from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, error_logger, unique_id
 

@@ -7,7 +7,9 @@ from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from utilities.data.datastructures.mes_independent import DeviceStatus, FuncInput, FuncOutput, StpMtrDescription
+from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput
+from utilities.data.datastructures.mes_independent.stpmtr import StpMtrDescription
+
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)

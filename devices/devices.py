@@ -21,9 +21,9 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent import DeviceStatus, FuncInput, FuncOutput, FuncPowerOutput
-from utilities.data.datastructures.mes_dependent import Connection
-from utilities.data.datastructures.dicts import Connections_Dict
+from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput, FuncPowerOutput
+from utilities.data.datastructures.mes_dependent.general import Connection
+from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
 from utilities.data.messages import Message, DoIt
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
@@ -459,7 +459,6 @@ class Service(Device):
     ACTIVATE = CmdStruct('activate', {'flag': True})
     GET_CONTROLLER_STATE = CmdStruct('get_controller_state', {})
     POWER = CmdStruct('power', {'flag': True})
-
 
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):

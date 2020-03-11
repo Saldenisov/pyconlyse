@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Union, Dict, Any
 from devices import CmdStruct
 from devices.devices import Service
-from utilities.data.datastructures.mes_independent import Measurement
+from utilities.data.datastructures.mes_independent.measurments import Measurement
 
 
 import logging
@@ -34,7 +34,9 @@ class ProjectController(Service):
         pass
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        pass
+        return super().available_public_functions() + [ProjectController.AVERAGE,
+                                                       ProjectController.READ,
+                                                       ProjectController.SAVE]
 
     def description(self) -> Dict[str, Any]:
         pass

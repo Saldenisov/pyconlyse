@@ -3,8 +3,7 @@ from time import time
 
 from communication.messaging.message_utils import MsgGenerator
 from communication.logic import Thinker, ThinkerEvent
-from communication.messaging.messengers import Messenger
-from utilities.data.datastructures.mes_dependent import Connection
+from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.messages import Message, DeviceInfoMes
 from utilities.myfunc import info_msg, error_logger
 
@@ -281,4 +280,8 @@ class ServiceCmdLogic(GeneralCmdLogic):
 
 
 class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
+
+
+class ProjectServiceCmdLogic(ServiceCmdLogic):
     pass

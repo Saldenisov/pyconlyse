@@ -1,5 +1,4 @@
-import pytest
-from utilities.data.datastructures.dicts import Events_Dict
+from utilities.data.datastructures.mes_dependent.dicts import Events_Dict
 from communication.logic import ThinkerEvent
 
 

@@ -18,7 +18,7 @@ from communication.interfaces import MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
-from utilities.data.datastructures.mes_dependent import OrderedDictMod
+from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.data.messages import Message
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop

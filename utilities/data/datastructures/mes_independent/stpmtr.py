@@ -1,27 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-import numpy as np
 from typing import Dict, List, Tuple, Union
-from utilities.data.general import DataClass_frozen, DataClass_unfrozen
-from communication.interfaces import MessengerInter, ThinkerInter
-from devices.interfaces import DeciderInter, ExecutorInter
-
-
-@dataclass
-class DeviceStatus(DataClass_unfrozen):
-    active: bool = False
-    connected: bool = False
-    messaging_on: bool = False
-    messaging_paused: bool = False
-    power: bool = False
-
-
-@dataclass(frozen=True)
-class DeviceParts(DataClass_frozen):
-    messenger: MessengerInter
-    thinker: ThinkerInter
-    decider: DeciderInter
-    executor: ExecutorInter
+from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput
 
 
 @dataclass(frozen=False)
@@ -58,69 +37,6 @@ class StpMtrCtrlStatusMultiAxes:
     axes_previous: Dict[int, AxisStpMtrEssentials] = None
     device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)
-
-
-#Experimental Data structures
-@dataclass
-class Measurement:
-    type: str  # Pulse-Probe, Pulse-Pump-Probe
-    comments: str
-    author: str
-    date: datetime
-
-
-@dataclass
-class Map2D(Measurement):
-    data: np.ndarray
-    wavelengths: np.array
-    timedelays: np.array
-    time_scale: str
-
-
-@dataclass
-class StroboscopicPulseProbeRaw(Measurement):
-    """
-    raw key=timedelay
-    [[Signal_0]
-     [Reference_0]
-     [Signal_electron_pulse]
-     [Reference_electron]
-     [Noise_signal]
-     [Noise_reference]
-     ...x n times
-     ]
-    """
-    raw: Dict[float, np.ndarray]
-    wavelength: np.array
-    timedelays: np.array
-    time_scale: str
-
-
-#Function for devices
-@dataclass
-class FuncInput:
-
-    def __post_init__(self):
-        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
-
-
-@dataclass
-class FuncOutput:
-    func_success: bool
-    comments: str
-
-    def __post_init__(self):
-        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
-
-
-@dataclass
-class FuncActivateInput(FuncInput):
-    flag: bool
-
-
-@dataclass
-class FuncActivateOutput(FuncOutput):
-    device_status: DeviceStatus
 
 
 @dataclass
