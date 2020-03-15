@@ -1,10 +1,11 @@
 from time import sleep, time
 from threading import Thread
 from typing import Union, Callable
-from communication.logic.thinkers import Thinker, ThinkerEvent
+from communication.logic.thinkers_logic import Thinker, ThinkerEvent
 from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import ThinkerErrorReact
-from utilities.data.datastructures.mes_dependent import OrderedDictMod, PendingDemand, PendingReply
+from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
+from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, error_logger
 
@@ -85,7 +86,7 @@ def task_in_reaction(event: ThinkerEvent):
                         thinker.add_reply_pending(msg)
                     thinker.react_in(msg)
                 except ThinkerErrorReact as e:
-                    info_msg(event, event.run, f'{e}: {msg}')
+                    error_logger(event, task_in_reaction, f'{e}: {msg}')
         else:
             sleep(0.5)
 
@@ -120,7 +121,7 @@ def task_out_reaction(event: ThinkerEvent):
                     if react:
                         thinker.react_out(msg)
                 except (ThinkerErrorReact, Exception) as e:
-                    info_msg(event, event.run, e)
+                    error_logger(event, task_out_reaction, f'{e}: {msg}')
         else:
             sleep(0.5)
 

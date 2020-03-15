@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Union
-from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput
+from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
 
 
 @dataclass(frozen=False)
@@ -13,7 +13,7 @@ class AxisStpMtr:
     status: int = 0
 
     def short(self):
-        return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.position)
+        return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status)
 
 
 @dataclass(order=True, frozen=False)
@@ -58,7 +58,10 @@ class FuncGetStpMtrControllerStateInput(FuncInput):
 @dataclass
 class FuncGetStpMtrControllerStateOutput(FuncOutput):
     axes: Dict[int, AxisStpMtr]
-    device_status: DeviceStatus
+
+    def __post_init__(self):
+        self.device_status = self.device.device_status
+        super().__post_init__()
 
 
 @dataclass
@@ -93,13 +96,3 @@ class FuncStopAxisOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
 
 
-@dataclass
-class FuncPowerInput(FuncInput):
-    device_id: str
-    flag: bool
-
-
-@dataclass
-class FuncPowerOutput(FuncOutput):
-    device_id: str
-    device_status: DeviceStatus

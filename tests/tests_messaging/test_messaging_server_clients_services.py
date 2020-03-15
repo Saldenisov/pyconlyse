@@ -1,6 +1,6 @@
 from time import sleep
 
-from communication.logic.thinkers import ThinkerEvent
+from communication.logic.thinkers_logic import ThinkerEvent
 from communication.messaging.message_utils import gen_msg
 
 address_server = {'frontend': 'tcp://127.0.0.1:5554', 'backend': 'tcp://127.0.0.1:5555',

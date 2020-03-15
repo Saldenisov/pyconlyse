@@ -10,7 +10,7 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
 from utilities.data.messages import Message
-from utilities.data.datastructures.mes_independent import DeviceStatus
+from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
 from communication.messaging.message_utils import MsgGenerator
 from views.ui.ServerGUI_ui import Ui_ServerGUI

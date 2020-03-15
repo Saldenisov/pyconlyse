@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Union
 
 from devices.service_devices.project_treatment.project_controller import ProjectController
-from utilities.data.datastructures.mes_independent.measurments import Measurement
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
 
 
 class Project_StreakCamera(ProjectController):

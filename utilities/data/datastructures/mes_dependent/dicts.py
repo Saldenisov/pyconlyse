@@ -1,4 +1,5 @@
-from utilities.data.datastructures.mes_dependent.general import Connection
+from typing import Dict
+from utilities.data.datastructures.mes_dependent.general import Connection, PendingDemand, PendingReply
 from utilities.data.messages import Message
 from collections import OrderedDict
 

@@ -7,9 +7,9 @@ import numpy as np
 from abc import abstractmethod
 from pathlib import Path
 from typing import Union, Dict, Any
-from devices import CmdStruct
 from devices.devices import Service
-from utilities.data.datastructures.mes_independent.measurments import Measurement
+from utilities.data.datastructures.mes_independent import CmdStruct
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
 
 
 import logging

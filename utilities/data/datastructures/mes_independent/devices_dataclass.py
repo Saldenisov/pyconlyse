@@ -1,7 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
 from devices.interfaces import DeciderInter, ExecutorInter
+from devices.interfaces import DeviceInter
 
 
 
@@ -34,10 +35,14 @@ class FuncInput:
 
 @dataclass
 class FuncOutput:
-    func_success: bool
     comments: str
+    device_id: str = field(init=False)
+    func_success: bool
+    device: DeviceInter
 
     def __post_init__(self):
+        self.device_id = self.device.id
+        self.device = None
         object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
 
 
@@ -48,7 +53,11 @@ class FuncActivateInput(FuncInput):
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
-    device_status: DeviceStatus
+    device_status: DeviceStatus = field(init=False)
+
+    def __post_init__(self):
+        self.device_status = self.device.device_status
+        super().__post_init__()
 
 
 @dataclass
@@ -59,5 +68,8 @@ class FuncPowerInput(FuncInput):
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
-    device_id: str
-    device_status: DeviceStatus
+    device_status: DeviceStatus = field(init=False)
+
+    def __post_init__(self):
+        self.device_status = self.device.device_status
+        super().__post_init__()

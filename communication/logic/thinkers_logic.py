@@ -2,7 +2,7 @@ import logging
 from time import time
 
 from communication.messaging.message_utils import MsgGenerator
-from communication.logic import Thinker, ThinkerEvent
+from communication.logic.thinker import Thinker, ThinkerEvent
 from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.messages import Message, DeviceInfoMes
 from utilities.myfunc import info_msg, error_logger

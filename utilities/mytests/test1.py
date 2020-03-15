@@ -1,7 +1,20 @@
+from dataclasses import dataclass
+
+@dataclass
 class A:
-    FIELD = 10
+    A: str
+
+@dataclass
+class B(A):
+
+    FIELD:str
+
+    def __init__(self, text:str, FIELD: str):
+        self.A = text
+        self.FIELD = FIELD
 
 
-a = A()
-c = A.__dict__
-b= a.__dict__
+a = B(text='asdfsdf', FIELD=10)
+print(a)
+
+

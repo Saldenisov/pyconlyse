@@ -292,6 +292,7 @@ class MsgGenerator:
                 data_info = mes_info_class(device.device_status)
             elif com_name == MsgGenerator.SHUTDOWN_INFO.mes_name:
                 data_info = mes_info_class(device.id, reason=kwargs['reason'])
+                crypted = False
             elif com_name == MsgGenerator.WELCOME_INFO.mes_name:
                 crypted = False
                 data_info = mes_info_class(name=device.name,

@@ -7,8 +7,8 @@ from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput
-from utilities.data.datastructures.mes_independent.stpmtr import StpMtrDescription
+from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
 
 from utilities.myfunc import unique_id
 
@@ -37,9 +37,11 @@ class AvailableServices:
     running_services: dict
     all_services: dict = field(default_factory=dict)
 
+
 @dataclass(frozen=True, order=True)
 class AreYouAliveDemand:
     context: str = ''
+
 
 @dataclass(frozen=True, order=True)
 class AreYouAliveReply:

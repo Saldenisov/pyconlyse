@@ -183,6 +183,7 @@ class Messenger(MessengerInter):
         self.active = False
         self.paused = False
         self._msg_out = {}
+        sleep(1)
 
     def pause(self):
         "put executation of thread on pause"
@@ -282,15 +283,19 @@ class ClientMessenger(Messenger):
 
     def run(self):
         super().run()
-        i = 0
+
         if 'server_frontend' not in self.addresses or 'server_backend' not in self.addresses:
             wait = True
         else:
             wait = False
-
+        i = 0
         while wait and self.active:
-            self.logger.info(f'{self.name} could not connect to server, no sockets, try to restart {self.parent.name}')
-            sockets = dict(self.poller.poll(10000))
+            if i > 100:
+                self.logger.info(f'{self.name} could not connect to server, no sockets, '
+                                 f'try to restart {self.parent.name}')
+                i = 0
+            i += 1
+            sockets = dict(self.poller.poll(100))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
                 mes: Message = MsgGenerator.json_to_message(mes)
@@ -331,10 +336,11 @@ class ClientMessenger(Messenger):
                                 self.parent.decide_on_msg(mes)
                             msgs = []
                     #b = time()
+                    else:
+                        sleep(.1)
                 except (ValueError, Exception) as e:
                     self.logger.error(e)
-                else:
-                    sleep(.5)
+
 
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.run, e)
@@ -482,7 +488,7 @@ class ServerMessenger(Messenger):
                     except (ValueError, Exception) as e:
                         self.logger.error(e)
                 else:
-                    sleep(0.5)
+                    sleep(0.1)
         except (Exception, zmq.error.ZMQError) as e:
             error_logger(self, self.run, e)
             self.stop()

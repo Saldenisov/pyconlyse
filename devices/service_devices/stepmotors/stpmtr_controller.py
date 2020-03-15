@@ -1,15 +1,15 @@
 from abc import abstractmethod
 from os import path
 from pathlib import Path
-from devices import CmdStruct
+from utilities.data.datastructures.mes_independent import CmdStruct
 from errors.myexceptions import DeviceError
 from devices.devices import Service
 from typing import Union, Dict, List, Tuple, Any, Callable
-from utilities.data.datastructures.mes_independent.devices import FuncActivateOutput
-from utilities.data.datastructures.mes_independent.stpmtr import (AxisStpMtr, FuncActivateAxisOutput, FuncGetPosOutput,
-                                                                  FuncMoveAxisToOutput, FuncStopAxisOutput,
-                                                                  FuncGetStpMtrControllerStateOutput,
-                                                                  StpMtrDescription)
+from utilities.data.datastructures.mes_independent.devices_dataclass import FuncActivateOutput
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, FuncActivateAxisOutput, FuncGetPosOutput,
+                                                                            FuncMoveAxisToOutput, FuncStopAxisOutput,
+                                                                            FuncGetStpMtrControllerStateOutput,
+                                                                            StpMtrDescription)
 import logging
 
 module_logger = logging.getLogger(__name__)
@@ -54,12 +54,18 @@ class StpMtrController(Service):
                 res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
                 if res:  # parameters should be set from hardware controller if possible
                     res, comments = self._set_parameters()  # This must be realized for all controllers
+                    if res:
+                        self.device_status.active = True
             else:
                 res, comments = self._connect(False)
-                self.device_status.active = False
-            info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
-            self.logger.info(info)
-        return FuncActivateOutput(func_success=res, comments=info, device_status=self.device_status)
+                for axis_id, axis in self.axes.items():
+                    if axis.status == 2:
+                        comments = f'Axis {axis_id} is moving. Cannot set controller active state to {flag}.'
+                        flag = True
+                self.device_status.active = flag
+        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
+        self.logger.info(info)
+        return FuncActivateOutput(comments=info, device=self, func_success=res)
 
     def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
         """
@@ -72,10 +78,13 @@ class StpMtrController(Service):
             res, comments = self._check_controller_activity()
         if res:
             res, comments = self._change_axis_status(axis_id, flag)
-            output = FuncActivateAxisOutput(func_success=res, comments=comments, axes=self.axes)
-        else:
-            output = FuncActivateAxisOutput(func_success=res, comments=comments, axes=self.axes_essentials)
-        return output
+        essentials = self.axes_essentials
+        status = []
+        for key, axis in essentials.items():
+            status.append(essentials[key].status)
+        info = f'Axes status: {status}. {comments}'
+        self.logger.info(info)
+        return FuncActivateAxisOutput(axes=self.axes_essentials, comments=info, device=self, func_success=res)
 
     @property
     def _axes_names(self) -> List[str]:
@@ -86,6 +95,7 @@ class StpMtrController(Service):
         essentials = {}
         for axis_id, axis in self.axes.items():
             essentials[axis_id] = axis.short()
+        return essentials
 
     @property
     def _axes_limits(self) -> List[Tuple[int]]:
@@ -115,22 +125,6 @@ class StpMtrController(Service):
             return True, ""
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
-
-    @abstractmethod
-    def _check_if_active(self) -> Tuple[bool, str]:
-        """
-        In real devices should ask hardware controller
-        :return:
-        """
-        return self.device_status.active, ''
-
-    @abstractmethod
-    def _check_if_connected(self) -> Tuple[bool, str]:
-        """
-        In real devices should ask hardware controller
-        :return:
-        """
-        return self.device_status.connected, ''
 
     def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
         """
@@ -214,8 +208,7 @@ class StpMtrController(Service):
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Axes are {self._axes_status}'
-        return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
-                                                  func_success=True, comments=comments)
+        return FuncGetStpMtrControllerStateOutput(axes=self.axes, device=self, comments=comments, func_success=True)
 
     @abstractmethod
     def _get_number_axes(self) -> int:

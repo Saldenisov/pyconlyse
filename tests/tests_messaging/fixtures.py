@@ -39,7 +39,7 @@ def my_stpmtrservice():
     path = Path(__file__).resolve()
 
     from devices.devices import Service
-    from communication.logic.thinkers import StpMtrCtrlServiceCmdLogic
+    from communication.logic.thinkers_logic import StpMtrCtrlServiceCmdLogic
 
     service = dev.DeviceFactory.make_device(device_id='b8b10026214c373bffe2b2847a9538dd',
                                         db_path=Path(Path(app_folder) / 'DB' / 'Devices.db'))

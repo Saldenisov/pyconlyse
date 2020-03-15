@@ -13,7 +13,6 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from devices import CmdStruct
 from DB.tools import create_connectionDB, executeDBcomm, close_connDB
 from communication.interfaces import ThinkerInter, MessengerInter
 from communication.messaging.message_utils import MsgGenerator
@@ -21,7 +20,9 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent.devices import DeviceStatus, FuncInput, FuncOutput, FuncPowerOutput
+from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
+                                                                             FuncPowerInput, FuncPowerOutput)
+from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
 from utilities.data.messages import Message, DoIt
@@ -54,6 +55,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  logger_new=True,
                  **kwargs):
         super().__init__()
+
         self._main_executor = ThreadPoolExecutor(max_workers=100)
         Device.n_instance += 1
         if logger_new:
@@ -104,7 +106,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.config.add_config(self.name, config_text=res[0])
 
             from communication.messaging.messengers import Messenger
-            from communication.logic.thinkers import Thinker
+            from communication.logic.thinkers_logic import Thinker
             from devices.soft.deciders import Decider
 
             if 'pub_option' not in kwargs:
@@ -123,7 +125,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'CREATED')
 
     @abstractmethod
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+    def available_public_functions(self) -> List[CmdStruct]:
         """
         Return dict of all functions available to user
         :return: dictionary of functions {name: description}, e.g. {'activate': {'flag': True}}
@@ -198,7 +200,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info: DoIt = msg.data.info
         com: str = info.com
         input: FuncInput = info.input
-        if com in self.available_public_functions():
+        if com in self.available_public_functions_names:
             f = getattr(self, com)
             func_param = signature(f).parameters
             input_dict = asdict(input)
@@ -262,16 +264,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = False
         self.send_status_pyqt()
 
-    def power(self, flag: bool) -> FuncPowerOutput:
-        # TODO: to be realized in metal someday
-        self.device_status.power = flag
-        if not flag:
-            self.device_status.connected = False
-            self.device_status.active = False
-        comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
-        return FuncPowerOutput(device_id=self.id, device_status=self.device_status,
-                               func_success=True, comments=comments)
-
     def start(self):
         self._start_messaging()
 
@@ -293,19 +285,14 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'STOPPING')
         stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
         self.messenger.send_msg(stop_msg)
-        sleep(1)
+        sleep(.1)
         self.thinker.pause()
         self.messenger.pause()
         self.thinker.stop()
-        sleep(0.5)
         self.messenger.stop()
-        sleep(0.1)
         self.send_status_pyqt()
         self.device_status.messaging_paused = False
         self.device_status.messaging_on = False
-        self.decider = None
-        self.thinker = None
-        self.messenger = None
         sleep(0.1)
         info_msg(self, 'STOPPED')
 
@@ -333,15 +320,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         # TODO: realize
         self.logger.info('Config is updated: ' + message)
 
-    def __del__(self):
-        self.logger.info(f"Instance of class {self.__class__.__name__}: {self.name} is deleted")
-        del self
+    #def __del__(self):
+        #self.logger.info(f"Instance of class {self.__class__.__name__}: {self.name} is deleted")
+        #del self
 
 
 class Server(Device):
 
     def __init__(self, **kwargs):
-        from communication.logic.thinkers import ServerCmdLogic
+        from communication.logic.thinkers_logic import ServerCmdLogic
         from communication.messaging.messengers import ServerMessenger
         from devices.soft.deciders import ServerDecider
         cls_parts = {'Thinker': ServerCmdLogic,
@@ -464,7 +451,7 @@ class Service(Device):
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServiceMessenger
         from devices.soft.deciders import ServiceDecider
-
+        self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
         if 'thinker_cls' in kwargs:
             cls_parts = {'Thinker': kwargs['thinker_cls'],
                          'Decider': ServiceDecider,
@@ -482,15 +469,31 @@ class Service(Device):
         super().__init__(**kwargs)
 
     @abstractmethod
+    def activate(self, func_input: FuncInput) -> FuncOutput:
+        pass
+
+    @abstractmethod
     def available_public_functions(self) -> List[CmdStruct]:
         return [Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.POWER]
 
     @abstractmethod
-    def description(self) -> Dict[str, Any]:
-        pass
+    def _check_if_active(self) -> Tuple[bool, str]:
+        """
+        In real devices should ask hardware controller
+        :return:
+        """
+        return self.device_status.active, ''
 
     @abstractmethod
-    def activate(self, flag: bool):
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        """
+        In real devices should ask hardware controller
+        :return:
+        """
+        return self.device_status.connected, ''
+
+    @abstractmethod
+    def description(self) -> Dict[str, Any]:
         pass
 
     def messenger_settings(self):
@@ -507,6 +510,14 @@ class Service(Device):
     def set_default(self):
         pass
 
+    def power(self, func_input: FuncInput) -> FuncPowerOutput:
+        # TODO: to be realized in metal someday
+        self.device_status.power = flag
+        if not flag:
+            self.device_status.connected = False
+            self.device_status.active = False
+        comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        return FuncPowerOutput(comments=comments, device=self, func_success=True)
 
 class DeviceFactory:
 
@@ -539,7 +550,7 @@ class DeviceFactory:
                 project_type = project_type[0]
 
                 from importlib import import_module
-                module_comm_thinkers = import_module('communication.logic.thinkers')
+                module_comm_thinkers = import_module('communication.logic.thinkers_logic')
                 if project_type == 'Client':
                     module_devices = import_module('devices.virtualdevices')
                 elif project_type == 'Service':

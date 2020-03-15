@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message
-from utilities.data.datastructures.mes_independent import FuncGetStpMtrControllerStateInput
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import FuncGetStpMtrControllerStateInput
 from views.ClientsGUIViews import SuperUserView, StepMotorsView
 from devices.devices import Device
 

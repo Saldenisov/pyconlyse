@@ -30,6 +30,12 @@ class StpMtrCtrl_emulate(StpMtrController):
                                        f'its status cannot be changed. First stop it.'
         return res, comments
 
+    def _check_if_active(self) -> Tuple[bool, str]:
+        return super()._check_if_active()
+
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        return super()._check_if_connected()
+
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
@@ -67,3 +73,7 @@ class StpMtrCtrl_emulate(StpMtrController):
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
             res, comments = True, ''
         return res, comments
+
+    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
+        return super()._set_controller_positions()
+

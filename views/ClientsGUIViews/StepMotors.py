@@ -11,17 +11,14 @@ from PyQt5.QtWidgets import (QWidget, QMainWindow,
                              QTextEdit, QRadioButton,
                              QLabel, QLineEdit, QLayout,
                              QSpacerItem, QSizePolicy, QWidgetItem)
+from PyQt5 import QtCore
 
-from typing import List, Union, Dict
 from utilities.myfunc import info_msg, error_logger, get_local_ip
-from PyQt5.QtGui import QCloseEvent
-from numpy import pad
 from devices.devices import Device
-from errors.myexceptions import CannotTreatLogic, WrongServiceGiven
 from utilities.data.messages import Message, ServiceInfoMes, DoneIt, Error
-from utilities.data.datastructures.mes_independent import *
+from utilities.data.datastructures.mes_independent.devices_dataclass import *
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import *
 from communication.messaging.message_utils import MsgGenerator
-from views.ui.Motors_widget import Ui_StepMotorsWidgetWindow
 from views.ui.widget_stpmtr_axis_simple import Ui_StpMtrGUI
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 
@@ -118,7 +115,6 @@ class StepMotorsView(QMainWindow):
             com = msg.data.com
             info: Union[DoneIt, Error] = msg.data.info
             if self.service_parameters.device_id in msg.body.sender_id:
-
                 if com == MsgGenerator.DONE_IT.mes_name:
                     info: DoneIt = msg.data.info
                     result: Union[FuncActivateOutput,
@@ -135,7 +131,6 @@ class StepMotorsView(QMainWindow):
                     elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                         result: FuncActivateAxisOutput = result
                         self.controller_status.axes = result.axes
-                        self.ui.retranslateUi(self, self.controller_status)
                     elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                         result: FuncMoveAxisToOutput = result
                         self.controller_status.axes = result.axes
@@ -191,17 +186,25 @@ class StepMotorsView(QMainWindow):
                 if now != then:
                     axis: AxisStpMtrEssentials = now[1]
                     ui.checkBox_On.setChecked(axis.status)
- #                   ui.ax
+            axis_id = int(ui.spinBox_axis.value())
+            axis: AxisStpMtrEssentials = cs.axes[axis_id]
+            ui.lcdNumber_position.display(axis.position)
+            _translate = QtCore.QCoreApplication.translate
+            axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
+            ui.label.setText(_translate("StpMtrGUI", "axis ID"))
+            ui.label_name.setText(_translate("StpMtrGUI", axis.name))
+            ui.label_ranges.setText(_translate("StpMtrGUI", str(axis.limits)))
+            ui.label_preset.setText(_translate("StpMtrGUI", str(axis.preset_values)))
 
             self.controller_status.axes_previous = self.controller_status.axes
 
         if cs.device_status != cs.device_status_previous:
             ui.checkBox_power.setChecked(cs.device_status.power)
             ui.checkBox_activate.setChecked(cs.device_status.active)
+            axis: AxisStpMtrEssentials = cs.axes[int(ui.spinBox_axis.value())]
             ui.lcdNumber_position.display(axis.position)
 
             self.controller_status.device_status_previous = self.controller_status.device_status
-
 
     def _update_progessbar_pos(self, axis: int, pos: Union[float, int]):
         if self.controller_status.axes[axis].status == 2 and self.ui.spinBox_axis.value() == axis:
@@ -211,204 +214,3 @@ class StepMotorsView(QMainWindow):
             self.ui.progressBar_movement.setValue(per)
             self.ui.lcdNumber_position.display(pos)
 
-
-class StepMotorsView_old(QWidget):
-    '''
-    Created on 11 mai 2017
-
-    @author: saldenisov
-    '''
-    def __init__(self, in_controller, in_model, parent=None):
-        super().__init__(parent)
-        self.name = 'StepMotorsClient:view: ' + get_local_ip()
-        self.logger = logging.getLogger("StepMotors." + __name__)
-        info_msg(self, 'INITIALIZING')
-        self.controller = in_controller
-        self.model = in_model
-
-        self.ui = Ui_StepMotorsWidgetWindow()
-        self.ui.setupUi(self)
-
-        self.model.add_observer(self)
-        self.model.model_changed.connect(self.model_is_changed)
-        self.ui.actionHelp.triggered.connect(self.controller.help_clicked)
-        self.ui.actionAuthor.triggered.connect(self.controller.author_clicked)
-        self.ui.actionQuit.triggered.connect(partial(self.controller.quit_clicked, event=QCloseEvent()))
-        self.ui.listWidget.itemDoubleClicked.connect(self.controller.listwidget_double_clicked)
-
-        self.ui.listWidget.addItems(self.model.config.get('widget').sections())
-
-        info_msg(self, 'INITIALIZED')
-
-    def closeEvent(self, event):
-        self.controller.quit_clicked(event)
-
-    def add_controls(self, stpmtrctrl_name):
-        """
-        When listwidget containing name of step motors controller is clicked, then
-        controls are added to view of StepMotors_widget.
-        :param stpmtrctrl_name: name of step motors controller
-        :return: None
-        """
-
-        var = 'layout_' + stpmtrctrl_name
-        setattr(self.ui, var, QVBoxLayout())
-        layout: QVBoxLayout = getattr(self.ui, var)
-        layout.setObjectName(var)
-        self.ui.horizontalLayout.addLayout(layout)
-
-        # Label
-        self._add_widget(QLabel, layout, 'label.' + stpmtrctrl_name, stpmtrctrl_name + ': pos, mm')
-
-        # where to move
-        self._add_widget(QLineEdit, layout, 'lineedit_where.' + stpmtrctrl_name, '')
-
-        # axis radiobuttons
-        axis_number = int(self.model.stpmtrctrl[stpmtrctrl_name].get_general_settings()['axis_number'])
-        radiobutton_layout = QHBoxLayout()
-        for axis in range(axis_number):
-            self._add_widget(QRadioButton, radiobutton_layout, f'radiobutton_axis{axis + 1}.' + stpmtrctrl_name,
-                             str(axis + 1))
-        widget: QRadioButton = getattr(self.ui, f'radiobutton_axis{1}.' + stpmtrctrl_name)
-        widget.setChecked(True)
-        layout.addLayout(radiobutton_layout)
-
-        #button move
-        self._add_widget(QPushButton, layout, 'button_move.' + stpmtrctrl_name, 'Move')
-        widget = getattr(self.ui, 'button_move.' + stpmtrctrl_name)
-        widget.setEnabled(False)
-        widget.clicked.connect(partial(self.controller.move_stpmtr,
-                                       DL_name=widget.objectName().split('.')[1],
-                                       axis=1, where=100))
-        #button_connect
-        self._add_widget(QPushButton, layout, 'button_connect.' + stpmtrctrl_name, 'Service is OFF')
-        widget = getattr(self.ui, 'button_connect.' + stpmtrctrl_name)
-        widget.clicked.connect(partial(self.controller.connect_stpmtrctrl,
-                                       DL_name=widget.objectName().split('.')[1]))
-        widget.setEnabled(False)
-
-        #status
-        self._add_widget(QLabel, layout, 'label_status.' + stpmtrctrl_name, 'status: ')
-
-        #TextEidt
-        self._add_widget(QTextEdit, layout, 'text_edit.' + stpmtrctrl_name, """ """)
-        widget = getattr(self.ui, 'text_edit.' + stpmtrctrl_name)
-        widget.setText('Lets do some work')
-        #Spacer
-        spacerItem = QSpacerItem(0, 1, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        name = 'spacer_' + stpmtrctrl_name
-        setattr(self.ui, name, spacerItem)
-        layout.addItem(spacerItem)
-
-    def delete_controls(self, stpmtrctrl_name):
-        layout = getattr(self.ui, 'layout_' + stpmtrctrl_name)
-
-        def del_from_layout(layout):
-            for i in reversed(range(layout.count())):
-                item = layout.itemAt(i)
-                if not isinstance(item, QLayout):
-                    if isinstance(item, QWidgetItem):
-                        item.widget().close()
-                    elif isinstance(item, QSpacerItem):
-                        pass
-                    layout.removeItem(item)
-                else:
-                    del_from_layout(item)
-
-        del_from_layout(layout)
-
-        self.ui.horizontalLayout.removeItem(layout)
-
-    def _add_widget(self, widget_cls: QWidget, layout: QLayout, name: str, text: str):
-        setattr(self.ui, name, widget_cls(self.ui.centralwidget))
-        widget = getattr(self.ui, name)
-        widget.setObjectName(name)
-        widget.setText(text)
-        layout.addWidget(widget)
-
-    def model_is_changed(self, msg: Message):
-        com = msg.data.com
-        parent = msg.body.sender.split(':')[-1]
-        try:
-            if com == 'lineedit_update':
-                widget_name = msg.data.info.widget_name
-                info = msg.data.info.parameters
-                axis_number = info['axis_number']
-                positions = info['positions']
-                widget = getattr(self.ui, f'{widget_name}.{parent}')
-                widget.setText(self._set_pos(axis_number, positions))
-            elif com == 'status_server':
-                status = msg.data.info.active
-                if status:
-                    text = 'Server status: OK'
-                else:
-                    text = 'Server status: not OK'
-                    try:
-                        widget = getattr(self.ui, 'text_edit.' + parent)
-                        if widget.toPlainText():
-                            widget.setFocus()
-                            widget.clear()
-                            widget.setText("")
-                    except:
-                        pass
-                widget = getattr(self.ui, 'label_status.' + parent)
-                widget.setText(text)
-                widget = getattr(self.ui, 'button_connect.' + parent)
-                widget.setEnabled(status)
-            elif com == 'status_service':
-                if msg.data.info.service_name in self.model.dlines.keys():
-                    active = msg.data.info.active
-                    on = msg.data.info.on
-                    if on:
-                        text = 'stepmotors is ON'
-                        status = True
-                    else:
-                        status = False
-                        if active:
-                            text = 'Service is ON'
-                        else:
-                            text = 'Service is OFF'
-                    widget = getattr(self.ui, 'button_connect.' + parent)
-                    widget.setText(text)
-                    widget = getattr(self.ui, 'button_move.' + parent)
-                    widget.setEnabled(status)
-
-
-                else:
-                    raise WrongServiceGiven(msg.data.info.service_name)
-
-            elif com == 'available_services':
-                self._update_text_edit(parent, msg['data']['services'])
-            elif com == 'activate_service':
-                if isinstance(msg['data']['status'], bool):
-                    pass
-                elif isinstance(msg['data']['status'], str):
-                    self._update_text_edit(parent, msg['data']['status'])
-                else:
-                    raise CannotTreatLogic('activate_service')
-        except (WrongServiceGiven, CannotTreatLogic) as e:
-            error_logger(self, self.model_is_changed, e)
-
-    @staticmethod
-    def _set_pos(axis_number: int, positions: list) -> str:
-        if positions:
-            text = ''
-            if axis_number > len(positions):
-                diff = axis_number - len(positions)
-                positions = pad(positions, (0, diff), 'constant')
-            i = 1
-            for pos in positions:
-                text = text + f'axis{i}={pos}; '
-                i += 1
-            return text
-        else:
-            return 'axis1=0; axis2=0;'
-
-    def _update_text_edit(self, name_dl: str, text: str):
-        try:
-            widget = getattr(self.ui, 'text_edit.' + name_dl)
-            widget.setFocus()
-            widget.clear()
-            widget.setText(text)
-        except Exception as e:
-            error_logger(self, self._update_text_edit, e)

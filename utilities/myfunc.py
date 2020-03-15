@@ -24,7 +24,7 @@ module_logger = logging.getLogger(__name__)
 
 
 def error_logger(obj: object, func, e):
-    obj.logger.error(f'func:{func.__name__} {e}')
+    obj.logger.error(f'func:{func.__name__}: {e}')
 
 
 def dict_to_str_repr(d: dict) -> str:
@@ -88,7 +88,7 @@ def info_msg(obj: object, msg_type: str, extra=''):
 
         obj.logger.info(r)
     else:
-        raise WrongInfoType(f'func: {info_msg.__name__}: wrong type: {msg_type}')
+        raise WrongInfoType(f'func: {obj.name}: wrong type: {msg_type}')
 
 
 def unique_id(name: [Any] = '') -> str:
