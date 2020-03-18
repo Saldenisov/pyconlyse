@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Union
-from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
+from typing import Dict, List, Tuple, Union, NewType
+from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
+                                                                             FuncGetControllerStateInput, FuncGetControllerStateOutput)
 
 
 @dataclass(frozen=False)
@@ -51,22 +52,19 @@ class FuncActivateAxisOutput(FuncOutput):
 
 
 @dataclass
-class FuncGetStpMtrControllerStateInput(FuncInput):
+class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
     pass
 
 
 @dataclass
-class FuncGetStpMtrControllerStateOutput(FuncOutput):
+class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
     axes: Dict[int, AxisStpMtr]
 
-    def __post_init__(self):
-        self.device_status = self.device.device_status
-        super().__post_init__()
 
 
 @dataclass
 class FuncGetPosInput(FuncInput):
-    pass
+    axis_id: int
 
 
 @dataclass
@@ -74,11 +72,15 @@ class FuncGetPosOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
 
 
+relative = NewType('relative', str)
+absolute = NewType('absolute', str)
+
+
 @dataclass
 class FuncMoveAxisToInput(FuncInput):
     axis_id: int
     pos: Union[int, float]
-    how: str
+    how: Union[relative, absolute]
 
 
 @dataclass

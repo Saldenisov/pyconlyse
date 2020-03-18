@@ -1,3 +1,16 @@
-for num, cheese, color in zip([1,2,3], ['manchego', 'stilton', 'brie'],
-                              ['red', 'blue', 'green']):
-    print('{} {} {}'.format(num, color, cheese))
+import concurrent.futures
+from time import sleep
+def foo(bar):
+    print('hello {}'.format(bar))
+    return 'foo'
+
+def boo(bar):
+    print('hello {}'.format(bar))
+    sleep(2)
+    return 'boo'
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+    future = executor.submit(foo, 'world!')
+    future2 = executor.submit(boo, 'shit')
+    return_value = future.result()
+    print(return_value, future2.result())

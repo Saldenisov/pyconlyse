@@ -5,11 +5,16 @@ from utilities.data.datastructures.mes_independent import CmdStruct
 from errors.myexceptions import DeviceError
 from devices.devices import Service
 from typing import Union, Dict, List, Tuple, Any, Callable
-from utilities.data.datastructures.mes_independent.devices_dataclass import FuncActivateOutput
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, FuncActivateAxisOutput, FuncGetPosOutput,
-                                                                            FuncMoveAxisToOutput, FuncStopAxisOutput,
+from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncErrorOutput, FuncActivateInput,
+                                                                             FuncActivateOutput)
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, FuncActivateAxisInput,
+                                                                            FuncActivateAxisOutput, FuncGetPosInput,
+                                                                            FuncGetPosOutput, FuncMoveAxisToInput,
+                                                                            FuncMoveAxisToOutput, FuncStopAxisInput,
+                                                                            FuncStopAxisOutput,
+                                                                            FuncGetStpMtrControllerStateInput,
                                                                             FuncGetStpMtrControllerStateOutput,
-                                                                            StpMtrDescription)
+                                                                            StpMtrDescription, relative, absolute)
 import logging
 
 module_logger = logging.getLogger(__name__)
@@ -20,10 +25,10 @@ class StpMtrController(Service):
     See Service for more functions
     These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
     """
-    ACTIVATE_AXIS = CmdStruct('activate_axis', {'axis': 0, 'flag': True})
-    GET_POS = CmdStruct('get_pos', {'axis': 0})
-    MOVE_AXIS_TO = CmdStruct('move_axis_to', {'axis': 0, 'pos': 0.0, 'how': 'absolute/relative'})
-    STOP_AXIS = CmdStruct('stop_axis', {'axis': 0})
+    ACTIVATE_AXIS = CmdStruct('activate_axis', FuncActivateAxisInput, FuncActivateAxisOutput)
+    GET_POS = CmdStruct('get_pos', FuncGetPosInput, FuncGetPosOutput)
+    MOVE_AXIS_TO = CmdStruct('move_axis_to', FuncMoveAxisToInput, FuncMoveAxisToOutput)
+    STOP_AXIS = CmdStruct('stop_axis', FuncStopAxisInput, FuncStopAxisOutput)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -47,7 +52,11 @@ class StpMtrController(Service):
         return super().available_public_functions() + [StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS,
                                                        StpMtrController.MOVE_AXIS_TO, StpMtrController.STOP_AXIS]
 
-    def activate(self, flag: bool) -> FuncActivateOutput:
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
+        flag = func_input.flag
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to Activate function')
         res, comments = self._check_if_active()
         if res ^ flag:  # res XOR Flag
             if flag:
@@ -57,22 +66,37 @@ class StpMtrController(Service):
                     if res:
                         self.device_status.active = True
             else:
-                res, comments = self._connect(False)
+                results, comments_l = ([], [])
                 for axis_id, axis in self.axes.items():
-                    if axis.status == 2:
-                        comments = f'Axis {axis_id} is moving. Cannot set controller active state to {flag}.'
-                        flag = True
-                self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}.{comments}'
+                    res, comments = self._change_axis_status(axis.id, 0)
+                    results.append(res)
+                    comments_l.append(comments)
+
+                if all(results):  # if all axis can be set to 0
+                    res, comments = self._connect(False)
+                else:
+                    res = False
+                    info = 'Cannot deactivate. '
+                    comments = ' '.join(comments_l)
+                    comments = info + comments
+
+                if res:
+                    self.device_status.active = flag
+        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         self.logger.info(info)
         return FuncActivateOutput(comments=info, device=self, func_success=res)
 
-    def activate_axis(self, axis_id: int, flag: int) -> FuncActivateAxisOutput:
+    def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
         """
         :param axis_id: 0-n
         :param flag: 0=non-active, 1=ready to work, 2=running
         :return: res, comments='' if True, else error_message
         """
+        axis_id = func_input.axis_id
+        flag = func_input.flag
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to Activate_axis function')
         res, comments = self._check_axis_range(axis_id)
         if res:
             res, comments = self._check_controller_activity()
@@ -99,6 +123,8 @@ class StpMtrController(Service):
 
     @property
     def _axes_limits(self) -> List[Tuple[int]]:
+        for axis in self.axes.values():
+            a = axis
         return [axis.limits for axis in self.axes.values()]
 
     @property
@@ -110,7 +136,7 @@ class StpMtrController(Service):
         return [axis.position for axis in self.axes.values()]
 
     @property
-    def _axes_preset_value(self) -> List[Union[int, float]]:
+    def _axes_preset_values(self) -> List[Union[int, float]]:
         return [axis.position for axis in self.axes.values()]
 
     @abstractmethod
@@ -201,11 +227,14 @@ class StpMtrController(Service):
     def _get_axes_status_db(self) -> List[int]:
         return [0] * self._axes_number
 
-    def get_controller_state(self) -> FuncGetStpMtrControllerStateOutput:
+    def get_controller_state(self, func_input: FuncGetStpMtrControllerStateInput) -> FuncGetStpMtrControllerStateOutput:
         """
         State of cotroller is returned
         :return:  FuncOutput
         """
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to get_controller_state function')
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Axes are {self._axes_status}'
         return FuncGetStpMtrControllerStateOutput(axes=self.axes, device=self, comments=comments, func_success=True)
@@ -222,34 +251,36 @@ class StpMtrController(Service):
         except (ValueError, SyntaxError):
             raise StpMtrError(self, text="Check axes number in DB, must be axex_number = 1 or any number")
 
-    def get_pos(self, axis_id: int) -> FuncGetPosOutput:
-        res, comments = self._check_axis(axis_id)
-        if res:
-            pos = self.axes[axis_id].position
-        return FuncGetPosOutput(func_success=res, comments=comments, axes=self.axes_essentials)
+    def get_pos(self, func_input: FuncGetPosInput) -> FuncGetPosOutput:
+        axis_id = func_input.axis_id
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to get_pos function')
+        return FuncGetPosOutput(axes=self.axes_essentials, comments='', device=self, func_success=True)
 
-    def move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> FuncMoveAxisToOutput:
+    def move_axis_to(self, func_input: FuncMoveAxisToInput) -> FuncMoveAxisToOutput:
+        axis_id = func_input.axis_id
+        device_id = func_input.device_id
+        how = func_input.how
+        pos = func_input.pos
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to move_axis function')
         res, comments = self._check_axis(axis_id)
-        chk_axis = res
         if res:
             res, comments = self._check_controller_activity()
         if res:
-            if how == 'relative':
+            if how.__name__ == 'relative':
                 pos = self.axes[axis_id].position + pos
-            res, comments = self._is_within_limits(axis_id, pos)
+            res, comments = self._is_within_limits(axis_id, pos)  # if not relative just set pos
         if res:
             if self.axes[axis_id].status == 1:
                 res, comments = self._move_axis_to(axis_id, pos, how)
             elif self.axes[axis_id].status == 2:
                 res, comments = False, f'Axis {axis_id} is running. Please, stop it before new request.'
-        if chk_axis:
-            pos = self.axes[axis_id].position
-        else:
-            pos = None
-        return FuncMoveAxisToOutput(axes=self.axes_essentials)
+        return FuncMoveAxisToOutput(axes=self.axes_essentials, device=self, comments=comments, func_success=res)
 
     @abstractmethod
-    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how: Union[absolute, relative]) -> Tuple[bool, str]:
         pass
 
     def _move_all_home(self) -> Tuple[bool, str]:
@@ -381,14 +412,15 @@ class StpMtrController(Service):
 
     def _set_axes_ids(self):
         # Axes ids must be in ascending order
-        ids = self._get_axes_ids_db()
-        ids_c = ids.copy()
-        if ids_c != ids:
-            e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
-            self.logger.error(e)
-            raise e
-        for id_a in ids:
-            self.axes[id_a] = AxisStpMtr(id=id_a)
+        if not self.device_status.connected:
+            ids = self._get_axes_ids_db()
+            ids_c = ids.copy()
+            if ids_c != ids:
+                e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
+                self.logger.error(e)
+                raise e
+            for id_a in ids:
+                self.axes[id_a] = AxisStpMtr(id=id_a)
 
     def _set_axes_names(self):
         names = self._get_axes_names_db()
@@ -479,16 +511,20 @@ class StpMtrController(Service):
             self.logger.error(e)
             return False, str(e)
 
-    def stop_axis(self, axis_id: int) -> FuncStopAxisOutput:
+    def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
+        axis_id = func_input.axis_id
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncErrorOutput(device_id=self.id, comments='Wrong device_id is passed to stop_axis function')
         res, comments = self._check_axis(axis_id)
         if res:
             if self.axes[axis_id].status == 2:
                 res, comments = self._change_axis_status(axis_id, 1, force=True)
                 if res:
-                    comments = f'Axis {axis_id} was stopped by user'
+                    comments = f'Axis {axis_id} was stopped by user.'
             elif self.axes[axis_id].status == 1:
-                comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped'
-        return FuncStopAxisOutput(func_success=res, comments=comments, axes=self.axes_essentials)
+                comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped.'
+        return FuncStopAxisOutput(axes=self.axes_essentials, comments=comments, device=self, func_success=res)
 
     @staticmethod
     def _write_to_file(text: str, file: Path):

@@ -18,9 +18,10 @@ module_logger = logging.getLogger(__name__)
 
 
 class ProjectController(Service):
-    AVERAGE = CmdStruct('average', {'experiments': []})
-    READ = CmdStruct('read', {'file_path': ''})
-    SAVE = CmdStruct('save', {'file_path': '', 'overwrite': True})
+    #TODO: UPDATE
+    #AVERAGE = CmdStruct('average', )
+    #READ = CmdStruct('read', )
+    #SAVE = CmdStruct('save', )
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

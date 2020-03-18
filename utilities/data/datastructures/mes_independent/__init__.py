@@ -9,4 +9,5 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class CmdStruct:
     name: str
-    parameters: dict
+    func_input: FuncInput
+    func_output: FuncOutput

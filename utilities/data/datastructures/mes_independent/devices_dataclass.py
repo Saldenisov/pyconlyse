@@ -27,7 +27,15 @@ from datetime import datetime
 
 
 @dataclass
+class FuncErrorOutput:
+    device_id: str
+    comments: str
+    func_success: bool = False
+
+
+@dataclass
 class FuncInput:
+    device_id: str
 
     def __post_init__(self):
         object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
@@ -61,8 +69,21 @@ class FuncActivateOutput(FuncOutput):
 
 
 @dataclass
+class FuncGetControllerStateInput(FuncInput):
+    pass
+
+
+@dataclass
+class FuncGetControllerStateOutput(FuncOutput):
+
+    def __post_init__(self):
+        self.device_status = self.device.device_status
+        super().__post_init__()
+
+
+
+@dataclass
 class FuncPowerInput(FuncInput):
-    device_id: str
     flag: bool
 
 

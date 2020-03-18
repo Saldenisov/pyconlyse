@@ -21,6 +21,8 @@ from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
+                                                                             FuncActivateInput, FuncActivateOutput,
+                                                                             FuncGetControllerStateInput, FuncGetControllerStateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
@@ -443,9 +445,9 @@ class Client(Device):
 
 
 class Service(Device):
-    ACTIVATE = CmdStruct('activate', {'flag': True})
-    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', {})
-    POWER = CmdStruct('power', {'flag': True})
+    ACTIVATE = CmdStruct('activate', FuncActivateInput, FuncActivateOutput)
+    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', FuncGetControllerStateInput, FuncGetControllerStateOutput)
+    POWER = CmdStruct('power', FuncPowerInput, FuncPowerOutput)
 
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):
@@ -510,14 +512,22 @@ class Service(Device):
     def set_default(self):
         pass
 
-    def power(self, func_input: FuncInput) -> FuncPowerOutput:
+    def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
-        self.device_status.power = flag
-        if not flag:
-            self.device_status.connected = False
-            self.device_status.active = False
-        comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
-        return FuncPowerOutput(comments=comments, device=self, func_success=True)
+        flag = func_input.flag
+        device_id = func_input.device_id
+        if device_id != self.id:
+            return FuncPowerOutput(comments='Wrong device_id is passed to Power function',
+                                   device=self, func_success=False)
+        if self.device_status.power ^ flag:  # XOR
+            if not flag and self.device_status.active:
+                comments = f'Power is {self.device_status.power}. Cannot switch power off when device is activated.'
+                success = False
+            else:
+                self.device_status.power = flag
+                success = True
+                comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        return FuncPowerOutput(comments=comments, device=self, func_success=success)
 
 class DeviceFactory:
 
