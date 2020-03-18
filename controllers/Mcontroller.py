@@ -18,7 +18,7 @@ module_logger = logging.getLogger(__name__)
 
 class Mcontroller():
     """
-    Class MainController is tests_hardware controller
+    Class MainController is tests_devices controller
     which coordinates work between
     MainView and MainModel
     """

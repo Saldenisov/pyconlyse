@@ -43,7 +43,7 @@ class LedPlugin(QPyDesignerCustomWidgetPlugin):
     def isContainer(self):
         return False
 
-    # Returns an XML description of tests_hardware custom widget instance that describes
+    # Returns an XML description of tests_devices custom widget instance that describes
     # default values for its properties. Each custom widget created by this
     # plugin will be configured using this description.
     # def domXml(self):

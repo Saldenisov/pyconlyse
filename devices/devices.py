@@ -529,10 +529,10 @@ class Service(Device):
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
         return FuncPowerOutput(comments=comments, device=self, func_success=success)
 
-class DeviceFactory:
 
+class DeviceFactory:
     @staticmethod
-    def make_device(**kwargs):
+    def make_device(**kwargs):  #TODO: redifine kwargs
         if 'cls' in kwargs:
             cls: Device = kwargs['cls']
             if issubclass(cls, Device):

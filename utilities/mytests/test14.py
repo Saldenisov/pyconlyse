@@ -8,13 +8,13 @@
 #         'http://some-made-up-domain.com/']
 #
 #
-# # Retrieve tests_hardware single page and report the url and contents
+# # Retrieve tests_devices single page and report the url and contents
 # def load_url(url, timeout):
 #     with urllib.request.urlopen(url, timeout=timeout) as conn:
 #         return conn.read()
 #
 #
-# # We can use tests_hardware with statement to ensure threads are cleaned up promptly
+# # We can use tests_devices with statement to ensure threads are cleaned up promptly
 # with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
 #     # Start the load operations and mark each future with its URL
 #     future_to_url = {executor.submit(load_url, url, 60): url for url in URLS}

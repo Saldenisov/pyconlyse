@@ -28,7 +28,7 @@ def executeDBcomm(cur: sq3.Cursor, command: str) -> Any:
 
 
 def create_connectionDB(DBfile: Path) -> Tuple[sq3.Connection, sq3.Cursor]:
-        """create tests_hardware database connection to the SQLite database
+        """create tests_devices database connection to the SQLite database
             specified by the db_file
         :param db_file: database file
         :return: Connection object or None
@@ -52,7 +52,7 @@ def close_connDB(conn: sq3.Connection):
 
 def calc_DB_hash(DB_path: Path):
         """
-        This function tales tests_hardware Path to DB sqlite
+        This function tales tests_devices Path to DB sqlite
         It calc the hash function, to use later if DB is changed
         externally
         :param DB_path:

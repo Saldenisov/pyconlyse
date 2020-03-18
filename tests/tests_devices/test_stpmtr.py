@@ -12,9 +12,7 @@ from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (Axis
                                                                             FuncStopAxisInput, FuncStopAxisOutput,
                                                                             relative, absolute)
 
-from tests.tests_hardware.fixtures import stpmtr_emulate
-
-import pytest
+from tests.fixtures.services import stpmtr_emulate
 
 
 def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):

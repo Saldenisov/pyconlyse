@@ -1,31 +1,49 @@
+from time import sleep
+from collections import OrderedDict as od
 from devices.devices import Server
-from tests.tests_messaging.fixtures import my_server, my_stpmtrservice
-from devices.devices import Service
+from devices.virtualdevices.clients import SuperUser
+from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
+from tests.fixtures import server, superuser, stpmtr_emulate
+from tests.tests_messaging.auxil import start_devices, stop_devices
+from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
+                                                                             FuncPowerInput, FuncPowerOutput)
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, AxisStpMtrEssentials,
+                                                                            FuncActivateAxisInput,
+                                                                            FuncActivateAxisOutput, FuncMoveAxisToInput,
+                                                                            FuncMoveAxisToOutput, FuncGetPosInput,
+                                                                            FuncGetPosOutput,
+                                                                            FuncGetStpMtrControllerStateInput,
+                                                                            FuncGetStpMtrControllerStateOutput,
+                                                                            FuncStopAxisInput, FuncStopAxisOutput,
+                                                                            relative, absolute)
 
+def test_superuser_server_stpmtr_emulate(server: Server, superuser:SuperUser, stpmtr_emulate: StpMtrCtrl_emulate):
 
-def test_server(my_server):
-    server: Server = my_server
-    assert not server.device_status.power
-    server.start()
-    assert server.device_status.power
+    devices = od()
+    devices['server'] = server
+    devices['superuser'] = superuser
+    devices['stpmtr_emulate'] = stpmtr_emulate
+
+    start_devices(devices)
+
+    sleep(5)
+
+    # Verify Server status
     assert server.device_status.active
-    server.pause()
-    assert server.device_status.messaging_paused
-    server.unpause()
-    assert not server.device_status.messaging_paused
-    server.stop()
-    assert not server.device_status.active
+    assert stpmtr_emulate.id in server.services_running
+    assert superuser.id in server.clients_running
+
+    # Verify SuperUser status
+    assert superuser.device_status.active
+    assert server.id in superuser.connections
+
+    # Verify Stpmtr_emulate
+    # Give power and activate service_device
+    stpmtr_emulate.power(FuncPowerInput(stpmtr_emulate.id,True))
+    stpmtr_emulate.activate(FuncActivateInput(stpmtr_emulate.id, True))
+    assert stpmtr_emulate.device_status.active
+    assert server.id in stpmtr_emulate.connections
 
 
-def test_stpmtrservice(my_stpmtrservice: Service):
-    service: Service = my_stpmtrservice
-    assert not service.device_status.power
-    service.start()
-    assert service.device_status.power
-    assert service.device_status.active
-    service.pause()
-    assert service.device_status.messaging_paused
-    service.unpause()
-    assert not service.device_status.messaging_paused
-    service.stop()
-    assert not service.device_status.active
+    stop_devices(devices)
+

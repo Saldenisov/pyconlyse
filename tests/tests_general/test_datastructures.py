@@ -1,5 +1,5 @@
 from utilities.data.datastructures.mes_dependent.dicts import Events_Dict
-from communication.logic import ThinkerEvent
+from communication.logic.thinker import ThinkerEvent
 
 
 def test_event_dict():

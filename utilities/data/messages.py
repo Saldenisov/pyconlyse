@@ -123,7 +123,7 @@ class ServiceInfoMes:
     device_status: DeviceStatus
     device_id: str
     device_description: Union[StpMtrDescription]
-    available_public_functions: dict = field(default_factory=dict)
+    available_public_functions: list = field(default_factory=list)
 
 
 @dataclass(frozen=True, order=True)

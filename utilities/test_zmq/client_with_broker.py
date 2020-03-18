@@ -10,7 +10,7 @@ context = zmq.Context()
 socket = context.socket(zmq.REQ)
 socket.connect("tcp://127.0.0.1:5559")
 
-#  Do 10 requests, waiting each time for tests_hardware response
+#  Do 10 requests, waiting each time for tests_devices response
 for request in range(1,11):
     socket.send(b"Hello")
     message = socket.recv()

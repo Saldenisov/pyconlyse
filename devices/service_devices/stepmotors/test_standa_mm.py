@@ -151,7 +151,7 @@ def test_set_microstep_mode_256(lib, device_id):
     print("Write command result: " + repr(result))
 
 
-# variable 'lib' points to tests_hardware loaded library
+# variable 'lib' points to tests_devices loaded library
 # note that ximc uses stdcall on win
 print("Library loaded")
 

@@ -1,9 +1,9 @@
 TryAgain = True
 while TryAgain:
     try:
-        Value = int(input("Type tests_hardware whole number. "))
+        Value = int(input("Type tests_devices whole number. "))
     except ValueError:
-        print("You must type tests_hardware whole number!")
+        print("You must type tests_devices whole number!")
         try:
             DoOver = input("Try again (y/n)? ")
         except:

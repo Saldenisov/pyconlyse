@@ -18,7 +18,7 @@ from . import MDP
 from tests.zhelpers import dump
 
 class Service:
-    """tests_hardware single Service"""
+    """tests_devices single Service"""
     name = None # Service name
     requests = None # List of client requests
     waiting = None # List of waiting workers
@@ -29,7 +29,7 @@ class Service:
         self.waiting = []
 
 class Worker:
-    """tests_hardware Worker, idle or active"""
+    """tests_devices Worker, idle or active"""
     identity = None # hex Identity of worker
     address = None # Address to route to
     service = None # Owning service, if known
@@ -116,7 +116,7 @@ class MajorDomoBroker:
     def bind(self, endpoint):
         """Bind broker to endpoint, can call this multiple times.
 
-        We use tests_hardware single socket for both clients and workers.
+        We use tests_devices single socket for both clients and workers.
         """
         self.socket.bind(endpoint)
         logging.info("I: MDP broker/0.1.1 is active at %s", endpoint)
@@ -152,7 +152,7 @@ class MajorDomoBroker:
                 break
 
     def process_client_message(self, sender, msg):
-        """Process tests_hardware request coming from tests_hardware client."""
+        """Process tests_devices request coming from tests_devices client."""
         assert len(msg) >= 2 # Service name + body
         service = msg.pop(0)
         # Set reply return address to client sender
@@ -163,7 +163,7 @@ class MajorDomoBroker:
             self.dispatch(self.require_service(service), msg)
 
     def process_worker_message(self, sender, msg):
-        """Process message sent to us by tests_hardware worker."""
+        """Process message sent to us by tests_devices worker."""
         assert len(msg) >= 1 # At least, command
 
         command = msg.pop(0)
@@ -173,7 +173,7 @@ class MajorDomoBroker:
         worker = self.require_worker(sender)
 
         if (MDP.W_READY == command):
-            assert len(msg) >= 1 # At least, tests_hardware service name
+            assert len(msg) >= 1 # At least, tests_devices service name
             service = msg.pop(0)
             # Not first command in session or Reserved service name
             if (worker_ready or service.startswith(self.INTERNAL_SERVICE_PREFIX)):

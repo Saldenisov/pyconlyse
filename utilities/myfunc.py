@@ -94,7 +94,7 @@ def info_msg(obj: object, msg_type: str, extra=''):
 def unique_id(name: [Any] = '') -> str:
     """
     Calculate md5 hash of date + system time + name
-    :return: return tests_hardware uniqie id
+    :return: return tests_devices uniqie id
     """
     if not name:
         name = ''
@@ -184,8 +184,8 @@ def ndarray_tostring(arr):
     Convert ndarray to tab separated string
 
     >>> import numpy as np
-    >>> tests_hardware = np.array([1, 2, 3])
-    >>> b = ndarray_tostring(tests_hardware)
+    >>> tests_devices = np.array([1, 2, 3])
+    >>> b = ndarray_tostring(tests_devices)
     >>> print(b)
     1.000
     2.000

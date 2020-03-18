@@ -280,7 +280,7 @@ class MsgGenerator:
                 data_info = mes_info_class(device.device_status,
                                            device.id,
                                            device.description(),
-                                           available_public_functions=device.available_public_functions())
+                                           available_public_functions=device.available_public_functions_names)
             elif com_name == MsgGenerator.REPLY_ON_FORWARDED_DEMAND.mes_name:
                 msg_reply: Message = kwargs['msg_reply']
                 data_info = msg_reply.data.info
