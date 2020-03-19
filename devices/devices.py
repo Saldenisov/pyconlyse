@@ -91,12 +91,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             raise e
 
-        # Pyqt slot and signal are connected
         try:
-            self.signal.connect(kwargs['pyqtslot'])
-            self.pyqtsignal_connected = True
-            self.logger.info(f'pyqtsignal is set to True')
-        except KeyError as e:
+            pyqtslot: Callable = kwargs['pyqtslot']
+            self._connect_pyqtslot_signal(pyqtslot)
+        except KeyError:
             self.pyqtsignal_connected = False
             self.logger.info(f'pyqtsignal is set to False')
 
@@ -151,6 +149,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             return False
 
+    def _connect_pyqtslot_signal(self, pyqtslot):
+        # Pyqt slot and signal are connected
+        self.signal.connect(pyqtslot)
+        self.pyqtsignal_connected = True
+        self.logger.info(f'pyqtsignal is set to True')
+
     def decide_on_msg(self, msg: Message) -> None:
         # TODO : realise logic
         decision = self.decider.decide(msg)
@@ -204,14 +208,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         input: FuncInput = info.input
         if com in self.available_public_functions_names:
             f = getattr(self, com)
-            func_param = signature(f).parameters
-            input_dict = asdict(input)
-            if (input_dict.keys() & func_param.keys()) == set(list(func_param.keys())):
+            func_input_type = signature(f).parameters['func_input'].annotation
+            if func_input_type == type(input):
                 try:
-                    parameters = {}
-                    for key in func_param.keys():
-                        parameters[key] = input_dict[key]
-                    result: FuncOutput = f(**parameters)
+                    result: FuncOutput = f(input)
                     msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result)
                 except Exception as e:
                     self.logger.error(e)
@@ -219,7 +219,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     comments = str(e)
             else:
                 error = True
-                comments = f'Input keys: {input_dict.keys()} do not match to func keys: {func_param.keys()}'
+                comments = f'Device {self.id} function: execute_com: Input type: {type(input)} do not match to ' \
+                           f'func_input type : {func_input_type}'
         else:
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
@@ -498,6 +499,10 @@ class Service(Device):
     def description(self) -> Dict[str, Any]:
         pass
 
+    @abstractmethod
+    def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
+        pass
+
     def messenger_settings(self):
         for adr in self.messenger.addresses['server_publisher']:
             try:
@@ -515,10 +520,6 @@ class Service(Device):
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
         flag = func_input.flag
-        device_id = func_input.device_id
-        if device_id != self.id:
-            return FuncPowerOutput(comments='Wrong device_id is passed to Power function',
-                                   device=self, func_success=False)
         if self.device_status.power ^ flag:  # XOR
             if not flag and self.device_status.active:
                 comments = f'Power is {self.device_status.power}. Cannot switch power off when device is activated.'
@@ -527,7 +528,7 @@ class Service(Device):
                 self.device_status.power = flag
                 success = True
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
-        return FuncPowerOutput(comments=comments, device=self, func_success=success)
+        return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=success)
 
 
 class DeviceFactory:

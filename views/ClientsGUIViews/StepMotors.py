@@ -55,7 +55,7 @@ class StepMotorsView(QMainWindow):
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
-        self.ui.spinBox_axis.valueChanged.connect(self.update_state)
+        self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, True))
         self.ui.closeEvent = self.closeEvent
 
         self.update_state()
@@ -87,16 +87,16 @@ class StepMotorsView(QMainWindow):
             axis_id = int(self.ui.spinBox_axis.value())
         com = StpMtrController.GET_POS.name
         msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.service_parameters.device_id,
-                                 input=FuncGetPosInput())
+                                 input=FuncGetPosInput(axis_id))
         self.device.send_msg_externally(msg)
         if with_return:
             return True if self.controller_status.axes[axis_id].status == 2 else False
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
-            how = 'absolute'
+            how = absolute.__name__
         else:
-            how = 'relative'
+            how = relative.__name__
         com = StpMtrController.MOVE_AXIS_TO.name
         axis_id = int(self.ui.spinBox_axis.value())
         pos = float(self.ui.lineEdit_value.text())
@@ -109,6 +109,22 @@ class StepMotorsView(QMainWindow):
         self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                     specific={'axis_id': axis_id, 'with_return': True})
         self._asked_status = 0
+
+    @property
+    def controller_axes(self):
+        return self.controller_status.axes
+
+    @controller_axes.setter
+    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
+        try:
+            if type(list(value.values())[0]) == AxisStpMtr:
+                self.controller_status.axes = value
+            else:
+                for axis_id, axis in value.items():
+                    self.controller_status.axes[axis_id].status = axis.status
+                    self.controller_status.axes[axis_id].position = axis.position
+        except Exception as e:
+            print(e)
 
     def model_is_changed(self, msg: Message):
         try:
@@ -130,22 +146,22 @@ class StepMotorsView(QMainWindow):
                         self.controller_status.device_status = result.device_status
                     elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                         result: FuncActivateAxisOutput = result
-                        self.controller_status.axes = result.axes
+                        self.controller_axes = result.axes
                     elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                         result: FuncMoveAxisToOutput = result
-                        self.controller_status.axes = result.axes
+                        self.controller_axes = result.axes
                     elif info.com == StpMtrController.GET_POS.name:
                         result: FuncGetPosOutput = result
-                        self.controller_status.axes = result.axes
+                        self.controller_axes = result.axes
                     elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                         result: FuncGetStpMtrControllerStateOutput = result
-                        self.controller_status.axes = result.axes
+                        self.controller_axes = result.axes
                         self.controller_status.device_status = result.device_status
                         if not self.controller_status.start_stop:
                             self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
                     elif info.com == StpMtrController.STOP_AXIS.name:
                         result: FuncStopAxisOutput = result
-                        self.controller_status.axes = result.axes
+                        self.controller_axes = result.axes
                     elif info.com == StpMtrController.POWER.name:
                         result: FuncPowerOutput = result
                         self.controller_status.device_status = result.device_status
@@ -174,14 +190,13 @@ class StepMotorsView(QMainWindow):
     def power(self):
         com = StpMtrController.POWER.name
         msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.service_parameters.device_id,
-                                 input=FuncPowerInput(device_id=self.service_parameters.device_id,
-                                                      flag=self.ui.checkBox_power.isChecked()))
+                                 input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         self.device.send_msg_externally(msg)
 
-    def update_state(self):
+    def update_state(self, force=False):
         cs = self.controller_status
         ui = self.ui
-        if cs.axes != cs.axes_previous:
+        if cs.axes != cs.axes_previous or force:
             for now, then in zip(cs.axes.items(), cs.axes_previous.items()):
                 if now != then:
                     axis: AxisStpMtrEssentials = now[1]
@@ -196,17 +211,22 @@ class StepMotorsView(QMainWindow):
             ui.label_ranges.setText(_translate("StpMtrGUI", str(axis.limits)))
             ui.label_preset.setText(_translate("StpMtrGUI", str(axis.preset_values)))
 
+            self._update_progessbar_pos()
+
             self.controller_status.axes_previous = self.controller_status.axes
 
-        if cs.device_status != cs.device_status_previous:
+        if cs.device_status != cs.device_status_previous or force:
             ui.checkBox_power.setChecked(cs.device_status.power)
             ui.checkBox_activate.setChecked(cs.device_status.active)
             axis: AxisStpMtrEssentials = cs.axes[int(ui.spinBox_axis.value())]
+            ui.checkBox_On.setChecked(axis.status)
             ui.lcdNumber_position.display(axis.position)
 
             self.controller_status.device_status_previous = self.controller_status.device_status
 
-    def _update_progessbar_pos(self, axis: int, pos: Union[float, int]):
+    def _update_progessbar_pos(self):
+        axis = int(self.ui.spinBox_axis.value())
+        pos = self.controller_status.axes[axis].position
         if self.controller_status.axes[axis].status == 2 and self.ui.spinBox_axis.value() == axis:
             start = self.controller_status.start_stop[axis][0]
             stop = self.controller_status.start_stop[axis][1]

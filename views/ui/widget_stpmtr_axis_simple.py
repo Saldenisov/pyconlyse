@@ -131,6 +131,7 @@ class Ui_StpMtrGUI(object):
             title = self.parameters.device_description.GUI_title
             axis = int(self.spinBox_axis.value())
             axes: Dict[int, AxisStpMtr] = self.parameters.device_description.axes
+            self.checkBox_On.setChecked(self.parameters.device_description.axes[axis].status)
             name = axes[axis].name
             ranges = str(axes[axis].limits)
             preset = str(axes[axis].preset_values)

@@ -26,7 +26,7 @@ class ServerGUIController:
         self.name = 'ServerGUI:controller: ' + get_local_ip()
         info_msg(self, 'INITIALIZING')
         self.model = in_model
-        self.view = ServerGUIView(self, in_model=self.model)
+        self.view = ServerGUIView(in_controller=self, in_model=self.model)
         self.view.show()
         info_msg(self, 'INITIALIZED')
 

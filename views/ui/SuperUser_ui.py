@@ -10,7 +10,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 
-class Ui_SuperUser(object):
+class Ui_SuperUser:
 
     def setupUi(self, SuperUser):
         SuperUser.setObjectName("SuperUser")

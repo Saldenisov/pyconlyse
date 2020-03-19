@@ -28,30 +28,18 @@ from datetime import datetime
 
 @dataclass
 class FuncErrorOutput:
-    device_id: str
     comments: str
     func_success: bool = False
 
 
 @dataclass
 class FuncInput:
-    device_id: str
-
-    def __post_init__(self):
-        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
-
+    pass
 
 @dataclass
 class FuncOutput:
     comments: str
-    device_id: str = field(init=False)
     func_success: bool
-    device: DeviceInter
-
-    def __post_init__(self):
-        self.device_id = self.device.id
-        self.device = None
-        object.__setattr__(self, 'time_stamp', datetime.timestamp(datetime.now()))
 
 
 @dataclass
@@ -61,11 +49,7 @@ class FuncActivateInput(FuncInput):
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
-    device_status: DeviceStatus = field(init=False)
-
-    def __post_init__(self):
-        self.device_status = self.device.device_status
-        super().__post_init__()
+    device_status: DeviceStatus
 
 
 @dataclass
@@ -75,11 +59,7 @@ class FuncGetControllerStateInput(FuncInput):
 
 @dataclass
 class FuncGetControllerStateOutput(FuncOutput):
-
-    def __post_init__(self):
-        self.device_status = self.device.device_status
-        super().__post_init__()
-
+    device_status: DeviceStatus
 
 
 @dataclass
@@ -89,8 +69,4 @@ class FuncPowerInput(FuncInput):
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
-    device_status: DeviceStatus = field(init=False)
-
-    def __post_init__(self):
-        self.device_status = self.device.device_status
-        super().__post_init__()
+    device_status: DeviceStatus

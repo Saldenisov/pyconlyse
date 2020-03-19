@@ -1,4 +1,4 @@
-"C:\Users\Sergey Denisov\AppData\Local\Programs\Python\Python37-32\Scripts\pyuic5.exe" SuperClient.ui -o SuperClient.py
+"C:\Users\Sergey Denisov\AppData\Local\Programs\Python\Python37-32\Scripts\pyuic5.exe" C:\dev\pyconlyse\views\ui\TestObserver.ui -o C:\dev\pyconlyse\views\ui\TestObserver.py
 
 
 

@@ -5,7 +5,7 @@ Created on 15.11.2019
 '''
 import logging
 
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMainWindow, QApplication
 
 from utilities.myfunc import info_msg,  get_local_ip
 from utilities.data.messages import Message
@@ -20,7 +20,7 @@ module_logger = logging.getLogger(__name__)
 class SuperUserView(QMainWindow):
 
     def __init__(self, in_controller, in_model, parent=None):
-        super().__init__(parent)
+        super().__init__()
         self.name = 'SuperUserGUI:view: ' + get_local_ip()
         self.logger = module_logger
         info_msg(self, 'INITIALIZING')
@@ -67,3 +67,4 @@ class SuperUserView(QMainWindow):
             self.model.service_parameters[info.device_id] = info
         elif com == MsgGenerator.ERROR.mes_name:
             self.ui.tE_info.setText(info.comments)
+

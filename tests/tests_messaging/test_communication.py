@@ -41,9 +41,15 @@ def test_superuser_server_stpmtr_emulate(server: Server, superuser:SuperUser, st
     # Give power and activate service_device
     stpmtr_emulate.power(FuncPowerInput(stpmtr_emulate.id,True))
     stpmtr_emulate.activate(FuncActivateInput(stpmtr_emulate.id, True))
+    assert stpmtr_emulate.device_status.power
     assert stpmtr_emulate.device_status.active
     assert server.id in stpmtr_emulate.connections
 
+    # !SuperUser-Server-Stpmtr_emulate are connected!
+
+
+    # Testing receiving
+    # pyqtslot is connected
 
     stop_devices(devices)
 

@@ -343,5 +343,5 @@ class MsgGenerator:
                 mes = eval(mes_dc)
                 return mes
             except Exception as e:
-                module_logger.error(f'IN json_to_message {e} msg_jso: {msg_json}, mes_dc: {mes_dc}, mes: {mes}')
+                module_logger.error(f'IN json_to_message {e} msg_json: {msg_json}, mes_dc: {mes_dc}, mes: {mes}')
                 raise

@@ -20,30 +20,24 @@ def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
 
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
                                  'stop_axis']
-    ACTIVATE = FuncActivateInput(device_id=stpmtr_emulate.id, flag=True)
-    DEACTIVATE = FuncActivateInput(device_id=stpmtr_emulate.id, flag=False)
-    ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1, device_id=stpmtr_emulate.id, flag=True)
-    DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1, device_id=stpmtr_emulate.id, flag=False)
-    GET_POS_AXIS1 = FuncGetPosInput(axis_id=1, device_id=stpmtr_emulate.id)
-    GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput(device_id=stpmtr_emulate.id)
-    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, device_id=stpmtr_emulate.id, pos=10, how=absolute)
-    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1, device_id=stpmtr_emulate.id, pos=100, how=absolute)
-    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1, device_id=stpmtr_emulate.id, pos=10, how=relative)
-    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1, device_id=stpmtr_emulate.id, pos=-10, how=relative)
-    STOP_AXIS1 = FuncStopAxisInput(device_id=stpmtr_emulate.id, axis_id=1)
-    POWER_ON = FuncPowerInput(device_id=stpmtr_emulate.id, flag=True)
-    POWER_ON_NO_ID = FuncPowerInput(device_id='', flag=True)
-    POWER_OFF = FuncPowerInput(device_id=stpmtr_emulate.id, flag=False)
+    ACTIVATE = FuncActivateInput(flag=True)
+    DEACTIVATE = FuncActivateInput(flag=False)
+    ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1, flag=True)
+    DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1,  flag=False)
+    GET_POS_AXIS1 = FuncGetPosInput(axis_id=1)
+    GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
+    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10, how=absolute)
+    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100, how=absolute)
+    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10, how=relative)
+    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10, how=relative)
+    STOP_AXIS1 = FuncStopAxisInput(axis_id=1)
+    POWER_ON = FuncPowerInput(flag=True)
+    POWER_OFF = FuncPowerInput(flag=False)
     # Testing Power function
-    # power On with wrong ID
-    res: FuncPowerOutput = stpmtr_emulate.power(POWER_ON_NO_ID)
-    assert type(res) == FuncPowerOutput
-    assert not res.func_success
     # power On
     res: FuncPowerOutput = stpmtr_emulate.power(POWER_ON)
     assert type(res) == FuncPowerOutput
     assert res.func_success
-    assert res.device_id == stpmtr_emulate.id
     assert res.device_status.power
     # power off when device is active
     res: FuncActivateOutput = stpmtr_emulate.activate(ACTIVATE)
@@ -57,7 +51,6 @@ def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
     res: FuncActivateOutput = stpmtr_emulate.activate(ACTIVATE)
     assert type(res) == FuncActivateOutput
     assert res.func_success
-    assert res.device_id == stpmtr_emulate.id
     assert res.device_status.active
     # activate for a second time
     res: FuncActivateOutput = stpmtr_emulate.activate(ACTIVATE)
