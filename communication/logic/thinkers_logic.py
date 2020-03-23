@@ -143,8 +143,7 @@ class ServerCmdLogic(Thinker):
         reply = True
         if msg.body.receiver_id != self.parent.id:
             if msg.body.receiver_id in self.parent.connections:
-                msg_i = MsgGenerator.forward_msg(device=self.parent,
-                                                 msg_i=msg)
+                msg_i = MsgGenerator.forward_msg(device=self.parent, msg_i=msg)
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
@@ -247,9 +246,9 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         data = msg.data
         if self.parent.pyqtsignal_connected:
             self.parent.signal.emit(msg)
-        if data.com == MsgGenerator.WELCOME_INFO.mes_name:
-            msg = MsgGenerator.available_services_demand(device=self.parent)
-            self.add_task_out(msg)
+        #if data.com == MsgGenerator.WELCOME_INFO.mes_name:
+            #msg = MsgGenerator.available_services_demand(device=self.parent)
+            #self.add_task_out(msg)
 
 
 class ServiceCmdLogic(GeneralCmdLogic):

@@ -12,3 +12,9 @@ def start_devices(devices: Dict[str, Device]):
 def stop_devices(devices: Dict[str, Device]):
     for device_name, device in devices.items():
         device.stop()
+
+
+def clean_test_queues(devices: Dict[str, Device]):
+    for device_name, device in devices.items():
+        device.thinker.tasks_in_test.clear()
+        device.thinker.tasks_out_test.clear()

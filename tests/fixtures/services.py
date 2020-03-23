@@ -11,3 +11,7 @@ def stpmtr_emulate(device_id='StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538d
         StpMtrCtrl_emulate:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'DB' / db_name))
 
+@pytest.fixture
+def stpmtr_emulate_test(device_id='StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', db_name='Devices.db') -> \
+        StpMtrCtrl_emulate:
+    return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'DB' / db_name), test=True)

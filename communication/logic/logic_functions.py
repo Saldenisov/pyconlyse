@@ -39,7 +39,7 @@ def external_hb_logic(event: ThinkerEvent):
                 counter = 0
                 info_msg(event, 'INFO', extra=f'{event.name} : {event.n}')
         else:
-            sleep(0.5)
+            sleep(0.05)
             event.time = time()
 
 
@@ -55,7 +55,7 @@ def internal_hb_logic(event: ThinkerEvent):
             msg = MsgGenerator.heartbeat(device, event=event, n=i)
             thinker.add_task_out(msg)
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def internal_info_logic(event: ThinkerEvent):
@@ -69,7 +69,7 @@ def internal_info_logic(event: ThinkerEvent):
             #msg = MsgGenerator.degen_msg('device_info_short', device, event=event)
             #thinker.add_task_out(msg)
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def task_in_reaction(event: ThinkerEvent):
@@ -88,7 +88,7 @@ def task_in_reaction(event: ThinkerEvent):
                 except ThinkerErrorReact as e:
                     error_logger(event, task_in_reaction, f'{e}: {msg}')
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def task_out_reaction(event: ThinkerEvent):
@@ -123,7 +123,7 @@ def task_out_reaction(event: ThinkerEvent):
                 except (ThinkerErrorReact, Exception) as e:
                     error_logger(event, task_out_reaction, f'{e}: {msg}')
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def pending_demands(event: ThinkerEvent):
@@ -134,6 +134,7 @@ def pending_demands(event: ThinkerEvent):
         if not event.paused:
             sleep(event.tick)
             if len(tasks) > 0:
+                print(f'pending demands tasl len {len(tasks)}')
                 try:
                     for key, item in tasks.items():
                         pending: PendingReply = item
@@ -152,7 +153,7 @@ def pending_demands(event: ThinkerEvent):
                 except (ThinkerErrorReact, Exception) as e:
                     error_logger(event, event.run, e)
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def pending_replies(event: ThinkerEvent):
@@ -184,7 +185,7 @@ def pending_replies(event: ThinkerEvent):
                 except (ThinkerErrorReact, Exception) as e:
                     error_logger(event, event.run, e)
         else:
-            sleep(0.5)
+            sleep(0.05)
 
 
 def postponed_reaction(replier: Callable[[Message], None], reaction: Message, t: float=1.0, logger=None):

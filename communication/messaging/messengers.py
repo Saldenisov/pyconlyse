@@ -183,7 +183,6 @@ class Messenger(MessengerInter):
         self.active = False
         self.paused = False
         self._msg_out = {}
-        sleep(1)
 
     def pause(self):
         "put executation of thread on pause"

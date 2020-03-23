@@ -129,12 +129,14 @@ class Ui_StpMtrGUI(object):
             self.checkBox_activate.setChecked(self.parameters.device_status.active)
             self.checkBox_power.setChecked(self.parameters.device_status.power)
             title = self.parameters.device_description.GUI_title
-            axis = int(self.spinBox_axis.value())
+            axis_id = int(self.spinBox_axis.value())
             axes: Dict[int, AxisStpMtr] = self.parameters.device_description.axes
-            self.checkBox_On.setChecked(self.parameters.device_description.axes[axis].status)
-            name = axes[axis].name
-            ranges = str(axes[axis].limits)
-            preset = str(axes[axis].preset_values)
+            axis: AxisStpMtr = axes[axis_id]
+            self.checkBox_On.setChecked(axis.status)
+            self.lcdNumber_position.display(axis.position)
+            name = axis.name
+            ranges = str(axis.limits)
+            preset = str(axis.preset_values)
         except KeyError:
             #TODO: modify
             axis = 1

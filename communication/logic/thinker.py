@@ -1,7 +1,7 @@
 import logging
 from abc import abstractmethod
 from threading import Thread
-from time import time
+from time import time, sleep
 from typing import Union, Callable
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import (ThinkerEventFuncError,
@@ -29,7 +29,9 @@ class Thinker(ThinkerInter):
         self._counter = 0
         self.events = Events_Dict()
         self._tasks_in = OrderedDictMod(name='tasks_in')
+        self.tasks_in_test = OrderedDictMod(name='tasks_in_test')
         self._tasks_out = OrderedDictMod(name='tasks_out')
+        self.tasks_out_test = OrderedDictMod(name='tasks_out_test')
         self._pending_demands = OrderedDictMesTypeCounter(name='pending_demands')
         self._pending_replies = OrderedDictMesTypeCounter(name='pending_replies')
         self.paused = False
@@ -176,6 +178,8 @@ class Thinker(ThinkerInter):
             if len(self._tasks_in) > 1000:
                 self._tasks_in.popitem(False)  # pop up last item
             self._tasks_in[msg.id] = msg
+            if self.parent.test and not (msg.data.com == 'heartbeat'):
+                self.tasks_in_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_in, e)
 
@@ -184,6 +188,8 @@ class Thinker(ThinkerInter):
             if len(self._tasks_out) > 1000:
                 self._tasks_out.popitem(False)  # pop up last item
             self._tasks_out[msg.id] = msg
+            if self.parent.test and not (msg.data.com == 'heartbeat'):
+                self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_out, e)
 
@@ -298,8 +304,9 @@ class ThinkerEvent(Thread):
     def stop(self, join=False):
         info_msg(self, 'STOPPING', extra=f' of {self.parent.name}')
         self.active = False
-        if join:
-            self.join()
+        #if join:
+            #self.join()
+
 
     def pause(self):
         info_msg(self, 'PAUSING')

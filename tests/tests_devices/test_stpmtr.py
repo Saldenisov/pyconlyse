@@ -12,12 +12,12 @@ from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (Axis
                                                                             FuncStopAxisInput, FuncStopAxisOutput,
                                                                             relative, absolute)
 
-from tests.fixtures.services import stpmtr_emulate
+from tests.fixtures.services import stpmtr_emulate_test
 
 
-def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
+def test_func_stpmtr_emulate(stpmtr_emulate_test: StpMtrCtrl_emulate):
+    stpmtr_emulate = stpmtr_emulate_test
     stpmtr_emulate.start()
-
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
                                  'stop_axis']
     ACTIVATE = FuncActivateInput(flag=True)
@@ -26,10 +26,10 @@ def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
     DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1,  flag=False)
     GET_POS_AXIS1 = FuncGetPosInput(axis_id=1)
     GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
-    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10, how=absolute)
-    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100, how=absolute)
-    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10, how=relative)
-    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10, how=relative)
+    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10, how=absolute.__name__)
+    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100, how=absolute.__name__)
+    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10, how=relative.__name__)
+    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10, how=relative.__name__)
     STOP_AXIS1 = FuncStopAxisInput(axis_id=1)
     POWER_ON = FuncPowerInput(flag=True)
     POWER_OFF = FuncPowerInput(flag=False)
@@ -146,12 +146,10 @@ def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
     # Move axis 1 to pos=100 and stop it immediately
 
     def move() -> FuncMoveAxisToOutput:
-        print('inside move')
         res: FuncMoveAxisToOutput = stpmtr_emulate.move_axis_to(MOVE_AXIS1_absolute_hundred)
         return res
 
     def stop() -> FuncStopAxisOutput:
-        print('inside stop')
         from time import sleep
         sleep(1)
         res: FuncStopAxisOutput = stpmtr_emulate.stop_axis(STOP_AXIS1)
@@ -196,4 +194,5 @@ def test_func_stpmtr_emulate(stpmtr_emulate: StpMtrCtrl_emulate):
     assert all(acc)
 
     # stop stpmtr_emulate device
+
     stpmtr_emulate.stop()

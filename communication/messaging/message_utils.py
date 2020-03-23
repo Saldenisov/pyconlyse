@@ -2,11 +2,7 @@ from base64 import b64decode
 from json import loads
 from zlib import decompress
 import utilities.data.messages as mes
-from utilities.data.messages import MessageStructure
-from typing import Union
-from communication.interfaces import MessengerInter
 from errors.myexceptions import MsgComNotKnown, MsgError
-from devices.interfaces import DeviceInter
 from utilities.data.messages import *  # This line is required for json_to_message
 from utilities.data.datastructures.mes_independent import *
 
@@ -161,9 +157,9 @@ class MsgGenerator:
     def _gen_msg(command: mes.MessageStructure, device, **kwargs) -> mes.Message:
         type_com: str = command.type
 
-        if type_com == FORWARD:
-            msg_i = kwargs['msg_i']
-            return msg_i
+        #if type_com == FORWARD:
+            #msg_i = kwargs['msg_i']
+            #return msg_i
 
         com_name: str = command.mes_name
         mes_info_class: mes.DataClass = command.mes_class
@@ -223,7 +219,7 @@ class MsgGenerator:
                 comments: str = kwargs['comments']
                 data_info = mes_info_class(comments)
             elif com_name == MsgGenerator.FORWARD_MSG.mes_name:
-                pass
+                return kwargs['msg_i']
             elif com_name == MsgGenerator.HEARTBEAT.mes_name:
                 crypted = False
                 event = kwargs['event']

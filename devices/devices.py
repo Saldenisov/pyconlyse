@@ -55,13 +55,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  parent: QObject = None,
                  DB_command: str = '',
                  logger_new=True,
+                 test=False,
                  **kwargs):
         super().__init__()
-
+        self.test = test
         self._main_executor = ThreadPoolExecutor(max_workers=100)
         Device.n_instance += 1
         if logger_new:
             self.logger = initialize_logger(app_folder / 'LOG', file_name=__name__ + '.' + self.__class__.__name__)
+            if test:
+                self.logger.setLevel(logging.ERROR)
+                #self.logger.disabled = True
         else:
             self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
 
@@ -279,16 +283,16 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.thinker.start()
         self.messenger_settings()
         self.messenger.start()
-        sleep(0.1)
         info_msg(self, 'STARTED')
         self.send_status_pyqt()
+
 
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
         self.messenger.send_msg(stop_msg)
-        sleep(.1)
+        sleep(0.1)
         self.thinker.pause()
         self.messenger.pause()
         self.thinker.stop()
@@ -296,8 +300,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.send_status_pyqt()
         self.device_status.messaging_paused = False
         self.device_status.messaging_on = False
-        sleep(0.1)
         info_msg(self, 'STOPPED')
+
 
     def send_status_pyqt(self, com=''):
         # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
@@ -340,7 +344,7 @@ class Server(Device):
         kwargs['cls_parts'] = cls_parts
         if 'DB_command' not in kwargs:
             kwargs['DB_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
-        self.services_available = []
+        self.services_available = {}
         self.type = 'server'
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
         super().__init__(**kwargs)

@@ -3,6 +3,7 @@ Created on 15.11.2019
 
 @author: saldenisov
 '''
+import copy
 import logging
 from _functools import partial
 
@@ -33,7 +34,7 @@ class StepMotorsView(QMainWindow):
         self._asked_status = 0
         self.controller = in_controller
         self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.axes,
-                                                           axes_previous=service_parameters.device_description.axes,
+                                                           axes_previous=dict(service_parameters.device_description.axes),
                                                            device_status=service_parameters.device_status,
                                                            device_status_previous=service_parameters.device_status)
         if not self.controller_status.start_stop:
@@ -117,7 +118,7 @@ class StepMotorsView(QMainWindow):
     @controller_axes.setter
     def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
         try:
-            if type(list(value.values())[0]) == AxisStpMtr:
+            if type(next(iter(value.values()))) == AxisStpMtr:
                 self.controller_status.axes = value
             else:
                 for axis_id, axis in value.items():
@@ -213,7 +214,7 @@ class StepMotorsView(QMainWindow):
 
             self._update_progessbar_pos()
 
-            self.controller_status.axes_previous = self.controller_status.axes
+            self.controller_status.axes_previous = copy.deepcopy(cs.axes)
 
         if cs.device_status != cs.device_status_previous or force:
             ui.checkBox_power.setChecked(cs.device_status.power)
@@ -222,7 +223,7 @@ class StepMotorsView(QMainWindow):
             ui.checkBox_On.setChecked(axis.status)
             ui.lcdNumber_position.display(axis.position)
 
-            self.controller_status.device_status_previous = self.controller_status.device_status
+            self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
 
     def _update_progessbar_pos(self):
         axis = int(self.ui.spinBox_axis.value())
