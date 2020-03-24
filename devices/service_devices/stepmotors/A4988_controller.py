@@ -33,34 +33,43 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
+    def _check_if_active(self) -> Tuple[bool, str]:
+        return super()._check_if_active()
+
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        return super()._check_if_connected()
+
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
+        def search(axes, status):
+            for axis_id, axis in self.axes.items():
+                if axis.status == status:
+                    return axis_id
+            return None
+
         res, comments = super()._check_axis_flag(flag)
         if res:
             if self.axes[axis_id].status != flag:
-                idx = None
                 info = ''
-                if 1 in self._axes_status:
-                    idx = self._axes_status.index(1)
-                elif 2 in self._axes_status:
-                    idx = self._axes_status.index(2)
-                    if force:
-                        self._axes_status[idx] = 1
-                        info = f' Axis {idx} was stopped.'
-                    else:
-                        return False, f'Stop axis {idx} to be able activate axis {axis_id}. Use force, or wait movement ' \
-                                      f'to complete.'
-                if idx != None:
-                    if idx != axis_id:
-                        self._axes_status[idx] = 0
-                        self._change_relay_state(idx, 0)
-                        info = f' Axis {idx} is set 0.'
+                idx = search(self.axes, 1)
+                if not idx:
+                    idx = search(self.axes, 2)
+                    if force and idx:
+                        self.axes[idx].status = 1
+                        info = f' Axis id={idx}, name={self.axes[idx].name} was stopped.'
+                    elif idx:
+                        return False, f'Stop axis id={idx} to be able activate axis id={axis_id}. ' \
+                                      f'Use force, or wait movement to complete.'
+                if idx != axis_id and idx:
+                    self.axes[idx].status = 0
+                    self._change_relay_state(idx, 0)
+                    info = f'Axis id={idx}, name={self.axes[idx].name} is set 0.'
 
-                if not (self._axes_status[axis_id] > 0 and flag > 0):
+                if not (self.axes[axis_id].status > 0 and flag > 0):  #only works for 0->1, 1->0, 2->0
                     self._change_relay_state(axis_id, flag)
-                self._axes_status[axis_id] = flag
-                res, comments = True, f'Axis {axis_id} is set to {flag}.' + info
+                self.axes[axis_id].status = flag
+                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
             else:
-                res, comments = True, f'Axis {axis_id} is already set to {flag}'
+                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
         return res, comments
 
     def GUI_bounds(self):
@@ -68,58 +77,53 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
     def _get_axes_status(self) -> List[int]:
-        if self._axes_status:
-            return self._axes_status
-        else:
-            return [0] * self._axes_number
+        return self._axes_status
 
     def _get_number_axes(self) -> int:
-        return self._get_number_axes_db()
+        return len(self.axes)
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
-        return self._get_limits_db()
+        return self._axes_limits
 
     def _get_positions(self) -> List[Union[int, float]]:
-        if self._pos:
-            return self._pos
-        else:
-            return [0] * self._axes_number
+        return self._axes_positions
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        return self._get_preset_values_db()
+        return self._axes_preset_values
 
     def _move_axis_to(self, axis_id: int, pos: int, how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            if pos - self._pos[axis_id] > 0:
+            if pos - self.axes[axis_id].position > 0:
                 pas = 1
                 self._direction('top')
             else:
                 pas = -1
                 self._direction('bottom')
-            steps = int(abs(pos - self._pos[axis_id]))
+            steps = int(abs(pos - self.axes[axis_id].position))
+            interrupted = False
             self._enable_controller()
             width = self._TTL_width[axis_id] / self._microsteps
             delay = self._delay_TTL[axis_id] / self._microsteps
             for i in range(steps):
-                if self._axes_status[axis_id] == 2:
+                if self.axes[axis_id].status == 2:
                     for _ in range(self._microsteps):
                         self._set_led(self._ttl, 1)
                         sleep(width)
                         self._set_led(self._ttl, 0)
                         sleep(delay)
-                    self._pos[axis_id] = self._pos[axis_id] + pas
+                    self.axes[axis_id].position += pas
                 else:
-                    comments = 'movement was interrupted'
+                    res = False
+                    comments = f'Movement of Axis with id={axis_id} was interrupted'
+                    interrupted = True
                     break
             self._disable_controller()
             _, _ = self._change_axis_status(axis_id, 1, force=True)
-            StpMtrController._write_to_file(str(self._pos), self._file_pos)
-            res, comments = True, ''
+            StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
+            if not interrupted:
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} was finished.'
         return res, comments
-
-    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        return super()._set_parameters(extra_func=[self._setup])
 
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
@@ -139,6 +143,12 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         except (KeyError, SyntaxError) as e:
             self.logger.error(e)
             return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
+
+    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
+        return super()._set_controller_positions()
+
+    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
+        return super()._set_parameters(extra_func=[self._setup])
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
@@ -260,3 +270,4 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     error.append(str(e))
             self._pins = []
             return True, '' if len(error)== 0 else str(error)
+

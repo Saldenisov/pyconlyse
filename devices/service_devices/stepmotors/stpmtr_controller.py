@@ -262,7 +262,8 @@ class StpMtrController(Service):
             if self.axes[axis_id].status == 1:
                 res, comments = self._move_axis_to(axis_id, pos, how)
             elif self.axes[axis_id].status == 2:
-                res, comments = False, f'Axis {axis_id} is running. Please, stop it before new request.'
+                res, comments = False, f'Axis id={axis_id}, name={self.axes[axis_id].name} is running. ' \
+                                       f'Please, stop it before new request.'
         return FuncMoveAxisToOutput(axes=self.axes_essentials, comments=comments, func_success=res)
 
     @abstractmethod
@@ -493,7 +494,7 @@ class StpMtrController(Service):
                 return True, ''
             else:
                 raise StpMtrError(self, comments)
-        except StpMtrError as e:
+        except (StpMtrError, Exception) as e:
             self.logger.error(e)
             return False, str(e)
 
@@ -504,7 +505,7 @@ class StpMtrController(Service):
             if self.axes[axis_id].status == 2:
                 res, comments = self._change_axis_status(axis_id, 1, force=True)
                 if res:
-                    comments = f'Axis {axis_id} was stopped by user.'
+                    comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was stopped by user.'
             elif self.axes[axis_id].status == 1:
                 comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped.'
         return FuncStopAxisOutput(axes=self.axes_essentials, comments=comments, func_success=res)

@@ -76,7 +76,7 @@ class StpMtrCtrl_emulate(StpMtrController):
             _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
             if not interrupted:
-                res, comments = True, f'Movement of Axis with id={axis_id} was finished.'
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} was finished.'
         return res, comments
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
