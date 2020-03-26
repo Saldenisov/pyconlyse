@@ -476,7 +476,7 @@ class Service(Device):
         super().__init__(**kwargs)
 
     @abstractmethod
-    def activate(self, func_input: FuncInput) -> FuncOutput:
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         pass
 
     @abstractmethod

@@ -3,15 +3,25 @@
 
 """
 from pathlib import Path
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Tuple
 
-from devices.service_devices.project_treatment.project_controller import ProjectController
+from devices.service_devices.project_treatment.projectmanager import ProjectManager
+from utilities.data.datastructures.mes_independent import FuncGetControllerStateInput, FuncGetControllerStateOutput
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
 
 
-class Project_StreakCamera(ProjectController):
+class ProjectManager_StreakCamera(ProjectManager):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+    def _check_if_active(self) -> Tuple[bool, str]:
+        pass
+
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        pass
+
+    def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
+        pass
 
     def open(self, measurement: Union[Path, Measurement]):
         pass

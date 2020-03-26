@@ -282,5 +282,5 @@ class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 
 
-class ProjectServiceCmdLogic(ServiceCmdLogic):
+class ProjectManagerServiceCmdLogic(ServiceCmdLogic):
     pass

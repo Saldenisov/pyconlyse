@@ -7,6 +7,9 @@ from typing import Dict
 #Experimental Data structures
 @dataclass
 class Measurement:
+    """
+    General measurement class
+    """
     type: str  # Pulse-Probe, Pulse-Pump-Probe
     comments: str
     author: str
