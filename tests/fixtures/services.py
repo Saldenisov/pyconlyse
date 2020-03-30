@@ -1,7 +1,7 @@
 from pathlib import Path
 from devices.devices import DeviceFactory
 from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes
-from devices.service_devices.project_treatment import ProjectManager_StreakCamera
+from devices.service_devices.project_treatment import ProjectManager
 import pytest
 
 app_folder = str(Path(__file__).resolve().parents[2])
@@ -38,11 +38,11 @@ def stpmtr_a4988_4axes_test_non_fixture(device_id='StpMtrCtrl_a4988_4axes:2ecfc6
 
 # Project managers
 @pytest.fixture
-def projectmanager_streakcamera(device_id='ProjectManagerStreakCamera:2d23d885d1c63ab03166ffa858b90ada',
-                                db_name='Devices.db') -> ProjectManager_StreakCamera:
+def projectmanager(device_id='ProjectManager:2d23d885d1c63ab03166ffa858b90ada',
+                                db_name='Devices.db') -> ProjectManager:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'DB' / db_name), test=True)
 
 
-def projectmanager_streakcamera_non_fixture(device_id='ProjectManagerStreakCamera:2d23d885d1c63ab03166ffa858b90ada',
-                                db_name='Devices.db') -> ProjectManager_StreakCamera:
+def projectmanager_non_fixture(device_id='ProjectManager:2d23d885d1c63ab03166ffa858b90ada',
+                                db_name='Devices.db') -> ProjectManager:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'DB' / db_name), test=True)

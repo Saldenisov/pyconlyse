@@ -89,6 +89,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     for key, axis in essentials.items():
         status.append(essentials[key].status)
     assert f'Axes status: {status}. ' in res.comments
+    assert stpmtr.axes[1].status == 1
     # deactivate axis 1
     res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
     assert res.func_success
@@ -98,8 +99,12 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         status.append(essentials[key].status)
     assert f'Axes status: {status}. ' in res.comments
 
+    # activate axis 1
+    res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     # deactivate controller
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
+    assert stpmtr.axes[1].status == 0
+
     # activate axis 1
     res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
     assert not res.func_success
