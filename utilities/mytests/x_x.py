@@ -1,16 +1,17 @@
-import concurrent.futures
-from time import sleep
-def foo(bar):
-    print('hello {}'.format(bar))
-    return 'foo'
+from dataclasses import dataclass
 
-def boo(bar):
-    print('hello {}'.format(bar))
-    sleep(2)
-    return 'boo'
 
-with concurrent.futures.ThreadPoolExecutor() as executor:
-    future = executor.submit(foo, 'world!')
-    future2 = executor.submit(boo, 'shit')
-    return_value = future.result()
-    print(return_value, future2.result())
+@dataclass
+class A:
+    n: int
+    data: str
+
+
+@dataclass
+class B(A):
+    data: dict
+
+
+a = A(1, '2')
+b = B(1, {})
+print(b)

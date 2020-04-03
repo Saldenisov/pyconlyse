@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 import numpy as np
-from typing import Dict
+from typing import Dict, Union
 
 
 #Experimental Data structures
@@ -13,15 +13,26 @@ class Measurement:
     type: str  # Pulse-Probe, Pulse-Pump-Probe
     comments: str
     author: str
-    date: datetime
-
-
-@dataclass
-class Map2D(Measurement):
+    timestamp: float
     data: np.ndarray
     wavelengths: np.array
     timedelays: np.array
     time_scale: str
+
+
+@dataclass
+class Hamamatsu(Measurement):
+    pass
+
+
+@dataclass
+class HamamatsuIMG(Hamamatsu):
+    pass
+
+
+@dataclass
+class HamamatsuHIS(Hamamatsu):
+    n_maps: int
 
 
 @dataclass
@@ -37,10 +48,7 @@ class StroboscopicPulseProbeRaw(Measurement):
      ...x n times
      ]
     """
-    raw: Dict[float, np.ndarray]
-    wavelength: np.array
-    timedelays: np.array
-    time_scale: str
+    pass
 
 
 

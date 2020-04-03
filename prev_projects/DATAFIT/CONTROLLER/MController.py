@@ -1,7 +1,7 @@
 from os.path import isfile, exists
-from VIEW import MView
-from MODEL import GRAPHSModel
-from CONTROLLER import GraphsController
+from prev_projects.DATAFIT.VIEW import MView
+from prev_projects.DATAFIT.MODEL import GRAPHSModel
+from prev_projects.DATAFIT.CONTROLLER import GraphsController
 
 from PyQt5.QtWidgets import (QMessageBox,
                              QApplication,

@@ -12,7 +12,7 @@ from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import FuncGetStpMtrControllerStateInput
-from views.ClientsGUIViews import SuperUserView, StepMotorsView
+from views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView
 from devices.devices import Device
 
 
@@ -129,3 +129,16 @@ class StepMotorsController:
 
     def move_stpmtr(self, motor_controller_name: str, axis: int, where: int):
         pass
+
+
+class VD2TreatmentController:
+
+    def __init__(self, in_model):
+        self.logger = logging.getLogger('VD2Treatment')
+        self.name = 'VD2Treatment:controller'
+        info_msg(self, 'INITIALIZING')
+        self.model = in_model
+        self.view = VD2TreatmentView(self)
+        self.view.show()
+
+        info_msg(self, 'INITIALIZED')

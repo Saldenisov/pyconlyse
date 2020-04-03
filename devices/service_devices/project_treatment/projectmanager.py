@@ -7,8 +7,10 @@ import numpy as np
 import os
 from abc import abstractmethod
 from itertools import chain
+import hashlib
 from pathlib import Path
-from typing import Union, Dict, Any, Tuple
+from time import time_ns
+from typing import Union, Dict, Any, Tuple, Iterable, Generator
 from devices.devices import Service
 from utilities.data.datastructures.mes_independent import (CmdStruct, FuncActivateInput, FuncActivateOutput,
                                                            FuncGetControllerStateInput, FuncGetControllerStateOutput)
@@ -66,10 +68,39 @@ class ProjectManager(Service):
         pass
 
     def _scanner_data(self) -> Tuple[bool, str]:
+        def check_files_names(files: Union[Generator, Iterable]) -> bool:
+
+            print()
+            renamed = False
+            for file in files:
+                if not isinstance(file, Path):
+                    try:
+                        file = Path(file)
+                    except:
+                        BaseException(f'Function: _scanner_data {file} is Path instance. Device id={self.id}')
+                if '~ID~' not in file.name:
+                    renamed = True
+                    file_name = '_'.join(file.name.split('.')[0:-1])
+                    extension = file.name.split('.')[-1]
+                    ID = hashlib.md5(file_name.encode('utf-8') + str(time_ns()).encode('utf-8')).hexdigest()
+                    new_name = f'{file_name}~ID~{ID}.{extension}'
+                    file.rename(file.parent / new_name)
+
+            return renamed
+
         dat_files = self.data_path.rglob('*.dat')
+        if check_files_names(dat_files):
+            dat_files = self.data_path.rglob('*.dat')
         img_files = self.data_path.rglob('*.img')
+        if check_files_names(img_files):
+            img_files = self.data_path.rglob('*.img')
         zip_files = self.data_path.rglob('*.zip')
-        files = tuple(chain(dat_files, img_files, zip_files))
+        if check_files_names(zip_files):
+            zip_files = self.data_path.rglob('*.zip')
+
+        self._files = set(chain(dat_files, img_files, zip_files))
+
+
 
         return True, ''
 

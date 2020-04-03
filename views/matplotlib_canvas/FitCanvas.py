@@ -27,8 +27,8 @@ class FitCanvas(MyMplCanvas):
 
         gs = gridspec.GridSpec(2, 1, height_ratios=[3, 1])
 
-        self.dataplot = self.Fig.add_subplot(gs[0])
-        self.residual = self.Fig.add_subplot(gs[1])
+        self.dataplot = self.fig.add_subplot(gs[0])
+        self.residual = self.fig.add_subplot(gs[1])
 
         self.dataplot.plot(timedelays, signal, 'b')
         self.dataplot.plot(timedelays[from_p:to_p], signal[from_p:to_p], 'r')

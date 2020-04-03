@@ -13,7 +13,7 @@ class KineticsCanvas(MyMplCanvas):
     def compute_initial_figure(self, data_model):
         self.model = data_model
 
-        self.dataplot = self.Fig.add_subplot(111)
+        self.dataplot = self.fig.add_subplot(111)
 
         self.dataplot.axhline(y=0, color='black')
 
