@@ -142,3 +142,20 @@ class VD2TreatmentController:
         self.view.show()
 
         info_msg(self, 'INITIALIZED')
+
+    def set_data(self, signal: str):
+        from os.path import isfile, exists
+        from pathlib import Path
+        try:
+            x = self.view.ui.tree.selectedIndexes()
+            file_path = self.view.ui.tree.model().filePath(x[0])
+
+            if isfile(file_path) and exists(file_path):
+                if signal == 'data':
+                    self.model.data_path = Path(file_path)
+                    self.model.read_data()
+                elif signal == 'noise':
+                    self.model.noise_path = Path(file_path)
+
+        except:
+            self.logger.error('Error in picking files from Tree')

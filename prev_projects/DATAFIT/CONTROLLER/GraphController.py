@@ -1,7 +1,7 @@
-from VIEW import GraphView
-from MODEL import FitModel
-from CONTROLLER import FitController
-from HELPFUL import ndarray_tostring
+from prev_projects.DATAFIT.VIEW import GraphView
+from prev_projects.DATAFIT.MODEL import FitModel
+from prev_projects.DATAFIT.CONTROLLER import FitController
+from prev_projects.DATAFIT.HELPFUL import ndarray_tostring
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import (QListWidgetItem,

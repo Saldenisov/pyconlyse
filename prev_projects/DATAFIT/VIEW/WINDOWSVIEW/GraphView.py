@@ -20,19 +20,14 @@ class GraphView(QMainWindow, GraphObserver, metaclass=Meta):
 
         self.model.addObserver(self)
         #
-        self.ui.datacanvas.mpl_connect('key_press_event',
-                                       self.controller.key_pressed)
-        self.ui.datacanvas.mpl_connect('key_release_event',
-                                       self.controller.key_released)
-        self.ui.datacanvas.mpl_connect('button_press_event',
-                                       self.controller.mouse_pressed)
-        self.ui.datacanvas.mpl_connect('motion_notify_event',
-                                       self.controller.mouse_moved)
+        self.ui.datacanvas.mpl_connect('key_press_event', self.controller.key_pressed)
+        self.ui.datacanvas.mpl_connect('key_release_event', self.controller.key_released)
+        self.ui.datacanvas.mpl_connect('button_press_event', self.controller.mouse_pressed)
+        self.ui.datacanvas.mpl_connect('motion_notify_event', self.controller.mouse_moved)
 
         self.ui.kinetics_slider.ValueChanged.connect(self.controller.slider_moved_Y)
 
-        self.ui.kineticscanvas.mpl_connect('key_press_event',
-                                           self.controller.key_pressed_kinetics)
+        self.ui.kineticscanvas.mpl_connect('key_press_event',self.controller.key_pressed_kinetics)
 
         self.ui.kineticscanvas.mpl_connect('pick_event', self.controller.on_pick_kinetics)
         self.ui.spectracanvas.mpl_connect('pick_event', self.controller.on_pick_spectrum)
@@ -41,8 +36,7 @@ class GraphView(QMainWindow, GraphObserver, metaclass=Meta):
 
         self.ui.data_colorbar_slider.ValueChanged.connect(self.controller.slider_colorbar_moved)
 
-        self.ui.spectracanvas.mpl_connect('key_press_event',
-                                          self.controller.key_pressed_spectra)
+        self.ui.spectracanvas.mpl_connect('key_press_event',self.controller.key_pressed_spectra)
 
         self.ui.button_Fit.clicked.connect(self.controller.fit_clicked)
 

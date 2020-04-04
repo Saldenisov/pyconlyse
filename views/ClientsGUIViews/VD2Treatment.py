@@ -3,18 +3,12 @@ Created on 01.04.2020
 
 @author: saldenisov
 '''
-import copy
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import (QWidget, QMainWindow,
-                             QPushButton, QVBoxLayout, QHBoxLayout,
-                             QTextEdit, QRadioButton,
-                             QLabel, QLineEdit, QLayout,
-                             QSpacerItem, QSizePolicy, QWidgetItem)
-from PyQt5 import QtCore
-
-from utilities.myfunc import info_msg, error_logger, get_local_ip
+from PyQt5.QtWidgets import QMainWindow
+from utilities.myfunc import info_msg
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
 from views.ui.VD2_treatment_ui import Ui_GraphVD2Window
 
 
@@ -33,7 +27,9 @@ class VD2TreatmentView(QMainWindow):
         self.ui = Ui_GraphVD2Window()
         self.ui.setupUi(self)
 
-        #self.model.add_observer(self)
+        self.controller.model.add_observer(self)
+
+        self.ui.button_set_data.clicked.connect(partial(self.controller.set_data, 'data'))
 
         info_msg(self, 'INITIALIZED')
 
@@ -42,3 +38,11 @@ class VD2TreatmentView(QMainWindow):
 
     def closeEvent(self, ce):
         self.fileQuit()
+
+    def modelIsChanged(self, measurement: Measurement):
+        """
+        """
+        self.ui.datacanvas.measurement = measurement
+        self.ui.datacanvas.compute_figure()
+
+

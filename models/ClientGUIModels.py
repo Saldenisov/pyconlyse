@@ -4,12 +4,11 @@ Created on 17.11.2019
 @author: saldenisov
 '''
 import logging
-import sqlite3 as sq3
-from time import sleep
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, error_logger, get_local_ip
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
 from typing import Any, Dict, Union
 from errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
@@ -75,4 +74,38 @@ class VD2Treatment(QObject):
         self.logger = module_logger
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
+        self.observers = []
         info_msg(self, 'INITIALIZED')
+
+        self.data_path: Path = None
+        self.noise_path: Path = None
+
+
+    def addObserver(self, inObserver):
+        self.observers.append(inObserver)
+
+    def notifyObservers(self, measurement: Measurement):
+        for x in self.observers:
+            x.modelIsChanged(measurement)
+
+    def removeObserver(self, inObserver):
+        self.observers.remove(inObserver)
+
+    def read_data(self, max_index=1) -> Measurement:
+        """
+
+        :param max_index: used only for .HIS files
+        :return: Measurement
+        """
+
+        file = self.data_path
+        if file:
+            file_extension: str = file.suffix
+            if file_extension == '.img':
+                pass
+            elif file_extension == '.his':
+                pass
+            else:
+                self.logger.error(f'Function read_data(): file extension {file_extension} is uknown')
+        else:
+            self.logger.error(f'Function read_data(): data_path is None')

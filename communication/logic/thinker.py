@@ -175,8 +175,8 @@ class Thinker(ThinkerInter):
 
     def add_task_in(self, msg: Message):
         try:
-            if len(self._tasks_in) > 1000:
-                self._tasks_in.popitem(False)  # pop up last item
+            if len(self._tasks_in) > 10000:
+                self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
             if self.parent.test and not (msg.data.com == 'heartbeat'):
                 self.tasks_in_test[msg.id] = msg
@@ -185,8 +185,8 @@ class Thinker(ThinkerInter):
 
     def add_task_out(self, msg: Message):
         try:
-            if len(self._tasks_out) > 1000:
-                self._tasks_out.popitem(False)  # pop up last item
+            if len(self._tasks_out) > 10000:
+                self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
             if self.parent.test and not (msg.data.com == 'heartbeat'):
                 self.tasks_out_test[msg.id] = msg
@@ -195,16 +195,16 @@ class Thinker(ThinkerInter):
 
     def add_demand_pending(self, msg: Message):
         try:
-            if len(self._pending_demands) > 1000:
-                self._pending_demands.popitem(False)  # pop up last item
+            if len(self._pending_demands) > 10000:
+                self._pending_demands.popitem()  # pop up first item
             self._pending_demands[msg.id] = PendingDemand(message=msg)
         except (KeyError, Exception) as e:
             info_msg(self, self.add_demand_pending, e)
 
     def add_reply_pending(self, msg: Message):
         try:
-            if len(self._pending_replies) > 1000:
-                self._pending_replies.popitem(False)  # pop up last item
+            if len(self._pending_replies) > 10000:
+                self._pending_replies.popitem()  # pop up first item
             self._pending_replies[msg.id] = PendingReply(message=msg)
         except KeyError as e:
             info_msg(self, self.add_demand_pending, e)

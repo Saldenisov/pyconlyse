@@ -10,6 +10,11 @@ class MyException(Exception):
         super().__init__(text)
 
 
+class NoSuchFileType(MyException):
+    def __init__(self):
+        MyException.__init__(self, "Unsupported file type")
+
+
 class DeviceError(Exception):
     def __init__(self, text, device_name='Device'):
         super().__init__(f'{device_name}: {text}')

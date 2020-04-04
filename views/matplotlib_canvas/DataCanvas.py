@@ -48,3 +48,24 @@ class DataCanvas(MyMplCanvas):
             self.axis.set_title(figure_name)
 
         self.fig.colorbar(image, ax=self.axis)
+
+    def update_figure(self):
+        k = len(self.axis.lines)
+        if k > 2:
+            for _ in range(k):
+                self.dataplot.lines[-1].remove()
+        cur = self.model.cursors
+        self.axis.axhline(y=self.measurement.timedelays[cur['y1']], color='r')
+        self.axis.axhline(y=self.measurement.timedelays[cur['y2']-1], color='r')
+        self.axis.axvline(x=self.measurement.wavelengths[cur['x1']], color='r')
+        self.axis.axvline(x=self.measurement.wavelengths[cur['x2']-1], color='r')
+
+        self.draw()
+
+    def update_limits(self, minv, maxv):
+        """
+        update vmin and vmax of imshow
+        """
+        self.image.set_clim(vmin=minv, vmax=maxv)
+
+        self.draw()
