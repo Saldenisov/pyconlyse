@@ -7,59 +7,12 @@ Created on 23 avr. 2015
 # import logging
 import os
 import numpy as np
-from errors import NoSuchFileType
+from errors.myexceptions import NoSuchFileType
 
 # module_logger = logging.getLogger(__name__)
 
 
-def asciiopener(filepath):
-    '''
-    Works as an opener for data files: '.csv' and (tab- and
-    ',' seperated) '.txt' files
-    Two columns data and multicolumn data used for TRABS representation
-    Wavelength(first column) vs Timedelay (first row) -->
-    0    0    1    2    3    4    5    ...
-    400    0    0    0    0    0
-    401    0    0    0    0    0
-    402    0    0    0    0    0
-    ...    0    0    0    0    0
-    '''
-    try:
-        fileextension = os.path.splitext(filepath)[1]
-        if fileextension not in ('.csv', '.txt', '.dat'):
-            raise NoSuchFileType
-        try:
-            # try to open file with tab-sep delimiter
-            with open(filepath, encoding='utf-8') as file:
-                data = np.loadtxt(file)
-        except ValueError:
-            # in case of ',' delimiter try this
-            try:
-                with open(filepath, encoding='utf-8') as file:
-                    data = np.loadtxt(file, delimiter=',')
-            except ValueError:
-                raise
 
-        # in case of two columns data: (X, Y)
-        if data.shape[1] == 2:
-            timedelays = data[:, 0]
-            # adds wavelength array in order to present data as a map
-            N = 100
-            wavelengths = np.arange(400, 400 + N +1, dtype=float)
-            _data = np.transpose(np.repeat([data[:, 1]], N + 1, 0))
-
-        # in case of matrix data representation (e.g. TRABS)
-        if data.shape[1] > 5:
-            timedelays = np.delete(data[0], 0)
-            wavelengths = np.delete(data[:, 0], 0)
-            _data = np.delete(np.delete(data, 0, axis=0), 0, axis=1)
-            _data = np.transpose(_data)
-
-    except (FileNotFoundError, NoSuchFileType):
-        raise
-    return {'data': _data,
-            'timedelays': timedelays,
-            'wavelengths': wavelengths}
 
 #===============================================================================
 # class ASCIIOpener(object):

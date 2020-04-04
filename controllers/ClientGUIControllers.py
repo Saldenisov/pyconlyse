@@ -153,9 +153,12 @@ class VD2TreatmentController:
             if isfile(file_path) and exists(file_path):
                 if signal == 'data':
                     self.model.data_path = Path(file_path)
-                    self.model.read_data()
+                    self.model.read_data(new=True)
                 elif signal == 'noise':
                     self.model.noise_path = Path(file_path)
 
-        except:
-            self.logger.error('Error in picking files from Tree')
+        except Exception as e:
+            self.logger.error(f'Error in picking files from Tree {e}')
+
+    def spinbox(self):
+        self.model.read_data(self.view.ui.spinbox.value())

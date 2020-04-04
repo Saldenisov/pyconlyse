@@ -10,16 +10,15 @@ import numpy as np
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Dict, Union, Tuple
+from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
 from errors.myexceptions import NoSuchFileType
+from utilities.data.datastructures.mes_independent import Measurement
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Hamamatsu
 
 
-
-import logging
-module_logger = logging.getLogger(__name__)
-
 @dataclass
-class CriticalInfo:
+class CriticalInfoHamamatsu(CriticalInfo):
     bytes_per_point: int
     data_pos: int
     file_type: str
@@ -29,120 +28,135 @@ class CriticalInfo:
     scaling_xunit: str
     scaling_yscale: np.double
     scaling_yunit: str
-    timedelays: np.array
-    wavelength: np.array
+    y_offset: int
 
 
-class HamamatsuFileOpener:
+class HamamatsuFileOpener(Opener):
     """
-    Opener for '.img' format used by STREAK-cameras,
-    developped by Hamamatsu Corporation.
+    Opener for '.img' and '.his' formats used by Hamamatsu STREAK-cameras,
 
-    Takes *.img file opens it and extract data,
-    timedelays, wavelengths as numpy arrays
     """
 
-    def __init__(self, filepath: Path, logger=None):
-        if not logger:
-            logger = module_logger
-        self.logger = logger
-        if filepath.suffix not in ['.img', '.his']:
-            raise NoSuchFileType
-        if not filepath.exists():
-            raise FileExistsError
-        self.filepath = filepath
-        self.measurement: Hamamatsu = None
-        self.read_header()
+    def __init__(self, **kwargs):
+        super().__init__()
 
-    def fill_criticial_info(self):
-        pass
-
-    def read_header(self) -> str:
-        pos = 0
-        with open(self.filepath, 'rb') as file:
-            settings_header = bytearray(file.read(64))
-            pos += 64
-            # header string
-            header_length = int.from_bytes(settings_header[2:4], byteorder='little')
-            self.header = bytearray(file.read(header_length)).decode(encoding='UTF-8')
-            pos += header_length
-            self.data_pos = pos
-            # Get file type
-            self.file_type = self.get_img_type(self.header)
-
+    def read_critical_info(self, filepath: Path) -> CriticalInfoHamamatsu:
+        try:
+            pos = 0
+            with open(filepath, 'rb') as file:
+                head_64_bytes = bytearray(file.read(64))
+                pos += 64
+                comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
+                #TODO: need to find where ends real header with text
+                #TODO: need to understand what are the comments, how do they relate to data
+                header = file.read(4610).decode(encoding='utf-8')
+                pos += comments_length
+            file_type = self.get_img_type(header)
             # Set scales parameters
-            self.scaling_xscale, self.scaling_xunit, self.scaling_yscale, self.scaling_yunit = self.set_scales_param(self.header)
+            scaling_xscale, scaling_xunit, scaling_yscale, scaling_yunit = self.set_scales_param(header)
 
-            # Wavelength array size in pixels
-            self.wavelengths_length = int.from_bytes(settings_header[4:6], byteorder='little')
-            # Time array size in pixels
-            self.timedelays_length = int.from_bytes(settings_header[6:8], byteorder='little')
-            # Data size type
-            pixel_size = int.from_bytes(settings_header[12:14], byteorder='little')
+            wavelengths_length = int.from_bytes(head_64_bytes[4:6], byteorder='little')
+            timedelays_length = int.from_bytes(head_64_bytes[6:8], byteorder='little')
+            y_offset = int.from_bytes(head_64_bytes[10:12], byteorder='little')
+            # Bytes for 1 pixel
+            pixel_size = int.from_bytes(head_64_bytes[12:14], byteorder='little')
             if pixel_size == 3:
-                self.bytes_per_point = 4
+                bytes_per_point = 4
             elif pixel_size == 2:
-                self.bytes_per_point = 2
+                bytes_per_point = 2
             elif pixel_size == 1:
-                self.bytes_per_point = 1
+                bytes_per_point = 1
 
-    def read_data(self, map_index=0) -> Hamamatsu:
-        """
-        Read .img or .his file and return one measurement
-        :return:
-        """
-        # Size of data in bytes
-        size_data_bytes = self.bytes_per_point * self.timedelays_length * self.wavelengths_length
+            number_maps = int.from_bytes(head_64_bytes[14:16], byteorder='little')
+            if number_maps == 0:
+                number_maps = 1
 
-        with open(self.filepath, 'rb') as file:
-            file.seek(self.pos, 0)
-            # Data byte array
-            data_bytearray = bytearray(file.read(size_data_bytes))
+            timedelays = self.get_timedelays_stat(filepath=filepath, header=header, file_type=file_type,
+                                                  bytes_per_point=bytes_per_point, timedelays_length=timedelays_length,
+                                                  scaling_yunit=scaling_yunit, scaling_yscale=scaling_yscale)
 
-        # Data double array
-        data_array = np.frombuffer(data_bytearray, dtype='int32')
-        self.__data = np.array(data_array.reshape(self.timedelays_length, self.wavelengths_length))
+            wavelengths = self.get_wavelengths_stat(filepath=filepath, header=header, file_type=file_type,
+                                                    bytes_per_point=bytes_per_point,
+                                                    wavelengths_length=wavelengths_length)
 
+            return CriticalInfoHamamatsu(bytes_per_point=bytes_per_point, data_pos=pos, file_path=filepath,
+                                         file_type=file_type,
+                                         number_maps=number_maps, header=header, scaling_xscale=scaling_xscale,
+                                         scaling_xunit=scaling_xunit, scaling_yscale=scaling_yscale,
+                                         scaling_yunit=scaling_yunit, y_offset=y_offset,
+                                         timedelays_length=timedelays_length, wavelengths_length=wavelengths_length,
+                                         timedelays=timedelays, wavelengths=wavelengths)
+        except Exception as e:
+            raise
 
-        # Arrays of wavelength and time-delays
-        self.timedelays = self.get_timedelays_stat()
+    def read_map(self, filepath: Path, map_index=0) -> Union[Hamamatsu, Tuple[bool, str]]:
+        from datetime import datetime
+        res = True
+        if filepath not in self.paths:
+            res, comments = self.fill_critical_info(filepath)
 
+        if res:
+            info: CriticalInfoHamamatsu = self.paths[filepath]
+            size_data_bytes = info.bytes_per_point * info.timedelays_length * info.wavelengths_length
 
+            if (map_index + 1) >= info.number_maps:
+                map_index = info.number_maps - 1
+            elif map_index < 0:
+                map_index = 0
 
-        self.wavelengths = self.get_wavelengths_stat()
+            with open(filepath, 'rb') as file:
+                file.seek(info.data_pos + 64 * map_index + map_index * size_data_bytes, 0)  # Shift pos
+                data_bytearray = bytearray(file.read(size_data_bytes))
 
-    def get_timedelays_stat(self):
-        timedelays = np.empty(self.timedelays_length)
+            # Data double array
+            if info.bytes_per_point == 4:
+                number_type = np.int32
+            elif info.bytes_per_point == 2:
+                number_type = np.int16
+            elif info.bytes_per_point == 1:
+                number_type = np.int8
+            else:
+                e = Exception(f'func: read_map Wrong bytes_per_point {info.bytes_per_point}')
+                self.logger.error(e)
+                raise e
+            data_array = np.frombuffer(data_bytearray, dtype=number_type)
+            data = data_array.reshape(info.timedelays_length, info.wavelengths_length)
+            return Hamamatsu(type=filepath.suffix, comments=info.header, author='', timestamp=filepath.stat().st_mtime,
+                             data=data, wavelengths=info.wavelengths, timedelays=info.timedelays,
+                             time_scale=info.scaling_yunit)
+        else:
+            return False, comments
 
-        if self.file_type == 'Normal':
-            from_ = int(self.header.split("ScalingYScalingFile=")[1][2:].split(",")[0])
-            with open(self.filepath, 'rb') as file:
-                file.seek(from_, 0)
+    def get_timedelays_stat(self, filepath: Path, header: str, file_type, bytes_per_point, timedelays_length,
+                            scaling_yunit, scaling_yscale) -> np.array:
+
+        if file_type == 'Normal':
+            from_byte = int(header.split("ScalingYScalingFile=")[1][2:].split(",")[0])
+            with open(filepath, 'rb') as file:
+                file.seek(from_byte, 0)
                 # Data byte array
-                timedelays_bytes = bytearray(file.read(self.timedelays_length  * self.bytes_per_point))
-            timedelays = [(struct.unpack('f', timedelays_bytes[i: i + self.bytes_per_point])[0])
-                          for i in range(0, self.timedelays_length * self.bytes_per_point, self.bytes_per_point)]
+                timedelays_bytes = bytearray(file.read(timedelays_length * bytes_per_point))
+            timedelays = np.frombuffer(timedelays_bytes, dtype=np.float32)
+
         else:
             divider = 1
-            if self.scalingyunit == 'ps':
+            if scaling_yunit == 'ps':
                 divider = 1000
-            timedelays = [i * self.scalingyscale / divider for i in range(self.timedelays_length)]
-        return np.array(timedelays)
+            timedelays = [i * scaling_yscale / divider for i in range(timedelays_length)]
+        return timedelays
 
-    def get_wavelengths_stat(self):
-        wavelengths = np.empty(self.wavelength_length)
-        if self.file_type == 'Normal':
-            from_ = int(self.header.split("ScalingXScalingFile=")[1][2:].split(",")[0])
-            with open(self.filepath, 'rb') as file:
+    def get_wavelengths_stat(self,filepath: Path, header: str, file_type, bytes_per_point,
+                             wavelengths_length) -> np.array:
+        if file_type == 'Normal':
+            from_ = int(header.split("ScalingXScalingFile=")[1][2:].split(",")[0])
+            with open(filepath, 'rb') as file:
                 file.seek(from_, 0)
-                # Data byte array
-                wavelengts_bytes = bytearray(file.read(self.wavelengths_length  * self.bytes_per_point))
-            wavelengths = [struct.unpack('f', wavelengts_bytes[i: i + self.bytes_per_point])[0]
-                           for i in range(0, self.wavelength_length * self.bytes_per_point, self.bytes_per_point)]
+                wavelengts_bytes = bytearray(file.read(wavelengths_length * bytes_per_point))
+            wavelengths = np.frombuffer(wavelengts_bytes, dtype=np.float32)
         else:
-            wavelengths = np.arange(self.wavelength_length)
+            wavelengths = np.arange(wavelengths_length)
 
-        return np.array(wavelengths)
+        return wavelengths
 
     def get_img_type(self, header) -> str:
         type_ = 'Other'
@@ -151,6 +165,17 @@ class HamamatsuFileOpener:
             return 'Normal'
         else:
             return 'Other'
+
+    def give_all_maps(self, filepath) -> Union[Measurement, Tuple[bool, str]]:
+        res = True
+        if filepath not in self.paths:
+            res, comments = self.fill_critical_info(filepath)
+        if res:
+            info: CriticalInfoHamamatsu = self.paths[filepath]
+            for map_index in range(info.number_maps):
+                yield self.read_map(filepath, map_index)
+        else:
+            return res, comments
 
     def set_scales_param(self, header: str):
         scalingxscale = np.double(header.split("ScalingXScale=")[1].split(",")[0])
@@ -163,10 +188,3 @@ class HamamatsuFileOpener:
         scalingyunit = header.split("ScalingYUnit=")[1][1:3]
 
         return scalingxscale, scalingxunit, scalingyscale, scalingyunit
-
-
-# =============================================================================
-
-Ham = HamamatsuFileOpener(Path('C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\test.img'))
-a = Ham.read_data()
-# =============================================================================

@@ -30,6 +30,7 @@ class VD2TreatmentView(QMainWindow):
         self.controller.model.add_observer(self)
 
         self.ui.button_set_data.clicked.connect(partial(self.controller.set_data, 'data'))
+        self.ui.spinbox.valueChanged.connect(self.controller.spinbox)
 
         info_msg(self, 'INITIALIZED')
 
@@ -39,10 +40,11 @@ class VD2TreatmentView(QMainWindow):
     def closeEvent(self, ce):
         self.fileQuit()
 
-    def modelIsChanged(self, measurement: Measurement):
+    def modelIsChanged(self, measurement: Measurement, new=False):
         """
         """
         self.ui.datacanvas.measurement = measurement
-        self.ui.datacanvas.compute_figure()
+        self.ui.datacanvas.new_data()
+
 
 

@@ -2,7 +2,7 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from PyQt5.QtWidgets import QWidget, QMainWindow
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import (QSizePolicy,
+from PyQt5.QtWidgets import (QSizePolicy, QSpinBox,
                              QTabWidget,
                              QWidget,
                              QGridLayout,
@@ -80,6 +80,10 @@ class Ui_GraphVD2Window(object):
         groupbox_control_buttons = QGroupBox()
         groupbox_tree_files = QGroupBox()
 
+        # SpinBoxes
+        self.spinbox = QSpinBox()
+        self.spinbox.setValue(0)
+
         # Tabs
         self.tabs = QTabWidget()
         self.tabs.setMinimumSize(500, 200)
@@ -119,6 +123,7 @@ class Ui_GraphVD2Window(object):
         layout_control_buttons.addWidget(self.button_set_noise)
         layout_control_buttons.addWidget(self.combobox_type_exp)
         layout_control_buttons.addWidget(self.checkbox_first_img_with_pulse)
+        layout_control_buttons.addWidget(self.spinbox)
         groupbox_control_buttons.setLayout(layout_control_buttons)  # GroupBox layout
         #
 

@@ -12,6 +12,7 @@ from utilities.data.datastructures.mes_independent.measurments_dataclass import 
 from typing import Any, Dict, Union
 from errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
+from devices.service_devices.project_treatment.openers import HamamatsuFileOpener
 
 module_logger = logging.getLogger(__name__)
 
@@ -75,37 +76,25 @@ class VD2Treatment(QObject):
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
         self.observers = []
+        self.opener = HamamatsuFileOpener(logger=self.logger)
         info_msg(self, 'INITIALIZED')
 
         self.data_path: Path = None
         self.noise_path: Path = None
 
 
-    def addObserver(self, inObserver):
+    def add_observer(self, inObserver):
         self.observers.append(inObserver)
 
-    def notifyObservers(self, measurement: Measurement):
+    def notify_observers(self, measurement: Measurement, new=False):
         for x in self.observers:
-            x.modelIsChanged(measurement)
+            x.modelIsChanged(measurement, new)
 
-    def removeObserver(self, inObserver):
+    def remove_observer(self, inObserver):
         self.observers.remove(inObserver)
 
-    def read_data(self, max_index=1) -> Measurement:
-        """
-
-        :param max_index: used only for .HIS files
-        :return: Measurement
-        """
-
-        file = self.data_path
-        if file:
-            file_extension: str = file.suffix
-            if file_extension == '.img':
-                pass
-            elif file_extension == '.his':
-                pass
-            else:
-                self.logger.error(f'Function read_data(): file extension {file_extension} is uknown')
-        else:
-            self.logger.error(f'Function read_data(): data_path is None')
+    def read_data(self, map_index=0, new=False):
+        measurement = self.opener.read_map(self.data_path, map_index)
+        if not isinstance(measurement, Measurement):
+            measurement = None
+        self.notify_observers(measurement, new)

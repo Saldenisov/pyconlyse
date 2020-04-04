@@ -4,88 +4,67 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-from . import hamamatsuopener, asciiopener
-from errors import NoSuchFileType, OpenerError
+from errors.myexceptions import NoSuchFileType, OpenerError
 
 import logging
-import os.path
+import numpy as np
+from abc import abstractmethod
+from collections import OrderedDict
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Union, Tuple
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
+import logging
+module_logger = logging.getLogger(__name__)
 
-module_looger = logging.getLogger(__name__)
+
+@dataclass
+class CriticalInfo:
+    file_path: Path
+    timedelays_length:int
+    wavelengths_length:int
+    timedelays: np.array
+    wavelengths: np.array
 
 
 class Opener:
-    '''
-    Opener is used to open data file depending file type
-    and collect Data as a numpy double array, time_array
-    and wavelength_array as numpy arrays.
-    *.IMG, Wavelength explicit format (*.dat, *.''), XY (*.txt, *.csv)
-    '''
+    """
+    TODO: add description
+    """
 
-    def __init__(self, filepath=None):
-        self.logger = logging.getLogger("MAIN." + __name__)
-        self.__filepath = filepath
-        self.__filetype = None
-        self.__reader = None
-        self.__data = None
-        self.__timedelays = None
-        self.__wavelengths = None
-        # Set reader
-        self.__set_reader()
+    def __init__(self, logger=None):
+        if not logger:
+            logger = module_logger
+        self.logger = logger
+        self.paths: Dict[Path, CriticalInfo] = OrderedDict()
 
-    def read_data(self, reader=None):
-        """
-        Read file and updates self.data, self.wavelengths,
-        self.timedelays
-        """
-        if not reader:
-            reader = self.__reader
-        else:
-            self.__reader = reader
+    def add_critical_info(self, info: CriticalInfo):
+        if info.file_path not in self.paths:
+            if len(self.paths) > 100:
+                self.paths.popitem()  # Remove first element from ordered dict
+            self.paths[info.file_path] = info
 
+    def fill_critical_info(self, filepath: Path) -> Tuple[bool, str]:
+        if filepath.suffix not in ['.img', '.his']:
+            raise NoSuchFileType
+        if not filepath.exists():
+            raise FileExistsError
         try:
-            file_opened = reader(self.filepath)
-        except (NoSuchFileType, FileNotFoundError, RuntimeError, ValueError) as e:
+            info = self.read_critical_info(filepath)
+            self.add_critical_info(info)
+            return True, ''
+        except (Exception, NoSuchFileType, FileExistsError) as e:
             self.logger.error(e)
-            raise OpenerError
-        else:
-            self.__data = file_opened['data']
-            self.__timedelays = file_opened['timedelays']
-            self.__wavelengths = file_opened['wavelengths']
-            self.logger.info('Data were loaded: ' + self.filepath)
+            return False, str(e)
 
-    def __set_reader(self, filepath=None):
-        try:
-            if not filepath:
-                filepath = self.filepath
-            fileextension = os.path.splitext(self.filepath)[1]
-            if fileextension == '.dat' \
-               or fileextension == '.txt' \
-               or fileextension == '.csv':
-                self.__reader = asciiopener
-            elif fileextension == '.img':
-                self.__reader = hamamatsuopener
-            else:
-                raise NoSuchFileType
-        except NoSuchFileType as e:
-            self.logger.error(e)
-            raise OpenerError
+    @abstractmethod
+    def read_critical_info(self, filepath: Path) -> CriticalInfo:
+        pass
 
-    @property
-    def filepath(self):
-        return self.__filepath
+    @abstractmethod
+    def read_map(self, filepath: Path, map_index=0) -> Union[Measurement, Tuple[bool, str]]:
+        pass
 
-    @filepath.setter
-    def filepath(self, filepath):
-        self.__filepath = filepath
-
-    @property
-    def data(self):
-        return self.__data
-
-    @property
-    def timedelays(self):
-        return self.__timedelays
-
-    @property
-    def wavelengths(self):
-        return self.__wavelengths
+    @abstractmethod
+    def give_all_maps(self, filepath) -> Union[Measurement, Tuple[bool, str]]:
+        pass

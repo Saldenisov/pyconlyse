@@ -32,7 +32,7 @@ class DataCanvas(MyMplCanvas):
         self.maxv = np.max(self.measurement.data)
         self.minv = np.min(self.measurement.data)
 
-        image: AxesImage = self.axis.imshow(self.measurement.data,
+        self.image: AxesImage = self.axis.imshow(self.measurement.data,
                                             extent=[self.measurement.wavelengths[0],
                                                     self.measurement.wavelengths[-1],
                                                     self.measurement.timedelays[-1],
@@ -47,25 +47,17 @@ class DataCanvas(MyMplCanvas):
         if figure_name:
             self.axis.set_title(figure_name)
 
-        self.fig.colorbar(image, ax=self.axis)
+        self.fig.colorbar(self.image, ax=self.axis)
 
-    def update_figure(self):
-        k = len(self.axis.lines)
-        if k > 2:
-            for _ in range(k):
-                self.dataplot.lines[-1].remove()
-        cur = self.model.cursors
-        self.axis.axhline(y=self.measurement.timedelays[cur['y1']], color='r')
-        self.axis.axhline(y=self.measurement.timedelays[cur['y2']-1], color='r')
-        self.axis.axvline(x=self.measurement.wavelengths[cur['x1']], color='r')
-        self.axis.axvline(x=self.measurement.wavelengths[cur['x2']-1], color='r')
+    def new_data(self):
+        self.image.set_data(self.measurement.data)
+        self.update_limits()
 
-        self.draw()
-
-    def update_limits(self, minv, maxv):
+    def update_limits(self):
         """
         update vmin and vmax of imshow
         """
+        maxv = np.max(self.measurement.data)
+        minv = np.min(self.measurement.data)
         self.image.set_clim(vmin=minv, vmax=maxv)
-
         self.draw()
