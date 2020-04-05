@@ -6,7 +6,7 @@ Created on 15.11.2019
 
 import os
 import logging
-import pathlib
+from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
@@ -119,6 +119,7 @@ class StepMotorsController:
         else:
             event.ignore()
 
+
     def connect_stpmtrctrl(self, motor_controller_name: str):
         on = self.model.dlines[motor_controller_name].start
         active = self.model.dlines[motor_controller_name].active
@@ -143,22 +144,37 @@ class VD2TreatmentController:
 
         info_msg(self, 'INITIALIZED')
 
+    def average_noise(self):
+        self.model.average_noise()
+
+    def calc_abs(self):
+        exp: str = self.view.ui.combobox_type_exp.currentText()
+        how: str = 'individual'
+        first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
+        self.model.calc_abs(exp, how, first_map_with_electrons)
+
+    def save(self):
+        self.model.save()
+
     def set_data(self, signal: str):
-        from os.path import isfile, exists
-        from pathlib import Path
         try:
             x = self.view.ui.tree.selectedIndexes()
-            file_path = self.view.ui.tree.model().filePath(x[0])
+            file_path = Path(self.view.ui.tree.model().filePath(x[0]))
 
-            if isfile(file_path) and exists(file_path):
+            if file_path.is_file() and file_path.exists():
                 if signal == 'data':
-                    self.model.data_path = Path(file_path)
-                    self.model.read_data(new=True)
+                    self.model.add_data_path(file_path)
                 elif signal == 'noise':
-                    self.model.noise_path = Path(file_path)
+                    self.model.add_noise_path(file_path)
 
         except Exception as e:
             self.logger.error(f'Error in picking files from Tree {e}')
 
-    def spinbox(self):
-        self.model.read_data(self.view.ui.spinbox.value())
+    def spinbox_map_selector_change(self):
+        value = int(self.view.ui.spinbox.value())
+        self.view.ui.data_slider.setValue(value)
+
+    def slider_map_selector_change(self):
+        value = int(self.view.ui.data_slider.value())
+        self.model.read_data(value)
+        self.view.ui.spinbox.setValue(value)

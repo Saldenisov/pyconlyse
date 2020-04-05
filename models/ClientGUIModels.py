@@ -4,15 +4,16 @@ Created on 17.11.2019
 @author: saldenisov
 '''
 import logging
+import numpy as np
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, error_logger, get_local_ip
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
 from typing import Any, Dict, Union
 from errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
-from devices.service_devices.project_treatment.openers import HamamatsuFileOpener
+from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
 
 module_logger = logging.getLogger(__name__)
 
@@ -75,26 +76,124 @@ class VD2Treatment(QObject):
         self.logger = module_logger
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
-        self.observers = []
+        self.measurements_observers = []
+        self.ui_observers = []
         self.opener = HamamatsuFileOpener(logger=self.logger)
         info_msg(self, 'INITIALIZED')
 
         self.data_path: Path = None
         self.noise_path: Path = None
+        self.noise_averaged = False
+        self.noise_averaged_data: np.ndarray = None
+
+    def add_data_path(self, file_path: Path):
+        res, comments = self.opener.fill_critical_info(file_path)
+        if res:
+            self.data_path = file_path
+            self.read_data(new=True)
+            dat_path: str = f'{file_path.parent}{file_path.stem}.dat'
+            self.notify_ui_observers({'lineedit_data_set': str(file_path),
+                                      'lineedit_save_file_name': dat_path})
+
+    def add_noise_path(self, file_path: Path):
+        res, comments = self.opener.fill_critical_info(file_path)
+        if res:
+            self.noise_path = file_path
+            self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
+            self.noise_averaged_data = None
+            self.noise_averaged = False
+            self.notify_ui_observers({'checkbox_noise_averaged': False})
 
 
-    def add_observer(self, inObserver):
-        self.observers.append(inObserver)
+    def add_measurement_observer(self, inObserver):
+        self.measurements_observers.append(inObserver)
 
-    def notify_observers(self, measurement: Measurement, new=False):
-        for x in self.observers:
-            x.modelIsChanged(measurement, new)
+    def average_noise(self):
+        if self.noise_path:
+            info: CriticalInfoHamamatsu = self.opener.paths[self.noise_path]
+            data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
+            for measurement in self.opener.give_all_maps(self.noise_path):
+                data_averaged += measurement.data
+            self.noise_averaged_data = data_averaged / info.number_maps
+            self.noise_averaged = True
+            self.notify_ui_observers({'checkbox_noise_averaged': True})
+
+    def calc_abs(self, exp: str, how: str, first_map_with_electrons: bool):
+        info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
+        if how == 'individual':
+            map_index = 0
+            od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+            for measurements in self.opener.give_pair_maps(self.data_path):
+                print(map_index)
+                map_index += 1
+                if first_map_with_electrons:
+                    abs = measurements[0].data
+                    base = measurements[1].data
+                else:
+                    abs = measurements[1].data
+                    base = measurements[0].data
+                abs = (base-self.noise_averaged_data) / (abs - self.noise_averaged_data)
+                od_data += np.log10(abs)
+                if map_index == 10:
+                    break
+            od_data = od_data / info.number_maps
+        elif how == 'averaged':
+            abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+            base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+            for measurements in self.opener.give_pair_maps(self.data_path):
+                if first_map_with_electrons:
+                    abs = measurements[0].data
+                    base = measurements[1].data
+                else:
+                    abs = measurements[1].data
+                    base = measurements[0].data
+
+                abs_data += abs
+                base_data += base
+
+            abs_data = abs_data / info.number_maps
+            base_data = base_data / info.number_maps
+            od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+        from datetime import datetime
+        timestamp = datetime.timestamp(datetime.now())
+        self.od = Measurement(type='Pump-Probe', comments='', author='SD',timestamp=timestamp,data=od_data,
+                           wavelengths=info.wavelengths, timedelays=info.timedelays, time_scale=info.scaling_yunit)
+        self.notify_measurement_observers(self.od, 0)
+
+
+
+    def notify_measurement_observers(self, measurement: Measurement, map_index: int,
+                                     critical_info: CriticalInfoHamamatsu=None, new=False):
+        for x in self.measurements_observers:
+            x.modelIsChanged(measurement, map_index, critical_info, new)
+
+    def add_ui_observer(self, inObserver):
+        self.ui_observers.append(inObserver)
+
+    def notify_ui_observers(self, ui: dict):
+        for x in self.ui_observers:
+            x.modelIsChanged_ui(ui)
 
     def remove_observer(self, inObserver):
-        self.observers.remove(inObserver)
+        self.measurements_observers.remove(inObserver)
 
     def read_data(self, map_index=0, new=False):
         measurement = self.opener.read_map(self.data_path, map_index)
         if not isinstance(measurement, Measurement):
             measurement = None
-        self.notify_observers(measurement, new)
+        self.notify_measurement_observers(measurement, map_index, self.opener.paths[self.data_path], new=new)
+
+    def save(self):
+        try:
+            info = self.opener.paths[self.data_path]
+            data = self.od.data
+            wavelengths= info.wavelengths
+            final_data = np.vstack((data, wavelengths))
+            final_data = final_data.transpose()
+            timedelays = np.insert(info.timedelays, 0, 0)
+            final_data = np.vstack((final_data, timedelays))
+            np.savetxt('C:\\dev\\DATA\\text.txt', final_data,delimiter='\t', fmt='%.4e')
+        except Exception as e:
+            self.logger.error(e)
+
+

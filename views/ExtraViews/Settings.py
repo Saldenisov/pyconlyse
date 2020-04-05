@@ -28,7 +28,7 @@ class SettingsView(QWidget, SettingsObserver, metaclass=Meta):
         self.ui = Ui_settings_general_widget()
         self.ui.setupUi(self)
 
-        self.model.add_observer(self)
+        self.model.add_measurement_observer(self)
 
         self.mapper = QSignalMapper(self)
 

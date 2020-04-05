@@ -49,7 +49,7 @@ class StepMotorsView(QMainWindow):
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, service_parameters)
 
-        self.model.add_observer(self)
+        self.model.add_measurement_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.checkBox_activate.clicked.connect(self.activate)
         self.ui.checkBox_power.clicked.connect(self.power)

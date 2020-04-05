@@ -1,8 +1,8 @@
 import matplotlib
 matplotlib.use("Qt5Agg")
-from PyQt5.QtWidgets import QWidget, QMainWindow
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import (QSizePolicy, QSpinBox,
+from PyQt5 import QtCore, QtWidgets, Qt
+from PyQt5 import Qt
+from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit,
                              QTabWidget,
                              QWidget,
                              QGridLayout,
@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (QSizePolicy, QSpinBox,
                              QGroupBox,
                              QPushButton,
                              QComboBox,
-                             QListWidget,
+                             QSlider,
                              QCheckBox)
 from matplotlib.widgets import Cursor, RectangleSelector
 from views.matplotlib_canvas import DataCanvas, KineticsCanvas, SpectrumCanvas
@@ -24,7 +24,7 @@ class Ui_GraphVD2Window(object):
 
         window.setObjectName("GraphWindow")
         window.setGeometry(600, 50, 200, 400)
-        window.resize(1240, 900)
+        window.resize(1240, 950)
         self.main_widget = QtWidgets.QWidget(window)
         self.main_widget.setObjectName("main_widget")
 
@@ -62,6 +62,10 @@ class Ui_GraphVD2Window(object):
         self.button_calc.setMaximumWidth(100)
         self.button_save_result = QPushButton('Save')
         self.button_save_result.setMaximumWidth(100)
+        self.button_average_noise = QPushButton('Average Noise')
+        self.button_left = QPushButton('<')
+        self.button_right = QPushButton('>')
+        self.button_play = QPushButton('Play')
 
         # Comboboxes
         self.combobox_type_exp = QComboBox()
@@ -75,10 +79,23 @@ class Ui_GraphVD2Window(object):
         # Checkboxes
         self.checkbox_first_img_with_pulse = QCheckBox('First with Pulse?')
         self.checkbox_first_img_with_pulse.setChecked(True)
+        self.checkbox_noise_averaged = QCheckBox('Noise averaged?')
+        self.checkbox_noise_averaged.setChecked(False)
 
         # GroupBoxes
         groupbox_control_buttons = QGroupBox()
         groupbox_tree_files = QGroupBox()
+
+        # LineEdit
+        self.lineedit_data_set = QLineEdit()
+        self.lineedit_noise_set  = QLineEdit()
+        self.lineedit_save_file_name  = QLineEdit()
+
+        # Slider
+        self.data_slider = QSlider(QtCore.Qt.Horizontal, self.main_widget)
+        self.data_slider.setMinimum(0)
+        self.data_slider.setMaximum(10)
+        self.data_slider.setValue(0)
 
         # SpinBoxes
         self.spinbox = QSpinBox()
@@ -113,17 +130,44 @@ class Ui_GraphVD2Window(object):
         # Layouts
         layout_save = QGridLayout()
         #
-        layout_save.addWidget(self.button_save_result, 0, 0)
         save_tab.setLayout(layout_save) # Tab save layout
+        #
+
+        layout_play_button = QtWidgets.QHBoxLayout()
+        #
+        layout_play_button.addWidget(self.button_left)
+        layout_play_button.addWidget(self.button_play)
+        layout_play_button.addWidget(self.button_right)
+        #
+
+        layout_type_exp = QtWidgets.QHBoxLayout()
+        #
+        layout_type_exp.addWidget(self.combobox_type_exp)
+        layout_type_exp.addWidget(self.checkbox_first_img_with_pulse)
+        layout_type_exp.addWidget(self.button_calc)
+        layout_type_exp.addWidget(self.button_save_result)
+        #
+
+        layout_noise = QtWidgets.QHBoxLayout()
+        #
+        layout_noise.addWidget(self.button_set_noise)
+        layout_noise.addWidget(self.button_average_noise)
+        layout_noise_param = QtWidgets.QVBoxLayout()
+        layout_noise_param.addWidget(self.lineedit_noise_set)
+        layout_noise_param.addWidget(self.checkbox_noise_averaged)
+        layout_noise.addLayout(layout_noise_param)
         #
 
         layout_control_buttons = QtWidgets.QVBoxLayout()
         #
-        layout_control_buttons.addWidget(self.button_set_data)
-        layout_control_buttons.addWidget(self.button_set_noise)
-        layout_control_buttons.addWidget(self.combobox_type_exp)
-        layout_control_buttons.addWidget(self.checkbox_first_img_with_pulse)
-        layout_control_buttons.addWidget(self.spinbox)
+        layout_data_buttons = QtWidgets.QHBoxLayout()
+        layout_data_buttons.addWidget(self.button_set_data)
+        layout_data_buttons.addWidget(self.lineedit_data_set)
+        layout_control_buttons.addLayout(layout_data_buttons)
+        layout_control_buttons.addLayout(layout_noise)
+        layout_control_buttons.addLayout(layout_type_exp)
+        layout_control_buttons.addWidget(self.lineedit_save_file_name)
+        layout_control_buttons.addLayout(layout_play_button)
         groupbox_control_buttons.setLayout(layout_control_buttons)  # GroupBox layout
         #
 
@@ -143,6 +187,12 @@ class Ui_GraphVD2Window(object):
         layout_files.addWidget(groupbox_control_buttons)
         layout_files.addWidget(groupbox_tree_files)
         files_tab.setLayout(layout_files)  # Tab files layout
+        #
+
+        layout_data_slider = QtWidgets.QHBoxLayout()
+        #
+        layout_data_slider.addWidget(self.data_slider)
+        layout_data_slider.addWidget(self.spinbox)
         #
 
         # FINALY layouts
@@ -165,7 +215,8 @@ class Ui_GraphVD2Window(object):
         self.layout_DATA = QtWidgets.QVBoxLayout()
         #
         self.layout_DATA.addWidget(self.datacanvas)
-        self.layout_DATA.addWidget(self.data_colorbar_slider)
+        #self.layout_DATA.addWidget(self.data_colorbar_slider)
+        self.layout_DATA.addLayout(layout_data_slider)
         self.groupbox_DATA.setLayout(self.layout_DATA)  # Groupbox data layout
         #
         self.layout_CONTROL = QtWidgets.QHBoxLayout()

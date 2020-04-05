@@ -72,11 +72,10 @@ class HamamatsuFileOpener(Opener):
                 number_maps = 1
 
             timedelays = self.get_timedelays_stat(filepath=filepath, header=header, file_type=file_type,
-                                                  bytes_per_point=bytes_per_point, timedelays_length=timedelays_length,
+                                                  timedelays_length=timedelays_length,
                                                   scaling_yunit=scaling_yunit, scaling_yscale=scaling_yscale)
 
             wavelengths = self.get_wavelengths_stat(filepath=filepath, header=header, file_type=file_type,
-                                                    bytes_per_point=bytes_per_point,
                                                     wavelengths_length=wavelengths_length)
 
             return CriticalInfoHamamatsu(bytes_per_point=bytes_per_point, data_pos=pos, file_path=filepath,
@@ -127,7 +126,7 @@ class HamamatsuFileOpener(Opener):
         else:
             return False, comments
 
-    def get_timedelays_stat(self, filepath: Path, header: str, file_type, bytes_per_point, timedelays_length,
+    def get_timedelays_stat(self, filepath: Path, header: str, file_type, timedelays_length,
                             scaling_yunit, scaling_yscale) -> np.array:
 
         if file_type == 'Normal':
@@ -135,7 +134,7 @@ class HamamatsuFileOpener(Opener):
             with open(filepath, 'rb') as file:
                 file.seek(from_byte, 0)
                 # Data byte array
-                timedelays_bytes = bytearray(file.read(timedelays_length * bytes_per_point))
+                timedelays_bytes = bytearray(file.read(timedelays_length * 4))
             timedelays = np.frombuffer(timedelays_bytes, dtype=np.float32)
 
         else:
@@ -145,13 +144,14 @@ class HamamatsuFileOpener(Opener):
             timedelays = [i * scaling_yscale / divider for i in range(timedelays_length)]
         return timedelays
 
-    def get_wavelengths_stat(self,filepath: Path, header: str, file_type, bytes_per_point,
+    def get_wavelengths_stat(self,filepath: Path, header: str, file_type,
                              wavelengths_length) -> np.array:
         if file_type == 'Normal':
             from_ = int(header.split("ScalingXScalingFile=")[1][2:].split(",")[0])
             with open(filepath, 'rb') as file:
                 file.seek(from_, 0)
-                wavelengts_bytes = bytearray(file.read(wavelengths_length * bytes_per_point))
+                wavelengts_bytes = bytearray(file.read(wavelengths_length * 4))
+
             wavelengths = np.frombuffer(wavelengts_bytes, dtype=np.float32)
         else:
             wavelengths = np.arange(wavelengths_length)
@@ -174,6 +174,17 @@ class HamamatsuFileOpener(Opener):
             info: CriticalInfoHamamatsu = self.paths[filepath]
             for map_index in range(info.number_maps):
                 yield self.read_map(filepath, map_index)
+        else:
+            return res, comments
+
+    def give_pair_maps(self, filepath) -> Union[Tuple[Measurement], Tuple[bool, str]]:
+        res = True
+        if filepath not in self.paths:
+            res, comments = self.fill_critical_info(filepath)
+        if res:
+            info: CriticalInfoHamamatsu = self.paths[filepath]
+            for map_index in range(0, info.number_maps, 2):
+                yield (self.read_map(filepath, map_index), self.read_map(filepath, map_index + 1))
         else:
             return res, comments
 

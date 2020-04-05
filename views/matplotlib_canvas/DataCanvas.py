@@ -49,8 +49,16 @@ class DataCanvas(MyMplCanvas):
 
         self.fig.colorbar(self.image, ax=self.axis)
 
-    def new_data(self):
+    def update_image_data(self):
+        #print('Datacanvas updating image data')
         self.image.set_data(self.measurement.data)
+        self.update_limits()
+
+    def new_data(self):
+        print('Datacanvas Setting New Data')
+        self.image.set_data(self.measurement.data)
+        self.image.set_extent(extent=[self.measurement.wavelengths[0], self.measurement.wavelengths[-1],
+                                      self.measurement.timedelays[-1],self.measurement.timedelays[0]])
         self.update_limits()
 
     def update_limits(self):
@@ -61,3 +69,4 @@ class DataCanvas(MyMplCanvas):
         minv = np.min(self.measurement.data)
         self.image.set_clim(vmin=minv, vmax=maxv)
         self.draw()
+        #print("Datacanvas redrawn")
