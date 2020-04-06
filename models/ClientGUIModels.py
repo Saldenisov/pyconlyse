@@ -5,6 +5,7 @@ Created on 17.11.2019
 '''
 import logging
 import numpy as np
+from datetime import datetime
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
@@ -91,9 +92,9 @@ class VD2Treatment(QObject):
         if res:
             self.data_path = file_path
             self.read_data(new=True)
-            dat_path: str = f'{file_path.parent}{file_path.stem}.dat'
+            self.save_path: Path = file_path.parent / f'{file_path.stem}.dat'
             self.notify_ui_observers({'lineedit_data_set': str(file_path),
-                                      'lineedit_save_file_name': dat_path})
+                                      'lineedit_save_file_name': str(self.save_path)})
 
     def add_noise_path(self, file_path: Path):
         res, comments = self.opener.fill_critical_info(file_path)
@@ -103,7 +104,6 @@ class VD2Treatment(QObject):
             self.noise_averaged_data = None
             self.noise_averaged = False
             self.notify_ui_observers({'checkbox_noise_averaged': False})
-
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
@@ -120,11 +120,10 @@ class VD2Treatment(QObject):
 
     def calc_abs(self, exp: str, how: str, first_map_with_electrons: bool):
         info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
+        map_index = 0
         if how == 'individual':
-            map_index = 0
             od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
             for measurements in self.opener.give_pair_maps(self.data_path):
-                print(map_index)
                 map_index += 1
                 if first_map_with_electrons:
                     abs = measurements[0].data
@@ -134,30 +133,34 @@ class VD2Treatment(QObject):
                     base = measurements[0].data
                 abs = (base-self.noise_averaged_data) / (abs - self.noise_averaged_data)
                 od_data += np.log10(abs)
-                if map_index == 10:
-                    break
+                self.progressbar.setValue(int(map_index/info.number_maps * 2 * 100))
+                #self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                if map_index == 10:  # TODO: this could be removed later
+                    # break
+                    pass
             od_data = od_data / info.number_maps
         elif how == 'averaged':
             abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
             base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
             for measurements in self.opener.give_pair_maps(self.data_path):
+                map_index += 1
                 if first_map_with_electrons:
                     abs = measurements[0].data
                     base = measurements[1].data
                 else:
                     abs = measurements[1].data
                     base = measurements[0].data
-
                 abs_data += abs
                 base_data += base
-
+                #self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                self.progressbar.setValue(int(map_index / info.number_maps * 2 * 100))
             abs_data = abs_data / info.number_maps
             base_data = base_data / info.number_maps
             od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
-        from datetime import datetime
-        timestamp = datetime.timestamp(datetime.now())
-        self.od = Measurement(type='Pump-Probe', comments='', author='SD',timestamp=timestamp,data=od_data,
-                           wavelengths=info.wavelengths, timedelays=info.timedelays, time_scale=info.scaling_yunit)
+
+        self.od = Measurement(type='Pump-Probe', comments='', author='SD',timestamp=datetime.timestamp(datetime.now()),
+                              data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
+                              time_scale=info.scaling_yunit)
         self.notify_measurement_observers(self.od, 0)
 
 
@@ -188,12 +191,19 @@ class VD2Treatment(QObject):
             info = self.opener.paths[self.data_path]
             data = self.od.data
             wavelengths= info.wavelengths
-            final_data = np.vstack((data, wavelengths))
+            final_data = np.vstack((wavelengths, data))
             final_data = final_data.transpose()
             timedelays = np.insert(info.timedelays, 0, 0)
-            final_data = np.vstack((final_data, timedelays))
-            np.savetxt('C:\\dev\\DATA\\text.txt', final_data,delimiter='\t', fmt='%.4e')
+            final_data = np.vstack((timedelays, final_data))
+            np.savetxt(self.save_path, final_data, delimiter='\t', fmt='%.4f')
         except Exception as e:
             self.logger.error(e)
+
+    def save_file_path_change(self, file_name: str):
+        try:
+            self.save_path = Path(file_name)
+        except Exception as e:  # TODO: to change
+            self.logger.error(e)
+            self.notify_ui_observers({'lineedit_save_file_name': str(self.save_path)})
 
 

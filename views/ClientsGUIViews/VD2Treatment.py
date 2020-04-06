@@ -6,7 +6,7 @@ Created on 01.04.2020
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit
+from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
 from utilities.myfunc import info_msg
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
@@ -30,17 +30,19 @@ class VD2TreatmentView(QMainWindow):
 
         self.controller.model.add_measurement_observer(self)
         self.controller.model.add_ui_observer(self)
+        self.controller.model.progressbar = self.ui.progressbar_calc
 
-        self.ui.button_set_data.clicked.connect(partial(self.controller.set_data, 'data'))
-        self.ui.button_set_noise.clicked.connect(partial(self.controller.set_data, 'noise'))
-        self.ui.button_left.clicked.connect(partial(self.map_step, -1))
-        self.ui.button_right.clicked.connect(partial(self.map_step, 1))
         self.ui.button_average_noise.clicked.connect(self.controller.average_noise)
         self.ui.button_calc.clicked.connect(self.controller.calc_abs)
-        self.ui.button_save_result.clicked.connect(self.controller.save)
-        self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)
-        self.ui.data_slider.valueChanged.connect(self.controller.slider_map_selector_change)
+        self.ui.button_left.clicked.connect(partial(self.map_step, -1))
         self.ui.button_play.clicked.connect(self.button_play_maps)
+        self.ui.button_right.clicked.connect(partial(self.map_step, 1))
+        self.ui.button_save_result.clicked.connect(self.controller.save)
+        self.ui.button_set_data.clicked.connect(partial(self.controller.set_data, 'data'))
+        self.ui.button_set_noise.clicked.connect(partial(self.controller.set_data, 'noise'))
+        self.ui.data_slider.valueChanged.connect(self.controller.slider_map_selector_change)
+        self.ui.lineedit_save_file_name.textChanged.connect(self.controller.save_file_path_changed)
+        self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)
 
         info_msg(self, 'INITIALIZED')
 
@@ -72,6 +74,9 @@ class VD2TreatmentView(QMainWindow):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
+            elif isinstance(widget, QProgressBar):
+                widget.setValue(value[0]/value[1] * 100)
+
 
     def modelIsChanged(self, measurement: Measurement, map_index: int,
                        critical_info: CriticalInfoHamamatsu=None, new=False):

@@ -148,13 +148,21 @@ class VD2TreatmentController:
         self.model.average_noise()
 
     def calc_abs(self):
+        self.view.ui.progressbar_calc.setValue(0)
         exp: str = self.view.ui.combobox_type_exp.currentText()
-        how: str = 'individual'
+        if self.view.ui.radiobutton_individual:
+            how = 'individual'
+        elif self.view.ui.radiobutton_averaged:
+            how = 'averaged'
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
         self.model.calc_abs(exp, how, first_map_with_electrons)
 
     def save(self):
         self.model.save()
+
+    def save_file_path_changed(self):
+        a = self.view.ui.lineedit_save_file_name.text()
+        self.model.save_file_path_change(a)
 
     def set_data(self, signal: str):
         try:

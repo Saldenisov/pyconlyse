@@ -2,7 +2,7 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from PyQt5 import QtCore, QtWidgets, Qt
 from PyQt5 import Qt
-from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit,
+from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit, QRadioButton, QProgressBar,
                              QTabWidget,
                              QWidget,
                              QGridLayout,
@@ -91,6 +91,18 @@ class Ui_GraphVD2Window(object):
         self.lineedit_noise_set  = QLineEdit()
         self.lineedit_save_file_name  = QLineEdit()
 
+        # ProgressBars
+        self.progressbar_calc = QProgressBar()
+        self.progressbar_calc.setMinimum(0)
+        self.progressbar_calc.setMaximum(100)
+        self.progressbar_calc.setValue(0)
+
+        # RadioButtons
+        self.radiobutton_individual = QRadioButton(text='Individual')
+        self.radiobutton_individual.setChecked(True)
+        self.radiobutton_averaged = QRadioButton(text='Averaged')
+        self.radiobutton_averaged.setChecked(False)
+
         # Slider
         self.data_slider = QSlider(QtCore.Qt.Horizontal, self.main_widget)
         self.data_slider.setMinimum(0)
@@ -144,6 +156,8 @@ class Ui_GraphVD2Window(object):
         #
         layout_type_exp.addWidget(self.combobox_type_exp)
         layout_type_exp.addWidget(self.checkbox_first_img_with_pulse)
+        layout_type_exp.addWidget(self.radiobutton_individual)
+        layout_type_exp.addWidget(self.radiobutton_averaged)
         layout_type_exp.addWidget(self.button_calc)
         layout_type_exp.addWidget(self.button_save_result)
         #
@@ -167,6 +181,7 @@ class Ui_GraphVD2Window(object):
         layout_control_buttons.addLayout(layout_noise)
         layout_control_buttons.addLayout(layout_type_exp)
         layout_control_buttons.addWidget(self.lineedit_save_file_name)
+        layout_control_buttons.addWidget(self.progressbar_calc)
         layout_control_buttons.addLayout(layout_play_button)
         groupbox_control_buttons.setLayout(layout_control_buttons)  # GroupBox layout
         #
