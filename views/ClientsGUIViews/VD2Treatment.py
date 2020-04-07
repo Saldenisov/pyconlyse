@@ -9,9 +9,9 @@ from _functools import partial
 from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
 from utilities.myfunc import info_msg
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 from views.ui.VD2_treatment_ui import Ui_GraphVD2Window
-
+from views.matplotlib_canvas import DataCanvas, KineticsCanvas, SpectrumCanvas
 
 module_logger = logging.getLogger(__name__)
 
@@ -76,6 +76,17 @@ class VD2TreatmentView(QMainWindow):
                 widget.setText(value)
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0]/value[1] * 100)
+            elif isinstance(widget, DataCanvas):
+                for key, value in value.items():
+                    if key == 'cursors':
+                        self.ui.datacanvas.draw_cursors(cursors=value)
+            elif isinstance(widget, KineticsCanvas):
+                if key == 'cursors':
+                    self.ui.kineticscanvas.update_limits(cursors=value)
+            elif isinstance(widget, SpectrumCanvas):
+                if key == 'cursors':
+                    self.ui.spectracanvas.update_limits(cursors=value)
+
 
 
     def modelIsChanged(self, measurement: Measurement, map_index: int,
@@ -84,16 +95,20 @@ class VD2TreatmentView(QMainWindow):
         """
         self.logger.info(f'Map_index={map_index}')
         self.ui.datacanvas.measurement = measurement
+        self.ui.kineticscanvas.measurement = measurement
         self.ui.spinbox.setValue(map_index)
         self.ui.data_slider.setValue(map_index)
         if new:
-            v = critical_info.number_maps-1
-            self.ui.data_slider.setMaximum(v)
-            self.ui.spinbox.setMaximum(v)
+            # datacanvas update
+            self.ui.data_slider.setMaximum(critical_info.number_maps-1)
+            self.ui.spinbox.setMaximum(critical_info.number_maps-1)
             self.ui.datacanvas.new_data()
-        else:
-            self.ui.datacanvas.update_image_data()
+            self.ui.kineticscanvas.new_data()
+            # kineticscanvas update
 
+        else:
+            self.ui.datacanvas.update_data()
+            self.ui.kineticscanvas.update_data()
 
 
 

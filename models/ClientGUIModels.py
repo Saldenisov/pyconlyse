@@ -10,8 +10,8 @@ from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messages import Message
 from utilities.myfunc import info_msg, error_logger, get_local_ip
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
-from typing import Any, Dict, Union
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
+from typing import Any, Dict, Union, Tuple
 from errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
@@ -80,12 +80,13 @@ class VD2Treatment(QObject):
         self.measurements_observers = []
         self.ui_observers = []
         self.opener = HamamatsuFileOpener(logger=self.logger)
-        info_msg(self, 'INITIALIZED')
 
         self.data_path: Path = None
         self.noise_path: Path = None
         self.noise_averaged = False
         self.noise_averaged_data: np.ndarray = None
+        self.cursors_data = Cursors2D()
+        info_msg(self, 'INITIALIZED')
 
     def add_data_path(self, file_path: Path):
         res, comments = self.opener.fill_critical_info(file_path)
@@ -206,4 +207,22 @@ class VD2Treatment(QObject):
             self.logger.error(e)
             self.notify_ui_observers({'lineedit_save_file_name': str(self.save_path)})
 
-
+    def update_data_cursors(self, x1, x2, y1, y2):
+        info: Hamamatsu = self.opener.paths[self.data_path]
+        waves = info.wavelengths
+        times = info.timedelays
+        if x1 > x2:
+            temp = x2
+            x2 = x1
+            x1 = temp
+        if y1 > y2:
+            temp = y2
+            y2 = y1
+            y1 = temp
+        x1 = np.searchsorted(waves, x1)
+        y1 = np.searchsorted(times, y1)
+        x2 = np.searchsorted(waves, x2)
+        y2 = np.searchsorted(times, y2)
+        cursors = Cursors2D((x1, waves[x1]), (x2, waves[x2]), (y1, times[y1]), (y2, times[y2]))
+        self.cursors_data = cursors
+        self.notify_ui_observers({'datacanvas': {'cursors': cursors}, 'kineticscanvas': {'cursors': cursors}})

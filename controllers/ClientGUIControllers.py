@@ -157,6 +157,12 @@ class VD2TreatmentController:
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
         self.model.calc_abs(exp, how, first_map_with_electrons)
 
+    def data_cursor_update(self, eclick, erelease):
+        self.model.update_data_cursors(eclick.xdata,
+                                       erelease.xdata,
+                                       eclick.ydata,
+                                       erelease.ydata)
+
     def save(self):
         self.model.save()
 

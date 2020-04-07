@@ -40,7 +40,7 @@ class Ui_GraphVD2Window(object):
         self.sliders_settings()
 
         self.RS = RectangleSelector(self.datacanvas.axis,
-                                    print('Selected'),
+                                    window.controller.data_cursor_update,
                                     drawtype='box',
                                     useblit=True,
                                     button=[1, 3],
@@ -222,7 +222,7 @@ class Ui_GraphVD2Window(object):
 
         self.layout_Spectrum = QtWidgets.QVBoxLayout()
         #
-        self.layout_Spectrum.addWidget(self.spectracanvas)
+        #self.layout_Spectrum.addWidget(self.spectracanvas)
         self.layout_Spectrum.addWidget(self.spectrum_slider)
         self.groupbox_Spectrum.setLayout(self.layout_Spectrum)  #GroupBox spectrum layout
         #
@@ -285,9 +285,9 @@ class Ui_GraphVD2Window(object):
 
         self.kineticscanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
-        self.spectracanvas = SpectrumCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
+        #self.spectracanvas = SpectrumCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
 
-        self.spectracanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        #self.spectracanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
     def sliders_settings(self):
         maxY, maxX = self.datacanvas.measurement.data.shape

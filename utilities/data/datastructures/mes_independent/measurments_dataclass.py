@@ -1,7 +1,17 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 import numpy as np
-from typing import Dict, Union
+from typing import Dict, Union, Tuple
+
+
+
+# Cursors
+@dataclass
+class Cursors2D:
+    x1: Tuple[int, float] = (0, 0)
+    x2: Tuple[int, float] = (0, 0)
+    y1: Tuple[int, float] = (0, 0)
+    y2: Tuple[int, float] = (0, 0)
 
 
 #Experimental Data structures
