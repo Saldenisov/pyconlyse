@@ -38,7 +38,7 @@ class SuperClientGUIcontroller():
         com = widget.text()
         com_splitted = com.split(';')
         path = self.model.app_folder
-        pyexec = str(pathlib.Path(path.parent / 'python_env\mypy37\Scripts' / 'python.exe'))
+        pyexec = str(Path(path.parent / 'python_env\mypy37\Scripts' / 'python.exe'))
         for x in com_splitted:
             x = x.split(' ')
             x = [command for command in x if command]
@@ -162,6 +162,12 @@ class VD2TreatmentController:
                                        erelease.xdata,
                                        eclick.ydata,
                                        erelease.ydata)
+
+    def slider_kinetics(self, index_slider, start, end):
+        self.model.update_data_cursors(y1=start, y2=end, pixels=True)
+
+    def slider_spectra(self, index_slider, start, end):
+        self.model.update_data_cursors(x1=start, x2=end, pixels=True)
 
     def save(self):
         self.model.save()

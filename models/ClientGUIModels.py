@@ -162,14 +162,13 @@ class VD2Treatment(QObject):
         self.od = Measurement(type='Pump-Probe', comments='', author='SD',timestamp=datetime.timestamp(datetime.now()),
                               data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
                               time_scale=info.scaling_yunit)
-        self.notify_measurement_observers(self.od, 0)
+        self.notify_measurement_observers(self.od)
 
-
-
-    def notify_measurement_observers(self, measurement: Measurement, map_index: int,
-                                     critical_info: CriticalInfoHamamatsu=None, new=False):
+    def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
+                                     critical_info: CriticalInfoHamamatsu = None, new=False,
+                                     cursors: Cursors2D = None):
         for x in self.measurements_observers:
-            x.modelIsChanged(measurement, map_index, critical_info, new)
+            x.modelIsChanged(measurement, map_index, critical_info, new, cursors)
 
     def add_ui_observer(self, inObserver):
         self.ui_observers.append(inObserver)
@@ -185,7 +184,13 @@ class VD2Treatment(QObject):
         measurement = self.opener.read_map(self.data_path, map_index)
         if not isinstance(measurement, Measurement):
             measurement = None
-        self.notify_measurement_observers(measurement, map_index, self.opener.paths[self.data_path], new=new)
+        if new:
+            self.cursors_data = self.make_default_cursor()
+            cursors = self.cursors_data
+        else:
+            cursors = None
+        self.notify_measurement_observers(measurement, map_index, self.opener.paths[self.data_path], new=new,
+                                          cursors=cursors)
 
     def save(self):
         try:
@@ -207,22 +212,43 @@ class VD2Treatment(QObject):
             self.logger.error(e)
             self.notify_ui_observers({'lineedit_save_file_name': str(self.save_path)})
 
-    def update_data_cursors(self, x1, x2, y1, y2):
+    def update_data_cursors(self, x1=None, x2=None, y1=None, y2=None, pixels=False):
         info: Hamamatsu = self.opener.paths[self.data_path]
         waves = info.wavelengths
         times = info.timedelays
-        if x1 > x2:
-            temp = x2
-            x2 = x1
-            x1 = temp
-        if y1 > y2:
-            temp = y2
-            y2 = y1
-            y1 = temp
-        x1 = np.searchsorted(waves, x1)
-        y1 = np.searchsorted(times, y1)
-        x2 = np.searchsorted(waves, x2)
-        y2 = np.searchsorted(times, y2)
+        if not pixels:
+            if x1 > x2:
+                temp = x2
+                x2 = x1
+                x1 = temp
+            if y1 > y2:
+                temp = y2
+                y2 = y1
+                y1 = temp
+            x1 = np.searchsorted(waves, x1)
+            y1 = np.searchsorted(times, y1)
+            x2 = np.searchsorted(waves, x2)
+            y2 = np.searchsorted(times, y2)
+        if not x1:
+            x1 = self.cursors_data.x1[0]
+        if not x2:
+            x2 = self.cursors_data.x2[0]
+        if not y1:
+            y1 = self.cursors_data.y1[0]
+        if not y2:
+            y2 = self.cursors_data.y2[0]
         cursors = Cursors2D((x1, waves[x1]), (x2, waves[x2]), (y1, times[y1]), (y2, times[y2]))
         self.cursors_data = cursors
-        self.notify_ui_observers({'datacanvas': {'cursors': cursors}, 'kineticscanvas': {'cursors': cursors}})
+        self.notify_measurement_observers(cursors=cursors)
+
+    def make_default_cursor(self) -> Cursors2D:
+        info: Hamamatsu = self.opener.paths[self.data_path]
+        waves_l = len(info.wavelengths)
+        times_l = len(info.timedelays)
+        waves = info.wavelengths
+        times = info.timedelays
+        x1 = int(waves_l*.2)
+        x2 = int(waves_l*.8)
+        y1 = int(times_l*.2)
+        y2 = int(times_l*.8)
+        return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))

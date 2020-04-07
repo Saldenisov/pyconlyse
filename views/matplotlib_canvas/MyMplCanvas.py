@@ -11,6 +11,7 @@ from datetime import datetime
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from typing import Union
 from PyQt5.QtWidgets import QSizePolicy
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
@@ -31,14 +32,14 @@ class MyMplCanvas(FigureCanvas):
             timestamp = datetime.timestamp(datetime.now())
             measurement = Measurement('', 'default', 'sd', timestamp, data, waves, times, 'none')
         self.measurement = measurement
-        self.calc_cursors()
+        self._set_labels()
         self.compute_figure()
 
     @abstractmethod
-    def compute_figure(self, *args, **kwargs):
+    def compute_figure(self, figure_name='Test'):
         pass
 
-    def calc_cursors(self, x1=None, x2=None, y1=None, y2=None):
+    def calc_cursors(self, x1=None, x2=None, y1=None, y2=None) -> Cursors2D:
         if not x1:
             x1 = int(len(self.measurement.wavelengths) * 0.2)
         x1r = self.measurement.wavelengths[x1]
@@ -51,22 +52,30 @@ class MyMplCanvas(FigureCanvas):
         if not y2:
             y2 = int(len(self.measurement.timedelays) * 0.8)
         y2r = self.measurement.timedelays[y2]
-        self.cursors = Cursors2D((x1, x1r), (x2, x2r), (y1, y1r), (y2, y2r))
+        return Cursors2D((x1, x1r), (x2, x2r), (y1, y1r), (y2, y2r))
 
     @abstractmethod
     def compute_figure(self, figure_name='Test'):
         pass
 
     @abstractmethod
-    def draw_cursors(self, draw=True, cursors=None):
+    def draw_cursors(self, cursors=None, draw=False):
         pass
 
     @abstractmethod
-    def new_data(self):
+    def _form_data(self) -> Union[np.array, np.ndarray]:
         pass
 
     @abstractmethod
-    def update_data(self):
+    def new_data(self, measurement: Measurement, cursors: Cursors2D):
+        pass
+
+    @abstractmethod
+    def _set_labels(self):
+        pass
+
+    @abstractmethod
+    def update_data(self, measurement: Measurement=None, cursors: Cursors2D=None):
         pass
 
     @abstractmethod

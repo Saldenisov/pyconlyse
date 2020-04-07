@@ -117,9 +117,9 @@ class Ui_GraphVD2Window(object):
         self.tabs = QTabWidget()
         self.tabs.setMinimumSize(500, 200)
         self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        save_tab = QWidget()
-        save_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        save_tab.setMaximumSize(100, 100)
+        cleaing_tab = QWidget()
+        cleaing_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cleaing_tab.setMaximumSize(100, 100)
         files_tab = QWidget()
         files_tab.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         info_tab = QWidget()
@@ -127,7 +127,7 @@ class Ui_GraphVD2Window(object):
         info_tab.setMaximumSize(100, 100)
 
         self.tabs.addTab(files_tab, 'Files')
-        self.tabs.addTab(save_tab, 'Save')
+        self.tabs.addTab(cleaing_tab, 'Cleaning')
         self.tabs.addTab(info_tab, 'Info')
 
         # Tree
@@ -142,7 +142,7 @@ class Ui_GraphVD2Window(object):
         # Layouts
         layout_save = QGridLayout()
         #
-        save_tab.setLayout(layout_save) # Tab save layout
+        cleaing_tab.setLayout(layout_save) # Tab save layout
         #
 
         layout_play_button = QtWidgets.QHBoxLayout()
@@ -222,7 +222,7 @@ class Ui_GraphVD2Window(object):
 
         self.layout_Spectrum = QtWidgets.QVBoxLayout()
         #
-        #self.layout_Spectrum.addWidget(self.spectracanvas)
+        self.layout_Spectrum.addWidget(self.spectracanvas)
         self.layout_Spectrum.addWidget(self.spectrum_slider)
         self.groupbox_Spectrum.setLayout(self.layout_Spectrum)  #GroupBox spectrum layout
         #
@@ -285,20 +285,20 @@ class Ui_GraphVD2Window(object):
 
         self.kineticscanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
-        #self.spectracanvas = SpectrumCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
+        self.spectracanvas = SpectrumCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
 
-        #self.spectracanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.spectracanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
     def sliders_settings(self):
         maxY, maxX = self.datacanvas.measurement.data.shape
 
-        self.kinetics_slider = RangeSlider.QRangeSlider(min=0.0, max=maxY, start=10, end=50, size_pixels=300)
+        self.kinetics_slider = RangeSlider.QRangeSlider(min=0.0, max=maxY, start=10, end=50, size_pixels=1000)
         self.kinetics_slider.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
                                                 'stop:0 #222, stop:1 #333);')
         self.kinetics_slider.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
                                                   'stop:0 #282, stop:1 #393);')
 
-        self.spectrum_slider = RangeSlider.QRangeSlider(min=0.0, max=maxX, start=10, end=50, size_pixels=300)
+        self.spectrum_slider = RangeSlider.QRangeSlider(min=0.0, max=maxX, start=10, end=50, size_pixels=1300)
         self.spectrum_slider.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
                                                 'stop:0 #222, stop:1 #333);')
         self.spectrum_slider.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '

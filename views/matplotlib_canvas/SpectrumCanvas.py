@@ -1,83 +1,37 @@
-from views.matplotlib_canvas import MyMplCanvas
-from itertools import islice
+from typing import Union
+
+import numpy as np
+from views.matplotlib_canvas import KineticsCanvas
+from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
 
-class SpectrumCanvas(MyMplCanvas):
+class SpectrumCanvas(KineticsCanvas):
 
-    def __init__(self, *args, **kwargs):
-        self.alpha = 0.7
-        MyMplCanvas.__init__(self, *args, **kwargs)
+    def __init__(self, width: int, height: int, dpi: int, canvas_parent, measurement: Measurement=None):
+        super().__init__(width, height, dpi, canvas_parent, measurement)
 
-    def compute_initial_figure(self, data_model):
-        self.model = data_model
-
-        self.dataplot = self.fig.add_subplot(111)
-
-        self.dataplot.axhline(y=0, color='black')
-
-        self.draw_figure_first()
-
-        self.N_lines = 3
-
-        self.dataplot.grid(True)
-
-        self.dataplot.set_xlabel('Wavelength, ~s')
-        self.dataplot.set_ylabel('Intensity')
-        self.dataplot.set_title('Spectra')
-        
-        self.draw()
+    def draw_cursors(self, draw=True, cursors=None):
+        if cursors:
+            self.cursors = cursors
+            lines = self.axis.lines
+            for _ in range(len(lines) - 1):
+                self.axis.lines[-1].remove()
+            self.axis.axvline(x=cursors.x1[1], color='r')
+            self.axis.axvline(x=cursors.x2[1], color='r')
+            self.new_data(measurement=None, cursors=cursors, external_call=False)
 
 
-    def draw_figure_total(self):
-        pfrom, pto = self.model.get_from_to()
-        wavelengths = self.model.wavelengths
+    def _get_x_values(self) -> np.array:
+        return self.measurement.wavelengths
 
-        self.draw_figure_first()
-        color_index = 0
+    def _form_data(self) -> Union[np.array, np.ndarray]:
+        beginning = self.cursors.y1[0]
+        end = self.cursors.y2[0]
+        data = self.measurement.data[beginning:end]
+        return np.mean(data, axis=0)
 
-        items = islice(self.model.spectra.items(), 1, None)
+    def _set_labels(self):
+        self._x_text = 'Wavelengths'
+        self._title = 'Spectrum'
 
-        for key, data in items:
-            color = self._colors[(color_index + 1) % len(self._colors)]
-            label = data[0] + ' key:' + str(key)
-            self.dataplot.plot(wavelengths, data[1], color,
-                               label=label,
-                               picker=5)
-            self.dataplot.plot(wavelengths[pfrom:pto], data[1][pfrom:pto], 'r-',
-                               alpha=self.alpha)
 
-        self.N_lines = len(self.model.spectra.keys()) * 2 + 1
-
-    def draw_figure_first(self):
-        pfrom, pto = self.model.get_from_to()
-        wavelengths = self.model.wavelengths
-
-        data = self.model.spectra['dynamic']
-
-        self.dataplot.plot(wavelengths, data[1], 'b', label=data[0])
-        self.dataplot.plot(wavelengths[pfrom:pto], data[1][pfrom:pto], 'r-',
-                           alpha=self.alpha)
-
-    def update_figure(self):
-        """
-        Removes all lines, and draws updated spectra
-        """
-        # if number of kinetics in model did not change
-        # update just last lines
-        if self.N_lines - 1 == len(self.model.spectra.keys()) * 2:
-            self.dataplot.lines[-1].remove()
-            self.dataplot.lines[-1].remove()
-            self.draw_figure_first()
-        # delete all and redraw
-        else:
-            n = int((self.N_lines - 1) / 2)
-            for _ in range(n):
-                self.dataplot.lines[-1].remove()
-                self.dataplot.lines[-1].remove()
-            self.draw_figure_total()
-
-        self.dataplot.relim()
-
-        self.dataplot.autoscale_view(True, True, True)
-
-        self.draw()
