@@ -8,7 +8,8 @@ Created on 7 juin 2016
 
 import socket
 from contextlib import closing
-from typing import Tuple, List
+from pathlib import Path
+from typing import Tuple, List, Iterable, Generator, Union
 import logging
 from datetime import datetime
 from hashlib import md5
@@ -91,6 +92,24 @@ def info_msg(obj: object, msg_type: str, extra=''):
         raise WrongInfoType(f'func: {obj.name}: wrong type: {msg_type}')
 
 
+def paths_to_dict(paths: Union[Iterable[Union[Path, str]], Generator], d={'dirs': {}, 'files': []}) -> dict:
+    def fill_dict(parts: List[str], d: dict, filename: str):
+        part = parts.pop(0)
+        if part != filename:
+            if part not in d['dirs']:
+                d['dirs'][part] = {'dirs': {}, 'files': []}
+            if parts:
+                fill_dict(parts, d['dirs'][part], filename)
+        else:
+            d['files'].append(part)
+
+    for path in paths:
+        if not isinstance(path, Path):
+            path = Path(path)
+        fill_dict(list(path.parts), d, path.name)
+    return d
+
+
 def unique_id(name: [Any] = '') -> str:
     """
     Calculate md5 hash of date + system time + name
@@ -130,6 +149,7 @@ def get_local_ip() -> str:
         return '127.0.0.1'
     # was before return str(gethostbyname(gethostname()))
     return get(ips_ls)
+
 
 def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example

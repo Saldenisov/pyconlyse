@@ -4,6 +4,8 @@ from devices.service_devices.project_treatment.openers import Opener, HamamatsuF
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
+from utilities.data.datastructures.mes_independent.projects_dataclass import (FuncReadFileTreeInput,
+                                                                              FuncReadFileTreeOutput)
 
 import logging
 module_logger = logging.getLogger(__name__)
@@ -17,7 +19,7 @@ all_services = [projectmanager_non_fixture()]
 test_param = all_services
 
 @pytest.mark.parametrize('project_manager', test_param)
-def test_func_stpmtr(project_manager: ProjectManager):
+def test_func_project_manager(project_manager: ProjectManager):
     pm = project_manager
     # Test Data and Project folder paths
     assert isinstance(pm.projects_path, Path)
@@ -32,6 +34,10 @@ def test_func_stpmtr(project_manager: ProjectManager):
     res = pm.activate(FuncActivateInput(True))
     assert pm.device_status.active
 
+    res = pm.read_file_tree(func_input=FuncReadFileTreeInput)
+    assert isinstance(res, FuncReadFileTreeOutput)
+    assert len(res.files) == 629
+    print(res.file_tree)
 
 @pytest.mark.openers
 @pytest.mark.parametrize('opener', [HamamatsuFileOpener()])
