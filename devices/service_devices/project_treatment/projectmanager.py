@@ -14,6 +14,7 @@ from time import time_ns
 from typing import Union, Dict, Any, Tuple, Iterable, Generator
 from database import db_create_connection, db_close_conn, db_execute_select, db_execute_insert
 from devices.devices import Service
+from utilities.myfunc import paths_to_dict
 from utilities.data.datastructures.mes_independent import (CmdStruct, FuncActivateInput, FuncActivateOutput,
                                                            FuncGetControllerStateInput, FuncGetControllerStateOutput)
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
@@ -74,11 +75,11 @@ class ProjectManager(Service):
 
     def read_file_tree(self, func_input: FuncReadFileTreeInput) -> FuncReadFileTreeOutput:
         conn = db_create_connection(self.database_path)
-        files_db = (Path(value) for value in db_execute_select(conn, "SELECT file_path from Files", True))
-        file_tree = {}
-        for file in files_db:
-            for parent in reversed(file.parents)
-                file_tree[str(parent)] = {}
+        files_db, files_db_c = tee((Path(value) for value in db_execute_select(conn,
+                                                                               "SELECT file_path from Files", True)))
+        file_tree = paths_to_dict(files_db_c)
+        return FuncReadFileTreeOutput(comments='', func_success=True, file_tree=file_tree, files=tuple(files_db))
+
     def save(self, file_path: Path):
         pass
 
