@@ -42,7 +42,7 @@ class StpMtrCtrl_Standa(StpMtrController):
 
 
         res, comments = self._form_devices_list()
-        # Check enumerated devices in accordance with DB data
+        # Check enumerated devices in accordance with database data
         if not res:
             pass
         # Open available devices, but keep software status set to 0
@@ -55,7 +55,7 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         """
-        1) enumerates devices 2) count devices 3) checks vs DB 4) form dict of devices {id: name}
+        1) enumerates devices 2) count devices 3) checks vs database 4) form dict of devices {id: name}
         5) set positions
         :return:
         """
@@ -64,14 +64,14 @@ class StpMtrCtrl_Standa(StpMtrController):
         # Enumerate devices
         # This is device search and enumeration with probing. It gives more information about soft.
         probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-        # TODO: change to DB readings
+        # TODO: change to database readings
         enum_hints = b"addr=192.168.0.1, 129.175.100.137"
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
         device_counts = lib.get_device_count(self._devenum)
         if device_counts != self._axes_number:
             res, comments = False, f'Number of available axes {device_counts} does not correspond to ' \
-                                   f'DB value {self._axes_number}. Check cabling or power.'
+                                   f'database value {self._axes_number}. Check cabling or power.'
         else:
             res, comments = True, ''
         if res:

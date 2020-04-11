@@ -1,7 +1,8 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Union, NewType
 from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
-                                                                             FuncGetControllerStateInput, FuncGetControllerStateOutput)
+                                                                             FuncGetControllerStateInput,
+                                                                             FuncGetControllerStateOutput)
 
 
 @dataclass(frozen=False)

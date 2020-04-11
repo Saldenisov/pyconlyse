@@ -5,7 +5,6 @@ from views.matplotlib_canvas import MyMplCanvas
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
 
-
 class KineticsCanvas(MyMplCanvas):
 
     def __init__(self, width: int, height: int, dpi: int, canvas_parent, measurement: Measurement=None):

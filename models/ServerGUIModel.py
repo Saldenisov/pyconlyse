@@ -25,7 +25,7 @@ class ServerGUIModel(QObject):
         self.app_folder = app_folder
         self.observers = []
         self.logger = module_logger
-        self.db_path = Path(app_folder / 'DB' / 'Devices.db')
+        self.db_path = Path(app_folder / 'database' / 'Devices.db')
         info_msg(self, 'INITIALIZING')
         self.server = None
         info_msg(self, 'INITIALIZED')

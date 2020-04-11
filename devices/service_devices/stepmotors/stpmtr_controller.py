@@ -43,7 +43,7 @@ class StpMtrController(Service):
             except Exception as e:
                 self.logger.error(e)
 
-        res, comments = self._set_parameters()  # Set parameters from DB first and after connection is done update
+        res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible
         if not res:
             raise StpMtrError(self, comments)
@@ -204,7 +204,7 @@ class StpMtrController(Service):
             parameters = self.get_settings('Parameters')
             return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'])
         except (KeyError, DeviceError) as e:
-            return StpMtrError(self, f'Could not set description of controller from DB: {e}')
+            return StpMtrError(self, f'Could not set description of controller from database: {e}')
 
     @abstractmethod
     def GUI_bounds(self) -> Dict[str, Any]:
@@ -239,9 +239,9 @@ class StpMtrController(Service):
         try:
             return int(self.get_settings('Parameters')['axes_number'])
         except KeyError:
-            raise StpMtrError(self, text="Axes_number could not be set, axes_number field is absent in the DB")
+            raise StpMtrError(self, text="Axes_number could not be set, axes_number field is absent in the database")
         except (ValueError, SyntaxError):
-            raise StpMtrError(self, text="Check axes number in DB, must be axex_number = 1 or any number")
+            raise StpMtrError(self, text="Check axes number in database, must be axex_number = 1 or any number")
 
     def get_pos(self, func_input: FuncGetPosInput) -> FuncGetPosOutput:
         axis_id = func_input.axis_id
@@ -295,9 +295,9 @@ class StpMtrController(Service):
                                         f'axes_number {self._axes_number}.')
             return ids
         except KeyError:
-            raise StpMtrError(self, text="Axes ids could not be set, axes_ids field is absent in the DB.")
+            raise StpMtrError(self, text="Axes ids could not be set, axes_ids field is absent in the database.")
         except (TypeError, SyntaxError):
-            raise StpMtrError(self, text="Check axes_ids field in DB, must be integer.")
+            raise StpMtrError(self, text="Check axes_ids field in database, must be integer.")
 
     def _get_axes_names_db(self):
         try:
@@ -313,9 +313,9 @@ class StpMtrController(Service):
                                         f'axes_number {self._axes_number}.')
             return names
         except KeyError:
-            raise StpMtrError(self, text="Axes names could not be set, axes_names field is absent in the DB.")
+            raise StpMtrError(self, text="Axes names could not be set, axes_names field is absent in the database.")
         except (TypeError, SyntaxError):
-            raise StpMtrError(self, text="Check axes_names field in DB.")
+            raise StpMtrError(self, text="Check axes_names field in database.")
 
     @abstractmethod
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
@@ -332,9 +332,9 @@ class StpMtrController(Service):
                 limits.append(val)
             return limits
         except KeyError:
-            raise StpMtrError(self, text="Limits could not be set, limits field is absent in the DB")
+            raise StpMtrError(self, text="Limits could not be set, limits field is absent in the database")
         except (TypeError, SyntaxError):
-            raise StpMtrError(self, text="Check limits field in DB, must be limits = (x1, x2), (x3, x4),...")
+            raise StpMtrError(self, text="Check limits field in database, must be limits = (x1, x2), (x3, x4),...")
 
     def _set_limits(self):
         if self.device_status.connected:
@@ -385,9 +385,9 @@ class StpMtrController(Service):
                 preset_values.append(val)
             return preset_values
         except KeyError:
-            raise StpMtrError(self, text="Preset values could not be set, preset_values field is absent in the DB")
+            raise StpMtrError(self, text="Preset values could not be set, preset_values field is absent in the database")
         except (TypeError, SyntaxError):
-            raise StpMtrError(self, text="Check preset_values field in DB, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
+            raise StpMtrError(self, text="Check preset_values field in database, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
 
     def _is_within_limits(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
         if self.axes[axis_id].limits[0] <= pos <= self.axes[axis_id].limits[1]:

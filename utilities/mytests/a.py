@@ -1,18 +1,38 @@
-import numpy as np
+import pprint
+from pathlib import Path
+from typing import List, Iterable, Generator, Union
+pp = pprint.PrettyPrinter()
+
+def dirpath_to_dict(path: Path, d: dict) -> dict:
+
+    name = path.parts[-1]
+
+    if path.is_dir():
+        if name not in d['dirs']:
+            d['dirs'][name] = {'dirs': {}, 'files': []}        for x in path.glob('*'):
+            dirpath_to_dict(x, d['dirs'][name])
+    else:
+        d['files'].append(name)
+    return d
+
+def paths_to_dict(paths: Union[Iterable[Path], Generator], d={'dirs': {}, 'files': []}) -> dict:
+    def fill_dict(parts: List[str], d: dict, filename: str):
+        part = parts.pop(0)
+        if part != filename:
+            if part not in d['dirs']:
+                d['dirs'][part] = {'dirs': {}, 'files': []}
+            if parts:
+                fill_dict(parts, d['dirs'][part], filename)
+        else:
+            d['files'].append(part)
+
+    for path in paths:
+        fill_dict(list(path.parts), d, path.name)
+    return d
 
 
-a = np.ones(shape=(3,3))
-print(a)
+mydict = dirpath_to_dict(Path('C:\\dev\\pyconlyse\\bin'), d={'dirs': {}, 'files': []})
+mydict2 = paths_to_dict([Path('C:\\dev\\pyconlyse\\bin\\service.py'), Path('C:\\dev\\pyconlyse\\bin\\VD2.py')])
 
-b = np.ones(shape=(3))*100
-c = np.ones(shape=(3))*200
-c = np.insert(c, 0, 0)
-print(f'b={b}')
-print(f'c={c}')
-
-
-d = np.vstack((b,a))
-d = np.transpose(d)
-d = np.vstack((c, d))
-print(f'd ={d}')
++*/pp.pprint(mydict2)
 

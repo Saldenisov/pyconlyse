@@ -145,7 +145,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
     def _setup(self) -> Tuple[Union[bool, str]]:
         """
-        essential parameters for controller operation are read from DB
+        essential parameters for controller operation are read from database
         :return: bool, comment
         """
         # TODO: not all parameters are set
@@ -154,7 +154,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
             settings = self.get_general_settings()
             for param in list_param:
                 if param not in settings:
-                    raise KeyError(f'{param} is not found in DB.')
+                    raise KeyError(f'{param} is not found in database.')
             self._DLpath = settings['DLL_path']
             self._PS90 = ctypes.WinDLL(self._DLpath)
             self._interface = int(settings['interface'])

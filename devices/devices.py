@@ -13,7 +13,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from DB.tools import create_connectionDB, executeDBcomm, close_connDB
+from database.tools import db_create_connection, db_execute_select, db_close_conn
 from communication.interfaces import ThinkerInter, MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
@@ -104,10 +104,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         # config is set here
         try:
-            self.db_conn, self.cur = create_connectionDB(self.db_path)
-            res = executeDBcomm(self.cur, DB_command)
-            close_connDB(self.db_conn)
-            self.config.add_config(self.name, config_text=res[0])
+            db_conn = db_create_connection(self.db_path)
+            res = db_execute_select(db_conn, DB_command)
+            db_close_conn(db_conn)
+            self.config.add_config(self.name, config_text=res)
 
             from communication.messaging.messengers import Messenger
             from communication.logic.thinkers_logic import Thinker
@@ -550,19 +550,17 @@ class DeviceFactory:
             if 'device_id' in kwargs and 'db_path' in kwargs:
                 device_id: str = kwargs['device_id']
 
-                db_conn, cur = create_connectionDB(kwargs['db_path'])
-                device_name = executeDBcomm(cur,
+                db_conn = db_create_connection(kwargs['db_path'])
+                device_name = db_execute_select(db_conn,
                                             f"SELECT device_name from DEVICES_settings where device_id='{device_id}'")
 
                 if not device_name:
                     err = f'DeviceFactory Crash: {device_id} is not present in DB'
                     module_logger.error(err)
                     raise BaseException(err)
-                device_name = device_name[0]
 
-                project_type = executeDBcomm(cur,
+                project_type = db_execute_select(db_conn,
                                              f"SELECT project_type from DEVICES_settings where device_id='{device_id}'")
-                project_type = project_type[0]
 
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
