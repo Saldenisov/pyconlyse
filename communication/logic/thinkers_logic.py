@@ -26,7 +26,7 @@ class GeneralCmdLogic(Thinker):
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             if data.info.device_id not in self.parent.connections:
-                self.logger.info(msg)
+                self.logger.info(msg.short())
                 from communication.logic.logic_functions import external_hb_logic
                 self.register_event(name=data.info.event_name,
                                     event_id=data.info.event_id,
@@ -218,7 +218,7 @@ class ServerCmdLogic(Thinker):
 
     def react_unknown(self, msg: Message):
         msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
-        info_msg(self, 'REPLY', extra=repr(msg_i))
+        info_msg(self, 'REPLY', extra=repr(msg_i.short()))
         self.messenger.add_task_out(self.msg_i)
 
     def react_internal(self, event: ThinkerEvent):

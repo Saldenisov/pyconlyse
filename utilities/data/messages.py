@@ -8,7 +8,7 @@ from zlib import compress
 
 from communication.interfaces import MessageInter
 from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
+from utilities.data.datastructures.mes_independent import Desription
 
 from utilities.myfunc import unique_id
 
@@ -122,7 +122,7 @@ class ServiceStatusMes:
 class ServiceInfoMes:
     device_status: DeviceStatus
     device_id: str
-    device_description: Union[StpMtrDescription]
+    device_description: Desription
     available_public_functions: list = field(default_factory=list)
 
 

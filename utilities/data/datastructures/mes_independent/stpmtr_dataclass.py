@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Union, NewType
+from utilities.data.datastructures.mes_independent import Desription
 from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
                                                                              FuncGetControllerStateInput,
                                                                              FuncGetControllerStateOutput)
@@ -27,10 +28,8 @@ class AxisStpMtrEssentials:
 
 
 @dataclass(order=True, frozen=True)
-class StpMtrDescription:
+class StpMtrDescription(Desription):
     axes: Dict[int, AxisStpMtr]
-    info: str
-    GUI_title: str
 
 
 @dataclass(order=True, frozen=False)

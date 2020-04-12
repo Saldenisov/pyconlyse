@@ -33,7 +33,7 @@ class ServerGUIView(QMainWindow):
         self.ui = Ui_ServerGUI()
         self.ui.setupUi(self)
 
-        self.model.add_measurement_observer(self)
+        self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.pB_start.clicked.connect(self.controller.start_server)
         self.ui.pB_pause.clicked.connect(self.controller.pause_server)

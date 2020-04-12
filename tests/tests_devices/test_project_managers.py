@@ -1,5 +1,5 @@
 from pathlib import Path
-from devices.service_devices.project_treatment import ProjectManager
+from devices.service_devices.project_treatment import ProjectManager_controller
 from devices.service_devices.project_treatment.openers import Opener, HamamatsuFileOpener
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
@@ -19,7 +19,7 @@ all_services = [projectmanager_non_fixture()]
 test_param = all_services
 
 @pytest.mark.parametrize('project_manager', test_param)
-def test_func_project_manager(project_manager: ProjectManager):
+def test_func_project_manager(project_manager: ProjectManager_controller):
     pm = project_manager
     # Test Data and Project folder paths
     assert isinstance(pm.projects_path, Path)
@@ -34,7 +34,7 @@ def test_func_project_manager(project_manager: ProjectManager):
     res = pm.activate(FuncActivateInput(True))
     assert pm.device_status.active
 
-    res = pm.read_file_tree(func_input=FuncReadFileTreeInput)
+    res = pm.get_file_tree(func_input=FuncReadFileTreeInput)
     assert isinstance(res, FuncReadFileTreeOutput)
     assert len(res.files) == 629
     print(res.file_tree)

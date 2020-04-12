@@ -31,7 +31,7 @@ class SuperUserView(QMainWindow):
         self.ui = Ui_SuperUser()
         self.ui.setupUi(self)
 
-        self.model.add_measurement_observer(self)
+        self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.pB_connection.clicked.connect(self.controller.create_service_gui)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)

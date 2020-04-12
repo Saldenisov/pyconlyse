@@ -500,7 +500,7 @@ class Service(Device):
         return self.device_status.connected, ''
 
     @abstractmethod
-    def description(self) -> Dict[str, Any]:
+    def description(self):
         pass
 
     @abstractmethod

@@ -10,9 +10,13 @@ from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
-from utilities.data.messages import Message
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import FuncGetStpMtrControllerStateInput
-from views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView
+from utilities.data.messages import Message, ServiceInfoMes
+
+from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
+                                                                              FuncGetProjectManagerControllerStateInput)
+from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput,
+                                                                            StpMtrDescription)
+from views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
 from devices.devices import Device
 
 
@@ -58,18 +62,25 @@ class SuperClientGUIcontroller():
     def create_service_gui(self):
         service_id = self.view.ui.lW_devices.currentItem().text()
         try:
-            parameters = self.model.service_parameters[service_id]
-        except KeyError as e:
-            self.logger.error(f'Service with id {service_id} does not have parameters')
-        try:
-            self.services_views[service_id] = StepMotorsView(in_controller=self, in_model=self.model,
-                                                             service_parameters=parameters)
+            parameters: ServiceInfoMes = self.model.service_parameters[service_id]
+            if isinstance(parameters.device_description, StpMtrDescription):
+                view = StepMotorsView
+                msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                                         service_id=service_id,
+                                         input=FuncGetStpMtrControllerStateInput())
+            elif isinstance(parameters.device_description, ProjectManagerDescription):
+                view = ProjectManagerView
+                msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                                         service_id=service_id,
+                                         input=FuncGetProjectManagerControllerStateInput())
+            self.services_views[service_id] = view(in_controller=self, in_model=self.model,
+                                                   service_parameters=parameters)
             self.services_views[service_id].show()
             self.logger.info(f'GUI for service {service_id} is started')
-            msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
-                                     service_id=service_id,
-                                     input=FuncGetStpMtrControllerStateInput())
+
             self.device.send_msg_externally(msg)
+        except KeyError:
+            self.logger.error(f'Parameters for service id={service_id} was not loaded')
         except Exception as e:
             print(f'in create_service_gui {e}')
 
@@ -118,7 +129,6 @@ class StepMotorsController:
             QApplication.quit()
         else:
             event.ignore()
-
 
     def connect_stpmtrctrl(self, motor_controller_name: str):
         on = self.model.dlines[motor_controller_name].start

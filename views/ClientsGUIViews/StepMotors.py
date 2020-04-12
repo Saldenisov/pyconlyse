@@ -49,7 +49,7 @@ class StepMotorsView(QMainWindow):
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, service_parameters)
 
-        self.model.add_measurement_observer(self)
+        self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.checkBox_activate.clicked.connect(self.activate)
         self.ui.checkBox_power.clicked.connect(self.power)
@@ -129,11 +129,10 @@ class StepMotorsView(QMainWindow):
 
     def model_is_changed(self, msg: Message):
         try:
-            com = msg.data.com
-            info: Union[DoneIt, Error] = msg.data.info
             if self.service_parameters.device_id in msg.body.sender_id:
+                com = msg.data.com
+                info: Union[DoneIt, Error] = msg.data.info
                 if com == MsgGenerator.DONE_IT.mes_name:
-                    info: DoneIt = msg.data.info
                     result: Union[FuncActivateOutput,
                                   FuncActivateAxisOutput,
                                   FuncGetStpMtrControllerStateOutput,

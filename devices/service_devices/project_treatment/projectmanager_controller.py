@@ -1,6 +1,6 @@
 """
 08/03/2020 DENISOV Sergey
-projectmanager.py contains abstract services capable of treating experiments data:
+projectmanager_controller.py contains abstract services capable of treating experiments data:
 open, analyze, transform
 """
 import numpy as np
@@ -14,12 +14,17 @@ from time import time_ns
 from typing import Union, Dict, Any, Tuple, Iterable, Generator
 from database import db_create_connection, db_close_conn, db_execute_select, db_execute_insert
 from devices.devices import Service
+from errors.myexceptions import DeviceError
 from utilities.myfunc import paths_to_dict
 from utilities.data.datastructures.mes_independent import (CmdStruct, FuncActivateInput, FuncActivateOutput,
-                                                           FuncGetControllerStateInput, FuncGetControllerStateOutput)
+                                                           FuncPowerInput, FuncGetControllerStateInput,
+                                                           FuncGetControllerStateOutput)
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
-from utilities.data.datastructures.mes_independent.projects_dataclass import (FuncReadFileTreeInput,
-                                                                              FuncReadFileTreeOutput)
+from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
+                                                                              FuncGetProjectManagerControllerStateInput,
+                                                                              FuncGetProjectManagerControllerStateOutput,
+                                                                              FuncGetFileTreeInput,
+                                                                              FuncGetFileTreeOutput)
 
 
 import logging
@@ -27,13 +32,13 @@ import logging
 module_logger = logging.getLogger(__name__)
 
 
-class ProjectManager(Service):
+class ProjectManager_controller(Service):
     # TODO: UPDATE
     AVERAGE = CmdStruct('average', None, None)
-    READ_PROJECT = CmdStruct('read_project', None, None)
-    READ_FILE = CmdStruct('read_file', None, None)
-    READ_FILE_TREE = CmdStruct('read_file_tree', None, None)
-    READ_PROJECT_TREE = CmdStruct('read_project_tree', None, None)
+    GET_PROJECT = CmdStruct('get_project', None, None)
+    GET_FILE = CmdStruct('get_file', None, None)
+    GET_FILE_TREE = CmdStruct('get_file_tree', FuncGetFileTreeInput, FuncGetFileTreeOutput)
+    GET_PROJECT_TREE = CmdStruct('get_project_tree', None, None)
 
     SAVE_FILE = CmdStruct('save', None, None)
 
@@ -42,7 +47,11 @@ class ProjectManager(Service):
         self.projects_path: Path = Path(self.get_settings('Parameters')['projects_folder'])
         self.data_path: Path = Path(self.get_settings('Parameters')['data_folder'])
         self.database_path: Path = Path(self.get_settings('Parameters')['database'])
+        self.power(FuncPowerInput(True))  # ProjectManager is always on
+        self.activate(FuncActivateInput(True))  # ProjectManager is always active
         res, comments = self._scan_files()
+        if not res:
+            raise ProjectManagerError(self, f'During __init__: comments={comments}')
 
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         flag = func_input.flag
@@ -51,9 +60,9 @@ class ProjectManager(Service):
                                   func_success=True, device_status=self.device_status)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        return super().available_public_functions() + [ProjectManager.AVERAGE,
-                                                       ProjectManager.READ_FILE_TREE,
-                                                       ProjectManager.SAVE_FILE]
+        return super().available_public_functions() + [ProjectManager_controller.AVERAGE,
+                                                       ProjectManager_controller.GET_FILE_TREE,
+                                                       ProjectManager_controller.SAVE_FILE]
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
@@ -61,24 +70,39 @@ class ProjectManager(Service):
     def _check_if_connected(self) -> Tuple[bool, str]:
         return super()._check_if_connected()
 
-    def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
+    def description(self) -> ProjectManagerDescription:
+        """
+        Description with important parameters
+        :return: StpMtrDescription with parameters essential for understanding what this device is used for
+        """
+        try:
+            parameters = self.get_settings('Parameters')
+            return ProjectManagerDescription(info=parameters['info'], GUI_title=parameters['title'])
+        except KeyError as e:
+            return DeviceError(self, f'Could not set description of controller from database: {e}')
+
+    def get_controller_state(self, func_input: FuncGetProjectManagerControllerStateInput) \
+            -> FuncGetProjectManagerControllerStateOutput:
         """
         State of cotroller is returned
         :return:  FuncGetControllerStateOutput
         """
         comments = ''
-        return FuncGetControllerStateOutput(device_status=self.device_status,
-                                            comments=comments, func_success=True)
+        return FuncGetProjectManagerControllerStateOutput(device_status=self.device_status,
+                                                          comments=comments, func_success=True)
 
-    def open(self, measurement: Union[Path, Measurement]):
-        pass
-
-    def read_file_tree(self, func_input: FuncReadFileTreeInput) -> FuncReadFileTreeOutput:
+    def get_file_tree(self, func_input: FuncGetFileTreeInput) -> FuncGetFileTreeOutput:
         conn = db_create_connection(self.database_path)
         files_db, files_db_c = tee((Path(value) for value in db_execute_select(conn,
                                                                                "SELECT file_path from Files", True)))
         file_tree = paths_to_dict(files_db_c)
-        return FuncReadFileTreeOutput(comments='', func_success=True, file_tree=file_tree, files=tuple(files_db))
+        files = set()
+        for file in files_db:
+            files.add(str(file))
+        return FuncGetFileTreeOutput(comments='', func_success=True, file_tree=file_tree, files=files)
+
+    def open(self, measurement: Union[Path, Measurement]):
+        pass
 
     def save(self, file_path: Path):
         pass
@@ -136,8 +160,7 @@ class ProjectManager(Service):
         # TODO: fill project_table in DB
         pass
 
-    def description(self) -> Dict[str, Any]:
-        pass
 
-
-
+class ProjectManagerError(BaseException):
+    def __init__(self, controller: ProjectManager_controller, text: str):
+        super().__init__(f'{controller.name}:{controller.id}:{text}')

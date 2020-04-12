@@ -1,10 +1,15 @@
 # all file should be imported or MsgGenerarot will not be able to work
+from dataclasses import dataclass
+
+@dataclass(frozen=True, order=True)
+class Desription:
+    info: str
+    GUI_title: str
+
 from .devices_dataclass import *
 from .measurments_dataclass import *
 from .stpmtr_dataclass import *
-
-from dataclasses import dataclass
-
+from .projects_dataclass import *
 
 @dataclass(frozen=True)
 class CmdStruct:
