@@ -6,13 +6,14 @@ Created on 15.11.2019
 import logging
 
 from PyQt5.QtWidgets import QMainWindow, QApplication
-
+from typing import Union
 from utilities.myfunc import info_msg,  get_local_ip
 from utilities.data.messages import Message
 from communication.messaging.message_utils import MsgGenerator
-
+from devices.devices import Server
+from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from views.ui.SuperUser_ui import Ui_SuperUser
-
+from utilities.data.messages import Message, ServiceInfoMes, DoneIt, Error
 
 module_logger = logging.getLogger(__name__)
 
@@ -54,14 +55,17 @@ class SuperUserView(QMainWindow):
                 widget2.setChecked(True)
             else:
                 widget1.setChecked(True)
-        elif com == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
-            widget = self.ui.lW_devices
-            widget.clear()
-            names = []
-            for key, item in info.running_services.items():
-                names.append(f'{key}')
-            widget.addItems(names)
-            self.model.superuser.running_services = info.running_services
+        elif com == MsgGenerator.DONE_IT.mes_name:
+            info: Union[DoneIt, Error] = info
+            if info.com == Server.AVAILABLE_SERVICES.name:
+                result: FuncAvailableServicesOutput = info.result
+                widget = self.ui.lW_devices
+                widget.clear()
+                names = []
+                for key, item in result.running_services.items():
+                    names.append(f'{key}')
+                widget.addItems(names)
+                self.model.superuser.running_services = result.running_services
         elif com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
             self.ui.tE_info.setText(str(info))
             self.model.service_parameters[info.device_id] = info

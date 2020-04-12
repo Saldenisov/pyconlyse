@@ -65,7 +65,7 @@ class StepMotorsView(QMainWindow):
     def activate(self):
         com = StpMtrController.ACTIVATE.name
         msg = MsgGenerator.do_it(device=self.device, com=com,
-                                 service_id=self.service_parameters.device_id,
+                                 device_id=self.service_parameters.device_id,
                                  input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
         self.device.send_msg_externally(msg)
         self._asked_status = 0
@@ -74,7 +74,7 @@ class StepMotorsView(QMainWindow):
         com = StpMtrController.ACTIVATE_AXIS.name
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         msg = MsgGenerator.do_it(device=self.device, com=com,
-                                 service_id=self.service_parameters.device_id,
+                                 device_id=self.service_parameters.device_id,
                                  input=FuncActivateAxisInput(axis_id=int(self.ui.spinBox_axis.value()),
                                                              flag=flag))
         self.device.send_msg_externally(msg)
@@ -87,7 +87,7 @@ class StepMotorsView(QMainWindow):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
         com = StpMtrController.GET_POS.name
-        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.service_parameters.device_id,
+        msg = MsgGenerator.do_it(com=com, device=self.device, device_id=self.service_parameters.device_id,
                                  input=FuncGetPosInput(axis_id))
         self.device.send_msg_externally(msg)
         if with_return:
@@ -101,7 +101,7 @@ class StepMotorsView(QMainWindow):
         com = StpMtrController.MOVE_AXIS_TO.name
         axis_id = int(self.ui.spinBox_axis.value())
         pos = float(self.ui.lineEdit_value.text())
-        msg = MsgGenerator.do_it(com=com, device=self.device, service_id=self.service_parameters.device_id,
+        msg = MsgGenerator.do_it(com=com, device=self.device, device_id=self.service_parameters.device_id,
                                  input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
         self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
         self.device.send_msg_externally(msg)
@@ -170,7 +170,7 @@ class StepMotorsView(QMainWindow):
                     self.ui.comments.setText(info.comments)
                     com = StpMtrController.GET_CONTROLLER_STATE.name
                     msg = MsgGenerator.do_it(com=com, device=self.device,
-                                             service_id=self.service_parameters.device_id,
+                                             device_id=self.service_parameters.device_id,
                                              input=FuncGetStpMtrControllerStateInput())
                     self.device.send_msg_externally(msg)
 
@@ -182,14 +182,14 @@ class StepMotorsView(QMainWindow):
         axis_id = int(self.ui.spinBox_axis.value())
         com = StpMtrController.STOP_AXIS.name
         msg = MsgGenerator.do_it(com=com, device=self.device,
-                                 service_id=self.service_parameters.device_id,
+                                 device_id=self.service_parameters.device_id,
                                  input=FuncStopAxisInput(axis_id=axis_id))
         self.device.send_msg_externally(msg)
         self._asked_status = 0
 
     def power(self):
         com = StpMtrController.POWER.name
-        msg = MsgGenerator.do_it(device=self.device, com=com, service_id=self.service_parameters.device_id,
+        msg = MsgGenerator.do_it(device=self.device, com=com, device_id=self.service_parameters.device_id,
                                  input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         self.device.send_msg_externally(msg)
 

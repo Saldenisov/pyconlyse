@@ -60,9 +60,9 @@ class ProjectManager_controller(Service):
                                   func_success=True, device_status=self.device_status)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        return super().available_public_functions() + [ProjectManager_controller.AVERAGE,
+        return  (*super().available_public_functions(), ProjectManager_controller.AVERAGE,
                                                        ProjectManager_controller.GET_FILE_TREE,
-                                                       ProjectManager_controller.SAVE_FILE]
+                                                       ProjectManager_controller.SAVE_FILE)
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()

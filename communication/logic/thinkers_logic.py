@@ -179,8 +179,7 @@ class ServerCmdLogic(Thinker):
                 except Exception as e:
                     self.logger.error(e)
                     msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-            elif cmd == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
-                msg_i = MsgGenerator.available_services_reply(device=self.parent, msg_i=msg)
+
             elif cmd == MsgGenerator.POWER_ON_DEMAND.mes_name:
                 # TODO: service must be realized instead
                 # Server here always replied the same way to all services
@@ -193,10 +192,15 @@ class ServerCmdLogic(Thinker):
                     msg_i = MsgGenerator.error(device=self.parent,
                                                comments=f'service/client {msg.body.sender_id} is not known to server',
                                                msg_i=msg)
+            elif data.com == MsgGenerator.DO_IT.mes_name:
+                reply = False
+                if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                    self.logger.error(f'Adding to executor {msg.data.info} failed')
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')
-        self.msg_out(reply, msg_i)
+        if reply:
+            self.msg_out(reply, msg_i)
 
     def react_reply(self,  msg: Message):
         data = msg.data
@@ -243,12 +247,8 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
     def react_reply(self, msg: Message):
         super().react_reply(msg)
-        data = msg.data
         if self.parent.pyqtsignal_connected:
             self.parent.signal.emit(msg)
-        #if data.com == MsgGenerator.WELCOME_INFO.mes_name:
-            #msg = MsgGenerator.available_services_demand(device=self.parent)
-            #self.add_task_out(msg)
 
 
 class ServiceCmdLogic(GeneralCmdLogic):

@@ -51,7 +51,7 @@ class ProjectManagerView(QMainWindow):
     def get_files(self):
         com = ProjectManager_controller.GET_FILE_TREE.name
         msg = MsgGenerator.do_it(device=self.device, com=com,
-                                 service_id=self.service_parameters.device_id,
+                                 device_id=self.service_parameters.device_id,
                                  input=FuncGetFileTreeInput())
         self.device.send_msg_externally(msg)
 

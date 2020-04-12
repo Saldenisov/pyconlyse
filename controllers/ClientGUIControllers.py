@@ -12,12 +12,13 @@ from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 from utilities.data.messages import Message, ServiceInfoMes
 
+from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
                                                                               FuncGetProjectManagerControllerStateInput)
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput,
                                                                             StpMtrDescription)
 from views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
-from devices.devices import Device
+from devices.devices import Device, Server
 
 
 module_logger = logging.getLogger(__name__)
@@ -66,12 +67,12 @@ class SuperClientGUIcontroller():
             if isinstance(parameters.device_description, StpMtrDescription):
                 view = StepMotorsView
                 msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
-                                         service_id=service_id,
+                                         device_id=service_id,
                                          input=FuncGetStpMtrControllerStateInput())
             elif isinstance(parameters.device_description, ProjectManagerDescription):
                 view = ProjectManagerView
                 msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
-                                         service_id=service_id,
+                                         device_id=service_id,
                                          input=FuncGetProjectManagerControllerStateInput())
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
@@ -93,7 +94,9 @@ class SuperClientGUIcontroller():
         self.device.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
-        msg = MsgGenerator.available_services_demand(device=self.device)
+        #msg = MsgGenerator.available_services_demand(device=self.device)
+        msg = MsgGenerator.do_it(device=self.device, com=Server.AVAILABLE_SERVICES.name,
+                                 input=FuncAvailableServicesInput(), device_id=self.device.server_id)
         self.device.thinker.add_task_out(msg)
 
     def quit_clicked(self, event, total_close=False):

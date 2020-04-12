@@ -26,8 +26,6 @@ class MsgGenerator:
                  'shutdown_info', 'welcome_info']
     ARE_YOU_ALIVE_DEMAND = mes.MessageStructure(DEMAND, mes.AreYouAliveDemand, 'are_you_alive_demand')
     ARE_YOU_ALIVE_REPLY = mes.MessageStructure(REPLY, None, 'are_you_alive_reply')
-    AVAILABLE_SERVICES_DEMAND = mes.MessageStructure(DEMAND, None, 'available_services_demand')
-    AVAILABLE_SERVICES_REPLY = mes.MessageStructure(REPLY, mes.AvailableServices, 'available_services_reply')
     DO_IT = mes.MessageStructure(DEMAND, mes.DoIt, 'do_it')
     DONE_IT = mes.MessageStructure(REPLY, mes.DoneIt, 'done_it')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
@@ -60,16 +58,8 @@ class MsgGenerator:
         return MsgGenerator._gen_msg(MsgGenerator.ARE_YOU_ALIVE_REPLY, device=device, msg_i=msg_i)
 
     @staticmethod
-    def available_services_demand(device):
-        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_DEMAND, device)
-
-    @staticmethod
-    def available_services_reply(device, msg_i: mes.Message):
-        return MsgGenerator._gen_msg(MsgGenerator.AVAILABLE_SERVICES_REPLY, device=device, msg_i=msg_i)
-
-    @staticmethod
-    def do_it(device, com: str, input: FuncInput, service_id: str):
-        return MsgGenerator._gen_msg(MsgGenerator.DO_IT, device, com=com, input=input, rec_id=service_id)
+    def do_it(device, com: str, input: FuncInput, device_id: str):
+        return MsgGenerator._gen_msg(MsgGenerator.DO_IT, device, com=com, input=input, rec_id=device_id)
 
     @staticmethod
     def done_it(device, msg_i: Message, result: FuncOutput):
@@ -197,11 +187,7 @@ class MsgGenerator:
         #  main logic for functions
         try:
             crypted = True
-            if com_name == MsgGenerator.AVAILABLE_SERVICES_DEMAND.mes_name:
-                data_info = None
-            elif com_name == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_name:
-                data_info = mes_info_class(device.services_running, all_services={})
-            elif com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+            if com_name == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
                 crypted = False
                 data_info = mes_info_class(context=kwargs['context'])
             elif com_name == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:

@@ -107,7 +107,7 @@ def test_superuser_server_services_functions(server_test: Server,
     # superuser now asks all services POWER ON
     msg_ids = []
     for service_id in services_id:
-        msg_power_on = MsgGenerator.do_it(superuser, com='power', input=FuncPowerInput(True), service_id=service_id)
+        msg_power_on = MsgGenerator.do_it(superuser, com='power', input=FuncPowerInput(True), device_id=service_id)
         msg_ids.append(msg_power_on.id)
         superuser.thinker.add_task_out(msg_power_on)
         del superuser.thinker.tasks_out_test[msg_power_on.id]
@@ -150,7 +150,7 @@ def test_superuser_server_services_functions(server_test: Server,
     msg_ids = []
     for service_id in services_id:
         msg_power_on = MsgGenerator.do_it(superuser, com='activate', input=FuncActivateInput(True),
-                                          service_id=service_id)
+                                          device_id=service_id)
         msg_ids.append(msg_power_on.id)
         superuser.thinker.add_task_out(msg_power_on)
         del superuser.thinker.tasks_out_test[msg_power_on.id]

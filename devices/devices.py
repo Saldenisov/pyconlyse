@@ -20,10 +20,7 @@ from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
-                                                                             FuncActivateInput, FuncActivateOutput,
-                                                                             FuncGetControllerStateInput, FuncGetControllerStateOutput,
-                                                                             FuncPowerInput, FuncPowerOutput)
+from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
@@ -59,6 +56,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  **kwargs):
         super().__init__()
         self.test = test
+        self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
         self._main_executor = ThreadPoolExecutor(max_workers=100)
         Device.n_instance += 1
         if logger_new:
@@ -129,11 +127,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'CREATED')
 
     @abstractmethod
-    def available_public_functions(self) -> List[CmdStruct]:
-        """
-        Return dict of all functions available to user
-        :return: dictionary of functions {name: description}, e.g. {'activate': {'flag': True}}
-        """
+    def available_public_functions(self) -> Tuple[CmdStruct]:
         pass
 
     @abstractmethod
@@ -229,8 +223,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
         if error:
-            msg_i = MsgGenerator.error(self, msg_i=msg,
-                                       comments=comments)
+            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
         self.thinker.msg_out(True, msg_i)
 
     @staticmethod
@@ -333,6 +326,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 
 class Server(Device):
+    AVAILABLE_SERVICES = CmdStruct('available_services', FuncAvailableServicesInput, FuncAvailableServicesOutput)
+    MAKE_CONNECTION = CmdStruct('make_connection', None, None)
 
     def __init__(self, **kwargs):
         from communication.logic.thinkers_logic import ServerCmdLogic
@@ -370,13 +365,16 @@ class Server(Device):
                 clients_running[device_id] = info.name
         return clients_running
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Any]]:
-        # TODO: realize
-        return {}
-
     def activate(self, flag: bool):
         """Server is always active"""
         self.logger.info("""Server is always active""")
+
+    def available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
+        return FuncAvailableServicesOutput(comments='', func_success=True,  running_services=self.services_running,
+                                           all_services={})
+
+    def available_public_functions(self) -> Tuple[CmdStruct]:
+        return (Server.AVAILABLE_SERVICES, Server.MAKE_CONNECTION)
 
     def description(self) -> Dict[str, Any]:
         # TODO: realize
@@ -415,14 +413,13 @@ class Client(Device):
 
         kwargs['cls_parts'] = cls_parts
         self.type = 'client'
-        self.server_msgn_id = ''
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
+        self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        # TODO: add functionality
-        pass
+    def available_public_functions(self) -> Tuple[CmdStruct]:
+        return ()
 
     def activate(self, flag: bool):
         """Server is always active"""
@@ -458,7 +455,6 @@ class Service(Device):
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServiceMessenger
         from devices.soft.deciders import ServiceDecider
-        self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
         if 'thinker_cls' in kwargs:
             cls_parts = {'Thinker': kwargs['thinker_cls'],
                          'Decider': ServiceDecider,
@@ -471,17 +467,17 @@ class Service(Device):
             raise Exception('DB_command_type is not determined')
 
         self.type = 'service'
-        self.server_msgn_id = ''
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
+        self.server_id = self.get_settings('General')['server_id']
 
     @abstractmethod
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         pass
 
     @abstractmethod
-    def available_public_functions(self) -> List[CmdStruct]:
-        return [Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.POWER]
+    def available_public_functions(self) -> Tuple[CmdStruct]:
+        return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.POWER)
 
     @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:

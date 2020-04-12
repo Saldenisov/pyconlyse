@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Dict, Union
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
 from devices.interfaces import DeciderInter, ExecutorInter
@@ -70,3 +71,14 @@ class FuncPowerInput(FuncInput):
 @dataclass
 class FuncPowerOutput(FuncOutput):
     device_status: DeviceStatus
+
+
+@dataclass
+class FuncAvailableServicesInput(FuncInput):
+    pass
+
+
+@dataclass
+class FuncAvailableServicesOutput(FuncOutput):
+    running_services: Dict[str, str]
+    all_services: Dict[str, str]
