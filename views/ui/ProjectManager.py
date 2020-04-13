@@ -22,7 +22,7 @@ class Ui_ProjectManager(object):
         self.groupBox_files.setObjectName("groupBox_files")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.groupBox_files)
         self.horizontalLayout.setObjectName("horizontalLayout")
-        self.treeView_file = QtWidgets.QTreeView(self.groupBox_files)
+        self.treeView_file = QtWidgets.QTreeWidget(self.groupBox_files)
         self.treeView_file.setEnabled(True)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         sizePolicy.setHorizontalStretch(0)
@@ -117,6 +117,31 @@ class Ui_ProjectManager(object):
         self.retranslateUi(ProjectManager)
         QtCore.QMetaObject.connectSlotsByName(ProjectManager)
 
+    def file_file_tree(self, item=None, value={'test': 'test.py'}):
+        if not item:
+            item = self.treeView_file.invisibleRootItem()
+        def new_item(parent, key, val=None):
+            child = QtWidgets.QTreeWidgetItem([key])
+            if not isinstance(val, str):
+                self.file_file_tree(child, val)
+            parent.addChild(child)
+            child.setExpanded(True)
+
+        if not value:
+            return
+        elif isinstance(value, dict):
+            for key, val in sorted(value.items()):
+                if key not in ['dirs', 'files']:
+                    new_item(item, str(key), val)
+                else:
+                    self.file_file_tree(item, val)
+        elif isinstance(value, (list, tuple)):
+            for val in value:
+                text = (str(val) if not isinstance(val, (dict, list, tuple)) else '[%s]' % type(val).__name__)
+                new_item(item, text, val)
+        else:
+            new_item(item, str(value))
+
     def retranslateUi(self, ProjectManager):
         _translate = QtCore.QCoreApplication.translate
         ProjectManager.setWindowTitle(_translate("ProjectManager", "Project Manager"))
@@ -137,3 +162,20 @@ class Ui_ProjectManager(object):
         self.groupBox_description.setTitle(_translate("ProjectManager", "Description"))
         self.label_search.setText(_translate("ProjectManager", "Search"))
 
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    form = QtWidgets.QMainWindow()
+    ui = Ui_ProjectManager()
+    ui.setupUi(form)
+    value = {'dirs':
+              {'C:\\':
+                   {'dirs':
+                        {'dev': {'dirs': {},
+                                 'files': ['service.py']}},
+                    'files': []}},
+          'files': []}
+    #ui.file_file_tree(ui.treeView_file.invisibleRootItem(), value)
+    form.show()
+    sys.exit(app.exec_())

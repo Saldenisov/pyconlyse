@@ -7,7 +7,7 @@ import copy
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import (QMainWindow)
+from PyQt5.QtWidgets import (QMainWindow, QTreeWidgetItem)
 from PyQt5 import QtCore
 
 from utilities.myfunc import info_msg, error_logger, get_local_ip
@@ -45,6 +45,7 @@ class ProjectManagerView(QMainWindow):
         self.ui.pushButton_get_files.clicked.connect(self.get_files)
         self.ui.pushButton_get_projects.clicked.connect(self.get_projects)
         self.ui.pushButton_get_users.clicked.connect(self.get_users)
+        self.ui.treeView_file.doubleClicked.connect(self.)
 
         info_msg(self, 'INITIALIZED')
 
@@ -64,6 +65,10 @@ class ProjectManagerView(QMainWindow):
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
+    def file_tree_double_click(self, index: QtCore.QModelIndex):
+        text = index.data()
+        parents = index.parent()
+
     def model_is_changed(self, msg: Message):
         try:
             if self.service_parameters.device_id in msg.body.sender_id:
@@ -75,6 +80,7 @@ class ProjectManagerView(QMainWindow):
                     if info.com == ProjectManager_controller.GET_FILE_TREE.name:
                         result: FuncGetFileTreeOutput = result
                         self.ui.label_files_number.setText(str(len(result.files)))
+                        self.ui.file_file_tree(value=result.file_tree)
                     elif info.com == ProjectManager_controller.GET_CONTROLLER_STATE.name:
                         result: FuncGetProjectManagerControllerStateOutput = result
                         self.ui.comments.setText(f'Device status: {result.device_status}. Comments={result.comments}')

@@ -16,14 +16,14 @@ FORWARD = 'forward'
 mes_types = [DEMAND, REPLY, INFO]
 
 class MsgGenerator:
-    _COMMANDS = ['activate_controller', 'available_services_demand', 'available_services_reply',
+    _COMMANDS = ('activate_controller', 'available_services_demand',
                  'are_you_alive_demand', 'are_you_alive_reply',
                  'do_it', 'done_it', 'error', 'forward_msg',
                  'heartbeat', 'hello', 'status_server_info', 'status_server_info_full', 'status_server_demand',
                  'status_server_reply', 'status_service', 'info_service_demand', 'info_service_reply',
                  'reply_on_forwarded_demand', 'power_on_demand', 'power_on_reply',
                  'status_client_info','status_client_demand', 'status_client_reply',
-                 'shutdown_info', 'welcome_info']
+                 'shutdown_info', 'welcome_info')
     ARE_YOU_ALIVE_DEMAND = mes.MessageStructure(DEMAND, mes.AreYouAliveDemand, 'are_you_alive_demand')
     ARE_YOU_ALIVE_REPLY = mes.MessageStructure(REPLY, None, 'are_you_alive_reply')
     DO_IT = mes.MessageStructure(DEMAND, mes.DoIt, 'do_it')
