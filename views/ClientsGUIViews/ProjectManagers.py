@@ -45,7 +45,8 @@ class ProjectManagerView(QMainWindow):
         self.ui.pushButton_get_files.clicked.connect(self.get_files)
         self.ui.pushButton_get_projects.clicked.connect(self.get_projects)
         self.ui.pushButton_get_users.clicked.connect(self.get_users)
-        self.ui.treeView_file.doubleClicked.connect(self.)
+        self.ui.treeView_file.clicked.connect(self.file_tree_click)
+        self.ui.treeView_file.doubleClicked.connect(self.file_tree_double_click)
 
         info_msg(self, 'INITIALIZED')
 
@@ -66,8 +67,17 @@ class ProjectManagerView(QMainWindow):
         self.controller.quit_clicked(event)
 
     def file_tree_double_click(self, index: QtCore.QModelIndex):
-        text = index.data()
-        parents = index.parent()
+        pass
+
+    def file_tree_click(self, index: QtCore.QModelIndex):
+        name: str = index.data()
+        if '~ID~' in name:
+            file_id = name.split('~ID~')[1].split('.')[0]
+            com = ProjectManager_controller.GET_FILE_DESCRIPTION.name
+            msg = MsgGenerator.do_it(device=self.device, com=com,
+                                     device_id=self.service_parameters.device_id,
+                                     input=FuncGetFileDescirptionInput(file_id=file_id))
+            self.device.send_msg_externally(msg)
 
     def model_is_changed(self, msg: Message):
         try:
@@ -75,15 +85,18 @@ class ProjectManagerView(QMainWindow):
                 com = msg.data.com
                 info: Union[DoneIt, Error] = msg.data.info
                 if com == MsgGenerator.DONE_IT.mes_name:
-                    result: Union[FuncGetFileTreeOutput] = info.result
+                    result: Union[FuncGetFileTreeOutput, FuncGetFileDescirptionOutput] = info.result
                     self.ui.comments.setText(result.comments)
                     if info.com == ProjectManager_controller.GET_FILE_TREE.name:
                         result: FuncGetFileTreeOutput = result
-                        self.ui.label_files_number.setText(str(len(result.files)))
-                        self.ui.file_file_tree(value=result.file_tree)
+                        self.ui.label_files_number.setText(f'Files: {len(result.files)}')
+                        self.ui.fill_file_tree(value=result.file_tree)
                     elif info.com == ProjectManager_controller.GET_CONTROLLER_STATE.name:
                         result: FuncGetProjectManagerControllerStateOutput = result
                         self.ui.comments.setText(f'Device status: {result.device_status}. Comments={result.comments}')
+                    elif info.com == ProjectManager_controller.GET_FILE_DESCRIPTION.name:
+                        result: FuncGetFileDescirptionOutput = result
+                        self.ui.update_table_description(result)
                 elif com == MsgGenerator.ERROR.mes_name:
                     self.ui.comments.setText(info.comments)
 

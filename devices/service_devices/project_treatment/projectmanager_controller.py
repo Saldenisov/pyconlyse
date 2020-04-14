@@ -20,11 +20,7 @@ from utilities.data.datastructures.mes_independent import (CmdStruct, FuncActiva
                                                            FuncPowerInput, FuncGetControllerStateInput,
                                                            FuncGetControllerStateOutput)
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
-from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
-                                                                              FuncGetProjectManagerControllerStateInput,
-                                                                              FuncGetProjectManagerControllerStateOutput,
-                                                                              FuncGetFileTreeInput,
-                                                                              FuncGetFileTreeOutput)
+from utilities.data.datastructures.mes_independent.projects_dataclass import *
 
 
 import logging
@@ -37,6 +33,7 @@ class ProjectManager_controller(Service):
     AVERAGE = CmdStruct('average', None, None)
     GET_PROJECT = CmdStruct('get_project', None, None)
     GET_FILE = CmdStruct('get_file', None, None)
+    GET_FILE_DESCRIPTION = CmdStruct('get_file_description', FuncGetFileDescirptionInput, FuncGetFileDescirptionOutput)
     GET_FILE_TREE = CmdStruct('get_file_tree', FuncGetFileTreeInput, FuncGetFileTreeOutput)
     GET_PROJECT_TREE = CmdStruct('get_project_tree', None, None)
 
@@ -62,6 +59,7 @@ class ProjectManager_controller(Service):
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         return  (*super().available_public_functions(), ProjectManager_controller.AVERAGE,
                                                        ProjectManager_controller.GET_FILE_TREE,
+                                                       ProjectManager_controller.GET_FILE_DESCRIPTION,
                                                        ProjectManager_controller.SAVE_FILE)
 
     def _check_if_active(self) -> Tuple[bool, str]:
@@ -91,14 +89,35 @@ class ProjectManager_controller(Service):
         return FuncGetProjectManagerControllerStateOutput(device_status=self.device_status,
                                                           comments=comments, func_success=True)
 
+    def get_file_description(self, func_input: FuncGetFileDescirptionInput) -> FuncGetFileDescirptionOutput:
+        conn = db_create_connection(self.database_path)
+        res, comments = db_execute_select(conn, f"Select Operators.last_name, Files.comments, Files.file_creation, "
+                                                f"Projects.project_name from Files, Projects, Operators where "
+                                                f"file_id = '{func_input.file_id}' and "
+                                                f"Operators.operator_id = Files.operator_id and "
+                                                f"Projects.project_id = Files.project_id")
+
+
+
+        if not res:
+            conn.close()
+            return FuncGetFileDescirptionOutput(comments, False)
+        else:
+            conn.close()
+            return FuncGetFileDescirptionOutput(comments, True, author=res[0], comments_file=res[1], data_size_bytes=0,
+                                                file_creation=res[2], project_name=res[3], timedelays_size=0,
+                                                wavelengths_size=0)
+
+
     def get_file_tree(self, func_input: FuncGetFileTreeInput) -> FuncGetFileTreeOutput:
         conn = db_create_connection(self.database_path)
         files_db, files_db_c = tee((Path(value) for value in db_execute_select(conn,
-                                                                               "SELECT file_path from Files", True)))
+                                                                               "SELECT file_path from Files", True)[0]))
         file_tree = paths_to_dict(files_db_c)
         files = set()
         for file in files_db:
             files.add(str(file))
+        conn.close()
         return FuncGetFileTreeOutput(comments='', func_success=True, file_tree=file_tree, files=files)
 
     def open(self, measurement: Union[Path, Measurement]):
@@ -139,7 +158,11 @@ class ProjectManager_controller(Service):
         self._files = set(chain(dat_files, img_files, zip_files, hdf_files))
 
         conn = db_create_connection(self.database_path)
-        files_db = [Path(value) for value in db_execute_select(conn, "SELECT file_path from Files", True)]
+        res, comments = db_execute_select(conn, "SELECT file_path from Files", True)
+        if not res:
+            return res, comments
+        else:
+            files_db = [Path(value) for value in res]
 
         files_to_insert = []
         for file_path in self._files:
@@ -147,10 +170,9 @@ class ProjectManager_controller(Service):
                 file_name = file_path.stem
                 file_id = file_name.split('~ID~')[1]
                 file_creation = datetime.fromtimestamp(file_path.stat().st_mtime).strftime("%Y-%m-%d (%H:%M:%S.%f)")
-                file_path = str(file_path)
-                files_to_insert.append((file_id, file_name, file_path, file_creation, -1))
+                files_to_insert.append((file_id, file_path.name, str(file_path), file_creation, -1, -1, ''))
         if files_to_insert:
-            res, comments = db_execute_insert(conn,  'INSERT INTO Files VALUES(?,?,?,?,?);', files_to_insert, True)
+            res, comments = db_execute_insert(conn,  'INSERT INTO Files VALUES(?,?,?,?,?,?,?);', files_to_insert, True)
         else:
             res, comments = True, ''
         db_close_conn(conn)

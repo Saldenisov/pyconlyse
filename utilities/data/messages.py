@@ -231,8 +231,12 @@ class Message(MessageInter):
     def short(self):
         t = str(self.data.info)
         l = len(t)
-        if l > 300:
+        if l > 300 and l < 1000:
             l = int(0.8*l)
+        elif l > 1000:
+            l = 300
+        else:
+            pass
         return {'path':  f'{self.body.sender_id}->{self.body.receiver_id}',
                 'data': f'{self.data.com}: {t[0:l]}...',
                 'reply_to': self.reply_to,

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ProjectManager</class>
- <widget class="QMainWindow" name="ProjectManager">
+ <class>treeView_file</class>
+ <widget class="QMainWindow" name="treeView_file">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -24,28 +24,12 @@
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout">
          <item>
-          <widget class="QTreeView" name="treeView_file">
-           <property name="enabled">
-            <bool>true</bool>
-           </property>
-           <property name="sizePolicy">
-            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-             <horstretch>0</horstretch>
-             <verstretch>0</verstretch>
-            </sizepolicy>
-           </property>
-           <property name="minimumSize">
-            <size>
-             <width>300</width>
-             <height>350</height>
-            </size>
-           </property>
-           <property name="baseSize">
-            <size>
-             <width>0</width>
-             <height>0</height>
-            </size>
-           </property>
+          <widget class="QTreeWidget" name="treeWidget">
+           <column>
+            <property name="text">
+             <string notr="true">1</string>
+            </property>
+           </column>
           </widget>
          </item>
          <item>
@@ -189,14 +173,7 @@
            </property>
            <layout class="QVBoxLayout" name="verticalLayout_2">
             <item>
-             <widget class="QTreeView" name="treeView_description">
-              <property name="minimumSize">
-               <size>
-                <width>300</width>
-                <height>350</height>
-               </size>
-              </property>
-             </widget>
+             <widget class="QTableWidget" name="tableWidget_description"/>
             </item>
             <item>
              <widget class="QLabel" name="label_search">

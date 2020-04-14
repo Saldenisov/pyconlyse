@@ -18,17 +18,24 @@ def db_check_update(parent, tick: int, DB_path: Path):
             parent.update_config('database is changed externally')
 
 
-def db_execute_select(connection: sq3.Connection, command: str, multiple=False) -> Any:
+def db_execute_select(connection: sq3.Connection, command: str, multiple=False) -> Tuple[Any, bool]:
+    #TODO: modify so it return res, comments as a Tuple
     try:
         cur = connection.cursor()
         cur.execute(command)
         if not multiple:
-            return cur.fetchone()[0]
+            value = cur.fetchone()
+            if len(value) == 1:
+                value = value[0]
         else:
-            return (value[0] for value in cur.fetchall())
-    except sq3.OperationalError as e:
+            value = (value[0] for value in cur.fetchall())
+        comments = ''
+    except (sq3.OperationalError, KeyError) as e:
         module_logger.error(e)
-        raise e
+        value = False
+        comments = f'db_execute_select: {e}'
+    finally:
+        return value, comments
 
 
 def db_execute_insert(connection: sq3.Connection, command: str,

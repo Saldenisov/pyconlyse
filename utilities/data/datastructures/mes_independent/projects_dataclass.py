@@ -23,6 +23,36 @@ class FuncGetProjectManagerControllerStateOutput(FuncGetControllerStateOutput):
 
 
 @dataclass
+class FuncGetFileDescirptionInput(FuncInput):
+    file_id: str
+
+
+@dataclass
+class FuncGetFileDescirptionOutput(FuncOutput):
+    author: str = ''
+    comments_file: str = ''
+    data_size_bytes: int = 0
+    file_creation: str = ''
+    project_name: str = ''
+    timedelays_size: int = 0
+    wavelengths_size: int = 0
+
+
+@dataclass
+class FuncGetProjectDescirptionInput(FuncInput):
+    file_id: str
+
+
+@dataclass
+class FuncGetProjectDescirptionOutput(FuncOutput):
+    author: str = ''
+    comments_file: str = ''
+    data_size_bytes: int = 0
+    file_creation: str = ''
+    project_name: str = ''
+
+
+@dataclass
 class FuncGetFileTreeInput(FuncInput):
     pass
 

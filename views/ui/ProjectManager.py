@@ -7,6 +7,9 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
+from typing import Union
+from utilities.data.datastructures.mes_independent.projects_dataclass import (FuncGetFileDescirptionOutput,
+                                                                              FuncGetProjectDescirptionOutput)
 
 class Ui_ProjectManager(object):
     def setupUi(self, ProjectManager):
@@ -88,10 +91,11 @@ class Ui_ProjectManager(object):
         self.groupBox_description.setObjectName("groupBox_description")
         self.verticalLayout_2 = QtWidgets.QVBoxLayout(self.groupBox_description)
         self.verticalLayout_2.setObjectName("verticalLayout_2")
-        self.treeView_description = QtWidgets.QTreeView(self.groupBox_description)
-        self.treeView_description.setMinimumSize(QtCore.QSize(300, 350))
-        self.treeView_description.setObjectName("treeView_description")
-        self.verticalLayout_2.addWidget(self.treeView_description)
+        self.tableWidget_description = QtWidgets.QTableWidget(self.groupBox_description)
+        self.tableWidget_description.setObjectName("tableWidget_description")
+        self.tableWidget_description.setColumnCount(2)
+        self.tableWidget_description.setRowCount(3)
+        self.verticalLayout_2.addWidget(self.tableWidget_description)
         self.label_search = QtWidgets.QLabel(self.groupBox_description)
         self.label_search.setObjectName("label_search")
         self.verticalLayout_2.addWidget(self.label_search)
@@ -117,31 +121,6 @@ class Ui_ProjectManager(object):
         self.retranslateUi(ProjectManager)
         QtCore.QMetaObject.connectSlotsByName(ProjectManager)
 
-    def file_file_tree(self, item=None, value={'test': 'test.py'}):
-        if not item:
-            item = self.treeView_file.invisibleRootItem()
-        def new_item(parent, key, val=None):
-            child = QtWidgets.QTreeWidgetItem([key])
-            if not isinstance(val, str):
-                self.file_file_tree(child, val)
-            parent.addChild(child)
-            child.setExpanded(True)
-
-        if not value:
-            return
-        elif isinstance(value, dict):
-            for key, val in sorted(value.items()):
-                if key not in ['dirs', 'files']:
-                    new_item(item, str(key), val)
-                else:
-                    self.file_file_tree(item, val)
-        elif isinstance(value, (list, tuple)):
-            for val in value:
-                text = (str(val) if not isinstance(val, (dict, list, tuple)) else '[%s]' % type(val).__name__)
-                new_item(item, text, val)
-        else:
-            new_item(item, str(value))
-
     def retranslateUi(self, ProjectManager):
         _translate = QtCore.QCoreApplication.translate
         ProjectManager.setWindowTitle(_translate("ProjectManager", "Project Manager"))
@@ -162,6 +141,46 @@ class Ui_ProjectManager(object):
         self.groupBox_description.setTitle(_translate("ProjectManager", "Description"))
         self.label_search.setText(_translate("ProjectManager", "Search"))
 
+    def fill_file_tree(self, item=None, value={'test': 'test.py'}):
+        if not item:
+            item = self.treeView_file.invisibleRootItem()
+        def new_item(parent, key, val=None):
+            child = QtWidgets.QTreeWidgetItem([key])
+            if not isinstance(val, str):
+                self.fill_file_tree(child, val)
+            parent.addChild(child)
+            child.setExpanded(True)
+
+        if not value:
+            return
+        elif isinstance(value, dict):
+            for key, val in sorted(value.items()):
+                if key not in ['dirs', 'files']:
+                    new_item(item, str(key), val)
+                else:
+                    self.fill_file_tree(item, val)
+        elif isinstance(value, (list, tuple)):
+            for val in value:
+                text = (str(val) if not isinstance(val, (dict, list, tuple)) else '[%s]' % type(val).__name__)
+                new_item(item, text, val)
+        else:
+            new_item(item, str(value))
+
+    def update_table_description(self, info: Union[FuncGetFileDescirptionOutput, FuncGetProjectDescirptionOutput]):
+        table = self.tableWidget_description
+        labels = info.__annotations__.keys()
+        table.setColumnCount(2)
+        table.setRowCount(len(labels))
+        table.setVerticalHeaderLabels(labels)
+        table.setHorizontalHeaderLabels(['Actual', 'Future'])
+        i=0
+        for key in labels:
+            value = getattr(info, key)
+            table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(value)))
+            i += 1
+        table.resizeColumnsToContents()
+
+
 
 if __name__ == "__main__":
     import sys
@@ -176,6 +195,6 @@ if __name__ == "__main__":
                                  'files': ['service.py']}},
                     'files': []}},
           'files': []}
-    #ui.file_file_tree(ui.treeView_file.invisibleRootItem(), value)
+    ui.fill_file_tree(ui.treeView_file.invisibleRootItem(), value)
     form.show()
     sys.exit(app.exec_())

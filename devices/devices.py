@@ -103,7 +103,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         # config is set here
         try:
             db_conn = db_create_connection(self.db_path)
-            res = db_execute_select(db_conn, DB_command)
+            res, comments = db_execute_select(db_conn, DB_command)
             db_close_conn(db_conn)
             self.config.add_config(self.name, config_text=res)
 
@@ -547,16 +547,16 @@ class DeviceFactory:
                 device_id: str = kwargs['device_id']
 
                 db_conn = db_create_connection(kwargs['db_path'])
-                device_name = db_execute_select(db_conn,
-                                            f"SELECT device_name from DEVICES_settings where device_id='{device_id}'")
+                device_name, comments = db_execute_select(db_conn, f"SELECT device_name from DEVICES_settings "
+                                                                   f"where device_id='{device_id}'")
 
                 if not device_name:
                     err = f'DeviceFactory Crash: {device_id} is not present in DB'
                     module_logger.error(err)
                     raise BaseException(err)
 
-                project_type = db_execute_select(db_conn,
-                                             f"SELECT project_type from DEVICES_settings where device_id='{device_id}'")
+                project_type, comments = db_execute_select(db_conn, f"SELECT project_type from DEVICES_settings "
+                                                                    f"where device_id='{device_id}'")
 
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
