@@ -7,9 +7,8 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from typing import Union
-from utilities.data.datastructures.mes_independent.projects_dataclass import (FuncGetFileDescirptionOutput,
-                                                                              FuncGetProjectDescirptionOutput)
+from typing import List, Union
+from utilities.data.datastructures.mes_independent.projects_dataclass import *
 
 class Ui_ProjectManager(object):
     def setupUi(self, ProjectManager):
@@ -25,17 +24,10 @@ class Ui_ProjectManager(object):
         self.groupBox_files.setObjectName("groupBox_files")
         self.horizontalLayout = QtWidgets.QHBoxLayout(self.groupBox_files)
         self.horizontalLayout.setObjectName("horizontalLayout")
-        self.treeView_file = QtWidgets.QTreeWidget(self.groupBox_files)
-        self.treeView_file.setEnabled(True)
-        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.treeView_file.sizePolicy().hasHeightForWidth())
-        self.treeView_file.setSizePolicy(sizePolicy)
-        self.treeView_file.setMinimumSize(QtCore.QSize(300, 350))
-        self.treeView_file.setBaseSize(QtCore.QSize(0, 0))
-        self.treeView_file.setObjectName("treeView_file")
-        self.horizontalLayout.addWidget(self.treeView_file)
+        self.treeWidget = QtWidgets.QTreeWidget(self.groupBox_files)
+        self.treeWidget.setObjectName("treeWidget")
+        self.treeWidget.headerItem().setText(0, "1")
+        self.horizontalLayout.addWidget(self.treeWidget)
         self.verticalLayout_files_action = QtWidgets.QVBoxLayout()
         self.verticalLayout_files_action.setContentsMargins(10, 20, 10, -1)
         self.verticalLayout_files_action.setObjectName("verticalLayout_files_action")
@@ -66,9 +58,9 @@ class Ui_ProjectManager(object):
         self.pushButton_get_projects = QtWidgets.QPushButton(self.groupBox_retreive)
         self.pushButton_get_projects.setObjectName("pushButton_get_projects")
         self.verticalLayout_3.addWidget(self.pushButton_get_projects)
-        self.label_projects_number = QtWidgets.QLabel(self.groupBox_retreive)
-        self.label_projects_number.setObjectName("label_projects_number")
-        self.verticalLayout_3.addWidget(self.label_projects_number)
+        self.comboBox_projects = QtWidgets.QComboBox(self.groupBox_retreive)
+        self.comboBox_projects.setObjectName("comboBox_projects")
+        self.verticalLayout_3.addWidget(self.comboBox_projects)
         self.pushButton_get_files = QtWidgets.QPushButton(self.groupBox_retreive)
         self.pushButton_get_files.setObjectName("pushButton_get_files")
         self.verticalLayout_3.addWidget(self.pushButton_get_files)
@@ -78,9 +70,12 @@ class Ui_ProjectManager(object):
         self.pushButton_get_users = QtWidgets.QPushButton(self.groupBox_retreive)
         self.pushButton_get_users.setObjectName("pushButton_get_users")
         self.verticalLayout_3.addWidget(self.pushButton_get_users)
-        self.label_users_number = QtWidgets.QLabel(self.groupBox_retreive)
-        self.label_users_number.setObjectName("label_users_number")
-        self.verticalLayout_3.addWidget(self.label_users_number)
+        self.comboBox_users = QtWidgets.QComboBox(self.groupBox_retreive)
+        self.comboBox_users.setMinimumSize(QtCore.QSize(200, 0))
+        self.comboBox_users.setObjectName("comboBox_users")
+        self.comboBox_users.addItem("")
+        self.comboBox_users.setItemText(0, "")
+        self.verticalLayout_3.addWidget(self.comboBox_users)
         spacerItem = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
         self.verticalLayout_3.addItem(spacerItem)
         self.verticalLayout_files_action.addWidget(self.groupBox_retreive)
@@ -93,8 +88,8 @@ class Ui_ProjectManager(object):
         self.verticalLayout_2.setObjectName("verticalLayout_2")
         self.tableWidget_description = QtWidgets.QTableWidget(self.groupBox_description)
         self.tableWidget_description.setObjectName("tableWidget_description")
-        self.tableWidget_description.setColumnCount(2)
-        self.tableWidget_description.setRowCount(3)
+        self.tableWidget_description.setColumnCount(0)
+        self.tableWidget_description.setRowCount(0)
         self.verticalLayout_2.addWidget(self.tableWidget_description)
         self.label_search = QtWidgets.QLabel(self.groupBox_description)
         self.label_search.setObjectName("label_search")
@@ -133,24 +128,25 @@ class Ui_ProjectManager(object):
         self.pushButton_delete.setText(_translate("ProjectManager", "Delete"))
         self.groupBox_retreive.setTitle(_translate("ProjectManager", "Retrieve"))
         self.pushButton_get_projects.setText(_translate("ProjectManager", "Get Projects"))
-        self.label_projects_number.setText(_translate("ProjectManager", "Projects: "))
         self.pushButton_get_files.setText(_translate("ProjectManager", "Get Files"))
         self.label_files_number.setText(_translate("ProjectManager", "Files: "))
         self.pushButton_get_users.setText(_translate("ProjectManager", "Get Users"))
-        self.label_users_number.setText(_translate("ProjectManager", "Users: "))
         self.groupBox_description.setTitle(_translate("ProjectManager", "Description"))
         self.label_search.setText(_translate("ProjectManager", "Search"))
 
-    def fill_file_tree(self, item=None, value={'test': 'test.py'}):
+    def fill_file_tree(self, item=None, value={}):
+
+
         if not item:
-            item = self.treeView_file.invisibleRootItem()
+            self.treeWidget.clear()
+            item = self.treeWidget.invisibleRootItem()
+
         def new_item(parent, key, val=None):
             child = QtWidgets.QTreeWidgetItem([key])
             if not isinstance(val, str):
                 self.fill_file_tree(child, val)
             parent.addChild(child)
             child.setExpanded(True)
-
         if not value:
             return
         elif isinstance(value, dict):
@@ -165,6 +161,17 @@ class Ui_ProjectManager(object):
                 new_item(item, text, val)
         else:
             new_item(item, str(value))
+
+    def update_operators(self, operators: List[Operator]):
+        if len(operators) != 0:
+            self.comboBox_users.clear()
+            self.comboBox_users.addItem('')
+            i = 1
+            for operator in operators:
+                text = f'{operator.email}'
+                self.comboBox_users.addItem(text)
+                i += 1
+            self.comboBox_users.setCurrentIndex(0)
 
     def update_table_description(self, info: Union[FuncGetFileDescirptionOutput, FuncGetProjectDescirptionOutput]):
         table = self.tableWidget_description
@@ -181,7 +188,6 @@ class Ui_ProjectManager(object):
         table.resizeColumnsToContents()
 
 
-
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
@@ -195,6 +201,6 @@ if __name__ == "__main__":
                                  'files': ['service.py']}},
                     'files': []}},
           'files': []}
-    ui.fill_file_tree(ui.treeView_file.invisibleRootItem(), value)
+    ui.fill_file_tree(ui.treeWidget.invisibleRootItem(), value)
     form.show()
     sys.exit(app.exec_())

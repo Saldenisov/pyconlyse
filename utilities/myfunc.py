@@ -102,14 +102,14 @@ def paths_to_dict(paths: Union[Iterable[Union[Path, str]], Generator], d={'dirs'
                 fill_dict(parts, d['dirs'][part], filename)
         else:
             d['files'].append(part)
-    for path in paths:
-        if not isinstance(path, Path):
-            path = Path(path)
-        fill_dict(list(path.parts), d, path.name)
+    #a = list(paths)
+    if paths:
+        for path in paths:
+            if not isinstance(path, Path):
+                path = Path(path)
+            fill_dict(list(path.parts), d, path.name)
     return d
-p = [Path('C:\dev\service.py')]
-d = paths_to_dict(p)
-a = d
+
 
 def unique_id(name: [Any] = '') -> str:
     """

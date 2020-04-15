@@ -127,6 +127,8 @@ class Thinker(ThinkerInter):
                 info_msg(self, 'REPLY', extra=repr(msg_i.short()))
             elif msg_i.body.type == 'demand':
                 info_msg(self, 'DEMAND', extra=repr(msg_i.short()))
+            elif msg_i.body.type == 'info':
+                info_msg(self, 'INFO', extra=repr(msg_i.short()))
             if isinstance(msg_i, list):
                 for msg in msg_i:
                     self.add_task_out(msg)
@@ -247,15 +249,16 @@ class Thinker(ThinkerInter):
         pass
 
     def remove_device_from_connections(self, device_id):
+        # TODO: the info is not deleted from _frontend sockets or backend sockets
         connections = self.parent.connections
         if device_id in connections:
             device_name = connections[device_id].device_info.name
-            self.logger.info(f'Procedure to delete {device_name} {device_id} is started')
+            self.logger.info(f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
             del self.parent.connections[device_id]
-            self.logger.info(f'{device_name} {device_id} is deleted')
+            self.logger.info(f'Device {device_id} is deleted')
         else:
             self.logger.error(f'remove_device_from_connections: Wrong device_id {device_id} is passed ')
 

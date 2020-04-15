@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>treeView_file</class>
- <widget class="QMainWindow" name="treeView_file">
+ <class>ProjectManager</class>
+ <widget class="QMainWindow" name="ProjectManager">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -101,11 +101,7 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_projects_number">
-                <property name="text">
-                 <string>Projects: </string>
-                </property>
-               </widget>
+               <widget class="QComboBox" name="comboBox_projects"/>
               </item>
               <item>
                <widget class="QPushButton" name="pushButton_get_files">
@@ -129,10 +125,18 @@
                </widget>
               </item>
               <item>
-               <widget class="QLabel" name="label_users_number">
-                <property name="text">
-                 <string>Users: </string>
+               <widget class="QComboBox" name="comboBox_users">
+                <property name="minimumSize">
+                 <size>
+                  <width>200</width>
+                  <height>0</height>
+                 </size>
                 </property>
+                <item>
+                 <property name="text">
+                  <string/>
+                 </property>
+                </item>
                </widget>
               </item>
               <item>

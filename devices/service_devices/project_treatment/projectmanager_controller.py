@@ -35,7 +35,8 @@ class ProjectManager_controller(Service):
     GET_FILE = CmdStruct('get_file', None, None)
     GET_FILE_DESCRIPTION = CmdStruct('get_file_description', FuncGetFileDescirptionInput, FuncGetFileDescirptionOutput)
     GET_FILE_TREE = CmdStruct('get_file_tree', FuncGetFileTreeInput, FuncGetFileTreeOutput)
-    GET_PROJECT_TREE = CmdStruct('get_project_tree', None, None)
+    GET_PROJECTS = CmdStruct('get_projects', FuncGetProjectsInput, FuncGetProjectsOutput)
+    GET_OPERATORS = CmdStruct('get_operators', FuncGetOperatorsInput, FuncGetOperatorsOutput)
 
     SAVE_FILE = CmdStruct('save', None, None)
 
@@ -57,8 +58,10 @@ class ProjectManager_controller(Service):
                                   func_success=True, device_status=self.device_status)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        return  (*super().available_public_functions(), ProjectManager_controller.AVERAGE,
+        return (*super().available_public_functions(), ProjectManager_controller.AVERAGE,
                                                        ProjectManager_controller.GET_FILE_TREE,
+                                                       ProjectManager_controller.GET_PROJECT,
+                                                       ProjectManager_controller.GET_OPERATORS,
                                                        ProjectManager_controller.GET_FILE_DESCRIPTION,
                                                        ProjectManager_controller.SAVE_FILE)
 
@@ -91,7 +94,7 @@ class ProjectManager_controller(Service):
 
     def get_file_description(self, func_input: FuncGetFileDescirptionInput) -> FuncGetFileDescirptionOutput:
         conn = db_create_connection(self.database_path)
-        res, comments = db_execute_select(conn, f"Select Operators.last_name, Files.comments, Files.file_creation, "
+        res, comments = db_execute_select(conn, f"Select Operators.lastname, Files.comments, Files.file_creation, "
                                                 f"Projects.project_name from Files, Projects, Operators where "
                                                 f"file_id = '{func_input.file_id}' and "
                                                 f"Operators.operator_id = Files.operator_id and "
@@ -108,17 +111,43 @@ class ProjectManager_controller(Service):
                                                 file_creation=res[2], project_name=res[3], timedelays_size=0,
                                                 wavelengths_size=0)
 
-
     def get_file_tree(self, func_input: FuncGetFileTreeInput) -> FuncGetFileTreeOutput:
         conn = db_create_connection(self.database_path)
-        files_db, files_db_c = tee((Path(value) for value in db_execute_select(conn,
-                                                                               "SELECT file_path from Files", True)[0]))
-        file_tree = paths_to_dict(files_db_c)
-        files = set()
-        for file in files_db:
-            files.add(str(file))
+        if not func_input.operator_email:
+            res, comments = db_execute_select(conn, "SELECT file_path from Files", True)
+        else:
+            res, comments = db_execute_select(conn, f"Select Files.file_path from Files where Files.operator_id="
+                                                    f"(Select Operators.operator_id from Operators where "
+                                                    f"Operators.email='{func_input.operator_email}')", True)
+        if res:
+            files_db, files_db_c = tee((Path(value[0]) for value in res))
+            file_tree = paths_to_dict(files_db_c, {'dirs': {}, 'files': []})
+            files = set()
+            for file in files_db:
+                files.add(str(file))
+            conn.close()
+            return FuncGetFileTreeOutput(comments='', func_success=True, operator_id=func_input.operator_email,
+                                         file_tree=file_tree, files=files)
+        else:
+            return FuncGetFileTreeOutput(comments=comments, func_success=False, operator_id=func_input.operator_email,
+                                         file_tree={}, files=[])
+
+    def get_operators(self, func_input: FuncGetOperatorsInput) -> FuncGetOperatorsOutput:
+        conn = db_create_connection(self.database_path)
+        param: List[str] = list(Operator.__annotations__.keys())
+        cmd = f"SELECT {', '.join(param)} from Operators"
+        res, comments = db_execute_select(conn, cmd, True)
         conn.close()
-        return FuncGetFileTreeOutput(comments='', func_success=True, file_tree=file_tree, files=files)
+        if res:
+            operators = []
+            for entree in res:
+                try:
+                    operators.append(Operator(*entree))
+                except Exception as e:
+                    comments = f'{comments} {e}'
+            return FuncGetOperatorsOutput(comments, True, operators)
+        else:
+            return FuncGetOperatorsOutput(comments, False, [])
 
     def open(self, measurement: Union[Path, Measurement]):
         pass
@@ -162,7 +191,7 @@ class ProjectManager_controller(Service):
         if not res:
             return res, comments
         else:
-            files_db = [Path(value) for value in res]
+            files_db = [Path(value[0]) for value in res]
 
         files_to_insert = []
         for file_path in self._files:

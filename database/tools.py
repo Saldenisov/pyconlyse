@@ -28,7 +28,7 @@ def db_execute_select(connection: sq3.Connection, command: str, multiple=False) 
             if len(value) == 1:
                 value = value[0]
         else:
-            value = (value[0] for value in cur.fetchall())
+            value = (value for value in cur.fetchall())
         comments = ''
     except (sq3.OperationalError, KeyError) as e:
         module_logger.error(e)

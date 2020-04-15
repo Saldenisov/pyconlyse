@@ -279,12 +279,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'STARTED')
         self.send_status_pyqt()
 
-
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
-        self.messenger.send_msg(stop_msg)
+        self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()
         self.messenger.pause()
@@ -294,7 +293,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = False
         self.device_status.messaging_on = False
         info_msg(self, 'STOPPED')
-
 
     def send_status_pyqt(self, com=''):
         # TODO: rewrite so it is unique for every type of device. make it @abstractmethod

@@ -45,23 +45,28 @@ class ProjectManagerView(QMainWindow):
         self.ui.pushButton_get_files.clicked.connect(self.get_files)
         self.ui.pushButton_get_projects.clicked.connect(self.get_projects)
         self.ui.pushButton_get_users.clicked.connect(self.get_users)
-        self.ui.treeView_file.clicked.connect(self.file_tree_click)
-        self.ui.treeView_file.doubleClicked.connect(self.file_tree_double_click)
+        self.ui.treeWidget.clicked.connect(self.file_tree_click)
+        self.ui.treeWidget.doubleClicked.connect(self.file_tree_double_click)
 
         info_msg(self, 'INITIALIZED')
 
     def get_files(self):
         com = ProjectManager_controller.GET_FILE_TREE.name
+        operator_email = self.ui.comboBox_users.itemText(self.ui.comboBox_users.currentIndex())
         msg = MsgGenerator.do_it(device=self.device, com=com,
                                  device_id=self.service_parameters.device_id,
-                                 input=FuncGetFileTreeInput())
+                                 input=ProjectManager_controller.GET_FILE_TREE.func_input(operator_email))
         self.device.send_msg_externally(msg)
 
     def get_projects(self):
         pass
 
     def get_users(self):
-        pass
+        com = ProjectManager_controller.GET_OPERATORS.name
+        msg = MsgGenerator.do_it(device=self.device, com=com,
+                                 device_id=self.service_parameters.device_id,
+                                 input=ProjectManager_controller.GET_OPERATORS.func_input())
+        self.device.send_msg_externally(msg)
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
@@ -97,6 +102,9 @@ class ProjectManagerView(QMainWindow):
                     elif info.com == ProjectManager_controller.GET_FILE_DESCRIPTION.name:
                         result: FuncGetFileDescirptionOutput = result
                         self.ui.update_table_description(result)
+                    elif info.com == ProjectManager_controller.GET_OPERATORS.name:
+                        result: FuncGetOperatorsOutput = result
+                        self.ui.update_operators(result.operators)
                 elif com == MsgGenerator.ERROR.mes_name:
                     self.ui.comments.setText(info.comments)
 

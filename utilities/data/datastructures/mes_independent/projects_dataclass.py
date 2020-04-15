@@ -6,6 +6,21 @@ from utilities.data.datastructures.mes_independent.devices_dataclass import (Dev
                                                                              FuncGetControllerStateInput,
                                                                              FuncGetControllerStateOutput)
 
+@dataclass
+class Operator:
+    lastname: str
+    firstname: str
+    email: str
+    telephone: str
+    birthday: str
+
+
+@dataclass
+class Project:
+    name: str
+    file_path: str
+    operators: List[Operator]
+
 
 @dataclass(order=True, frozen=True)
 class ProjectManagerDescription(Desription):
@@ -54,10 +69,30 @@ class FuncGetProjectDescirptionOutput(FuncOutput):
 
 @dataclass
 class FuncGetFileTreeInput(FuncInput):
-    pass
+    operator_email: str = ''
 
 
 @dataclass
 class FuncGetFileTreeOutput(FuncOutput):
     file_tree: Dict[str, Union[str, Dict[str, str]]]
     files: Set[str]
+    operator_id: str = ''
+
+
+@dataclass
+class FuncGetOperatorsInput(FuncInput):
+    pass
+
+@dataclass
+class FuncGetOperatorsOutput(FuncOutput):
+    operators: List[Operator]
+
+
+@dataclass
+class FuncGetProjectsInput(FuncInput):
+    pass
+
+
+@dataclass
+class FuncGetProjectsOutput(FuncOutput):
+    operators: List[Operator]
