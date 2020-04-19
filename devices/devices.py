@@ -526,6 +526,8 @@ class Service(Device):
                 self.device_status.power = flag
                 success = True
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        else:
+            success, comments = True, ''
         return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=success)
 
 

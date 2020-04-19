@@ -6,7 +6,7 @@ from utilities.data.datastructures.mes_independent.devices_dataclass import (Dev
                                                                              FuncGetControllerStateInput,
                                                                              FuncGetControllerStateOutput)
 
-@dataclass
+@dataclass(frozen=True)  # To make it hashable
 class Operator:
     lastname: str
     firstname: str
@@ -17,9 +17,27 @@ class Operator:
 
 @dataclass
 class Project:
-    name: str
-    file_path: str
-    operators: List[Operator]
+    project_name: str
+    project_file_path: str
+    project_description: str
+
+
+@dataclass
+class ProjectManagerControllerState:
+    device_status: DeviceStatus
+    db_md5_sum: str  # Allows to check if DB was updated
+    files_len: int
+    operators_len: int
+    projects_len: int
+
+
+@dataclass
+class ProjectManagerViewState:
+    controller_state: ProjectManagerControllerState
+    files_paths: set = field(default_factory=set())
+    projects_names: set = field(default_factory=set())
+    projects_paths: set = field(default_factory=set())
+    operators_names: set = field(default_factory=set())
 
 
 @dataclass(order=True, frozen=True)
@@ -31,10 +49,9 @@ class ProjectManagerDescription(Desription):
 class FuncGetProjectManagerControllerStateInput(FuncGetControllerStateInput):
     pass
 
-
 @dataclass
 class FuncGetProjectManagerControllerStateOutput(FuncGetControllerStateOutput):
-    pass
+    state: ProjectManagerControllerState
 
 
 @dataclass
@@ -68,15 +85,15 @@ class FuncGetProjectDescirptionOutput(FuncOutput):
 
 
 @dataclass
-class FuncGetFileTreeInput(FuncInput):
-    operator_email: str = ''
+class FuncGetFilesInput(FuncInput):
+    author_email: str = ''
+    operator_email: Union[str, List[str]] = ''
 
 
 @dataclass
-class FuncGetFileTreeOutput(FuncOutput):
-    file_tree: Dict[str, Union[str, Dict[str, str]]]
+class FuncGetFilesOutput(FuncOutput):
     files: Set[str]
-    operator_id: str = ''
+    operator_email: Union[str, List[str]] = ''
 
 
 @dataclass
@@ -90,9 +107,12 @@ class FuncGetOperatorsOutput(FuncOutput):
 
 @dataclass
 class FuncGetProjectsInput(FuncInput):
-    pass
+    author_email: str = ''
+    operator_email: Union[str, List[str]] = ''
 
 
 @dataclass
 class FuncGetProjectsOutput(FuncOutput):
-    operators: List[Operator]
+    projects_names: Set[str]
+    projects_files: Set[str]
+    operator_email: Union[str, List[str]] = ''

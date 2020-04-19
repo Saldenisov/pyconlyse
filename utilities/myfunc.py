@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Tuple, List, Iterable, Generator, Union
 import logging
 from datetime import datetime
-from hashlib import md5
+import hashlib
 from random import randint
 from time import sleep
 from typing import Any
@@ -30,6 +30,17 @@ def error_logger(obj: object, func, e):
 
 def dict_to_str_repr(d: dict) -> str:
     return "\n".join("{}: {}".format(k, v) for k, v in d.items())
+
+
+def file_md5(file_path: Path, buf_size=65536) -> str:
+    md5 = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        while True:
+            data = f.read(buf_size)
+            if not data:
+                break
+            md5.update(data)
+    return md5.hexdigest()
 
 
 def list_to_str_repr(l: list) -> str:
@@ -102,7 +113,6 @@ def paths_to_dict(paths: Union[Iterable[Union[Path, str]], Generator], d={'dirs'
                 fill_dict(parts, d['dirs'][part], filename)
         else:
             d['files'].append(part)
-    #a = list(paths)
     if paths:
         for path in paths:
             if not isinstance(path, Path):
@@ -127,7 +137,7 @@ def unique_id(name: [Any] = '') -> str:
     date_time2 = str(datetime.now())
     rint = randint(0, 1000)
     result = f'{date_time1}_{date_time2}_{rint}_{name}'
-    return md5(result.encode('ascii')).hexdigest()
+    return hashlib.md5(result.encode('ascii')).hexdigest()
 
 
 def get_local_ip() -> str:
@@ -265,7 +275,6 @@ def dict_of_dict_to_array(dic):
         else:
             arr.extend(dict_of_dict_to_array(dic[key]))
     return arr
-
 
 if __name__ == "__main__":
     import doctest
