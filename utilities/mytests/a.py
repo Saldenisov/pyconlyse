@@ -1,7 +1,7 @@
 from enum import Enum, Flag, auto
 
 class D(Enum):
-    FILES = str
+    FILES = 1
     PORJECTS = 2
 
 class Flags(Flag):
@@ -9,7 +9,6 @@ class Flags(Flag):
     PORJECTS = auto()
 
 
-print(D.FILES == D.PORJECTS)
+print(D.)
 
 
-print(D.FILES.value)

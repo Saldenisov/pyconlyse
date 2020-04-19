@@ -241,7 +241,7 @@ class Ui_ProjectManager(object):
         self.actionNew_Project.setText(_translate("ProjectManager", "New Project"))
         self.actionQuit.setText(_translate("ProjectManager", "Quit"))
 
-    def fill_file_tree(self, item=None, value={}):
+    def update_file_tree(self, item=None, value={}):
         if not item:
             self.treeWidget.clear()
             item = self.treeWidget.invisibleRootItem()
@@ -249,7 +249,7 @@ class Ui_ProjectManager(object):
         def new_item(parent, key, val=None):
             child = QtWidgets.QTreeWidgetItem([key])
             if not isinstance(val, str):
-                self.fill_file_tree(child, val)
+                self.update_file_tree(child, val)
             parent.addChild(child)
             child.setExpanded(True)
         if not value:
@@ -259,7 +259,7 @@ class Ui_ProjectManager(object):
                 if key not in ['dirs', 'files']:
                     new_item(item, str(key), val)
                 else:
-                    self.fill_file_tree(item, val)
+                    self.update_file_tree(item, val)
         elif isinstance(value, (list, tuple)):
             for val in value:
                 text = (str(val) if not isinstance(val, (dict, list, tuple)) else '[%s]' % type(val).__name__)
@@ -275,6 +275,18 @@ class Ui_ProjectManager(object):
             i = 1
             for operator in operators:
                 text = f'{operator.email}'
+                combobox.addItem(text)
+                i += 1
+            combobox.setCurrentIndex(0)
+
+    def update_projects(self, projects_names: Set[str]):
+        if len(projects_names) != 0:
+            combobox = self.comboBox_projects
+            combobox.clear()
+            combobox.addItem('')
+            i = 1
+            for project_name in projects_names:
+                text = f'{project_name}'
                 combobox.addItem(text)
                 i += 1
             combobox.setCurrentIndex(0)
@@ -321,6 +333,6 @@ if __name__ == "__main__":
                                  'files': ['service.py']}},
                     'files': []}},
           'files': []}
-    ui.fill_file_tree(ui.treeWidget.invisibleRootItem(), value2)
+    ui.update_file_tree(ui.treeWidget.invisibleRootItem(), value2)
     form.show()
     sys.exit(app.exec_())

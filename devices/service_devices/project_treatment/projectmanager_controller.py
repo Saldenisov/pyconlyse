@@ -52,7 +52,7 @@ class ProjectManager_controller(Service):
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         return (*super().available_public_functions(), ProjectManager_controller.GET_FILES,
-                                                       ProjectManager_controller.GET_PROJECT,
+                                                       ProjectManager_controller.GET_PROJECTS,
                                                        ProjectManager_controller.GET_OPERATORS,
                                                        ProjectManager_controller.GET_FILE_DESCRIPTION)
 

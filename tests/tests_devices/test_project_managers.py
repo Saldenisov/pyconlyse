@@ -60,6 +60,10 @@ def test_func_project_manager(project_manager: ProjectManager_controller):
                                                               'daniel.adjei@universite-paris-saclay.fr']))
     assert len(res.files) == 421
 
+    res: FuncGetFilesOutput = pm.get_files(FuncGetFilesInput(operator_email=
+                                                             'viacheslav.shcherbakov@universite-paris-saclay.fr'))
+    assert len(res.files) == 0
+
     # Get Projects
     res: FuncGetProjectsOutput = pm.get_projects(FuncGetProjectsInput())
     assert isinstance(res, FuncGetProjectsOutput)

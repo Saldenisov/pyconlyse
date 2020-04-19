@@ -34,10 +34,10 @@ class ProjectManagerControllerState:
 @dataclass
 class ProjectManagerViewState:
     controller_state: ProjectManagerControllerState
-    files_paths: set = field(default_factory=set())
-    projects_names: set = field(default_factory=set())
-    projects_paths: set = field(default_factory=set())
-    operators_names: set = field(default_factory=set())
+    files_paths: set = field(default_factory=set)
+    projects_names: set = field(default_factory=set)
+    projects_paths: set = field(default_factory=set)
+    operators_names: set = field(default_factory=set)
 
 
 @dataclass(order=True, frozen=True)

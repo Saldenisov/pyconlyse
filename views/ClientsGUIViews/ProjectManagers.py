@@ -24,11 +24,12 @@ module_logger = logging.getLogger(__name__)
 
 class Flags(Enum):
     DEFAULT = auto()
+    DRAW_FILES = auto()
     FILES = auto()
     FILE_DESC = auto()
     OPERATORS = auto()
     PROJECTS = auto()
-    STATUS = auto()
+    STATE = auto()
 
 
 class ProjectManagerView(QMainWindow):
@@ -67,7 +68,11 @@ class ProjectManagerView(QMainWindow):
         self.device.send_msg_externally(msg)
 
     def get_projects(self):
-        pass
+        com = ProjectManager_controller.GET_PROJECTS.name
+        msg = MsgGenerator.do_it(device=self.device, com=com,
+                                 device_id=self.service_parameters.device_id,
+                                 input=ProjectManager_controller.GET_PROJECTS.func_input())
+        self.device.send_msg_externally(msg)
 
     def get_operators(self):
         com = ProjectManager_controller.GET_OPERATORS.name
@@ -107,43 +112,58 @@ class ProjectManagerView(QMainWindow):
                 if com == MsgGenerator.DONE_IT.mes_name:
                     result: Union[FuncGetFilesOutput, FuncGetFileDescirptionOutput] = info.result
                     self.ui.comments.setText(result.comments)
-                    if info.com == ProjectManager_controller.GET_CONTROLLER_STATE.name:
-                        flag = Flags.STATE
-                    elif info.com == ProjectManager_controller.GET_FILES.name:
-                        flag = Flags.FILES
-                    elif info.com == ProjectManager_controller.GET_FILE_DESCRIPTION.name:
-                        flag = Flags.FILE_DESC
-                    elif info.com == ProjectManager_controller.GET_OPERATORS.name:
-                        flag = Flags.OPERATORS
-                    elif info.com == ProjectManager_controller.GET_PROJECTS.name:
-                        flag = Flags.PROJECTS
-                    else:
-                        flag = Flags.DEFAULT
-                    self.update_state(result, flag)
+                    if result.func_success:
+                        if info.com == ProjectManager_controller.GET_CONTROLLER_STATE.name:
+                            flag = Flags.STATE
+                        elif info.com == ProjectManager_controller.GET_FILES.name:
+                            flag = Flags.FILES
+                        elif info.com == ProjectManager_controller.GET_FILE_DESCRIPTION.name:
+                            flag = Flags.FILE_DESC
+                        elif info.com == ProjectManager_controller.GET_OPERATORS.name:
+                            flag = Flags.OPERATORS
+                        elif info.com == ProjectManager_controller.GET_PROJECTS.name:
+                            flag = Flags.PROJECTS
+                        else:
+                            flag = Flags.DEFAULT
+                        self.update_state(result, flag)
                 elif com == MsgGenerator.ERROR.mes_name:
                     self.ui.comments.setText(info.comments)
 
         except Exception as e:
             self.logger.error(e)
 
-    def update_state(self, res: FuncOutput, changed=Flags.DEFAULT):
-        def operators(self):
-            operators: List[str] = self.controller_state.operators
-            self.ui.label_operators.setText(f'Operators: {len(operators)}')
-            self.ui.update_operators(operators)
+    def update_state(self, res: FuncOutput, flag=Flags.DEFAULT):
+        if flag is Flags.STATE:
+            result: FuncGetProjectManagerControllerStateOutput = res
+            self.diff_state_action(result.state)
+        elif flag is Flags.FILES:
+            result: FuncGetFilesOutput = res
+            self.view_state.files_paths = result.files
+            self.view_state.controller_state.files_len = len(result.files)
+            self.ui.label_files.setText(f'Files: {self.view_state.controller_state.files_len}')
+            self.ui.update_file_tree(value=paths_to_dict(result.files, d={'dirs': {}, 'files': []}))
+        elif flag is Flags.OPERATORS:
+            result: FuncGetOperatorsOutput = res
+            self.ui.label_operators.setText(f'Operators: {self.view_state.controller_state.operators_len}')
+            self.ui.update_operators(result.operators)
+        elif flag is Flags.PROJECTS:
+            result: FuncGetProjectsOutput = res
+            self.view_state.projects_names = result.projects_names
+            self.view_state.projects_paths = result.projects_files
+            self.ui.label_projects.setText(f'Projects: {self.view_state.controller_state.projects_len}')
+            self.ui.update_projects(result.projects_names)
 
-        all_func = [operators]
 
-        if changed == 'all':
-            for func in all_func:
-                func(self)
-
-        elif changed == 'operators':
-            operators(self)
 
     def diff_state_action(self, new_state: ProjectManagerControllerState):
+        def check_all(self):
+            self.get_files()
+            self.get_operators()
+            self.get_projects()
+
         if not self.view_state:
             self.view_state = ProjectManagerViewState(controller_state=new_state)
+            check_all(self)
 
         controller_state = self.view_state.controller_state
 
@@ -156,4 +176,6 @@ class ProjectManagerView(QMainWindow):
                 self.get_operators()
 
             self.view_state.controller_state = new_state
+        else:
+            print('no')
 
