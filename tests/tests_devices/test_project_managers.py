@@ -82,6 +82,13 @@ def test_func_project_manager(project_manager: ProjectManager_controller):
     res: FuncGetOperatorsOutput = pm.get_operators(FuncGetOperatorsInput())
     assert isinstance(res, FuncGetOperatorsOutput)
     assert len(res.operators) == 6
+    res: FuncGetOperatorsOutput = pm.get_operators(FuncGetOperatorsInput(1))
+    assert res.operators[0].email == 'sergey.denisov@universite-paris-saclay.fr'
+
+    # Get File Description
+    res: FuncGetFileDescriptionOutput = pm.get_file_description(FuncGetFileDescriptionInput(file_id='c80f3a53d4f3ce46f9081d6cb94c4886'))
+    assert len(res.operators) == 2
+    assert res.author.email == 'sergey.denisov@universite-paris-saclay.fr'
 
 
 

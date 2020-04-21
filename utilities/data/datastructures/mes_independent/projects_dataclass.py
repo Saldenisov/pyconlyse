@@ -8,11 +8,11 @@ from utilities.data.datastructures.mes_independent.devices_dataclass import (Dev
 
 @dataclass(frozen=True)  # To make it hashable
 class Operator:
-    lastname: str
-    firstname: str
-    email: str
-    telephone: str
-    birthday: str
+    lastname: str = ''
+    firstname: str = ''
+    email: str = ''
+    telephone: str = ''
+    birthday: str = ''
 
 
 @dataclass
@@ -34,10 +34,10 @@ class ProjectManagerControllerState:
 @dataclass
 class ProjectManagerViewState:
     controller_state: ProjectManagerControllerState
-    files_paths: set = field(default_factory=set)
-    projects_names: set = field(default_factory=set)
-    projects_paths: set = field(default_factory=set)
-    operators_names: set = field(default_factory=set)
+    files_paths: list = field(default_factory=list)
+    projects_names: list = field(default_factory=list)
+    projects_paths: list = field(default_factory=list)
+    operators_names: list = field(default_factory=list)
 
 
 @dataclass(order=True, frozen=True)
@@ -49,23 +49,25 @@ class ProjectManagerDescription(Desription):
 class FuncGetProjectManagerControllerStateInput(FuncGetControllerStateInput):
     pass
 
+
 @dataclass
 class FuncGetProjectManagerControllerStateOutput(FuncGetControllerStateOutput):
     state: ProjectManagerControllerState
 
 
 @dataclass
-class FuncGetFileDescirptionInput(FuncInput):
+class FuncGetFileDescriptionInput(FuncInput):
     file_id: str
 
 
 @dataclass
-class FuncGetFileDescirptionOutput(FuncOutput):
-    author: str = ''
+class FuncGetFileDescriptionOutput(FuncOutput):
+    author: Operator = Operator()
     comments_file: str = ''
     data_size_bytes: int = 0
+    file_name: str = ''
     file_creation: str = ''
-    project_name: str = ''
+    operators: List[Operator] = field(default_factory=list)
     timedelays_size: int = 0
     wavelengths_size: int = 0
 
@@ -92,13 +94,13 @@ class FuncGetFilesInput(FuncInput):
 
 @dataclass
 class FuncGetFilesOutput(FuncOutput):
-    files: Set[str]
+    files: List[str]
     operator_email: Union[str, List[str]] = ''
 
 
 @dataclass
 class FuncGetOperatorsInput(FuncInput):
-    pass
+    operator_id: Union[int, List[int]] = field(default_factory=list)
 
 @dataclass
 class FuncGetOperatorsOutput(FuncOutput):
@@ -113,6 +115,6 @@ class FuncGetProjectsInput(FuncInput):
 
 @dataclass
 class FuncGetProjectsOutput(FuncOutput):
-    projects_names: Set[str]
-    projects_files: Set[str]
+    projects_names: List[str]
+    projects_files: List[str]
     operator_email: Union[str, List[str]] = ''

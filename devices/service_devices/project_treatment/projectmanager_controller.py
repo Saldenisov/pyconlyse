@@ -28,7 +28,7 @@ class ProjectManager_controller(Service):
     # TODO: UPDATE
     GET_PROJECT = CmdStruct('get_project', None, None)
     GET_FILE = CmdStruct('get_file', None, None)
-    GET_FILE_DESCRIPTION = CmdStruct('get_file_description', FuncGetFileDescirptionInput, FuncGetFileDescirptionOutput)
+    GET_FILE_DESCRIPTION = CmdStruct('get_file_description', FuncGetFileDescriptionInput, FuncGetFileDescriptionOutput)
     GET_FILES = CmdStruct('get_files', FuncGetFilesInput, FuncGetFilesOutput)
     GET_PROJECTS = CmdStruct('get_projects', FuncGetProjectsInput, FuncGetProjectsOutput)
     GET_OPERATORS = CmdStruct('get_operators', FuncGetOperatorsInput, FuncGetOperatorsOutput)
@@ -111,20 +111,61 @@ class ProjectManager_controller(Service):
                                                           device_status=self.device_status,
                                                           state=self.state)
 
-    def get_file_description(self, func_input: FuncGetFileDescirptionInput) -> FuncGetFileDescirptionOutput:
+    def get_file_description(self, func_input: FuncGetFileDescriptionInput) -> FuncGetFileDescriptionOutput:
         conn = db_create_connection(self.database_path)
-        res, comments = db_execute_select(conn, f"Select Operators.lastname, Files.comments, Files.file_creation, "
-                                                f"Projects.project_name from Files, Projects, Operators where "
-                                                f"file_id = '{func_input.file_id}' and "
-                                                f"Operators.operator_id = Files.operator_id and "
-                                                f"Projects.project_id = Files.project_id")
+        author = Operator()
+        comments_file = ''
+        data_size_bytes = 0
+        file_creation = ''
+        operators: List[Operator] = []
+        timedelays_size = 0
+        wavelengths_size = 0
+        COMMENTS = ''
+
+        # Get author Operator
+        res, comments = db_execute_select(conn, f"Select author_id from Files where file_id='{func_input.file_id}'")
+        if res:
+            res = self.get_operators(FuncGetOperatorsInput(res))
+            author: Operator = res.operators[0]
+            COMMENTS = f'{COMMENTS}.{res.comments}'
+        COMMENTS = f'{COMMENTS}.{comments}'
+        # Get comments, file creation, operators
+        # comments and file creation
+        res, comments = db_execute_select(conn, f"Select comments from Files where file_id='{func_input.file_id}'")
+        if res:
+            comments_file = res
+        COMMENTS = f'{COMMENTS}.{comments}'
+        # file creation
+        cmd = f"Select file_creation from Files where file_id='{func_input.file_id}'"
+        res, comments = db_execute_select(conn, cmd)
+        if res:
+            file_creation = res
+        COMMENTS = f'{COMMENTS}.{comments}'
+        # operators
+        cmd = f"Select operator_id from GlueOperatorFile where file_id='{func_input.file_id}'"
+        res, comments = db_execute_select(conn, cmd, True)
+        if res:
+            operators_ids = []
+            for entree in res:
+                operators_ids.append(entree[0])
+            res = self.get_operators(FuncGetOperatorsInput(operators_ids))
+            operators = res.operators
+
+        COMMENTS = f'{COMMENTS}.{comments}'
+        # File' data info
+        res, comments = db_execute_select(conn, f"Select file_path from Files where file_id='{func_input.file_id}'")
+        if res:
+            file_path = Path(self.data_path.parents[0] / res)
+            data_size_bytes = file_path.stat().st_size
+        COMMENTS = f'{COMMENTS}.{comments}'
         conn.close()
         if res:
-            return FuncGetFileDescirptionOutput(comments, True, author=res[0], comments_file=res[1], data_size_bytes=0,
-                                                file_creation=res[2], project_name=res[3], timedelays_size=0,
-                                                wavelengths_size=0)
+            return FuncGetFileDescriptionOutput(comments, True, author=author, comments_file=comments_file,
+                                                data_size_bytes=data_size_bytes, operators=operators,
+                                                file_creation=file_creation, timedelays_size=timedelays_size,
+                                                wavelengths_size=wavelengths_size)
         else:
-            return FuncGetFileDescirptionOutput(comments, False)
+            return FuncGetFileDescriptionOutput(comments, False)
 
     def get_files(self, func_input: FuncGetFilesInput) -> FuncGetFilesOutput:
         conn = db_create_connection(self.database_path)
@@ -158,9 +199,9 @@ class ProjectManager_controller(Service):
         if res:
             try:
                 files_db = (Path(value[0]) for value in res)
-                files = set()
+                files = []
                 for file in files_db:
-                    files.add(str(file))
+                    files.append(str(file))
                 self._files = files
                 res = True
             except (KeyError, ValueError, TypeError) as e:
@@ -170,12 +211,24 @@ class ProjectManager_controller(Service):
                                       files=files)
         else:
             return FuncGetFilesOutput(comments=comments, func_success=False,
-                                      operator_email=func_input.operator_email, files=set())
+                                      operator_email=func_input.operator_email, files=[])
 
     def get_operators(self, func_input: FuncGetOperatorsInput) -> FuncGetOperatorsOutput:
+
         conn = db_create_connection(self.database_path)
         param: List[str] = list(Operator.__annotations__.keys())
         cmd = f"SELECT {', '.join(param)} from Operators"
+        if isinstance(func_input.operator_id, list):
+            if func_input.operator_id == []:
+                pass
+            else:
+                operators_ids = [str(oper) for oper in func_input.operator_id]
+                operators_ids = '(' + ','.join(operators_ids) + ')'
+                cmd = f"{cmd} where operator_id IN {operators_ids}"
+        elif isinstance(func_input.operator_id, int):
+            cmd = f"{cmd} where operator_id='{func_input.operator_id}'"
+
+
         res, comments = db_execute_select(conn, cmd, True)
         conn.close()
         if res:
@@ -183,14 +236,14 @@ class ProjectManager_controller(Service):
             try:
                 for entree in res:
                     operators.append(Operator(*entree))
-                    res = True
+                res = True
             except TypeError as e:
                     res = False
                     comments = f'{comments} {e}'
             self._operators = operators
-            return FuncGetOperatorsOutput(comments, res, set(operators))
+            return FuncGetOperatorsOutput(comments, res, operators)
         else:
-            return FuncGetOperatorsOutput(comments, False, set())
+            return FuncGetOperatorsOutput(comments, False, [])
 
     def get_projects(self, func_input: FuncGetProjectsInput) -> FuncGetProjectsOutput:
         conn = db_create_connection(self.database_path)
@@ -232,9 +285,9 @@ class ProjectManager_controller(Service):
                 except (KeyError, ValueError) as e:
                     res = False
                     comments = f'{comments} {e}'
-            return FuncGetProjectsOutput(comments, res, set(projects_names), set(projects_paths), func_input.operator_email)
+            return FuncGetProjectsOutput(comments, res, projects_names, projects_paths, func_input.operator_email)
         else:
-            return FuncGetOperatorsOutput(comments, False, set(), set(), func_input.operator_email)
+            return FuncGetOperatorsOutput(comments, False, [], [], func_input.operator_email)
 
     def open(self, measurement: Union[Path, Measurement]):
         pass
