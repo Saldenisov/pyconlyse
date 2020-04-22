@@ -179,7 +179,6 @@ class ServerCmdLogic(Thinker):
                 except Exception as e:
                     self.logger.error(e)
                     msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-
             elif cmd == MsgGenerator.POWER_ON_DEMAND.mes_name:
                 # TODO: service must be realized instead
                 # Server here always replied the same way to all services
