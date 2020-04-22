@@ -43,6 +43,6 @@ def projectmanager(device_id='ProjectManager_controller:2d23d885d1c63ab03166ffa8
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'database' / db_name), test=True)
 
 
-def projectmanager_non_fixture(device_id='ProjectManager_controller:2d23d885d1c63ab03166ffa858b90ada',
-                                db_name='Devices.db') -> ProjectManager_controller:
+def projectmanager_default_non_fixture(device_id='ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada',
+                                       db_name='Devices.db') -> ProjectManager_controller:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'database' / db_name), test=True)

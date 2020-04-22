@@ -83,6 +83,10 @@ class StepMotorsView(QMainWindow):
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
 
+    @property
+    def controller_axes(self):
+        return self.controller_status.axes
+
     def get_pos(self, axis_id=None, with_return=False):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
@@ -92,6 +96,18 @@ class StepMotorsView(QMainWindow):
         self.device.send_msg_externally(msg)
         if with_return:
             return True if self.controller_status.axes[axis_id].status == 2 else False
+
+    @controller_axes.setter
+    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
+        try:
+            if type(next(iter(value.values()))) == AxisStpMtr:
+                self.controller_status.axes = value
+            else:
+                for axis_id, axis in value.items():
+                    self.controller_status.axes[axis_id].status = axis.status
+                    self.controller_status.axes[axis_id].position = axis.position
+        except Exception as e:
+            print(e)
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
@@ -110,22 +126,6 @@ class StepMotorsView(QMainWindow):
         self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                     specific={'axis_id': axis_id, 'with_return': True})
         self._asked_status = 0
-
-    @property
-    def controller_axes(self):
-        return self.controller_status.axes
-
-    @controller_axes.setter
-    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
-        try:
-            if type(next(iter(value.values()))) == AxisStpMtr:
-                self.controller_status.axes = value
-            else:
-                for axis_id, axis in value.items():
-                    self.controller_status.axes[axis_id].status = axis.status
-                    self.controller_status.axes[axis_id].position = axis.position
-        except Exception as e:
-            print(e)
 
     def model_is_changed(self, msg: Message):
         try:

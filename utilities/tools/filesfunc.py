@@ -6,9 +6,6 @@ import zlib
 from multiprocessing import Pool
 
 
-
-
-
 def deletefile(filepath):
     pass
 

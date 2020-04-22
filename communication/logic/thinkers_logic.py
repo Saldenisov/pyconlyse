@@ -118,7 +118,7 @@ class ServerCmdLogic(Thinker):
         self.register_event(name='heartbeat',
                             external_name='server_heartbeat',
                             logic_func=internal_hb_logic)
-        self._forward_binding = {}
+        self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_info(self, msg: Message):
         data = msg.data
@@ -131,8 +131,7 @@ class ServerCmdLogic(Thinker):
                     self.events[data.info.event_id].n = data.info.n
                 except KeyError as e:
                     self.logger.error(e)
-            elif data.com == 'shutdown':
-                # TODO: the info is not deleted from _frontend sockets or backend sockets
+            elif data.com == 'shutdown_info':
                 self.remove_device_from_connections(data.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
@@ -162,7 +161,6 @@ class ServerCmdLogic(Thinker):
                         if 'publisher' in device_info.public_sockets:
                             from communication.logic.logic_functions import external_hb_logic
                             self.parent.messenger.subscribe_sub(address=device_info.public_sockets['publisher'])
-                            a = f'heartbeat:{data.info.name}'
                             self.register_event(name=f'heartbeat:{data.info.name}',
                                                 logic_func=external_hb_logic,
                                                 event_id=f'heartbeat:{data.info.device_id}',
@@ -226,12 +224,12 @@ class ServerCmdLogic(Thinker):
 
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
-            if event.counter_timeout > int(self.parent.get_general_settings()['timeout']):
+            if event.counter_timeout > self.timeout:
                 self.logger.info('Service was away for too long...deleting info about service')
-                self.unregister_event(event.id)
-                del self.parent.connections[event.original_owner]
+                #self.unregister_event(event.id)
+                #del self.parent.connections[event.original_owner]
+                self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt(com='status_server_info_full')
-
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 

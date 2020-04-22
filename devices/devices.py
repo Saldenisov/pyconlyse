@@ -103,7 +103,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         # config is set here
         try:
             db_conn = db_create_connection(self.db_path)
-            res = db_execute_select(db_conn, DB_command)
+            res, comments = db_execute_select(db_conn, DB_command)
             db_close_conn(db_conn)
             self.config.add_config(self.name, config_text=res)
 
@@ -279,12 +279,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info_msg(self, 'STARTED')
         self.send_status_pyqt()
 
-
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
-        self.messenger.send_msg(stop_msg)
+        self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()
         self.messenger.pause()
@@ -294,7 +293,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = False
         self.device_status.messaging_on = False
         info_msg(self, 'STOPPED')
-
 
     def send_status_pyqt(self, com=''):
         # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
@@ -528,6 +526,8 @@ class Service(Device):
                 self.device_status.power = flag
                 success = True
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+        else:
+            success, comments = True, ''
         return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=success)
 
 
@@ -547,16 +547,16 @@ class DeviceFactory:
                 device_id: str = kwargs['device_id']
 
                 db_conn = db_create_connection(kwargs['db_path'])
-                device_name = db_execute_select(db_conn,
-                                            f"SELECT device_name from DEVICES_settings where device_id='{device_id}'")
+                device_name, comments = db_execute_select(db_conn, f"SELECT device_name from DEVICES_settings "
+                                                                   f"where device_id='{device_id}'")
 
                 if not device_name:
                     err = f'DeviceFactory Crash: {device_id} is not present in DB'
                     module_logger.error(err)
                     raise BaseException(err)
 
-                project_type = db_execute_select(db_conn,
-                                             f"SELECT project_type from DEVICES_settings where device_id='{device_id}'")
+                project_type, comments = db_execute_select(db_conn, f"SELECT project_type from DEVICES_settings "
+                                                                    f"where device_id='{device_id}'")
 
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')

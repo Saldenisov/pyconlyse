@@ -20,9 +20,7 @@ from utilities.myfunc import paths_to_dict
 from utilities.data.datastructures.mes_independent import (CmdStruct, FuncActivateInput, FuncActivateOutput,
                                                            FuncGetControllerStateInput, FuncGetControllerStateOutput)
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
-from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
-                                                                              FuncGetFileTreeInput,
-                                                                              FuncGetFileTreeOutput)
+from utilities.data.datastructures.mes_independent.projects_dataclass import *
 
 
 class ProjectManager_default(ProjectManager_controller):
