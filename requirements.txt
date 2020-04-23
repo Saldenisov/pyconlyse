@@ -1,3 +1,4 @@
+aiohttp
 configobj
 cryptography
 gpiozero
@@ -7,6 +8,7 @@ numpy
 PyQt5
 pytest-qt
 pywin32
+python-socketio
 scipy
 tables
 vitables
