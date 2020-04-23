@@ -34,10 +34,47 @@ class ProjectManagerControllerState:
 @dataclass
 class ProjectManagerViewState:
     controller_state: ProjectManagerControllerState
-    files_paths: list = field(default_factory=list)
-    projects_names: list = field(default_factory=list)
-    projects_paths: list = field(default_factory=list)
-    operators_names: list = field(default_factory=list)
+    files_paths: List[str] = field(default_factory=list)
+    projects_names: List[str] = field(default_factory=list)
+    projects_paths: List[str] = field(default_factory=list)
+    operators: List[Operator] = field(default_factory=list)
+    operators_future: List[Operator] = field(default_factory=list)
+
+
+    def operators_search(self, operator_email: str) -> int:
+        if self.operators:
+            i = 0
+            for operator in self.operators:
+                if operator_email == operator.email:
+                    return i
+                i += 1
+        return -1
+
+    def operators_future_search(self, operator_email: str) -> int:
+        if self.operators_future:
+            i = 0
+            for operator in self.operators_future:
+                if operator_email == operator.email:
+                    return i
+                i += 1
+        return -1
+
+    def operators_future_add_by_index(self, operator_index: int):
+        if self.operators:
+            if len(self.operators) > operator_index:
+                self.operators_future.append(self.operators[operator_index])
+
+    def operators_future_remove_by_index(self, operator_index: int):
+        if self.operators_future:
+            if len(self.operators_future) > operator_index:
+                self.operators_future.pop(operator_index)
+
+    def operators_future_remove_element(self, operator: Operator):
+        if self.operators_future:
+            try:
+                self.operators_future.remove(operator)
+            except ValueError:
+                pass
 
 
 @dataclass(order=True, frozen=True)
@@ -62,12 +99,13 @@ class FuncGetFileDescriptionInput(FuncInput):
 
 @dataclass
 class FuncGetFileDescriptionOutput(FuncOutput):
+    file_id: str = ''
+    file_name: str = ''
     author: Operator = Operator()
     comments_file: str = ''
-    data_size_bytes: int = 0
-    file_name: str = ''
-    file_creation: str = ''
     operators: List[Operator] = field(default_factory=list)
+    file_creation: str = ''
+    data_size_bytes: int = 0
     timedelays_size: int = 0
     wavelengths_size: int = 0
 

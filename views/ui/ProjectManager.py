@@ -7,9 +7,6 @@
 # WARNING! All changes made in this file will be lost!
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from typing import List, Union
-from utilities.data.datastructures.mes_independent.projects_dataclass import *
-
 
 class Ui_ProjectManager(object):
     def setupUi(self, ProjectManager):
@@ -28,6 +25,7 @@ class Ui_ProjectManager(object):
         self.treeWidget = QtWidgets.QTreeWidget(self.groupBox_files)
         self.treeWidget.setMinimumSize(QtCore.QSize(350, 0))
         self.treeWidget.setObjectName("treeWidget")
+        self.treeWidget.headerItem().setText(0, "1")
         self.treeWidget.header().setVisible(False)
         self.horizontalLayout.addWidget(self.treeWidget)
         self.verticalLayout_files_action = QtWidgets.QVBoxLayout()
@@ -126,6 +124,9 @@ class Ui_ProjectManager(object):
         self.pushButton_get_operators.setMinimumSize(QtCore.QSize(120, 0))
         self.pushButton_get_operators.setObjectName("pushButton_get_operators")
         self.gridLayout_operators.addWidget(self.pushButton_get_operators, 0, 0, 1, 1)
+        self.pushButton_remove_operator = QtWidgets.QPushButton(self.groupBox_retreive)
+        self.pushButton_remove_operator.setObjectName("pushButton_remove_operator")
+        self.gridLayout_operators.addWidget(self.pushButton_remove_operator, 1, 1, 1, 1)
         self.pushButton_add_operator = QtWidgets.QPushButton(self.groupBox_retreive)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
@@ -135,12 +136,9 @@ class Ui_ProjectManager(object):
         self.pushButton_add_operator.setMinimumSize(QtCore.QSize(0, 0))
         self.pushButton_add_operator.setObjectName("pushButton_add_operator")
         self.gridLayout_operators.addWidget(self.pushButton_add_operator, 0, 1, 1, 1)
-        self.pushButton_remove_operator = QtWidgets.QPushButton(self.groupBox_retreive)
-        self.pushButton_remove_operator.setObjectName("pushButton_remove_operator")
-        self.gridLayout_operators.addWidget(self.pushButton_remove_operator, 1, 1, 1, 1)
-        self.pushButton_update_operator = QtWidgets.QPushButton(self.groupBox_retreive)
-        self.pushButton_update_operator.setObjectName("pushButton_update_operator")
-        self.gridLayout_operators.addWidget(self.pushButton_update_operator, 1, 0, 1, 1)
+        self.pushButton_new_operator = QtWidgets.QPushButton(self.groupBox_retreive)
+        self.pushButton_new_operator.setObjectName("pushButton_new_operator")
+        self.gridLayout_operators.addWidget(self.pushButton_new_operator, 1, 0, 1, 1)
         self.horizontalLayout_operators.addLayout(self.gridLayout_operators)
         spacerItem2 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
         self.horizontalLayout_operators.addItem(spacerItem2)
@@ -166,6 +164,9 @@ class Ui_ProjectManager(object):
         self.tableWidget_description.setColumnCount(0)
         self.tableWidget_description.setRowCount(0)
         self.verticalLayout_2.addWidget(self.tableWidget_description)
+        self.pushButton_update_description = QtWidgets.QPushButton(self.groupBox_description)
+        self.pushButton_update_description.setObjectName("pushButton_update_description")
+        self.verticalLayout_2.addWidget(self.pushButton_update_description)
         self.label_search = QtWidgets.QLabel(self.groupBox_description)
         self.label_search.setObjectName("label_search")
         self.verticalLayout_2.addWidget(self.label_search)
@@ -211,7 +212,7 @@ class Ui_ProjectManager(object):
         self.pushButton_remove_project.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Remove File from Selected Project</span></p></body></html>"))
         self.pushButton_remove_project.setText(_translate("ProjectManager", "-"))
         self.pushButton_get_projects.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Retreive Projects</span></p></body></html>"))
-        self.pushButton_get_projects.setText(_translate("ProjectManager", "Get Projects"))
+        self.pushButton_get_projects.setText(_translate("ProjectManager", "Projects"))
         self.pushButton_new_project.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Create New Project</span></p></body></html>"))
         self.pushButton_new_project.setText(_translate("ProjectManager", "New"))
         self.pushButton_add_file_to_project.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Add File to Selected Project</span></p></body></html>"))
@@ -219,28 +220,28 @@ class Ui_ProjectManager(object):
         self.comboBox_projects.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Projects</span></p></body></html>"))
         self.label_files.setText(_translate("ProjectManager", "Files: "))
         self.pushButton_get_files.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Retreive Files</span></p></body></html>"))
-        self.pushButton_get_files.setText(_translate("ProjectManager", "Get Files"))
+        self.pushButton_get_files.setText(_translate("ProjectManager", "Files"))
         self.pushButton_remove_file.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Remove File/Files from DB</span></p></body></html>"))
         self.pushButton_remove_file.setText(_translate("ProjectManager", "-"))
         self.label_operators.setText(_translate("ProjectManager", "Operators:"))
         self.pushButton_get_operators.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Retreive Operators</span></p></body></html>"))
-        self.pushButton_get_operators.setText(_translate("ProjectManager", "Get Operators"))
-        self.pushButton_add_operator.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Create New Operator</span></p></body></html>"))
-        self.pushButton_add_operator.setText(_translate("ProjectManager", "+"))
+        self.pushButton_get_operators.setText(_translate("ProjectManager", "Operators"))
         self.pushButton_remove_operator.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Remove Operator from DB</span></p></body></html>"))
         self.pushButton_remove_operator.setText(_translate("ProjectManager", "-"))
-        self.pushButton_update_operator.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Update Operator info</span></p></body></html>"))
-        self.pushButton_update_operator.setText(_translate("ProjectManager", "Update"))
+        self.pushButton_add_operator.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Create New Operator</span></p></body></html>"))
+        self.pushButton_add_operator.setText(_translate("ProjectManager", "+"))
+        self.pushButton_new_operator.setText(_translate("ProjectManager", "New"))
         self.comboBox_operators.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Operators</span></p></body></html>"))
         self.groupBox_description.setTitle(_translate("ProjectManager", "Description"))
         self.tableWidget_description.setToolTip(_translate("ProjectManager", "<html><head/><body><p>Description of file/project</p></body></html>"))
+        self.pushButton_update_description.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">Update Operator info</span></p></body></html>"))
+        self.pushButton_update_description.setText(_translate("ProjectManager", "Update"))
         self.label_search.setText(_translate("ProjectManager", "Search"))
         self.lineEdit_search.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">SQL search query</span></p></body></html>"))
         self.comments.setToolTip(_translate("ProjectManager", "<html><head/><body><p><span style=\" font-weight:600;\">comments</span></p></body></html>"))
         self.menuGeneral.setTitle(_translate("ProjectManager", "General"))
         self.actionNew_Project.setText(_translate("ProjectManager", "New Project"))
         self.actionQuit.setText(_translate("ProjectManager", "Quit"))
-
 
 from typing import List, Union
 from utilities.data.datastructures.mes_independent.projects_dataclass import *
