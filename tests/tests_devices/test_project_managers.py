@@ -89,6 +89,7 @@ def test_func_project_manager(project_manager: ProjectManager_controller):
     res: FuncGetFileDescriptionOutput = pm.get_file_description(FuncGetFileDescriptionInput(file_id='c80f3a53d4f3ce46f9081d6cb94c4886'))
     assert len(res.operators) == 2
     assert res.author.email == 'sergey.denisov@universite-paris-saclay.fr'
+    assert res.file_name == '28_32-6atm-CO2-16-13~ID~c80f3a53d4f3ce46f9081d6cb94c4886.zip'
 
 
 

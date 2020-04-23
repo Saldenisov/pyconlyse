@@ -117,6 +117,7 @@ class ProjectManager_controller(Service):
         comments_file = ''
         data_size_bytes = 0
         file_creation = ''
+        file_name = ''
         operators: List[Operator] = []
         timedelays_size = 0
         wavelengths_size = 0
@@ -129,11 +130,16 @@ class ProjectManager_controller(Service):
             author: Operator = res.operators[0]
             COMMENTS = f'{COMMENTS}.{res.comments}'
         COMMENTS = f'{COMMENTS}.{comments}'
-        # Get comments, file creation, operators
-        # comments and file creation
+        # comments
         res, comments = db_execute_select(conn, f"Select comments from Files where file_id='{func_input.file_id}'")
         if res:
             comments_file = res
+        COMMENTS = f'{COMMENTS}.{comments}'
+        # file name
+        cmd = f"Select file_name from Files where file_id='{func_input.file_id}'"
+        res, comments = db_execute_select(conn, cmd)
+        if res:
+            file_name = res
         COMMENTS = f'{COMMENTS}.{comments}'
         # file creation
         cmd = f"Select file_creation from Files where file_id='{func_input.file_id}'"
@@ -161,7 +167,8 @@ class ProjectManager_controller(Service):
         conn.close()
         if res:
             return FuncGetFileDescriptionOutput(comments, True, author=author, comments_file=comments_file,
-                                                data_size_bytes=data_size_bytes, operators=operators,
+                                                data_size_bytes=data_size_bytes, file_name=file_name,
+                                                file_id=func_input.file_id, operators=operators,
                                                 file_creation=file_creation, timedelays_size=timedelays_size,
                                                 wavelengths_size=wavelengths_size)
         else:

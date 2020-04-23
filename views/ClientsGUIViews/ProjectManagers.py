@@ -6,7 +6,7 @@ Created on 15.11.2019
 import copy
 import logging
 
-from PyQt5 import QtCore, QtWidgets
+from PyQt5 import QtCore, QtWidgets, QtGui
 from enum import Enum, auto
 from utilities.myfunc import info_msg, error_logger, get_local_ip, paths_to_dict
 from devices.devices import Device
@@ -167,6 +167,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
             self.update_file_tree(value=paths_to_dict(result.files, d={'dirs': {}, 'files': []}))
         elif flag is Flags.OPERATORS:
             result: FuncGetOperatorsOutput = res
+            self.view_state.operators = result.operators
             self.ui.label_operators.setText(f'Operators: {self.view_state.controller_state.operators_len}')
             self.update_operators(result.operators)
         elif flag is Flags.PROJECTS:
@@ -177,6 +178,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
             self.update_projects(result.projects_names)
         elif flag is Flags.FILE_DESC:
             result: FuncGetFileDescriptionOutput = res
+            self.update_table_description(result)
 
     def update_file_tree(self, item=None, value={}):
 
@@ -230,7 +232,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
                 i += 1
             combobox.setCurrentIndex(0)
 
-    def update_table_description(self, info: Union[FuncGetFileDescriptionOutput, FuncGetProjectDescirptionOutput]):
+    def update_table_description(self, info: FuncGetFileDescriptionOutput):
         table = self.ui.tableWidget_description
         labels = info.__annotations__.keys()
         table.setColumnCount(2)
@@ -240,12 +242,54 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         i = 0
         for key in labels:
             value = getattr(info, key)
-            table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(value)))
+
             if key == 'author':
-                author_combobox = QtWidgets.QComboBox()
-                table.setCellWidget(i, 1, author_combobox)
-            elif key == 'project_name':
-                projects_combobox = QtWidgets.QComboBox()
-                table.setCellWidget(i, 1, projects_combobox)
+                author_combobox_future = QtWidgets.QComboBox()
+                author: Operator = value
+                table.setItem(i, 0, QtWidgets.QTableWidgetItem(author.email))
+                j = 0
+                for operator in self.view_state.operators:
+                    author_combobox_future.addItem(operator.email)
+                    if operator.email == author.email:
+                        author_combobox_future.setCurrentIndex(j)
+                    j += 1
+                table.setCellWidget(i, 1, author_combobox_future)
+            elif key == 'operators':
+                operators_combobox_actual = QtWidgets.QComboBox()
+                self.operators_list_future = QtWidgets.QListWidget()
+                operators_actual = []
+                for operator in info.operators:
+                    operators_combobox_actual.addItem(operator.email)
+                    operators_actual.append(operator.email)
+                table.setCellWidget(i, 0, operators_combobox_actual)
+
+                for operator in self.view_state.operators:
+                    item = QtWidgets.QListWidgetItem(operator.email)
+                    if operator.email in operators_actual:
+                        item.setBackground(QtGui.QColor('green'))
+                        self.view_state.operators_future.append(operator)
+                    self.operators_list_future.addItem(item)
+                self.operators_list_future.setMinimumHeight(70)
+                self.operators_list_future.setMinimumWidth(150)
+                table.setCellWidget(i, 1, self.operators_list_future)
+                self.operators_list_future.itemClicked.connect(self.operators_list_desc)
+            else:
+                table.setItem(i, 0, QtWidgets.QTableWidgetItem(str(value)))
+
             i += 1
         table.resizeColumnsToContents()
+
+    def operators_list_desc(self, item: QtWidgets.QListWidgetItem):
+        search_index = self.view_state.operators_future_search(item.text())
+        if search_index != -1:
+            item.setBackground(QtGui.QColor('white'))
+            self.view_state.operators_future_remove_by_index(search_index)
+        else:
+            search_index = self.view_state.operators_search(item.text())
+            if search_index != -1:
+                item.setBackground(QtGui.QColor('green'))
+                self.view_state.operators_future_add_by_index(search_index)
+            else:
+                self.logger.error('Index of operator is not found in Operators')
+
+
