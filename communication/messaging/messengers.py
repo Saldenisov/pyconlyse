@@ -66,7 +66,6 @@ class Messenger(MessengerInter):
                 self._polling_time = 1
         else:
             self._polling_time = 1
-        self.msg_received = None
         # Cryptographic rsa keys are generated here
         self._fernet: Fernet = None
         self._gen_rsa_keys()
@@ -107,7 +106,7 @@ class Messenger(MessengerInter):
     def _load_private_key(self, pem=b''):
         return load_pem_private_key(pem, None, default_backend())
 
-    def _gen_rsa_keys(self):
+    def  _gen_rsa_keys(self):
         # Create private key
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
         self._public_key = self._private_key.public_key()

@@ -122,8 +122,6 @@ class ServerCmdLogic(Thinker):
 
     def react_info(self, msg: Message):
         data = msg.data
-        # TODO: if section should be added to check weather device which send cmd is in connections or not
-        # at this moment connections is dict with key = device_id
         if msg.body.sender_id in self.parent.connections:
             if MsgGenerator.HEARTBEAT.mes_name in data.com:
                 try:
@@ -131,7 +129,7 @@ class ServerCmdLogic(Thinker):
                     self.events[data.info.event_id].n = data.info.n
                 except KeyError as e:
                     self.logger.error(e)
-            elif data.com == 'shutdown_info':
+            elif data.com == 'shutdown_info':  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(data.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
@@ -146,7 +144,7 @@ class ServerCmdLogic(Thinker):
             else:
                 msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
                          MsgGenerator.error(device=self.parent,
-                                            comments=f'service {data.info.service_id} is not available anymore',
+                                            comments=f'service {data.info.service_id} is not available',
                                             msg_i=msg)]
         else:
             if cmd == MsgGenerator.HELLO.mes_name:
@@ -177,11 +175,6 @@ class ServerCmdLogic(Thinker):
                 except Exception as e:
                     self.logger.error(e)
                     msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-            elif cmd == MsgGenerator.POWER_ON_DEMAND.mes_name:
-                # TODO: service must be realized instead
-                # Server here always replied the same way to all services
-                comments = """"I always say, that power is ON, I hope the user have turned on power already"""
-                msg_i = MsgGenerator.power_on_reply(self.parent, msg_i=msg, flag=True, comments=comments)
             elif cmd == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
                 if msg.body.sender_id in self.parent.connections:
                     msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
@@ -230,6 +223,7 @@ class ServerCmdLogic(Thinker):
                 #del self.parent.connections[event.original_owner]
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt(com='status_server_info_full')
+
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 
