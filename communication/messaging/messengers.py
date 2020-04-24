@@ -14,6 +14,7 @@ from typing import Dict, Union, List
 
 import zmq
 from devices.devices import Device
+from communication.logic.thinkers_logic import Thinker
 from communication.interfaces import MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
@@ -44,6 +45,7 @@ class Messenger(MessengerInter):
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
         self.parent: Union[Device, Messenger] = None
+        self.parent_thinker: Thinker = self.parent.thinker
         if parent:
             self.id: str = parent.id
             self.parent: Union[Device] = parent
@@ -281,7 +283,6 @@ class ClientMessenger(Messenger):
 
     def run(self):
         super().run()
-
         if 'server_frontend' not in self.addresses or 'server_backend' not in self.addresses:
             wait = True
         else:
@@ -308,7 +309,6 @@ class ClientMessenger(Messenger):
                         wait = False
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
-
         try:
             if self.active:
                 self.connect()
@@ -317,7 +317,6 @@ class ClientMessenger(Messenger):
             from time import time_ns as time
             while self.active:
                 try:
-                    #a = time()
                     if not self.paused:
                         sockets = dict(self.poller.poll(1))
                         if self.sockets['dealer'] in sockets:
@@ -330,10 +329,12 @@ class ClientMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     msg = self.decrypt_with_session_key(msg)
-                                mes: Message = MsgGenerator.json_to_message(msg)
-                                self.parent.decide_on_msg(mes)
+                                try:
+                                    mes: Message = MsgGenerator.json_to_message(msg)
+                                    self.parent_thinker.add_task_in(mes)
+                                except:
+                                    pass
                             msgs = []
-                    #b = time()
                     else:
                         sleep(.1)
                 except (ValueError, Exception) as e:
@@ -461,33 +462,38 @@ class ServerMessenger(Messenger):
                     sockets = dict(self.poller.poll(1))
                     try:
                         if self.sockets['frontend'] in sockets:
-                            messenger_id, msg, crypted = self.sockets['frontend'].recv_multipart()
-                            messenger_id = messenger_id.decode('utf-8')
-                            if messenger_id not in self._frontendpool:
-                                self._frontendpool.add(messenger_id)
-                            msgs.append((msg,crypted))
+                            device_id, msg, crypted = self.sockets['frontend'].recv_multipart()
+                            device_id = device_id.decode('utf-8')
+                            if device_id not in self._frontendpool:
+                                self._frontendpool.add(device_id)
+                            msgs.append((msg, crypted))
                         if self.sockets['backend'] in sockets:
-                            messenger_id, msg, crypted = self.sockets['backend'].recv_multipart()
-                            messenger_id = messenger_id.decode('utf-8')
-                            if messenger_id not in self._backendpool:
-                                self._backendpool.add(messenger_id)
+                            device_id, msg, crypted = self.sockets['backend'].recv_multipart()
+                            device_id = device_id.decode('utf-8')
+                            if device_id not in self._backendpool:
+                                self._backendpool.add(device_id)
                             msgs.append((msg, crypted))
                         if self.sockets['sub'] in sockets:
                             msg, crypted = self.sockets['sub'].recv_multipart()
                             msgs.append((msg, crypted))
                         if sockets:
+                            # TODO: but what happends if there is not crypted arrived!!!???
                             for msg, crypted in msgs:
                                 if int(crypted):
-                                    fernet = self.fernets[messenger_id]
+                                    # TODO: if there is no Fernet send msg back crypted as it is
+                                    fernet = self.fernets[device_id]
                                     msg = self.decrypt_with_session_key(msg, fernet)
-                                mes: Message = MsgGenerator.json_to_message(msg)
-                                self.parent.decide_on_msg(mes)
+                                try:
+                                    mes: Message = MsgGenerator.json_to_message(msg)
+                                    self.parent_thinker.add_task_in(mes)
+                                except:
+                                    pass  # TODO: send back with ERROR
                             msgs = []
-                    except (ValueError, Exception) as e:
+                    except ValueError as e:
                         self.logger.error(e)
                 else:
                     sleep(0.1)
-        except (Exception, zmq.error.ZMQError) as e:
+        except zmq.error.ZMQError as e:
             error_logger(self, self.run, e)
             self.stop()
         finally:

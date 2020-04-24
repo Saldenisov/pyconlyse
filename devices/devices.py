@@ -3,7 +3,6 @@ import sqlite3 as sq3
 import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict
 from inspect import signature, isclass
 from pathlib import Path
 from time import sleep
@@ -14,11 +13,9 @@ from PyQt5.QtCore import QObject, pyqtSignal
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from database.tools import db_create_connection, db_execute_select, db_close_conn
-from communication.interfaces import ThinkerInter, MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
-from devices.interfaces import DeciderInter, ExecutorInter, DeviceInter
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct
@@ -48,7 +45,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def __init__(self,
                  name: str,
                  db_path: Path,
-                 cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, DeciderInter, ExecutorInter]],
+                 cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]],
                  parent: QObject = None,
                  DB_command: str = '',
                  logger_new=True,
@@ -80,14 +77,14 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         self.connections: Dict[str, Connection] = Connections_Dict()
 
-        self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, DeciderInter, ExecutorInter]] = cls_parts
+        self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
 
         self.device_status: DeviceStatus = DeviceStatus(*[False] * 5)
 
         try:
-            assert len(self.cls_parts) == 3
+            assert len(self.cls_parts) == 2
             for key, item in self.cls_parts.items():
-                assert key in ['Messenger', 'Thinker', 'Decider']
+                assert key in ['Messenger', 'Thinker']
                 assert isclass(item)
         except AssertionError as e:
             self.logger.error(e)
@@ -109,7 +106,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
             from communication.messaging.messengers import Messenger
             from communication.logic.thinkers_logic import Thinker
-            from devices.soft.deciders import Decider
 
             if 'pub_option' not in kwargs:
                 kwargs['pub_option'] = True
@@ -119,7 +115,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                                     parent=self,
                                                                     pub_option=kwargs['pub_option'])
             self.thinker: Thinker = self.cls_parts['Thinker'](parent=self)
-            self.decider: Decider = self.cls_parts['Decider'](parent=self)
         except (sq3.Error, KeyError, MessengerError, Exception) as e:
             self.logger.error(e)
             raise DeviceError(str(e))
@@ -143,7 +138,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             self._main_executor.submit(func, **kwargs)
             return True
-        except Exception as e:
+        except Exception as e:  # TODO: replace EXCEPTION with correct errors
             self.logger.error(e)
             return False
 
@@ -152,14 +147,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.signal.connect(pyqtslot)
         self.pyqtsignal_connected = True
         self.logger.info(f'pyqtsignal is set to True')
-
-    def decide_on_msg(self, msg: Message) -> None:
-        # TODO : realise logic
-        decision = self.decider.decide(msg)
-        if decision.allowed:
-            self.thinker.add_task_in(msg)
-        else:
-            pass  # should be send back or whereever
 
     @abstractmethod
     def description(self) -> Dict[str, Any]:
@@ -245,7 +232,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         info['device_status'] = self.device_status
         info['messenger_status'] = self.messenger.info()
         info['thinker_status'] = self.thinker.info()
-        info['decider_status'] = self.decider.info()
         return info
 
     @abstractmethod
@@ -330,9 +316,7 @@ class Server(Device):
     def __init__(self, **kwargs):
         from communication.logic.thinkers_logic import ServerCmdLogic
         from communication.messaging.messengers import ServerMessenger
-        from devices.soft.deciders import ServerDecider
         cls_parts = {'Thinker': ServerCmdLogic,
-                     'Decider': ServerDecider,
                      'Messenger': ServerMessenger}
         kwargs['cls_parts'] = cls_parts
         if 'DB_command' not in kwargs:
@@ -400,11 +384,9 @@ class Client(Device):
 
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ClientMessenger
-        from devices.soft.deciders import ClientDecider
 
         if 'thinker_cls' in kwargs:
             cls_parts = {'Thinker': kwargs['thinker_cls'],
-                         'Decider': ClientDecider,
                          'Messenger': ClientMessenger}
         else:
             raise Exception('Thinker cls was not passed to Device factory')
@@ -452,10 +434,8 @@ class Service(Device):
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServiceMessenger
-        from devices.soft.deciders import ServiceDecider
         if 'thinker_cls' in kwargs:
             cls_parts = {'Thinker': kwargs['thinker_cls'],
-                         'Decider': ServiceDecider,
                          'Messenger': ServiceMessenger}
         else:
             raise Exception('Thinker cls was not passed to Device factory')

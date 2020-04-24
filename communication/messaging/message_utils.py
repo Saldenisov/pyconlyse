@@ -319,11 +319,11 @@ class MsgGenerator:
         try:
             mes_str = loads(msg_json)
             return eval(mes_str)
-        except Exception:
+        except Exception:  # TODO replace exception by something meaningful
             try:
                 mes_dc = loads(decompress(b64decode(msg_json)))
                 mes = eval(mes_dc)
                 return mes
-            except Exception as e:
+            except Exception as e:  # TODO replace exception by something meaningful
                 module_logger.error(f'IN json_to_message {e} msg_json: {msg_json}, mes_dc: {mes_dc}, mes: {mes}')
                 raise

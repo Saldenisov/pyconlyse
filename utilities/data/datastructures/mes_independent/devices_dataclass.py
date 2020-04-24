@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Union
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
-from devices.interfaces import DeciderInter, ExecutorInter
+from devices.interfaces import ExecutorInter
 from devices.interfaces import DeviceInter
 
 
@@ -20,7 +20,6 @@ class DeviceStatus(DataClass_unfrozen):
 class DeviceParts(DataClass_frozen):
     messenger: MessengerInter
     thinker: ThinkerInter
-    decider: DeciderInter
     executor: ExecutorInter
 
 
