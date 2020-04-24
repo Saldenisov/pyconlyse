@@ -35,24 +35,27 @@ class Messenger(MessengerInter):
     def __init__(self,
                  name: str,
                  addresses: Dict[str, str],
-                 parent: Union[Device],
-                 pub_option: bool,
+                 parent: Device,
+                 pub_option: bool,  # Is there a publisher for this messenger?
                  **kwargs):
         super().__init__()
-        self._attempts_to_restart_sub = 1
+        self._attempts_to_restart_sub = 1  # restart subscriber
         self._are_you_alive_send = False
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
-        self.parent: Union[Device, Messenger] = None
-        self.parent_thinker: Thinker = self.parent.thinker
         if parent:
             self.id: str = parent.id
-            self.parent: Union[Device] = parent
+            self.parent: Device = parent
+            try:
+                self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
+            except AttributeError:
+                self._polling_time = 1
         else:
             self.parent = self
             self.id = f'{self.name}:{unique_id(self.name)}'
             self.pyqtsignal_connected = False
+            self._polling_time = 1
         self.active = False
         self.paused = False
         self._msg_out = OrderedDictMod(name=f'msg_out:{self.parent.id}')
@@ -61,13 +64,6 @@ class Messenger(MessengerInter):
         self._public_sockets = {}
         self.addresses = {}
         self._pub_option = pub_option
-        if self.parent:
-            try:
-                self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
-            except AttributeError:
-                self._polling_time = 1
-        else:
-            self._polling_time = 1
         # Cryptographic rsa keys are generated here
         self._fernet: Fernet = None
         self._gen_rsa_keys()
@@ -77,7 +73,7 @@ class Messenger(MessengerInter):
             self._verify_addresses(addresses)
             self._create_sockets()
             info_msg(self, 'INITIALIZED')
-        except (WrongAddress, ThinkerError, zmq.ZMQError, Exception) as e:
+        except (WrongAddress, ThinkerError, zmq.ZMQError) as e:
             info_msg(self, 'NOT INITIALIZED')
             raise MessengerError(str(e))
 
@@ -108,7 +104,7 @@ class Messenger(MessengerInter):
     def _load_private_key(self, pem=b''):
         return load_pem_private_key(pem, None, default_backend())
 
-    def  _gen_rsa_keys(self):
+    def _gen_rsa_keys(self):
         # Create private key
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
         self._public_key = self._private_key.public_key()
@@ -209,8 +205,8 @@ class Messenger(MessengerInter):
     def add_msg_out(self, msg: Message):
         try:
             if len(self._msg_out) > 100000:
+                self.logger.info('Dict of msg_out is overfull > 100000 msg. Kicking out last msg')
                 self._msg_out.popitem(False)  # pop up last item
-                self.logger.info('Dict of msg_out is overfull > 100000 msg')
             self._msg_out[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
@@ -399,9 +395,9 @@ class ServerMessenger(Messenger):
         # TODO: when connection is deleted from device these pools must be updated
         self._frontendpool: set = set()
         self._backendpool: set = set()
-        self.fernets: Dict[str, Fernet] = {}
+        self.connection_fernets: Dict[str, Fernet] = {}
 
-    def _verify_addresses(self, addresses):
+    def _verify_addresses(self, addresses: Dict[str, str]):
         if not isinstance(addresses, dict):
             raise Exception(f'{addresses} are not dict, func: {self._verify_addresses.__name__} of {self.parent.name}')
 
@@ -481,7 +477,7 @@ class ServerMessenger(Messenger):
                             for msg, crypted in msgs:
                                 if int(crypted):
                                     # TODO: if there is no Fernet send msg back crypted as it is
-                                    fernet = self.fernets[device_id]
+                                    fernet = self.connection_fernets[device_id]
                                     msg = self.decrypt_with_session_key(msg, fernet)
                                 try:
                                     mes: Message = MsgGenerator.json_to_message(msg)
@@ -507,7 +503,7 @@ class ServerMessenger(Messenger):
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
         password = Fernet.generate_key()
         session_key = base64.urlsafe_b64encode(kdf.derive(password))
-        self.fernets[device_id] = Fernet(session_key)
+        self.connection_fernets[device_id] = Fernet(session_key)
         return session_key
 
     def encrypt_with_public(self, msg_b: bytes, pem: bytes):
@@ -521,7 +517,7 @@ class ServerMessenger(Messenger):
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_json = msg.json_repr()
             if msg.crypted:
-                fernet = self.fernets[msg.body.receiver_id]
+                fernet = self.connection_fernets[msg.body.receiver_id]
                 msg_json = self.encrypt_with_session_key(msg_json, fernet)
             if msg.body.type == 'info':
                 #self.logger.info(f'Info msg {msg} is send from publisher')
