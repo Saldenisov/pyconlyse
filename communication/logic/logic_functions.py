@@ -93,8 +93,10 @@ def task_in_reaction(event: ThinkerEvent):
                     if msg.type is MsgType.INFO:
                         thinker.react_info(msg)
                     elif msg.type is MsgType.DEMAND:
+                        info_msg(event, 'REQUEST', extra=str(msg.short()))
                         thinker.react_demand(msg)
                     elif msg.type is MsgType.REPLY:
+                        info_msg(event, 'REPLY_IN', extra=str(msg.short()))
                         thinker.react_reply(msg)
                     else:
                         raise ThinkerErrorReact(f'Message type has wrong value {msg.type}')

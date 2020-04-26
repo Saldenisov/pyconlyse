@@ -19,7 +19,7 @@ from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.messaging import Message, MsgType
+from utilities.data.messaging.messages import Message, MsgType
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
@@ -43,10 +43,6 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
-<<<<<<< HEAD
-        self.parent: Union[Device, Messenger] = None
-=======
->>>>>>> 9b485ac02702f4891b1b512429acdb3438bc3c3f
         if parent:
             self.id: str = parent.id
             self.parent: Device = parent
@@ -144,11 +140,10 @@ class Messenger(MessengerInter):
     def _load_private_key(self, pem=b''):
         return load_pem_private_key(pem, None, default_backend())
 
-<<<<<<< HEAD
     @property
     def public_sockets(self):
         return self._public_sockets
-=======
+
     def _gen_rsa_keys(self):
         # Create private key
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
@@ -158,7 +153,6 @@ class Messenger(MessengerInter):
         plaintext = self._private_key.decrypt(cipher_text, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
->>>>>>> 9b485ac02702f4891b1b512429acdb3438bc3c3f
 
     @public_sockets.setter
     def public_sockets(self, value):
@@ -234,8 +228,6 @@ class Messenger(MessengerInter):
         self.paused = False
         self.logger.info(f'{self.name} is unpaused')
 
-<<<<<<< HEAD
-=======
     @abstractmethod
     def info(self):
         from collections import OrderedDict as od
@@ -261,7 +253,6 @@ class Messenger(MessengerInter):
             msg: Message = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
->>>>>>> 9b485ac02702f4891b1b512429acdb3438bc3c3f
 
 class ClientMessenger(Messenger):
     def __init__(self, **kwargs):
@@ -522,13 +513,10 @@ class ServerMessenger(Messenger):
                         if sockets:
                             # TODO: but what happends if there is not crypted arrived!!!???
                             for msg, crypted in msgs:
-<<<<<<< HEAD
-=======
                                 if int(crypted):
                                     # TODO: if there is no Fernet send msg back crypted as it is
                                     fernet = self.connection_fernets[device_id]
                                     msg = self.decrypt_with_session_key(msg, fernet)
->>>>>>> 9b485ac02702f4891b1b512429acdb3438bc3c3f
                                 try:
                                     if int(crypted):
                                         # TODO: if there is no Fernet send msg back crypted as it is

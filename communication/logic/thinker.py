@@ -2,14 +2,13 @@ import logging
 from abc import abstractmethod
 from threading import Thread
 from time import time
-from typing import Union, Callable
+from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import *
-import devices.devices as dev
 from utilities.data.messaging.messages import Message, MsgCom
 from utilities.data.messaging.message_types import MsgType
 from utilities.data.datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
-from  utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
+from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.myfunc import info_msg, error_logger, unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -19,12 +18,13 @@ class Thinker(ThinkerInter):
 
     n_instance = 0
 
-    def __init__(self, parent: dev.Device):
+    def __init__(self, parent):
+        from devices.devices import Device
         Thinker.n_instance += 1
         self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         self.name = f'{self.__class__.__name__}:{parent.name}:{Thinker.n_instance}'
         self.id = f'{self.name}:{unique_id(self.name)}'
-        self.parent: dev.Device = parent
+        self.parent: Device = parent
         self.msg_counter = 0
         self.events = Events_Dict()
         self._tasks_in = OrderedDictMod(name='tasks_in')
@@ -60,104 +60,6 @@ class Thinker(ThinkerInter):
             error_logger(self, self.register_event, e)
             info_msg(self, 'NOT CREATED')
             raise ThinkerError(str(e))
-
-    @property
-    def demands_pending_answer(self) -> OrderedDictMod:
-        return self._pending_demands
-
-    def register_event(self, name: str,
-                       logic_func: Callable,
-                       event_id: str = None,
-                       external_name='',
-                       original_owner='',
-                       start_now=False,
-                       **kwargs):
-        try:
-            if 'tick' in kwargs:
-                tick = kwargs['tick']
-            else:
-                tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
-        except KeyError as e:
-            error_logger(self, self.register_event, f'{e}. Tick value is set to {tick}s')
-        finally:
-            print_every_n = int(self.parent.get_general_settings()['print_every_n'])
-            try:
-                if not external_name:
-                    external_name = name
-                if not event_id:
-                    event_id = f'{external_name}:{self.parent.id}'
-                if original_owner == '':
-                    original_owner = self.parent.id
-                self.events[event_id] = ThinkerEvent(name=name,
-                                                     external_name=external_name,
-                                                     parent=self,
-                                                     logic_func=logic_func,
-                                                     tick=tick,
-                                                     print_every_n=print_every_n,
-                                                     event_id=event_id,
-                                                     original_owner=original_owner)
-
-                if start_now:
-                    self.events[event_id].start()
-
-            except ThinkerEventFuncError as e:
-                raise ThinkerEventError(str(e))
-
-    @property
-    def tasks_in(self) -> OrderedDictMod:
-        return self._tasks_in
-
-    @property
-    def tasks_out(self) -> OrderedDictMod:
-        return self._tasks_out
-
-    @property
-    def replies_pending_answer(self) -> OrderedDictMod:
-        return self._pending_replies
-
-    def unregister_event(self, event_id: str):
-        if event_id in self.events:
-            self.events[event_id].stop()
-            del self.events[event_id]
-
-    def msg_out(self, out: bool, msg_i: Message):
-        if out:
-            if msg_i.type is MsgType.REPLY:
-                info_msg(self, 'REPLY', extra=repr(msg_i.short()))
-            elif msg_i.type is MsgType.DEMAND:
-                info_msg(self, 'DEMAND', extra=repr(msg_i.short()))
-            elif msg_i.type is MsgType.INFO:
-                info_msg(self, 'INFO', extra=repr(msg_i.short()))
-            if isinstance(msg_i, list):
-                for msg in msg_i:
-                    self.add_task_out(msg)
-            else:
-                self.add_task_out(msg_i)
-
-    def start(self):
-        info_msg(self, 'STARTING')
-        for _, event in self.events.items():
-            if not event.active:
-                event.start()
-
-    def stop(self):
-        info_msg(self, 'STOPPING')
-        for event_id, event in self.events.items():
-            event.stop(join=True)
-        self.events = {}
-
-    def pause(self):
-        self.paused = True
-        if self.events:
-            for _, event in self.events.items():
-                event.pause()
-
-    def unpause(self):
-        self.paused = False
-
-        if self.events:
-            for _, event in self.events.items():
-                event.unpause()
 
     def add_task_in(self, msg: Message):
         try:
@@ -195,6 +97,10 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             info_msg(self, self.add_demand_pending, e)
 
+    @property
+    def demands_pending_answer(self) -> OrderedDictMod:
+        return self._pending_demands
+
     def info(self):
         from collections import OrderedDict as od
         info = od()
@@ -205,6 +111,58 @@ class Thinker(ThinkerInter):
         info['pending_demands'] = self.demands_pending_answer
         info['pending_replies'] = self.replies_pending_answer
         return info
+
+    def msg_out(self, out: bool, msg_i: Union[Message, List[Message]]):
+        if out and msg_i:
+            if isinstance(msg_i, list):
+                for msg in msg_i:
+                    self.msg_out(out, msg)
+            elif isinstance(msg_i, Message):
+                if msg_i.type is MsgType.REPLY:
+                    info_msg(self, 'REPLY', extra=repr(msg_i.short()))
+                elif msg_i.type is MsgType.DEMAND:
+                    info_msg(self, 'DEMAND', extra=repr(msg_i.short()))
+                elif msg_i.type is MsgType.INFO:
+                    info_msg(self, 'INFO', extra=repr(msg_i.short()))
+            else:
+                self.add_task_out(msg_i)
+
+    def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
+                       start_now=False, **kwargs):
+        try:
+            if 'tick' in kwargs:
+                tick = kwargs['tick']
+            else:
+                tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
+        except KeyError as e:
+            error_logger(self, self.register_event, f'{e}. Tick value is set to {tick}s')
+        finally:
+            print_every_n = int(self.parent.get_general_settings()['print_every_n'])
+            try:
+                if not external_name:
+                    external_name = name
+                if not event_id:
+                    event_id = f'{external_name}:{self.parent.id}'
+                if original_owner == '':
+                    original_owner = self.parent.id
+                self.events[event_id] = ThinkerEvent(name=name,
+                                                     external_name=external_name,
+                                                     parent=self,
+                                                     logic_func=logic_func,
+                                                     tick=tick,
+                                                     print_every_n=print_every_n,
+                                                     event_id=event_id,
+                                                     original_owner=original_owner)
+
+                if start_now:
+                    self.events[event_id].start()
+
+            except ThinkerEventFuncError as e:
+                raise ThinkerEventError(str(e))
+
+    @property
+    def replies_pending_answer(self) -> OrderedDictMod:
+        return self._pending_replies
 
     @abstractmethod
     def react_internal(self, event):
@@ -246,25 +204,54 @@ class Thinker(ThinkerInter):
             error_logger(self, self.remove_device_from_connections,
                          f'remove_device_from_connections: Wrong device_id {device_id} is passed')
 
+    @property
+    def tasks_in(self) -> OrderedDictMod:
+        return self._tasks_in
+
+    @property
+    def tasks_out(self) -> OrderedDictMod:
+        return self._tasks_out
+
+    def start(self):
+        info_msg(self, 'STARTING')
+        for _, event in self.events.items():
+            if not event.active:
+                event.start()
+
+    def stop(self):
+        info_msg(self, 'STOPPING')
+        for event_id, event in self.events.items():
+            event.stop()
+        self.events = {}
+
+    def pause(self):
+        self.paused = True
+        if self.events:
+            for _, event in self.events.items():
+                event.pause()
+
+    def unpause(self):
+        self.paused = False
+
+        if self.events:
+            for _, event in self.events.items():
+                event.unpause()
+
+    def unregister_event(self, event_id: str):
+        if event_id in self.events:
+            self.events[event_id].stop()
+            del self.events[event_id]
+
 
 class ThinkerEvent(Thread):
-    def __init__(self, name: str,
-                 external_name: str,
-                 event_id: str,
-                 logic_func: Callable,
-                 parent: Thinker,
-                 tick=0.1,
-                 print_every_n=20,
-                 original_owner=''):
+    def __init__(self, name: str, external_name: str, event_id: str, logic_func: Callable, parent: Thinker, tick=0.1,
+                 print_every_n=20, original_owner=''):
         super().__init__()
         self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         self.name = name
         self.external_name = external_name
         self.id = event_id
-        if parent:
-            self.parent = parent
-        else:
-            self.parent = self
+        self.parent = parent
         self.original_owner = original_owner
         self.logic_func = logic_func
         self.print_every_n = print_every_n
@@ -288,12 +275,9 @@ class ThinkerEvent(Thread):
         finally:
             info_msg(self, 'STOPPED', extra=f' of {self.parent.name}')
 
-    def stop(self, join=False):
+    def stop(self):
         info_msg(self, 'STOPPING', extra=f' of {self.parent.name}')
         self.active = False
-        #if join:
-            #self.join()
-
 
     def pause(self):
         info_msg(self, 'PAUSING')

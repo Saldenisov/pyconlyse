@@ -2,9 +2,10 @@ import logging
 from base64 import b64encode
 from collections import deque
 from dataclasses import dataclass, field, asdict
+from enum import Enum
 from json import dumps
 from msgpack import packb, unpackb
-from typing import Any, NamedTuple, Dict, Union
+from typing import Any, NamedTuple, Dict
 from zlib import compress
 
 from communication.interfaces import MessageInter
@@ -63,12 +64,6 @@ class DoneIt:
     result: FuncOutput
 
 
-@dataclass(frozen=True, order=True)
-class Forward_msg:
-    service_id: str
-    demand: dict  # {'com': com, 'parameters': {'name1':name1value, 'name2': name2value}}
-
-
 @dataclass(order=True)
 class MessengerInfoMes:
     id: str = ''
@@ -80,10 +75,10 @@ class MessengerInfoMes:
 class EventInfoMes:
     event_id: str
     event_name: str
+    event_n: int
+    event_tick: float
     device_id: str
-    tick: float = 0.1
-    n: float = 0.0
-    sockets: dict = field(default_factory=dict)
+    device_sockets: dict = field(default_factory=dict)
 
 
 @dataclass(order=True)
@@ -99,10 +94,10 @@ class DeviceInfoMes:
 @dataclass(order=True)
 class WelcomeInfoServer:
     device_id: str
-    session_key: str
-    name: str
+    device_session_key: str
+    device_name: str
     device_status: DeviceStatus
-    public_sockets: dict
+    device_public_sockets: dict
 
 
 @dataclass(frozen=True, order=True)
@@ -207,12 +202,27 @@ class Test:
 from utilities.data.messaging.message_types import MsgType, MessageStructure
 
 
-class MsgCom:
+class MsgCom(Enum):
+    ARE_YOU_ALIVE = MessageStructure('are_you_alive_reply', MsgType.DEMAND, None)
+    ERROR = MessageStructure('error', MsgType.REPLY, Error)
     HEARTBEAT = MessageStructure('heartbeat', MsgType.INFO, EventInfoMes)
     SHUTDOWN = MessageStructure('shutdown', MsgType.INFO, ShutDownMes)
     WELCOME_INFO = MessageStructure('welcome_info', MsgType.REPLY, WelcomeInfoServer)
-    ARE_YOU_ALIVE = MessageStructure('are_you_alive_reply', MsgType.DEMAND, None)
 
+    @property
+    def com_name(self):
+        value: MessageStructure = self.value
+        return value.name
+
+    @property
+    def com_type(self):
+        value: MessageStructure = self.value
+        return value.type
+
+    @property
+    def com_info_class(self):
+        value: MessageStructure = self.value
+        return value.info_class
 
 @dataclass(order=True)
 class Message(MessageInter):

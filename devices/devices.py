@@ -1,17 +1,17 @@
-import logging
-import sqlite3 as sq3
-import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
 from pathlib import Path
+import sys
+import sqlite3 as sq3
 from time import sleep
-from typing import Union, Dict, List, Tuple, Any, Callable, NewType
+from typing import List, Tuple, Callable, NewType, ClassVar
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from database.tools import db_create_connection, db_execute_select
 from communication.messaging.message_utils import MsgGenerator
 from communication.logic.thinker import ThinkerEvent
@@ -22,8 +22,8 @@ from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
-from utilities.data.messaging.messages import Message, DoIt
-from utilities.myfunc import info_msg, unique_id
+from utilities.data.messaging.messages import *
+from utilities.myfunc import info_msg, unique_id, error_logger
 from logs_pack import initialize_logger
 
 module_logger = logging.getLogger(__name__)
@@ -46,15 +46,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     signal = pyqtSignal(Message)
 
-    def __init__(self,
-                 name: str,
-                 db_path: Path,
-                 cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]],
-                 parent: QObject = None,
-                 db_command: str = '',
-                 logger_new=True,
-                 test=False,
-                 **kwargs):
+    def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], parent: QObject = None,
+                 db_command: str = '', logger_new=True, test=False, **kwargs):
         super().__init__()
         self.test = test
         self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
@@ -194,6 +187,35 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                             sockets=self.messenger.public_sockets)
         return Message(com=MsgCom.HEARTBEAT, type=MsgType.INFO, info=info, sender_id=self.id)
 
+    def generate_msg(self, msg_com: MsgCom, parameters: Dict[str, Any]) -> Message:
+        if msg_com is MsgCom.HEARTBEAT.name:
+            MUST_HAVE = ['event']
+            check = []
+            for param in MUST_HAVE:
+                if param in parameters:
+                    check.append(True)
+            if not all(check):
+                error_logger(self, self.generate_msg, f'Not all parameters {MUST_HAVE} were passed to function '
+                                                      f'{parameters}')
+                return None
+            else:
+                d = {}
+                event: ThinkerEvent = parameters['event']
+                for attr in MsgCom.HEARTBEAT.com_info_class.__annotations__:
+                    if 'event' in attr:
+                        param_name = attr.split('_')[1]
+                        param_value = getattr(event, param_name)
+                    elif 'device' in attr:
+                        param_name = attr.split('_')[1]
+                        param_value = getattr(self, param_name)
+
+                    d[attr] = param_value
+                info = EventInfoMes(**d)
+                return Message(com=MsgCom.HEARTBEAT, type=MsgType.INFO, info=info, sender_id=self.id)
+
+        else:
+            return None
+
     def execute_com(self, msg: Message):
         error = False
         info: DoIt = msg.data.info
@@ -276,7 +298,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
-        stop_msg = MsgGenerator.shutdown_info(device=self, reason='normal shutdown')
+        stop_msg = self.generate_msg(msg_com=MsgCom.SHUTDOWN, parameters={'reason': 'normal_shutdown'})
         self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()
@@ -323,8 +345,8 @@ class Server(Device):
         cls_parts = {'Thinker': ServerCmdLogic,
                      'Messenger': ServerMessenger}
         kwargs['cls_parts'] = cls_parts
-        if 'DB_command' not in kwargs:
-            kwargs['DB_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
+        if 'db_command' not in kwargs:
+            kwargs['db_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
         self.services_available = {}
         self.type = 'server'
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
