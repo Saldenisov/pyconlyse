@@ -10,7 +10,7 @@ from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
-from utilities.data.messages import Message, ServiceInfoMes
+from utilities.data.messaging import Message, ServiceInfoMes
 
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,

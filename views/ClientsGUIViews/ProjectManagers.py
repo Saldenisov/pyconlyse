@@ -10,7 +10,7 @@ from PyQt5 import QtCore, QtWidgets, QtGui
 from enum import Enum, auto
 from utilities.myfunc import info_msg, error_logger, get_local_ip, paths_to_dict
 from devices.devices import Device
-from utilities.data.messages import Message, ServiceInfoMes, DoneIt, Error
+from utilities.data.messaging import Message, ServiceInfoMes, DoneIt, Error
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent.projects_dataclass import *
 from communication.messaging.message_utils import MsgGenerator

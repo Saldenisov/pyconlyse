@@ -1,14 +1,13 @@
 import logging
 from abc import abstractmethod
 from threading import Thread
-from time import time, sleep
+from time import time
 from typing import Union, Callable
 from communication.interfaces import ThinkerInter
-from errors.myexceptions import (ThinkerEventFuncError,
-                                 ThinkerEventError,
-                                 ThinkerError)
+from errors.myexceptions import *
 import devices.devices as dev
-from utilities.data.messages import Message
+from utilities.data.messaging.messages import Message, MsgCom
+from utilities.data.messaging.message_types import MsgType
 from utilities.data.datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
 from  utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.myfunc import info_msg, error_logger, unique_id
@@ -19,14 +18,14 @@ module_logger = logging.getLogger(__name__)
 class Thinker(ThinkerInter):
 
     n_instance = 0
-    import devices.devices as dev
+
     def __init__(self, parent: dev.Device):
         Thinker.n_instance += 1
         self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         self.name = f'{self.__class__.__name__}:{parent.name}:{Thinker.n_instance}'
         self.id = f'{self.name}:{unique_id(self.name)}'
         self.parent: dev.Device = parent
-        self._counter = 0
+        self.msg_counter = 0
         self.events = Events_Dict()
         self._tasks_in = OrderedDictMod(name='tasks_in')
         self.tasks_in_test = OrderedDictMod(name='tasks_in_test')
@@ -58,29 +57,17 @@ class Thinker(ThinkerInter):
             self.register_event(name='pending_replies', logic_func=pending_replies, tick=pending_replies_tick)
             info_msg(self, 'CREATED')
         except (ThinkerEventError, ThinkerEventFuncError, TypeError) as e:
-            self.logger.error(e)
+            error_logger(self, self.register_event, e)
             info_msg(self, 'NOT CREATED')
             raise ThinkerError(str(e))
-
-    @property
-    def tasks_in(self) -> OrderedDictMod:
-        return self._tasks_in
-
-    @property
-    def tasks_out(self) -> OrderedDictMod:
-        return self._tasks_out
 
     @property
     def demands_pending_answer(self) -> OrderedDictMod:
         return self._pending_demands
 
-    @property
-    def replies_pending_answer(self) -> OrderedDictMod:
-        return self._pending_replies
-
     def register_event(self, name: str,
                        logic_func: Callable,
-                       event_id: Union[str, None] = None,
+                       event_id: str = None,
                        external_name='',
                        original_owner='',
                        start_now=False,
@@ -91,7 +78,7 @@ class Thinker(ThinkerInter):
             else:
                 tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
         except KeyError as e:
-            self.logger.error(f'Tick value is set to {tick}s')
+            error_logger(self, self.register_event, f'{e}. Tick value is set to {tick}s')
         finally:
             print_every_n = int(self.parent.get_general_settings()['print_every_n'])
             try:
@@ -116,6 +103,18 @@ class Thinker(ThinkerInter):
             except ThinkerEventFuncError as e:
                 raise ThinkerEventError(str(e))
 
+    @property
+    def tasks_in(self) -> OrderedDictMod:
+        return self._tasks_in
+
+    @property
+    def tasks_out(self) -> OrderedDictMod:
+        return self._tasks_out
+
+    @property
+    def replies_pending_answer(self) -> OrderedDictMod:
+        return self._pending_replies
+
     def unregister_event(self, event_id: str):
         if event_id in self.events:
             self.events[event_id].stop()
@@ -123,11 +122,11 @@ class Thinker(ThinkerInter):
 
     def msg_out(self, out: bool, msg_i: Message):
         if out:
-            if msg_i.body.type == 'reply':
+            if msg_i.type is MsgType.REPLY:
                 info_msg(self, 'REPLY', extra=repr(msg_i.short()))
-            elif msg_i.body.type == 'demand':
+            elif msg_i.type is MsgType.DEMAND:
                 info_msg(self, 'DEMAND', extra=repr(msg_i.short()))
-            elif msg_i.body.type == 'info':
+            elif msg_i.type is MsgType.INFO:
                 info_msg(self, 'INFO', extra=repr(msg_i.short()))
             if isinstance(msg_i, list):
                 for msg in msg_i:
@@ -160,27 +159,12 @@ class Thinker(ThinkerInter):
             for _, event in self.events.items():
                 event.unpause()
 
-    def react_in(self, msg: Message):
-        self._counter += 1
-        msg_type = msg.body.type
-        if msg_type == 'info':
-            self.react_info(msg)
-        elif msg_type == 'demand':
-            self.react_demand(msg)
-        elif msg_type == 'reply':
-            self.react_reply(msg)
-        else:
-            self.react_unknown(msg)
-
-    def react_out(self, msg: Message):
-        self.parent.send_msg_externally(msg)
-
     def add_task_in(self, msg: Message):
         try:
             if len(self._tasks_in) > 10000:
                 self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
-            if self.parent.test and not (msg.data.com == 'heartbeat'):
+            if self.parent.test and not (msg.com == MsgCom.HEARTBEAT.name):
                 self.tasks_in_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_in, e)
@@ -190,7 +174,7 @@ class Thinker(ThinkerInter):
             if len(self._tasks_out) > 10000:
                 self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
-            if self.parent.test and not (msg.data.com == 'heartbeat'):
+            if self.parent.test and not (msg.com == MsgCom.HEARTBEAT.name):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_out, e)
@@ -200,7 +184,7 @@ class Thinker(ThinkerInter):
             if len(self._pending_demands) > 10000:
                 self._pending_demands.popitem()  # pop up first item
             self._pending_demands[msg.id] = PendingDemand(message=msg)
-        except (KeyError, Exception) as e:
+        except KeyError as e:
             info_msg(self, self.add_demand_pending, e)
 
     def add_reply_pending(self, msg: Message):
@@ -252,7 +236,6 @@ class Thinker(ThinkerInter):
         # TODO: the info is not deleted from _frontend sockets or backend sockets
         connections = self.parent.connections
         if device_id in connections:
-            device_name = connections[device_id].device_info.name
             self.logger.info(f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
@@ -260,7 +243,8 @@ class Thinker(ThinkerInter):
             del self.parent.connections[device_id]
             self.logger.info(f'Device {device_id} is deleted')
         else:
-            self.logger.error(f'remove_device_from_connections: Wrong device_id {device_id} is passed ')
+            error_logger(self, self.remove_device_from_connections,
+                         f'remove_device_from_connections: Wrong device_id {device_id} is passed')
 
 
 class ThinkerEvent(Thread):
@@ -320,4 +304,3 @@ class ThinkerEvent(Thread):
         info_msg(self, 'UNPAUSING')
         self.paused = False
         info_msg(self, 'UNPAUSED')
-

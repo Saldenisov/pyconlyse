@@ -8,12 +8,12 @@ import logging
 from PyQt5.QtWidgets import QMainWindow, QApplication
 from typing import Union
 from utilities.myfunc import info_msg,  get_local_ip
-from utilities.data.messages import Message
+from utilities.data.messaging import Message
 from communication.messaging.message_utils import MsgGenerator
 from devices.devices import Server
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from views.ui.SuperUser_ui import Ui_SuperUser
-from utilities.data.messages import Message, ServiceInfoMes, DoneIt, Error
+from utilities.data.messaging import Message, ServiceInfoMes, DoneIt, Error
 
 module_logger = logging.getLogger(__name__)
 

@@ -10,7 +10,7 @@ import zmq
 
 context = zmq.Context()
 
-# Socket to receive messages on
+# Socket to receive messaging on
 receiver = context.socket(zmq.PULL)
 receiver.bind("tcp://*:5558")
 

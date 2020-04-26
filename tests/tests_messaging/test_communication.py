@@ -6,7 +6,7 @@ from devices.virtualdevices.clients import SuperUser
 from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
 from tests.fixtures import server_test, superuser_test, stpmtr_emulate_test
 from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
-from utilities.data.messages import Message
+from utilities.data.messaging import Message
 from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, AxisStpMtrEssentials,

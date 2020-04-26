@@ -6,14 +6,15 @@ from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
 from pathlib import Path
 from time import sleep
-from typing import Union, Dict, List, Tuple, Any, Callable
+from typing import Union, Dict, List, Tuple, Any, Callable, NewType
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from database.tools import db_create_connection, db_execute_select, db_close_conn
+from database.tools import db_create_connection, db_execute_select
 from communication.messaging.message_utils import MsgGenerator
+from communication.logic.thinker import ThinkerEvent
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
@@ -21,13 +22,16 @@ from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
 from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
-from utilities.data.messages import Message, DoIt
+from utilities.data.messaging.messages import Message, DoIt
 from utilities.myfunc import info_msg, unique_id
 from logs_pack import initialize_logger
 
 module_logger = logging.getLogger(__name__)
 
 pyqtWrapperType = type(QObject)
+
+
+DeviceId = NewType('DeviceId', str)
 
 
 class FinalMeta(type(DeviceInter), type(QObject)):
@@ -47,7 +51,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                  db_path: Path,
                  cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]],
                  parent: QObject = None,
-                 DB_command: str = '',
+                 db_command: str = '',
                  logger_new=True,
                  test=False,
                  **kwargs):
@@ -60,14 +64,13 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger = initialize_logger(app_folder / 'LOG', file_name=__name__ + '.' + self.__class__.__name__)
             if test:
                 self.logger.setLevel(logging.ERROR)
-                #self.logger.disabled = True
         else:
             self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
 
         if 'id' not in kwargs:
-            self.id = f'{name}:{unique_id(name)}'
+            self.id: DeviceId = f'{name}:{unique_id(name)}'
         else:
-            self.id = kwargs['id']
+            self.id: DeviceId = kwargs['id']
 
         self.name: str = name
         self.parent: QObject = parent
@@ -75,7 +78,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.db_path = db_path
         self.config = configurationSD(self)
 
-        self.connections: Dict[str, Connection] = Connections_Dict()
+        self.connections: Dict[DeviceId, Connection] = Connections_Dict()
 
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
 
@@ -100,8 +103,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         # config is set here
         try:
             db_conn = db_create_connection(self.db_path)
-            res, comments = db_execute_select(db_conn, DB_command)
-            db_close_conn(db_conn)
+            res, comments = db_execute_select(db_conn, db_command)
+            db_conn.close()
             self.config.add_config(self.name, config_text=res)
 
             from communication.messaging.messengers import Messenger
@@ -115,7 +118,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                                     parent=self,
                                                                     pub_option=kwargs['pub_option'])
             self.thinker: Thinker = self.cls_parts['Thinker'](parent=self)
-        except (sq3.Error, KeyError, MessengerError, Exception) as e:
+        except (sq3.Error, KeyError, MessengerError) as e:
             self.logger.error(e)
             raise DeviceError(str(e))
 
@@ -185,6 +188,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(f"_get_list_db: field {what} or section {from_section} is absent in the DB", self.name)
         except (TypeError, SyntaxError):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
+
+    def gen_heartbeat(self, event: ThinkerEvent, n=0) -> Message:
+        info = EventInfoMes(event_id=event.id, event_name=event.name, device_id=self.id, tick=event.tick, n=n,
+                            sockets=self.messenger.public_sockets)
+        return Message(com=MsgCom.HEARTBEAT, type=MsgType.INFO, info=info, sender_id=self.id)
 
     def execute_com(self, msg: Message):
         error = False
@@ -303,10 +311,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def update_config(self, message: str):
         # TODO: realize
         self.logger.info('Config is updated: ' + message)
-
-    #def __del__(self):
-        #self.logger.info(f"Instance of class {self.__class__.__name__}: {self.name} is deleted")
-        #del self
 
 
 class Server(Device):
@@ -441,13 +445,12 @@ class Service(Device):
             raise Exception('Thinker cls was not passed to Device factory')
 
         kwargs['cls_parts'] = cls_parts
-        if 'DB_command' not in kwargs:
+        if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
 
         self.type = 'service'
-        # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
-        self.server_id = self.get_settings('General')['server_id']
+        self.server_id: DeviceId = self.get_settings('General')['server_id']
 
     @abstractmethod
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
@@ -552,7 +555,7 @@ class DeviceFactory:
                 thinker_class = getattr(module_comm_thinkers, f'{device_name_split}{project_type}CmdLogic')
                 kwargs['name'] = device_name
                 kwargs['thinker_cls'] = thinker_class
-                kwargs['DB_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
+                kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
                 kwargs['id'] = device_id
                 if issubclass(cls, Device):
                     return cls(**kwargs)

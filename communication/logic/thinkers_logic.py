@@ -1,10 +1,11 @@
 import logging
 from time import time
 
+
 from communication.messaging.message_utils import MsgGenerator
 from communication.logic.thinker import Thinker, ThinkerEvent
 from utilities.data.datastructures.mes_dependent.general import Connection
-from utilities.data.messages import Message, DeviceInfoMes
+from utilities.data.messaging.messages import *
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -21,47 +22,38 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.id}')
 
     def react_info(self, msg: Message):
-        data = msg.data
-        if data.com == MsgGenerator.HEARTBEAT.mes_name:
+        if msg.com == MsgCom.HEARTBEAT.name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
-            if data.info.device_id not in self.parent.connections:
+            if msg.info.device_id not in self.parent.connections:
                 self.logger.info(msg.short())
                 from communication.logic.logic_functions import external_hb_logic
-                self.register_event(name=data.info.event_name,
-                                    event_id=data.info.event_id,
+                self.register_event(name=msg.info.event_name,
+                                    event_id=msg.info.event_id,
                                     logic_func=external_hb_logic,
-                                    original_owner=data.info.device_id,
+                                    original_owner=msg.info.device_id,
                                     start_now=True)
-                self.parent.connections[data.info.device_id] = Connection(DeviceInfoMes(device_id=data.info.device_id,
-                                                                                        messenger_id=msg.body.sender_id))
+                self.parent.connections[msg.info.device_id] = Connection(DeviceInfoMes(device_id=msg.info.device_id,
+                                                                                       messenger_id=msg.sender_id))
                 msg_i = MsgGenerator.hello(device=self.parent)
                 self.msg_out(True, msg_i)
             else:
                 # TODO: potential danger of calling non-existing event
-                self.events[data.info.event_id].time = time()
-                self.events[data.info.event_id].n = data.info.n
-
-    def react_unknown(self, msg: Message):
-        # TODO: correct
-        self.logger.info('Fuck Yeah')
+                self.events[msg.info.event_id].time = time()
+                self.events[msg.info.event_id].n = msg.info.n
 
     def react_reply(self, msg: Message):
-        data = msg.data
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
-        if msg.reply_to in self.demands_pending_answer:
-            del self.demands_pending_answer[msg.reply_to]
-            self.logger.info(f'react_reply: Msg {msg.reply_to} reply is obtained')
-
-        if data.com == MsgGenerator.WELCOME_INFO.mes_name:
-            if data.info.device_id in self.parent.connections:
-                self.logger.info(f'Server {data.info.device_id} is active. Handshake was undertaken')
-                connection: Connection = self.parent.connections[data.info.device_id]
-                connection.device_info = data.info
-                session_key = self.parent.messenger.decrypt_with_private(data.info.session_key)
+        if msg.com == MsgCom.WELCOME_INFO.mes_name:
+            if msg.info.device_id in self.parent.connections:
+                self.logger.info(f'Server {msg.info.device_id} is active. Handshake was undertaken')
+                connection: Connection = self.parent.connections[msg.info.device_id]
+                connection.device_info = msg.info
+                session_key = self.parent.messenger.decrypt_with_private(msg.info.session_key)
+                # TODO: replace with setter
                 self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
-        elif data.com == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
+        elif msg.com == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
             self.events['server_heartbeat'].time = time()
             self.parent.messenger._are_you_alive_send = False
 
@@ -121,21 +113,18 @@ class ServerCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_info(self, msg: Message):
-        data = msg.data
-        if msg.body.sender_id in self.parent.connections:
-            if MsgGenerator.HEARTBEAT.mes_name in data.com:
+        if msg.sender_id in self.parent.connections:
+            if msg.com == MsgCom.HEARTBEAT.name:
                 try:
-                    self.events[data.info.event_id].time = time()
-                    self.events[data.info.event_id].n = data.info.n
+                    self.events[msg.info.event_id].time = time()
+                    self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
-                    self.logger.error(e)
-            elif data.com == 'shutdown_info':  # When one of devices connected to server shutdowns
-                self.remove_device_from_connections(data.info.device_id)
+                    error_logger(self, self.react_info, e)
+            elif msg.com == MsgCom.SHUTDOWN.name:  # When one of devices connected to server shutdowns
+                self.remove_device_from_connections(msg.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
     def react_demand(self, msg: Message):
-        data = msg.data
-        cmd = data.com
         info_msg(self, 'REQUEST', extra=str(msg.short()))
         reply = True
         if msg.body.receiver_id != self.parent.id:

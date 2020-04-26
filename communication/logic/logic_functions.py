@@ -6,7 +6,7 @@ from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import ThinkerErrorReact
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
-from utilities.data.messages import Message
+from utilities.data.messaging.messages import Message, MsgType
 from utilities.myfunc import info_msg, error_logger
 
 
@@ -32,7 +32,6 @@ def external_hb_logic(event: ThinkerEvent):
                 thinker.logger.info(f'{event.name} timeout {event.counter_timeout}')
             else:
                 event.counter_timeout = 0
-                # event.time = time()
             counter += 1
             event.parent.react_internal(event)
             if counter % event.print_every_n == 0:
@@ -47,13 +46,13 @@ def internal_hb_logic(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
     info_msg(event, 'STARTED', extra=f' of {thinker.name}')
-    i = 0.0
+    i = 0
     while event.active:
         if not event.paused:
             i += 1
             sleep(event.tick)
-            msg = MsgGenerator.heartbeat(device, event=event, n=i)
-            thinker.add_task_out(msg)
+            msg_heartbeat = device.gen_heartbeat(event, i)
+            thinker.add_task_out(msg_heartbeat)
         else:
             sleep(0.05)
 
@@ -79,12 +78,27 @@ def task_in_reaction(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            if len(tasks) > 0:
+            if tasks:
                 try:
                     msg: Message = tasks.popitem()[1]
-                    if msg.body.type == 'demand':
+                    thinker.msg_counter += 1
+
+                    if msg.type == 'demand':
                         thinker.add_reply_pending(msg)
-                    thinker.react_in(msg)
+
+                    if msg.reply_to in thinker.demands_pending_answer:
+                        del thinker.demands_pending_answer[msg.reply_to]
+                        event.logger.info(f'react_reply: Msg {msg.reply_to} reply is obtained')
+
+                    if msg.type is MsgType.INFO:
+                        thinker.react_info(msg)
+                    elif msg.type is MsgType.DEMAND:
+                        thinker.react_demand(msg)
+                    elif msg.type is MsgType.REPLY:
+                        thinker.react_reply(msg)
+                    else:
+                        raise ThinkerErrorReact(f'Message type has wrong value {msg.type}')
+
                 except ThinkerErrorReact as e:
                     error_logger(event, task_in_reaction, f'{e}: {msg}')
         else:
@@ -100,12 +114,12 @@ def task_out_reaction(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            if len(tasks) > 0:
+            if tasks:
                 try:
                     msg: Message = tasks.popitem()[1]
-                    if msg.body.type == 'demand':
+                    if msg.type == 'demand':
                         thinker.add_demand_pending(msg)
-                    elif msg.body.type == 'reply':
+                    elif msg.type == 'reply':
                         if msg.reply_to in tasks_reply_pending:
                             react = True
                             try:
@@ -116,11 +130,11 @@ def task_out_reaction(event: ThinkerEvent):
                         else:
                             react = False
                             event.logger.info(f'Timeout for message {msg}')
-                    elif msg.body.type == 'info':
+                    elif msg.type == 'info':
                         react = True
                     if react:
-                        thinker.react_out(msg)
-                except (ThinkerErrorReact, Exception) as e:
+                        thinker.parent.send_msg_externally(msg)
+                except ThinkerErrorReact as e:
                     error_logger(event, task_out_reaction, f'{e}: {msg}')
         else:
             sleep(0.05)
@@ -133,8 +147,8 @@ def pending_demands(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            if len(tasks) > 0:
-                print(f'pending demands tasl len {len(tasks)}')
+            if tasks:
+                print(f'Pending demands number of tasks {len(tasks)}')
                 try:
                     for key, item in tasks.items():
                         pending: PendingReply = item
@@ -150,7 +164,7 @@ def pending_demands(event: ThinkerEvent):
                                 event.logger.info(f'Msg: {msg.id} is deleted')
                             except KeyError:
                                 info_msg(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_demands')
-                except (ThinkerErrorReact, Exception) as e:
+                except ThinkerErrorReact as e:
                     error_logger(event, event.run, e)
         else:
             sleep(0.05)
@@ -164,7 +178,7 @@ def pending_replies(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            if len(tasks) > 0:
+            if tasks > 0:
                 try:
                     for key, item in tasks.items():
                         pending: PendingReply = item
@@ -182,7 +196,7 @@ def pending_replies(event: ThinkerEvent):
                                 event.logger.info(f'Msg: {msg.id} is deleted')
                             except KeyError:
                                 error_logger(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_replies')
-                except (ThinkerErrorReact, Exception) as e:
+                except ThinkerErrorReact as e:
                     error_logger(event, event.run, e)
         else:
             sleep(0.05)
@@ -191,7 +205,7 @@ def pending_replies(event: ThinkerEvent):
 def postponed_reaction(replier: Callable[[Message], None], reaction: Message, t: float=1.0, logger=None):
     def f():
         if logger:
-            logger.info(f'postponed_reaction for {reaction.short()} started')
+            logger.info(f'Postponed_reaction for {reaction.short()} started')
         sleep(t)
         replier(reaction)
     trd = Thread(target=f)

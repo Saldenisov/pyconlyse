@@ -1,7 +1,7 @@
 from pathlib import Path
 from PyQt5.QtCore import pyqtSignal
 from PyQt5.QtWidgets import QMainWindow, QApplication, QWidget
-from utilities.data.messages import Message
+from utilities.data.messaging import Message
 from views.Test.TestObserver import Ui_TestObserver
 import pytest
 

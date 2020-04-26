@@ -1,6 +1,6 @@
 from typing import Dict
 from utilities.data.datastructures.mes_dependent.general import Connection, PendingDemand, PendingReply
-from utilities.data.messages import Message
+from utilities.data.messaging.messages import Message
 from collections import OrderedDict
 
 class Events_Dict(dict):

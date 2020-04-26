@@ -16,7 +16,7 @@ poller = zmq.Poller()
 poller.register(frontend, zmq.POLLIN)
 poller.register(backend, zmq.POLLIN)
 
-# Switch messages between sockets
+# Switch messaging between sockets
 while True:
     socks = dict(poller.poll())
 

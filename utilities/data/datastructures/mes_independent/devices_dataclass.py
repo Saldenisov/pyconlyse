@@ -23,9 +23,6 @@ class DeviceParts(DataClass_frozen):
     executor: ExecutorInter
 
 
-from datetime import datetime
-
-
 @dataclass
 class FuncErrorOutput:
     comments: str

@@ -9,7 +9,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from typing import Dict, Union
-from utilities.data.messages import ServiceInfoMes
+from utilities.data.messaging import ServiceInfoMes
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
 import logging
 

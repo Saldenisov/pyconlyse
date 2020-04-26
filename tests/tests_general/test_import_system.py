@@ -10,7 +10,7 @@ def test_import_testing():
     from devices.soft.deciders import ServerDecider
     from devices.devices import Device
     from devices.soft.deciders import Decider
-    from utilities.data.messages import Message
+    from utilities.data.messaging import Message
 
     import utilities.data.datastructures.mes_dependent
     import utilities.data.datastructures.mes_independent

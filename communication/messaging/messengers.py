@@ -14,13 +14,12 @@ from typing import Dict, Union, List
 
 import zmq
 from devices.devices import Device
-from communication.logic.thinkers_logic import Thinker
 from communication.interfaces import MessengerInter
 from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.messages import Message
+from utilities.data.messaging import Message, MsgType
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
@@ -45,7 +44,6 @@ class Messenger(MessengerInter):
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
         self.parent: Union[Device, Messenger] = None
-        self.parent_thinker: Thinker = self.parent.thinker
         if parent:
             self.id: str = parent.id
             self.parent: Union[Device] = parent
@@ -77,9 +75,73 @@ class Messenger(MessengerInter):
             self._verify_addresses(addresses)
             self._create_sockets()
             info_msg(self, 'INITIALIZED')
-        except (WrongAddress, ThinkerError, zmq.ZMQError, Exception) as e:
+        except (WrongAddress, ThinkerError, zmq.ZMQError) as e:
             info_msg(self, 'NOT INITIALIZED')
             raise MessengerError(str(e))
+
+    def add_msg_out(self, msg: Message):
+        try:
+            if len(self._msg_out) > 100000:
+                self._msg_out.popitem(False)  # pop up last item
+                self.logger.info('Dict of msg_out is overfull > 100000 msg')
+            self._msg_out[msg.id] = msg
+        except KeyError as e:
+            error_logger(self, self.add_msg_out, e)
+
+    @abstractmethod
+    def _create_sockets(self):
+        pass
+
+    def create_fernet(self, session_key: bytes):
+        return Fernet(session_key)
+
+    def decrypt_with_private(self, cipher_text: bytes):
+        plaintext = self._private_key.decrypt(cipher_text, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
+                                                                        algorithm=hashes.SHA1(), label=None))
+        return plaintext
+
+    def decrypt_with_session_key(self, msg_json: bytes, fernet: Fernet = None):
+        # TODO: add functionality to messenger.decrypt() when TLS is realized
+        if not fernet:
+            fernet = self._fernet
+        return fernet.decrypt(msg_json)
+
+    def encrypt_with_session_key(self, msg_json: bytes, fernet: Fernet = None):
+        # TODO: add functionality to messenger.encrypt() when TLS is realized
+        if not fernet:
+            fernet = self._fernet
+        return fernet.encrypt(msg_json)
+
+    @property
+    def fernet(self):
+        return self._fernet
+
+    @fernet.setter
+    def fernet(self, value):
+        self._fernet = value
+
+    def _gen_rsa_keys(self):
+        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+        self._public_key = self._private_key.public_key()
+
+    def heartbeat(self) -> Message:
+        return Message(com='heartbeat', type=MsgType.INFO, )
+
+    @abstractmethod
+    def info(self):
+        from collections import OrderedDict as od
+        info = od()
+        info['id'] = self.id
+        info['status'] = {'active': self.active, 'paused': self.paused}
+        info['msg_out'] = self._msg_out
+        info['polling_time'] = self._polling_time
+        return info
+
+    def _load_public_key(self, pem=b''):
+        return load_pem_public_key(pem, default_backend())
+
+    def _load_private_key(self, pem=b''):
+        return load_pem_private_key(pem, None, default_backend())
 
     @property
     def public_sockets(self):
@@ -92,55 +154,21 @@ class Messenger(MessengerInter):
     @property
     def public_key(self):
         return self._public_key.public_bytes(encoding=serialization.Encoding.PEM,
-                                               format=serialization.PublicFormat.SubjectPublicKeyInfo)
+                                             format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
-    @property
-    def fernet(self):
-        return self._fernet
+    def pause(self):
+        "put executation of thread on pause"
+        self.paused = True
+        self.logger.info(f'{self.name} is paused')
+        sleep(0.01)
 
-    @fernet.setter
-    def fernet(self, value):
-        self._fernet = value
-
-    def _load_public_key(self, pem=b''):
-        return load_pem_public_key(pem, default_backend())
-
-    def _load_private_key(self, pem=b''):
-        return load_pem_private_key(pem, None, default_backend())
-
-    def  _gen_rsa_keys(self):
-        # Create private key
-        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
-        self._public_key = self._private_key.public_key()
-
-    def decrypt_with_private(self, cipher_text: bytes):
-        plaintext = self._private_key.decrypt(cipher_text, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
-                                                                        algorithm=hashes.SHA1(), label=None))
-        return plaintext
-
-    def create_fernet(self, session_key: bytes):
-        return Fernet(session_key)
-
-    def encrypt_with_session_key(self, msg_json: bytes, fernet: Fernet=None):
-        # TODO: add functionality to messenger.encrypt() when TLS is realized
-        if not fernet:
-            fernet = self._fernet
-        return fernet.encrypt(msg_json)
-
-    def decrypt_with_session_key(self, msg_json: bytes, fernet: Fernet=None ):
-        # TODO: add functionality to messenger.decrypt() when TLS is realized
-        if not fernet:
-            fernet = self._fernet
-        return fernet.decrypt(msg_json)
-
-    def subscribe_sub(self, address=None, filter_opt=b""):
-        try:
-            self.sockets['sub'].connect(address)
-            self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
-            self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
-            self.logger.info(f'socket sub is connected to {address}')
-        except (zmq.ZMQError, Exception) as e:
-            error_logger(self, self.subscribe_sub, e)
+    @abstractmethod
+    def run(self):
+        info_msg(self, 'STARTING')
+        self.active = True
+        self.paused = False
+        # Start send loop here
+        self._sendloop_logic(await_time=0.1 / 1000.)
 
     def restart_socket(self, socket_name: str, connect_to: str):
         #TODO: realize other sockets
@@ -160,24 +188,14 @@ class Messenger(MessengerInter):
         self.unpause()
 
     @abstractmethod
-    def _verify_addresses(self, addresses: dict):
-        pass
-
-    @abstractmethod
-    def _create_sockets(self):
-        pass
-
-    @abstractmethod
     def send_msg(self, msg: Message):
         pass
 
-    @abstractmethod
-    def run(self):
-        info_msg(self, 'STARTING')
-        self.active = True
-        self.paused = False
-        # Start send loop here
-        self._sendloop_logic(await_time=0.1 / 1000.)
+    @make_loop
+    def _sendloop_logic(self, await_time):
+        if len(self._msg_out) > 0:
+            msg: Message = self._msg_out.popitem(last=False)[1]
+            self.send_msg(msg)
 
     def stop(self):
         info_msg(self, 'STOPPING')
@@ -185,41 +203,23 @@ class Messenger(MessengerInter):
         self.paused = False
         self._msg_out = {}
 
-    def pause(self):
-        "put executation of thread on pause"
-        self.paused = True
-        self.logger.info(f'{self.name} is paused')
-        sleep(0.01)
+    def subscribe_sub(self, address=None, filter_opt=b""):
+        try:
+            self.sockets['sub'].connect(address)
+            self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
+            self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
+            self.logger.info(f'socket sub is connected to {address}')
+        except (zmq.ZMQError, Exception) as e:
+            error_logger(self, self.subscribe_sub, e)
+
+    @abstractmethod
+    def _verify_addresses(self, addresses: dict):
+        pass
 
     def unpause(self):
         "unpauses executation of thread"
         self.paused = False
         self.logger.info(f'{self.name} is unpaused')
-
-    @abstractmethod
-    def info(self):
-        from collections import OrderedDict as od
-        info = od()
-        info['id'] = self.id
-        info['status'] = {'active': self.active, 'paused': self.paused}
-        info['msg_out'] = self._msg_out
-        info['polling_time'] = self._polling_time
-        return info
-
-    def add_msg_out(self, msg: Message):
-        try:
-            if len(self._msg_out) > 100000:
-                self._msg_out.popitem(False)  # pop up last item
-                self.logger.info('Dict of msg_out is overfull > 100000 msg')
-            self._msg_out[msg.id] = msg
-        except KeyError as e:
-            error_logger(self, self.add_msg_out, e)
-
-    @make_loop
-    def _sendloop_logic(self, await_time):
-        if len(self._msg_out) > 0:
-            msg: Message = self._msg_out.popitem(last=False)[1]
-            self.send_msg(msg)
 
 
 class ClientMessenger(Messenger):
@@ -281,8 +281,73 @@ class ClientMessenger(Messenger):
         except (WrongAddress, zmq.error.ZMQError) as e:
             error_logger(self, self.connect, e)
 
+    def info(self):
+        return super().info()
+
     def run(self):
         super().run()
+        self._wait_server_hb()
+        try:
+            if self.active:
+                self.connect()
+                info_msg(self, 'STARTED')
+            msgs = []
+            while self.active:
+                try:
+                    if not self.paused:
+                        sockets = dict(self.poller.poll(1))
+                        if self.sockets['dealer'] in sockets:
+                            msg, crypted = self.sockets['dealer'].recv_multipart()  # TODO: check how the wrong msg will be treated when the param CRYPTED is not available
+                            msgs.append((msg,crypted))
+                        if self.sockets['sub'] in sockets:
+                            msg, crypted = self.sockets['sub'].recv_multipart()
+                            msgs.append((msg, crypted))
+                        if sockets:
+                            for msg, crypted in msgs:
+                                try:
+                                    if int(crypted):
+                                        msg = self.decrypt_with_session_key(msg)
+                                    mes: Message = MsgGenerator.json_to_message(msg)
+                                    self.parent_thinker.add_task_in(mes)
+                                except Exception as e:
+                                    error_logger(self, self.run, str(e))
+                                    pass  # TODO: if error send back error!
+                            msgs = []
+                    else:
+                        sleep(.1)
+                except ValueError as e:  # TODO when recv_multipart works wrong!
+                    self.logger.error(e)
+
+        except (zmq.ZMQError, Exception) as e:
+            error_logger(self, self.run, e)
+            self.stop()
+        finally:
+            self.sockets['dealer'].close()
+            if self.sockets['sub']:
+                self.sockets['sub'].close()
+            self.context.destroy()
+            info_msg(self, 'STOPPED')
+
+    def send_msg(self, msg: Message):
+        try:
+            crypted = str(int(msg.crypted)).encode('utf-8')
+            msg_json = msg.json_repr()
+            if msg.crypted:
+                msg_json = self.encrypt_with_session_key(msg_json)
+            if msg.body.type == MsgType.REPLY or msg.body.type == MsgType.DEMAND:
+                self.sockets['dealer'].send_multipart([msg_json, crypted])
+                self.logger.info(f'{msg.short()} is send from {self.parent.name}')
+            elif msg.body.type == MsgType.INFO:
+                if self._pub_option:
+                    self.sockets['publisher'].send_multipart([msg_json, crypted])
+                else:
+                    self.logger.info('Publisher socket is not avaiable')
+            else:
+                error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
+        except zmq.ZMQError as e:
+            error_logger(self, self.send_msg, e)
+
+    def _wait_server_hb(self):
         if 'server_frontend' not in self.addresses or 'server_backend' not in self.addresses:
             wait = True
         else:
@@ -309,69 +374,6 @@ class ClientMessenger(Messenger):
                         wait = False
                     else:
                         raise Exception(f'Not all sockets are sent to {self.name}')
-        try:
-            if self.active:
-                self.connect()
-                info_msg(self, 'STARTED')
-            msgs = []
-            from time import time_ns as time
-            while self.active:
-                try:
-                    if not self.paused:
-                        sockets = dict(self.poller.poll(1))
-                        if self.sockets['dealer'] in sockets:
-                            msg, crypted = self.sockets['dealer'].recv_multipart()
-                            msgs.append((msg,crypted))
-                        if self.sockets['sub'] in sockets:
-                            msg, crypted = self.sockets['sub'].recv_multipart()
-                            msgs.append((msg, crypted))
-                        if sockets:
-                            for msg, crypted in msgs:
-                                if int(crypted):
-                                    msg = self.decrypt_with_session_key(msg)
-                                try:
-                                    mes: Message = MsgGenerator.json_to_message(msg)
-                                    self.parent_thinker.add_task_in(mes)
-                                except:
-                                    pass
-                            msgs = []
-                    else:
-                        sleep(.1)
-                except (ValueError, Exception) as e:
-                    self.logger.error(e)
-
-
-        except (zmq.ZMQError, Exception) as e:
-            error_logger(self, self.run, e)
-            self.stop()
-        finally:
-            self.sockets['dealer'].close()
-            if self.sockets['sub']:
-                self.sockets['sub'].close()
-            self.context.destroy()
-            info_msg(self, 'STOPPED')
-
-    def info(self):
-        return super().info()
-
-    def send_msg(self, msg: Message):
-        try:
-            crypted = str(int(msg.crypted)).encode('utf-8')
-            msg_json = msg.json_repr()
-            if msg.crypted:
-                msg_json = self.encrypt_with_session_key(msg_json)
-            if msg.body.type == 'reply' or msg.body.type == 'demand':
-                self.sockets['dealer'].send_multipart([msg_json, crypted])
-                self.logger.info(f'{msg.short()} is send from {self.parent.name}')
-            elif msg.body.type == 'info':
-                if self._pub_option:
-                    self.sockets['publisher'].send_multipart([msg_json, crypted])
-                else:
-                    self.logger.info('Publisher socket is not avaiable')
-            else:
-                error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.body.type}')
-        except zmq.ZMQError as e:
-            error_logger(self, self.send_msg, e)
 
 
 class ServiceMessenger(ClientMessenger):
@@ -479,14 +481,15 @@ class ServerMessenger(Messenger):
                         if sockets:
                             # TODO: but what happends if there is not crypted arrived!!!???
                             for msg, crypted in msgs:
-                                if int(crypted):
-                                    # TODO: if there is no Fernet send msg back crypted as it is
-                                    fernet = self.fernets[device_id]
-                                    msg = self.decrypt_with_session_key(msg, fernet)
                                 try:
+                                    if int(crypted):
+                                        # TODO: if there is no Fernet send msg back crypted as it is
+                                        fernet = self.fernets[device_id]
+                                        msg = self.decrypt_with_session_key(msg, fernet)
                                     mes: Message = MsgGenerator.json_to_message(msg)
                                     self.parent_thinker.add_task_in(mes)
-                                except:
+                                except Exception as e:
+                                    error_logger(self, self.run, str(e))
                                     pass  # TODO: send back with ERROR
                             msgs = []
                     except ValueError as e:
@@ -523,12 +526,12 @@ class ServerMessenger(Messenger):
             if msg.crypted:
                 fernet = self.fernets[msg.body.receiver_id]
                 msg_json = self.encrypt_with_session_key(msg_json, fernet)
-            if msg.body.type == 'info':
+            if msg.body.type == MsgType.INFO:
                 #self.logger.info(f'Info msg {msg} is send from publisher')
                 self.sockets['publisher'].send_multipart([msg_json, crypted])
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg)
-            elif msg.body.type != 'info':
+            elif msg.body.type != MsgType.INFO:
                 if msg.body.receiver_id in self._frontendpool:
                     self.sockets['frontend'].send_multipart([msg.body.receiver_id.encode('utf-8'), msg_json, crypted])
                     self.logger.info(f'{msg.body.type} msg {msg.id} is send from frontend')

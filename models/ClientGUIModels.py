@@ -8,7 +8,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
-from utilities.data.messages import Message
+from utilities.data.messaging import Message
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from typing import Any, Dict, Union, Tuple

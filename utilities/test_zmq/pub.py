@@ -17,7 +17,7 @@ def main():
     publisher.bind("tcp://*:5563")
 
     while True:
-        # Write two messages, each with an envelope and content
+        # Write two messaging, each with an envelope and content
         publisher.send_multipart([b"A", b"We don't want to see this"])
         publisher.send_multipart([b"B", b"We would like to see this"])
         time.sleep(1)

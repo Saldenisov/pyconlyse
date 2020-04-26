@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from time import time
 
-import utilities.data.messages as mes
+import utilities.data.messaging.messages as mes
 from utilities.data.general import DataClass_unfrozen
 
 

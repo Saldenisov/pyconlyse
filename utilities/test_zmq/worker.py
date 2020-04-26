@@ -12,11 +12,11 @@ import zmq
 
 context = zmq.Context()
 
-# Socket to receive messages on
+# Socket to receive messaging on
 receiver = context.socket(zmq.PULL)
 receiver.connect("tcp://localhost:5557")
 
-# Socket to send messages to
+# Socket to send messaging to
 sender = context.socket(zmq.PUSH)
 sender.connect("tcp://localhost:5558")
 

@@ -1,12 +1,14 @@
 import logging
 from base64 import b64encode
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from json import dumps
+from msgpack import packb, unpackb
 from typing import Any, NamedTuple, Dict, Union
 from zlib import compress
 
 from communication.interfaces import MessageInter
+from devices.interfaces import DeviceType
 from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
 from utilities.data.datastructures.mes_independent import Desription
 
@@ -14,8 +16,8 @@ from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
 
-
-# __repr__ function for MyDataClass and data classes
+# __repr__ func
+# tion for MyDataClass and data classes
 def f(obj: object) -> str:
     out = []
     if tuple in obj.__class__.__bases__:
@@ -87,19 +89,16 @@ class EventInfoMes:
 @dataclass(order=True)
 class DeviceInfoMes:
     device_id: str
-    messenger_id: str
-    name: str = None
-    type: str = None  # service, client, server
-    class_type: str = None
-    device_status: DeviceStatus = None
+    name: str
+    type: DeviceType
+    device_status: DeviceStatus
     public_key: bytes = b''
     public_sockets: dict = field(default_factory=dict)
 
 
 @dataclass(order=True)
-class WelcomeServer:
+class WelcomeInfoServer:
     device_id: str
-    messenger_id: str
     session_key: str
     name: str
     device_status: DeviceStatus
@@ -185,11 +184,13 @@ class PowerOnDemand:
     device_id: str
     power_on: bool
 
+
 @dataclass(frozen=True, order=True)
 class PowerOnReply:
     device_id: str
     power_on: bool
     comments: str = ""
+
 
 @dataclass(frozen=True, order=True)
 class Unknown:
@@ -203,23 +204,23 @@ class Test:
 
 
 # General structure of message
-@dataclass(order=True)
-class MessageData:
-    com: str  # command
-    info: object  # DataClass
+from utilities.data.messaging.message_types import MsgType, MessageStructure
 
 
-@dataclass(order=True)
-class MessageBody:
-    type: str
-    sender_id: str
-    receiver_id: str = ''
+class MsgCom:
+    HEARTBEAT = MessageStructure('heartbeat', MsgType.INFO, EventInfoMes)
+    SHUTDOWN = MessageStructure('shutdown', MsgType.INFO, ShutDownMes)
+    WELCOME_INFO = MessageStructure('welcome_info', MsgType.REPLY, WelcomeInfoServer)
+    ARE_YOU_ALIVE = MessageStructure('are_you_alive_reply', MsgType.DEMAND, None)
 
 
 @dataclass(order=True)
 class Message(MessageInter):
-    body: MessageBody
-    data: MessageData
+    com: MsgCom  # command
+    type: MsgType
+    info: dataclass  # DataClass
+    sender_id: str
+    receiver_id: str = ''
     id: str = ''
     reply_to: str = ''
     crypted: bool = False
@@ -237,70 +238,60 @@ class Message(MessageInter):
             l = 300
         else:
             pass
-        return {'path':  f'{self.body.sender_id}->{self.body.receiver_id}',
-                'data': f'{self.data.com}: {t[0:l]}...',
+        return {'path':  f'{self.sender_id}->{self.receiver_id}',
+                'data': f'{self.com}: {t[0:l]}...',
                 'reply_to': self.reply_to,
                 'id': self.id}
 
+    def json_repr_long(self, compression=True) -> bytes:
+        try:
+            json_str = dumps(repr(self)).encode('utf-8')
+            if compression:
+                json_str_c = compress(json_str)
+                json_str_c = b64encode(json_str_c)
+                return json_str_c
+            else:
+                return json_str
+        except Exception as e:  # TODO replace with reasonable
+            module_logger.error(e)
+            return b''
+
     def json_repr(self, compression=True) -> bytes:
-        # FIXME: Something should be done with this...
-        def message_to_json(msg: Message, compression: bool) -> bytes:
-            try:
-                json_str = dumps(repr(msg)).encode('utf-8')
-                if compression:
-                    json_str_c = compress(json_str)
-                    json_str_c = b64encode(json_str_c)
-                    return json_str_c
-                else:
-                    return json_str
-            except Exception as e:
-                module_logger.error(e)
-                raise e
+        try:
+            msg_l = []
+            for name in self.__annotations__:
+                value = getattr(self, name)
+                if name == 'info':
+                    msg_l.append(type(value))
+                    value = asdict(value)
+                elif isinstance(value, MsgType):
+                    value = value.value
+                msg_l.append(value)
+            json_str = dumps(repr(msg_l)).encode('utf-8')
+            if compression:
+                json_str_c = compress(json_str)
+                json_str_c = b64encode(json_str_c)
+                return json_str_c
+            else:
+                return json_str
+        except Exception as e:  # TODO replace with reasonable
+            module_logger.error(e)
+            return b''
 
-        return message_to_json(self, compression)
+    def msgpack_repr(self) -> bytes:
+        try:
+            msg_l = []
+            for name in self.__annotations__:
+                value = getattr(self, name)
+                if name == 'info':
+                    msg_l.append(value.__class__.__name__)
+                    value = asdict(value)
+                elif isinstance(value, MsgType):
+                    value = value.value
+                msg_l.append(value)
+            msgpack_repr = packb(msg_l)
+            return msgpack_repr
+        except ValueError as e:
+            module_logger.error(e)
+            return b''
 
-
-class MessageStructure(NamedTuple):
-    type: str
-    mes_class: object  # DataClass
-    mes_name: str = ""
-
-
-@dataclass
-class Test():
-    filed1: str = 'test'
-    field2: Unknown = Unknown(comment='test')
-
-
-# Test Messages correct
-info = Test()
-body = MessageBody('info', 'TestSender', 'TestReceiver')
-data = MessageData(com='test1', info=info)
-msgTest1 = Message(body, data)
-
-info = Test()
-body = MessageBody('demand', 'TestSender', 'TestReceiver')
-data = MessageData(com='test2', info=info)
-msgTest2 = Message(body, data)
-
-info = Test()
-body = MessageBody('reply', 'TestSender', 'TestReceiver')
-data = MessageData(com='test3', info=info)
-msgTest3 = Message(body, data)
-
-info = Test()
-body = MessageBody('reply', 'TestSender', 'TestReceiver')
-data = MessageData(com='test3', info=info)
-msgTest4 = Message(body, data)
-
-msgs_correct = [msgTest1, msgTest2, msgTest3, msgTest4]
-
-
-
-# Test Messages correct
-info = Test()
-body = MessageBody('test', 'TestSender', 'TestReceiver')
-data = MessageData(com='test', info=info)
-msgTest_incorrect = Message(body, data)
-
-msgs_incorrect = [msgTest_incorrect]

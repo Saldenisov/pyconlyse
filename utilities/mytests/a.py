@@ -1,14 +1,8 @@
 from enum import Enum, Flag, auto
 
-class D(Enum):
-    FILES = 1
-    PORJECTS = 2
+class MsgType(str, Enum):
+    INFO = 'info'
+    DEMAND = 'demand'
+    REPLY = 'reply'
 
-class Flags(Flag):
-    Files = auto()
-    PORJECTS = auto()
-
-
-print(D.)
-
-
+print(MsgType('info'))

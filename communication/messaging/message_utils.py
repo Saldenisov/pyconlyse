@@ -1,9 +1,9 @@
 from base64 import b64decode
 from json import loads
 from zlib import decompress
-import utilities.data.messages as mes
+import utilities.data.messaging as mes
 from errors.myexceptions import MsgComNotKnown, MsgError
-from utilities.data.messages import *  # This line is required for json_to_message
+from utilities.data.messaging import *  # This line is required for json_to_message
 from utilities.data.datastructures.mes_independent import *
 
 module_logger = logging.getLogger(__name__)
@@ -30,7 +30,6 @@ class MsgGenerator:
     DONE_IT = mes.MessageStructure(REPLY, mes.DoneIt, 'done_it')
     ERROR = mes.MessageStructure(REPLY, mes.Error, 'error')
     FORWARD_MSG = mes.MessageStructure(FORWARD, mes.Forward_msg, 'forward_msg')
-    HEARTBEAT = mes.MessageStructure(INFO, mes.EventInfoMes, 'heartbeat')
     HELLO = mes.MessageStructure(DEMAND, mes.DeviceInfoMes, 'hello')
     STATUS_SERVER_INFO = mes.MessageStructure(INFO, mes.ServerStatusMes, 'status_server_info')
     STATUS_SERVER_INFO_FULL = mes.MessageStructure(INFO, mes.ServerStatusExtMes, 'status_server_info_full')
@@ -72,10 +71,6 @@ class MsgGenerator:
     @staticmethod
     def forward_msg(device, msg_i):
         return MsgGenerator._gen_msg(MsgGenerator.FORWARD_MSG, device=device, msg_i=msg_i)
-
-    @staticmethod
-    def heartbeat(device, event, n):
-        return MsgGenerator._gen_msg(MsgGenerator.HEARTBEAT, device=device, event=event, n=n)
 
     @staticmethod
     def hello(device):
@@ -206,15 +201,6 @@ class MsgGenerator:
                 data_info = mes_info_class(comments)
             elif com_name == MsgGenerator.FORWARD_MSG.mes_name:
                 return kwargs['msg_i']
-            elif com_name == MsgGenerator.HEARTBEAT.mes_name:
-                crypted = False
-                event = kwargs['event']
-                data_info = mes_info_class(event.id,
-                                           event.external_name,
-                                           device.id,
-                                           tick=event.tick,
-                                           n=kwargs['n'],
-                                           sockets=device.messenger.public_sockets)
             elif com_name == MsgGenerator.HELLO.mes_name:
                 crypted = False
                 data_info = mes_info_class(name=device.name,

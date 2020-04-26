@@ -16,7 +16,7 @@ except NameError:
 
 context = zmq.Context()
 
-# Socket to send messages on
+# Socket to send messaging on
 sender = context.socket(zmq.PUSH)
 sender.bind("tcp://*:5557")
 
