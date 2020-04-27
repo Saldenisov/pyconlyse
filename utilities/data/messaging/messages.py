@@ -9,7 +9,7 @@ from typing import Any, NamedTuple, Dict
 from zlib import compress
 
 from communication.interfaces import MessageInter
-from devices.interfaces import DeviceType
+from devices.interfaces import DeviceType, DeviceId
 from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
 from utilities.data.datastructures.mes_independent import Desription
 
@@ -37,8 +37,7 @@ def f(obj: object) -> str:
 
 @dataclass(frozen=True, order=True)
 class AvailableServices:
-    running_services: dict
-    all_services: dict = field(default_factory=dict)
+    device_available_services: Dict[DeviceId, str]
 
 
 @dataclass(frozen=True, order=True)
@@ -78,7 +77,7 @@ class EventInfoMes:
     event_n: int
     event_tick: float
     device_id: str
-    device_sockets: dict = field(default_factory=dict)
+    device_public_sockets: dict = field(default_factory=dict)
 
 
 @dataclass(order=True)
@@ -158,9 +157,14 @@ class CheckService:
     service_id: str
 
 
-@dataclass(frozen=True, order=True)
+@dataclass
 class Error:
-    comments: str = ''
+    comments: str
+
+
+@dataclass(frozen=True, order=True)
+class MsgError:
+    error_comments: str = ''
 
 
 @dataclass(frozen=True, order=True)
@@ -199,41 +203,34 @@ class Test:
 
 
 # General structure of message
-from utilities.data.messaging.message_types import MsgType, MessageStructure
+from utilities.data.messaging.message_types import MsgType, MessageInfo
 
 
-class MsgCom(Enum):
-    ARE_YOU_ALIVE = MessageStructure('are_you_alive_reply', MsgType.DEMAND, None)
-    ERROR = MessageStructure('error', MsgType.REPLY, Error)
-    HEARTBEAT = MessageStructure('heartbeat', MsgType.INFO, EventInfoMes)
-    SHUTDOWN = MessageStructure('shutdown', MsgType.INFO, ShutDownMes)
-    WELCOME_INFO = MessageStructure('welcome_info', MsgType.REPLY, WelcomeInfoServer)
+class MsgCommon(Enum):
+    ARE_YOU_ALIVE_DEMAND = MessageInfo('are_you_alive_reply', MsgType.DEMAND, None, set(), True)
+    ARE_YOU_ALIVE_REPLY = MessageInfo('are_you_alive_reply', MsgType.REPLY, None, set(), True)
+    AVAILABLE_SERVICES = MessageInfo('available_services', MsgType.INFO, AvailableServices, set(), True)
+    ERROR = MessageInfo('error', MsgType.INFO, MsgError, set(['error']), True)
+    HEARTBEAT = MessageInfo('heartbeat', MsgType.INFO, EventInfoMes, set(['event']), False)
+    SHUTDOWN = MessageInfo('shutdown', MsgType.INFO, ShutDownMes, set(), False)
+    WELCOME_INFO = MessageInfo('welcome_info', MsgType.REPLY, WelcomeInfoServer, set(), False)
 
     @property
     def com_name(self):
-        value: MessageStructure = self.value
+        value: MessageInfo = self.value
         return value.name
 
-    @property
-    def com_type(self):
-        value: MessageStructure = self.value
-        return value.type
-
-    @property
-    def com_info_class(self):
-        value: MessageStructure = self.value
-        return value.info_class
 
 @dataclass(order=True)
 class Message(MessageInter):
-    com: MsgCom  # command
-    type: MsgType
+    com: str  # command name
+    crypted: bool
     info: dataclass  # DataClass
+    receiver_id: str
+    reply_to: str
     sender_id: str
-    receiver_id: str = ''
+    type: str
     id: str = ''
-    reply_to: str = ''
-    crypted: bool = False
 
     def __post_init__(self):
         if not self.id:

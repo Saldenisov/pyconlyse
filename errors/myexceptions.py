@@ -32,7 +32,7 @@ class ThinkerEventError(Exception):
 
 class MsgError(Exception):
     def __init__(self, text):
-        super().__init__(f'Error during msg generation: {text}')
+        super().__init__(f'MsgError during msg generation: {text}')
 
 
 class MsgComNotKnown(Exception):
@@ -95,7 +95,7 @@ class EmptyConfiguration(MyException):
 
 class FittingError(MyException):
     def __init__(self):
-        MyException.__init__(self, "Fitting Error")
+        MyException.__init__(self, "Fitting MsgError")
 
 
 class ValidationFailed(MyException):

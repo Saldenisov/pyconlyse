@@ -8,7 +8,7 @@ import ctypes
 from typing import Dict, NewType
 from xmlrpc.client import boolean
 
-Error = NewType('Error', Dict)
+Error = NewType('MsgError', Dict)
 
 default = Error({'status': False, 'code': 2, 'desription': ''})
 
@@ -19,7 +19,7 @@ def errorcodehandler(code: int):
 
 def Init(LR: ctypes, dir: str) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     dirc = ctypes.c_char_p(dir.encode('utf-8'))
     executed = LR.Initialize(dirc)
@@ -28,7 +28,7 @@ def Init(LR: ctypes, dir: str) -> tuple:
 
 def SetAcquisitionMode(LR: ctypes, mode: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     0 - Reserved
     1 - Single scan
     2 - Accumulate
@@ -50,7 +50,7 @@ def SetAcquisitionMode(LR: ctypes, mode: int, error: Error=default) -> tuple:
 
 def SetExposureTime(LR: ctypes, time: float, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     if not error['status']:
         timec = ctypes.c_float(time)
@@ -62,7 +62,7 @@ def SetExposureTime(LR: ctypes, time: float, error: Error=default) -> tuple:
     
 def GetNumberHSSpeeds(LR: ctypes, type: int, channel: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, number)
+    Returns tuple(MsgError type, number)
     EMP-amp = 0
     Conventional Amp = 1
     """ 
@@ -79,7 +79,7 @@ def GetNumberHSSpeeds(LR: ctypes, type: int, channel: int, error: Error=default)
 
 def SetHSSpeed(LR: ctypes, type: int, index: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     EMP-amp = 0
     Conventional Amp = 1
     """ 
@@ -94,7 +94,7 @@ def SetHSSpeed(LR: ctypes, type: int, index: int, error: Error=default) -> tuple
 
 def GetHSSpeed(LR: ctypes, type: int, index: int, channel: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, speed)
+    Returns tuple(MsgError type, speed)
     EMP-amp = 0
     Conventional Amp = 1
     """ 
@@ -112,7 +112,7 @@ def GetHSSpeed(LR: ctypes, type: int, index: int, channel: int, error: Error=def
 
 def GetNumberVSSpeeds(LR: ctypes, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, number)
+    Returns tuple(MsgError type, number)
     """ 
     if not error['status']:
         n = ctypes.c_int(0)
@@ -125,7 +125,7 @@ def GetNumberVSSpeeds(LR: ctypes, error: Error=default) -> tuple:
 
 def SetVSSpeed(LR: ctypes, index: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """ 
     if not error['status']:
         indexc = ctypes.c_int32(index)
@@ -137,7 +137,7 @@ def SetVSSpeed(LR: ctypes, index: int, error: Error=default) -> tuple:
 
 def GetVSSpeed(LR: ctypes, index: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, speed)
+    Returns tuple(MsgError type, speed)
     """ 
     if not error['status']:
         indexc = ctypes.c_int32(index)
@@ -151,7 +151,7 @@ def GetVSSpeed(LR: ctypes, index: int, error: Error=default) -> tuple:
 
 def GetDetector(LR: ctypes,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, tuple(xpixels, ypixels)
+    Returns tuple(MsgError type, tuple(xpixels, ypixels)
     """ 
     if not error['status']:
         xpix = ctypes.c_int32(0)
@@ -166,7 +166,7 @@ def GetDetector(LR: ctypes,  error: Error=default) -> tuple:
 
 def GetNumberPreAmpGains(LR: ctypes,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, number)
+    Returns tuple(MsgError type, number)
     """
     if not error['status']:
         n = ctypes.c_int32(0)
@@ -178,7 +178,7 @@ def GetNumberPreAmpGains(LR: ctypes,  error: Error=default) -> tuple:
     
 def SetADChannel(LR: ctypes, channel: int,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     if not error['status']:
         channelc = ctypes.c_int32(channel)
@@ -190,7 +190,7 @@ def SetADChannel(LR: ctypes, channel: int,  error: Error=default) -> tuple:
     
 def SetPreAmpGain(LR: ctypes, index: int,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     if not error['status']:
         indexc = ctypes.c_int32(index)
@@ -202,7 +202,7 @@ def SetPreAmpGain(LR: ctypes, index: int,  error: Error=default) -> tuple:
    
 def GetPreAmpGain(LR: ctypes, index: int,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, gain)
+    Returns tuple(MsgError type, gain)
     """
     if not error['status']:
         indexc = ctypes.c_int32(index)
@@ -216,7 +216,7 @@ def GetPreAmpGain(LR: ctypes, index: int,  error: Error=default) -> tuple:
 
 def GetNumberADChannels(LR: ctypes, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, number)
+    Returns tuple(MsgError type, number)
     """
     if not error['status']:
         v = ctypes.c_int32(0)
@@ -229,7 +229,7 @@ def GetNumberADChannels(LR: ctypes, error: Error=default) -> tuple:
     
 def SetTriggerMode(LR: ctypes, mode: int,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     Mode:
     0 - Internal
     1- External
@@ -252,7 +252,7 @@ def SetTriggerMode(LR: ctypes, mode: int,  error: Error=default) -> tuple:
 
 def SetFastExtTrigger(LR: ctypes, mode: boolean,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     if not error['status']:
         modec = ctypes.c_int32(int(mode))
@@ -264,7 +264,7 @@ def SetFastExtTrigger(LR: ctypes, mode: boolean,  error: Error=default) -> tuple
 
 def SetReadMode(LR: ctypes, mode: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     Mode:
     0 - Full Vertical Binning
     1 - Multi-Track
@@ -282,7 +282,7 @@ def SetReadMode(LR: ctypes, mode: int, error: Error=default) -> tuple:
 
 def SetMultiTrack(LR: ctypes, number: int, height: int, offset: int, error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, (bottom, gap))
+    Returns tuple(MsgError type, (bottom, gap))
     """  
     if not error['status']:
         bot = ctypes.c_int32(0)
@@ -300,7 +300,7 @@ def SetMultiTrack(LR: ctypes, number: int, height: int, offset: int, error: Erro
 
 def SetBaselineClamp(LR: ctypes, state: boolean,  error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """
     if not error['status']:
         statec = ctypes.c_int32(int(state))
@@ -313,7 +313,7 @@ def SetBaselineClamp(LR: ctypes, state: boolean,  error: Error=default) -> tuple
 def GetAcquisitionTimings(LR: ctypes, exposure_in: float, accumulate_in: float, kinetics_in: float,
                           error: Error=default) -> tuple:
     """
-    Returns tuple(Error type, (exposure, accumulate, kinetics))
+    Returns tuple(MsgError type, (exposure, accumulate, kinetics))
     """     
     if not error['status']:
         exp = ctypes.c_float(exposure_in)
@@ -330,7 +330,7 @@ def GetAcquisitionTimings(LR: ctypes, exposure_in: float, accumulate_in: float, 
 
 def ShutDown(LR: ctypes) -> tuple:
     """
-    Returns tuple(Error type, None)
+    Returns tuple(MsgError type, None)
     """     
 
     executed = LR.ShutDown()

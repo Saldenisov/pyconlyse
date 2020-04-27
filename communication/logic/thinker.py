@@ -5,7 +5,7 @@ from time import time
 from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import *
-from utilities.data.messaging.messages import Message, MsgCom
+from utilities.data.messaging.messages import Message, MsgCommon
 from utilities.data.messaging.message_types import MsgType
 from utilities.data.datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
@@ -66,7 +66,7 @@ class Thinker(ThinkerInter):
             if len(self._tasks_in) > 10000:
                 self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgCom.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
                 self.tasks_in_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_in, e)
@@ -76,7 +76,7 @@ class Thinker(ThinkerInter):
             if len(self._tasks_out) > 10000:
                 self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgCom.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             info_msg(self, self.add_task_out, e)
@@ -169,22 +169,8 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
-    def react_info(self, msg: Message):
+    def react_external(self, msg: Message):
         pass
-
-    @abstractmethod
-    def react_demand(self, msg: Message):
-        pass
-
-    @abstractmethod
-    def react_reply(self, msg: Message):
-        if msg.reply_to in self.demands_pending_answer:
-            try:
-                del self.demands_pending_answer[msg.reply_to]
-            except KeyError:
-                info_msg(self, self.react_reply, f'Cannot delete msg: {msg.reply_to} from tasks_pending_answer')
-        else:
-            info_msg(self, 'INFO', f'Msg:{msg.id} was deleted from task_pending_answer before arrival of reply')
 
     @abstractmethod
     def react_unknown(self, msg: Message):
@@ -274,6 +260,7 @@ class ThinkerEvent(Thread):
             error_logger(self, self.run, e)
         finally:
             info_msg(self, 'STOPPED', extra=f' of {self.parent.name}')
+
 
     def stop(self):
         info_msg(self, 'STOPPING', extra=f' of {self.parent.name}')

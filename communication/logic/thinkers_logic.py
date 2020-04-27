@@ -34,7 +34,7 @@ class GeneralCmdLogic(Thinker):
         self.msg_out(reply, msg_i)
 
     def react_info(self, msg: Message):
-        if msg.com == MsgCom.HEARTBEAT.name:
+        if msg.com == MsgCommon.HEARTBEAT.name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             if msg.info.device_id not in self.parent.connections:
@@ -57,7 +57,7 @@ class GeneralCmdLogic(Thinker):
     def react_reply(self, msg: Message):
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
-        if msg.com == MsgCom.WELCOME_INFO.mes_name:
+        if msg.com == MsgCommon.WELCOME_INFO.mes_name:
             if msg.info.device_id in self.parent.connections:
                 self.logger.info(f'Server {msg.info.device_id} is active. Handshake was undertaken')
                 connection: Connection = self.parent.connections[msg.info.device_id]
@@ -108,15 +108,18 @@ class ServerCmdLogic(Thinker):
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_demand(self, msg: Message):
-        reply = True
+    def react_external(self, msg: Message):
         if msg.receiver_id != self.parent.id:
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
+                self.logger.info(f'Msg: {msg.reply_to} reply is obtained and forwarded to initial demander')
             else:
-                msg_i = [MsgGenerator.available_services_reply(device=self.parent, msg_i=msg),
-                         MsgGenerator.error(device=self.parent, comments=f'service {msg.info.service_id} '
-                                                                         f'is not available', msg_i=msg)]
+                msg_i = [self.parent.generate_msg(msg_com=MsgCommon.AVAILABLE_SERVICES,
+                                                  parameters={'receiver_id': msg.sender_id, 'reply_to': msg.id}),
+                         self.parent.generate_msg(msg_com=MsgCommon.ERROR,
+                                                  parameters={"comments": f'service {msg.receiver_id} is not available',
+                                                              'receiver_id': msg.sender_id, 'reply_to': msg.id})]
+
         else:
             if msg.com == MsgGenerator.HELLO.mes_name:
                 try:
@@ -160,32 +163,25 @@ class ServerCmdLogic(Thinker):
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')
-        if reply:
-            self.msg_out(reply, msg_i)
 
-    def react_info(self, msg: Message):
+
+
+        # OLD INFO
         if msg.sender_id in self.parent.connections:
-            if msg.com == MsgCom.HEARTBEAT.name:
+            if msg.com == MsgCommon.HEARTBEAT.com_name:
                 try:
                     self.events[msg.info.event_id].time = time()
                     self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
                     error_logger(self, self.react_info, e)
-            elif msg.com == MsgCom.SHUTDOWN.name:  # When one of devices connected to server shutdowns
+            elif msg.com == MsgCommon.SHUTDOWN.com_name:  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(msg.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
-    def react_reply(self,  msg: Message):
-        reply = False
-        if msg.receiver_id != self.parent.id:
-            msg_i = msg
-            reply = True
-            if msg.reply_to in self.demands_pending_answer:
-                del self.demands_pending_answer[msg.reply_to]
-                self.logger.info(f'Msg: {msg.reply_to} reply is obtained and forwarded to initial demander')
-        else:
-            pass
+
         self.msg_out(reply, msg_i)
+
+
 
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:

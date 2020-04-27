@@ -2,11 +2,10 @@ from time import sleep, time
 from threading import Thread
 from typing import Union, Callable
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
-from communication.messaging.message_utils import MsgGenerator
 from errors.myexceptions import ThinkerErrorReact
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
-from utilities.data.messaging.messages import Message, MsgType
+from utilities.data.messaging.messages import Message, MsgType, MsgCommon
 from utilities.myfunc import info_msg, error_logger
 
 
@@ -46,12 +45,11 @@ def internal_hb_logic(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
     info_msg(event, 'STARTED', extra=f' of {thinker.name}')
-    i = 0
     while event.active:
         if not event.paused:
-            i += 1
+            event.n += 1
             sleep(event.tick)
-            msg_heartbeat = device.gen_heartbeat(event, i)
+            msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, parameters={'event': event})
             thinker.add_task_out(msg_heartbeat)
         else:
             sleep(0.05)
@@ -83,21 +81,17 @@ def task_in_reaction(event: ThinkerEvent):
                     msg: Message = tasks.popitem()[1]
                     thinker.msg_counter += 1
 
-                    if msg.type == 'demand':
+                    if msg.type is MsgType.DEMAND:
                         thinker.add_reply_pending(msg)
 
                     if msg.reply_to in thinker.demands_pending_answer:
+                        # TODO: should it else clause
                         del thinker.demands_pending_answer[msg.reply_to]
                         event.logger.info(f'react_reply: Msg {msg.reply_to} reply is obtained')
 
-                    if msg.type is MsgType.INFO:
-                        thinker.react_info(msg)
-                    elif msg.type is MsgType.DEMAND:
-                        info_msg(event, 'REQUEST', extra=str(msg.short()))
-                        thinker.react_demand(msg)
-                    elif msg.type is MsgType.REPLY:
-                        info_msg(event, 'REPLY_IN', extra=str(msg.short()))
-                        thinker.react_reply(msg)
+                    if msg.type in MsgType:
+                        info_msg(event, msg.type, extra=str(msg.short()))
+                        thinker.react_external(msg)
                     else:
                         raise ThinkerErrorReact(f'Message type has wrong value {msg.type}')
 
@@ -180,7 +174,7 @@ def pending_replies(event: ThinkerEvent):
     while event.active:
         if not event.paused:
             sleep(event.tick)
-            if tasks > 0:
+            if tasks:
                 try:
                     for key, item in tasks.items():
                         pending: PendingReply = item

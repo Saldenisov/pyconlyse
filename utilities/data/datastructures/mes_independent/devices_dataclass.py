@@ -2,8 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Union
 from utilities.data.general import DataClass_frozen, DataClass_unfrozen
 from communication.interfaces import MessengerInter, ThinkerInter
-from devices.interfaces import ExecutorInter
-from devices.interfaces import DeviceInter
+from devices.interfaces import ExecutorInter, DeviceId
 
 
 
@@ -76,5 +75,5 @@ class FuncAvailableServicesInput(FuncInput):
 
 @dataclass
 class FuncAvailableServicesOutput(FuncOutput):
-    running_services: Dict[str, str]
-    all_services: Dict[str, str]
+    device_id: DeviceId
+    device_available_services: Dict[DeviceId, str]

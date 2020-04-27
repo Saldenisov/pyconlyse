@@ -36,7 +36,7 @@ class TestOpener(unittest.TestCase):
 
     def test_errorinfile_Opener(self):
         """
-        Error in file .->,
+        MsgError in file .->,
         """
         filepath = 'C:\\Users\\saldenisov\\Dropbox\\Python\\DATAFIT\\tests_files\\testASCII_error.txt'
         file_open = Opener(filepath)

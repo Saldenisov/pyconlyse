@@ -734,7 +734,7 @@ class status_calb_t(Structure):
 class measurements_t(Structure):
 	_fields_ = [
 		("Speed", c_int * 25),
-		("Error", c_int * 25),
+		("MsgError", c_int * 25),
 		("Length", c_uint),
 	]
 

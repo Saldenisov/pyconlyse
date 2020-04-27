@@ -5,16 +5,16 @@ from pathlib import Path
 import sys
 import sqlite3 as sq3
 from time import sleep
-from typing import List, Tuple, Callable, NewType, ClassVar
+from typing import List, Tuple, Callable
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
+from devices.interfaces import DeviceId, DeviceType, DeviceInter
 from database.tools import db_create_connection, db_execute_select
 from communication.messaging.message_utils import MsgGenerator
-from communication.logic.thinker import ThinkerEvent
 from errors.messaging_errors import MessengerError
 from errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
@@ -28,10 +28,8 @@ from logs_pack import initialize_logger
 
 module_logger = logging.getLogger(__name__)
 
+
 pyqtWrapperType = type(QObject)
-
-
-DeviceId = NewType('DeviceId', str)
 
 
 class FinalMeta(type(DeviceInter), type(QObject)):
@@ -117,6 +115,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         info_msg(self, 'CREATED')
 
+    @property
+    @abstractmethod
+    def available_services(self) -> Dict[DeviceId, str]:
+        pass
+
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
         pass
@@ -182,39 +185,50 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         except (TypeError, SyntaxError):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
-    def gen_heartbeat(self, event: ThinkerEvent, n=0) -> Message:
-        info = EventInfoMes(event_id=event.id, event_name=event.name, device_id=self.id, tick=event.tick, n=n,
-                            sockets=self.messenger.public_sockets)
-        return Message(com=MsgCom.HEARTBEAT, type=MsgType.INFO, info=info, sender_id=self.id)
-
-    def generate_msg(self, msg_com: MsgCom, parameters: Dict[str, Any]) -> Message:
-        if msg_com is MsgCom.HEARTBEAT.name:
-            MUST_HAVE = ['event']
-            check = []
-            for param in MUST_HAVE:
-                if param in parameters:
-                    check.append(True)
-            if not all(check):
-                error_logger(self, self.generate_msg, f'Not all parameters {MUST_HAVE} were passed to function '
-                                                      f'{parameters}')
+    def generate_msg(self, msg_com: MsgCommon, parameters: Dict[str, Any]) -> Message:
+        if not isinstance(msg_com, MsgCommon):
+            error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
+            return None
+        else:
+            msg_str: MessageInfo = msg_com.value
+            a = msg_str.must_have_param
+            b = set(parameters.keys())
+            if not a.issubset(b):
+                error_logger(self, self.generate_msg, f'Not all parameters {msg_str.must_have_param} were passed to '
+                                                      f'function {parameters}')
                 return None
             else:
-                d = {}
-                event: ThinkerEvent = parameters['event']
-                for attr in MsgCom.HEARTBEAT.com_info_class.__annotations__:
-                    if 'event' in attr:
-                        param_name = attr.split('_')[1]
-                        param_value = getattr(event, param_name)
-                    elif 'device' in attr:
-                        param_name = attr.split('_')[1]
+                param_values = {}
+                for attr in msg_str.info_class.__annotations__:
+                    param_name = attr.split('_')
+                    attr_name = param_name[0]
+                    if len(param_name) > 2:
+                        param_name = "_".join(param_name[1:])
+                    elif len(param_name) == 2:
+                        param_name = param_name[1]
+                    else:
+                        param_name = param_name[0]
+
+                    if attr_name == 'device':
                         param_value = getattr(self, param_name)
+                    else:
+                        param_value = getattr(parameters[attr_name], param_name)
 
-                    d[attr] = param_value
-                info = EventInfoMes(**d)
-                return Message(com=MsgCom.HEARTBEAT, type=MsgType.INFO, info=info, sender_id=self.id)
+                    param_values[attr] = param_value
+                info = msg_str.info_class(**param_values)
 
-        else:
-            return None
+                if 'receiver_id' in parameters:
+                    receiver_id = parameters['receiver_id']
+                else:
+                    receiver_id = ''
+
+                if 'reply_to' in parameters:
+                    reply_to = parameters['reply_to']
+                else:
+                    reply_to = ''
+
+                return Message(com=msg_str.name, crypted=msg_str.crypted, info=info, receiver_id=receiver_id,
+                               reply_to=reply_to, sender_id=self.id, type=msg_str.type.value)
 
     def execute_com(self, msg: Message):
         error = False
@@ -274,6 +288,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_paused = True
         self.send_status_pyqt()
 
+    @property
+    def public_sockets(self):
+        return self.messenger.public_sockets
+
     def unpause(self):
         self.messenger.unpause()
         self.thinker.unpause()
@@ -298,7 +316,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
-        stop_msg = self.generate_msg(msg_com=MsgCom.SHUTDOWN, parameters={'reason': 'normal_shutdown'})
+        stop_msg = self.generate_msg(msg_com=MsgCommon.SHUTDOWN, parameters={'reason': 'normal_shutdown'})
         self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()
@@ -336,7 +354,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 
 class Server(Device):
-    AVAILABLE_SERVICES = CmdStruct('available_services', FuncAvailableServicesInput, FuncAvailableServicesOutput)
+    # TODO: refactor
+    GET_AVAILABLE_SERVICES = CmdStruct('get_available_services', FuncAvailableServicesInput, FuncAvailableServicesOutput)
     MAKE_CONNECTION = CmdStruct('make_connection', None, None)
 
     def __init__(self, **kwargs):
@@ -354,14 +373,13 @@ class Server(Device):
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
     @property
-    def services_running(self) -> Dict[str, str]:
-        """Returns dict of running services {device_id: name}"""
-        services_running = {}
+    def available_services(self) -> Dict[DeviceId, str]:
+        available_services = {}
         for device_id, connection in self.connections.items():
             info = connection.device_info
-            if info.type == 'service':
-                services_running[device_id] = info.name
-        return services_running
+            if info.type is DeviceType.SERVICE:
+                available_services[device_id] = info.name
+        return available_services
 
     @property
     def clients_running(self) -> Dict[str, str]:
@@ -369,7 +387,7 @@ class Server(Device):
         clients_running = {}
         for device_id, connection in self.connections.items():
             info = connection.device_info
-            if info.type == 'client':
+            if info.type is DeviceType.CLIENT:
                 clients_running[device_id] = info.name
         return clients_running
 
@@ -377,12 +395,13 @@ class Server(Device):
         """Server is always active"""
         self.logger.info("""Server is always active""")
 
-    def available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
-        return FuncAvailableServicesOutput(comments='', func_success=True,  running_services=self.services_running,
-                                           all_services={})
+    def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
+        """Returns dict of avaiable services {DeviceID: name}"""
+        return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.id,
+                                           device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return (Server.AVAILABLE_SERVICES, Server.MAKE_CONNECTION)
+        return (Server.GET_AVAILABLE_SERVICES, Server.MAKE_CONNECTION)
 
     def description(self) -> Dict[str, Any]:
         # TODO: realize
@@ -423,6 +442,10 @@ class Client(Device):
         super().__init__(**kwargs)
         self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
+
+    @property
+    def available_services(self) -> Dict[DeviceId, str]:
+        pass
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return ()
@@ -473,6 +496,10 @@ class Service(Device):
         self.type = 'service'
         super().__init__(**kwargs)
         self.server_id: DeviceId = self.get_settings('General')['server_id']
+
+    @property
+    def available_services(self) -> Dict[DeviceId, str]:
+        pass
 
     @abstractmethod
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
@@ -537,6 +564,7 @@ class Service(Device):
 
 
 class DeviceFactory:
+    # TODO: do refactoring with DeviceType and DeviceId, etc.
     @staticmethod
     def make_device(**kwargs):  #TODO: redifine kwargs
         if 'cls' in kwargs:

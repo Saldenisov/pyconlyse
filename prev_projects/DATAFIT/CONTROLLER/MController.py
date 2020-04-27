@@ -41,7 +41,7 @@ class MController():
                    file_path not in self.model.files:
                     self.model.add_file(file_path)
         except:
-            self.logger.error('Error in picking files from Tree')
+            self.logger.error('MsgError in picking files from Tree')
 
     def delete_clicked(self):
         listItems = self.view.ui.list_Files.selectedItems()

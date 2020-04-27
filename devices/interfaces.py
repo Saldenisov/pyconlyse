@@ -1,6 +1,9 @@
 from abc import ABC
 from enum import Enum
+from typing import NewType
 
+
+DeviceId = NewType('DeviceId', str)
 
 class DeviceType(str, Enum):
     """

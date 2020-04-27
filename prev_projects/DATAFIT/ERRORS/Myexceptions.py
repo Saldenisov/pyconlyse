@@ -17,7 +17,7 @@ class EmptyConfiguration(MyException):
 
 class FittingError(MyException):
     def __init__(self):
-        MyException.__init__(self, "Fitting Error")
+        MyException.__init__(self, "Fitting MsgError")
 
 
 class ValidationFailed(MyException):

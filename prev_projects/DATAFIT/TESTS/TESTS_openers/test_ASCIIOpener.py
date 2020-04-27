@@ -24,7 +24,7 @@ class TestASCIIOpener(unittest.TestCase):
 
     def test_errorinfile_ASCIIOpener(self):
         """
-        Error in file .->,
+        MsgError in file .->,
         """
         filepath = 'C:\\Users\\saldenisov\\Dropbox\\Python\\DATAFIT\\tests_files\\testASCII_error.txt'
         with self.assertRaises(ValueError):
