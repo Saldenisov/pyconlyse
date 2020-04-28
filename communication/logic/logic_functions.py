@@ -49,7 +49,7 @@ def internal_hb_logic(event: ThinkerEvent):
         if not event.paused:
             event.n += 1
             sleep(event.tick)
-            msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, parameters={'event': event})
+            msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, event=event)
             thinker.add_task_out(msg_heartbeat)
         else:
             sleep(0.05)

@@ -168,14 +168,6 @@ class Messenger(MessengerInter):
         return info
 
     @property
-    def public_sockets(self):
-        return self.public_sockets
-
-    @public_sockets.setter
-    def public_sockets(self, value):
-        self.public_sockets = value
-
-    @property
     def public_key(self):
         return self._public_key.public_bytes(encoding=serialization.Encoding.PEM,
                                              format=serialization.PublicFormat.SubjectPublicKeyInfo)

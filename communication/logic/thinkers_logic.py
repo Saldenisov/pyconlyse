@@ -45,8 +45,8 @@ class GeneralCmdLogic(Thinker):
                                     logic_func=external_hb_logic,
                                     original_owner=msg.info.device_id,
                                     start_now=True)
-                self.parent.connections[msg.info.device_id] = Connection(DeviceInfoMes(device_id=msg.info.device_id,
-                                                                                       messenger_id=msg.sender_id))
+                self.parent.connections[msg.info.device_id] = Connection(WelcomeInfoDevice(device_id=msg.info.device_id,
+                                                                                           messenger_id=msg.sender_id))
                 msg_i = MsgGenerator.hello(device=self.parent)
                 self.msg_out(True, msg_i)
             else:
@@ -123,7 +123,7 @@ class ServerCmdLogic(Thinker):
         else:
             if msg.com == MsgGenerator.HELLO.mes_name:
                 try:
-                    device_info: DeviceInfoMes = msg.info
+                    device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
                     if msg.info.type not in ('service', 'client'):
                         raise Exception(f'{self}:{device_info.type} is not known')

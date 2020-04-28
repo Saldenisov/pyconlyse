@@ -38,7 +38,7 @@ def f(obj: object) -> str:
 
 @dataclass(frozen=True, order=True)
 class AvailableServices:
-    device_available_services: Dict[DeviceId, str]
+    available_services: Dict[DeviceId, str]
 
 
 @dataclass(frozen=True, order=True)
@@ -72,27 +72,36 @@ class MessengerInfoMes:
 
 
 @dataclass(frozen=True, order=True)
-class EventInfoMes:
-    event_id: str
-    event_name: str
+class HeartBeat:
     event_n: int
     event_tick: float
     device_id: str
-    device_public_sockets: dict = field(default_factory=dict)
+    device_public_sockets: dict
+    device_public_key: bytes
 
 
 @dataclass(order=True)
-class DeviceInfoMes:
+class WelcomeInfoDevice:
+    """
+    Must be remembered that WelcomeInfoDevice.device_public_key must be crypted with Server public key and will be
+    decrypted on Server side by Server private key, a only after that session_key will be created and used between
+    Server and Device communication.
+    """
     device_id: str
-    name: str
-    type: DeviceType
+    device_name: str
+    device_type: DeviceType
     device_status: DeviceStatus
-    public_key: bytes = b''
-    public_sockets: dict = field(default_factory=dict)
+    device_public_key: bytes
+    device_public_sockets: dict
 
 
 @dataclass(order=True)
 class WelcomeInfoServer:
+    """
+    Must be remembered that WelcomeInfoServer must be crypted with Device public key and will be decrypted on
+    Device side by Device private key, a only after that session_key will be used in communication between
+    Server and Device.
+    """
     device_id: str
     device_session_key: str
     device_name: str
@@ -142,7 +151,7 @@ class ServerInfoQueKeysMes:
 
 
 @dataclass(frozen=True, order=True)
-class ShutDownMes:
+class ShutDown:
     device_id: str
     reason: str = ""
 
@@ -205,25 +214,42 @@ class Test:
 
 # General structure of message
 from utilities.data.messaging.message_types import MsgType, MessageInfo
-
+import sys
 
 class MsgCommon(Enum):
     ALIVE = MessageInfo('alive', MsgType.DIRECTED, None, set(), True)
-    AVAILABLE_SERVICES = MessageInfo('available_services', MsgType.DIRECTED, AvailableServices, set(), True)
-    ERROR = MessageInfo('error', MsgType.DIRECTED, MsgError, set(['error']), True)
-    HEARTBEAT = MessageInfo('heartbeat', MsgType.BROADCASTED, EventInfoMes, set(['event']), False)
-    SHUTDOWN = MessageInfo('shutdown', MsgType.BROADCASTED, ShutDownMes, set(), False)
+    AVAILABLE_SERVICES = MessageInfo('available_services', MsgType.DIRECTED, AvailableServices,
+                                     set(['available_services']), True)
+    ERROR = MessageInfo('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), True)
+    HEARTBEAT = MessageInfo('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
+    SHUTDOWN = MessageInfo('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
     TEST_ONE = MessageInfo('test', MsgType.DIRECTED, Test, set(), False)
-    WELCOME_INFO = MessageInfo('welcome_info', MsgType.DIRECTED, WelcomeInfoServer, set(), False)
+    WELCOME_INFO_DEVICE = MessageInfo('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,
+                                      set(['reply_to', 'receiver_id']), False)
+    WELCOME_INFO_SERVER = MessageInfo('welcome_info_server', MsgType.DIRECTED, WelcomeInfoServer,
+                                      set(['reply_to', 'receiver_id']), False)
 
     @property
-    def com_name(self):
+    def msg_name(self):
         value: MessageInfo = self.value
         return value.name
+
+    @property
+    def msg_crypted(self):
+        value: MessageInfo = self.value
+        return value.crypted
+
+    @property
+    def msg_type(self):
+        value: MessageInfo = self.value
+        return value.type
 
 
 @dataclass(order=True)
 class Message(MessageInter):
+    """
+    !!! Better not to change order of the parameters  !!!
+    """
     com: str  # command name
     crypted: bool
     info: dataclass  # DataClass
@@ -238,7 +264,7 @@ class Message(MessageInter):
             object.__setattr__(self, 'id', unique_id())
 
     def short(self):
-        t = str(self.data.info)
+        t = str(self.info)
         l = len(t)
         if l > 300 and l < 1000:
             l = int(0.8*l)
@@ -308,9 +334,19 @@ class Message(MessageInter):
             return b''
 
     @staticmethod
-    def msgpack_bytes_to_msg(mes: bytes) -> MessageInter:
+
+    def msgpack_bytes_to_msg(mes_bytes: bytes) -> MessageInter:
         try:
-            pass
+            mes_unpacked = unpackb(mes_bytes)
+            info_class = eval(mes_unpacked[2])
+            mes_unpacked.pop(2)
+            info = info_class(**mes_unpacked[2])
+            mes_unpacked.pop(2)
+            mes_unpacked.insert(2, info)
+            parameters = {}
+            for param_name, param in zip(Message.__annotations__, mes_unpacked):
+                parameters[param_name] = param
+            return Message(**parameters)
         except Exception as e:
             raise MessageError(f'Error {e} in msgpack_bytes_to_msg')
 

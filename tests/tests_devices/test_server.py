@@ -11,9 +11,7 @@ def test_server(server: Server):
 
     assert server.device_status.active
     server.pause()
-    #Msg generation testing
-    msg = server.generate_msg(msg_com=MsgCommon.AVAILABLE_SERVICES, parameters={})
-    msg = server.generate_msg(msg_com=MsgCommon.ERROR, parameters={'error': Error('Yes')})
+
 
     server.stop()
 

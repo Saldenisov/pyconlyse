@@ -26,7 +26,7 @@ class MsgGenerator:
     #ARE_YOU_ALIVE_REPLY = mes.MessageInfo(REPLY, None, 'are_you_alive_reply')
     #DO_IT = mes.MessageInfo(DEMAND, mes.DoIt, 'do_it')
     #DONE_IT = mes.MessageInfo(REPLY, mes.DoneIt, 'done_it')
-    #HELLO = mes.MessageInfo(DEMAND, mes.DeviceInfoMes, 'hello')
+    #HELLO = mes.MessageInfo(DEMAND, mes.WelcomeInfoDevice, 'hello')
     #STATUS_SERVER_INFO = mes.MessageInfo(INFO, mes.ServerStatusMes, 'status_server_info')
     #STATUS_SERVER_INFO_FULL = mes.MessageInfo(INFO, mes.ServerStatusExtMes, 'status_server_info_full')
     #STATUS_SERVER_DEMAND = mes.MessageInfo(DEMAND, None, 'status_server_demand')

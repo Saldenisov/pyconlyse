@@ -185,50 +185,41 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         except (TypeError, SyntaxError):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
-    def generate_msg(self, msg_com: MsgCommon, parameters: Dict[str, Any]) -> Message:
+    def generate_msg(self, msg_com: MsgCommon, **kwargs) -> Message:
         if not isinstance(msg_com, MsgCommon):
             error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
             return None
         else:
-            msg_str: MessageInfo = msg_com.value
-            a = msg_str.must_have_param
-            b = set(parameters.keys())
-            if not a.issubset(b):
-                error_logger(self, self.generate_msg, f'Not all parameters {msg_str.must_have_param} were passed to '
-                                                      f'function {parameters}')
-                return None
+            message_info: MessageInfo = msg_com.value
+            if not message_info.must_have_param.issubset(set(kwargs.keys())):
+                error_logger(self, self.generate_msg, f'Not all required parameters are given '
+                                                      f'{message_info.must_have_param}, only {kwargs.keys()}')
             else:
-                param_values = {}
-                for attr in msg_str.info_class.__annotations__:
-                    param_name = attr.split('_')
-                    attr_name = param_name[0]
-                    if len(param_name) > 2:
-                        param_name = "_".join(param_name[1:])
-                    elif len(param_name) == 2:
-                        param_name = param_name[1]
-                    else:
-                        param_name = param_name[0]
+                if msg_com is MsgCommon.AVAILABLE_SERVICES:
+                    info = AvailableServices(available_services=kwargs['available_services'])
+                elif msg_com is MsgCommon.HEARTBEAT:
+                    event = kwargs['event']
+                    info = HeartBeat(event_n=event.n, event_tick=event.tick, device_id=self.id,
+                                     device_public_key=self.messenger.public_key,
+                                     device_public_sockets=self.messenger.public_sockets)
+                elif msg_com is MsgCommon.ERROR:
+                    info = MsgError(error_comments=kwargs['error_comments'])
+                elif msg_com is MsgCommon.SHUTDOWN:
+                    info = ShutDown(device_id=self.id, reason=kwargs['reason'])
 
-                    if attr_name == 'device':
-                        param_value = getattr(self, param_name)
-                    else:
-                        param_value = getattr(parameters[attr_name], param_name)
-
-                    param_values[attr] = param_value
-                info = msg_str.info_class(**param_values)
-
-                if 'receiver_id' in parameters:
-                    receiver_id = parameters['receiver_id']
-                else:
-                    receiver_id = ''
-
-                if 'reply_to' in parameters:
-                    reply_to = parameters['reply_to']
-                else:
+                if msg_com.msg_type is MsgType.BROADCASTED:
                     reply_to = ''
+                    receiver_id = ''
+                elif msg_com.msg_type is MsgType.DIRECTED:
+                    reply_to = kwargs['reply_to']
+                    receiver_id = kwargs['receiver_id']
 
-                return Message(com=msg_str.name, crypted=msg_str.crypted, info=info, receiver_id=receiver_id,
-                               reply_to=reply_to, sender_id=self.id, type=msg_str.type.value)
+                return Message(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info, receiver_id=receiver_id,
+                               reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
+
+
+
+
 
     def execute_com(self, msg: Message):
         error = False
@@ -316,7 +307,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
-        stop_msg = self.generate_msg(msg_com=MsgCommon.SHUTDOWN, parameters={'reason': 'normal_shutdown'})
+        stop_msg = self.generate_msg(msg_com=MsgCommon.SHUTDOWN, reason='normal_shutdown')
         self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()

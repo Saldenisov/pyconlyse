@@ -120,12 +120,7 @@ class Thinker(ThinkerInter):
                 for msg in msg_i:
                     self.msg_out(out, msg)
             elif isinstance(msg_i, Message):
-                if msg_i.type is MsgType.REPLY:
-                    info_msg(self, 'REPLY', extra=repr(msg_i.short()))
-                elif msg_i.type is MsgType.DEMAND:
-                    info_msg(self, 'DEMAND', extra=repr(msg_i.short()))
-                elif msg_i.type is MsgType.INFO:
-                    info_msg(self, 'INFO', extra=repr(msg_i.short()))
+                info_msg(self, 'INFO', extra=repr(msg_i.short()))
             else:
                 self.add_task_out(msg_i)
 

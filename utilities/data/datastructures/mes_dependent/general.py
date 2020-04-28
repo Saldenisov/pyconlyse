@@ -21,7 +21,7 @@ class AccessLevel(Enum):
 
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
-    device_info: mes.DeviceInfoMes = None
+    device_info: mes.WelcomeInfoDevice = None
     # TODO: I do not know if session_key should be here
     session_key: bytes = b''
     permission: ConnectionPermission = ConnectionPermission.DENIED
