@@ -208,13 +208,13 @@ from utilities.data.messaging.message_types import MsgType, MessageInfo
 
 
 class MsgCommon(Enum):
-    ARE_YOU_ALIVE_DEMAND = MessageInfo('are_you_alive_reply', MsgType.DEMAND, None, set(), True)
-    ARE_YOU_ALIVE_REPLY = MessageInfo('are_you_alive_reply', MsgType.REPLY, None, set(), True)
-    AVAILABLE_SERVICES = MessageInfo('available_services', MsgType.INFO, AvailableServices, set(), True)
-    ERROR = MessageInfo('error', MsgType.INFO, MsgError, set(['error']), True)
-    HEARTBEAT = MessageInfo('heartbeat', MsgType.INFO, EventInfoMes, set(['event']), False)
-    SHUTDOWN = MessageInfo('shutdown', MsgType.INFO, ShutDownMes, set(), False)
-    WELCOME_INFO = MessageInfo('welcome_info', MsgType.REPLY, WelcomeInfoServer, set(), False)
+    ALIVE = MessageInfo('alive', MsgType.DIRECTED, None, set(), True)
+    AVAILABLE_SERVICES = MessageInfo('available_services', MsgType.DIRECTED, AvailableServices, set(), True)
+    ERROR = MessageInfo('error', MsgType.DIRECTED, MsgError, set(['error']), True)
+    HEARTBEAT = MessageInfo('heartbeat', MsgType.BROADCASTED, EventInfoMes, set(['event']), False)
+    SHUTDOWN = MessageInfo('shutdown', MsgType.BROADCASTED, ShutDownMes, set(), False)
+    TEST_ONE = MessageInfo('test', MsgType.DIRECTED, Test, set(), False)
+    WELCOME_INFO = MessageInfo('welcome_info', MsgType.DIRECTED, WelcomeInfoServer, set(), False)
 
     @property
     def com_name(self):
@@ -230,7 +230,7 @@ class Message(MessageInter):
     receiver_id: str
     reply_to: str
     sender_id: str
-    type: str
+    type: MsgType
     id: str = ''
 
     def __post_init__(self):

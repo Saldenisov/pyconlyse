@@ -16,11 +16,10 @@ import zmq
 from devices.interfaces import DeviceId
 from devices.devices import Device
 from communication.interfaces import MessengerInter
-from communication.messaging.message_utils import MsgGenerator
 from errors.messaging_errors import MessengerError, MessageError
 from errors.myexceptions import WrongAddress, ThinkerError
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.messaging.messages import Message, MsgType
+from utilities.data.messaging.messages import Message, MsgType, MsgCommon
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
@@ -103,10 +102,14 @@ class Messenger(MessengerInter):
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId):
+    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None):
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
-            fernet = self.fernets[device_id]
+            if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
+                fernet = self.fernets[self.fernets.keys()[0]]  # at this moment there could be only one key for
+                # client and service messenger, since it is Dealer to Router connection for client/service to Server
+            else:
+                fernet = self.fernets[device_id]
             return fernet.decrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
@@ -114,7 +117,11 @@ class Messenger(MessengerInter):
     def encrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId):
         # TODO: add functionality to messenger.encrypt() when TLS is realized
         try:
-            fernet = self.fernets[device_id]
+            if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
+                fernet = self.fernets[self.fernets.keys()[0]]  # at this moment there could be only one key for
+                # client and service messenger, since it is Dealer to Router connection for client/service to Server
+            else:
+                fernet = self.fernets[device_id]
             return fernet.encrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
@@ -303,7 +310,7 @@ class ClientMessenger(Messenger):
     def info(self):
         return super().info()
 
-    def _recieves_msgs(self):
+    def _receive_msgs(self):
         msgs = []
         while self.active:
             try:
@@ -311,15 +318,15 @@ class ClientMessenger(Messenger):
                     sockets = dict(self.poller.poll(1))
                     if self.sockets['dealer'] in sockets:
                         msg, crypted = self.sockets['dealer'].recv_multipart()
-                        msgs.append((msg, crypted))
+                        msgs.append((msg, None, crypted))
                     if self.sockets['sub'] in sockets:
                         msg, crypted = self.sockets['sub'].recv_multipart()
-                        msgs.append((msg, crypted))
+                        msgs.append((msg, None, crypted))
                     if sockets:
-                        for msg, crypted in msgs:
+                        for msg, device_id, crypted in msgs:
                             try:
                                 if int(crypted):
-                                    msg = self.decrypt_with_session_key(msg)
+                                    msg = self.decrypt_with_session_key(msg, device_id)
                                 mes: Message = Message.msgpack_bytes_to_msg(msg)
                                 self.parent_thinker.add_task_in(mes)
                             except (MessengerError, MessageError, ThinkerError) as e:
@@ -332,13 +339,13 @@ class ClientMessenger(Messenger):
 
     def run(self):
         super().run()
-        self._wait_server_hb()
         try:
+            self._wait_server_hb()
             if self.active:
                 self.connect()
                 info_msg(self, 'STARTED')
-            self._recieves_msgs()
-        except zmq.error.ZMQError as e:  # Bad type of error
+            self._receive_msgs()
+        except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
             error_logger(self, self.run, e)
             self.stop()
         finally:
@@ -351,19 +358,19 @@ class ClientMessenger(Messenger):
     def send_msg(self, msg: Message):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
-            msg_json = msg.json_repr()
+            msg_bytes = msg.msgpack_repr()
             if msg.crypted:
-                msg_json = self.encrypt_with_session_key(msg_json)
-            if msg.body.type == MsgType.REPLY or msg.body.type == MsgType.DEMAND:
-                self.sockets['dealer'].send_multipart([msg_json, crypted])
+                msg_bytes = self.encrypt_with_session_key(msg_bytes)
+            if msg.type is MsgType.DIRECTED:
+                self.sockets['dealer'].send_multipart([msg_bytes, crypted])
                 self.logger.info(f'{msg.short()} is send from {self.parent.name}')
-            elif msg.body.type == MsgType.INFO:
+            elif msg.type is MsgType.BROADCASTED:
                 if self.pub_option:
-                    self.sockets['publisher'].send_multipart([msg_json, crypted])
+                    self.sockets['publisher'].send_multipart([msg_bytes, crypted])
                 else:
-                    self.logger.info('Publisher socket is not avaiable')
+                    self.logger.info(f'Publisher socket is not available for {self.name}.')
             else:
-                error_logger(self, self.send_msg, f'Wrong msg.body.type: {msg.type}')
+                error_logger(self, self.send_msg, f'Cannot handle msg type {msg.type}')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -394,18 +401,17 @@ class ClientMessenger(Messenger):
             sockets = dict(self.poller.poll(100))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
-                mes: Message = MsgGenerator.json_to_message(mes)
-                # first heartbeat in principle could be received only from server
-                if mes.data.com == MsgGenerator.HEARTBEAT.mes_name:
-                    sockets = mes.data.info.sockets
+                mes: Message = Message.msgpack_bytes_to_msg(mes)
+                # TODO: first heartbeat could be received only from server! make it safe
+                if mes.com == MsgCommon.HEARTBEAT.com_name:
+                    sockets = mes.info.sockets
                     if 'frontend' in sockets and 'backend' in sockets:
                         self.logger.info(mes)
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
-                        self.parent.server_msgn_id = mes.body.sender_id
                         wait = False
                     else:
-                        raise Exception(f'Not all sockets are sent to {self.name}')
+                        raise MessengerError(f'Not all sockets are sent to {self.name}')
 
 
 class ServiceMessenger(ClientMessenger):

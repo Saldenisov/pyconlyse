@@ -181,8 +181,6 @@ class ServerCmdLogic(Thinker):
 
         self.msg_out(reply, msg_i)
 
-
-
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:

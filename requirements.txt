@@ -4,6 +4,7 @@ cryptography
 gpiozero
 ifaddr
 matplotlib
+msgpack
 numpy
 PyQt5
 pytest-qt
