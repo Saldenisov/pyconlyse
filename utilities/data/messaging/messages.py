@@ -9,6 +9,7 @@ from typing import Any, NamedTuple, Dict
 from zlib import compress
 
 from communication.interfaces import MessageInter
+from errors.messaging_errors import MessageError
 from devices.interfaces import DeviceType, DeviceId
 from utilities.data.datastructures.mes_independent.devices_dataclass import DeviceStatus, FuncInput, FuncOutput
 from utilities.data.datastructures.mes_independent import Desription
@@ -286,6 +287,10 @@ class Message(MessageInter):
             return b''
 
     def msgpack_repr(self) -> bytes:
+        """
+        Considered to by better in performance and size compared to json representation
+        :return: string of bytes when success or b'' if error
+        """
         try:
             msg_l = []
             for name in self.__annotations__:
@@ -301,4 +306,20 @@ class Message(MessageInter):
         except ValueError as e:
             module_logger.error(e)
             return b''
+
+    @staticmethod
+    def msgpack_bytes_to_msg(mes: bytes) -> MessageInter:
+        try:
+            pass
+        except Exception as e:
+            raise MessageError(f'Error {e} in msgpack_bytes_to_msg')
+
+
+from base64 import b64decode
+from json import loads
+from zlib import decompress
+
+def msg_verification(msg: Message) -> bool:
+    # TODO: add functionality
+    return True
 

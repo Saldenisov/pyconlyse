@@ -5,9 +5,8 @@ from enum import Enum, auto
 
 
 class MsgType(str, Enum):
-    INFO = 'info'
-    DEMAND = 'demand'
-    REPLY = 'reply'
+    BROADCASTED = 'broadcasted'
+    DIRECTED = 'directed'
 
 
 class MessageInfo(NamedTuple):

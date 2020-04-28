@@ -11,6 +11,9 @@ class MessengerInter(ABC, Thread):
 
 
 class MessageInter(ABC):
+    """
+    Interface Class for Message
+    """
     pass
 
 

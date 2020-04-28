@@ -50,6 +50,10 @@ class WrongServiceGiven(Exception):
         super().__init__(f'Wrong service is passed: {text}')
 
 
+class ThinkerError(MyException):
+    def __init__(self, text):
+        super().__init__(f'{text}')
+
 class ThinkerErrorReact(MyException):
     def __init__(self, text):
         if text != '':

@@ -69,7 +69,8 @@ class Thinker(ThinkerInter):
             if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
                 self.tasks_in_test[msg.id] = msg
         except KeyError as e:
-            info_msg(self, self.add_task_in, e)
+            error_logger(self, self.add_task_in, e)
+            raise e
 
     def add_task_out(self, msg: Message):
         try:
@@ -79,7 +80,8 @@ class Thinker(ThinkerInter):
             if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
-            info_msg(self, self.add_task_out, e)
+            error_logger(self, self.add_task_out, e)
+            raise e
 
     def add_demand_pending(self, msg: Message):
         try:
