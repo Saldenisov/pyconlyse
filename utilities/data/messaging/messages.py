@@ -41,16 +41,6 @@ class AvailableServices:
     available_services: Dict[DeviceId, str]
 
 
-@dataclass(frozen=True, order=True)
-class AreYouAliveDemand:
-    context: str = ''
-
-
-@dataclass(frozen=True, order=True)
-class AreYouAliveReply:
-    context: str = ''
-    extra: object = None
-
 
 @dataclass(frozen=True, order=True)
 class DoIt:
@@ -64,20 +54,19 @@ class DoneIt:
     result: FuncOutput
 
 
-@dataclass(order=True)
-class MessengerInfoMes:
-    id: str = ''
-    public_key: str = ''
-    public_sockets: dict = field(default_factory=dict)
-
-
-@dataclass(frozen=True, order=True)
+@dataclass
 class HeartBeat:
-    event_n: int
-    event_tick: float
+    device_id: str
+    event_n: float
+
+
+@dataclass
+class HeartBeatFull:
     device_id: str
     device_public_sockets: dict
     device_public_key: bytes
+    event_n: int
+    event_tick: float
 
 
 @dataclass(order=True)
@@ -92,7 +81,7 @@ class WelcomeInfoDevice:
     device_type: DeviceType
     device_status: DeviceStatus
     device_public_key: bytes
-    device_public_sockets: dict
+    device_public_sockets: Dict[str, str]
 
 
 @dataclass(order=True)
@@ -102,11 +91,7 @@ class WelcomeInfoServer:
     Device side by Device private key, a only after that session_key will be used in communication between
     Server and Device.
     """
-    device_id: str
-    device_session_key: str
-    device_name: str
-    device_status: DeviceStatus
-    device_public_sockets: dict
+    device_session_key: bytes
 
 
 @dataclass(frozen=True, order=True)
@@ -214,7 +199,6 @@ class Test:
 
 # General structure of message
 from utilities.data.messaging.message_types import MsgType, MessageInfo
-import sys
 
 class MsgCommon(Enum):
     ALIVE = MessageInfo('alive', MsgType.DIRECTED, None, set(), True)
@@ -222,6 +206,7 @@ class MsgCommon(Enum):
                                      set(['available_services']), True)
     ERROR = MessageInfo('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), True)
     HEARTBEAT = MessageInfo('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
+    HEARTBEAT_FULL = MessageInfo('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfo('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
     TEST_ONE = MessageInfo('test', MsgType.DIRECTED, Test, set(), False)
     WELCOME_INFO_DEVICE = MessageInfo('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,

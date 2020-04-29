@@ -58,7 +58,7 @@ class ServerGUIController:
             com = x[0]
             rest = x[1:]
             if com == '-start_service':
-                p = str(path / 'bin' / 'service.py')
+                p = str(path / 'bin' / 'device_start.py')
                 exc = f'start cmd /K {pyexec} {p} {" ".join(rest)}'
                 os.system(exc)
             elif com == '-start':

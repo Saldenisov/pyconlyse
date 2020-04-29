@@ -33,7 +33,7 @@ def treat_com(com: str, commands: dict, messenger, logger, path):
             print('yes')
         elif com == '-start_service':
             pyexec = str(pathlib.Path(path.parent.parent / 'python_env\mypy37\Scripts' / 'python.exe'))
-            p = str(path / 'service.py')
+            p = str(path / 'device_start.py')
             exc = f'start cmd /K {pyexec} {p} {rest[0]} {rest[1]}'
             os.system(exc)
         elif com == '-quit':

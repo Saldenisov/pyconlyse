@@ -19,6 +19,9 @@ class GeneralCmdLogic(Thinker):
         self.register_event('heartbeat',  internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
 
+    def react_external(self, msg: Message):
+        pass
+
     def react_demand(self, msg: Message):
         reply = False
         msg_i = []
@@ -109,23 +112,24 @@ class ServerCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_external(self, msg: Message):
+
         if msg.receiver_id != self.parent.id:
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
                 self.logger.info(f'Msg: {msg.reply_to} reply is obtained and forwarded to initial demander')
             else:
-                msg_i = [self.parent.generate_msg(msg_com=MsgCommon.AVAILABLE_SERVICES,
-                                                  parameters={'receiver_id': msg.sender_id, 'reply_to': msg.id}),
+                msg_i = [self.parent.generate_msg(msg_com=MsgCommon.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
+                                                  reply_to=msg.id),
                          self.parent.generate_msg(msg_com=MsgCommon.ERROR,
-                                                  parameters={"comments": f'service {msg.receiver_id} is not available',
-                                                              'receiver_id': msg.sender_id, 'reply_to': msg.id})]
+                                                  comments=f'service {msg.receiver_id} is not available',
+                                                  receiver_id=msg.sender_id, reply_to=msg.id)]
 
         else:
-            if msg.com == MsgGenerator.HELLO.mes_name:
+            if msg.com == MsgCommon.WELCOME_INFO_DEVICE.mes_name:
                 try:
                     device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
-                    if msg.info.type not in ('service', 'client'):
+                    if msg.info.type not in DeviceType:
                         raise Exception(f'{self}:{device_info.type} is not known')
 
                     if device_info.device_id not in connections:

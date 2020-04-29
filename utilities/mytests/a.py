@@ -23,6 +23,5 @@ class A:
         self.b.append('c')
         print(self.b)
 
-print(MsgType['DEMAND'] not in MsgType)
-
-A().p()
+if MsgType.REPLY in MsgType:
+    print(1)

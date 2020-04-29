@@ -52,12 +52,12 @@ if __name__ == '__main__':
               {'C:\\':
                    {'dirs':
                         {'dev': {'dirs': {},
-                                 'files': ['service.py', 'test.py']}},
+                                 'files': ['device_start.py', 'test.py']}},
                     'files': []}},
           'files': []}
     v3 = {'dirs':
               {'C:\\': {'dirs': {},
-                        'files': ['service.py', 'test.py']}},
+                        'files': ['device_start.py', 'test.py']}},
 
           'files': []}
     window = ViewTree(v2)

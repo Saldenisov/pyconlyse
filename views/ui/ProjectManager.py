@@ -255,14 +255,14 @@ if __name__ == "__main__":
               {'C:\\':
                    {'dirs':
                         {'dev': {'dirs': {},
-                                 'files': ['service.py']}},
+                                 'files': ['device_start.py']}},
                     'files': []}},
           'files': []}
     value2 = {'dirs':
               {'dev':
                    {'dirs':
                         {'DATA': {'dirs': {},
-                                 'files': ['service.py']}},
+                                 'files': ['device_start.py']}},
                     'files': []}},
           'files': []}
     ui.update_file_tree(ui.treeWidget.invisibleRootItem(), value2)

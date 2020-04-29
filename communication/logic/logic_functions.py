@@ -1,7 +1,9 @@
 from time import sleep, time
 from threading import Thread
 from typing import Union, Callable
+
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
+from devices.interfaces import DeviceType
 from errors.myexceptions import ThinkerErrorReact
 from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
@@ -44,12 +46,19 @@ def external_hb_logic(event: ThinkerEvent):
 def internal_hb_logic(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
+    interchange = False
+    if device.type is DeviceType.SERVER:
+        interchange = True
     info_msg(event, 'STARTED', extra=f' of {thinker.name}')
     while event.active:
         if not event.paused:
             event.n += 1
             sleep(event.tick)
-            msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, event=event)
+            if interchange and event.n % 2:
+                msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT_FULL, event=event)
+            else:
+                msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, event=event)
+
             thinker.add_task_out(msg_heartbeat)
         else:
             sleep(0.05)

@@ -50,7 +50,7 @@ class SuperClientGUIcontroller():
             com = x[0]
             rest = x[1:]
             if com == '-start_service':
-                p = str(path / 'bin' / 'service.py')
+                p = str(path / 'bin' / 'device_start.py')
                 exc = f'start cmd /K {pyexec} {p} {rest[0]} {rest[1]}'
                 os.system(exc)
             elif com == '-start':

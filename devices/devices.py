@@ -186,10 +186,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
     def generate_msg(self, msg_com: MsgCommon, **kwargs) -> Message:
-        if not isinstance(msg_com, MsgCommon):
-            error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
-            return None
-        else:
+        def gen_msg(self, msg_com: MsgCommon, **kwargs) -> Message:
             message_info: MessageInfo = msg_com.value
             if not message_info.must_have_param.issubset(set(kwargs.keys())):
                 error_logger(self, self.generate_msg, f'Not all required parameters are given '
@@ -199,13 +196,23 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     info = AvailableServices(available_services=kwargs['available_services'])
                 elif msg_com is MsgCommon.HEARTBEAT:
                     event = kwargs['event']
-                    info = HeartBeat(event_n=event.n, event_tick=event.tick, device_id=self.id,
+                    info = HeartBeat(device_id=self.id, event_n=event.n)
+                elif msg_com is MsgCommon.HEARTBEAT_FULL:
+                    event = kwargs['event']
+                    info = HeartBeatFull(event_n=event.n, event_tick=event.tick, device_id=self.id,
                                      device_public_key=self.messenger.public_key,
                                      device_public_sockets=self.messenger.public_sockets)
                 elif msg_com is MsgCommon.ERROR:
                     info = MsgError(error_comments=kwargs['error_comments'])
                 elif msg_com is MsgCommon.SHUTDOWN:
                     info = ShutDown(device_id=self.id, reason=kwargs['reason'])
+                elif msg_com is MsgCommon.WELCOME_INFO_SERVER:
+                    try:
+                        session_key = self.messenger.fernets[kwargs['receiver_id']]
+                    except KeyError:
+                        session_key = b''
+                    finally:
+                        info = WelcomeInfoServer(device_session_key=session_key)
 
                 if msg_com.msg_type is MsgType.BROADCASTED:
                     reply_to = ''
@@ -216,10 +223,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
                 return Message(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info, receiver_id=receiver_id,
                                reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
-
-
-
-
+        if not isinstance(msg_com, MsgCommon):
+            error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
+            return None
+        else:
+            return gen_msg(self, msg_com, **kwargs)
 
     def execute_com(self, msg: Message):
         error = False
@@ -358,7 +366,7 @@ class Server(Device):
         if 'db_command' not in kwargs:
             kwargs['db_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
         self.services_available = {}
-        self.type = 'server'
+        self.type = DeviceType.SERVER
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
@@ -428,7 +436,7 @@ class Client(Device):
             raise Exception('Thinker cls was not passed to Device factory')
 
         kwargs['cls_parts'] = cls_parts
-        self.type = 'client'
+        self.type = DeviceType.CLIENT
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
         self.server_id = self.get_settings('General')['server_id']
@@ -484,7 +492,7 @@ class Service(Device):
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
 
-        self.type = 'service'
+        self.type = DeviceType.SERVICE
         super().__init__(**kwargs)
         self.server_id: DeviceId = self.get_settings('General')['server_id']
 
@@ -588,12 +596,18 @@ class DeviceFactory:
                     module_devices = import_module('devices.virtualdevices')
                 elif project_type == 'Service':
                     module_devices = import_module('devices.service_devices')
+                elif project_type == 'Server':
+                    module_devices = import_module('devices.servers')
                 else:
                     raise Exception(f'Project type: {project_type} is not known')
 
                 cls = getattr(module_devices, device_name)
                 device_name_split = device_name.split('_')[0]
-                thinker_class = getattr(module_comm_thinkers, f'{device_name_split}{project_type}CmdLogic')
+                if project_type != 'Server':
+                    thinker_class = getattr(module_comm_thinkers, f'{device_name_split}{project_type}CmdLogic')
+                else:
+                    thinker_class = getattr(module_comm_thinkers, f'{device_name_split}CmdLogic')
+
                 kwargs['name'] = device_name
                 kwargs['thinker_cls'] = thinker_class
                 kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
