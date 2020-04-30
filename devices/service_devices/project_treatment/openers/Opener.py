@@ -4,7 +4,7 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-from errors.myexceptions import NoSuchFileType
+from utilities.errors.myexceptions import NoSuchFileType
 
 import numpy as np
 from abc import abstractmethod

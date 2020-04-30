@@ -5,9 +5,6 @@ Created on 23 avr. 2015
 '''
 
 # import logging
-import os
-import numpy as np
-from errors.myexceptions import NoSuchFileType
 
 # module_logger = logging.getLogger(__name__)
 

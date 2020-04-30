@@ -4,7 +4,7 @@ from threading import Thread
 from time import time
 from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
-from errors.myexceptions import *
+from utilities.errors.myexceptions import *
 from utilities.data.messaging.messages import MessageExt, MsgComExt
 from datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply

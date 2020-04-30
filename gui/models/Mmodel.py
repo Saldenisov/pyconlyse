@@ -6,7 +6,7 @@ Created on 7 juin 2016
 import os
 
 from utilities import configurations
-from errors.myexceptions import ValidationFailed
+from utilities.errors.myexceptions import ValidationFailed
 
 
 import logging

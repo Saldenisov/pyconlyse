@@ -12,7 +12,7 @@ from utilities.data.messaging import Message
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from typing import Any, Dict
-from errors.myexceptions import MsgComNotKnown
+from utilities.errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
 

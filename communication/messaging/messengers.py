@@ -16,8 +16,8 @@ import zmq
 from devices.interfaces import DeviceId
 from devices.devices import Device
 from communication.interfaces import MessengerInter
-from errors.messaging_errors import MessengerError, MessageError
-from errors.myexceptions import WrongAddress, ThinkerError
+from utilities.errors import MessengerError, MessageError
+from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.data.messaging.messages import MessageExt, MsgType, MsgComExt
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port

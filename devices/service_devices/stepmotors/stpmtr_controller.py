@@ -2,10 +2,10 @@ from abc import abstractmethod
 from os import path
 from pathlib import Path
 from utilities.data.datastructures.mes_independent import CmdStruct
-from errors.myexceptions import DeviceError
+from utilities.errors.myexceptions import DeviceError
 from devices.devices import Service
 from typing import Union, Dict, List, Tuple, Any, Callable
-from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncErrorOutput, FuncActivateInput,
+from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput,
                                                                              FuncActivateOutput)
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, FuncActivateAxisInput,
                                                                             FuncActivateAxisOutput, FuncGetPosInput,

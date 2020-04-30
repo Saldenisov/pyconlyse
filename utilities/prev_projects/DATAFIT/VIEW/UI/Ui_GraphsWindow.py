@@ -1,17 +1,12 @@
 import matplotlib
 matplotlib.use("Qt5Agg")
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import (QSizePolicy, QTabWidget, QWidget, QGridLayout, QSplitter,
+from PyQt5.QtWidgets import (QGridLayout, QSplitter,
                              QGroupBox, QPushButton,
                              QComboBox, QListWidget,
                              QCheckBox)
 
-
-from matplotlib.widgets import Cursor, RectangleSelector
-
-
-from prev_projects.DATAFIT.VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
-from prev_projects.DATAFIT.VIEW import RangeSlider
+from utilities.prev_projects.DATAFIT.VIEW import RangeSlider
 
 
 class Ui_GraphsWindow(object):

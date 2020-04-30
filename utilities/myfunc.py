@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from errors.myexceptions import WrongInfoType
+from utilities.errors.myexceptions import WrongInfoType
 
 module_logger = logging.getLogger(__name__)
 

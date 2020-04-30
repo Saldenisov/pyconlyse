@@ -13,10 +13,10 @@ app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from devices.interfaces import DeviceId, DeviceType, DeviceInter
-from database.tools import db_create_connection, db_execute_select
+from utilities.database.tools import db_create_connection, db_execute_select
 from communication.messaging.message_utils import MsgGenerator
-from errors.messaging_errors import MessengerError
-from errors.myexceptions import DeviceError
+from utilities.errors import MessengerError
+from utilities.errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct

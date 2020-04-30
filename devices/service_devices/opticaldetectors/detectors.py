@@ -1,8 +1,7 @@
-from devices.device import Device
 import ctypes as ct
 import numpy as np
 from time import sleep
-from errors import myexceptions as myexc
+from utilities.errors import myexceptions as myexc
 from devices import OpticalDetector
 
 

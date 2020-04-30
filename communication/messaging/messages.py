@@ -8,7 +8,7 @@ from zlib import compress
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from errors.messaging_errors import MessageError
+from utilities.errors import MessageError
 
 from utilities.myfunc import unique_id
 

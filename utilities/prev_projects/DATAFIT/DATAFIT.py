@@ -15,7 +15,7 @@ ROOT = 'C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\tests_files'
 
 def main():
     initialize_logger(
-        'C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\LOG', "MAIN")
+        '/utilities/prev_projects\\DATAFIT\\LOG', "MAIN")
 
     app = QApplication(sys.argv)
 

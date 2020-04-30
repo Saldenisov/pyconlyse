@@ -4,13 +4,12 @@ Created on 06.08.2019
 @author: saldenisov
 """
 import logging
-from time import sleep
 from pathlib import Path
 from typing import Union
 from PyQt5.QtCore import QObject, pyqtSignal
 from utilities.data.messaging.messages import MessageInt, MessageExt
 from communication.interfaces import Message
-from errors.myexceptions import MsgComNotKnown, DeviceError
+from utilities.errors.myexceptions import MsgComNotKnown, DeviceError
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
 module_logger = logging.getLogger(__name__)
