@@ -3,11 +3,11 @@ from threading import Thread
 from typing import Callable
 
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
+from communication.messaging.messages import MessageExt, MsgType, MsgComInt, MsgComExt
 from devices.interfaces import DeviceType
-from utilities.errors.myexceptions import ThinkerErrorReact
 from datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.datastructures.mes_dependent.general import PendingReply
-from utilities.data.messaging.messages import MessageExt, MsgType, MsgComInt, MsgComExt
+from datastructures.mes_dependent.general import PendingReply
+from utilities.errors.myexceptions import ThinkerErrorReact
 from utilities.myfunc import info_msg, error_logger
 
 

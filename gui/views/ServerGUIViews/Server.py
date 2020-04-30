@@ -9,8 +9,8 @@ from typing import Union
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
-from utilities.data.messaging.messages import MsgComInt, MessageInt, MessageExt
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
+from communication.messaging.messages import MsgComInt, MessageInt, MessageExt
+from datastructures.mes_independent.devices_dataclass import *
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
 from gui.views.ui.ServerGUI_ui import Ui_ServerGUI
 
@@ -49,8 +49,8 @@ class ServerGUIView(QMainWindow):
         com = msg.com
         info = msg.info
         if com == MsgComInt.DEVICE_INFO_INT.msg_name:
-            info: DeviceInfoInt = info.device_status
-            if info.active:
+            info: DeviceInfoInt = info
+            if info.device_status.active:
                 text_widget = "Click to stop..."
                 color = 'background-color: green'
                 self.ui.pB_pause.setEnabled(True)
@@ -64,7 +64,7 @@ class ServerGUIView(QMainWindow):
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
 
-            if info.messaging_paused:
+            if info.device_status.messaging_paused:
                 text_widget = "click to unpause..."
                 color = 'background-color: yellow'
             else:
@@ -74,13 +74,13 @@ class ServerGUIView(QMainWindow):
             _translate = QtCore.QCoreApplication.translate
             widget.setText((_translate("ServerMainWindow", text_widget)))
             widget.setStyleSheet(color)
-            text_info = f'{info}'
+            text_info = f'{info.device_status}'
             self.ui.lE_serverinfo.setText(text_info)
 
             # setting info on running services, clients, events
             # TODO: Make if work
             self.ui.tE_services_running.setText(list_to_str_repr(info.active_connections))
-            self.ui.tE_events_running.setText(list_to_str_repr(list(info.events_running.keys())))
+            self.ui.tE_events_running.setText(list_to_str_repr(info.events_running))
         elif com == 'server_queues_tasks_keys':
             # TODO: change MsgGenerator naming
             self.ui.tE_queue_in.setText(list_to_str_repr(list(info.queue_in_keys)))

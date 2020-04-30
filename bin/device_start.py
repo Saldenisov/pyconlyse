@@ -14,7 +14,7 @@ from devices.devices import DeviceFactory
 
 def init(device_id: str, db_name: str):
     service = DeviceFactory.make_device(device_id=device_id,
-                                        db_path=Path(Path(app_folder) / 'database' / db_name))
+                                        db_path=Path(Path(app_folder) / 'utilities' / 'database' / db_name))
 
     service.start()
 

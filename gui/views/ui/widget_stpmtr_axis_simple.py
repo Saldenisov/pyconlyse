@@ -8,9 +8,9 @@
 
 
 from PyQt5 import QtCore, QtGui, QtWidgets
-from typing import Dict, Union
-from utilities.data.messaging import ServiceInfoMes
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
+from typing import Dict
+from datastructures.mes_independent.devices_dataclass import DeviceInfoExt
+from datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
 import logging
 
 
@@ -19,8 +19,8 @@ module_logger = logging.getLogger(__name__)
 
 class Ui_StpMtrGUI(object):
 
-    def setupUi(self, StpMtrGUI, parameters: ServiceInfoMes):
-        self.parameters: ServiceInfoMes = parameters
+    def setupUi(self, StpMtrGUI, parameters: DeviceInfoExt):
+        self.parameters: DeviceInfoExt = parameters
         StpMtrGUI.setObjectName("StpMtrGUI")
         StpMtrGUI.resize(431, 119)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)

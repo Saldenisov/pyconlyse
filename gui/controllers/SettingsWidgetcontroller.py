@@ -5,7 +5,7 @@ Created on 12 May 2017
 '''
 
 
-from gui.views.ExtraViews import SettingsView
+from gui.views.ExtraViews.Settings import SettingsView
 from re import split
 
 import logging

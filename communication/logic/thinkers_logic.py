@@ -2,10 +2,9 @@ import logging
 from time import time
 
 
-from communication.messaging.message_utils import MsgGenerator
 from communication.logic.thinker import Thinker, ThinkerEvent
-from utilities.data.datastructures.mes_dependent.general import Connection
-from utilities.data.messaging.messages import *
+from communication.messaging.messages import *
+from datastructures.mes_independent.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)

@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Union, Tuple
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
-from utilities.data.datastructures.mes_independent import Measurement
-from datastructures.mes_independent.measurments_dataclass import Hamamatsu
+from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
 
 
 @dataclass

@@ -10,14 +10,14 @@ from _functools import partial
 from PyQt5.QtWidgets import (QMainWindow)
 from PyQt5 import QtCore
 
-from utilities.myfunc import info_msg, get_local_ip
-from devices.devices import Device
-from utilities.data.messaging import Message, ServiceInfoMes, DoneIt, Error
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import *
+from communication.messaging.messages import Message
 from communication.messaging.message_utils import MsgGenerator
-from gui.views import Ui_StpMtrGUI
+from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent.stpmtr_dataclass import *
+from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
+from gui.views.ui import Ui_StpMtrGUI
+from utilities.myfunc import info_msg, get_local_ip
 
 
 module_logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ module_logger = logging.getLogger(__name__)
 
 class StepMotorsView(QMainWindow):
 
-    def __init__(self, in_controller, in_model, service_parameters: ServiceInfoMes, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
@@ -40,7 +40,7 @@ class StepMotorsView(QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.model = in_model
         self.device: Device = self.model.superuser
-        self.service_parameters: ServiceInfoMes = service_parameters
+        self.service_parameters: DeviceInfoExt = service_parameters
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, service_parameters)
@@ -127,7 +127,7 @@ class StepMotorsView(QMainWindow):
         try:
             if self.service_parameters.device_id in msg.body.sender_id:
                 com = msg.data.com
-                info: Union[DoneIt, Error] = msg.data.info
+                info: Union[DoneIt, MsgError] = msg.data.info
                 if com == MsgGenerator.DONE_IT.mes_name:
                     result: Union[FuncActivateOutput,
                                   FuncActivateAxisOutput,

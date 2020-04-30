@@ -213,7 +213,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                              available_public_functions=self.available_public_functions(),
                                              device_id=self.id,
                                              device_status=self.device_status, device_description=self.description(),
-                                             events_running=self.thinker.events.name_id.keys())
+                                             events_running=list(self.thinker.events.name_id.keys()))
                     elif msg_com is MsgComExt.SHUTDOWN:
                         info = ShutDown(device_id=self.id, reason=kwargs['reason'])
                     elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
@@ -570,7 +570,7 @@ class Service(Device):
 class DeviceFactory:
     # TODO: do refactoring with DeviceType and DeviceId, etc.
     @staticmethod
-    def make_device(**kwargs):  #TODO: redifine kwargs
+    def make_device(**kwargs):  #TODO: redefine kwargs
         if 'cls' in kwargs:
             cls: Device = kwargs['cls']
             if issubclass(cls, Device):

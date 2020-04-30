@@ -244,7 +244,7 @@ class Ui_ProjectManager(object):
         self.actionQuit.setText(_translate("ProjectManager", "Quit"))
 
 from typing import List, Union
-from utilities.data.datastructures.mes_independent.projects_dataclass import *
+from datastructures.mes_independent.projects_dataclass import *
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)

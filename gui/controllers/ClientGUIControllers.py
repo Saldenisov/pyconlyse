@@ -1,24 +1,21 @@
-'''
+"""
 Created on 15.11.2019
 
 @author: saldenisov
-'''
+"""
 
 import os
 import logging
 from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
-from communication.messaging.message_utils import MsgGenerator
-from utilities.myfunc import info_msg, get_local_ip
-from utilities.data.messaging import Message, ServiceInfoMes
-
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
-from utilities.data.datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
-                                                                              FuncGetProjectManagerControllerStateInput)
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput,
-                                                                            StpMtrDescription)
-from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
+from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
+                                                               FuncGetProjectManagerControllerStateInput)
+from datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
 from devices.devices import Device, Server
+from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
+from utilities.myfunc import info_msg, get_local_ip
 
 
 module_logger = logging.getLogger(__name__)
@@ -63,15 +60,15 @@ class SuperClientGUIcontroller():
     def create_service_gui(self):
         service_id = self.view.ui.lW_devices.currentItem().text()
         try:
-            parameters: ServiceInfoMes = self.model.service_parameters[service_id]
+            parameters: DeviceInfoExt = self.model.service_parameters[service_id]
             if isinstance(parameters.device_description, StpMtrDescription):
                 view = StepMotorsView
-                msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                msg = self.device.generate_msg(com='get_controller_state', device=self.device,
                                          device_id=service_id,
                                          input=FuncGetStpMtrControllerStateInput())
             elif isinstance(parameters.device_description, ProjectManagerDescription):
                 view = ProjectManagerView
-                msg = MsgGenerator.do_it(com='get_controller_state', device=self.device,
+                msg = self.device.generate_msg(com='get_controller_state', device=self.device,
                                          device_id=service_id,
                                          input=FuncGetProjectManagerControllerStateInput())
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
@@ -85,17 +82,17 @@ class SuperClientGUIcontroller():
         except Exception as e:
             print(f'in create_service_gui {e}')
 
-    def send_request_to_server(self, msg: Message):
+    def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
-        msg = MsgGenerator.info_service_demand(device=self.device, service_id=service_id)
+        msg = self.device.generate_msg(device=self.device, service_id=service_id)
         self.device.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
         #msg = MsgGenerator.available_services_demand(device=self.device)
-        msg = MsgGenerator.do_it(device=self.device, com=Server.AVAILABLE_SERVICES.name,
+        msg = self.device.generate_msg(device=self.device, com=Server.AVAILABLE_SERVICES.name,
                                  input=FuncAvailableServicesInput(), device_id=self.device.server_id)
         self.device.thinker.add_task_out(msg)
 

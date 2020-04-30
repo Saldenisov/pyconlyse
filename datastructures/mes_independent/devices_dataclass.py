@@ -96,6 +96,11 @@ class DeviceInfoInt:
 
 
 @dataclass(frozen=True, order=True)
+class DeviceInfoExt:
+    pass
+
+
+@dataclass(frozen=True, order=True)
 class ServerInfoQueKeysMes:
     queue_in_keys: deque = field(default_factory=deque)
     queue_out_keys: deque = field(default_factory=deque)

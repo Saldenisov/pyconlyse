@@ -1,18 +1,18 @@
-'''
+"""
 Created on 15.11.2019
 
 @author: saldenisov
-'''
+"""
 import logging
 
 from PyQt5.QtWidgets import QMainWindow
 from typing import Union
-from utilities.myfunc import info_msg,  get_local_ip
-from communication.messaging.message_utils import MsgGenerator
+
+from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from datastructures.mes_independent.devices_dataclass import *
 from devices.devices import Server
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from gui.views.ui.SuperUser_ui import Ui_SuperUser
-from utilities.data.messaging import Message, DoneIt, Error
+from utilities.myfunc import info_msg,  get_local_ip
 
 module_logger = logging.getLogger(__name__)
 
@@ -43,10 +43,10 @@ class SuperUserView(QMainWindow):
         self.logger.info('Closing')
         self.controller.quit_clicked(event, total_close=True)
 
-    def model_is_changed(self, msg: Message):
+    def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
         com = msg.data.com
         info = msg.data.info
-        if com == MsgGenerator.HEARTBEAT.mes_name:
+        if com == MsgComExt.HEARTBEAT.msg_name:
             widget1 = self.ui.rB_hb
             widget2 = self.ui.rB_hb2
             widget1v = widget1.isChecked()
@@ -54,8 +54,8 @@ class SuperUserView(QMainWindow):
                 widget2.setChecked(True)
             else:
                 widget1.setChecked(True)
-        elif com == MsgGenerator.DONE_IT.mes_name:
-            info: Union[DoneIt, Error] = info
+        elif com == MsgComExt.DONE_IT.mes_name:
+            info: Union[DoneIt, MsgError] = info
             if info.com == Server.AVAILABLE_SERVICES.name:
                 result: FuncAvailableServicesOutput = info.result
                 widget = self.ui.lW_devices
@@ -65,9 +65,9 @@ class SuperUserView(QMainWindow):
                     names.append(f'{key}')
                 widget.addItems(names)
                 self.model.superuser.running_services = result.running_services
-        elif com == MsgGenerator.INFO_SERVICE_REPLY.mes_name:
+        elif com == MsgComExt.INFO_SERVICE_REPLY.mes_name:
             self.ui.tE_info.setText(str(info))
             self.model.service_parameters[info.device_id] = info
-        elif com == MsgGenerator.ERROR.mes_name:
+        elif com == MsgComExt.ERROR.mes_name:
             self.ui.tE_info.setText(info.comments)
 

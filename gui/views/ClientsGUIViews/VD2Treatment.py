@@ -1,16 +1,16 @@
-'''
+"""
 Created on 01.04.2020
 
 @author: saldenisov
-'''
+"""
 import logging
 from _functools import partial
 
 from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
-from utilities.myfunc import info_msg
 from datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
-from gui.views import Ui_GraphVD2Window
+from gui.views.ui import Ui_GraphVD2Window
+from utilities.myfunc import info_msg
 
 module_logger = logging.getLogger(__name__)
 

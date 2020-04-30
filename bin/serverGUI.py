@@ -15,8 +15,6 @@ from gui.controllers import ServerGUIController
 from logs_pack import initialize_logger
 
 
-
-
 def main():
     logger = initialize_logger(app_folder / 'LOG', file_name="ServerGUI")
     logger.info('Starting Server GUI...')

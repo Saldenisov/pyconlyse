@@ -7,14 +7,13 @@ import logging
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from enum import Enum, auto
-from utilities.myfunc import info_msg, get_local_ip, paths_to_dict
+from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent.projects_dataclass import *
 from devices.devices import Device
-from utilities.data.messaging import Message, ServiceInfoMes, DoneIt, Error
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
-from utilities.data.datastructures.mes_independent.projects_dataclass import *
-from communication.messaging.message_utils import MsgGenerator
-from gui.views.ui.ProjectManager import Ui_ProjectManager
 from devices.service_devices.project_treatment import ProjectManager_controller
+from gui.views.ui.ProjectManager import Ui_ProjectManager
+from utilities.myfunc import info_msg, get_local_ip, paths_to_dict
 
 
 module_logger = logging.getLogger(__name__)
@@ -32,7 +31,7 @@ class Flags(Enum):
 
 class ProjectManagerView(QtWidgets.QMainWindow):
 
-    def __init__(self, in_controller, in_model, service_parameters: ServiceInfoMes, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
@@ -42,7 +41,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.model = in_model
         self.device: Device = self.model.superuser
-        self.service_parameters: ServiceInfoMes = service_parameters
+        self.service_parameters: DeviceInfoExt = service_parameters
 
         self.ui = Ui_ProjectManager()
         self.ui.setupUi(self)
@@ -60,28 +59,28 @@ class ProjectManagerView(QtWidgets.QMainWindow):
     def get_files(self):
         com = ProjectManager_controller.GET_FILES.name
         operator_email = self.ui.comboBox_operators.itemText(self.ui.comboBox_operators.currentIndex())
-        msg = MsgGenerator.do_it(device=self.device, com=com,
+        msg = self.device.generate_msg(device=self.device, com=com,
                                  device_id=self.service_parameters.device_id,
                                  input=ProjectManager_controller.GET_FILES.func_input(operator_email))
         self.device.send_msg_externally(msg)
 
     def get_projects(self):
         com = ProjectManager_controller.GET_PROJECTS.name
-        msg = MsgGenerator.do_it(device=self.device, com=com,
+        msg = self.device.generate_msg(device=self.device, com=com,
                                  device_id=self.service_parameters.device_id,
                                  input=ProjectManager_controller.GET_PROJECTS.func_input())
         self.device.send_msg_externally(msg)
 
     def get_operators(self):
         com = ProjectManager_controller.GET_OPERATORS.name
-        msg = MsgGenerator.do_it(device=self.device, com=com,
+        msg = self.device.generate_msg(device=self.device, com=com,
                                  device_id=self.service_parameters.device_id,
                                  input=ProjectManager_controller.GET_OPERATORS.func_input())
         self.device.send_msg_externally(msg)
 
     def get_state(self):
         com = ProjectManager_controller.GET_CONTROLLER_STATE.name
-        msg = MsgGenerator.do_it(device=self.device, com=com,
+        msg = self.device.generate_msg(device=self.device, com=com,
                                  device_id=self.service_parameters.device_id,
                                  input=ProjectManager_controller.GET_CONTROLLER_STATE.func_input())
         self.device.send_msg_externally(msg)
@@ -121,17 +120,17 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         if '~ID~' in name:
             file_id = name.split('~ID~')[1].split('.')[0]
             com = ProjectManager_controller.GET_FILE_DESCRIPTION.name
-            msg = MsgGenerator.do_it(device=self.device, com=com,
+            msg = self.device.generate_msg(device=self.device, com=com,
                                      device_id=self.service_parameters.device_id,
                                      input=FuncGetFileDescriptionInput(file_id=file_id))
             self.device.send_msg_externally(msg)
 
-    def model_is_changed(self, msg: Message):
+    def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
         try:
             if self.service_parameters.device_id in msg.body.sender_id:
                 com = msg.data.com
-                info: Union[DoneIt, Error] = msg.data.info
-                if com == MsgGenerator.DONE_IT.mes_name:
+                info: Union[DoneIt, MsgError] = msg.data.info
+                if com == MsgComExt.DONE_IT.mes_name:
                     result: Union[FuncGetFilesOutput, FuncGetFileDescriptionOutput] = info.result
                     self.ui.comments.setText(result.comments)
                     if result.func_success:
@@ -148,7 +147,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
                         else:
                             flag = Flags.DEFAULT
                         self.update_state(result, flag)
-                elif com == MsgGenerator.ERROR.mes_name:
+                elif com == MsgComExt.ERROR.mes_name:
                     self.ui.comments.setText(info.comments)
 
         except Exception as e:

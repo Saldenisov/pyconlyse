@@ -7,7 +7,7 @@ import logging
 from pathlib import Path
 from typing import Union
 from PyQt5.QtCore import QObject, pyqtSignal
-from utilities.data.messaging.messages import MessageInt, MessageExt
+from communication.messaging.messages import MessageInt, MessageExt
 from communication.interfaces import Message
 from utilities.errors.myexceptions import MsgComNotKnown, DeviceError
 from utilities.myfunc import info_msg, error_logger, get_local_ip
@@ -25,7 +25,7 @@ class ServerGUIModel(QObject):
         self.app_folder = app_folder
         self.observers = []
         self.logger = module_logger
-        self.db_path = Path(app_folder / 'database' / 'Devices.db')
+        self.db_path = Path(app_folder / 'utilities' / 'database' / 'Devices.db')
         info_msg(self, 'INITIALIZING')
         self.server = None
         info_msg(self, 'INITIALIZED')

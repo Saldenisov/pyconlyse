@@ -5,9 +5,9 @@ from time import time
 from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from utilities.errors.myexceptions import *
-from utilities.data.messaging.messages import MessageExt, MsgComExt
+from communication.messaging.messages import MessageExt, MsgComExt
 from datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
-from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
+from datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.myfunc import info_msg, error_logger, unique_id
 
 module_logger = logging.getLogger(__name__)

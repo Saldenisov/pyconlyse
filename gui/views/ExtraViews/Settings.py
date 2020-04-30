@@ -1,8 +1,8 @@
-'''
+"""
 Created on 12 May 2017
 
 @author: Sergey Denisov
-'''
+"""
 
 from PyQt5.Qt import  QWidget,QLineEdit, QSignalMapper
 

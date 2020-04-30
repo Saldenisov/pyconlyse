@@ -1,27 +1,27 @@
-'''
+"""
 Created on 17.11.2019
 
 @author: saldenisov
-'''
+"""
 import logging
 import numpy as np
 from datetime import datetime
 from pathlib import Path
+from typing import Any, Dict, Union
 from PyQt5.QtCore import QObject, pyqtSignal
-from utilities.data.messaging import Message
-from utilities.myfunc import info_msg, error_logger, get_local_ip
+from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
-from typing import Any, Dict
-from utilities.errors.myexceptions import MsgComNotKnown
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
+from utilities.errors.myexceptions import MsgComNotKnown
+from utilities.myfunc import info_msg, error_logger, get_local_ip
 
 module_logger = logging.getLogger(__name__)
 
 
 class SuperUserGUIModel(QObject):
 
-    model_changed = pyqtSignal(Message, name='SuperUser_model_changed')
+    model_changed = pyqtSignal(MessageInt, name='SuperUser_model_changed')
 
     def __init__(self, app_folder: Path):
         super().__init__(parent=None)
@@ -45,13 +45,13 @@ class SuperUserGUIModel(QObject):
     def remove_observer(self, inObserver):
         self.observers.remove(inObserver)
 
-    def treat_pyqtsignals(self, msg: Message):
+    def treat_pyqtsignals(self, msg: Union[MessageInt, MessageExt]):
         self.model_changed.emit(msg)
 
 
 class StepMotorsGUIModel(QObject):
 
-    model_changed = pyqtSignal(Message, name='StepMotorsGUI_model_changed')
+    model_changed = pyqtSignal(MessageInt, name='StepMotorsGUI_model_changed')
 
     def __init__(self, parameters: dict = {}):
         super().__init__(parent=None)
@@ -61,7 +61,7 @@ class StepMotorsGUIModel(QObject):
         self.parameters = parameters
         info_msg(self, 'INITIALIZED')
 
-    def treat_pyqtsignals(self, msg: Message):
+    def treat_pyqtsignals(self, msg: Union[MessageInt, MessageExt]):
         try:
             self.model_changed.emit(msg)
         except MsgComNotKnown as e:
