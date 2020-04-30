@@ -5,16 +5,13 @@ Created on 17 avr. 2015
 @author: saldenisov
 '''
 
-import struct
 import numpy as np
-import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Union, Tuple
+from typing import Union, Tuple
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
-from errors.myexceptions import NoSuchFileType
 from utilities.data.datastructures.mes_independent import Measurement
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Hamamatsu
+from datastructures.mes_independent.measurments_dataclass import Hamamatsu
 
 
 @dataclass
@@ -48,7 +45,7 @@ class HamamatsuFileOpener(Opener):
                 pos += 64
                 comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
                 #TODO: need to find where ends real header with text
-                #TODO: need to understand what are the comments, how do they relate to data
+                #TODO: need to understand what are the comments, how do they relate to datastructures
                 header = file.read(4610).decode(encoding='utf-8')
                 pos += comments_length
             file_type = self.get_img_type(header)
@@ -89,7 +86,6 @@ class HamamatsuFileOpener(Opener):
             raise
 
     def read_map(self, filepath: Path, map_index=0) -> Union[Hamamatsu, Tuple[bool, str]]:
-        from datetime import datetime
         res = True
         if filepath not in self.paths:
             res, comments = self.fill_critical_info(filepath)

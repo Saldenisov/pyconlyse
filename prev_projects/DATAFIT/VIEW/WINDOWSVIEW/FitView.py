@@ -7,7 +7,7 @@ from prev_projects.DATAFIT.VIEW.UI import Ui_FitWindow
 
 class FitView(QMainWindow, FitObserver, metaclass=Meta):
     """
-    Represents graphical view of experimental data fit.
+    Represents graphical view of experimental datastructures fit.
     """
 
     def __init__(self, inController, parent=None):

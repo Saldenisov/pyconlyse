@@ -28,7 +28,7 @@ def treat_com(com: str, commands: dict, messenger, logger, path):
                 print(e)
         elif com == '-stop_server':
             msg = MessageOld(message_type='demand', from_=messenger.id, to_='Server_messenger')
-            msg['data']['com'] = 'stop_server'
+            msg['datastructures']['com'] = 'stop_server'
             messenger.add_task_out()
             print('yes')
         elif com == '-start_service':

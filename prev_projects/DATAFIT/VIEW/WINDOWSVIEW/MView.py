@@ -10,7 +10,7 @@ from _functools import partial
 
 class MView(QMainWindow, MObserver, metaclass=Meta):
     """
-    Represents experimental data file selection.
+    Represents experimental datastructures file selection.
     """
 
     def __init__(self, inController, in_model, root, parent=None):

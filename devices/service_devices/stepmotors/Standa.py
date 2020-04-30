@@ -42,7 +42,7 @@ class StpMtrCtrl_Standa(StpMtrController):
 
 
         res, comments = self._form_devices_list()
-        # Check enumerated devices in accordance with database data
+        # Check enumerated devices in accordance with database datastructures
         if not res:
             pass
         # Open available devices, but keep software status set to 0

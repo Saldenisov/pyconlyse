@@ -13,8 +13,8 @@ app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(app_folder)
 
 from PyQt5.QtWidgets import QApplication
-from models.ClientGUIModels import SuperUserGUIModel
-from controllers.ClientGUIControllers import SuperClientGUIcontroller
+from gui.models import SuperUserGUIModel
+from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
 

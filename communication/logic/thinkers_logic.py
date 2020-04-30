@@ -19,10 +19,10 @@ class GeneralCmdLogic(Thinker):
         self.register_event('heartbeat',  internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
 
-    def react_external(self, msg: Message):
+    def react_external(self, msg: MessageExt):
         pass
 
-    def react_demand(self, msg: Message):
+    def react_demand(self, msg: MessageExt):
         reply = False
         msg_i = []
         if msg.com == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
@@ -36,8 +36,8 @@ class GeneralCmdLogic(Thinker):
 
         self.msg_out(reply, msg_i)
 
-    def react_info(self, msg: Message):
-        if msg.com == MsgCommon.HEARTBEAT.name:
+    def react_info(self, msg: MessageExt):
+        if msg.com == MsgComExt.HEARTBEAT.name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
             if msg.info.device_id not in self.parent.connections:
@@ -57,10 +57,10 @@ class GeneralCmdLogic(Thinker):
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = msg.info.n
 
-    def react_reply(self, msg: Message):
+    def react_reply(self, msg: MessageExt):
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
-        if msg.com == MsgCommon.WELCOME_INFO.mes_name:
+        if msg.com == MsgComExt.WELCOME_INFO.mes_name:
             if msg.info.device_id in self.parent.connections:
                 self.logger.info(f'Server {msg.info.device_id} is active. Handshake was undertaken')
                 connection: Connection = self.parent.connections[msg.info.device_id]
@@ -95,7 +95,7 @@ class GeneralCmdLogic(Thinker):
                         del self.parent.connections[event.original_owner]
                         self.unregister_event(event.id)
 
-    def react_unknown(self, msg: Message):
+    def react_unknown(self, msg: MessageExt):
         pass
 
 
@@ -111,21 +111,21 @@ class ServerCmdLogic(Thinker):
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_external(self, msg: Message):
+    def react_external(self, msg: MessageExt):
 
         if msg.receiver_id != self.parent.id:
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
                 self.logger.info(f'Msg: {msg.reply_to} reply is obtained and forwarded to initial demander')
             else:
-                msg_i = [self.parent.generate_msg(msg_com=MsgCommon.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
+                msg_i = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
                                                   reply_to=msg.id),
-                         self.parent.generate_msg(msg_com=MsgCommon.ERROR,
+                         self.parent.generate_msg(msg_com=MsgComExt.ERROR,
                                                   comments=f'service {msg.receiver_id} is not available',
                                                   receiver_id=msg.sender_id, reply_to=msg.id)]
 
         else:
-            if msg.com == MsgCommon.WELCOME_INFO_DEVICE.mes_name:
+            if msg.com == MsgComExt.WELCOME_INFO_DEVICE.mes_name:
                 try:
                     device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
@@ -172,13 +172,13 @@ class ServerCmdLogic(Thinker):
 
         # OLD INFO
         if msg.sender_id in self.parent.connections:
-            if msg.com == MsgCommon.HEARTBEAT.com_name:
+            if msg.com == MsgComExt.HEARTBEAT.com_name:
                 try:
                     self.events[msg.info.event_id].time = time()
                     self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
                     error_logger(self, self.react_info, e)
-            elif msg.com == MsgCommon.SHUTDOWN.com_name:  # When one of devices connected to server shutdowns
+            elif msg.com == MsgComExt.SHUTDOWN.com_name:  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(msg.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
@@ -192,7 +192,7 @@ class ServerCmdLogic(Thinker):
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt(com='status_server_info_full')
 
-    def react_unknown(self, msg: Message):
+    def react_unknown(self, msg: MessageExt):
         msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
         info_msg(self, 'REPLY', extra=repr(msg_i.short()))
         self.messenger.add_task_out(self.msg_i)
@@ -200,7 +200,7 @@ class ServerCmdLogic(Thinker):
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
 
-    def react_reply(self, msg: Message):
+    def react_reply(self, msg: MessageExt):
         super().react_reply(msg)
         if self.parent.pyqtsignal_connected:
             self.parent.signal.emit(msg)
@@ -208,7 +208,7 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 class ServiceCmdLogic(GeneralCmdLogic):
 
-    def react_demand(self, msg: Message):
+    def react_demand(self, msg: MessageExt):
         super().react_demand(msg)
         reply = False
         data = msg.data
@@ -225,7 +225,7 @@ class ServiceCmdLogic(GeneralCmdLogic):
             msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
         self.msg_out(reply, msg_i)
 
-    def react_reply(self, msg: Message):
+    def react_reply(self, msg: MessageExt):
         super().react_reply(msg)
         data = msg.data
         if data.com == MsgGenerator.POWER_ON_REPLY.mes_name:

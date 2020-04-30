@@ -7,7 +7,7 @@ from prev_projects.DATAFIT.VIEW.UI import Ui_GraphWindow
 
 class GraphView(QMainWindow, GraphObserver, metaclass=Meta):
     """
-    Represents graphical view of experimental data.
+    Represents graphical view of experimental datastructures.
     """
 
     def __init__(self, in_controller, in_parameters=None, parent=None):

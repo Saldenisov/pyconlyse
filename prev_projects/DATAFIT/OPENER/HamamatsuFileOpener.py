@@ -123,7 +123,7 @@ def hamamatsuopener(filepath):
         if int.from_bytes(settings_header[12:14], byteorder='little') == 1:
             bytes_per_point = 1
 
-        # Size of data in bytes
+        # Size of datastructures in bytes
         size_data_bytes = bytes_per_point * timedelays_length * wavelengths_length
 
         # Data byte array
@@ -157,7 +157,7 @@ def hamamatsuopener(filepath):
                                                file_type)
         except struct.error:
             raise RuntimeError('no wavelengths were read')
-        return {'data': _data,
+        return {'datastructures': _data,
                 'timedelays': timedelays,
                 'wavelengths': wavelengths}
 
@@ -167,7 +167,7 @@ def hamamatsuopener(filepath):
 #     Opener for '.img' format used by STREAK-cameras,
 #     developped by Hamamatsu Corporation.
 # 
-#     Takes *.img file opens it and extract data,
+#     Takes *.img file opens it and extract datastructures,
 #     timedelays, wavelengths as numpy arrays
 #     """
 # 
@@ -222,7 +222,7 @@ def hamamatsuopener(filepath):
 #             if int.from_bytes(settings_header[12:14], byteorder='little') == 1:
 #                 bytes_per_point = 1
 # 
-#             # Size of data in bytes
+#             # Size of datastructures in bytes
 #             size_data_bytes = bytes_per_point * timedelays_length * wavelengths_length
 # 
 #             # Data byte array
@@ -322,14 +322,14 @@ def hamamatsuopener(filepath):
 #         return scalingxscale, scalingxunit, scalingyscale, scalingyunit
 # 
 #     def get_essential_info(self):
-#         return {'data': self.data, 'timedelays': self.timedelays, 'wavelengths': self.wavelengths}
+#         return {'datastructures': self.datastructures, 'timedelays': self.timedelays, 'wavelengths': self.wavelengths}
 # 
 #     @property
 #     def filepath(self):
 #         return self.__filepath
 # 
 #     @property
-#     def data(self):
+#     def datastructures(self):
 #         return self.__data
 # 
 #     @property

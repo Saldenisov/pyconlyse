@@ -3,7 +3,7 @@ import numpy as np
 
 class DataCanvas(MyMplCanvas):
     """
-    Represents 2D data map using matplotlib imshow
+    Represents 2D datastructures map using matplotlib imshow
     """
     def __init__(self, *args, **kwargs):
         MyMplCanvas.__init__(self, *args, **kwargs)

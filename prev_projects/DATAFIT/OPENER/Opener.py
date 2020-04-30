@@ -15,7 +15,7 @@ module_looger = logging.getLogger(__name__)
 
 class Opener:
     '''
-    Opener is used to open data file depending file type
+    Opener is used to open datastructures file depending file type
     and collect Data as a numpy double array, time_array
     and wavelength_array as numpy arrays.
     *.IMG, Wavelength explicit format (*.dat, *.''), XY (*.txt, *.csv)
@@ -34,7 +34,7 @@ class Opener:
 
     def read_data(self, reader=None):
         """
-        Read file and updates self.data, self.wavelengths,
+        Read file and updates self.datastructures, self.wavelengths,
         self.timedelays
         """
         if not reader:
@@ -48,7 +48,7 @@ class Opener:
             self.logger.error(e)
             raise OpenerError
         else:
-            self.__data = file_opened['data']
+            self.__data = file_opened['datastructures']
             self.__timedelays = file_opened['timedelays']
             self.__wavelengths = file_opened['wavelengths']
             self.logger.info('Data were loaded: ' + self.filepath)

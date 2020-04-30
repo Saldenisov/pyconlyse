@@ -38,7 +38,7 @@ class TestASCIIOpener(unittest.TestCase):
         file_open = asciiopener(filepath)
         self.assertEqual(all(file_open['timedelays'] == [1, 2, 3, 4, 5]), True)
         self.assertEqual(all(file_open['wavelengths'] == [1, 2, 3, 4, 5]), True)
-        check = file_open['data'] == np.ones((5,5))
+        check = file_open['datastructures'] == np.ones((5,5))
         self.assertEqual(check.all(), True)
 
     def test_noexisting_ASCIIOpener(self):

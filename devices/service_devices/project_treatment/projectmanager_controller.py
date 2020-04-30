@@ -1,9 +1,8 @@
 """
 08/03/2020 DENISOV Sergey
-projectmanager_controller.py contains abstract services capable of treating experiments data:
+projectmanager_controller.py contains abstract services capable of treating experiments datastructures:
 open, analyze, transform
 """
-from enum import Flag, auto
 from datetime import datetime
 from itertools import chain, tee
 import hashlib
@@ -15,7 +14,7 @@ from devices.devices import Service
 from errors.myexceptions import DeviceError
 from utilities.myfunc import file_md5
 from utilities.data.datastructures.mes_independent import *
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
+from datastructures.mes_independent.measurments_dataclass import Measurement
 from utilities.data.datastructures.mes_independent.projects_dataclass import *
 
 
@@ -158,7 +157,7 @@ class ProjectManager_controller(Service):
             operators = res.operators
 
         COMMENTS = f'{COMMENTS}.{comments}'
-        # File' data info
+        # File' datastructures info
         res, comments = db_execute_select(conn, f"Select file_path from Files where file_id='{func_input.file_id}'")
         if res:
             file_path = Path(self.data_path.parents[0] / res)

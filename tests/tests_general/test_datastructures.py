@@ -1,4 +1,4 @@
-from utilities.data.datastructures.mes_dependent.dicts import Events_Dict
+from datastructures.mes_dependent.dicts import Events_Dict
 from communication.logic.thinker import ThinkerEvent
 
 

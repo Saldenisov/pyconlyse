@@ -2,7 +2,7 @@ import numpy as np
 
 def correct_cursors_pos(cursors, rows, columns):
     """
-    Correct cursors (pixels) so they do not become larger than data shape
+    Correct cursors (pixels) so they do not become larger than datastructures shape
     """
     if(cursors['x1'] < 0):
         cursors['x1'] = 0

@@ -11,9 +11,9 @@ module_logger = logging.getLogger(__name__)
 
 class GraphModel:
     """
-    Class GraphModel is model of data used for working with Graphs.
+    Class GraphModel is model of datastructures used for working with Graphs.
     Model contains method of registration, deleting, notification of observers
-    and methods managing these data.
+    and methods managing these datastructures.
     """
 
     def __init__(self,

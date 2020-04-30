@@ -71,8 +71,8 @@ class Ui_GraphsWindow(object):
 
     def canvas_settings(self):
         pass
-        #self.kineticscanvas = KineticsCanvas(self.main_widget, width=6, height=6, dpi=50, LP=None, data=self.All_Data[0], timedelay=self.All_Data[1], cursors=self.All_Data[5])
-        #self.spectracanvas = SpectrumCanvas(self.main_widget, width=6, height=6, dpi=50, LP=None, data=self.All_Data[0], wavelength=self.All_Data[2], cursors=self.All_Data[5])
+        #self.kineticscanvas = KineticsCanvas(self.main_widget, width=6, height=6, dpi=50, LP=None, datastructures=self.All_Data[0], timedelay=self.All_Data[1], cursors=self.All_Data[5])
+        #self.spectracanvas = SpectrumCanvas(self.main_widget, width=6, height=6, dpi=50, LP=None, datastructures=self.All_Data[0], wavelength=self.All_Data[2], cursors=self.All_Data[5])
 
     def retranslateUi(self, view):
         _translate = QtCore.QCoreApplication.translate

@@ -14,9 +14,9 @@ from ERRORS import NoSuchFileType
 
 def asciiopener(filepath):
     '''
-    Works as an opener for data files: '.csv' and (tab- and
+    Works as an opener for datastructures files: '.csv' and (tab- and
     ',' seperated) '.txt' files
-    Two columns data and multicolumn data used for TRABS representation
+    Two columns datastructures and multicolumn datastructures used for TRABS representation
     Wavelength(first column) vs Timedelay (first row) -->
     0    0    1    2    3    4    5    ...
     400    0    0    0    0    0
@@ -40,15 +40,15 @@ def asciiopener(filepath):
             except ValueError:
                 raise
 
-        # in case of two columns data: (X, Y)
+        # in case of two columns datastructures: (X, Y)
         if data.shape[1] == 2:
             timedelays = data[:, 0]
-            # adds wavelength array in order to present data as a map
+            # adds wavelength array in order to present datastructures as a map
             N = 100
             wavelengths = np.arange(400, 400 + N +1, dtype=float)
             _data = np.transpose(np.repeat([data[:, 1]], N + 1, 0))
 
-        # in case of matrix data representation (e.g. TRABS)
+        # in case of matrix datastructures representation (e.g. TRABS)
         if data.shape[1] > 5:
             timedelays = np.delete(data[0], 0)
             wavelengths = np.delete(data[:, 0], 0)
@@ -57,17 +57,17 @@ def asciiopener(filepath):
 
     except (FileNotFoundError, NoSuchFileType):
         raise
-    return {'data': _data,
+    return {'datastructures': _data,
             'timedelays': timedelays,
             'wavelengths': wavelengths}
 
 #===============================================================================
 # class ASCIIOpener(object):
 #     '''
-#     Works as an opener for data files: '.csv' and (tab- and
+#     Works as an opener for datastructures files: '.csv' and (tab- and
 #     ',' seperated) '.txt' files
 # 
-#     Two columns data and multicolumn data used for TRABS representation
+#     Two columns datastructures and multicolumn datastructures used for TRABS representation
 #     Wavelength(first column) vs Timedelay (first row) -->
 #     0    0    1    2    3    4    5    ...
 #     400    0    0    0    0    0
@@ -91,24 +91,24 @@ def asciiopener(filepath):
 # 
 #             try:
 #                 with open(self.filepath, encoding='utf-8') as file:
-#                     data = np.loadtxt(file)
+#                     datastructures = np.loadtxt(file)
 #             except ValueError:
 #                 # in case of ',' delimiter try this
 #                 with open(self.filepath, encoding='utf-8') as file:
-#                     data = np.loadtxt(file, delimiter=',')
+#                     datastructures = np.loadtxt(file, delimiter=',')
 # 
-#             # in case of two columns data: (X, Y)
-#             if data.shape[1] == 2:
-#                 self.__timedelays = data[:, 0]
-#                 # adds wavelength array in order to present data as a map
+#             # in case of two columns datastructures: (X, Y)
+#             if datastructures.shape[1] == 2:
+#                 self.__timedelays = datastructures[:, 0]
+#                 # adds wavelength array in order to present datastructures as a map
 #                 self.__wavelengths = np.arange(400, 501, dtype=float)
-#                 self.__data = np.repeat([data[:, 1]], 100, 0)
+#                 self.__data = np.repeat([datastructures[:, 1]], 100, 0)
 # 
-#             # in case of matrix data representation (e.g. TRABS)
-#             if data.shape[1] > 5:
-#                 self.__timedelays = np.delete(data[0], 0)
-#                 self.__wavelengths = np.delete(data[:, 0], 0)
-#                 self.__data = np.delete(np.delete(data, 0, axis=0), 0, axis=1)
+#             # in case of matrix datastructures representation (e.g. TRABS)
+#             if datastructures.shape[1] > 5:
+#                 self.__timedelays = np.delete(datastructures[0], 0)
+#                 self.__wavelengths = np.delete(datastructures[:, 0], 0)
+#                 self.__data = np.delete(np.delete(datastructures, 0, axis=0), 0, axis=1)
 # 
 #         except (FileNotFoundError, NoSuchFileType) as e:
 #             self.logger.error(e)
@@ -119,7 +119,7 @@ def asciiopener(filepath):
 #         return self.__filepath
 # 
 #     @property
-#     def data(self):
+#     def datastructures(self):
 #         return self.__data
 # 
 #     @property

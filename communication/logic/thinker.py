@@ -5,9 +5,8 @@ from time import time
 from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from errors.myexceptions import *
-from utilities.data.messaging.messages import Message, MsgCommon
-from utilities.data.messaging.message_types import MsgType
-from utilities.data.datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
+from utilities.data.messaging.messages import MessageExt, MsgComExt
+from datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
 from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.myfunc import info_msg, error_logger, unique_id
 
@@ -61,29 +60,29 @@ class Thinker(ThinkerInter):
             info_msg(self, 'NOT CREATED')
             raise ThinkerError(str(e))
 
-    def add_task_in(self, msg: Message):
+    def add_task_in(self, msg: MessageExt):
         try:
             if len(self._tasks_in) > 10000:
                 self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.name):
                 self.tasks_in_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_in, e)
             raise e
 
-    def add_task_out(self, msg: Message):
+    def add_task_out(self, msg: MessageExt):
         try:
             if len(self._tasks_out) > 10000:
                 self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgCommon.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.name):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
             raise e
 
-    def add_demand_pending(self, msg: Message):
+    def add_demand_pending(self, msg: MessageExt):
         try:
             if len(self._pending_demands) > 10000:
                 self._pending_demands.popitem()  # pop up first item
@@ -91,7 +90,7 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             info_msg(self, self.add_demand_pending, e)
 
-    def add_reply_pending(self, msg: Message):
+    def add_reply_pending(self, msg: MessageExt):
         try:
             if len(self._pending_replies) > 10000:
                 self._pending_replies.popitem()  # pop up first item
@@ -114,12 +113,12 @@ class Thinker(ThinkerInter):
         info['pending_replies'] = self.replies_pending_answer
         return info
 
-    def msg_out(self, out: bool, msg_i: Union[Message, List[Message]]):
+    def msg_out(self, out: bool, msg_i: Union[MessageExt, List[MessageExt]]):
         if out and msg_i:
             if isinstance(msg_i, list):
                 for msg in msg_i:
                     self.msg_out(out, msg)
-            elif isinstance(msg_i, Message):
+            elif isinstance(msg_i, MessageExt):
                 info_msg(self, 'INFO', extra=repr(msg_i.short()))
             else:
                 self.add_task_out(msg_i)
@@ -166,11 +165,11 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
-    def react_external(self, msg: Message):
+    def react_external(self, msg: MessageExt):
         pass
 
     @abstractmethod
-    def react_unknown(self, msg: Message):
+    def react_unknown(self, msg: MessageExt):
         pass
 
     def remove_device_from_connections(self, device_id):

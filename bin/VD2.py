@@ -10,8 +10,8 @@ from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from PyQt5.QtWidgets import QApplication
-from models.ClientGUIModels import VD2Treatment
-from controllers.ClientGUIControllers import VD2TreatmentController
+from gui.models import VD2Treatment
+from gui.controllers.ClientGUIControllers import VD2TreatmentController
 from logs_pack import initialize_logger
 
 

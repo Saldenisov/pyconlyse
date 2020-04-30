@@ -21,7 +21,7 @@ from utilities.configurations import configurationSD
 from utilities.data.datastructures.mes_independent.devices_dataclass import *
 from utilities.data.datastructures.mes_independent import CmdStruct
 from utilities.data.datastructures.mes_dependent.general import Connection
-from utilities.data.datastructures.mes_dependent.dicts import Connections_Dict
+from datastructures.mes_dependent.dicts import Connections_Dict
 from utilities.data.messaging.messages import *
 from utilities.myfunc import info_msg, unique_id, error_logger
 from logs_pack import initialize_logger
@@ -42,7 +42,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     """
     n_instance = 0
 
-    signal = pyqtSignal(Message)
+    signal = pyqtSignal(MessageInt)
 
     def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], parent: QObject = None,
                  db_command: str = '', logger_new=True, test=False, **kwargs):
@@ -115,6 +115,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         info_msg(self, 'CREATED')
 
+    def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
+        res = []
+        for device_id, connection in self.connections.items():
+            res.append((device_id, connection.device_info.device_name))
+        return res
+
     @property
     @abstractmethod
     def available_services(self) -> Dict[DeviceId, str]:
@@ -185,51 +191,66 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         except (TypeError, SyntaxError):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
-    def generate_msg(self, msg_com: MsgCommon, **kwargs) -> Message:
-        def gen_msg(self, msg_com: MsgCommon, **kwargs) -> Message:
-            message_info: MessageInfo = msg_com.value
-            if not message_info.must_have_param.issubset(set(kwargs.keys())):
-                error_logger(self, self.generate_msg, f'Not all required parameters are given '
-                                                      f'{message_info.must_have_param}, only {kwargs.keys()}')
-            else:
-                if msg_com is MsgCommon.AVAILABLE_SERVICES:
-                    info = AvailableServices(available_services=kwargs['available_services'])
-                elif msg_com is MsgCommon.HEARTBEAT:
-                    event = kwargs['event']
-                    info = HeartBeat(device_id=self.id, event_n=event.n)
-                elif msg_com is MsgCommon.HEARTBEAT_FULL:
-                    event = kwargs['event']
-                    info = HeartBeatFull(event_n=event.n, event_tick=event.tick, device_id=self.id,
-                                     device_public_key=self.messenger.public_key,
-                                     device_public_sockets=self.messenger.public_sockets)
-                elif msg_com is MsgCommon.ERROR:
-                    info = MsgError(error_comments=kwargs['error_comments'])
-                elif msg_com is MsgCommon.SHUTDOWN:
-                    info = ShutDown(device_id=self.id, reason=kwargs['reason'])
-                elif msg_com is MsgCommon.WELCOME_INFO_SERVER:
-                    try:
-                        session_key = self.messenger.fernets[kwargs['receiver_id']]
-                    except KeyError:
-                        session_key = b''
-                    finally:
-                        info = WelcomeInfoServer(device_session_key=session_key)
+    def generate_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
+        def gen_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
+            try:
+                message_info: MessageInfoExt = msg_com.value
+                if not message_info.must_have_param.issubset(set(kwargs.keys())):
+                    error_logger(self, self.generate_msg, f'Not all required parameters are given '
+                                                          f'{message_info.must_have_param}, only {kwargs.keys()}')
+                else:
+                    if msg_com is MsgComExt.AVAILABLE_SERVICES:
+                        info = AvailableServices(available_services=kwargs['available_services'])
+                    elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
+                        event = kwargs['event']
+                        info = HeartBeat(device_id=self.id, event_n=event.n)
+                    elif msg_com is MsgComExt.HEARTBEAT_FULL:
+                        event = kwargs['event']
+                        info = HeartBeatFull(event_n=event.n, event_tick=event.tick, device_id=self.id,
+                                             device_public_key=self.messenger.public_key,
+                                             device_public_sockets=self.messenger.public_sockets)
+                    elif msg_com is MsgComExt.ERROR:
+                        info = MsgError(error_comments=kwargs['error_comments'])
+                    elif msg_com is MsgComInt.DEVICE_INFO_INT:
+                        info = DeviceInfoInt(active_connections=self.active_connections(),
+                                             available_public_functions=self.available_public_functions(),
+                                             device_id=self.id,
+                                             device_status=self.device_status, device_description=self.description(),
+                                             events_running=self.thinker.events.name_id.keys())
+                    elif msg_com is MsgComExt.SHUTDOWN:
+                        info = ShutDown(device_id=self.id, reason=kwargs['reason'])
+                    elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
+                        try:
+                            session_key = self.messenger.fernets[kwargs['receiver_id']]
+                        except KeyError:
+                            session_key = b''
+                        finally:
+                            info = WelcomeInfoServer(session_key=session_key)
 
-                if msg_com.msg_type is MsgType.BROADCASTED:
-                    reply_to = ''
-                    receiver_id = ''
-                elif msg_com.msg_type is MsgType.DIRECTED:
-                    reply_to = kwargs['reply_to']
-                    receiver_id = kwargs['receiver_id']
+            except Exception as e:  # TODO: replace Exception, after all it is needed for development
+                error_logger(self, self.generate_msg, e)
+                raise e
+            finally:
+                if isinstance(msg_com, MsgComExt):
+                    if msg_com.msg_type is MsgType.BROADCASTED:
+                        reply_to = ''
+                        receiver_id = ''
+                    elif msg_com.msg_type is MsgType.DIRECTED:
+                        reply_to = kwargs['reply_to']
+                        receiver_id = kwargs['receiver_id']
 
-                return Message(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info, receiver_id=receiver_id,
-                               reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
-        if not isinstance(msg_com, MsgCommon):
+                    return MessageExt(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info,
+                                      receiver_id=receiver_id,
+                                      reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
+                else:
+                    return MessageInt(com=msg_com.msg_name, info=info)
+        if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
             error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
             return None
         else:
             return gen_msg(self, msg_com, **kwargs)
 
-    def execute_com(self, msg: Message):
+    def execute_com(self, msg: MessageExt):
         error = False
         info: DoIt = msg.data.info
         com: str = info.com
@@ -269,14 +290,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             if f:
                 flag = f(**specific)
 
-    def info(self) -> Dict[str, Union[DeviceStatus, Any]]:
-        from collections import OrderedDict as od
-        info = od()
-        info['device_status'] = self.device_status
-        info['messenger_status'] = self.messenger.info()
-        info['thinker_status'] = self.thinker.info()
-        return info
-
     @abstractmethod
     def messenger_settings(self):
         pass
@@ -315,7 +328,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
-        stop_msg = self.generate_msg(msg_com=MsgCommon.SHUTDOWN, reason='normal_shutdown')
+        stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, reason='normal_shutdown')
         self.thinker.msg_out(True, stop_msg)
         sleep(0.1)
         self.thinker.pause()
@@ -327,24 +340,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.device_status.messaging_on = False
         info_msg(self, 'STOPPED')
 
-    def send_status_pyqt(self, com=''):
-        # TODO: rewrite so it is unique for every type of device. make it @abstractmethod
-        if self.pyqtsignal_connected:
-            if com == 'status_server_info_full':
-                msg = MsgGenerator.status_server_info_full(device=self)
-            elif com == 'status_server_info':
-                msg = MsgGenerator.status_server_info(device=self)
-            elif com == 'status_client_info':
-                msg = MsgGenerator.status_client_info(device=self)
-            else:
-                self.logger.error(f'send_status_pyqt com {com} is not known')
-                msg = None
-            if msg:
-                self.signal.emit(msg)
-        else:
-            self.logger.info(f'pyqtsignal_connected is {self.pyqtsignal_connected}, the signal cannot be emitted')
+    @abstractmethod
+    def send_status_pyqt(self):
+        pass
 
-    def send_msg_externally(self, msg: Message):
+    def send_msg_externally(self, msg: MessageExt):
         self.messenger.add_msg_out(msg)
 
     def update_config(self, message: str):
@@ -358,16 +358,19 @@ class Server(Device):
     MAKE_CONNECTION = CmdStruct('make_connection', None, None)
 
     def __init__(self, **kwargs):
-        from communication.logic.thinkers_logic import ServerCmdLogic
         from communication.messaging.messengers import ServerMessenger
-        cls_parts = {'Thinker': ServerCmdLogic,
-                     'Messenger': ServerMessenger}
+
+        if 'thinker_cls' in kwargs:
+            cls_parts = {'Thinker': kwargs['thinker_cls'],
+                         'Messenger': ServerMessenger}
+        else:
+            raise Exception('Thinker cls was not passed to Device factory')
+
         kwargs['cls_parts'] = cls_parts
+
         if 'db_command' not in kwargs:
-            kwargs['db_command'] = "SELECT parameters from SERVER_settings where name = 'default'"
-        self.services_available = {}
+            raise Exception('DB_command_type is not determined')
         self.type = DeviceType.SERVER
-        # initialize_logger(app_folder / 'bin' / 'LOG', file_name="Server")
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
@@ -381,7 +384,7 @@ class Server(Device):
         return available_services
 
     @property
-    def clients_running(self) -> Dict[str, str]:
+    def available_clients(self) -> Dict[str, str]:
         """Returns dict of running clients {device_id: name}"""
         clients_running = {}
         for device_id, connection in self.connections.items():
@@ -402,9 +405,9 @@ class Server(Device):
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return (Server.GET_AVAILABLE_SERVICES, Server.MAKE_CONNECTION)
 
-    def description(self) -> Dict[str, Any]:
-        # TODO: realize
-        return {}
+    def description(self) -> Desription:
+        parameters = self.get_settings('Parameters')
+        return Desription(info=parameters['info'], GUI_title=parameters['title'])
 
     def messenger_settings(self):
         # FIXME:...
@@ -413,8 +416,13 @@ class Server(Device):
     def start(self):
         super().start()
 
-    def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_server_info_full')
+    def send_status_pyqt(self):
+        if self.pyqtsignal_connected:
+            msg = self.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT)
+            if msg:
+                self.signal.emit(msg)
+        else:
+            self.logger.info(f'pyqtsignal_connected is {self.pyqtsignal_connected}, the signal cannot be emitted')
 
     def set_default(self):
         pass
@@ -453,11 +461,11 @@ class Client(Device):
         """Server is always active"""
         self.logger.info("""Client is always active""")
 
-    def description(self) -> Dict[str, Any]:
+    def description(self) -> Desription:
         # TODO: add functionality
         pass
 
-    def execute_com(self, msg: Message):
+    def execute_com(self, msg: MessageExt):
         pass
 
     def messenger_settings(self):
@@ -467,8 +475,8 @@ class Client(Device):
     def start(self):
         super().start()
 
-    def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_client_info')
+    def send_status_pyqt(self):
+        pass
 
     def set_default(self):
         pass
@@ -525,7 +533,7 @@ class Service(Device):
         return self.device_status.connected, ''
 
     @abstractmethod
-    def description(self):
+    def description(self) -> Desription:
         pass
 
     @abstractmethod
@@ -540,8 +548,8 @@ class Service(Device):
                 a = e
                 print(e)
 
-    def send_status_pyqt(self, com=''):
-        super().send_status_pyqt(com='status_service_info')
+    def send_status_pyqt(self):
+        pass
 
     def set_default(self):
         pass

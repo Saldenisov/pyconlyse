@@ -4,16 +4,15 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-from errors.myexceptions import NoSuchFileType, OpenerError
+from errors.myexceptions import NoSuchFileType
 
-import logging
 import numpy as np
 from abc import abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Union, Tuple
-from utilities.data.datastructures.mes_independent.measurments_dataclass import Measurement
+from datastructures.mes_independent.measurments_dataclass import Measurement
 import logging
 module_logger = logging.getLogger(__name__)
 

@@ -10,9 +10,9 @@ module_logger = logging.getLogger(__name__)
 
 class MModel:
     """
-    Class MModel (Main Model) is upper level data model_str
+    Class MModel (Main Model) is upper level datastructures model_str
 
-    It operates with data files
+    It operates with datastructures files
     """
 
     def __init__(self, root='D:\\DATA',

@@ -1,13 +1,13 @@
 from time import sleep, time
 from threading import Thread
-from typing import Union, Callable
+from typing import Callable
 
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
 from devices.interfaces import DeviceType
 from errors.myexceptions import ThinkerErrorReact
-from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.datastructures.mes_dependent.general import PendingDemand, PendingReply
-from utilities.data.messaging.messages import Message, MsgType, MsgCommon
+from datastructures.mes_dependent.dicts import OrderedDictMod
+from utilities.data.datastructures.mes_dependent.general import PendingReply
+from utilities.data.messaging.messages import MessageExt, MsgType, MsgComInt, MsgComExt
 from utilities.myfunc import info_msg, error_logger
 
 
@@ -55,9 +55,13 @@ def internal_hb_logic(event: ThinkerEvent):
             event.n += 1
             sleep(event.tick)
             if interchange and event.n % 2:
-                msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT_FULL, event=event)
+                msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
             else:
-                msg_heartbeat = device.generate_msg(msg_com=MsgCommon.HEARTBEAT, event=event)
+                msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)
+
+            if device.pyqtsignal_connected:
+                msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
+                device.signal.emit(msg)
 
             thinker.add_task_out(msg_heartbeat)
         else:
@@ -87,7 +91,7 @@ def task_in_reaction(event: ThinkerEvent):
             sleep(event.tick)
             if tasks:
                 try:
-                    msg: Message = tasks.popitem()[1]
+                    msg: MessageExt = tasks.popitem()[1]
                     thinker.msg_counter += 1
 
                     if msg.type is MsgType.DEMAND:
@@ -121,7 +125,7 @@ def task_out_reaction(event: ThinkerEvent):
             sleep(event.tick)
             if tasks:
                 try:
-                    msg: Message = tasks.popitem()[1]
+                    msg: MessageExt = tasks.popitem()[1]
                     if msg.type == 'demand':
                         thinker.add_demand_pending(msg)
                     elif msg.type == 'reply':
@@ -207,7 +211,7 @@ def pending_replies(event: ThinkerEvent):
             sleep(0.05)
 
 
-def postponed_reaction(replier: Callable[[Message], None], reaction: Message, t: float=1.0, logger=None):
+def postponed_reaction(replier: Callable[[MessageExt], None], reaction: MessageExt, t: float=1.0, logger=None):
     def f():
         if logger:
             logger.info(f'Postponed_reaction for {reaction.short()} started')

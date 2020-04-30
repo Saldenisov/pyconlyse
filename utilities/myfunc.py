@@ -43,9 +43,9 @@ def file_md5(file_path: Path, buf_size=65536) -> str:
     return md5.hexdigest()
 
 
-def list_to_str_repr(l: list) -> str:
-    if l:
-        return "\n".join("{}".format(k) for k in l)
+def list_to_str_repr(list_values: list) -> str:
+    if list_values:
+        return "\n".join("{}".format(k) for k in list_values)
     else:
         return ""
 

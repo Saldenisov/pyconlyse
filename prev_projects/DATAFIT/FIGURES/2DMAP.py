@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy.interpolate
 
-# Generate data:
+# Generate datastructures:
 x, y, z = 10 * np.random.random((3, 10))
 
 # Set up a regular grid of interpolation points

@@ -10,7 +10,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from time import sleep
-from typing import Dict, Union, List
+from typing import Dict
 
 import zmq
 from devices.interfaces import DeviceId
@@ -18,8 +18,8 @@ from devices.devices import Device
 from communication.interfaces import MessengerInter
 from errors.messaging_errors import MessengerError, MessageError
 from errors.myexceptions import WrongAddress, ThinkerError
-from utilities.data.datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.messaging.messages import Message, MsgType, MsgCommon
+from datastructures.mes_dependent.dicts import OrderedDictMod
+from utilities.data.messaging.messages import MessageExt, MsgType, MsgComExt
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
@@ -81,7 +81,7 @@ class Messenger(MessengerInter):
             info_msg(self, 'NOT INITIALIZED')
             raise MessengerError(str(e))
 
-    def add_msg_out(self, msg: Message):
+    def add_msg_out(self, msg: MessageExt):
         try:
             if len(self._msg_out) > 100000:
                 self._msg_out.popitem(False)  # pop up last item
@@ -138,8 +138,8 @@ class Messenger(MessengerInter):
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
         self._public_key = self._private_key.public_key()
 
-    def heartbeat(self) -> Message:
-        return Message(com='heartbeat', type=MsgType.INFO, )
+    def heartbeat(self) -> MessageExt:
+        return MessageExt(com='heartbeat', type=MsgType.INFO, )
 
     @abstractmethod
     def info(self):
@@ -204,19 +204,19 @@ class Messenger(MessengerInter):
         self.unpause()
 
     @abstractmethod
-    def send_msg(self, msg: Message):
+    def send_msg(self, msg: MessageExt):
         pass
 
     @make_loop
     def _sendloop_logic(self, await_time):
         if len(self._msg_out) > 0:
-            msg: Message = self._msg_out.popitem(last=False)[1]
+            msg: MessageExt = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
     @make_loop
     def _sendloop_logic(self, await_time):
         if len(self._msg_out) > 0:
-            msg: Message = self._msg_out.popitem(last=False)[1]
+            msg: MessageExt = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
     def stop(self):
@@ -319,7 +319,7 @@ class ClientMessenger(Messenger):
                             try:
                                 if int(crypted):
                                     msg = self.decrypt_with_session_key(msg, device_id)
-                                mes: Message = Message.msgpack_bytes_to_msg(msg)
+                                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
                                 self.parent_thinker.add_task_in(mes)
                             except (MessengerError, MessageError, ThinkerError) as e:
                                 error_logger(self, self.run, str(e))
@@ -347,7 +347,7 @@ class ClientMessenger(Messenger):
             self.context.destroy()
             info_msg(self, 'STOPPED')
 
-    def send_msg(self, msg: Message):
+    def send_msg(self, msg: MessageExt):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = msg.msgpack_repr()
@@ -393,9 +393,9 @@ class ClientMessenger(Messenger):
             sockets = dict(self.poller.poll(100))
             if self.sockets['sub'] in sockets:
                 mes, crypted = self.sockets['sub'].recv_multipart()
-                mes: Message = Message.msgpack_bytes_to_msg(mes)
+                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(mes)
                 # TODO: first heartbeat could be received only from server! make it safe
-                if mes.com == MsgCommon.HEARTBEAT.com_name:
+                if mes.com == MsgComExt.HEARTBEAT.com_name:
                     sockets = mes.info.sockets
                     if 'frontend' in sockets and 'backend' in sockets:
                         self.logger.info(mes)
@@ -524,7 +524,7 @@ class ServerMessenger(Messenger):
                             try:
                                 if int(crypted):
                                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
-                                mes: Message = Message.msgpack_bytes_to_msg(msg)
+                                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
                                 self.parent_thinker.add_task_in(mes)
                             except (MessengerError, MessageError, ThinkerError) as e:
                                 error_logger(self, self.run, e)  # Black hole error for sender
@@ -536,7 +536,7 @@ class ServerMessenger(Messenger):
             else:
                 sleep(0.1)
 
-    def send_msg(self, msg: Message):
+    def send_msg(self, msg: MessageExt):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = msg.msgpack_repr()  # It gives smaller size compared to json representation
@@ -544,8 +544,6 @@ class ServerMessenger(Messenger):
                 msg_bytes = self.encrypt_with_session_key(msg_bytes, msg.receiver_id)
             if msg.type is MsgType.BROADCASTED:
                 self.sockets['publisher'].send_multipart([msg_bytes, crypted])
-                if self.parent.pyqtsignal_connected:
-                    self.parent.signal.emit(msg)
             elif msg.type is MsgType.DIRECTED:
                 if msg.receiver_id in self._frontendpool:
                     self.sockets['frontend'].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])

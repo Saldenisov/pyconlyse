@@ -1,5 +1,5 @@
 from devices.devices import Server
-from utilities.data.messaging.messages import MsgCommon, Error
+from utilities.data.messaging.messages import MsgComExt, Error
 from utilities.data.datastructures.mes_independent import CmdStruct
 
 

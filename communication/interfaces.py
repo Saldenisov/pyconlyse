@@ -10,10 +10,10 @@ class MessengerInter(ABC, Thread):
     pass
 
 
-class MessageInter(ABC):
+class Message(ABC):
     """
-    Interface Class for Message
+    Interface Class for MessageExt and MessageInt
     """
-    pass
 
+    pass
 

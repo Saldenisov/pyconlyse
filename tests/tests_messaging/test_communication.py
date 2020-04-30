@@ -6,7 +6,7 @@ from devices.virtualdevices.clients import SuperUser
 from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
 from tests.fixtures import server_test, superuser_test, stpmtr_emulate_test
 from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
-from utilities.data.messaging.messages import Message
+from utilities.data.messaging.messages import MessageExt
 from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
 from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, AxisStpMtrEssentials,
@@ -73,7 +73,7 @@ def test_superuser_server_services_functions(server_test: Server,
 
     # getting welcome_info from server task_out_test and check if it has arrived to device: service, user
     for msg_id, msg in server.thinker.tasks_out_test.items():
-        msg: Message = msg
+        msg: MessageExt = msg
         assert msg.data.com == MsgGenerator.WELCOME_INFO.mes_name
         device_receiver = devices[msg.body.receiver_id]
         sleep(0.01)
@@ -90,12 +90,12 @@ def test_superuser_server_services_functions(server_test: Server,
     # server recieves this demand
     assert msg_available_services.id in server.thinker.tasks_in_test
     # get reply from server
-    reply_to_demand: Message = next(iter(server.thinker.tasks_out_test.values()))
+    reply_to_demand: MessageExt = next(iter(server.thinker.tasks_out_test.values()))
     del server.thinker.tasks_out_test[reply_to_demand.id]
     assert reply_to_demand.reply_to == msg_available_services.id
     sleep(0.02)
     # superuser receives reply
-    reply: Message = next(iter(superuser.thinker.tasks_in_test.values()))
+    reply: MessageExt = next(iter(superuser.thinker.tasks_in_test.values()))
     del superuser.thinker.tasks_in_test[reply.id]
     assert type(reply.data.info) == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_class
     for service_id in services_id:
