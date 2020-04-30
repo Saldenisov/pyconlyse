@@ -1,15 +1,15 @@
 import logging
 from base64 import b64encode
-from dataclasses import dataclass, asdict
+from dataclasses import asdict
 from enum import Enum
-from json import dumps
 from msgpack import packb, unpackb
+from json import dumps
 from zlib import compress
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from utilities.errors import MessageError
-
+from datastructures.mes_independent.devices_dataclass import *
+from utilities.errors.messaging_errors import MessageError
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -18,7 +18,6 @@ module_logger = logging.getLogger(__name__)
 class MsgComInt(Enum):
     DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set())
     HEARTBEAT = MessageInfoInt('heartbeat', HeartBeat, set(['event']))
-
 
     @property
     def msg_name(self):
@@ -31,7 +30,6 @@ class MsgComInt(Enum):
         return value.type
 
 
-
 class MsgComExt(Enum):
     ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(), True)
     AVAILABLE_SERVICES = MessageInfoExt('available_services', MsgType.DIRECTED, AvailableServices,
@@ -40,7 +38,6 @@ class MsgComExt(Enum):
     HEARTBEAT = MessageInfoExt('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfoExt('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
-    TEST_ONE = MessageInfoExt('test', MsgType.DIRECTED, Test, set(), False)
     WELCOME_INFO_DEVICE = MessageInfoExt('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,
                                          set(['reply_to', 'receiver_id']), False)
     WELCOME_INFO_SERVER = MessageInfoExt('welcome_info_server', MsgType.DIRECTED, WelcomeInfoServer,

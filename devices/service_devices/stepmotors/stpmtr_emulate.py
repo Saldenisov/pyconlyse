@@ -3,7 +3,7 @@ from time import sleep
 from typing import List, Union, Tuple
 
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import relative, absolute
+from datastructures.mes_independent.stpmtr_dataclass import relative, absolute
 
 module_logger = logging.getLogger(__name__)
 

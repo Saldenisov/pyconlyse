@@ -1,5 +1,6 @@
-import logging
 import base64
+import logging
+import zmq
 from abc import abstractmethod
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
@@ -12,14 +13,13 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from time import sleep
 from typing import Dict
 
-import zmq
+from communication.interfaces import MessengerInter
+from communication.messaging.messages import MessageExt, MsgType, MsgComExt
 from devices.interfaces import DeviceId
 from devices.devices import Device
-from communication.interfaces import MessengerInter
-from utilities.errors import MessengerError, MessageError
-from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from datastructures.mes_dependent.dicts import OrderedDictMod
-from utilities.data.messaging.messages import MessageExt, MsgType, MsgComExt
+from utilities.errors.messaging_errors import MessengerError, MessageError
+from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 

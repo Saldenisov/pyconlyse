@@ -1,7 +1,7 @@
 from typing import Union, List
 from devices.devices import Server, Service
-from utilities.data.messaging.messages import *
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import *
+from communication.messaging.messages import *
+from datastructures.mes_independent.stpmtr_dataclass import *
 import pytest
 
 from tests.fixtures.server import server

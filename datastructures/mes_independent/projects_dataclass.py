@@ -1,10 +1,9 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Tuple, Union, NewType, Set
-from utilities.data.datastructures.mes_independent import Desription
-from utilities.data.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncInput, FuncOutput,
-                                                                             FuncGetControllerStateInput,
-                                                                             FuncGetControllerStateOutput)
+from datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
+from datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
+                                                              FuncGetControllerStateOutput)
 
 @dataclass(frozen=True)  # To make it hashable
 class Operator:

@@ -5,24 +5,21 @@ from pathlib import Path
 import sys
 import sqlite3 as sq3
 from time import sleep
-from typing import List, Tuple, Callable
+from typing import Any, Callable, List, Tuple, Union
 
 from PyQt5.QtCore import QObject, pyqtSignal
 
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from devices.interfaces import DeviceId, DeviceType, DeviceInter
-from utilities.database.tools import db_create_connection, db_execute_select
+from datastructures.mes_dependent.dicts import Connections_Dict
+from devices.interfaces import DeviceInter
+from communication.messaging.messages import *
 from communication.messaging.message_utils import MsgGenerator
-from utilities.errors import MessengerError
+from utilities.database.tools import db_create_connection, db_execute_select
+from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
-from utilities.data.datastructures.mes_independent.devices_dataclass import *
-from utilities.data.datastructures.mes_independent import CmdStruct
-from utilities.data.datastructures.mes_dependent.general import Connection
-from datastructures.mes_dependent.dicts import Connections_Dict
-from utilities.data.messaging.messages import *
 from utilities.myfunc import info_msg, unique_id, error_logger
 from logs_pack import initialize_logger
 

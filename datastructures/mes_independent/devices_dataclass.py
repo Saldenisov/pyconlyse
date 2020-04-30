@@ -1,16 +1,16 @@
-from datastructures import DataClass_frozen, DataClass_unfrozen
-from communication.interfaces import MessengerInter, ThinkerInter
-from devices.interfaces import ExecutorInter
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
-from devices.interfaces import DeviceType, DeviceId
+from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, ConnectionPermission
-from datastructures import CmdStruct, Desription
+from datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
+from datastructures import DataClass_frozen, DataClass_unfrozen
+from devices.interfaces import ExecutorInter
+from devices.interfaces import DeviceType, DeviceId
 
 
-#
+
 @dataclass(frozen=True)
 class DeviceParts(DataClass_frozen):
     messenger: MessengerInter
@@ -25,26 +25,6 @@ class DeviceStatus(DataClass_unfrozen):
     messaging_on: bool = False
     messaging_paused: bool = False
     power: bool = False
-
-
-
-
-
-
-@dataclass(order=True)
-class Connection(DataClass_unfrozen):
-    access_level: AccessLevel
-    device_info: WelcomeInfoDevice
-    # TODO: I do not know if session_key should be here
-    session_key: bytes
-    permission: ConnectionPermission
-
-
-
-
-
-
-
 
 
 @dataclass(frozen=True, order=True)
@@ -129,67 +109,8 @@ class ShutDown:
 
 
 @dataclass(frozen=True, order=True)
-class DemandMes:
-    device_id: str
-    com: Dict[str, Any]
-
-
-@dataclass(frozen=True, order=True)
-class CheckService:
-    service_id: str
-
-
-@dataclass
-class Error:
-    comments: str
-
-
-@dataclass(frozen=True, order=True)
 class MsgError:
     error_comments: str = ''
-
-
-@dataclass(frozen=True, order=True)
-class CheckClient:
-    client_id: str
-
-
-@dataclass(frozen=True, order=True)
-class InfoViewUpdate:
-    widget_name: str
-    parameters: dict
-
-
-@dataclass(frozen=True, order=True)
-class PowerOnDemand:
-    device_id: str
-    power_on: bool
-
-
-@dataclass(frozen=True, order=True)
-class PowerOnReply:
-    device_id: str
-    power_on: bool
-    comments: str = ""
-
-
-@dataclass(frozen=True, order=True)
-class Unknown:
-    comment: str = ''
-
-
-@dataclass(frozen=True, order=True)
-class Test:
-    id: str = ''
-    parameters: dict = field(default_factory=dict)
-
-
-
-@dataclass
-class FuncErrorOutput:
-    comments: str
-    func_success: bool = False
-
 
 
 @dataclass
@@ -231,3 +152,12 @@ class FuncAvailableServicesInput(FuncInput):
 class FuncAvailableServicesOutput(FuncOutput):
     device_id: DeviceId
     device_available_services: Dict[DeviceId, str]
+
+
+@dataclass(order=True)
+class Connection(DataClass_unfrozen):
+    access_level: AccessLevel
+    device_info: WelcomeInfoDevice
+    # TODO: I do not know if session_key should be here
+    session_key: bytes
+    permission: ConnectionPermission

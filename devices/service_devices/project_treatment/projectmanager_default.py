@@ -10,7 +10,7 @@ from pathlib import Path
 from devices.devices import Service
 from devices.service_devices.project_treatment.projectmanager_controller import ProjectManager_controller
 from utilities.myfunc import paths_to_dict
-from utilities.data.datastructures.mes_independent.projects_dataclass import *
+from datastructures.mes_independent.projects_dataclass import *
 
 
 class ProjectManager_default(ProjectManager_controller):
