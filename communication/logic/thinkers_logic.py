@@ -118,6 +118,7 @@ class ServerCmdLogic(Thinker):
                                                   comments=f'service {msg.receiver_id} is not available',
                                                   receiver_id=msg.sender_id, reply_to=msg.id)]
 
+        # When the message is dedicated to Server
         else:
             if msg.com == MsgComExt.HEARTBEAT.com_name:
                 try:
@@ -125,35 +126,30 @@ class ServerCmdLogic(Thinker):
                     self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
                     error_logger(self, self.react_info, e)
-            elif msg.com == MsgComExt.WELCOME_INFO_DEVICE.mes_name:
+            elif msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
                 try:
                     device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
-                    if msg.info.type not in DeviceType:
-                        raise Exception(f'{self}:{device_info.type} is not known')
-
                     if device_info.device_id not in connections:
-                        connections[device_info.device_id] = Connection(device_info=data.info)
+                        connections[device_info.device_id] = Connection(device_info=device_info)
                         if 'publisher' in device_info.public_sockets:
                             from communication.logic.logic_functions import external_hb_logic
                             self.parent.messenger.subscribe_sub(address=device_info.public_sockets['publisher'])
-                            self.register_event(name=f'heartbeat:{data.info.name}',
+                            self.register_event(name=f'heartbeat:{device_info.device_name}',
                                                 logic_func=external_hb_logic,
-                                                event_id=f'heartbeat:{data.info.device_id}',
+                                                event_id=f'heartbeat:{device_info.device_id}',
                                                 original_owner=device_info.device_id,
                                                 start_now=True)
                         session_key = self.parent.messenger.gen_symmetric_key(device_info.device_id)
+                        device_public_key = self.parent.messenger.decrypt_with_private(device_info.public_key)
                         session_key_encrypted = self.parent.messenger.encrypt_with_public(session_key,
-                                                                                          device_info.public_key)
-                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg,
-                                                          session_key=session_key_encrypted)
-                        self.parent.send_status_pyqt(com='status_server_info_full')
-                    else:
-                        msg_i = MsgGenerator.welcome_info(device=self.parent, msg_i=msg)
-                except Exception as e:
-                    self.logger.error(e)
-                    msg_i = MsgGenerator.error(device=self.parent, comments=repr(e), msg_i=msg)
-            elif cmd == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+                                                                                          device_public_key)
+                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
+                                                         receiver_id=msg.sender_id)
+                        self.parent.send_status_pyqt()
+                except Exception as e:  # TODO: change Exception to something reasonable
+                    pass  #  TODO: add functionality
+            elif msg.com == MsgComExt.ALIVE.msg_name:
                 if msg.body.sender_id in self.parent.connections:
                     msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
                 else:
@@ -164,9 +160,9 @@ class ServerCmdLogic(Thinker):
                 reply = False
                 if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                     self.logger.error(f'Adding to executor {msg.data.info} failed')
-            elif msg.com == MsgComExt.SHUTDOWN.com_name:  # When one of devices connected to server shutdowns
+            elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(msg.info.device_id)
-                self.parent.send_status_pyqt(com='status_server_info_full')
+                self.parent.send_status_pyqt()
 
         self.msg_out(reply, msg_i)
 
