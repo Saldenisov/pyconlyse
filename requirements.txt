@@ -1,6 +1,6 @@
 aiohttp
 configobj
-cryptography
+cryptography == 2.9.1  # After 2.9.1 they changed something in import of primitives TODO: Need to solve the problem
 gpiozero
 ifaddr
 matplotlib

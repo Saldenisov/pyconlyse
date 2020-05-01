@@ -5,7 +5,7 @@ def test_import_testing():
     from communication.messaging.messengers import Messenger
     from communication.logic.thinkers_logic import Thinker
     from communication.logic.thinkers_logic import ServerCmdLogic
-    from communication.messaging.messengers import ServerMessenger
+    from communication.messaging.messengers import ServerMessenger, ClientMessenger, ServiceMessenger
     from communication.logic.logic_functions import task_in_reaction, task_out_reaction, pending_demands
     from communication.messaging.messages import Message
     from devices.devices import Device

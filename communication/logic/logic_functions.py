@@ -107,7 +107,6 @@ def task_out_reaction(event: ThinkerEvent):
     tasks_out: OrderedDictMod = thinker.tasks_out
     tasks_reply_pending: OrderedDictMod = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    react = True
     while event.active:
         if not event.paused and tasks_out:
             try:

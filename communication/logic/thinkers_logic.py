@@ -16,11 +16,12 @@ class GeneralCmdLogic(Thinker):
         from communication.logic.logic_functions import internal_hb_logic
         self.register_event('heartbeat',  internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
+        self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_external(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
-            # TODO: Need to convert to MessageInt when sending through
-            self.parent.signal.emit(msg)
+            # Convert MessageExt to MessageInt and emit it
+            self.parent.signal.emit(msg.ext_to_int())
 
         reply = False
         msg_i = []
@@ -71,24 +72,23 @@ class GeneralCmdLogic(Thinker):
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
-            if event.counter_timeout > int(self.parent.get_general_settings()['timeout']):
+            if event.counter_timeout > self.timeout:
                 if self.parent.messenger._attempts_to_restart_sub > 0:
-                    self.logger.info('Server is away...trying to restart sub socket')
-                    self.logger.info('Setting event.counter_timeout to 0')
+                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
+                    info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     self.parent.messenger._attempts_to_restart_sub -= 1
                     event.counter_timeout = 0
                     addr = self.parent.connections[event.original_owner].device_info.public_sockets['publisher']
                     self.parent.messenger.restart_socket('sub', addr)
-
                 else:
                     if not self.parent.messenger._are_you_alive_send:
-                        self.logger.info('restart of sub socket did work, switching to demand pathway')
+                        info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
                         event.counter_timeout = 0
                         msg_i = MsgGenerator.are_you_alive_demand(device=self.parent, context=f'EVENT:{event.id}')
                         self.parent.messenger._are_you_alive_send = True
                         self.msg_out(True, msg_i)
                     else:
-                        self.logger.info('Server was away for too long...deleting info about Server')
+                        info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
                         del self.parent.connections[event.original_owner]
                         self.unregister_event(event.id)
 
@@ -107,7 +107,7 @@ class ServerCmdLogic(Thinker):
 
     def react_external(self, msg: MessageExt):
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
-        if msg.receiver_id != self.parent.id:
+        if msg.receiver_id != self.parent.id and msg.receiver_id != '':
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
                 info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
@@ -117,16 +117,17 @@ class ServerCmdLogic(Thinker):
                          self.parent.generate_msg(msg_com=MsgComExt.ERROR,
                                                   comments=f'service {msg.receiver_id} is not available',
                                                   receiver_id=msg.sender_id, reply_to=msg.id)]
-
-        # When the message is dedicated to Server
-        else:
+        # HEARTBEATS...maybe something else later
+        elif msg.receiver_id == '' and msg.sender_id in self.parent.connections:
             if msg.com == MsgComExt.HEARTBEAT.com_name:
                 try:
                     self.events[msg.info.event_id].time = time()
                     self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
-                    error_logger(self, self.react_info, e)
-            elif msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
+                    error_logger(self, self.react_external, e)
+        # WELCOME INFO from another device
+        elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
+            if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
                 try:
                     device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
@@ -149,20 +150,20 @@ class ServerCmdLogic(Thinker):
                         self.parent.send_status_pyqt()
                 except Exception as e:  # TODO: change Exception to something reasonable
                     pass  #  TODO: add functionality
-            elif msg.com == MsgComExt.ALIVE.msg_name:
+        # When the message is dedicated to Server
+        elif msg.sender_id in self.parent.connections and msg.receiver_id == self.parent.id:
+            if msg.com == MsgComExt.ALIVE.msg_name:
                 if msg.body.sender_id in self.parent.connections:
-                    msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
-                else:
-                    msg_i = MsgGenerator.error(device=self.parent,
-                                               comments=f'service/client {msg.body.sender_id} is not known to server',
-                                               msg_i=msg)
-            elif data.com == MsgGenerator.DO_IT.mes_name:
+                    msg_i = None #MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
+            elif msg.com == MsgComExt.DO_IT.mes_name:
                 reply = False
                 if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                    self.logger.error(f'Adding to executor {msg.data.info} failed')
+                    self.logger.error(f'Adding to executor {msg.info} failed')
             elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(msg.info.device_id)
                 self.parent.send_status_pyqt()
+        else:
+            pass  # TODO: that I do not know what it is...add MsgError
 
         self.msg_out(reply, msg_i)
 

@@ -23,12 +23,18 @@ def test_messages(server: Server, stpmtr_emulate: Service):
     # TODO: need to fill with all messages
     msgs = []
 
-    msg_device_info = server.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT)
+    msg_device_info = server.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT, sender_id='sender_id')
+
+
     msgs.append(msg_device_info)
 
     msg_available_services = server.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES,
                                                  available_services=server.available_services,
                                                  reply_to='', receiver_id='receiver_id')
+
+    # MessageExt to MessageInt conversion
+    msg_available_services_int = msg_available_services.ext_to_int()
+
     msgs.append(msg_available_services)
     msg_error = server.generate_msg(msg_com=MsgComExt.ERROR, error_comments='test_error', reply_to='',
                                     receiver_id='receiver_id')

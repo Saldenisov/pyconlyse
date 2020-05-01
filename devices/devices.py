@@ -240,7 +240,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                       receiver_id=receiver_id,
                                       reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
                 else:
-                    return MessageInt(com=msg_com.msg_name, info=info)
+                    return MessageInt(com=msg_com.msg_name, info=info, sender_id=kwargs['sender_id'])
         if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
             error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
             return None

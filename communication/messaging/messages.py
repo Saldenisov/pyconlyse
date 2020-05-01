@@ -16,7 +16,7 @@ module_logger = logging.getLogger(__name__)
 
 
 class MsgComInt(Enum):
-    DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set())
+    DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set(['sender_id']))
     HEARTBEAT = MessageInfoInt('heartbeat', HeartBeat, set(['event']))
 
     @property
@@ -34,6 +34,8 @@ class MsgComExt(Enum):
     ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(), True)
     AVAILABLE_SERVICES = MessageInfoExt('available_services', MsgType.DIRECTED, AvailableServices,
                                         set(['available_services']), True)
+    DO_IT = None
+    DONE_IT = None
     ERROR = MessageInfoExt('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), True)
     HEARTBEAT = MessageInfoExt('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
@@ -135,6 +137,9 @@ class MessageExt(Message):
         except Exception as e:  # TODO replace with reasonable
             module_logger.error(e)
             return b''
+
+    def ext_to_int(self) -> MessageInt:
+        return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id)
 
     def msgpack_repr(self) -> bytes:
         """

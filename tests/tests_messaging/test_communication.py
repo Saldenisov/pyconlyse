@@ -6,18 +6,9 @@ from devices.virtualdevices.clients import SuperUser
 from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
 from tests.fixtures import server_test, superuser_test, stpmtr_emulate_test
 from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
-from utilities.data.messaging.messages import MessageExt
-from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
-                                                                             FuncPowerInput, FuncPowerOutput)
-from utilities.data.datastructures.mes_independent.stpmtr_dataclass import (AxisStpMtr, AxisStpMtrEssentials,
-                                                                            FuncActivateAxisInput,
-                                                                            FuncActivateAxisOutput, FuncMoveAxisToInput,
-                                                                            FuncMoveAxisToOutput, FuncGetPosInput,
-                                                                            FuncGetPosOutput,
-                                                                            FuncGetStpMtrControllerStateInput,
-                                                                            FuncGetStpMtrControllerStateOutput,
-                                                                            FuncStopAxisInput, FuncStopAxisOutput,
-                                                                            relative, absolute)
+from communication.messaging.messages import MessageExt
+from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent.stpmtr_dataclass import *
 
 def test_superuser_server_services_functions(server_test: Server,
                                              superuser_test: SuperUser,
