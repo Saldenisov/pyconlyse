@@ -1,7 +1,6 @@
 import logging
 from time import time
 
-
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
 from datastructures.mes_independent.devices_dataclass import Connection
@@ -19,9 +18,10 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.id}')
 
     def react_external(self, msg: MessageExt):
-        pass
+        if self.parent.pyqtsignal_connected:
+            # TODO: Need to convert to MessageInt when sending through
+            self.parent.signal.emit(msg)
 
-    def react_demand(self, msg: MessageExt):
         reply = False
         msg_i = []
         if msg.com == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
@@ -35,7 +35,6 @@ class GeneralCmdLogic(Thinker):
 
         self.msg_out(reply, msg_i)
 
-    def react_info(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.name:
             if self.parent.pyqtsignal_connected:
                 self.parent.signal.emit(msg)
@@ -56,7 +55,6 @@ class GeneralCmdLogic(Thinker):
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = msg.info.n
 
-    def react_reply(self, msg: MessageExt):
         info_msg(self, 'REPLY_IN', extra=str(msg.short()))
 
         if msg.com == MsgComExt.WELCOME_INFO.mes_name:
@@ -112,6 +110,7 @@ class ServerCmdLogic(Thinker):
 
     def react_external(self, msg: MessageExt):
 
+        # Forwarding message
         if msg.receiver_id != self.parent.id:
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
@@ -189,20 +188,16 @@ class ServerCmdLogic(Thinker):
             if event.counter_timeout > self.timeout:
                 self.logger.info('Service was away for too long...deleting info about service')
                 self.remove_device_from_connections(event.original_owner)
-                self.parent.send_status_pyqt(com='status_server_info_full')
+                self.parent.send_status_pyqt()
 
     def react_unknown(self, msg: MessageExt):
-        msg_i = MsgGenerator.error(self.messenger, msg_i=msg, comments=f'unknown message com: {msg.data.com}')
-        info_msg(self, 'REPLY', extra=repr(msg_i.short()))
-        self.messenger.add_task_out(self.msg_i)
+        msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, error_comments=f'unknown message com: {msg.data.com}',
+                                         reply_to=msg.id, receiver_id=msg.sender_id)
+        self.msg_out(True, msg_r)
 
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
-
-    def react_reply(self, msg: MessageExt):
-        super().react_reply(msg)
-        if self.parent.pyqtsignal_connected:
-            self.parent.signal.emit(msg)
+    pass
 
 
 class ServiceCmdLogic(GeneralCmdLogic):

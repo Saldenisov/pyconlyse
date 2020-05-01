@@ -66,6 +66,7 @@ class MessageInt(Message):
     """
     com: str  # command name
     info: dataclass  # DataClass
+    sender_id: str
 
 
 @dataclass(order=True)

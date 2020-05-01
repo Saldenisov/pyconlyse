@@ -92,7 +92,7 @@ def info_msg(obj: object, msg_type: str, extra=''):
         elif msg_type in ['REQUEST', 'DEMAND']:
             r = f'{msg_type}: {extra} \n____________________________\n'
         elif msg_type == 'INFO':
-            r = f': {extra} \n____________________________\n'
+            r = f'FYI: {extra} \n____________________________\n'
         elif msg_type == 'FORWARD':
             r = f'FORWARD: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
         elif msg_type in ['REPLY', 'REPLY_IN']:
