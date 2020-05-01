@@ -168,10 +168,6 @@ class Thinker(ThinkerInter):
     def react_external(self, msg: MessageExt):
         pass
 
-    @abstractmethod
-    def react_unknown(self, msg: MessageExt):
-        pass
-
     def remove_device_from_connections(self, device_id):
         # TODO: the info is not deleted from _frontend sockets or backend sockets
         connections = self.parent.connections

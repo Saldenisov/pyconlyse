@@ -47,17 +47,11 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
-        if parent:
-            self.id: str = parent.id
-            self.parent: Device = parent
-            try:
-                self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
-            except AttributeError:
-                self._polling_time = 1
-        else:
-            self.parent = self
-            self.id = f'{self.name}:{unique_id(self.name)}'
-            self.pyqtsignal_connected = False
+        self.id: DeviceId = parent.id
+        self.parent: Device = parent
+        try:
+            self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
+        except AttributeError:
             self._polling_time = 1
         self.active = False
         self.paused = False
@@ -322,11 +316,15 @@ class ClientMessenger(Messenger):
                                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
                                 self.parent_thinker.add_task_in(mes)
                             except (MessengerError, MessageError, ThinkerError) as e:
-                                error_logger(self, self.run, str(e))
+                                error_logger(self, self.run, e)
+                                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                                                 error_comments=str(e),
+                                                                 reply_to='', receiver_id=device_id)
+                                self.add_msg_out(msg_r)
                         msgs = []
                 else:
-                    sleep(.1)
-            except ValueError as e:  # TODO when recv_multipart works wrong!
+                    sleep(0.01)
+            except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
                 self.logger.error(e)
 
     def run(self):
@@ -527,14 +525,17 @@ class ServerMessenger(Messenger):
                                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
                                 self.parent_thinker.add_task_in(mes)
                             except (MessengerError, MessageError, ThinkerError) as e:
-                                error_logger(self, self.run, e)  # Black hole error for sender
-                                # it will never know what happened to its message, or why
-                                # however it is natural protection from spying in my view (SAD)
+                                error_logger(self, self.run, e)
+                                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                                                 error_comments=str(e),
+                                                                 reply_to='', receiver_id=device_id)
+                                self.add_msg_out(msg_r)
+
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)
             else:
-                sleep(0.1)
+                sleep(0.01)
 
     def send_msg(self, msg: MessageExt):
         try:

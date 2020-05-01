@@ -92,9 +92,6 @@ class GeneralCmdLogic(Thinker):
                         del self.parent.connections[event.original_owner]
                         self.unregister_event(event.id)
 
-    def react_unknown(self, msg: MessageExt):
-        pass
-
 
 class ServerCmdLogic(Thinker):
     """
@@ -109,12 +106,11 @@ class ServerCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_external(self, msg: MessageExt):
-
-        # Forwarding message
+        # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
         if msg.receiver_id != self.parent.id:
             if msg.receiver_id in self.parent.connections:
                 msg_i = msg
-                self.logger.info(f'Msg: {msg.reply_to} reply is obtained and forwarded to initial demander')
+                info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
             else:
                 msg_i = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
                                                   reply_to=msg.id),
@@ -123,7 +119,13 @@ class ServerCmdLogic(Thinker):
                                                   receiver_id=msg.sender_id, reply_to=msg.id)]
 
         else:
-            if msg.com == MsgComExt.WELCOME_INFO_DEVICE.mes_name:
+            if msg.com == MsgComExt.HEARTBEAT.com_name:
+                try:
+                    self.events[msg.info.event_id].time = time()
+                    self.events[msg.info.event_id].n = msg.info.n
+                except KeyError as e:
+                    error_logger(self, self.react_info, e)
+            elif msg.com == MsgComExt.WELCOME_INFO_DEVICE.mes_name:
                 try:
                     device_info: WelcomeInfoDevice = msg.info
                     connections = self.parent.connections
@@ -162,24 +164,9 @@ class ServerCmdLogic(Thinker):
                 reply = False
                 if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                     self.logger.error(f'Adding to executor {msg.data.info} failed')
-            else:
-                msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
-                                           comments=f'Unknown Message com: {msg.data.com}')
-
-
-
-        # OLD INFO
-        if msg.sender_id in self.parent.connections:
-            if msg.com == MsgComExt.HEARTBEAT.com_name:
-                try:
-                    self.events[msg.info.event_id].time = time()
-                    self.events[msg.info.event_id].n = msg.info.n
-                except KeyError as e:
-                    error_logger(self, self.react_info, e)
             elif msg.com == MsgComExt.SHUTDOWN.com_name:  # When one of devices connected to server shutdowns
                 self.remove_device_from_connections(msg.info.device_id)
                 self.parent.send_status_pyqt(com='status_server_info_full')
-
 
         self.msg_out(reply, msg_i)
 
@@ -190,11 +177,6 @@ class ServerCmdLogic(Thinker):
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt()
 
-    def react_unknown(self, msg: MessageExt):
-        msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, error_comments=f'unknown message com: {msg.data.com}',
-                                         reply_to=msg.id, receiver_id=msg.sender_id)
-        self.msg_out(True, msg_r)
-
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
     pass
@@ -202,8 +184,8 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 class ServiceCmdLogic(GeneralCmdLogic):
 
-    def react_demand(self, msg: MessageExt):
-        super().react_demand(msg)
+    def react_external(self, msg: MessageExt):
+        super().react_external(msg)
         reply = False
         data = msg.data
         msg_i = []
@@ -219,8 +201,7 @@ class ServiceCmdLogic(GeneralCmdLogic):
             msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
         self.msg_out(reply, msg_i)
 
-    def react_reply(self, msg: MessageExt):
-        super().react_reply(msg)
+    # OLD reply
         data = msg.data
         if data.com == MsgGenerator.POWER_ON_REPLY.mes_name:
             self.parent.device_status.power = data.info.power_on
