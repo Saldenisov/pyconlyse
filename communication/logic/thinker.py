@@ -37,8 +37,6 @@ class Thinker(ThinkerInter):
         info_msg(self, 'CREATING')
         try:
             self.timeout = int(self.parent.get_general_settings()['timeout'])
-            task_in_reaction_tick = float(self.parent.get_general_settings()['task_in_reaction']) / 1000.
-            task_out_reaction_tick = float(self.parent.get_general_settings()['task_out_reaction']) / 1000.
             pending_demands_tick = float(self.parent.get_general_settings()['pending_demands']) / 1000.
             pending_replies_tick = float(self.parent.get_general_settings()['pending_replies']) / 1000.
         except KeyError as e:
@@ -50,8 +48,8 @@ class Thinker(ThinkerInter):
         try:
             from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands,
                                                              pending_replies)
-            self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=task_in_reaction_tick)
-            self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=task_out_reaction_tick)
+            self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
+            self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
             self.register_event(name='pending_demands', logic_func=pending_demands, tick=pending_demands_tick)
             self.register_event(name='pending_replies', logic_func=pending_replies, tick=pending_replies_tick)
             info_msg(self, 'CREATED')

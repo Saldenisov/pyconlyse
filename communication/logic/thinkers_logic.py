@@ -18,6 +18,9 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
+    def react_broadcasted(self, msg: MessageExt):
+        pass
+
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
             # Convert MessageExt to MessageInt and emit it
@@ -104,6 +107,9 @@ class ServerCmdLogic(Thinker):
         from communication.logic.logic_functions import internal_hb_logic
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
+
+    def react_broadcasted(self, msg: MessageExt):
+        pass
 
     def react_directed(self, msg: MessageExt):
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back

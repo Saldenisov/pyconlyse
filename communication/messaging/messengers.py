@@ -227,7 +227,6 @@ class Messenger(MessengerInter):
             msg: MessageExt = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
-
     def stop(self):
         info_msg(self, 'STOPPING')
         self.active = False
@@ -244,7 +243,7 @@ class Messenger(MessengerInter):
             error_logger(self, self.subscribe_sub, e)
 
     @abstractmethod
-    def _verify_addresses(self, addresses: dict):
+    def _verify_addresses(self, addresses: Dict[str, str]):
         pass
 
     def unpause(self):
@@ -304,10 +303,10 @@ class ClientMessenger(Messenger):
                     error_logger(self, self.connect, e)
                     port = get_free_port(scope=None)
                     local_ip = get_local_ip()
-                    self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
-                    self.public_sockets = {'publisher': self.addresses['publisher']}
-                    self.sockets['publisher'].setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
-                    self.sockets['publisher'].bind(self.addresses['publisher'])
+                    self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
+                    self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
+                    self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+                    self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
         except (WrongAddress, zmq.error.ZMQBindError) as e:
             error_logger(self, self.connect, e)
 
@@ -375,7 +374,7 @@ class ClientMessenger(Messenger):
                 self.logger.info(f'{msg.short()} is send from {self.parent.name}')
             elif msg.type is MsgType.BROADCASTED:
                 if self.pub_option:
-                    self.sockets['publisher'].send_multipart([msg_bytes, crypted])
+                    self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
                     self.logger.info(f'Publisher socket is not available for {self.name}.')
             else:
@@ -383,7 +382,7 @@ class ClientMessenger(Messenger):
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
-    def _verify_addresses(self, addresses: dict):
+    def _verify_addresses(self, addresses: Dict[str, str]):
         # TODO: replace with UserSocket NewType the ports names.
         ports = [PUB_Socket, PUB_Socket_Server]
         for port in ports:
@@ -397,7 +396,7 @@ class ClientMessenger(Messenger):
         self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
 
     def _wait_server_hb(self):
-        if 'server_frontend' not in self.addresses or 'server_backend' not in self.addresses:
+        if FRONTEND_Server not in self.addresses or BACKEND_Server not in self.addresses:
             wait = True
         else:
             wait = False
@@ -409,13 +408,13 @@ class ClientMessenger(Messenger):
                 i = 0
             i += 1
             sockets = dict(self.poller.poll(100))
-            if self.sockets['sub'] in sockets:
-                mes, crypted = self.sockets['sub'].recv_multipart()
+            if self.sockets[SUB_Socket] in sockets:
+                mes, crypted = self.sockets[SUB_Socket].recv_multipart()
                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(mes)
                 # TODO: first heartbeat could be received only from server! make it safe
                 if mes.com == MsgComExt.HEARTBEAT.com_name:
                     sockets = mes.info.sockets
-                    if 'frontend' in sockets and 'backend' in sockets:
+                    if FRONTEND_Server in sockets and BACKEND_Server in sockets:
                         self.logger.info(mes)
                         self.addresses['server_frontend'] = sockets['frontend']
                         self.addresses['server_backend'] = sockets['backend']
@@ -443,7 +442,7 @@ class ServerMessenger(Messenger):
 
     """
 
-    sockets_names = set([FRONTEND_Server, BACKEND_Server, PUB_Socket])
+    sockets_names = set([FRONTEND_Server, BACKEND_Server, PUB_Socket_Server])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -455,12 +454,12 @@ class ServerMessenger(Messenger):
         try:
             self.context = zmq.Context()
             frontend = self.context.socket(zmq.ROUTER)
-            frontend.bind(self.addresses['frontend'])
+            frontend.bind(self.addresses[FRONTEND_Server])
             backend = self.context.socket(zmq.ROUTER)
-            backend.bind(self.addresses['backend'])
+            backend.bind(self.addresses[BACKEND_Server])
 
             publisher = self.context.socket(zmq.PUB)
-            publisher.bind(self.addresses['publisher'])
+            publisher.bind(self.addresses[PUB_Socket_Server])
 
             # SOCKET SUBSCRIBER
             sub = self.context.socket(zmq.SUB)
@@ -474,9 +473,9 @@ class ServerMessenger(Messenger):
                             BACKEND_Server: backend,
                             PUB_Socket: publisher,
                             SUB_Socket: sub}
-            self.public_sockets = {PUB_Socket: self.addresses['publisher'],
-                                   FRONTEND_Server: self.addresses['frontend'],
-                                   BACKEND_Server: self.addresses['backend']}
+            self.public_sockets = {PUB_Socket_Server: self.addresses[PUB_Socket_Server],
+                                   FRONTEND_Server: self.addresses[FRONTEND_Server],
+                                   BACKEND_Server: self.addresses[BACKEND_Server]}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
@@ -547,7 +546,7 @@ class ServerMessenger(Messenger):
                         if device_id not in self._backendpool:
                             self._backendpool.add(device_id)
                         msgs.append(MsgTuple(msg, device_id, BACKEND_Server, crypted))
-                    if self.sockets['sub'] in sockets:
+                    if self.sockets[SUB_Socket] in sockets:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
@@ -555,8 +554,6 @@ class ServerMessenger(Messenger):
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)
-            else:
-                sleep(0.01)
 
     def send_msg(self, msg: MessageExt):
         try:
@@ -565,13 +562,13 @@ class ServerMessenger(Messenger):
             if msg.crypted:
                 msg_bytes = self.encrypt_with_session_key(msg_bytes, msg.receiver_id)
             if msg.type is MsgType.BROADCASTED:
-                self.sockets['publisher'].send_multipart([msg_bytes, crypted])
+                self.sockets[PUB_Socket_Server].send_multipart([msg_bytes, crypted])
             elif msg.type is MsgType.DIRECTED:
                 if msg.receiver_id in self._frontendpool:
-                    self.sockets['frontend'].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
+                    self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
                     self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from frontend to {msg.receiver_id}')
                 elif msg.receiver_id in self._backendpool:
-                    self.sockets['backend'].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
+                    self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
                     self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from backend to {msg.receiver_id}')
                 else:
                     error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
