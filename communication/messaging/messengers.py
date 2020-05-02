@@ -28,8 +28,8 @@ from utilities.tools.decorators import make_loop
 module_logger = logging.getLogger(__name__)
 
 UserSocket = NewType('UserSocketName', str)
-FRONTENDRouter_Socket = UserSocket('frontend_router')
-BACKENDRouter_Socket = UserSocket('backend_router')
+FRONTEND_router = UserSocket('frontend_router_socket_server')
+BACKEND_router = UserSocket('backend_router_socket_server')
 DEALER_Socket = UserSocket('dealer')
 PUB_Socket = UserSocket('publisher')
 SUB_Socket = UserSocket('subscriber')
@@ -440,7 +440,7 @@ class ServerMessenger(Messenger):
 
     """
 
-    sockets_names = set([FRONTENDRouter_Socket, BACKENDRouter_Socket, PUB_Socket])
+    sockets_names = set([FRONTEND_router, BACKEND_router, PUB_Socket])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -467,13 +467,13 @@ class ServerMessenger(Messenger):
             self.poller.register(backend, zmq.POLLIN)
             self.poller.register(sub, zmq.POLLIN)
 
-            self.sockets = {FRONTENDRouter_Socket: frontend,
-                            BACKENDRouter_Socket: backend,
+            self.sockets = {FRONTEND_router: frontend,
+                            BACKEND_router: backend,
                             PUB_Socket: publisher,
                             SUB_Socket: sub}
             self.public_sockets = {PUB_Socket: self.addresses['publisher'],
-                                   FRONTENDRouter_Socket: self.addresses['frontend'],
-                                   BACKENDRouter_Socket: self.addresses['backend']}
+                                   FRONTEND_router: self.addresses['frontend'],
+                                   BACKEND_router: self.addresses['backend']}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
@@ -532,18 +532,18 @@ class ServerMessenger(Messenger):
             if not self.paused:
                 sockets = dict(self.poller.poll(1))
                 try:
-                    if self.sockets[FRONTENDRouter_Socket] in sockets:
-                        device_id, msg, crypted = self.sockets[FRONTENDRouter_Socket].recv_multipart()
+                    if self.sockets[FRONTEND_router] in sockets:
+                        device_id, msg, crypted = self.sockets[FRONTEND_router].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._frontendpool:
                             self._frontendpool.add(device_id)
-                        msgs.append(MsgTuple(msg, device_id, FRONTENDRouter_Socket, crypted))
-                    if self.sockets[BACKENDRouter_Socket] in sockets:
-                        device_id, msg, crypted = self.sockets[BACKENDRouter_Socket].recv_multipart()
+                        msgs.append(MsgTuple(msg, device_id, FRONTEND_router, crypted))
+                    if self.sockets[BACKEND_router] in sockets:
+                        device_id, msg, crypted = self.sockets[BACKEND_router].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._backendpool:
                             self._backendpool.add(device_id)
-                        msgs.append(MsgTuple(msg, device_id, BACKENDRouter_Socket, crypted))
+                        msgs.append(MsgTuple(msg, device_id, BACKEND_router, crypted))
                     if self.sockets['sub'] in sockets:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
