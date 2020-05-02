@@ -28,11 +28,12 @@ from utilities.tools.decorators import make_loop
 module_logger = logging.getLogger(__name__)
 
 UserSocket = NewType('UserSocketName', str)
-FRONTEND_router = UserSocket('frontend_router_socket_server')
-BACKEND_router = UserSocket('backend_router_socket_server')
-DEALER_Socket = UserSocket('dealer')
-PUB_Socket = UserSocket('publisher')
-SUB_Socket = UserSocket('subscriber')
+FRONTEND_Server = UserSocket('frontend_router_socket_server')
+BACKEND_Server = UserSocket('backend_router_socket_server')
+DEALER_Socket = UserSocket('dealer_socket')
+PUB_Socket = UserSocket('publisher_socket')
+PUB_Socket_Server = UserSocket('publisher_socket_server')
+SUB_Socket = UserSocket('subscriber_socket')
 
 
 class MsgTuple(NamedTuple):
@@ -235,9 +236,9 @@ class Messenger(MessengerInter):
 
     def subscribe_sub(self, address=None, filter_opt=b""):
         try:
-            self.sockets['sub'].connect(address)
-            self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
-            self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
+            self.sockets[SUB_Socket].connect(address)
+            self.sockets[SUB_Socket].setsockopt(zmq.SUBSCRIBE, filter_opt)
+            self.sockets[SUB_Socket].setsockopt(zmq.RCVHWM, 3)
             self.logger.info(f'socket sub is connected to {address}')
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
@@ -279,9 +280,9 @@ class ClientMessenger(Messenger):
             # SOCKET PUBLISHER
             if self.pub_option:
                 publisher = self.context.socket(zmq.PUB)
-                publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
+                publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
                 self.sockets[PUB_Socket] = publisher
-                self.public_sockets = {PUB_Socket: self.addresses['publisher']}
+                self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
 
             # POLLER
             self.poller = zmq.Poller()
@@ -293,10 +294,12 @@ class ClientMessenger(Messenger):
 
     def connect(self):
         try:
-            self.sockets[DEALER_Socket].connect(self.addresses['server_frontend'])
+            self.sockets[DEALER_Socket].connect(self.addresses[FRONTEND_Server])
+            for adr in self.addresses[PUB_Socket_Server]:
+                self.subscribe_sub(address=adr)
             if self.pub_option:
                 try:
-                    self.sockets[PUB_Socket].bind(self.addresses['publisher'])
+                    self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
                 except (WrongAddress, zmq.error.ZMQError) as e:
                     error_logger(self, self.connect, e)
                     port = get_free_port(scope=None)
@@ -382,16 +385,16 @@ class ClientMessenger(Messenger):
 
     def _verify_addresses(self, addresses: dict):
         # TODO: replace with UserSocket NewType the ports names.
-        ports = ['publisher', 'server_publisher']
+        ports = [PUB_Socket, PUB_Socket_Server]
         for port in ports:
             if port not in addresses:
                 raise Exception(f'Not enough ports {port} were passed to {self.name}')
         from utilities.myfunc import verify_port
         # Check only publisher port availability
-        port = verify_port(addresses['publisher'])
+        port = verify_port(addresses[PUB_Socket])
         local_ip = get_local_ip()
-        self.addresses['publisher'] = f'tcp://{local_ip}:{port}'
-        self.addresses['server_publisher'] = addresses['server_publisher'].replace(" ", "").split(',')
+        self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
+        self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
 
     def _wait_server_hb(self):
         if 'server_frontend' not in self.addresses or 'server_backend' not in self.addresses:
@@ -440,7 +443,7 @@ class ServerMessenger(Messenger):
 
     """
 
-    sockets_names = set([FRONTEND_router, BACKEND_router, PUB_Socket])
+    sockets_names = set([FRONTEND_Server, BACKEND_Server, PUB_Socket])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -467,13 +470,13 @@ class ServerMessenger(Messenger):
             self.poller.register(backend, zmq.POLLIN)
             self.poller.register(sub, zmq.POLLIN)
 
-            self.sockets = {FRONTEND_router: frontend,
-                            BACKEND_router: backend,
+            self.sockets = {FRONTEND_Server: frontend,
+                            BACKEND_Server: backend,
                             PUB_Socket: publisher,
                             SUB_Socket: sub}
             self.public_sockets = {PUB_Socket: self.addresses['publisher'],
-                                   FRONTEND_router: self.addresses['frontend'],
-                                   BACKEND_router: self.addresses['backend']}
+                                   FRONTEND_Server: self.addresses['frontend'],
+                                   BACKEND_Server: self.addresses['backend']}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
@@ -532,18 +535,18 @@ class ServerMessenger(Messenger):
             if not self.paused:
                 sockets = dict(self.poller.poll(1))
                 try:
-                    if self.sockets[FRONTEND_router] in sockets:
-                        device_id, msg, crypted = self.sockets[FRONTEND_router].recv_multipart()
+                    if self.sockets[FRONTEND_Server] in sockets:
+                        device_id, msg, crypted = self.sockets[FRONTEND_Server].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._frontendpool:
                             self._frontendpool.add(device_id)
-                        msgs.append(MsgTuple(msg, device_id, FRONTEND_router, crypted))
-                    if self.sockets[BACKEND_router] in sockets:
-                        device_id, msg, crypted = self.sockets[BACKEND_router].recv_multipart()
+                        msgs.append(MsgTuple(msg, device_id, FRONTEND_Server, crypted))
+                    if self.sockets[BACKEND_Server] in sockets:
+                        device_id, msg, crypted = self.sockets[BACKEND_Server].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._backendpool:
                             self._backendpool.add(device_id)
-                        msgs.append(MsgTuple(msg, device_id, BACKEND_router, crypted))
+                        msgs.append(MsgTuple(msg, device_id, BACKEND_Server, crypted))
                     if self.sockets['sub'] in sockets:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))

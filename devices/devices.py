@@ -287,10 +287,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             if f:
                 flag = f(**specific)
 
-    @abstractmethod
-    def messenger_settings(self):
-        pass
-
     def pause(self):
         self.thinker.pause()
         self.messenger.pause()
@@ -317,7 +313,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         """Start messaging part of Device"""
         info_msg(self, 'STARTING')
         self.thinker.start()
-        self.messenger_settings()
         self.messenger.start()
         info_msg(self, 'STARTED')
         self.send_status_pyqt()
@@ -406,10 +401,6 @@ class Server(Device):
         parameters = self.get_settings('Parameters')
         return Desription(info=parameters['info'], GUI_title=parameters['title'])
 
-    def messenger_settings(self):
-        # FIXME:...
-        pass
-
     def start(self):
         super().start()
 
@@ -464,10 +455,6 @@ class Client(Device):
 
     def execute_com(self, msg: MessageExt):
         pass
-
-    def messenger_settings(self):
-        for adr in self.messenger.addresses['server_publisher']:
-            self.messenger.subscribe_sub(address=adr)
 
     def start(self):
         super().start()
@@ -536,14 +523,6 @@ class Service(Device):
     @abstractmethod
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
         pass
-
-    def messenger_settings(self):
-        for adr in self.messenger.addresses['server_publisher']:
-            try:
-                self.messenger.subscribe_sub(address=adr)
-            except Exception as e:
-                a = e
-                print(e)
 
     def send_status_pyqt(self):
         pass
