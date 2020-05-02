@@ -161,11 +161,15 @@ class Thinker(ThinkerInter):
         return self._pending_replies
 
     @abstractmethod
-    def react_internal(self, event):
+    def react_broadcasted(self, msg: MessageExt):
         pass
 
     @abstractmethod
-    def react_external(self, msg: MessageExt):
+    def react_directed(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_internal(self, event):
         pass
 
     def remove_device_from_connections(self, device_id):

@@ -2,6 +2,7 @@ import base64
 import logging
 import zmq
 from abc import abstractmethod
+from enum import Enum
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -11,7 +12,7 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from time import sleep
-from typing import Dict
+from typing import Dict, List, NamedTuple, NewType
 
 from communication.interfaces import MessengerInter
 from communication.messaging.messages import MessageExt, MsgType, MsgComExt
@@ -25,6 +26,20 @@ from utilities.tools.decorators import make_loop
 
 
 module_logger = logging.getLogger(__name__)
+
+UserSocket = NewType('UserSocketName', str)
+FRONTENDRouter_Socket = UserSocket('frontend_router')
+BACKENDRouter_Socket = UserSocket('backend_router')
+DEALER_Socket = UserSocket('dealer')
+PUB_Socket = UserSocket('publisher')
+SUB_Socket = UserSocket('subscriber')
+
+
+class MsgTuple(NamedTuple):
+    msg: MessageExt
+    device_id: DeviceId
+    socket_name: UserSocket
+    crypted: bool
 
 
 class Messenger(MessengerInter):
@@ -108,6 +123,10 @@ class Messenger(MessengerInter):
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
 
+    @abstractmethod
+    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+        pass
+
     def encrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId):
         # TODO: add functionality to messenger.encrypt() when TLS is realized
         try:
@@ -178,7 +197,7 @@ class Messenger(MessengerInter):
         self.active = True
         self.paused = False
         # Start send loop here
-        self._sendloop_logic(await_time=0.1 / 1000.)
+        self._send_loop_logic(await_time=0.1 / 1000.)
 
     def restart_socket(self, socket_name: str, connect_to: str):
         #TODO: realize other sockets
@@ -202,16 +221,11 @@ class Messenger(MessengerInter):
         pass
 
     @make_loop
-    def _sendloop_logic(self, await_time):
-        if len(self._msg_out) > 0:
+    def _send_loop_logic(self, await_time):
+        if self._msg_out > 0:
             msg: MessageExt = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
-    @make_loop
-    def _sendloop_logic(self, await_time):
-        if len(self._msg_out) > 0:
-            msg: MessageExt = self._msg_out.popitem(last=False)[1]
-            self.send_msg(msg)
 
     def stop(self):
         info_msg(self, 'STOPPING')
@@ -243,12 +257,12 @@ class Messenger(MessengerInter):
 
 class ClientMessenger(Messenger):
 
-    socket_names = set(['dealer', 'sub'])
+    socket_names = set([DEALER_Socket, SUB_Socket])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         if self.pub_option:
-            self.socket_names.add('publisher')
+            self.socket_names.add(PUB_Socket)
 
     def _create_sockets(self):
         try:
@@ -257,31 +271,32 @@ class ClientMessenger(Messenger):
             dealer = self.context.socket(zmq.DEALER)
             dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
             # SOCKET SUBSCRIBER
-            sub = self.context.socket(zmq.SUB)
-            sub.setsockopt(zmq.RCVHWM, 10)
+            subscriber = self.context.socket(zmq.SUB)
+            subscriber.setsockopt(zmq.RCVHWM, 10)
+
+            self.sockets = {DEALER_Socket: dealer, SUB_Socket: subscriber}
+
             # SOCKET PUBLISHER
             if self.pub_option:
                 publisher = self.context.socket(zmq.PUB)
                 publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses['publisher'])
-                self.sockets = {'dealer': dealer, 'sub': sub, 'publisher': publisher}
-                self.public_sockets = {'publisher': self.addresses['publisher']}
-            else:
-                self.sockets = {'dealer': dealer, 'sub': sub}
+                self.sockets[PUB_Socket] = publisher
+                self.public_sockets = {PUB_Socket: self.addresses['publisher']}
 
             # POLLER
             self.poller = zmq.Poller()
             self.poller.register(dealer, zmq.POLLIN)
-            self.poller.register(sub, zmq.POLLIN)
+            self.poller.register(subscriber, zmq.POLLIN)
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
 
     def connect(self):
         try:
-            self.sockets['dealer'].connect(self.addresses['server_frontend'])
+            self.sockets[DEALER_Socket].connect(self.addresses['server_frontend'])
             if self.pub_option:
                 try:
-                    self.sockets['publisher'].bind(self.addresses['publisher'])
+                    self.sockets[PUB_Socket].bind(self.addresses['publisher'])
                 except (WrongAddress, zmq.error.ZMQError) as e:
                     error_logger(self, self.connect, e)
                     port = get_free_port(scope=None)
@@ -293,6 +308,20 @@ class ClientMessenger(Messenger):
         except (WrongAddress, zmq.error.ZMQBindError) as e:
             error_logger(self, self.connect, e)
 
+    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+        for msg, device_id, socket, crypted in msgs:
+            try:
+                if int(crypted):
+                    msg = self.decrypt_with_session_key(msg, device_id)
+                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
+                self.parent_thinker.add_task_in(mes)
+            except (MessengerError, MessageError, ThinkerError) as e:
+                error_logger(self, self.run, e)
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                                 error_comments=str(e),
+                                                 reply_to='', receiver_id=device_id)
+                self.add_msg_out(msg_r)
+
     def info(self):
         return super().info()
 
@@ -302,28 +331,15 @@ class ClientMessenger(Messenger):
             try:
                 if not self.paused:
                     sockets = dict(self.poller.poll(1))
-                    if self.sockets['dealer'] in sockets:
-                        msg, crypted = self.sockets['dealer'].recv_multipart()
-                        msgs.append((msg, None, crypted))
-                    if self.sockets['sub'] in sockets:
-                        msg, crypted = self.sockets['sub'].recv_multipart()
-                        msgs.append((msg, None, crypted))
-                    if sockets:
-                        for msg, device_id, crypted in msgs:
-                            try:
-                                if int(crypted):
-                                    msg = self.decrypt_with_session_key(msg, device_id)
-                                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
-                                self.parent_thinker.add_task_in(mes)
-                            except (MessengerError, MessageError, ThinkerError) as e:
-                                error_logger(self, self.run, e)
-                                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                                                 error_comments=str(e),
-                                                                 reply_to='', receiver_id=device_id)
-                                self.add_msg_out(msg_r)
+                    if self.sockets[DEALER_Socket] in sockets:
+                        msg, crypted = self.sockets[DEALER_Socket].recv_multipart()
+                        msgs.append(MsgTuple(msg, None, DEALER_Socket, crypted))
+                    if self.sockets[SUB_Socket] in sockets:
+                        msg, crypted = self.sockets[SUB_Socket].recv_multipart()
+                        msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
+                    if msgs:
+                        self._deal_with_reaceived_msg(msgs)
                         msgs = []
-                else:
-                    sleep(0.01)
             except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
                 self.logger.error(e)
 
@@ -365,6 +381,7 @@ class ClientMessenger(Messenger):
             error_logger(self, self.send_msg, e)
 
     def _verify_addresses(self, addresses: dict):
+        # TODO: replace with UserSocket NewType the ports names.
         ports = ['publisher', 'server_publisher']
         for port in ports:
             if port not in addresses:
@@ -423,7 +440,7 @@ class ServerMessenger(Messenger):
 
     """
 
-    sockets_names = set(['frontend', 'backend', 'publisher'])
+    sockets_names = set([FRONTENDRouter_Socket, BACKENDRouter_Socket, PUB_Socket])
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -450,16 +467,30 @@ class ServerMessenger(Messenger):
             self.poller.register(backend, zmq.POLLIN)
             self.poller.register(sub, zmq.POLLIN)
 
-            self.sockets = {'frontend': frontend,
-                            'backend': backend,
-                            'publisher': publisher,
-                            'sub': sub}
-            self.public_sockets = {'publisher': self.addresses['publisher'],
-                                    'frontend': self.addresses['frontend'],
-                                    'backend': self.addresses['backend']}
+            self.sockets = {FRONTENDRouter_Socket: frontend,
+                            BACKENDRouter_Socket: backend,
+                            PUB_Socket: publisher,
+                            SUB_Socket: sub}
+            self.public_sockets = {PUB_Socket: self.addresses['publisher'],
+                                   FRONTENDRouter_Socket: self.addresses['frontend'],
+                                   BACKENDRouter_Socket: self.addresses['backend']}
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
+
+    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+        for msg, device_id, crypted in msgs:
+            try:
+                if int(crypted):
+                    msg: bytes = self.decrypt_with_session_key(msg, device_id)
+                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
+                self.parent_thinker.add_task_in(mes)
+            except (MessengerError, MessageError, ThinkerError) as e:
+                error_logger(self, self.run, e)
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                                 error_comments=str(e),
+                                                 reply_to='', receiver_id=device_id)
+                self.add_msg_out(msg_r)
 
     def encrypt_with_public(self, msg_b: bytes, pem: bytes):
         public_key = self._load_public_key(pem)
@@ -501,36 +532,23 @@ class ServerMessenger(Messenger):
             if not self.paused:
                 sockets = dict(self.poller.poll(1))
                 try:
-                    if self.sockets['frontend'] in sockets:
-                        device_id, msg, crypted = self.sockets['frontend'].recv_multipart()
+                    if self.sockets[FRONTENDRouter_Socket] in sockets:
+                        device_id, msg, crypted = self.sockets[FRONTENDRouter_Socket].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._frontendpool:
                             self._frontendpool.add(device_id)
-                        msgs.append((msg, device_id, crypted))
-                    if self.sockets['backend'] in sockets:
-                        device_id, msg, crypted = self.sockets['backend'].recv_multipart()
+                        msgs.append(MsgTuple(msg, device_id, FRONTENDRouter_Socket, crypted))
+                    if self.sockets[BACKENDRouter_Socket] in sockets:
+                        device_id, msg, crypted = self.sockets[BACKENDRouter_Socket].recv_multipart()
                         device_id = device_id.decode('utf-8')
                         if device_id not in self._backendpool:
                             self._backendpool.add(device_id)
-                        msgs.append((msg, device_id, crypted))
+                        msgs.append(MsgTuple(msg, device_id, BACKENDRouter_Socket, crypted))
                     if self.sockets['sub'] in sockets:
-                        msg, crypted = self.sockets['sub'].recv_multipart()
-                        msgs.append((msg, None, crypted))
-
+                        msg, crypted = self.sockets[SUB_Socket].recv_multipart()
+                        msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        for msg, device_id, crypted in msgs:
-                            try:
-                                if int(crypted):
-                                    msg: bytes = self.decrypt_with_session_key(msg, device_id)
-                                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
-                                self.parent_thinker.add_task_in(mes)
-                            except (MessengerError, MessageError, ThinkerError) as e:
-                                error_logger(self, self.run, e)
-                                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                                                 error_comments=str(e),
-                                                                 reply_to='', receiver_id=device_id)
-                                self.add_msg_out(msg_r)
-
+                        self._deal_with_reaceived_msg()
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)

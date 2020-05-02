@@ -18,7 +18,7 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_external(self, msg: MessageExt):
+    def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
             # Convert MessageExt to MessageInt and emit it
             self.parent.signal.emit(msg.ext_to_int())
@@ -105,7 +105,7 @@ class ServerCmdLogic(Thinker):
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_external(self, msg: MessageExt):
+    def react_directed(self, msg: MessageExt):
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
         if msg.receiver_id != self.parent.id and msg.receiver_id != '':
             if msg.receiver_id in self.parent.connections:
@@ -124,7 +124,7 @@ class ServerCmdLogic(Thinker):
                     self.events[msg.info.event_id].time = time()
                     self.events[msg.info.event_id].n = msg.info.n
                 except KeyError as e:
-                    error_logger(self, self.react_external, e)
+                    error_logger(self, self.react_directed, e)
         # WELCOME INFO from another device
         elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
             if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
@@ -181,8 +181,8 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 class ServiceCmdLogic(GeneralCmdLogic):
 
-    def react_external(self, msg: MessageExt):
-        super().react_external(msg)
+    def react_directed(self, msg: MessageExt):
+        super().react_directed(msg)
         reply = False
         data = msg.data
         msg_i = []

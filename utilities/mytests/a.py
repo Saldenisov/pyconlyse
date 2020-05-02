@@ -1,27 +1,9 @@
-from enum import Enum, Flag, auto
-from dataclasses import dataclass
+from typing import NewType
 
-@dataclass
-class DC:
-    name: str = '1'
-    value: int = 2
+N = NewType('N', str)
+a = N('a')
 
-    @staticmethod
-    def a():
-        print(DC())
+b = {'a': 2}
 
-
-class MsgType(str, Enum):
-    INFO = DC('info', 1)
-    DEMAND = DC('demand', 2)
-    REPLY = DC('reply', 3)
-
-class A:
-    b = ['a']
-
-    def p(self):
-        self.b.append('c')
-        print(self.b)
-
-if MsgType.REPLY in MsgType:
+if 'b' is a:
     print(1)
