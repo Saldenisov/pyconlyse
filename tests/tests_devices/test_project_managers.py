@@ -2,10 +2,10 @@ from pathlib import Path
 from devices.service_devices.project_treatment import ProjectManager_controller
 from devices.service_devices.project_treatment.openers import Opener, HamamatsuFileOpener
 from utilities.myfunc import file_md5
-from utilities.data.datastructures.mes_independent import CmdStruct
-from utilities.data.datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
+from datastructures.mes_independent import CmdStruct
+from datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
-from utilities.data.datastructures.mes_independent.projects_dataclass import *
+from datastructures.mes_independent.projects_dataclass import *
 
 import logging
 module_logger = logging.getLogger(__name__)

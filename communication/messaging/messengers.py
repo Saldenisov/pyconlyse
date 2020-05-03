@@ -70,7 +70,7 @@ class Messenger(MessengerInter):
         except AttributeError:
             self._polling_time = 1
         self.active = False
-        self.paused = False
+        self.paused = True
         self._msg_out = OrderedDictMod(name=f'msg_out:{self.parent.id}')
         # ZMQ sockets, communication info
         self.sockets = {}
@@ -107,12 +107,17 @@ class Messenger(MessengerInter):
     def create_fernet(self, session_key: bytes):
         return Fernet(session_key)
 
-    def decrypt_with_private(self, cipher_text: bytes):
+    def decrypt_with_private(self, cipher_text: bytes) -> str:
+        """
+        Decrypt the cipher text using private key (RSA)
+        :param cipher_text: cipher text in bytes
+        :return: plain text string
+        """
         plaintext = self._private_key.decrypt(cipher_text, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None):
+    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> str:
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
             if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
@@ -128,7 +133,13 @@ class Messenger(MessengerInter):
     def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
         pass
 
-    def encrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId):
+    def encrypt_with_public(self, msg_b: bytes, pem: bytes) -> bytes:
+        public_key = self._load_public_key(pem)
+        msg_encrypted = public_key.encrypt(msg_b, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
+                                                                                algorithm=hashes.SHA1(), label=None))
+        return msg_encrypted
+
+    def encrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId) -> bytes:
         # TODO: add functionality to messenger.encrypt() when TLS is realized
         try:
             if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
@@ -149,6 +160,10 @@ class Messenger(MessengerInter):
         self._fernets = value
 
     def _gen_rsa_keys(self):
+        """
+        Private and Public Keys are generated with default_backend
+        :return: None
+        """
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
         self._public_key = self._private_key.public_key()
 
@@ -200,6 +215,10 @@ class Messenger(MessengerInter):
         # Start send loop here
         self._send_loop_logic(await_time=0.1 / 1000.)
 
+    @abstractmethod
+    def _receive_msgs(self):
+        pass
+
     def restart_socket(self, socket_name: str, connect_to: str):
         #TODO: realize other sockets
         self.logger.info(f'restarting {socket_name} socket')
@@ -230,7 +249,7 @@ class Messenger(MessengerInter):
     def stop(self):
         info_msg(self, 'STOPPING')
         self.active = False
-        self.paused = False
+        self.paused = True
         self._msg_out = {}
 
     def subscribe_sub(self, address=None, filter_opt=b""):
@@ -361,6 +380,8 @@ class ClientMessenger(Messenger):
             if self.sockets['sub']:
                 self.sockets['sub'].close()
             self.context.destroy()
+            self.active = False
+            self.paused = True
             info_msg(self, 'STOPPED')
 
     def send_msg(self, msg: MessageExt):
@@ -369,16 +390,14 @@ class ClientMessenger(Messenger):
             msg_bytes = msg.msgpack_repr()
             if msg.crypted:
                 msg_bytes = self.encrypt_with_session_key(msg_bytes)
-            if msg.type is MsgType.DIRECTED:
-                self.sockets['dealer'].send_multipart([msg_bytes, crypted])
+            if msg.receiver_id != '':
+                self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
                 self.logger.info(f'{msg.short()} is send from {self.parent.name}')
-            elif msg.type is MsgType.BROADCASTED:
+            else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
                     self.logger.info(f'Publisher socket is not available for {self.name}.')
-            else:
-                error_logger(self, self.send_msg, f'Cannot handle msg type {msg.type}')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -494,13 +513,13 @@ class ServerMessenger(Messenger):
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
 
-    def encrypt_with_public(self, msg_b: bytes, pem: bytes):
-        public_key = self._load_public_key(pem)
-        msg_encrypted = public_key.encrypt(msg_b, padding.OAEP(mgf=padding.MGF1(algorithm=hashes.SHA1()),
-                                                                                algorithm=hashes.SHA1(), label=None))
-        return msg_encrypted
 
     def gen_symmetric_key(self, device_id):
+        """
+        Session key is generated based on PBKDF2 standard, the key is stored in connected_fernets dict
+        :param device_id: unique device id
+        :return: None
+        """
         salt = Fernet.generate_key()
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
         password = Fernet.generate_key()
@@ -526,6 +545,8 @@ class ServerMessenger(Messenger):
             for _, soc in self.sockets.items():
                 soc.close()
             self.context.destroy()
+            self.active = False
+            self.paused = True
             info_msg(self, 'STOPPED')
 
     def _receive_msgs(self):
@@ -561,9 +582,9 @@ class ServerMessenger(Messenger):
             msg_bytes = msg.msgpack_repr()  # It gives smaller size compared to json representation
             if msg.crypted:
                 msg_bytes = self.encrypt_with_session_key(msg_bytes, msg.receiver_id)
-            if msg.type is MsgType.BROADCASTED:
+            if msg.receiver_id == '':
                 self.sockets[PUB_Socket_Server].send_multipart([msg_bytes, crypted])
-            elif msg.type is MsgType.DIRECTED:
+            else:
                 if msg.receiver_id in self._frontendpool:
                     self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
                     self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from frontend to {msg.receiver_id}')
@@ -572,8 +593,7 @@ class ServerMessenger(Messenger):
                     self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from backend to {msg.receiver_id}')
                 else:
                     error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
-            else:
-                error_logger(self, self.send_msg, f'Cannot handle msg type {msg.type}')
+
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 

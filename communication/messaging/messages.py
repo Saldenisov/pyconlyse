@@ -36,7 +36,8 @@ class MsgComExt(Enum):
                                         set(['available_services']), True)
     DO_IT = None
     DONE_IT = None
-    ERROR = MessageInfoExt('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), True)
+    ERROR = MessageInfoExt('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']),
+                           False)
     HEARTBEAT = MessageInfoExt('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfoExt('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
@@ -82,7 +83,7 @@ class MessageExt(Message):
     receiver_id: str
     reply_to: str
     sender_id: str
-    type: MsgType
+    #type: MsgType  # temporary disabled TODO: to think what to do with it
     id: str = ''
 
     def __post_init__(self):

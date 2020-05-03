@@ -111,15 +111,15 @@ class Thinker(ThinkerInter):
         info['pending_replies'] = self.replies_pending_answer
         return info
 
-    def msg_out(self, out: bool, msg_i: Union[MessageExt, List[MessageExt]]):
-        if out and msg_i:
-            if isinstance(msg_i, list):
-                for msg in msg_i:
-                    self.msg_out(out, msg)
-            elif isinstance(msg_i, MessageExt):
-                info_msg(self, 'INFO', extra=repr(msg_i.short()))
+    def msg_out(self, msg_out: Union[MessageExt, List[MessageExt]]):
+        if msg_out:
+            if isinstance(msg_out, list):
+                for msg in msg_out:
+                    self.msg_out(msg)
+            elif isinstance(msg_out, MessageExt):
+                info_msg(self, 'INFO', extra=repr(msg_out.short()))
             else:
-                self.add_task_out(msg_i)
+                self.add_task_out(msg_out)
 
     def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
                        start_now=False, **kwargs):
@@ -157,6 +157,10 @@ class Thinker(ThinkerInter):
     @property
     def replies_pending_answer(self) -> OrderedDictMod:
         return self._pending_replies
+
+    @abstractmethod
+    def react_external(self, msg: MessageExt):
+        pass
 
     @abstractmethod
     def react_broadcasted(self, msg: MessageExt):

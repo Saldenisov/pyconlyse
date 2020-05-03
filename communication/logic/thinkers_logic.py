@@ -3,6 +3,7 @@ from time import time
 
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
+from communication.messaging.messengers import PUB_Socket, SUB_Socket
 from datastructures.mes_independent.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
 
@@ -73,6 +74,9 @@ class GeneralCmdLogic(Thinker):
             self.events['server_heartbeat'].time = time()
             self.parent.messenger._are_you_alive_send = False
 
+    def react_external(self, msg: MessageExt):
+        pass
+
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
@@ -81,7 +85,7 @@ class GeneralCmdLogic(Thinker):
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     self.parent.messenger._attempts_to_restart_sub -= 1
                     event.counter_timeout = 0
-                    addr = self.parent.connections[event.original_owner].device_info.public_sockets['publisher']
+                    addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket]  # TODO: check if it is PUB_scoket or Server PUB_socket
                     self.parent.messenger.restart_socket('sub', addr)
                 else:
                     if not self.parent.messenger._are_you_alive_send:
@@ -109,69 +113,87 @@ class ServerCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_broadcasted(self, msg: MessageExt):
-        pass
+        if msg.com == MsgComExt.HEARTBEAT.msg_name:
+            try:
+                self.events[msg.info.event_id].time = time()
+                self.events[msg.info.event_id].n = msg.info.n
+            except KeyError as e:
+                error_logger(self, self.react_directed, e)
+        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
+            self.remove_device_from_connections(msg.info.device_id)
+            self.parent.send_status_pyqt()
 
-    def react_directed(self, msg: MessageExt):
+    def react_external(self, msg: MessageExt):
+        # TODO: add decision on permission
+        # HEARTBEATS and SHUTDOWNS...maybe something else later
+        if msg.receiver_id == '' and msg.sender_id in self.parent.connections:
+            self.react_broadcasted(msg)
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
-        if msg.receiver_id != self.parent.id and msg.receiver_id != '':
-            if msg.receiver_id in self.parent.connections:
-                msg_i = msg
-                info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
-            else:
-                msg_i = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
-                                                  reply_to=msg.id),
-                         self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                                  comments=f'service {msg.receiver_id} is not available',
-                                                  receiver_id=msg.sender_id, reply_to=msg.id)]
-        # HEARTBEATS...maybe something else later
-        elif msg.receiver_id == '' and msg.sender_id in self.parent.connections:
-            if msg.com == MsgComExt.HEARTBEAT.com_name:
-                try:
-                    self.events[msg.info.event_id].time = time()
-                    self.events[msg.info.event_id].n = msg.info.n
-                except KeyError as e:
-                    error_logger(self, self.react_directed, e)
-        # WELCOME INFO from another device
+        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
+            self.react_forward(msg)
+        # WELCOME INFO from another device or Directed message for the first time
         elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
-            if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
-                try:
-                    device_info: WelcomeInfoDevice = msg.info
-                    connections = self.parent.connections
-                    if device_info.device_id not in connections:
-                        connections[device_info.device_id] = Connection(device_info=device_info)
-                        if 'publisher' in device_info.public_sockets:
-                            from communication.logic.logic_functions import external_hb_logic
-                            self.parent.messenger.subscribe_sub(address=device_info.public_sockets['publisher'])
-                            self.register_event(name=f'heartbeat:{device_info.device_name}',
-                                                logic_func=external_hb_logic,
-                                                event_id=f'heartbeat:{device_info.device_id}',
-                                                original_owner=device_info.device_id,
-                                                start_now=True)
-                        session_key = self.parent.messenger.gen_symmetric_key(device_info.device_id)
-                        device_public_key = self.parent.messenger.decrypt_with_private(device_info.public_key)
-                        session_key_encrypted = self.parent.messenger.encrypt_with_public(session_key,
-                                                                                          device_public_key)
-                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
-                                                         receiver_id=msg.sender_id)
-                        self.parent.send_status_pyqt()
-                except Exception as e:  # TODO: change Exception to something reasonable
-                    pass  #  TODO: add functionality
+            self.react_first_welcome(msg)
         # When the message is dedicated to Server
         elif msg.sender_id in self.parent.connections and msg.receiver_id == self.parent.id:
-            if msg.com == MsgComExt.ALIVE.msg_name:
-                if msg.body.sender_id in self.parent.connections:
-                    msg_i = None #MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
-            elif msg.com == MsgComExt.DO_IT.mes_name:
-                reply = False
-                if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                    self.logger.error(f'Adding to executor {msg.info} failed')
-            elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
-                self.remove_device_from_connections(msg.info.device_id)
-                self.parent.send_status_pyqt()
+            self.react_directed(msg)
         else:
             pass  # TODO: that I do not know what it is...add MsgError
 
-        self.msg_out(reply, msg_i)
+    def react_directed(self, msg: MessageExt):
+        msg_r = None
+        if msg.com == MsgComExt.ALIVE.msg_name:
+            if msg.body.sender_id in self.parent.connections:
+                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
+        elif msg.com == MsgComExt.DO_IT.mes_name:
+            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                self.logger.error(f'Adding to executor {msg.info} failed')
+
+        self.msg_out(msg_r)
+
+    def react_denied(self, msg: MessageExt):
+        pass
+
+    def react_first_welcome(self, msg: MessageExt):
+        msg_r = None
+        if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
+            try:
+                messenger = self.parent.messenger
+                device_info: WelcomeInfoDevice = msg.info
+                # Decrypt public_key of device crypted on device side with public key of Server
+                device_info.device_public_key = messenger.decrypt_with_private(device_info.device_public_key)
+                connections = self.parent.connections
+                connections[device_info.device_id] = Connection(device_info=device_info)
+                if PUB_Socket in device_info.public_sockets:
+                    from communication.logic.logic_functions import external_hb_logic
+                    messenger.subscribe_sub(address=device_info.public_sockets[PUB_Socket])
+                    self.register_event(name=f'heartbeat:{device_info.device_name}',
+                                        logic_func=external_hb_logic,
+                                        event_id=f'heartbeat:{device_info.device_id}',
+                                        original_owner=device_info.device_id,
+                                        start_now=True)
+
+                session_key = messenger.gen_symmetric_key(device_info.device_id)
+                messenger.fernets[device_info.device_id] = session_key
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
+                                                 receiver_id=msg.sender_id)
+                self.parent.send_status_pyqt()
+            except Exception as e:  # TODO: change Exception to something reasonable
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
+                                                 receiver_id=msg.sender_id, reply_to=msg.id)
+        self.msg_out(msg_r)
+
+    def react_forward(self, msg: MsgComExt):
+        msg_r = None
+        if msg.receiver_id in self.parent.connections:
+            info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
+        else:
+            msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
+                                              reply_to=msg.id),
+                     self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                              comments=f'service {msg.receiver_id} is not available',
+                                              receiver_id=msg.sender_id, reply_to=msg.id)]
+        self.msg_out(msg_r)
 
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:

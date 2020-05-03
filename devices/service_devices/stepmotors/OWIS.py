@@ -197,7 +197,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :return: 0 – function was successful 1...9 – error
         1 function error (invalid parameters)
         3 invalid serial port (port is not found)
-        4 access denied (port is busy)
+        4 access react_denied (port is busy)
         5 no response from control unit (check cable, connection or reset control unit)
         8 no connection to modbus/tcp
         9 no connection to tcp/ip socket
@@ -720,7 +720,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :return: error as string
         """
         errors_connections = {0: 'no error', -1: 'function error', -2: 'invalid serial port (port is not found)',
-                  -3: 'access denied  (port is busy)', -4: 'access denied  (port is busy)',
+                  -3: 'access react_denied  (port is busy)', -4: 'access react_denied  (port is busy)',
                   -5: 'no response from control unit', -7: 'control unit with the specified serial number is not found',
                   -8: 'no connection to modbus/tcp', -9: 'no connection to tcp/ip socket'}
         errors_functions = {0: 'no error', -1: 'function error', -2: 'communication error', -3: 'syntax error',

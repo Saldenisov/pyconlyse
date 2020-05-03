@@ -22,6 +22,7 @@ def once(func):
 def make_loop(func):
     from threading import Thread
     from time import sleep
+
     @wraps(func)
     def func_wrapper(*args, **kwargs):
         try:
@@ -31,14 +32,13 @@ def make_loop(func):
         if not hasattr(obj, 'active') or not hasattr(obj, 'paused'):
             raise Exception(f'{obj} does not have attribute: active or paused')
 
-        def f(*args, **kwargs):
-
+        def f(*internal_args, **internal_kwargs):
             while obj.active:
                 if not obj.paused:
-                    sleep(kwargs['await_time'])
-                    func(*args, **kwargs)
+                    sleep(internal_kwargs['await_time'])
+                    func(*internal_args, **internal_kwargs)
                 else:
-                    sleep(kwargs['await_time'] * 10)
+                    sleep(internal_kwargs['await_time'] * 10)
             obj.logger.info('Loop thread is off')
 
         obj.send_loop_thread = Thread(target=f, args=args, kwargs=kwargs)

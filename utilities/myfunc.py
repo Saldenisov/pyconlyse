@@ -88,7 +88,7 @@ def info_msg(obj: object, msg_type: str, extra=''):
         elif msg_type == 'STRANGE':
             r = f'Something strange happened {obj.name}{extra}'
         elif msg_type == 'DENIED':
-            r = 'Permission is denied'
+            r = 'Permission is react_denied'
         elif msg_type in ['REQUEST', 'DEMAND']:
             r = f'{msg_type}: {extra} \n____________________________\n'
         elif msg_type == 'INFO':

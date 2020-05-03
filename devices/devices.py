@@ -189,6 +189,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
 
     def generate_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
+        """
+        This function is dedicated to generate Messages for some device
+        :param msg_com:
+        :param kwargs: could be any, depends on the message definition
+        :return: Union[MessageExt, MessageInt, None]
+        """
         def gen_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
             try:
                 message_info: MessageInfoExt = msg_com.value
@@ -219,11 +225,13 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
                         try:
                             session_key = self.messenger.fernets[kwargs['receiver_id']]
+                            device_public_key = self.connections[kwargs['receiver_id']].device_info.device_public_key
+                            # Session key Server-Device is crypted with device public key, message is not crypted
+                            session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
                         except KeyError:
-                            session_key = b''
+                            session_key_crypted = b''
                         finally:
-                            info = WelcomeInfoServer(session_key=session_key)
-
+                            info = WelcomeInfoServer(session_key=session_key_crypted)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, e)
                 raise e
