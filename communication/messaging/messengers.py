@@ -16,6 +16,7 @@ from typing import Dict, List, NamedTuple, NewType
 
 from communication.interfaces import MessengerInter
 from communication.messaging.messages import MessageExt, MsgType, MsgComExt
+from datastructures.mes_independent.devices_dataclass import *
 from devices.interfaces import DeviceId
 from devices.devices import Device
 from datastructures.mes_dependent.dicts import OrderedDictMod
@@ -77,8 +78,6 @@ class Messenger(MessengerInter):
         self.public_sockets = {}
         self.addresses = {}
         self.pub_option = pub_option
-        # Cryptographic rsa keys are generated here
-        self._fernets: Dict[DeviceId, Fernet] = {}
         self._gen_rsa_keys()
 
 
@@ -139,25 +138,12 @@ class Messenger(MessengerInter):
                                                                                 algorithm=hashes.SHA1(), label=None))
         return msg_encrypted
 
-    def encrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId) -> bytes:
+    def encrypt_with_session_key(self, msg_bytes: bytes, receiver_id: DeviceId) -> bytes:
         # TODO: add functionality to messenger.encrypt() when TLS is realized
         try:
-            if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
-                fernet = self.fernets[self.fernets.keys()[0]]  # at this moment there could be only one key for
-                # client and service messenger, since it is Dealer to Router connection for client/service to Server
-            else:
-                fernet = self.fernets[device_id]
-            return fernet.encrypt(msg_bytes)
+            return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
-
-    @property
-    def fernets(self):
-        return self._fernets
-
-    @fernets.setter
-    def fernets(self, value: Dict[DeviceId, Fernet]):
-        self._fernets = value
 
     def _gen_rsa_keys(self):
         """
@@ -429,17 +415,26 @@ class ClientMessenger(Messenger):
             sockets = dict(self.poller.poll(100))
             if self.sockets[SUB_Socket] in sockets:
                 mes, crypted = self.sockets[SUB_Socket].recv_multipart()
-                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(mes)
+                # TODO: decrypt message safely with try except
+                msg: MessageExt = MessageExt.msgpack_bytes_to_msg(mes)
                 # TODO: first heartbeat could be received only from server! make it safe
-                if mes.com == MsgComExt.HEARTBEAT.com_name:
-                    sockets = mes.info.sockets
-                    if FRONTEND_Server in sockets and BACKEND_Server in sockets:
-                        self.logger.info(mes)
-                        self.addresses['server_frontend'] = sockets['frontend']
-                        self.addresses['server_backend'] = sockets['backend']
-                        wait = False
-                    else:
-                        raise MessengerError(f'Not all sockets are sent to {self.name}')
+                if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
+                    try:
+                        info: HeartBeatFull = msg.info
+                        sockets = info.device_public_sockets
+                        if FRONTEND_Server in sockets and BACKEND_Server in sockets:
+                            self.logger.info(msg)
+                            self.addresses['server_frontend'] = sockets['frontend']
+                            self.addresses['server_backend'] = sockets['backend']
+                            param = {}
+                            for field_name in info.__annotations__:
+                                param[field_name] = getattr(info, field_name)
+                            self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
+                            break
+                        else:
+                            raise MessengerError(f'Not all sockets are sent to {self.name}')
+                    except AttributeError:  # IN case when short Heartbeat arrived
+                        pass
 
 
 class ServiceMessenger(ClientMessenger):
@@ -513,8 +508,7 @@ class ServerMessenger(Messenger):
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
 
-
-    def gen_symmetric_key(self, device_id):
+    def gen_symmetric_key(self, device_id) -> bytes:
         """
         Session key is generated based on PBKDF2 standard, the key is stored in connected_fernets dict
         :param device_id: unique device id
@@ -523,9 +517,7 @@ class ServerMessenger(Messenger):
         salt = Fernet.generate_key()
         kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
         password = Fernet.generate_key()
-        session_key = base64.urlsafe_b64encode(kdf.derive(password))
-        self.connection_fernets[device_id] = Fernet(session_key)
-        return session_key
+        return base64.urlsafe_b64encode(kdf.derive(password))
 
     def info(self):
         from collections import OrderedDict as od

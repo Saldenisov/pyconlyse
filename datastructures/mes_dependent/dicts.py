@@ -75,7 +75,7 @@ class Connections_Dict(dict):
             if key in self.messenger_id:
                 return super().__getitem__(self.messenger_id[key])
             else:
-                raise KeyError('Neither device_id nor messenger_id were passed correctly to get the connection...')
+                raise KeyError('Neither receiver_id nor messenger_id were passed correctly to get the connection...')
 
     def __delitem__(self, key):
         try:
@@ -90,7 +90,7 @@ class Connections_Dict(dict):
                 del self.messenger_id[messenger_id]
                 super().__delitem__(key)
             else:
-                raise KeyError('Neither device_id nor messenger_id were passed correctly to delete the connection...')
+                raise KeyError('Neither receiver_id nor messenger_id were passed correctly to delete the connection...')
 
     def __contains__(self, item):
         if super().__contains__(item):

@@ -12,6 +12,7 @@ class DeviceType(str, Enum):
     CLIENT = 'client'
     SERVER = 'server'
     SERVICE = 'service'
+    DEFAULT = 'default'
 
 
 class DeviceInter(ABC):

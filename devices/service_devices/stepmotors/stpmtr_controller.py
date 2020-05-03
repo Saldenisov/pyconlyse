@@ -24,7 +24,7 @@ class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._axes_number: int = 0
-        self.axes: Dict[int, AxisStpMtr] = dict()  # {device_id: AxisStpMtr()}
+        self.axes: Dict[int, AxisStpMtr] = dict()  # {receiver_id: AxisStpMtr()}
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._parameters_set_hardware = False
         if not path.exists(self._file_pos):

@@ -10,10 +10,10 @@ class ConnectionPermission(Enum):
 
 
 class AccessLevel(Enum):
-    GOD_LEVEL = auto()
-    FULL_LEVEL = auto()
-    READ_ONLY_LEVEL = auto()
-    NONE_LEVEL = auto()
+    GOD = auto()
+    FULL = auto()
+    READ_ONLY = auto()
+    NONE = auto()
 
 
 class MsgType(str, Enum):

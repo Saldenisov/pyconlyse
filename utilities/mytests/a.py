@@ -1,9 +1,20 @@
-from typing import NewType
+from dataclasses import dataclass
 
-N = NewType('N', str)
-a = N('a')
 
-b = {'a': 2}
+@dataclass
+class A:
+    a: int = 2
+    b: str = 'sdf'
 
-if 'b' is a:
-    print(1)
+a = A()
+for field in a.__annotations__:
+    print(getattr(a, field))
+from time import sleep
+b = True
+i = 0
+while b:
+    if i>100:
+        break
+    i += 1
+
+print('Doine')

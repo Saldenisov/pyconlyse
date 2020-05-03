@@ -44,10 +44,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], parent: QObject = None,
                  db_command: str = '', logger_new=True, test=False, **kwargs):
         super().__init__()
-        self.test = test
-        self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
-        self._main_executor = ThreadPoolExecutor(max_workers=100)
         Device.n_instance += 1
+        self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
+        self.config = configurationSD(self)
+        self.connections: Dict[DeviceId, Connection] = Connections_Dict()
+        self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
+        self.device_status: DeviceStatus = DeviceStatus(*[False] * 5)
+        self.db_path = db_path
+        self.name: str = name
+        self._main_executor = ThreadPoolExecutor(max_workers=100)
+        self.parent: QObject = parent
+        self.type: DeviceType = DeviceType.DEFAULT
+        self.test = test
+
         if logger_new:
             self.logger = initialize_logger(app_folder / 'LOG', file_name=__name__ + '.' + self.__class__.__name__)
             if test:
@@ -59,18 +68,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.id: DeviceId = f'{name}:{unique_id(name)}'
         else:
             self.id: DeviceId = kwargs['id']
-
-        self.name: str = name
-        self.parent: QObject = parent
-
-        self.db_path = db_path
-        self.config = configurationSD(self)
-
-        self.connections: Dict[DeviceId, Connection] = Connections_Dict()
-
-        self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
-
-        self.device_status: DeviceStatus = DeviceStatus(*[False] * 5)
 
         try:
             assert len(self.cls_parts) == 2
@@ -210,6 +207,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     elif msg_com is MsgComExt.HEARTBEAT_FULL:
                         event = kwargs['event']
                         info = HeartBeatFull(event_n=event.n, event_tick=event.tick, device_id=self.id,
+                                             device_name=self.name, device_type=self.type,
                                              device_public_key=self.messenger.public_key,
                                              device_public_sockets=self.messenger.public_sockets)
                     elif msg_com is MsgComExt.ERROR:
@@ -224,14 +222,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         info = ShutDown(device_id=self.id, reason=kwargs['reason'])
                     elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
                         try:
-                            session_key = self.messenger.fernets[kwargs['receiver_id']]
-                            device_public_key = self.connections[kwargs['receiver_id']].device_info.device_public_key
+                            session_key = self.connections[kwargs['receiver_id']].session_key
+                            device_public_key = self.connections[kwargs['receiver_id']].device_public_key
                             # Session key Server-Device is crypted with device public key, message is not crypted
                             session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
                         except KeyError:
                             session_key_crypted = b''
                         finally:
-                            info = WelcomeInfoServer(session_key=session_key_crypted)
+                            info = WelcomeInfoServer(device_id=self.id, device_name=self.name,
+                                                     device_type=DeviceType.SERVER,
+                                                     device_public_key=self.messenger.public_key,
+                                                     device_public_sockets=self.messenger.public_sockets,
+                                                     session_key=session_key_crypted)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, e)
                 raise e
@@ -378,19 +380,17 @@ class Server(Device):
     def available_services(self) -> Dict[DeviceId, str]:
         available_services = {}
         for device_id, connection in self.connections.items():
-            info = connection.device_info
-            if info.type is DeviceType.SERVICE:
-                available_services[device_id] = info.name
+            if connection.device_type is DeviceType.SERVICE:
+                available_services[device_id] = connection.device_name
         return available_services
 
     @property
     def available_clients(self) -> Dict[str, str]:
-        """Returns dict of running clients {device_id: name}"""
+        """Returns dict of running clients {receiver_id: name}"""
         clients_running = {}
         for device_id, connection in self.connections.items():
-            info = connection.device_info
-            if info.type is DeviceType.CLIENT:
-                clients_running[device_id] = info.name
+            if connection.device_type is DeviceType.CLIENT:
+                clients_running[device_id] = connection.device_name
         return clients_running
 
     def activate(self, flag: bool):
@@ -567,12 +567,12 @@ class DeviceFactory:
             else:
                 raise BaseException(f'DeviceFactory Crash: Device cls is not a class, but {type(cls)}')
         else:
-            if 'device_id' in kwargs and 'db_path' in kwargs:
-                device_id: str = kwargs['device_id']
+            if 'receiver_id' in kwargs and 'db_path' in kwargs:
+                device_id: str = kwargs['receiver_id']
 
                 db_conn = db_create_connection(kwargs['db_path'])
                 device_name, comments = db_execute_select(db_conn, f"SELECT device_name from DEVICES_settings "
-                                                                   f"where device_id='{device_id}'")
+                                                                   f"where receiver_id='{device_id}'")
 
                 if not device_name:
                     err = f'DeviceFactory Crash: {device_id} is not present in DB'
@@ -580,7 +580,7 @@ class DeviceFactory:
                     raise BaseException(err)
 
                 project_type, comments = db_execute_select(db_conn, f"SELECT project_type from DEVICES_settings "
-                                                                    f"where device_id='{device_id}'")
+                                                                    f"where receiver_id='{device_id}'")
 
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
@@ -602,9 +602,9 @@ class DeviceFactory:
 
                 kwargs['name'] = device_name
                 kwargs['thinker_cls'] = thinker_class
-                kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
+                kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where receiver_id = "{device_id}"'
                 kwargs['id'] = device_id
                 if issubclass(cls, Device):
                     return cls(**kwargs)
             else:
-                raise BaseException('DeviceFactory Crash: device_id or db_path were not passed')
+                raise BaseException('DeviceFactory Crash: receiver_id or db_path were not passed')

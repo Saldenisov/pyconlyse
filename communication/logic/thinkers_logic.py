@@ -5,7 +5,7 @@ from pip._internal import self_outdated_check
 
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
-from communication.messaging.messengers import PUB_Socket, SUB_Socket
+from communication.messaging.messengers import PUB_Socket, SUB_Socket, PUB_Socket_Server
 from datastructures.mes_independent.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
 
@@ -17,17 +17,17 @@ class GeneralCmdLogic(Thinker):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
-        self.register_event('heartbeat',  internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
+        self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_broadcasted(self, msg: MessageExt):
+    def react_broadcast(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.msg_name:
             try:
                 self.events[msg.sender_id].time = time()
                 self.events[msg.sender_id].n = msg.info.n
             except KeyError as e:
-                error_logger(self, self.react_broadcasted, e)
+                error_logger(self, self.react_broadcast, e)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
             self.remove_device_from_connections(msg.sender_id)
             self.parent.send_status_pyqt()
@@ -43,58 +43,68 @@ class GeneralCmdLogic(Thinker):
             # Convert MessageExt to MessageInt and emit it
             self.parent.signal.emit(msg.ext_to_int())
 
-        reply = False
-        msg_i = []
-        if msg.com == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
+        msg_r = None
+        if msg.com == MsgComExt.ALIVE.msg_name:
             if msg.body.sender_id in self.parent.connections:
-                msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
-            else:
-                msg_i = MsgGenerator.error(device=self.parent,
-                                       comments=f'service/client {msg.body.sender_id} is not known to server',
-                                       msg_i=msg)
-            reply = True
+                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
+        elif msg.com == MsgComExt.DO_IT.mes_name:
+            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
+                self.logger.error(f'Adding to executor {msg.info} failed')
 
-        self.msg_out(reply, msg_i)
+        self.msg_out(msg_r)
 
-        if msg.com == MsgComExt.HEARTBEAT.name:
-            if self.parent.pyqtsignal_connected:
-                self.parent.signal.emit(msg)
-            if msg.info.device_id not in self.parent.connections:
-                self.logger.info(msg.short())
-                from communication.logic.logic_functions import external_hb_logic
-                self.register_event(name=msg.info.event_name,
-                                    event_id=msg.info.event_id,
-                                    logic_func=external_hb_logic,
-                                    original_owner=msg.info.device_id,
-                                    start_now=True)
-                self.parent.connections[msg.info.device_id] = Connection(WelcomeInfoDevice(device_id=msg.info.device_id,
-                                                                                           messenger_id=msg.sender_id))
-                msg_i = MsgGenerator.hello(device=self.parent)
-                self.msg_out(True, msg_i)
-            else:
-                # TODO: potential danger of calling non-existing event
-                self.events[msg.info.event_id].time = time()
-                self.events[msg.info.event_id].n = msg.info.n
+        if msg.info.device_id not in self.parent.connections:
+            self.logger.info(msg.short())
+            from communication.logic.logic_functions import external_hb_logic
+            self.register_event(name=msg.info.event_name,
+                                event_id=msg.info.event_id,
+                                logic_func=external_hb_logic,
+                                original_owner=msg.info.device_id,
+                                start_now=True)
+            self.parent.connections[msg.info.device_id] = Connection(WelcomeInfoDevice(device_id=msg.info.device_id,
+                                                                                       messenger_id=msg.sender_id))
+            msg_i = MsgGenerator.hello(device=self.parent)
+            self.msg_out(True, msg_i)
+        else:
+            # TODO: potential danger of calling non-existing event
+            self.events[msg.info.event_id].time = time()
+            self.events[msg.info.event_id].n = msg.info.n
 
-        info_msg(self, 'REPLY_IN', extra=str(msg.short()))
-
-        if msg.com == MsgComExt.WELCOME_INFO.mes_name:
-            if msg.info.device_id in self.parent.connections:
-                self.logger.info(f'Server {msg.info.device_id} is active. Handshake was undertaken')
-                connection: Connection = self.parent.connections[msg.info.device_id]
-                connection.device_info = msg.info
-                session_key = self.parent.messenger.decrypt_with_private(msg.info.session_key)
-                # TODO: replace with setter
-                self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
-        elif msg.com == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
-            self.events['server_heartbeat'].time = time()
-            self.parent.messenger._are_you_alive_send = False
+    def react_first_welcome(self, msg: MessageExt):
+        msg_r = None
+        if msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
+            try:
+                messenger = self.parent.messenger
+                info: WelcomeInfoServer = msg.info
+                # Decrypt public_key of device crypted on device side with public key of Server
+                info.session_key = messenger.decrypt_with_private(info.device_public_key)
+                connections = self.parent.connections
+                param = {}
+                for field_name in info.__annotations__:
+                    param[field_name] = getattr(info, field_name)
+                # TODO: Actually check AccessLevel and ConnectionPermission using password checksum
+                param['AccessLevel'] = AccessLevel.FULL
+                param['ConnectionPermission'] = ConnectionPermission.GRANTED
+                connections[info.device_id] = Connection(**param)
+                if PUB_Socket_Server in info.device_public_sockets:
+                    from communication.logic.logic_functions import external_hb_logic
+                    messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket_Server])
+                    self.register_event(name=f'heartbeat:{info.device_name}',
+                                        logic_func=external_hb_logic,
+                                        event_id=f'heartbeat:{info.device_id}',
+                                        original_owner=info.device_id,
+                                        start_now=True)
+                self.parent.send_status_pyqt()
+            except Exception as e:  # TODO: change Exception to something reasonable
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
+                                                 receiver_id=msg.sender_id, reply_to=msg.id)
+        self.msg_out(msg_r)
 
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         # HEARTBEATS and SHUTDOWNS...maybe something else later
         if msg.receiver_id == '' and msg.sender_id in self.parent.connections:
-            self.react_broadcasted(msg)
+            self.react_broadcast(msg)
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
         elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
             self.react_forward(msg)
@@ -127,7 +137,6 @@ class GeneralCmdLogic(Thinker):
                     else:
                         info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
                         del self.parent.connections[event.original_owner]
-                        self.unregister_event(event.id)
 
 
 class ServerCmdLogic(GeneralCmdLogic):
@@ -142,17 +151,6 @@ class ServerCmdLogic(GeneralCmdLogic):
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
-    def react_directed(self, msg: MessageExt):
-        msg_r = None
-        if msg.com == MsgComExt.ALIVE.msg_name:
-            if msg.body.sender_id in self.parent.connections:
-                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
-        elif msg.com == MsgComExt.DO_IT.mes_name:
-            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                self.logger.error(f'Adding to executor {msg.info} failed')
-
-        self.msg_out(msg_r)
-
     def react_denied(self, msg: MessageExt):
         pass
 
@@ -161,22 +159,27 @@ class ServerCmdLogic(GeneralCmdLogic):
         if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
             try:
                 messenger = self.parent.messenger
-                device_info: WelcomeInfoDevice = msg.info
+                info: WelcomeInfoDevice = msg.info
                 # Decrypt public_key of device crypted on device side with public key of Server
-                device_info.device_public_key = messenger.decrypt_with_private(device_info.device_public_key)
+                info.device_public_key = messenger.decrypt_with_private(info.device_public_key)
                 connections = self.parent.connections
-                connections[device_info.device_id] = Connection(device_info=device_info)
-                if PUB_Socket in device_info.public_sockets:
+                param = {}
+                for field_name in info.__annotations__:
+                    param[field_name] = getattr(info, field_name)
+                # TODO: Actually check AccessLevel and ConnectionPermission using password checksum
+                param['AccessLevel'] = AccessLevel.FULL
+                param['ConnectionPermission'] = ConnectionPermission.GRANTED
+                connections[info.device_id] = Connection(**param)
+                if PUB_Socket in info.device_public_sockets:
                     from communication.logic.logic_functions import external_hb_logic
-                    messenger.subscribe_sub(address=device_info.public_sockets[PUB_Socket])
-                    self.register_event(name=f'heartbeat:{device_info.device_name}',
+                    messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
+                    self.register_event(name=f'heartbeat:{info.device_name}',
                                         logic_func=external_hb_logic,
-                                        event_id=f'heartbeat:{device_info.device_id}',
-                                        original_owner=device_info.device_id,
+                                        event_id=f'heartbeat:{info.device_id}',
+                                        original_owner=info.device_id,
                                         start_now=True)
-
-                session_key = messenger.gen_symmetric_key(device_info.device_id)
-                messenger.fernets[device_info.device_id] = session_key
+                session_key = messenger.gen_symmetric_key(info.device_id)
+                self.parent.connections[info.device_id].session_key = session_key
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
                                                  receiver_id=msg.sender_id)
                 self.parent.send_status_pyqt()

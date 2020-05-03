@@ -163,7 +163,7 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
-    def react_broadcasted(self, msg: MessageExt):
+    def react_broadcast(self, msg: MessageExt):
         pass
 
     @abstractmethod

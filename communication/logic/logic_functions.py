@@ -21,7 +21,6 @@ def external_hb_logic(event: ThinkerEvent):
     :param event: ThinkerEvent
     :return: None
     """
-
     thinker: Thinker = event.parent
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     counter = 0
@@ -54,7 +53,7 @@ def internal_hb_logic(event: ThinkerEvent):
         if not event.paused:
             event.n += 1
             sleep(event.tick)
-            if interchange and event.n % 2:
+            if interchange and event.n % 3:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
             else:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)

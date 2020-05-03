@@ -54,8 +54,10 @@ class HeartBeat:
 @dataclass
 class HeartBeatFull:
     device_id: str
-    device_public_sockets: dict
+    device_name: str
+    device_type: DeviceType
     device_public_key: bytes
+    device_public_sockets: Dict[str, str]
     event_n: int
     event_tick: float
 
@@ -70,24 +72,24 @@ class WelcomeInfoDevice:
     device_id: str
     device_name: str
     device_type: DeviceType
-    device_status: DeviceStatus
     device_public_key: bytes
     device_public_sockets: Dict[str, str]
+    password_checksum: bytes = b''
 
 
 @dataclass(order=True)
-class WelcomeInfoServer:
+class WelcomeInfoServer(WelcomeInfoDevice):
     """
     Must be remembered that WelcomeInfoServer must be crypted with Device public key and will be decrypted on
     Device side by Device private key, a only after that session_key will be used in communication between
     Server and Device.
     """
-    session_key: bytes
+    session_key: bytes = b''
 
 
 @dataclass(frozen=True, order=True)
 class DeviceInfoInt:
-    active_connections: List[Tuple[DeviceId, DeviceType]]  # [(device_id, DeviceType), ...]
+    active_connections: List[Tuple[DeviceId, DeviceType]]  # [(receiver_id, DeviceType), ...]
     available_public_functions: List[CmdStruct]
     device_id: str
     device_status: DeviceStatus
@@ -160,8 +162,11 @@ class FuncAvailableServicesOutput(FuncOutput):
 
 @dataclass(order=True)
 class Connection(DataClass_unfrozen):
-    access_level: AccessLevel
-    device_info: WelcomeInfoDevice
-    # TODO: I do not know if session_key should be here
-    session_key: bytes
-    permission: ConnectionPermission
+    device_id: str
+    device_name: str
+    device_type: DeviceType
+    device_public_key: bytes
+    device_public_sockets: Dict[str, str]
+    access_level: AccessLevel = AccessLevel.NONE
+    session_key: bytes = b''
+    permission: ConnectionPermission = ConnectionPermission.DENIED
