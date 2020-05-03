@@ -167,6 +167,14 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
+    def react_forward(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_first_welcome(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
     def react_directed(self, msg: MessageExt):
         pass
 

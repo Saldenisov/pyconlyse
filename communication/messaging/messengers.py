@@ -422,8 +422,8 @@ class ClientMessenger(Messenger):
         i = 0
         while wait and self.active:
             if i > 100:
-                self.logger.info(f'{self.name} could not connect to server, no sockets, '
-                                 f'try to restart {self.parent.name}')
+                info_msg(self, 'INFO', f'{self.name} could not connect to server, no sockets, '
+                                       f'try to restart {self.parent.name}')
                 i = 0
             i += 1
             sockets = dict(self.poller.poll(100))

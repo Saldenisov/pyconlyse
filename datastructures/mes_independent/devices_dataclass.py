@@ -109,7 +109,6 @@ class ServerInfoQueKeysMes:
 
 @dataclass(frozen=True, order=True)
 class ShutDown:
-    device_id: str
     reason: str = ""
 
 

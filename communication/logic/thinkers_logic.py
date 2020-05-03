@@ -1,6 +1,8 @@
 import logging
 from time import time
 
+from pip._internal import self_outdated_check
+
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
 from communication.messaging.messengers import PUB_Socket, SUB_Socket
@@ -20,6 +22,20 @@ class GeneralCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_broadcasted(self, msg: MessageExt):
+        if msg.com == MsgComExt.HEARTBEAT.msg_name:
+            try:
+                self.events[msg.sender_id].time = time()
+                self.events[msg.sender_id].n = msg.info.n
+            except KeyError as e:
+                error_logger(self, self.react_broadcasted, e)
+        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
+            self.remove_device_from_connections(msg.sender_id)
+            self.parent.send_status_pyqt()
+
+    def react_forward(self, msg: MessageExt):
+        pass
+
+    def react_first_welcome(self, msg: MessageExt):
         pass
 
     def react_directed(self, msg: MessageExt):
@@ -75,7 +91,21 @@ class GeneralCmdLogic(Thinker):
             self.parent.messenger._are_you_alive_send = False
 
     def react_external(self, msg: MessageExt):
-        pass
+        # TODO: add decision on permission
+        # HEARTBEATS and SHUTDOWNS...maybe something else later
+        if msg.receiver_id == '' and msg.sender_id in self.parent.connections:
+            self.react_broadcasted(msg)
+        # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
+        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
+            self.react_forward(msg)
+        # WELCOME INFO from another device or Directed message for the first time
+        elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
+            self.react_first_welcome(msg)
+        # When the message is dedicated to Device
+        elif msg.sender_id in self.parent.connections and msg.receiver_id == self.parent.id:
+            self.react_directed(msg)
+        else:
+            pass  # TODO: that I do not know what it is...add MsgError
 
     def react_internal(self, event: ThinkerEvent):
         if 'server_heartbeat' in event.name:
@@ -100,7 +130,7 @@ class GeneralCmdLogic(Thinker):
                         self.unregister_event(event.id)
 
 
-class ServerCmdLogic(Thinker):
+class ServerCmdLogic(GeneralCmdLogic):
     """
     Knows how to react to commands that SERVER messenger receives
     TODO:  BUG: several instances of the same devices can be started, and server will think that they are different
@@ -111,34 +141,6 @@ class ServerCmdLogic(Thinker):
         from communication.logic.logic_functions import internal_hb_logic
         self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
         self.timeout = int(self.parent.get_general_settings()['timeout'])
-
-    def react_broadcasted(self, msg: MessageExt):
-        if msg.com == MsgComExt.HEARTBEAT.msg_name:
-            try:
-                self.events[msg.info.event_id].time = time()
-                self.events[msg.info.event_id].n = msg.info.n
-            except KeyError as e:
-                error_logger(self, self.react_directed, e)
-        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
-            self.remove_device_from_connections(msg.info.device_id)
-            self.parent.send_status_pyqt()
-
-    def react_external(self, msg: MessageExt):
-        # TODO: add decision on permission
-        # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if msg.receiver_id == '' and msg.sender_id in self.parent.connections:
-            self.react_broadcasted(msg)
-        # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
-        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
-            self.react_forward(msg)
-        # WELCOME INFO from another device or Directed message for the first time
-        elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
-            self.react_first_welcome(msg)
-        # When the message is dedicated to Server
-        elif msg.sender_id in self.parent.connections and msg.receiver_id == self.parent.id:
-            self.react_directed(msg)
-        else:
-            pass  # TODO: that I do not know what it is...add MsgError
 
     def react_directed(self, msg: MessageExt):
         msg_r = None
