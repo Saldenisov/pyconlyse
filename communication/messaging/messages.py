@@ -31,7 +31,7 @@ class MsgComInt(Enum):
 
 
 class MsgComExt(Enum):
-    ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(), True)
+    ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(['receiver_id']), True)
     AVAILABLE_SERVICES = MessageInfoExt('available_services', MsgType.DIRECTED, AvailableServices,
                                         set(['available_services']), True)
     DO_IT = None
@@ -42,7 +42,7 @@ class MsgComExt(Enum):
     HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfoExt('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
     WELCOME_INFO_DEVICE = MessageInfoExt('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,
-                                         set(['reply_to', 'receiver_id']), False)
+                                         set(['receiver_id']), False)
     WELCOME_INFO_SERVER = MessageInfoExt('welcome_info_server', MsgType.DIRECTED, WelcomeInfoServer,
                                          set(['reply_to', 'receiver_id']), False)
 

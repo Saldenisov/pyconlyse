@@ -87,7 +87,7 @@ def task_in_reaction(event: ThinkerEvent):
             try:
                 msg: MessageExt = tasks_in.popitem()[1]
                 thinker.msg_counter += 1
-                info_msg(event, msg.type, extra=str(msg.short()))
+                info_msg(event, 'INFO', extra=str(msg.short()))
                 thinker.react_external(msg)
                 if msg.reply_to != '':  # If message is not a reply, it must be a demand one
                     thinker.add_reply_pending(msg)
@@ -111,7 +111,7 @@ def task_out_reaction(event: ThinkerEvent):
             try:
                 msg: MessageExt = tasks_out.popitem()[1]
                 react = True
-                if msg.type is MsgType.DIRECTED and msg.reply_to == '':
+                if msg.receiver_id != '' and msg.reply_to == '':
                     # If msg is not reply, than add to pending demand
                     thinker.add_demand_pending(msg)
 

@@ -123,6 +123,7 @@ class Thinker(ThinkerInter):
 
     def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
                        start_now=False, **kwargs):
+        # TODO: to complicated. Need to optimize.
         try:
             if 'tick' in kwargs:
                 tick = kwargs['tick']
@@ -253,8 +254,10 @@ class ThinkerEvent(Thread):
         self.active = False
         self.paused = False
         self.counter_timeout = 0
-        info_msg(self, 'CREATED', extra=f' of {self.parent.name}')
-
+        if self.parent:
+            info_msg(self, 'CREATED', extra=f' of {self.parent.name}')
+        else:
+            info_msg(self, 'CREATED')
     def run(self):
         self.active = True
         self.paused = self.parent.paused

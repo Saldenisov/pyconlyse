@@ -248,7 +248,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
                     return MessageExt(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info,
                                       receiver_id=receiver_id,
-                                      reply_to=reply_to, sender_id=self.messenger.id, type=msg_com.msg_type)
+                                      reply_to=reply_to, sender_id=self.messenger.id)
                 else:
                     return MessageInt(com=msg_com.msg_name, info=info, sender_id=kwargs['sender_id'])
         if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
@@ -331,7 +331,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, reason='normal_shutdown')
-        self.thinker.msg_out(True, stop_msg)
+        self.thinker.msg_out(stop_msg)
         sleep(0.1)
         self.thinker.pause()
         self.messenger.pause()
@@ -454,7 +454,7 @@ class Client(Device):
         return ()
 
     def activate(self, flag: bool):
-        """Server is always active"""
+        """Client is always active"""
         self.logger.info("""Client is always active""")
 
     def description(self) -> Desription:
@@ -567,12 +567,12 @@ class DeviceFactory:
             else:
                 raise BaseException(f'DeviceFactory Crash: Device cls is not a class, but {type(cls)}')
         else:
-            if 'receiver_id' in kwargs and 'db_path' in kwargs:
-                device_id: str = kwargs['receiver_id']
+            if 'device_id' in kwargs and 'db_path' in kwargs:
+                device_id: str = kwargs['device_id']
 
                 db_conn = db_create_connection(kwargs['db_path'])
                 device_name, comments = db_execute_select(db_conn, f"SELECT device_name from DEVICES_settings "
-                                                                   f"where receiver_id='{device_id}'")
+                                                                   f"where device_id='{device_id}'")
 
                 if not device_name:
                     err = f'DeviceFactory Crash: {device_id} is not present in DB'
@@ -580,7 +580,7 @@ class DeviceFactory:
                     raise BaseException(err)
 
                 project_type, comments = db_execute_select(db_conn, f"SELECT project_type from DEVICES_settings "
-                                                                    f"where receiver_id='{device_id}'")
+                                                                    f"where device_id='{device_id}'")
 
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
@@ -602,9 +602,9 @@ class DeviceFactory:
 
                 kwargs['name'] = device_name
                 kwargs['thinker_cls'] = thinker_class
-                kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where receiver_id = "{device_id}"'
+                kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
                 kwargs['id'] = device_id
                 if issubclass(cls, Device):
                     return cls(**kwargs)
             else:
-                raise BaseException('DeviceFactory Crash: receiver_id or db_path were not passed')
+                raise BaseException('DeviceFactory Crash: device_id or db_path were not passed')

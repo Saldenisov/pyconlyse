@@ -96,9 +96,9 @@ def test_func_project_manager(project_manager: ProjectManager_controller):
 @pytest.mark.openers
 @pytest.mark.parametrize('opener', [HamamatsuFileOpener()])
 def test_opener(opener: Opener):
-    files = [Path("C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\test.img"),
-             Path('C:\\dev\\DATA\\M1043.his'),
-             Path('C:\\dev\\DATA\\B1043.his')]
+    files = [Path("C:\\dev\\DATA\\ABS1042~ID~bf352407a90fed5a29e60a111b3c2f5f.img"),
+             Path('C:\\dev\\DATA\\B1043~ID~9a16d5b15b3bd33fa5593f32ca81c2d5.his'),
+             Path('C:\\dev\\DATA\\M1043~ID~aaf9110ef77dee14be8bf7f812446229.his')]
 
     for file in files:
         opener.fill_critical_info(file)

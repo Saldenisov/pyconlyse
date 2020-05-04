@@ -58,6 +58,8 @@ class HeartBeatFull:
     device_type: DeviceType
     device_public_key: bytes
     device_public_sockets: Dict[str, str]
+    event_id: str
+    event_name: str
     event_n: int
     event_tick: float
 
@@ -111,6 +113,7 @@ class ServerInfoQueKeysMes:
 
 @dataclass(frozen=True, order=True)
 class ShutDown:
+    device_id: str
     reason: str = ""
 
 

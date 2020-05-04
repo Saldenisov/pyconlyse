@@ -26,9 +26,13 @@ class GeneralCmdLogic(Thinker):
             try:
                 self.events[msg.sender_id].time = time()
                 self.events[msg.sender_id].n = msg.info.n
+                if self.parent.connections[msg.sender_id].session_key != b'' and \
+                        self.parent.type is not DeviceType.SERVER:  # Only applicable not for Server type devices
+                    msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
+                    self.msg_out(msg_r)
             except KeyError as e:
                 error_logger(self, self.react_broadcast, e)
-        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices connected to server shutdowns
+        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
             self.remove_device_from_connections(msg.sender_id)
             self.parent.send_status_pyqt()
 
@@ -42,33 +46,16 @@ class GeneralCmdLogic(Thinker):
         if self.parent.pyqtsignal_connected:
             # Convert MessageExt to MessageInt and emit it
             self.parent.signal.emit(msg.ext_to_int())
-
         msg_r = None
         if msg.com == MsgComExt.ALIVE.msg_name:
             if msg.body.sender_id in self.parent.connections:
                 msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
         elif msg.com == MsgComExt.DO_IT.mes_name:
+            # TODO: to be checked later
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                 self.logger.error(f'Adding to executor {msg.info} failed')
 
         self.msg_out(msg_r)
-
-        if msg.info.device_id not in self.parent.connections:
-            self.logger.info(msg.short())
-            from communication.logic.logic_functions import external_hb_logic
-            self.register_event(name=msg.info.event_name,
-                                event_id=msg.info.event_id,
-                                logic_func=external_hb_logic,
-                                original_owner=msg.info.device_id,
-                                start_now=True)
-            self.parent.connections[msg.info.device_id] = Connection(WelcomeInfoDevice(device_id=msg.info.device_id,
-                                                                                       messenger_id=msg.sender_id))
-            msg_i = MsgGenerator.hello(device=self.parent)
-            self.msg_out(True, msg_i)
-        else:
-            # TODO: potential danger of calling non-existing event
-            self.events[msg.info.event_id].time = time()
-            self.events[msg.info.event_id].n = msg.info.n
 
     def react_first_welcome(self, msg: MessageExt):
         msg_r = None
@@ -125,13 +112,13 @@ class GeneralCmdLogic(Thinker):
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     self.parent.messenger._attempts_to_restart_sub -= 1
                     event.counter_timeout = 0
-                    addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket]  # TODO: check if it is PUB_scoket or Server PUB_socket
-                    self.parent.messenger.restart_socket('sub', addr)
+                    addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
+                    self.parent.messenger.restart_socket(SUB_Socket, addr)
                 else:
                     if not self.parent.messenger._are_you_alive_send:
                         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
                         event.counter_timeout = 0
-                        msg_i = MsgGenerator.are_you_alive_demand(device=self.parent, context=f'EVENT:{event.id}')
+                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
                         self.parent.messenger._are_you_alive_send = True
                         self.msg_out(True, msg_i)
                     else:
@@ -148,8 +135,6 @@ class ServerCmdLogic(GeneralCmdLogic):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
-        self.register_event(name='heartbeat', external_name='server_heartbeat', logic_func=internal_hb_logic)
-        self.timeout = int(self.parent.get_general_settings()['timeout'])
 
     def react_denied(self, msg: MessageExt):
         pass

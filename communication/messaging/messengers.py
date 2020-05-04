@@ -228,7 +228,7 @@ class Messenger(MessengerInter):
 
     @make_loop
     def _send_loop_logic(self, await_time):
-        if self._msg_out > 0:
+        if self._msg_out:
             msg: MessageExt = self._msg_out.popitem(last=False)[1]
             self.send_msg(msg)
 
@@ -430,6 +430,14 @@ class ClientMessenger(Messenger):
                             for field_name in info.__annotations__:
                                 param[field_name] = getattr(info, field_name)
                             self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
+
+                            from communication.logic.logic_functions import external_hb_logic
+                            thinker = self.parent.thinker
+                            thinker.register_event(name=msg.info.event_name,
+                                                   event_id=msg.info.event_id,
+                                                   logic_func=external_hb_logic,
+                                                   original_owner=msg.info.device_id,
+                                                   start_now=True)
                             break
                         else:
                             raise MessengerError(f'Not all sockets are sent to {self.name}')

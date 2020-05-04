@@ -9,8 +9,8 @@ def test_event_dict():
     dct[event.id] = event
     assert event.id in dct
     assert event.name in dct
-    assert not 'a' in dct
-    assert not '' in dct
+    assert 'a' not in dct
+    assert '' not in dct
     print(dct, dct.name_id)
 
     try:

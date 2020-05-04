@@ -6,7 +6,10 @@ import pytest
 
 from tests.fixtures.server import server
 from tests.fixtures.services import stpmtr_emulate
+
+
 def test_messages(server: Server, stpmtr_emulate: Service):
+
     def msg_bytes_back_assert(msgs: List[Union[MessageExt, MessageInt]]):
         msgs_bytes = []
         for msg in msgs:
