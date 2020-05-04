@@ -234,6 +234,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                      device_public_key=self.messenger.public_key,
                                                      device_public_sockets=self.messenger.public_sockets,
                                                      session_key=session_key_crypted)
+                    elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
+                        info = WelcomeInfoDevice(device_id=self.id, device_name=self.name,
+                                                 device_type=DeviceType.SERVER,
+                                                 device_public_key=self.messenger.public_key,
+                                                 device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, e)
                 raise e
@@ -372,8 +377,8 @@ class Server(Device):
 
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
-        self.type = DeviceType.SERVER
         super().__init__(**kwargs)
+        self.type = DeviceType.SERVER
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
     @property
@@ -440,9 +445,9 @@ class Client(Device):
             raise Exception('Thinker cls was not passed to Device factory')
 
         kwargs['cls_parts'] = cls_parts
-        self.type = DeviceType.CLIENT
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         super().__init__(**kwargs)
+        self.type = DeviceType.CLIENT
         self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
 
@@ -492,8 +497,8 @@ class Service(Device):
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
 
-        self.type = DeviceType.SERVICE
         super().__init__(**kwargs)
+        self.type = DeviceType.SERVICE
         self.server_id: DeviceId = self.get_settings('General')['server_id']
 
     @property

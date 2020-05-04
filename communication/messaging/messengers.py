@@ -362,9 +362,11 @@ class ClientMessenger(Messenger):
             error_logger(self, self.run, e)
             self.stop()
         finally:
-            self.sockets['dealer'].close()
-            if self.sockets['sub']:
-                self.sockets['sub'].close()
+            self.sockets[DEALER_Socket].close()
+            if self.sockets[SUB_Socket]:
+                self.sockets[SUB_Socket].close()
+            if self.sockets[PUB_Socket]:
+                self.sockets[PUB_Socket].close()
             self.context.destroy()
             self.active = False
             self.paused = True
@@ -424,8 +426,8 @@ class ClientMessenger(Messenger):
                         sockets = info.device_public_sockets
                         if FRONTEND_Server in sockets and BACKEND_Server in sockets:
                             self.logger.info(msg)
-                            self.addresses['server_frontend'] = sockets['frontend']
-                            self.addresses['server_backend'] = sockets['backend']
+                            self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
+                            self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
                             param = {}
                             for field_name in info.__annotations__:
                                 param[field_name] = getattr(info, field_name)

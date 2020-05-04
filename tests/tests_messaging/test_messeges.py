@@ -43,7 +43,8 @@ def test_messages(server: Server, stpmtr_emulate: Service):
                                     receiver_id='receiver_id')
     msgs.append(msg_error)
 
-    msg_welcome = server.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to='', receiver_id='receiver_id')
+    msg_welcome = server.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to='reply_to',
+                                      receiver_id='receiver_id')
     msgs.append(msg_welcome)
 
 
@@ -52,16 +53,20 @@ def test_messages(server: Server, stpmtr_emulate: Service):
 
 
     # Msg generation testing for stpmtr_emulate
-    stpmtr_emulate
     msgs = []
 
     msg_available_services = stpmtr_emulate.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES,
                                                          available_services=server.available_services,
                                                          reply_to='', receiver_id='receiver_id')
     msgs.append(msg_available_services)
+
     msg_error = stpmtr_emulate.generate_msg(msg_com=MsgComExt.ERROR, error_comments='test_error', reply_to='',
                                             receiver_id='receiver_id')
     msgs.append(msg_error)
+
+    msg_welcome = stpmtr_emulate.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, reply_to='reply_to',
+                                              receiver_id='receiver_id')
+    msgs.append(msg_welcome)
 
     msg_bytes_back_assert(msgs)
 

@@ -13,6 +13,19 @@ from datastructures.mes_independent.stpmtr_dataclass import *
 
 import pytest
 
+
+
+def test_server_stpmtr(server_test: Server, stpmtr_emulate_test: StpMtrCtrl_emulate):
+    server = server_test
+    stpmtr_emulate = stpmtr_emulate_test
+
+    server.start()
+    sleep(3)
+    stpmtr_emulate.start()
+
+
+
+
 def test_superuser_server_services_functions(server_test: Server,
                                              superuser_test: SuperUser,
                                              stpmtr_emulate_test: StpMtrCtrl_emulate):
@@ -35,18 +48,18 @@ def test_superuser_server_services_functions(server_test: Server,
     sleep(5)
 
     # Verify Server status
-    assert server.device_status.active
-    assert stpmtr_emulate.id in server.services_running
-    assert superuser.id in server.clients_running
+    #assert server.device_status.active
+    #assert stpmtr_emulate.id in server.services_running
+    #assert superuser.id in server.clients_running
 
     # Verify SuperUser status
-    assert superuser.device_status.active
-    assert server.id in superuser.connections
+    #assert superuser.device_status.active
+    #assert server.id in superuser.connections
 
     # Verify Stpmtr_emulate
-    assert not stpmtr_emulate.device_status.power
-    assert not stpmtr_emulate.device_status.active
-    assert server.id in stpmtr_emulate.connections
+    #assert not stpmtr_emulate.device_status.power
+    #assert not stpmtr_emulate.device_status.active
+    #assert server.id in stpmtr_emulate.connections
 
     # !SuperUser-Server-Stpmtr_emulate are connected!
     # getting hello message for device and deleting it from tasks_out_test
@@ -169,7 +182,7 @@ devices = [server_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
 
 @pytest.mark.messengers
 @pytest.mark.parametrize('device', devices)
-def test_messenger_basic_functions(device: Device):
+def test_messenger_basics(device: Device):
     """
     Test function designed to test functionality of 3 types of messengers: Client, Service and Server
     Thinker operation will be paused, only messenger will be active in some stages of the test
@@ -189,6 +202,21 @@ def test_messenger_basic_functions(device: Device):
     messenger.unpause()
     assert messenger.active
     assert not messenger.paused
+
+    assert messenger.id == device.id
+
+    if device.type is DeviceType.SERVER:
+        assert PUB_Socket_Server in messenger.public_sockets
+        assert PUB_Socket_Server in messenger.addresses
+        assert FRONTEND_Server in messenger.public_sockets
+        assert FRONTEND_Server in messenger.public_sockets
+        assert BACKEND_Server in messenger.addresses
+        assert BACKEND_Server in messenger.addresses
+
+    else:
+        assert PUB_Socket in messenger.public_sockets
+        assert PUB_Socket in messenger.addresses
+        assert PUB_Socket_Server in messenger.addresses
 
     messenger.stop()
     assert not messenger.active
