@@ -63,7 +63,7 @@ class Thinker(ThinkerInter):
             if len(self._tasks_in) > 10000:
                 self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.msg_name):
                 self.tasks_in_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_in, e)
@@ -74,7 +74,7 @@ class Thinker(ThinkerInter):
             if len(self._tasks_out) > 10000:
                 self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
-            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.name):
+            if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.msg_name):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_out, e)

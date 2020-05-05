@@ -45,15 +45,15 @@ def external_hb_logic(event: ThinkerEvent):
 def internal_hb_logic(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
-    interchange = False
+    full_heartbeat = False
     if device.type is DeviceType.SERVER:
-        interchange = True
+        full_heartbeat = True  # Allows to send MsgComExt.HEARTBEAT_FULL only for Server
     info_msg(event, 'STARTED', extra=f' of {thinker.name}')
     while event.active:
         if not event.paused:
             event.n += 1
             sleep(event.tick)
-            if interchange and event.n % 3:
+            if full_heartbeat and event.n % 3:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
             else:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)

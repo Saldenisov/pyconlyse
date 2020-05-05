@@ -206,7 +206,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         info = HeartBeat(device_id=self.id, event_n=event.n)
                     elif msg_com is MsgComExt.HEARTBEAT_FULL:
                         event = kwargs['event']
-                        info = HeartBeatFull(event_n=event.n, event_tick=event.tick, device_id=self.id,
+                        info = HeartBeatFull(event_n=event.n, event_name=event.name, event_tick=event.tick,
+                                             event_id=event.id, device_id=self.id,
                                              device_name=self.name, device_type=self.type,
                                              device_public_key=self.messenger.public_key,
                                              device_public_sockets=self.messenger.public_sockets)
@@ -240,7 +241,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                  device_public_key=self.messenger.public_key,
                                                  device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
-                error_logger(self, self.generate_msg, e)
+                error_logger(self, self.generate_msg, f'{msg_com}: {e}')
                 raise e
             finally:
                 if isinstance(msg_com, MsgComExt):

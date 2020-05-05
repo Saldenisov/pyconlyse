@@ -5,7 +5,7 @@ from communication.messaging.message_utils import MsgGenerator
 from devices.devices import Server, Service
 from devices.virtualdevices.clients import SuperUser
 from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
-from tests.fixtures import server_test_non_fixture, stpmtr_emulate_test_non_fixture, server_test, superuser_test, stpmtr_emulate_test
+from tests.fixtures import *
 from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
 from communication.messaging.messages import MessageExt
 from datastructures.mes_independent.devices_dataclass import *
@@ -15,20 +15,41 @@ import pytest
 
 
 
-def test_server_stpmtr(server_test: Server, stpmtr_emulate_test: StpMtrCtrl_emulate):
+def test_server_stpmtr(server_test: Server,
+                                        superuser_test: SuperUser,
+                                        stpmtr_emulate_test: StpMtrCtrl_emulate):
     server = server_test
+    superuser = superuser_test
     stpmtr_emulate = stpmtr_emulate_test
 
-    server.start()
-    sleep(3)
-    stpmtr_emulate.start()
+    devices = od()
+    devices[server.id] = server
+    devices[superuser.id] = superuser
+    devices[stpmtr_emulate.id] = stpmtr_emulate
+
+    services_id = []
+    for device_id, device in devices.items():
+        if device_id not in [server.id, superuser.id]:
+            services_id.append(device_id)
+
+    start_devices(devices)
+
+
+    for device_id, device in devices.items():
+        if device_id != server.id:
+            in_task = device.thinker.tasks_in_test.items()
+            out_tasks = device.thinker.tasks_out_test.items()
 
 
 
+    # Stop
+    server.stop()
+    stpmtr_emulate.stop()
 
-def test_superuser_server_services_functions(server_test: Server,
-                                             superuser_test: SuperUser,
-                                             stpmtr_emulate_test: StpMtrCtrl_emulate):
+
+def superuser_server_services_functions(server_test: Server,
+                                        superuser_test: SuperUser,
+                                        stpmtr_emulate_test: StpMtrCtrl_emulate):
     server = server_test
     superuser = superuser_test
     stpmtr_emulate = stpmtr_emulate_test
@@ -177,47 +198,3 @@ def test_superuser_server_services_functions(server_test: Server,
     stop_devices(devices)
 
 
-devices = [server_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
-
-
-@pytest.mark.messengers
-@pytest.mark.parametrize('device', devices)
-def test_messenger_basics(device: Device):
-    """
-    Test function designed to test functionality of 3 types of messengers: Client, Service and Server
-    Thinker operation will be paused, only messenger will be active in some stages of the test
-    """
-    # get messenger of the device
-    messenger: Messenger = device.messenger
-    assert not messenger.active
-    assert messenger.paused
-    messenger.start()
-    assert messenger.active
-    assert not messenger.paused
-
-    messenger.pause()
-    assert messenger.active
-    assert messenger.paused
-
-    messenger.unpause()
-    assert messenger.active
-    assert not messenger.paused
-
-    assert messenger.id == device.id
-
-    if device.type is DeviceType.SERVER:
-        assert PUB_Socket_Server in messenger.public_sockets
-        assert PUB_Socket_Server in messenger.addresses
-        assert FRONTEND_Server in messenger.public_sockets
-        assert FRONTEND_Server in messenger.public_sockets
-        assert BACKEND_Server in messenger.addresses
-        assert BACKEND_Server in messenger.addresses
-
-    else:
-        assert PUB_Socket in messenger.public_sockets
-        assert PUB_Socket in messenger.addresses
-        assert PUB_Socket_Server in messenger.addresses
-
-    messenger.stop()
-    assert not messenger.active
-    assert messenger.paused

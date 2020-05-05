@@ -299,8 +299,6 @@ class ClientMessenger(Messenger):
     def connect(self):
         try:
             self.sockets[DEALER_Socket].connect(self.addresses[FRONTEND_Server])
-            for adr in self.addresses[PUB_Socket_Server]:
-                self.subscribe_sub(address=adr)
             if self.pub_option:
                 try:
                     self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
@@ -353,6 +351,8 @@ class ClientMessenger(Messenger):
     def run(self):
         super().run()
         try:
+            for adr in self.addresses[PUB_Socket_Server]:
+                self.subscribe_sub(address=adr)
             self._wait_server_hb()
             if self.active:
                 self.connect()
@@ -429,9 +429,15 @@ class ClientMessenger(Messenger):
                             self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
                             self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
                             param = {}
-                            for field_name in info.__annotations__:
-                                param[field_name] = getattr(info, field_name)
-                            self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
+                            for field_name in Connection.__annotations__:
+                                try:
+                                    param[field_name] = getattr(info, field_name)
+                                except AttributeError:
+                                    pass
+                            try:
+                                self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
+                            except Exception as e:
+                                print(e)
 
                             from communication.logic.logic_functions import external_hb_logic
                             thinker = self.parent.thinker
@@ -495,7 +501,7 @@ class ServerMessenger(Messenger):
 
             self.sockets = {FRONTEND_Server: frontend,
                             BACKEND_Server: backend,
-                            PUB_Socket: publisher,
+                            PUB_Socket_Server: publisher,
                             SUB_Socket: sub}
             self.public_sockets = {PUB_Socket_Server: self.addresses[PUB_Socket_Server],
                                    FRONTEND_Server: self.addresses[FRONTEND_Server],

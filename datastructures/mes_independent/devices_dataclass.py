@@ -170,6 +170,8 @@ class Connection(DataClass_unfrozen):
     device_type: DeviceType
     device_public_key: bytes
     device_public_sockets: Dict[str, str]
+    event_id: str
+    event_name: str
     access_level: AccessLevel = AccessLevel.NONE
     session_key: bytes = b''
     permission: ConnectionPermission = ConnectionPermission.DENIED
