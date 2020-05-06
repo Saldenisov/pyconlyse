@@ -3,7 +3,8 @@ from typing import NamedTuple, Set
 from enum import Enum, auto
 
 
-class ConnectionPermission(Enum):
+class Permission(Enum):
+    NONE = auto()
     GRANTED = auto()
     DENIED = auto()
     TEMPORARY = auto()

@@ -29,7 +29,8 @@ def external_hb_logic(event: ThinkerEvent):
             sleep(event.tick)
             if (time() - event.time) >= event.tick:
                 event.counter_timeout += 1
-                thinker.logger.info(f'{event.name} timeout {event.counter_timeout}')
+                if event.counter_timeout % 3 == 0:
+                    info_msg(event, 'INFO', f'{event.name} timeout {event.counter_timeout}')
             else:
                 event.counter_timeout = 0
             counter += 1
@@ -82,16 +83,18 @@ def task_in_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_in: OrderedDictMod = thinker.tasks_in
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
+    exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
         if not event.paused and tasks_in:
             try:
                 msg: MessageExt = tasks_in.popitem()[1]
                 thinker.msg_counter += 1
-                info_msg(event, 'INFO', extra=str(msg.short()))
+                if msg.com not in exclude_msgs:
+                    info_msg(event, 'INFO', extra=str(msg.short()))
                 thinker.react_external(msg)
                 if msg.reply_to != '':  # If message is not a reply, it must be a demand one
                     thinker.add_reply_pending(msg)
-                    event.logger.info(f'Expect a reply to {msg.id} com={msg.com}. Adding to pending_reply.')
+                    info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to pending_reply.')
                     if msg.reply_to in thinker.demands_pending_answer:
                         # TODO: should it have else clause or not?
                         com = thinker.demands_pending_answer[msg.reply_to].com

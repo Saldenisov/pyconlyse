@@ -198,15 +198,16 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 if not message_info.must_have_param.issubset(set(kwargs.keys())):
                     error_logger(self, self.generate_msg, f'Not all required parameters are given '
                                                           f'{message_info.must_have_param}, only {kwargs.keys()}')
+                    raise DeviceError(f'Not all parameters are passed to device.generate_msg')
                 else:
                     if msg_com is MsgComExt.AVAILABLE_SERVICES:
                         info = AvailableServices(available_services=kwargs['available_services'])
                     elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
                         event = kwargs['event']
-                        info = HeartBeat(device_id=self.id, event_n=event.n)
+                        info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
                     elif msg_com is MsgComExt.HEARTBEAT_FULL:
                         event = kwargs['event']
-                        info = HeartBeatFull(event_n=event.n, event_name=event.name, event_tick=event.tick,
+                        info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
                                              event_id=event.id, device_id=self.id,
                                              device_name=self.name, device_type=self.type,
                                              device_public_key=self.messenger.public_key,
@@ -249,7 +250,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         reply_to = ''
                         receiver_id = ''
                     elif msg_com.msg_type is MsgType.DIRECTED:
-                        reply_to = kwargs['reply_to']
+                        try:
+                            reply_to = kwargs['reply_to']
+                        except KeyError:
+                            reply_to = ''
                         receiver_id = kwargs['receiver_id']
 
                     return MessageExt(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info,
@@ -328,7 +332,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _start_messaging(self):
         """Start messaging part of Device"""
         info_msg(self, 'STARTING')
-        self.thinker.start()
+        self.thinker.start()  # !!!Thinker must start before the messenger, always!!!!
         self.messenger.start()
         info_msg(self, 'STARTED')
         self.send_status_pyqt()

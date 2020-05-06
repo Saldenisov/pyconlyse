@@ -58,46 +58,46 @@ class Connections_Dict(dict):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.messenger_id = {}
+        self.device_id = {}
 
     def __setitem__(self, key_id, connection: Connection):
-        msgn_id = connection.device_info.messenger_id
-        if msgn_id not in self.messenger_id:
+        device_id = connection.device_id
+        if device_id not in self.device_id:
             super().__setitem__(key_id, connection)
-            self.messenger_id[msgn_id] = key_id
+            self.device_id[device_id] = key_id
         else:
-            raise KeyError(f'Messenger id: {msgn_id} already exists in {self.messenger_id}')
+            raise KeyError(f'Messenger id: {device_id} already exists in {self.device_id}')
 
     def __getitem__(self, key):
         try:
             return super().__getitem__(key)
         except KeyError:
-            if key in self.messenger_id:
-                return super().__getitem__(self.messenger_id[key])
+            if key in self.device_id:
+                return super().__getitem__(self.device_id[key])
             else:
-                raise KeyError('Neither receiver_id nor messenger_id were passed correctly to get the connection...')
+                raise KeyError('Neither receiver_id nor device_id were passed correctly to get the connection...')
 
     def __delitem__(self, key):
         try:
             connection: Connection = self[key]
             messenger_id = connection.device_info.messenger_id
             super().__delitem__(key)
-            del self.messenger_id[messenger_id]
+            del self.device_id[messenger_id]
         except KeyError:
             messenger_id = key
-            if messenger_id in self.messenger_id:
-                key = self.messenger_id[messenger_id]
-                del self.messenger_id[messenger_id]
+            if messenger_id in self.device_id:
+                key = self.device_id[messenger_id]
+                del self.device_id[messenger_id]
                 super().__delitem__(key)
             else:
-                raise KeyError('Neither receiver_id nor messenger_id were passed correctly to delete the connection...')
+                raise KeyError('Neither receiver_id nor device_id were passed correctly to delete the connection...')
 
     def __contains__(self, item):
         if super().__contains__(item):
             return True
         else:
-            if item in self.messenger_id:
-                return super().__contains__(self.messenger_id[item])
+            if item in self.device_id:
+                return super().__contains__(self.device_id[item])
 
 
 class OrderedDictMod(OrderedDict):

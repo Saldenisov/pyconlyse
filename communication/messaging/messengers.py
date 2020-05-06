@@ -72,7 +72,7 @@ class Messenger(MessengerInter):
             self._polling_time = 1
         self.active = False
         self.paused = True
-        self._msg_out = OrderedDictMod(name=f'msg_out:{self.parent.id}')
+        self._msg_out = OrderedDictMod(name=f'msg_out:{self.id}')
         # ZMQ sockets, communication info
         self.sockets = {}
         self.public_sockets = {}
@@ -92,9 +92,10 @@ class Messenger(MessengerInter):
 
     def add_msg_out(self, msg: MessageExt):
         try:
-            if len(self._msg_out) > 100000:
+            n = 100000
+            if len(self._msg_out) > n:
                 self._msg_out.popitem(False)  # pop up last item
-                self.logger.info('Dict of msg_out is overfull > 100000 msg')
+                self.logger.info(f'Dict of msg_out is overfull > {n} messages')
             self._msg_out[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
@@ -319,7 +320,7 @@ class ClientMessenger(Messenger):
                 if int(crypted):
                     msg = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
-                self.parent_thinker.add_task_in(mes)
+                self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
@@ -357,7 +358,7 @@ class ClientMessenger(Messenger):
             if self.active:
                 self.connect()
                 info_msg(self, 'STARTED')
-            self._receive_msgs()
+                self._receive_msgs()
         except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
             error_logger(self, self.run, e)
             self.stop()
@@ -425,7 +426,8 @@ class ClientMessenger(Messenger):
                         info: HeartBeatFull = msg.info
                         sockets = info.device_public_sockets
                         if FRONTEND_Server in sockets and BACKEND_Server in sockets:
-                            self.logger.info(msg)
+                            info_msg(self, 'INFO', f'{msg.short()}')
+                            info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
                             self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
                             self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
                             param = {}
@@ -434,22 +436,23 @@ class ClientMessenger(Messenger):
                                     param[field_name] = getattr(info, field_name)
                                 except AttributeError:
                                     pass
-                            try:
-                                self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
-                            except Exception as e:
-                                print(e)
 
                             from communication.logic.logic_functions import external_hb_logic
-                            thinker = self.parent.thinker
-                            thinker.register_event(name=msg.info.event_name,
-                                                   event_id=msg.info.event_id,
-                                                   logic_func=external_hb_logic,
-                                                   original_owner=msg.info.device_id,
-                                                   start_now=True)
+                            self.parent.thinker.register_event(name=info.event_name,event_id=info.event_id,
+                                                               logic_func=external_hb_logic,
+                                                               original_owner=info.device_id, tick=info.event_tick,
+                                                               start_now=True)
+
+                            sleep(0.2)  # Give time to start event
+
+                            self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
+                            self.parent.server_id = info.device_id
+
+
                             break
                         else:
                             raise MessengerError(f'Not all sockets are sent to {self.name}')
-                    except AttributeError:  # IN case when short Heartbeat arrived
+                    except (AttributeError, Exception) as e:  # IN case when short Heartbeat arrived
                         pass
 
 

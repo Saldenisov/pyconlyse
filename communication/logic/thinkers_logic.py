@@ -16,21 +16,24 @@ class GeneralCmdLogic(Thinker):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from communication.logic.logic_functions import internal_hb_logic
+        from communication.logic.logic_functions import internal_hb_logic, external_hb_logic
         self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
+        self.connections = self.parent.connections
+
+        # Only applicable not for Server type devices
+        # if not self.connections[DeviceId(msg.sender_id)].filled() and self.parent.type is not DeviceType.SERVER \
+        #         and msg.info.event_n % 3:
+        #     msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
+        #     self.msg_out(msg_r)
 
     def react_broadcast(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.msg_name:
             try:
-                self.events[msg.sender_id].time = time()
-                self.events[msg.sender_id].n = msg.info.n
-                if self.parent.connections[msg.sender_id].session_key != b'' and \
-                        self.parent.type is not DeviceType.SERVER:  # Only applicable not for Server type devices
-                    msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
-                    self.msg_out(msg_r)
-            except KeyError as e:
+                self.events[msg.info.event_id].time = time()
+                self.events[msg.info.event_id].n = msg.info.event_n
+            except (KeyError, Exception) as e:
                 error_logger(self, self.react_broadcast, e)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
             self.remove_device_from_connections(msg.sender_id)
@@ -69,9 +72,9 @@ class GeneralCmdLogic(Thinker):
                 param = {}
                 for field_name in info.__annotations__:
                     param[field_name] = getattr(info, field_name)
-                # TODO: Actually check AccessLevel and ConnectionPermission using password checksum
+                # TODO: Actually check AccessLevel and Permission using password checksum
                 param['AccessLevel'] = AccessLevel.FULL
-                param['ConnectionPermission'] = ConnectionPermission.GRANTED
+                param['Permission'] = Permission.GRANTED
                 connections[info.device_id] = Connection(**param)
                 if PUB_Socket_Server in info.device_public_sockets:
                     from communication.logic.logic_functions import external_hb_logic
@@ -90,40 +93,42 @@ class GeneralCmdLogic(Thinker):
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if msg.receiver_id == '' and msg.sender_id in self.parent.connections:
+        if msg.receiver_id == '' and msg.sender_id in self.connections:
             self.react_broadcast(msg)
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
         elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
             self.react_forward(msg)
         # WELCOME INFO from another device or Directed message for the first time
-        elif msg.sender_id not in self.parent.connections and msg.receiver_id == self.parent.id:
+        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
             self.react_first_welcome(msg)
         # When the message is dedicated to Device
-        elif msg.sender_id in self.parent.connections and msg.receiver_id == self.parent.id:
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
             self.react_directed(msg)
         else:
             pass  # TODO: that I do not know what it is...add MsgError
 
     def react_internal(self, event: ThinkerEvent):
-        if 'server_heartbeat' in event.name:
+        if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                if self.parent.messenger._attempts_to_restart_sub > 0:
-                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
-                    info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
-                    self.parent.messenger._attempts_to_restart_sub -= 1
-                    event.counter_timeout = 0
-                    addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
-                    self.parent.messenger.restart_socket(SUB_Socket, addr)
-                else:
-                    if not self.parent.messenger._are_you_alive_send:
-                        info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
-                        event.counter_timeout = 0
-                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
-                        self.parent.messenger._are_you_alive_send = True
-                        self.msg_out(True, msg_i)
-                    else:
-                        info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
-                        del self.parent.connections[event.original_owner]
+                info_msg(self, 'INFO', f'{event.name} is away for too long...Deleting event {event.id}')
+                del self.parent.connections[event.original_owner]
+                # if self.parent.messenger._attempts_to_restart_sub > 0:
+                #     info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
+                #     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
+                #     self.parent.messenger._attempts_to_restart_sub -= 1
+                #     event.counter_timeout = 0
+                #     addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
+                #     self.parent.messenger.restart_socket(SUB_Socket, addr)
+                # else:
+                #     if not self.parent.messenger._are_you_alive_send:
+                #         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
+                #         event.counter_timeout = 0
+                #         msg_i = self.parent.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
+                #         self.parent.messenger._are_you_alive_send = True
+                #         self.msg_out(True, msg_i)
+                #     else:
+                #         info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
+                #         del self.parent.connections[event.original_owner]
 
 
 class ServerCmdLogic(GeneralCmdLogic):
@@ -151,9 +156,9 @@ class ServerCmdLogic(GeneralCmdLogic):
                 param = {}
                 for field_name in info.__annotations__:
                     param[field_name] = getattr(info, field_name)
-                # TODO: Actually check AccessLevel and ConnectionPermission using password checksum
+                # TODO: Actually check AccessLevel and Permission using password checksum
                 param['AccessLevel'] = AccessLevel.FULL
-                param['ConnectionPermission'] = ConnectionPermission.GRANTED
+                param['Permission'] = Permission.GRANTED
                 connections[info.device_id] = Connection(**param)
                 if PUB_Socket in info.device_public_sockets:
                     from communication.logic.logic_functions import external_hb_logic

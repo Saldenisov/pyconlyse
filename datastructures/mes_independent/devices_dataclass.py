@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Tuple
 
 from communication.interfaces import MessengerInter, ThinkerInter
-from communication.messaging.message_types import AccessLevel, ConnectionPermission
+from communication.messaging.message_types import AccessLevel, Permission
 from datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
 from datastructures import DataClass_frozen, DataClass_unfrozen
 from devices.interfaces import ExecutorInter
@@ -49,6 +49,7 @@ class DoneIt:
 class HeartBeat:
     device_id: str
     event_n: float
+    event_id: str
 
 
 @dataclass
@@ -172,6 +173,8 @@ class Connection(DataClass_unfrozen):
     device_public_sockets: Dict[str, str]
     event_id: str
     event_name: str
+    event_tick: float
     access_level: AccessLevel = AccessLevel.NONE
     session_key: bytes = b''
-    permission: ConnectionPermission = ConnectionPermission.DENIED
+    permission: Permission = Permission.DENIED
+
