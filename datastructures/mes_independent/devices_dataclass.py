@@ -77,16 +77,20 @@ class WelcomeInfoDevice:
     device_type: DeviceType
     device_public_key: bytes
     device_public_sockets: Dict[str, str]
+    event_id: str
+    event_name: str
+    event_tick: float
     password_checksum: bytes = b''
 
 
 @dataclass(order=True)
-class WelcomeInfoServer(WelcomeInfoDevice):
+class WelcomeInfoServer:
     """
     Must be remembered that WelcomeInfoServer must be crypted with Device public key and will be decrypted on
     Device side by Device private key, a only after that session_key will be used in communication between
     Server and Device.
     """
+    password_checksum: bytes = b''
     session_key: bytes = b''
 
 
@@ -177,4 +181,5 @@ class Connection(DataClass_unfrozen):
     access_level: AccessLevel = AccessLevel.NONE
     session_key: bytes = b''
     permission: Permission = Permission.DENIED
+    password_checksum: bytes = b''
 

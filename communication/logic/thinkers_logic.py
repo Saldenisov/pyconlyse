@@ -38,55 +38,63 @@ class GeneralCmdLogic(Thinker):
             self.remove_device_from_connections(msg.sender_id)
             self.parent.send_status_pyqt()
 
-    def react_forward(self, msg: MessageExt):
-        pass
-
-    def react_first_welcome(self, msg: MessageExt):
-        pass
-
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
             # Convert MessageExt to MessageInt and emit it
             self.parent.signal.emit(msg.ext_to_int())
         msg_r = None
         if msg.com == MsgComExt.ALIVE.msg_name:
-            if msg.body.sender_id in self.parent.connections:
+            if msg.sender_id in self.parent.connections:
                 msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
-        elif msg.com == MsgComExt.DO_IT.mes_name:
+        elif msg.com == MsgComExt.DO_IT.msg_name:
             # TODO: to be checked later
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                 self.logger.error(f'Adding to executor {msg.info} failed')
+        elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
+            self.react_first_welcome(msg)
 
         self.msg_out(msg_r)
 
+    def react_external(self, msg: MessageExt):
+        # TODO: add decision on permission
+        # HEARTBEATS and SHUTDOWNS...maybe something else later
+        if msg.receiver_id == '' and msg.sender_id in self.connections:
+            self.react_broadcast(msg)
+        # Only possible for non Server, since only Server emit MsgComExt.HEARTBEAT_FULL
+        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
+            self.react_heartbeat_full(msg)
+        # Forwarding message
+        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
+            self.react_forward(msg)
+        # When the message is dedicated to Device
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
+            self.react_directed(msg)
+        # For Server
+        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
+            self.react_first_welcome(msg)
+        else:
+            pass  # TODO: that I do not know what it is...add MsgError
+
+    def react_forward(self, msg: MessageExt):
+        pass
+
     def react_first_welcome(self, msg: MessageExt):
         msg_r = None
-        if msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
-            try:
-                messenger = self.parent.messenger
-                info: WelcomeInfoServer = msg.info
-                # Decrypt public_key of device crypted on device side with public key of Server
-                info.session_key = messenger.decrypt_with_private(info.device_public_key)
-                connections = self.parent.connections
-                param = {}
-                for field_name in info.__annotations__:
-                    param[field_name] = getattr(info, field_name)
-                # TODO: Actually check AccessLevel and Permission using password checksum
-                param['AccessLevel'] = AccessLevel.FULL
-                param['Permission'] = Permission.GRANTED
-                connections[info.device_id] = Connection(**param)
-                if PUB_Socket_Server in info.device_public_sockets:
-                    from communication.logic.logic_functions import external_hb_logic
-                    messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket_Server])
-                    self.register_event(name=f'heartbeat:{info.device_name}',
-                                        logic_func=external_hb_logic,
-                                        event_id=f'heartbeat:{info.device_id}',
-                                        original_owner=info.device_id,
-                                        start_now=True)
-                self.parent.send_status_pyqt()
-            except Exception as e:  # TODO: change Exception to something reasonable
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
-                                                 receiver_id=msg.sender_id, reply_to=msg.id)
+        try:
+            messenger = self.parent.messenger
+            info: WelcomeInfoServer = msg.info
+            # Decrypt public_key of device crypted on device side with public key of Server
+            info.session_key = messenger.decrypt_with_private(info.session_key)
+            server_connection = self.connections[msg.sender_id]
+            # TODO: Actually check AccessLevel and Permission using password checksum
+            server_connection.session_key = info.session_key
+            server_connection.access_level = AccessLevel.FULL
+            server_connection.permission = Permission.GRANTED
+            self.parent.send_status_pyqt()
+            info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
+        except Exception as e:  # TODO: change Exception to something reasonable
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
+                                             receiver_id=msg.sender_id, reply_to=msg.id)
         self.msg_out(msg_r)
 
     def react_heartbeat_full(self, msg: MessageExt):
@@ -105,29 +113,10 @@ class GeneralCmdLogic(Thinker):
 
         self.parent.server_id = msg.info.device_id
         self.parent.connections[DeviceId(msg.info.device_id)] = Connection(**param)
-
+        event = self.events['heartbeat']
         msg_welcome = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE,
-                                               receiver_id=msg.info.device_id)
+                                               receiver_id=msg.info.device_id, event=event)
         self.msg_out(msg_welcome)
-
-    def react_external(self, msg: MessageExt):
-        # TODO: add decision on permission
-        # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if msg.receiver_id == '' and msg.sender_id in self.connections:
-            self.react_broadcast(msg)
-        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
-            self.react_heartbeat_full(msg)
-        # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
-        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
-            self.react_forward(msg)
-        # WELCOME INFO from another device or Directed message for the first time
-        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
-            self.react_first_welcome(msg)
-        # When the message is dedicated to Device
-        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
-            self.react_directed(msg)
-        else:
-            pass  # TODO: that I do not know what it is...add MsgError
 
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
@@ -169,36 +158,35 @@ class ServerCmdLogic(GeneralCmdLogic):
 
     def react_first_welcome(self, msg: MessageExt):
         msg_r = None
-        if msg.com == MsgComExt.WELCOME_INFO_DEVICE.msg_name:
-            try:
-                messenger = self.parent.messenger
-                info: WelcomeInfoDevice = msg.info
-                # Decrypt public_key of device crypted on device side with public key of Server
-                info.device_public_key = messenger.decrypt_with_private(info.device_public_key)
-                connections = self.parent.connections
-                param = {}
-                for field_name in info.__annotations__:
-                    param[field_name] = getattr(info, field_name)
-                # TODO: Actually check AccessLevel and Permission using password checksum
-                param['AccessLevel'] = AccessLevel.FULL
-                param['Permission'] = Permission.GRANTED
-                connections[info.device_id] = Connection(**param)
-                if PUB_Socket in info.device_public_sockets:
-                    from communication.logic.logic_functions import external_hb_logic
-                    messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
-                    self.register_event(name=f'heartbeat:{info.device_name}',
-                                        logic_func=external_hb_logic,
-                                        event_id=f'heartbeat:{info.device_id}',
-                                        original_owner=info.device_id,
-                                        start_now=True)
-                session_key = messenger.gen_symmetric_key(info.device_id)
-                self.parent.connections[info.device_id].session_key = session_key
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
-                                                 receiver_id=msg.sender_id)
-                self.parent.send_status_pyqt()
-            except Exception as e:  # TODO: change Exception to something reasonable
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
-                                                 receiver_id=msg.sender_id, reply_to=msg.id)
+        try:
+            messenger = self.parent.messenger
+            info: WelcomeInfoDevice = msg.info
+            # Decrypt public_key of device crypted on device side with public key of Server
+            info.device_public_key = messenger.decrypt_with_private(info.device_public_key)
+            connections = self.parent.connections
+            param = {}
+            for field_name in info.__annotations__:
+                param[field_name] = getattr(info, field_name)
+            # TODO: Actually check AccessLevel and Permission using password checksum
+            param['access_level'] = AccessLevel.FULL
+            param['permission'] = Permission.GRANTED
+            connections[info.device_id] = Connection(**param)
+            if PUB_Socket in info.device_public_sockets:
+                from communication.logic.logic_functions import external_hb_logic
+                messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
+                self.register_event(name=f'heartbeat:{info.device_name}',
+                                    logic_func=external_hb_logic,
+                                    event_id=f'heartbeat:{info.device_id}',
+                                    original_owner=info.device_id,
+                                    start_now=True)
+            session_key = messenger.gen_symmetric_key(info.device_id)
+            self.parent.connections[info.device_id].session_key = session_key
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
+                                             receiver_id=msg.sender_id)
+            self.parent.send_status_pyqt()
+        except Exception as e:  # TODO: change Exception to something reasonable
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
+                                             receiver_id=msg.sender_id, reply_to=msg.id)
         self.msg_out(msg_r)
 
     def react_forward(self, msg: MsgComExt):
@@ -226,29 +214,7 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
 
 
 class ServiceCmdLogic(GeneralCmdLogic):
-
-    def react_directed(self, msg: MessageExt):
-        super().react_directed(msg)
-        reply = False
-        data = msg.data
-        msg_i = []
-        if data.com == MsgGenerator.INFO_SERVICE_DEMAND.mes_name:
-            msg_i = MsgGenerator.info_service_reply(device=self.parent, msg_i=msg)
-            reply = True
-        elif data.com == MsgGenerator.DO_IT.mes_name:
-            reply = False
-            if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                self.logger.error(f'Adding to executor {msg.data.info} failed')
-        else:
-            reply = True
-            msg_i = MsgGenerator.error(device=self.parent, msg_i=msg, comments=f'Unknown Message com: {msg.data.com}')
-        self.msg_out(reply, msg_i)
-
-    # OLD reply
-        data = msg.data
-        if data.com == MsgGenerator.POWER_ON_REPLY.mes_name:
-            self.parent.device_status.power = data.info.power_on
-            self.logger.info(data.info.comments)
+    pass
 
 
 class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):

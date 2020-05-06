@@ -41,7 +41,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     signal = pyqtSignal(MessageInt)
 
-    def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], parent: QObject = None,
+    def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], type: DeviceType, parent: QObject = None,
                  db_command: str = '', logger_new=True, test=False, **kwargs):
         super().__init__()
         Device.n_instance += 1
@@ -54,7 +54,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.name: str = name
         self._main_executor = ThreadPoolExecutor(max_workers=100)
         self.parent: QObject = parent
-        self.type: DeviceType = DeviceType.DEFAULT
+        self.type: DeviceType = type
         self.test = test
 
         if logger_new:
@@ -231,15 +231,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         except KeyError:
                             session_key_crypted = b''
                         finally:
-                            info = WelcomeInfoServer(device_id=self.id, device_name=self.name,
-                                                     device_type=DeviceType.SERVER,
-                                                     device_public_key=self.messenger.public_key,
-                                                     device_public_sockets=self.messenger.public_sockets,
-                                                     session_key=session_key_crypted)
+                            info = WelcomeInfoServer(session_key=session_key_crypted)
+
                     elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
-                        info = WelcomeInfoDevice(device_id=self.id, device_name=self.name,
-                                                 device_type=DeviceType.SERVER,
-                                                 device_public_key=self.messenger.public_key,
+                        server_public_key = self.connections[self.server_id].device_public_key
+                        pub_key = self.messenger.public_key
+                        device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
+                                                                                       server_public_key)
+                        event = kwargs['event']
+                        info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
+                                                 event_id=event.id, device_id=self.id, device_name=self.name,
+                                                 device_type=self.type, device_public_key=device_public_key_crypted,
                                                  device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
@@ -382,8 +384,8 @@ class Server(Device):
 
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
+        kwargs['type'] = DeviceType.SERVER
         super().__init__(**kwargs)
-        self.type = DeviceType.SERVER
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
     @property
@@ -451,8 +453,8 @@ class Client(Device):
 
         kwargs['cls_parts'] = cls_parts
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
+        kwargs['type'] = DeviceType.CLIENT
         super().__init__(**kwargs)
-        self.type = DeviceType.CLIENT
         self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
 
@@ -501,9 +503,8 @@ class Service(Device):
         kwargs['cls_parts'] = cls_parts
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
-
+        kwargs['type'] = DeviceType.SERVICE
         super().__init__(**kwargs)
-        self.type = DeviceType.SERVICE
         self.server_id: DeviceId = self.get_settings('General')['server_id']
 
     @property

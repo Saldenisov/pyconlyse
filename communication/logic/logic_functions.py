@@ -89,18 +89,26 @@ def task_in_reaction(event: ThinkerEvent):
             try:
                 msg: MessageExt = tasks_in.popitem()[1]
                 thinker.msg_counter += 1
+                react = True
                 if msg.com not in exclude_msgs:
                     info_msg(event, 'INFO', extra=str(msg.short()))
-                thinker.react_external(msg)
-                if msg.reply_to != '':  # If message is not a reply, it must be a demand one
+
+
+                if msg.reply_to == '' and msg.receiver_id != '':  # If message is not a reply, it must be a demand one
                     thinker.add_reply_pending(msg)
                     info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to pending_reply.')
+                elif msg.reply_to != '':
                     if msg.reply_to in thinker.demands_pending_answer:
                         # TODO: should it have else clause or not?
-                        com = thinker.demands_pending_answer[msg.reply_to].com
+                        com = thinker.demands_pending_answer[msg.reply_to].message.com
                         event.logger.info(f'REPLY to Msg {msg.reply_to} {com} is obtained.')
                         del thinker.demands_pending_answer[msg.reply_to]
-            except ThinkerErrorReact as e:
+                    else:
+                        react = False
+                        info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
+                if react:
+                    thinker.react_external(msg)
+            except (ThinkerErrorReact, Exception) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg}')
 
 
@@ -109,6 +117,7 @@ def task_out_reaction(event: ThinkerEvent):
     tasks_out: OrderedDictMod = thinker.tasks_out
     tasks_reply_pending: OrderedDictMod = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
+    react=False
     while event.active:
         if not event.paused and tasks_out:
             try:
@@ -121,7 +130,7 @@ def task_out_reaction(event: ThinkerEvent):
                 elif msg.reply_to != '':
                     if msg.reply_to in tasks_reply_pending:
                         try:
-                            com = tasks_reply_pending[msg.reply_to].com
+                            com = tasks_reply_pending[msg.reply_to].message.com
                             del tasks_reply_pending[msg.reply_to]
                             event.logger.info(f'Msg id={msg.reply_to} {com} is deleted from tasks_reply_pending')
                         except KeyError as e:
@@ -131,7 +140,7 @@ def task_out_reaction(event: ThinkerEvent):
                         event.logger.info(f'Timeout for message {msg.short()}')
                 if react:
                     thinker.parent.send_msg_externally(msg)
-            except ThinkerErrorReact as e:
+            except (ThinkerErrorReact, Exception) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg}')
 
 
@@ -147,18 +156,18 @@ def pending_demands(event: ThinkerEvent):
                     pending: PendingReply = item
                     if (time() - event.time) > event.tick and pending.attempt < 3:
                         pending.attempt += 1
-                        thinker.logger.info(f'Pending message awaits {pending.attempt}: {pending.message.short()}')
+                        info_msg(event, 'INFO', f'Pending message awaits {pending.attempt}: {pending.message.short()}')
                     elif (time() - event.time) > event.tick and pending.attempt >= 3:
                         try:
                             msg = pending.message
                             del tasks_pending_demands[key]
-                            event.logger.info(f'Timeout for demand msg: {msg.short()}')
-                            event.logger.info(f'Msg id={msg.id} is deleted')
+                            info_msg(event, 'INFO', f'Timeout for demand msg: {msg.short()}')
+                            info_msg(event, 'INFO', f'Msg id={msg.id} is deleted')
                         except KeyError:
-                            error_logger(event, event.run, f'Cannot delete msg id={msg.id} com={msg.com} from '
-                                                           f'pending_demands')
+                            error_logger(event, pending_demands, f'Cannot delete msg id={msg.id} com={msg.com} from '
+                                                                 f'pending_demands')
             except ThinkerErrorReact as e:
-                error_logger(event, event.run, e)
+                error_logger(event, pending_demands, e)
 
 
 def pending_replies(event: ThinkerEvent):
@@ -174,7 +183,7 @@ def pending_replies(event: ThinkerEvent):
                     pending: PendingReply = item
                     if (time() - event.time) > event.tick and pending.attempt < 3:
                         pending.attempt = pending.attempt + 1
-                        thinker.logger.info(f'Pending reply message waits {pending.attempt}: {pending.message}')
+                        info_msg(event, 'INFO', f'Pending reply message waits {pending.attempt}: {pending.message}')
                     elif (time() - event.time) > event.tick and pending.attempt >= 3:
                         try:
                             msg = pending.message
@@ -182,12 +191,12 @@ def pending_replies(event: ThinkerEvent):
                                                           reply_to=msg.id, receiver_id=msg.sender_id)
                             thinker.add_task_out(msg_out)
                             del tasks_pending_replies[key]
-                            event.logger.info(f'Timeout for reply msg: {msg.short}')
-                            event.logger.info(f'Msg: {msg.id} is deleted')
+                            info_msg(event, 'INFO', f'Timeout for reply msg: {msg.short}')
+                            info_msg(event, 'INFO', f'Msg: {msg.id} is deleted')
                         except KeyError:
-                            error_logger(event, event.run, f'Cannot delete msg: {msg.reply_to} from pending_replies')
+                            error_logger(event, pending_replies, f'Cannot delete msg: {msg.reply_to} from pending_replies')
             except ThinkerErrorReact as e:
-                error_logger(event, event.run, e)
+                error_logger(event, pending_replies, e)
 
 
 

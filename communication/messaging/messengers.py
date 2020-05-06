@@ -17,7 +17,7 @@ from typing import Dict, List, NamedTuple, NewType
 from communication.interfaces import MessengerInter
 from communication.messaging.messages import MessageExt, MsgType, MsgComExt
 from datastructures.mes_independent.devices_dataclass import *
-from devices.interfaces import DeviceId
+from devices.interfaces import DeviceId, DeviceType
 from devices.devices import Device
 from datastructures.mes_dependent.dicts import OrderedDictMod
 from utilities.errors.messaging_errors import MessengerError, MessageError
@@ -151,7 +151,11 @@ class Messenger(MessengerInter):
         Private and Public Keys are generated with default_backend
         :return: None
         """
-        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048, backend=default_backend())
+        if self.parent.type is DeviceType.SERVER:
+            key_size = 4096
+        else:
+            key_size = 2048
+        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size, backend=default_backend())
         self._public_key = self._private_key.public_key()
 
     def heartbeat(self) -> MessageExt:
@@ -498,13 +502,13 @@ class ServerMessenger(Messenger):
             raise e
 
     def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
-        for msg, device_id, crypted in msgs:
+        for msg, device_id, socket_name, crypted in msgs:
             try:
                 if int(crypted):
                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
-                self.parent_thinker.add_task_in(mes)
-            except (MessengerError, MessageError, ThinkerError) as e:
+                self.parent.thinker.add_task_in(mes)
+            except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
                                                  error_comments=str(e),
@@ -566,7 +570,7 @@ class ServerMessenger(Messenger):
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        self._deal_with_reaceived_msg()
+                        self._deal_with_reaceived_msg(msgs)
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)

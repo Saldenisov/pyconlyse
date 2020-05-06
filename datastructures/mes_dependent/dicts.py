@@ -43,8 +43,6 @@ class Events_Dict(dict):
 
             else:
                 raise KeyError('Neither event_id nor event_name were passed correctly to delete the event...')
-        finally:
-            print(f'event {event_name} is deleted')
 
     def __contains__(self, item):
         if super().__contains__(item):
@@ -129,10 +127,10 @@ class OrderedDictMesTypeCounter(OrderedDict):
                 msg = value.message
             else:
                 raise TypeError(f'Wrong type is passed {type(value)}')
-            if msg.body.type in self.mes_types:
-                self.mes_types[msg.body.type] += 1
+            if msg.type in self.mes_types:
+                self.mes_types[msg.type] += 1
             else:
-                self.mes_types[msg.body.type] = 1
+                self.mes_types[msg.type] = 1
         else:
             raise KeyError(f'Key: {key} already exists in {self.name}')
 

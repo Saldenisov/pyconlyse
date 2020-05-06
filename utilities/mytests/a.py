@@ -1,6 +1,27 @@
-from datastructures.mes_independent.devices_dataclass import Connection
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.asymmetric import rsa
 
-param = {'device_id': 'Server:Main:sfqvtyjsdf23qa23xcv', 'device_name': 'Server_default', 'device_type': 'server', 'device_public_key': b'-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtsmUZkHlja1P9Ygpbe6/\nPQ3G8qFgGsqjRDWm1e940BCc3KXYek0spCOp6uIdlGYC5oL7RRpCPMMOJqT/54aU\n64JVykIRt4G79P8qS+Uth3//0zrWBVCT47eaxn3Rr+jf7xmYjU6LxMlOtOBFVqaD\nlWNH30T1ntsRNQEhbxqY3ULTdEQV6p/u5CBmCo9jxPwT/XtDTvQjjx7SgTSR3lnS\nFN/MtL+ehF7CwKKzaUuLmM0dbF43KM9wlhNrBW/Na/wmX+IAZE+SqjVpBJ4DHAhQ\nvPsdlDshHNw+I81qR0qG9LgJNGqWiHgZEMf0+CzFz3GU8fQN537hKe/wuUTE47zw\nvQIDAQAB\n-----END PUBLIC KEY-----\n', 'device_public_sockets': {'publisher_socket_server': 'tcp://127.0.0.1:5556', 'frontend_router_socket_server': 'tcp://127.0.0.1:5001', 'backend_router_socket_server': 'tcp://127.0.0.1:5002'}, 'event_id': 'heartbeat:Server:Main:sfqvtyjsdf23qa23xcv', 'event_name': 'heartbeat'}
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
-a = Connection(**param)
-print(a)
+MESSAGE = b'-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArp8Sl+X9tgrXxGuTk+IJ\naSTsLFwLmY4rCz96i6ziuA1fd1DjaN2aUeXScosTjn6kNrQCb+fFStA941+k7AdB\n1QKsUJX6/zdvIzDwLwt7fFulXgWgtLFeqiQNo4jg9pdi7zIB1ztQVGbqxArINMY0\nrsEYd0fWIec9zWliUW+cmGB8xjjPu/LtoDt8ZuQLBh9DuGNUdBzn40ToGmPVdcup\nqcZgB94K76MXRnCg1eUp+Lul+t/Y279CEvjnWliL7+fePCrQWOLcDqZVoJjqlF9J\nMmgjZIXNStB2Kxypf+C/jxXKp8LYiV5SY1+CAsoYCwct+5/h9v7beisCvBCTmCpr\n7QIDAQAB\n-----END PUBLIC KEY-----\n'
+pub_key_bytes = b'-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAoAdYduVrNRPyQOsH/sJL\nDyGPh/D1NjhTvZ0kPX2qg034BFVwmTRXf16QzVWupXV0ROX6OCMdSvQ/49UQlQoc\nglPHjstuSKRPOy1cpp2r3hXBPNMAm6dHFw1cXuywdbp7q8e4YWnt87IAtR/QCfvt\nlbCKBi4Lvzwoz/2/80gg4mnPGH7Eg1eg3s4b2fJ+Bpk63VVq+TAvWTBbNB+x/ApX\nb8e1/SWZYQNhZ+CuBY0VF3Daa/GHGHmSLScUVr/8sOMKLGUtnpjWxp5zDlpXBauV\nQtAyafUA1gWL+ZdB35wdAqR4T37BMUamE5CBYbDKFyI+qhjeZCC2+AbTKnBx7G17\nIQIDAQAB\n-----END PUBLIC KEY-----\n'
+
+
+public_key = load_pem_public_key(pub_key_bytes, backend=default_backend())
+
+try:
+    # Encrypt
+    ciphertext = public_key.encrypt(
+        MESSAGE,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA1()),
+            algorithm=hashes.SHA1(),
+            label=None
+        )
+    )
+except Exception as e:
+    print(e)
+

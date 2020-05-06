@@ -14,15 +14,14 @@ from datastructures.mes_independent.stpmtr_dataclass import *
 import pytest
 
 
-
-def test_server_stpmtr(server_test: Server, superuser_test: SuperUser, stpmtr_emulate_test: StpMtrCtrl_emulate):
+def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser, stpmtr_emulate_test: StpMtrCtrl_emulate):
     server = server_test
     superuser = superuser_test
     stpmtr_emulate = stpmtr_emulate_test
 
     devices = od()
     devices[server.id] = server
-    #devices[superuser.id] = superuser
+    devices[superuser.id] = superuser
     devices[stpmtr_emulate.id] = stpmtr_emulate
 
     services_id = []
@@ -32,7 +31,7 @@ def test_server_stpmtr(server_test: Server, superuser_test: SuperUser, stpmtr_em
 
     start_devices(devices)
 
-    sleep(3)
+    sleep(5)
 
     for device_id, device in devices.items():
         if device_id != server.id:

@@ -34,15 +34,15 @@ class MsgComExt(Enum):
     ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(['receiver_id']), True)
     AVAILABLE_SERVICES = MessageInfoExt('available_services', MsgType.DIRECTED, AvailableServices,
                                         set(['available_services']), True)
-    DO_IT = None
-    DONE_IT = None
+    DO_IT = MessageInfoExt('alive', MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
+    DONE_IT = MessageInfoExt('alive', MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
     ERROR = MessageInfoExt('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']),
                            False)
     HEARTBEAT = MessageInfoExt('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfoExt('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
     WELCOME_INFO_DEVICE = MessageInfoExt('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,
-                                         set(['receiver_id']), False)
+                                         set(['receiver_id', 'event']), False)
     WELCOME_INFO_SERVER = MessageInfoExt('welcome_info_server', MsgType.DIRECTED, WelcomeInfoServer,
                                          set(['reply_to', 'receiver_id']), False)
 

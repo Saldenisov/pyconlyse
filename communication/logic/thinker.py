@@ -30,8 +30,8 @@ class Thinker(ThinkerInter):
         self.tasks_in_test = OrderedDictMod(name='tasks_in_test')
         self._tasks_out = OrderedDictMod(name='tasks_out')
         self.tasks_out_test = OrderedDictMod(name='tasks_out_test')
-        self._pending_demands = OrderedDictMesTypeCounter(name='pending_demands')
-        self._pending_replies = OrderedDictMesTypeCounter(name='pending_replies')
+        self._pending_demands = OrderedDictMod(name='pending_demands')
+        self._pending_replies = OrderedDictMod(name='pending_replies')
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -118,8 +118,10 @@ class Thinker(ThinkerInter):
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
                 info_msg(self, 'INFO', extra=repr(msg_out.short()))
-            else:
                 self.add_task_out(msg_out)
+            else:
+                error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'
+                                                 f'{msg_out}')
 
     def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
                        start_now=False, **kwargs):
