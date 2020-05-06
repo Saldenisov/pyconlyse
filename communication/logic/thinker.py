@@ -176,6 +176,10 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
+    def react_heartbeat_full(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
     def react_directed(self, msg: MessageExt):
         pass
 
@@ -187,12 +191,12 @@ class Thinker(ThinkerInter):
         # TODO: the info is not deleted from _frontend sockets or backend sockets
         connections = self.parent.connections
         if device_id in connections:
-            self.logger.info(f'Procedure to delete {device_id} is started')
+            info_msg(self, 'INFO', f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
             del self.parent.connections[device_id]
-            self.logger.info(f'Device {device_id} is deleted')
+            info_msg(self, 'INFO', f'Device {device_id} is deleted')
         else:
             error_logger(self, self.remove_device_from_connections,
                          f'remove_device_from_connections: Wrong device_id {device_id} is passed')
@@ -258,6 +262,7 @@ class ThinkerEvent(Thread):
             info_msg(self, 'CREATED', extra=f' of {self.parent.name}')
         else:
             info_msg(self, 'CREATED')
+
     def run(self):
         self.active = True
         self.paused = self.parent.paused

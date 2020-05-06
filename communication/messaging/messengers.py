@@ -426,28 +426,12 @@ class ClientMessenger(Messenger):
                         info: HeartBeatFull = msg.info
                         sockets = info.device_public_sockets
                         if FRONTEND_Server in sockets and BACKEND_Server in sockets:
+                            #TODO: need to check if it true SERVER using password or certificate
                             info_msg(self, 'INFO', f'{msg.short()}')
                             info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
                             self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
                             self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
-                            param = {}
-                            for field_name in Connection.__annotations__:
-                                try:
-                                    param[field_name] = getattr(info, field_name)
-                                except AttributeError:
-                                    pass
-
-                            from communication.logic.logic_functions import external_hb_logic
-                            self.parent.thinker.register_event(name=info.event_name,event_id=info.event_id,
-                                                               logic_func=external_hb_logic,
-                                                               original_owner=info.device_id, tick=info.event_tick,
-                                                               start_now=True)
-
-                            sleep(0.2)  # Give time to start event
-
-                            self.parent.connections[DeviceId(info.device_id)] = Connection(**param)
-                            self.parent.server_id = info.device_id
-
+                            self.parent.thinker.react_heartbeat_full(msg)
 
                             break
                         else:

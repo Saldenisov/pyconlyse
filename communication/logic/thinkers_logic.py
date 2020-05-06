@@ -1,7 +1,6 @@
 import logging
-from time import time
+from time import time, sleep
 
-from pip._internal import self_outdated_check
 
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
@@ -90,11 +89,34 @@ class GeneralCmdLogic(Thinker):
                                                  receiver_id=msg.sender_id, reply_to=msg.id)
         self.msg_out(msg_r)
 
+    def react_heartbeat_full(self, msg: MessageExt):
+        param = {}
+        for field_name in Connection.__annotations__:
+            try:
+                param[field_name] = getattr(msg.info, field_name)
+            except AttributeError:
+                pass
+
+        from communication.logic.logic_functions import external_hb_logic
+        self.register_event(name=msg.info.event_name, event_id=msg.info.event_id, logic_func=external_hb_logic,
+                            original_owner=msg.info.device_id, tick=msg.info.event_tick, start_now=True)
+
+        sleep(0.2)  # Give time to start event
+
+        self.parent.server_id = msg.info.device_id
+        self.parent.connections[DeviceId(msg.info.device_id)] = Connection(**param)
+
+        msg_welcome = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE,
+                                               receiver_id=msg.info.device_id)
+        self.msg_out(msg_welcome)
+
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         # HEARTBEATS and SHUTDOWNS...maybe something else later
         if msg.receiver_id == '' and msg.sender_id in self.connections:
             self.react_broadcast(msg)
+        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
+            self.react_heartbeat_full(msg)
         # Forwarding message or sending [MsgComExt.AVAILABLE_SERVICES, MsgComExt.ERROR] back
         elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
             self.react_forward(msg)
@@ -110,8 +132,9 @@ class GeneralCmdLogic(Thinker):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                info_msg(self, 'INFO', f'{event.name} is away for too long...Deleting event {event.id}')
-                del self.parent.connections[event.original_owner]
+                self.logger.info(f'{event.name} timeout is reached. Deleting the event {event.id}.')
+                self.remove_device_from_connections(event.original_owner)
+                self.parent.send_status_pyqt()
                 # if self.parent.messenger._attempts_to_restart_sub > 0:
                 #     info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
                 #     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')

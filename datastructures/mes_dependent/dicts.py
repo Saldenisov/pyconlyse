@@ -80,14 +80,14 @@ class Connections_Dict(dict):
     def __delitem__(self, key):
         try:
             connection: Connection = self[key]
-            messenger_id = connection.device_info.messenger_id
+            device_id = connection.device_id
             super().__delitem__(key)
-            del self.device_id[messenger_id]
+            del self.device_id[device_id]
         except KeyError:
             messenger_id = key
-            if messenger_id in self.device_id:
-                key = self.device_id[messenger_id]
-                del self.device_id[messenger_id]
+            if device_id in self.device_id:
+                key = self.device_id[device_id]
+                del self.device_id[device_id]
                 super().__delitem__(key)
             else:
                 raise KeyError('Neither receiver_id nor device_id were passed correctly to delete the connection...')
