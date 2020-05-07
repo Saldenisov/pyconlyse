@@ -305,18 +305,22 @@ class ClientMessenger(Messenger):
         try:
             self.sockets[DEALER_Socket].connect(self.addresses[FRONTEND_Server])
             if self.pub_option:
-                try:
-                    self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
-                except (WrongAddress, zmq.error.ZMQError) as e:
-                    error_logger(self, self.connect, e)
-                    port = get_free_port(scope=None)
-                    local_ip = get_local_ip()
-                    self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
-                    self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
-                    self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
-                    self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
+                self.bind_pub()
         except (WrongAddress, zmq.error.ZMQBindError) as e:
             error_logger(self, self.connect, e)
+
+    def bind_pub(self):
+        try:
+            self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+            self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
+        except (WrongAddress, zmq.error.ZMQError) as e:
+            # TODO: potential recursion depth violation
+            error_logger(self, self.connect, f'{e}: {self.addresses[PUB_Socket]}')
+            port = get_free_port(scope=None)
+            local_ip = get_local_ip()
+            self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
+            self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
+            self.bind_pub()
 
     def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket, crypted in msgs:
@@ -358,9 +362,10 @@ class ClientMessenger(Messenger):
         try:
             for adr in self.addresses[PUB_Socket_Server]:
                 self.subscribe_sub(address=adr)
-            self._wait_server_hb()
+            msg = self._wait_server_hb()
             if self.active:
                 self.connect()
+                self.parent.thinker.react_heartbeat_full(msg)
                 info_msg(self, 'STARTED')
                 self._receive_msgs()
         except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
@@ -407,12 +412,13 @@ class ClientMessenger(Messenger):
         self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
         self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
 
-    def _wait_server_hb(self):
+    def _wait_server_hb(self) -> MessageExt:
         if FRONTEND_Server not in self.addresses or BACKEND_Server not in self.addresses:
             wait = True
         else:
             wait = False
         i = 0
+        msg_out = None
         while wait and self.active:
             if i > 100:
                 info_msg(self, 'INFO', f'{self.name} could not connect to server, no sockets, '
@@ -435,14 +441,13 @@ class ClientMessenger(Messenger):
                             info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
                             self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
                             self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
-                            self.parent.thinker.react_heartbeat_full(msg)
-
+                            msg_out = msg
                             break
                         else:
                             raise MessengerError(f'Not all sockets are sent to {self.name}')
                     except (AttributeError, Exception) as e:  # IN case when short Heartbeat arrived
                         pass
-
+        return msg_out
 
 class ServiceMessenger(ClientMessenger):
 

@@ -55,6 +55,7 @@ def internal_hb_logic(event: ThinkerEvent):
             event.n += 1
             sleep(event.tick)
             if full_heartbeat and event.n % 3:
+                # TODO: every n minutes changes session_key for safety...
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
             else:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)

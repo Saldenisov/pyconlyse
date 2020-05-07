@@ -41,7 +41,8 @@ class ServerGUIModel(QObject):
             try:
                 from devices.devices import DeviceFactory, Server
                 self.server = DeviceFactory.make_device(device_id="Server:Main:sfqvtyjsdf23qa23xcv",
-                                                        db_path=self.db_path, pyqtslot=self.treat_pyqtsignals)
+                                                        db_path=self.db_path, pyqtslot=self.treat_pyqtsignals,
+                                                        logger_new=False)
                 self.server.start()
             except DeviceError as e:
                 self.logger.error(e)

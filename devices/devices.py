@@ -112,7 +112,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
         res = []
         for device_id, connection in self.connections.items():
-            res.append((device_id, connection.device_info.device_name))
+            res.append((device_id, connection.device_name))
+        print(res)
         return res
 
     @property
@@ -196,7 +197,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             try:
                 message_info: MessageInfoExt = msg_com.value
                 if not message_info.must_have_param.issubset(set(kwargs.keys())):
-                    error_logger(self, self.generate_msg, f'Not all required parameters are given '
+                    error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com}'
                                                           f'{message_info.must_have_param}, only {kwargs.keys()}')
                     raise DeviceError(f'Not all parameters are passed to device.generate_msg')
                 else:
@@ -262,7 +263,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                       receiver_id=receiver_id,
                                       reply_to=reply_to, sender_id=self.messenger.id)
                 else:
-                    return MessageInt(com=msg_com.msg_name, info=info, sender_id=kwargs['sender_id'])
+                    return MessageInt(com=msg_com.msg_name, info=info, sender_id=self.messenger.id)
         if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
             error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
             return None
@@ -384,7 +385,6 @@ class Server(Device):
 
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
-        kwargs['type'] = DeviceType.SERVER
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
@@ -426,7 +426,7 @@ class Server(Device):
 
     def send_status_pyqt(self):
         if self.pyqtsignal_connected:
-            msg = self.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT)
+            msg = self.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT, sender_id=self.id)
             if msg:
                 self.signal.emit(msg)
         else:
@@ -597,10 +597,13 @@ class DeviceFactory:
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
                 if project_type == 'Client':
                     module_devices = import_module('devices.virtualdevices')
+                    type = DeviceType.CLIENT
                 elif project_type == 'Service':
                     module_devices = import_module('devices.service_devices')
+                    type = DeviceType.SERVICE
                 elif project_type == 'Server':
                     module_devices = import_module('devices.servers')
+                    type = DeviceType.SERVER
                 else:
                     raise Exception(f'Project type: {project_type} is not known')
 
@@ -615,6 +618,7 @@ class DeviceFactory:
                 kwargs['thinker_cls'] = thinker_class
                 kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
                 kwargs['id'] = device_id
+                kwargs['type'] = type
                 if issubclass(cls, Device):
                     return cls(**kwargs)
             else:

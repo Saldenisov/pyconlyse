@@ -16,7 +16,7 @@ module_logger = logging.getLogger(__name__)
 
 
 class MsgComInt(Enum):
-    DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set(['sender_id']))
+    DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set([]))
     HEARTBEAT = MessageInfoInt('heartbeat', HeartBeat, set(['event']))
 
     @property
