@@ -1,15 +1,15 @@
-'''
+"""
 Created on 06.08.2019
 
 @author: saldenisov
-'''
+"""
 
 import os
 import logging
 from PyQt5.QtWidgets import QApplication
 
+from communication.messaging.messages import *
 from gui.views.ServerGUIViews import ServerGUIView
-from communication.messaging.message_utils import MsgGenerator
 from utilities.myfunc import info_msg, get_local_ip
 
 
@@ -68,7 +68,7 @@ class ServerGUIController:
                 os.system(exc)
 
     def check_status(self):
-        msg = MsgGenerator.status_server_info_full(device=self.model.server)
+        msg = self.model.server.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT)
         self.model.model_changed.emit(msg)
 
     def quit_clicked(self, event):

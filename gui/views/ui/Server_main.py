@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'Server_main.ui'
+# Form implementation generated from reading ui file 'C:\dev\pyconlyse\gui\views\ui\Server_main.ui'
 #
 # Created by: PyQt5 UI code generator 5.11.3
 #
@@ -8,8 +8,7 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-
-class Ui_ServerGUI(object):
+class Ui_ServerMainWindow(object):
     def setupUi(self, ServerMainWindow):
         ServerMainWindow.setObjectName("ServerMainWindow")
         ServerMainWindow.resize(819, 750)
@@ -192,5 +191,4 @@ class Ui_ServerGUI(object):
         self.label_4.setText(_translate("ServerMainWindow", "Events running"))
         self.menusdf.setTitle(_translate("ServerMainWindow", "Settings"))
         self.actionExit.setText(_translate("ServerMainWindow", "actionExit"))
-
 

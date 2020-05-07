@@ -113,7 +113,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         res = []
         for device_id, connection in self.connections.items():
             res.append((device_id, connection.device_name))
-        print(res)
         return res
 
     @property

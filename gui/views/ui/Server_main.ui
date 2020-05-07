@@ -1,14 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ServerMainWindow</class>
- <widget class="QMainWindow" name="ServerMainWindow">
+ <class>ServerGUI</class>
+ <widget class="QMainWindow" name="ServerGUI">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>950</width>
-    <height>706</height>
+    <width>1074</width>
+    <height>750</height>
    </rect>
+  </property>
+  <property name="sizePolicy">
+   <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+    <horstretch>0</horstretch>
+    <verstretch>0</verstretch>
+   </sizepolicy>
   </property>
   <property name="windowTitle">
    <string>ServerGUI</string>
@@ -35,7 +41,14 @@
              </widget>
             </item>
             <item>
-             <widget class="QTextEdit" name="tE_queue_in"/>
+             <widget class="QTextEdit" name="tE_queue_in">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>600</height>
+               </size>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
@@ -49,7 +62,14 @@
              </widget>
             </item>
             <item>
-             <widget class="QTextEdit" name="tE_queue_in_pending"/>
+             <widget class="QTextEdit" name="tE_queue_in_pending">
+              <property name="maximumSize">
+               <size>
+                <width>16777215</width>
+                <height>600</height>
+               </size>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
@@ -65,7 +85,14 @@
            </widget>
           </item>
           <item>
-           <widget class="QTextEdit" name="tE_queue_out"/>
+           <widget class="QTextEdit" name="tE_queue_out">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>400</height>
+             </size>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
@@ -99,6 +126,9 @@
     </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout_2">
+      <property name="spacing">
+       <number>0</number>
+      </property>
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
@@ -110,6 +140,46 @@
            <string>Click to start</string>
           </property>
          </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="rB_hb">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer_2">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>20</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
         <item>
          <widget class="QPushButton" name="pB_pause">
@@ -175,7 +245,26 @@
              </widget>
             </item>
             <item>
-             <widget class="QTextEdit" name="tE_services_running"/>
+             <widget class="QTextEdit" name="tE_services_running">
+              <property name="sizePolicy">
+               <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+                <horstretch>0</horstretch>
+                <verstretch>0</verstretch>
+               </sizepolicy>
+              </property>
+              <property name="minimumSize">
+               <size>
+                <width>350</width>
+                <height>150</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>500</width>
+                <height>500</height>
+               </size>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
@@ -189,47 +278,29 @@
              </widget>
             </item>
             <item>
-             <widget class="QTextEdit" name="tE_events_running"/>
+             <widget class="QTextEdit" name="tE_events_running">
+              <property name="minimumSize">
+               <size>
+                <width>350</width>
+                <height>150</height>
+               </size>
+              </property>
+              <property name="maximumSize">
+               <size>
+                <width>500</width>
+                <height>500</height>
+               </size>
+              </property>
+             </widget>
             </item>
            </layout>
           </item>
           <item>
-           <layout class="QVBoxLayout" name="verticalLayout_8">
-            <item>
-             <widget class="QLabel" name="label_5">
-              <property name="text">
-               <string>Clients Running</string>
-              </property>
-             </widget>
-            </item>
-            <item>
-             <widget class="QTextEdit" name="tE_clients_running"/>
-            </item>
-           </layout>
+           <layout class="QVBoxLayout" name="verticalLayout_8"/>
           </item>
          </layout>
         </item>
        </layout>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="rB_hb">
-        <property name="text">
-         <string/>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <spacer name="horizontalSpacer">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
-        </property>
-        <property name="sizeHint" stdset="0">
-         <size>
-          <width>40</width>
-          <height>20</height>
-         </size>
-        </property>
-       </spacer>
       </item>
      </layout>
     </item>
@@ -240,7 +311,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>950</width>
+     <width>1074</width>
      <height>21</height>
     </rect>
    </property>
