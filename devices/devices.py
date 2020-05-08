@@ -363,7 +363,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         pass
 
     def send_msg_externally(self, msg: MessageExt):
-        self.messenger.add_msg_out(msg)
+        self.thinker.add_task_out(msg)
 
     def update_config(self, message: str):
         # TODO: realize

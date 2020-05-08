@@ -89,8 +89,8 @@ def task_in_reaction(event: ThinkerEvent):
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
+        sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
-            sleep(0.01)
             try:
                 msg: MessageExt = tasks_in.popitem()[1]
                 thinker.msg_counter += 1
@@ -122,15 +122,15 @@ def task_out_reaction(event: ThinkerEvent):
     tasks_out: MsgDict = thinker.tasks_out
     tasks_reply_pending: MsgDict = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    react=False
     while event.active:
+        sleep(0.001)
         if not event.paused and tasks_out:
-            sleep(0.01)
             try:
                 msg: MessageExt = tasks_out.popitem()[1]
                 react = True
                 if msg.receiver_id != '' and msg.reply_to == '':
                     # If msg is not reply, than add to pending demand
+                    info_msg(event, 'INFO', f'Msg id={msg.id} is considered to get a reply')
                     thinker.add_demand_pending(msg)
 
                 elif msg.reply_to != '':
@@ -146,8 +146,8 @@ def task_out_reaction(event: ThinkerEvent):
                         event.logger.info(f'Timeout for message {msg.short()}')
                 if react:
                     thinker.parent.send_msg_externally(msg)
-            except (ThinkerErrorReact, Exception) as e:
-                error_logger(event, task_out_reaction, f'{e}: {msg}')
+            except (ThinkerErrorReact, KeyError) as e:
+                error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
 
 
 def pending_demands(event: ThinkerEvent): 
@@ -155,6 +155,7 @@ def pending_demands(event: ThinkerEvent):
     tasks_pending_demands: MsgDict = thinker.demands_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
+        sleep(0.001)
         if not event.paused and tasks_pending_demands:
             try:
                 sleep(event.tick)
@@ -182,6 +183,7 @@ def pending_replies(event: ThinkerEvent):
     tasks_pending_replies: MsgDict = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
+        sleep(0.001)
         if not event.paused and tasks_pending_replies:
             sleep(event.tick)
             try:

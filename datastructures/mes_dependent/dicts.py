@@ -101,6 +101,7 @@ class Connections_Dict(dict):
 class MsgDict(OrderedDict):
 
     def __init__(self, name, dict_parent, size_limit, *args, **kwargs):
+        self.__name__ = name
         self.name = name
         self.size_limit = size_limit
         self.dict_parent = dict_parent
@@ -113,7 +114,7 @@ class MsgDict(OrderedDict):
         else:
             error = f'Key: {key} already exists in {self.name} {self}'
             if self.dict_parent:
-                error_logger(self, self.__setitem__, error)
+                error_logger(self.dict_parent, self, error)
             raise KeyError(error)
 
     def _check_size_limit(self):
@@ -122,7 +123,7 @@ class MsgDict(OrderedDict):
                 element = self.popitem(last=False)  # Remove first element
                 if self.dict_parent:
                     info_msg(self.dict_parent, 'INFO', f'Limit size={self.size_limit} was exceeded for {self.name}, '
-                                                  f'first element {element} was removed')
+                                                f'first element {element} was removed')
 
 
 class OrderedDictMesTypeCounter(OrderedDict):
