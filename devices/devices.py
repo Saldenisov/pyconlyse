@@ -200,8 +200,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                           f'{message_info.must_have_param}, only {kwargs.keys()}')
                     raise DeviceError(f'Not all parameters are passed to device.generate_msg')
                 else:
-                    if msg_com is MsgComExt.AVAILABLE_SERVICES:
-                        info = AvailableServices(available_services=kwargs['available_services'])
+                    if msg_com is MsgComExt.DO_IT:
+                        info = kwargs['func_input']
+                    elif msg_com is MsgComExt.DONE_IT:
+                        info = kwargs['func_output']
                     elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
                         event = kwargs['event']
                         info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
@@ -245,7 +247,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                  device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
-                raise e
+                raise e  # TO
             finally:
                 if isinstance(msg_com, MsgComExt):
                     if msg_com.msg_type is MsgType.BROADCASTED:
