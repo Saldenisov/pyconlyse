@@ -63,10 +63,10 @@ class SuperUserView(QMainWindow):
                     widget = self.ui.lW_devices
                     widget.clear()
                     names = []
-                    for key, item in result.running_services.items():
+                    for key, item in result.device_available_services.items():
                         names.append(f'{key}')
                     widget.addItems(names)
-                    self.model.superuser.running_services = result.running_services
+                    self.model.superuser.running_services = result.device_available_services
             #elif com == MsgComExt.INFO_SERVICE_REPLY.msg_name:
                 #self.model.service_parameters[info.device_id] = info
             elif com == MsgComExt.ERROR.msg_name:

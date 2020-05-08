@@ -25,6 +25,7 @@ def external_hb_logic(event: ThinkerEvent):
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     counter = 0
     while event.active:
+        sleep(0.001)
         if not event.paused:
             sleep(event.tick)
             if (time() - event.time) >= event.tick:
@@ -54,9 +55,9 @@ def internal_hb_logic(event: ThinkerEvent):
         full_heartbeat = True  # Allows to send MsgComExt.HEARTBEAT_FULL only for Server
     info_msg(event, 'STARTED', extra=f' of {thinker.name}')
     while event.active:
+        sleep(0.001)
         if not event.paused:
             event.n += 1
-            sleep(event.tick)
             if full_heartbeat and event.n % 3:
                 # TODO: every n minutes changes session_key for safety...
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
@@ -68,6 +69,7 @@ def internal_hb_logic(event: ThinkerEvent):
                 device.signal.emit(msg)
 
             thinker.add_task_out(msg_heartbeat)
+            sleep(event.tick)
 
 
 def internal_info_logic(event: ThinkerEvent):
@@ -76,11 +78,10 @@ def internal_info_logic(event: ThinkerEvent):
     device = thinker.parent
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
+        sleep(0.001)
         if not event.paused:
             sleep(event.tick)
             # TODO': requires update
-            #msg = MsgGenerator.degen_msg('device_info_short', device, event=event)
-            #thinker.add_task_out(msg)
 
 
 def task_in_reaction(event: ThinkerEvent):
@@ -92,7 +93,7 @@ def task_in_reaction(event: ThinkerEvent):
         sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
             try:
-                msg: MessageExt = tasks_in.popitem()[1]
+                msg: MessageExt = tasks_in.popitem(last=False)[1]
                 thinker.msg_counter += 1
                 react = True
                 if msg.com not in exclude_msgs:
@@ -126,7 +127,7 @@ def task_out_reaction(event: ThinkerEvent):
         sleep(0.001)
         if not event.paused and tasks_out:
             try:
-                msg: MessageExt = tasks_out.popitem()[1]
+                msg: MessageExt = tasks_out.popitem(last=False)[1]
                 react = True
                 if msg.receiver_id != '' and msg.reply_to == '':
                     # If msg is not reply, than add to pending demand
@@ -145,7 +146,7 @@ def task_out_reaction(event: ThinkerEvent):
                         react = False
                         event.logger.info(f'Timeout for message {msg.short()}')
                 if react:
-                    thinker.parent.send_msg_externally(msg)
+                    thinker.parent.messenger.add_msg_out(msg)
             except (ThinkerErrorReact, KeyError) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
 
@@ -205,7 +206,6 @@ def pending_replies(event: ThinkerEvent):
                             error_logger(event, pending_replies, f'Cannot delete msg: {msg.reply_to} from pending_replies')
             except ThinkerErrorReact as e:
                 error_logger(event, pending_replies, e)
-
 
 
 def postponed_reaction(replier: Callable[[MessageExt], None], reaction: MessageExt, t: float=1.0, logger=None):

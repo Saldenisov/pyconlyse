@@ -53,7 +53,7 @@ class Messenger(MessengerInter):
 
         :param name: user-friendly name
         :param addresses:
-        :param parent: Device, messenger can function without dict_parent Device as well
+        :param parent: Device, messenger can function without parent_logger Device as well
         :param pub_option: tell weather there is a publisher socket
         :param kwargs:
         """

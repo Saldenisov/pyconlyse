@@ -73,19 +73,18 @@ class Thinker(ThinkerInter):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
-            raise e
 
     def add_demand_pending(self, msg: MessageExt):
         try:
             self._pending_demands[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
-            info_msg(self, self.add_demand_pending, e)
+            error_logger(self, self.add_demand_pending, e)
 
     def add_reply_pending(self, msg: MessageExt):
         try:
             self._pending_replies[msg.id] = PendingReply(message=msg)
         except KeyError as e:
-            info_msg(self, self.add_demand_pending, e)
+            error_logger(self, self.add_demand_pending, e)
 
     @property
     def demands_pending_answer(self) -> MsgDict:

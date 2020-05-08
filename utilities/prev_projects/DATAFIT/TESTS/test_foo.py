@@ -142,7 +142,7 @@ class CallbackEvent(Qt.QEvent):
 
 
 class MyThread(QThread):
-    """ Runs a function in a thread, and alerts the dict_parent when done.
+    """ Runs a function in a thread, and alerts the parent_logger when done.
 
     Uses a custom QEvent to alert the main thread of completion.
 
