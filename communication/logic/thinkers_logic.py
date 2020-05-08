@@ -32,7 +32,9 @@ class GeneralCmdLogic(Thinker):
             try:
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = msg.info.event_n
-            except (KeyError, Exception) as e:
+                if self.parent.pyqtsignal_connected:
+                    self.parent.signal.emit(msg.ext_to_int())
+            except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
             self.remove_device_from_connections(msg.sender_id)
@@ -171,6 +173,8 @@ class ServerCmdLogic(GeneralCmdLogic):
             param['access_level'] = AccessLevel.FULL
             param['permission'] = Permission.GRANTED
             connections[info.device_id] = Connection(**param)
+            connections[info.device_id].device_type = DeviceType(connections[info.device_id].device_type)
+
             if PUB_Socket in info.device_public_sockets:
                 from communication.logic.logic_functions import external_hb_logic
                 messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])

@@ -58,8 +58,8 @@ class SuperUserView(QMainWindow):
                     widget1.setChecked(True)
             elif com == MsgComExt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
-                if info.com == Server.AVAILABLE_SERVICES.name:
-                    result: FuncAvailableServicesOutput = info.result
+                if info.com == Server.GET_AVAILABLE_SERVICES.name:
+                    result: FuncAvailableServicesOutput = info
                     widget = self.ui.lW_devices
                     widget.clear()
                     names = []

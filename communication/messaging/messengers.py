@@ -116,12 +116,7 @@ class Messenger(MessengerInter):
     def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> str:
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
-            if isinstance(self, ClientMessenger) or isinstance(self, ServiceMessenger):
-                fernet = self.fernets[self.fernets.keys()[0]]  # at this moment there could be only one key for
-                # client and service messenger, since it is Dealer to Router connection for client/service to Server
-            else:
-                fernet = self.fernets[device_id]
-            return fernet.decrypt(msg_bytes)
+            return Fernet(self.parent.connections[device_id].session_key).decrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
 
@@ -135,12 +130,16 @@ class Messenger(MessengerInter):
                                                                                 algorithm=hashes.SHA1(), label=None))
         return msg_encrypted
 
-    def encrypt_with_session_key(self, msg_bytes: bytes, receiver_id: DeviceId) -> bytes:
+    def encrypt_with_session_key(self, msg: MessageExt) -> bytes:
         # TODO: add functionality to messenger.encrypt() when TLS is realized
-        try:
-            return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg_bytes)
-        except KeyError:
-            raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
+        if msg.crypted:
+            try:
+                receiver_id: DeviceId = msg.receiver_id
+                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.msgpack_repr())
+            except KeyError:
+                raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
+        else:
+            return msg.msgpack_repr()
 
     def _gen_rsa_keys(self):
         """
@@ -325,14 +324,14 @@ class ClientMessenger(Messenger):
         for msg, device_id, socket, crypted in msgs:
             try:
                 if int(crypted):
+                    device_id = self.parent.server_id  #  !!! ONLY WHEN CLIET/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                                 error_comments=str(e),
-                                                 reply_to='', receiver_id=device_id)
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, error_comments=str(e), reply_to='',
+                                                 receiver_id=device_id)
                 self.add_msg_out(msg_r)
 
     def info(self):
@@ -384,9 +383,8 @@ class ClientMessenger(Messenger):
     def send_msg(self, msg: MessageExt):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
-            msg_bytes = msg.msgpack_repr()
-            if msg.crypted:
-                msg_bytes = self.encrypt_with_session_key(msg_bytes)
+            msg_bytes = self.encrypt_with_session_key(msg)
+
             if msg.receiver_id != '':
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
                 self.logger.info(f'{msg.short()} is send from {self.parent.name}')
@@ -447,6 +445,7 @@ class ClientMessenger(Messenger):
                     except (AttributeError, Exception) as e:  # IN case when short Heartbeat arrived
                         pass
         return msg_out
+
 
 class ServiceMessenger(ClientMessenger):
 
@@ -582,9 +581,7 @@ class ServerMessenger(Messenger):
     def send_msg(self, msg: MessageExt):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
-            msg_bytes = msg.msgpack_repr()  # It gives smaller size compared to json representation
-            if msg.crypted:
-                msg_bytes = self.encrypt_with_session_key(msg_bytes, msg.receiver_id)
+            msg_bytes = self.encrypt_with_session_key(msg)
             if msg.receiver_id == '':
                 self.sockets[PUB_Socket_Server].send_multipart([msg_bytes, crypted])
             else:
@@ -596,7 +593,6 @@ class ServerMessenger(Messenger):
                     self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from backend to {msg.receiver_id}')
                 else:
                     error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
-
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 

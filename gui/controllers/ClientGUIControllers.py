@@ -94,8 +94,8 @@ class SuperClientGUIcontroller():
         client = self.device
 
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  func_input=FuncAvailableServicesInput)
-        client.thinker.add_task_out(msg)
+                                  func_input=FuncAvailableServicesInput())
+        client.send_msg_externally(msg)
 
     def quit_clicked(self, event, total_close=False):
         if total_close:

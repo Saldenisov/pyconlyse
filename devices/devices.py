@@ -200,7 +200,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                           f'{message_info.must_have_param}, only {kwargs.keys()}')
                     raise DeviceError(f'Not all parameters are passed to device.generate_msg')
                 else:
-                    if msg_com is MsgComExt.DO_IT:
+                    if msg_com is MsgComExt.AVAILABLE_SERVICES:
+                        info = AvailableServices(available_services=kwargs['available_services'])
+                    elif msg_com is MsgComExt.DO_IT:
                         info = kwargs['func_input']
                     elif msg_com is MsgComExt.DONE_IT:
                         info = kwargs['func_output']
@@ -234,7 +236,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                             session_key_crypted = b''
                         finally:
                             info = WelcomeInfoServer(session_key=session_key_crypted)
-
                     elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
                         server_public_key = self.connections[self.server_id].device_public_key
                         pub_key = self.messenger.public_key
@@ -247,7 +248,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                  device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
-                raise e  # TO
+                raise e
             finally:
                 if isinstance(msg_com, MsgComExt):
                     if msg_com.msg_type is MsgType.BROADCASTED:
@@ -273,18 +274,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     def execute_com(self, msg: MessageExt):
         error = False
-        info: DoIt = msg.data.info
-        com: str = info.com
-        input: FuncInput = info.input
+        com: str = msg.info.com
+        input: FuncInput = msg.info
         if com in self.available_public_functions_names:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
             if func_input_type == type(input):
                 try:
                     result: FuncOutput = f(input)
-                    msg_i = MsgGenerator.done_it(self, msg_i=msg, result=result)
-                except Exception as e:
-                    self.logger.error(e)
+                    msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=msg.sender_id, func_output=result,
+                                              reply_to=msg.id)
+                except Exception as e:  # TODO: replace Exception
+                    error_logger(self, self.execute_com, e)
                     error = True
                     comments = str(e)
             else:
@@ -295,8 +296,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
         if error:
-            msg_i = MsgGenerator.error(self, msg_i=msg, comments=comments)
-        self.thinker.msg_out(True, msg_i)
+            msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
+                                      reply_to=msg.id)
+        self.thinker.msg_out(msg_r)
 
     @staticmethod
     def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
@@ -371,7 +373,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 class Server(Device):
     # TODO: refactor
     GET_AVAILABLE_SERVICES = CmdStruct('get_available_services', FuncAvailableServicesInput, FuncAvailableServicesOutput)
-    MAKE_CONNECTION = CmdStruct('make_connection', None, None)
 
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServerMessenger
@@ -416,7 +417,7 @@ class Server(Device):
                                            device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return (Server.GET_AVAILABLE_SERVICES, Server.MAKE_CONNECTION)
+        return tuple([Server.GET_AVAILABLE_SERVICES])
 
     def description(self) -> Desription:
         parameters = self.get_settings('Parameters')

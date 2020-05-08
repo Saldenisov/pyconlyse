@@ -159,13 +159,14 @@ class FuncPowerOutput(FuncOutput):
 
 @dataclass
 class FuncAvailableServicesInput(FuncInput):
-    pass
+    com: str = 'get_available_services'
 
 
 @dataclass
 class FuncAvailableServicesOutput(FuncOutput):
     device_id: DeviceId
     device_available_services: Dict[DeviceId, str]
+    com: str = 'get_available_services'
 
 
 @dataclass(order=True)

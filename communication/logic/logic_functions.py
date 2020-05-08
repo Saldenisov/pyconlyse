@@ -90,6 +90,7 @@ def task_in_reaction(event: ThinkerEvent):
     exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
         if not event.paused and tasks_in:
+            sleep(0.01)
             try:
                 msg: MessageExt = tasks_in.popitem()[1]
                 thinker.msg_counter += 1
@@ -124,6 +125,7 @@ def task_out_reaction(event: ThinkerEvent):
     react=False
     while event.active:
         if not event.paused and tasks_out:
+            sleep(0.01)
             try:
                 msg: MessageExt = tasks_out.popitem()[1]
                 react = True
