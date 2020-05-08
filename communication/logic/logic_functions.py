@@ -5,17 +5,17 @@ from typing import Callable
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
 from communication.messaging.messages import MessageExt, MsgType, MsgComInt, MsgComExt
 from devices.interfaces import DeviceType
-from datastructures.mes_dependent.dicts import OrderedDictMod
+from datastructures.mes_dependent.dicts import MsgDict
 from datastructures.mes_dependent.general import PendingReply
-from utilities.errors.myexceptions import ThinkerErrorReact
 from utilities.myfunc import info_msg, error_logger
+from utilities.errors.myexceptions import ThinkerErrorReact
 
 
 def external_hb_logic(event: ThinkerEvent):
     """
     This event function is designed to track after external events, e.g., heartbeat of a Server
     If event is timeout, than counter_timeout += 1
-    Every cycle event is being send to Thinker.react_internal, where Thinker decides what should be done, if, e.g.,
+    Every cycle event is being send to Thinker.react_internal, where Thinker decides what should be done, e.g.,
     counter_timeout reached certain value
     Every event.print_every_n the information of event is printed out in console
     :param event: ThinkerEvent
@@ -29,15 +29,18 @@ def external_hb_logic(event: ThinkerEvent):
             sleep(event.tick)
             if (time() - event.time) >= event.tick:
                 event.counter_timeout += 1
-                if event.counter_timeout % 3 == 0:
-                    info_msg(event, 'INFO', f'{event.name} timeout {event.counter_timeout}')
             else:
                 event.counter_timeout = 0
+
+            if event.counter_timeout % 3 == 0 and event.counter_timeout != 0:
+                info_msg(event, 'INFO', f'{event.name} timeout {event.counter_timeout}')
+
             counter += 1
             event.parent.react_internal(event)
+
             if counter % event.print_every_n == 0:
                 counter = 0
-                info_msg(event, 'INFO', extra=f'{event.name} : {event.n}')
+                info_msg(event, 'INFO', extra=f'{event.name}: {event.n}')
         else:
             sleep(0.05)
             event.time = time()
@@ -82,7 +85,7 @@ def internal_info_logic(event: ThinkerEvent):
 
 def task_in_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
-    tasks_in: OrderedDictMod = thinker.tasks_in
+    tasks_in: MsgDict = thinker.tasks_in
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
@@ -94,10 +97,10 @@ def task_in_reaction(event: ThinkerEvent):
                 if msg.com not in exclude_msgs:
                     info_msg(event, 'INFO', extra=str(msg.short()))
 
-
                 if msg.reply_to == '' and msg.receiver_id != '':  # If message is not a reply, it must be a demand one
                     thinker.add_reply_pending(msg)
                     info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to pending_reply.')
+
                 elif msg.reply_to != '':
                     if msg.reply_to in thinker.demands_pending_answer:
                         # TODO: should it have else clause or not?
@@ -115,8 +118,8 @@ def task_in_reaction(event: ThinkerEvent):
 
 def task_out_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
-    tasks_out: OrderedDictMod = thinker.tasks_out
-    tasks_reply_pending: OrderedDictMod = thinker.replies_pending_answer
+    tasks_out: MsgDict = thinker.tasks_out
+    tasks_reply_pending: MsgDict = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     react=False
     while event.active:
@@ -147,7 +150,7 @@ def task_out_reaction(event: ThinkerEvent):
 
 def pending_demands(event: ThinkerEvent): 
     thinker: Thinker = event.parent
-    tasks_pending_demands: OrderedDictMod = thinker.demands_pending_answer
+    tasks_pending_demands: MsgDict = thinker.demands_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         if not event.paused and tasks_pending_demands:
@@ -174,7 +177,7 @@ def pending_demands(event: ThinkerEvent):
 def pending_replies(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
-    tasks_pending_replies: OrderedDictMod = thinker.replies_pending_answer
+    tasks_pending_replies: MsgDict = thinker.replies_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         if not event.paused and tasks_pending_replies:

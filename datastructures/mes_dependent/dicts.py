@@ -4,7 +4,7 @@ from typing import Dict
 from datastructures.mes_dependent.general import PendingDemand, PendingReply
 from datastructures.mes_independent.devices_dataclass import Connection
 from communication.messaging.messages import MessageExt
-
+from utilities.myfunc import info_msg, error_logger
 
 class Events_Dict(dict):
 
@@ -98,17 +98,31 @@ class Connections_Dict(dict):
                 return super().__contains__(self.device_id[item])
 
 
-class OrderedDictMod(OrderedDict):
+class MsgDict(OrderedDict):
 
-    def __init__(self, name, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, name, dict_parent, size_limit, *args, **kwargs):
         self.name = name
+        self.size_limit = size_limit
+        self.dict_parent = dict_parent
+        super().__init__(*args, **kwargs)
 
     def __setitem__(self, key, value):
         if key not in self:
+            self._check_size_limit()
             super().__setitem__(key, value)
         else:
-            raise KeyError(f'Key: {key} already exists in {self.name}    {self}')
+            error = f'Key: {key} already exists in {self.name} {self}'
+            if self.dict_parent:
+                error_logger(self, self.__setitem__, error)
+            raise KeyError(error)
+
+    def _check_size_limit(self):
+        if self.size_limit is not None:
+            while len(self) > self.size_limit:
+                element = self.popitem(last=False)  # Remove first element
+                if self.dict_parent:
+                    info_msg(self.dict_parent, 'INFO', f'Limit size={self.size_limit} was exceeded for {self.name}, '
+                                                  f'first element {element} was removed')
 
 
 class OrderedDictMesTypeCounter(OrderedDict):

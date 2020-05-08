@@ -38,14 +38,15 @@ class SuperUserView(QMainWindow):
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
+        a = 2
 
     def closeEvent(self, event):
-        self.logger.info('Closing')
+        info_msg(self,'INFO', f'{self.name} is closing.')
         self.controller.quit_clicked(event, total_close=True)
 
     def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
-        com = msg.data.com
-        info = msg.data.info
+        com = msg.com
+        info = msg.info
         if com == MsgComExt.HEARTBEAT.msg_name:
             widget1 = self.ui.rB_hb
             widget2 = self.ui.rB_hb2
@@ -54,7 +55,7 @@ class SuperUserView(QMainWindow):
                 widget2.setChecked(True)
             else:
                 widget1.setChecked(True)
-        elif com == MsgComExt.DONE_IT.mes_name:
+        elif com == MsgComExt.DONE_IT.msg_name:
             info: Union[DoneIt, MsgError] = info
             if info.com == Server.AVAILABLE_SERVICES.name:
                 result: FuncAvailableServicesOutput = info.result
@@ -65,9 +66,8 @@ class SuperUserView(QMainWindow):
                     names.append(f'{key}')
                 widget.addItems(names)
                 self.model.superuser.running_services = result.running_services
-        elif com == MsgComExt.INFO_SERVICE_REPLY.mes_name:
-            self.ui.tE_info.setText(str(info))
+        elif com == MsgComExt.INFO_SERVICE_REPLY.msg_name:
             self.model.service_parameters[info.device_id] = info
-        elif com == MsgComExt.ERROR.mes_name:
+        elif com == MsgComExt.ERROR.msg_name:
             self.ui.tE_info.setText(info.comments)
 

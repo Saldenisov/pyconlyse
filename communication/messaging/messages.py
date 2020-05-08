@@ -16,13 +16,13 @@ module_logger = logging.getLogger(__name__)
 
 
 class MsgComInt(Enum):
-    DEVICE_INFO_INT = MessageInfoInt('device_info_int', DeviceInfoInt, set([]))
-    HEARTBEAT = MessageInfoInt('heartbeat', HeartBeat, set(['event']))
+    DEVICE_INFO_INT = MessageInfoInt(DeviceInfoInt, set([]))
+    HEARTBEAT = MessageInfoInt(HeartBeat, set(['event']))
 
     @property
     def msg_name(self):
         value: MessageInfoExt = self.value
-        return value.name
+        return self._name_
 
     @property
     def msg_type(self):
@@ -31,25 +31,22 @@ class MsgComInt(Enum):
 
 
 class MsgComExt(Enum):
-    ALIVE = MessageInfoExt('alive', MsgType.DIRECTED, None, set(['receiver_id']), True)
-    AVAILABLE_SERVICES = MessageInfoExt('available_services', MsgType.DIRECTED, AvailableServices,
+    ALIVE = MessageInfoExt(MsgType.DIRECTED, None, set(['receiver_id']), True)
+    AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices,
                                         set(['available_services']), True)
-    DO_IT = MessageInfoExt('alive', MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
-    DONE_IT = MessageInfoExt('alive', MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
-    ERROR = MessageInfoExt('error', MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']),
-                           False)
-    HEARTBEAT = MessageInfoExt('heartbeat', MsgType.BROADCASTED, HeartBeat, set(['event']), False)
-    HEARTBEAT_FULL = MessageInfoExt('heartbeat_full', MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
-    SHUTDOWN = MessageInfoExt('shutdown', MsgType.BROADCASTED, ShutDown, set(['reason']), False)
-    WELCOME_INFO_DEVICE = MessageInfoExt('welcome_info_device', MsgType.DIRECTED, WelcomeInfoDevice,
-                                         set(['receiver_id', 'event']), False)
-    WELCOME_INFO_SERVER = MessageInfoExt('welcome_info_server', MsgType.DIRECTED, WelcomeInfoServer,
-                                         set(['reply_to', 'receiver_id']), False)
+    DO_IT = MessageInfoExt(MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
+    DONE_IT = MessageInfoExt(MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
+    ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), False)
+    HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, set(['event']), False)
+    HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
+    SHUTDOWN = MessageInfoExt(MsgType.BROADCASTED, ShutDown, set(['reason']), False)
+    WELCOME_INFO_DEVICE = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoDevice, set(['receiver_id', 'event']), False)
+    WELCOME_INFO_SERVER = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoServer, set(['reply_to', 'receiver_id']), False)
 
     @property
     def msg_name(self):
         value: MessageInfoExt = self.value
-        return value.name
+        return self._name_
 
     @property
     def msg_crypted(self):

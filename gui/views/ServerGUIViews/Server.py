@@ -50,7 +50,7 @@ class ServerGUIView(QMainWindow):
         info = msg.info
         if com == MsgComInt.DEVICE_INFO_INT.msg_name:
             info: DeviceInfoInt = info
-            if info.device_status.active:
+            if info.device_status.messaging_on:
                 text_widget = "Click to stop..."
                 color = 'background-color: green'
                 self.ui.pB_pause.setEnabled(True)

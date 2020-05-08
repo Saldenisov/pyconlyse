@@ -22,9 +22,9 @@ class GeneralCmdLogic(Thinker):
         self.connections = self.parent.connections
 
         # Only applicable not for Server type devices
-        # if not self.connections[DeviceId(msg.sender_id)].filled() and self.parent.type is not DeviceType.SERVER \
+        # if not self.connections[DeviceId(msg.sender_id)].filled() and self.dict_parent.type is not DeviceType.SERVER \
         #         and msg.info.event_n % 3:
-        #     msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
+        #     msg_r = self.dict_parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
         #     self.msg_out(msg_r)
 
     def react_broadcast(self, msg: MessageExt):
@@ -45,7 +45,7 @@ class GeneralCmdLogic(Thinker):
         msg_r = None
         if msg.com == MsgComExt.ALIVE.msg_name:
             if msg.sender_id in self.parent.connections:
-                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
+                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.dict_parent, msg_i=msg)
         elif msg.com == MsgComExt.DO_IT.msg_name:
             # TODO: to be checked later
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
@@ -124,23 +124,23 @@ class GeneralCmdLogic(Thinker):
                 self.logger.info(f'{event.name} timeout is reached. Deleting the event {event.id}.')
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt()
-                # if self.parent.messenger._attempts_to_restart_sub > 0:
+                # if self.dict_parent.messenger._attempts_to_restart_sub > 0:
                 #     info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
                 #     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
-                #     self.parent.messenger._attempts_to_restart_sub -= 1
+                #     self.dict_parent.messenger._attempts_to_restart_sub -= 1
                 #     event.counter_timeout = 0
-                #     addr = self.parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
-                #     self.parent.messenger.restart_socket(SUB_Socket, addr)
+                #     addr = self.dict_parent.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
+                #     self.dict_parent.messenger.restart_socket(SUB_Socket, addr)
                 # else:
-                #     if not self.parent.messenger._are_you_alive_send:
+                #     if not self.dict_parent.messenger._are_you_alive_send:
                 #         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
                 #         event.counter_timeout = 0
-                #         msg_i = self.parent.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
-                #         self.parent.messenger._are_you_alive_send = True
+                #         msg_i = self.dict_parent.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
+                #         self.dict_parent.messenger._are_you_alive_send = True
                 #         self.msg_out(True, msg_i)
                 #     else:
                 #         info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
-                #         del self.parent.connections[event.original_owner]
+                #         del self.dict_parent.connections[event.original_owner]
 
 
 class ServerCmdLogic(GeneralCmdLogic):

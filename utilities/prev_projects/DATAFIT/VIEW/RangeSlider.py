@@ -84,7 +84,7 @@ class Element(QtWidgets.QGroupBox):
         self.main = main
 
     def setStyleSheet(self, style):
-        """redirect style to parent groupbox"""
+        """redirect style to dict_parent groupbox"""
         self.parent().setStyleSheet(style)
 
     def textColor(self):
@@ -178,7 +178,7 @@ class QRangeSlider(QtWidgets.QWidget, Ui_Form):
     Inherits QWidget.
 
     Methods
-        * __init__ (self, QWidget parent = None)
+        * __init__ (self, QWidget dict_parent = None)
         * bool drawValues (self)
         * int end (self)
         * (int, int) getRange (self)
@@ -246,7 +246,7 @@ class QRangeSlider(QtWidgets.QWidget, Ui_Form):
     def __init__(self, min, max, start, end, size_pixels, parent=None, *args, **kwargs):
         """Create a new QRangeSlider instance.
 
-            :param parent: QWidget parent
+            :param parent: QWidget dict_parent
             :return: New QRangeSlider instance.
 
         """

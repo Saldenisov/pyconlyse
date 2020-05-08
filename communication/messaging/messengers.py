@@ -19,7 +19,7 @@ from communication.messaging.messages import MessageExt, MsgType, MsgComExt
 from datastructures.mes_independent.devices_dataclass import *
 from devices.interfaces import DeviceId, DeviceType
 from devices.devices import Device
-from datastructures.mes_dependent.dicts import OrderedDictMod
+from datastructures.mes_dependent.dicts import MsgDict
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
@@ -53,7 +53,7 @@ class Messenger(MessengerInter):
 
         :param name: user-friendly name
         :param addresses:
-        :param parent: Device, messenger can function without parent Device as well
+        :param parent: Device, messenger can function without dict_parent Device as well
         :param pub_option: tell weather there is a publisher socket
         :param kwargs:
         """
@@ -72,7 +72,7 @@ class Messenger(MessengerInter):
             self._polling_time = 1
         self.active = False
         self.paused = True
-        self._msg_out = OrderedDictMod(name=f'msg_out:{self.id}')
+        self._msg_out = MsgDict(name=f'msg_out:{self.id}', size_limit=1000, dict_parent=self)
         # ZMQ sockets, communication info
         self.sockets = {}
         self.public_sockets = {}
@@ -92,10 +92,6 @@ class Messenger(MessengerInter):
 
     def add_msg_out(self, msg: MessageExt):
         try:
-            n = 100000
-            if len(self._msg_out) > n:
-                self._msg_out.popitem(False)  # pop up last item
-                self.logger.info(f'Dict of msg_out is overfull > {n} messages')
             self._msg_out[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
@@ -158,8 +154,6 @@ class Messenger(MessengerInter):
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size, backend=default_backend())
         self._public_key = self._private_key.public_key()
 
-    def heartbeat(self) -> MessageExt:
-        return MessageExt(com='heartbeat', type=MsgType.INFO, )
 
     @abstractmethod
     def info(self):
@@ -195,6 +189,7 @@ class Messenger(MessengerInter):
     def pause(self):
         "put executation of thread on pause"
         self.paused = True
+        self.parent.device_status.messaging_paused = self.paused
         self.logger.info(f'{self.name} is paused')
         sleep(0.01)
 
@@ -203,6 +198,8 @@ class Messenger(MessengerInter):
         info_msg(self, 'STARTING')
         self.active = True
         self.paused = False
+        self.parent.device_status.messaging_on = self.active
+        self.parent.device_status.messaging_paused = self.paused
         # Start send loop here
         self._send_loop_logic(await_time=0.1 / 1000.)
 
@@ -241,7 +238,9 @@ class Messenger(MessengerInter):
         info_msg(self, 'STOPPING')
         self.active = False
         self.paused = True
-        self._msg_out = {}
+        self.parent.device_status.messaging_on = self.active
+        self.parent.device_status.messaging_paused = self.paused
+        self._msg_out.clear()
 
     def subscribe_sub(self, address=None, filter_opt=b""):
         try:

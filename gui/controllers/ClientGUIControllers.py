@@ -15,7 +15,7 @@ from datastructures.mes_independent.projects_dataclass import (ProjectManagerDes
 from datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
 from devices.devices import Device, Server
 from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
-from utilities.myfunc import info_msg, get_local_ip
+from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 
 module_logger = logging.getLogger(__name__)
@@ -91,7 +91,6 @@ class SuperClientGUIcontroller():
         self.device.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
-        #msg = MsgGenerator.available_services_demand(device=self.device)
         msg = self.device.generate_msg(device=self.device, com=Server.AVAILABLE_SERVICES.name,
                                  input=FuncAvailableServicesInput(), device_id=self.device.server_id)
         self.device.thinker.add_task_out(msg)
@@ -100,9 +99,9 @@ class SuperClientGUIcontroller():
         if total_close:
             try:
                 self.device.stop()
-            except Exception as e:
-                print(e)
-            self.logger.info('Closing')
+            except Exception as e:  # TODO something reasonable
+                error_logger(self, self.quit_clicked, f'{self.name}: {e}')
+            info_msg(self, 'INFO', 'SuperClientGUI is closing.')
             QApplication.quit()
 
 

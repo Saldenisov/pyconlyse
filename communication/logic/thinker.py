@@ -6,7 +6,7 @@ from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from utilities.errors.myexceptions import *
 from communication.messaging.messages import MessageExt, MsgComExt
-from datastructures.mes_dependent.dicts import Events_Dict, OrderedDictMod, OrderedDictMesTypeCounter
+from datastructures.mes_dependent.dicts import Events_Dict, MsgDict
 from datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.myfunc import info_msg, error_logger, unique_id
 
@@ -26,12 +26,13 @@ class Thinker(ThinkerInter):
         self.parent: Device = parent
         self.msg_counter = 0
         self.events = Events_Dict()
-        self._tasks_in = OrderedDictMod(name='tasks_in')
-        self.tasks_in_test = OrderedDictMod(name='tasks_in_test')
-        self._tasks_out = OrderedDictMod(name='tasks_out')
-        self.tasks_out_test = OrderedDictMod(name='tasks_out_test')
-        self._pending_demands = OrderedDictMod(name='pending_demands')
-        self._pending_replies = OrderedDictMod(name='pending_replies')
+        msg_dict_size_limit = 10000
+        self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
+        self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
+        self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._pending_demands = MsgDict(name='pending_demands', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._pending_replies = MsgDict(name='pending_replies', size_limit=msg_dict_size_limit, dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -42,8 +43,6 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.__init__, e)
             self.timeout = 10
-            task_in_reaction_tick = 0.001
-            task_out_reaction_tick = 0.001
             pending_demands_tick = 0.2
         try:
             from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands,
@@ -60,8 +59,6 @@ class Thinker(ThinkerInter):
 
     def add_task_in(self, msg: MessageExt):
         try:
-            if len(self._tasks_in) > 10000:
-                self._tasks_in.popitem()  # pop up first item
             self._tasks_in[msg.id] = msg
             if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.msg_name):
                 self.tasks_in_test[msg.id] = msg
@@ -71,8 +68,6 @@ class Thinker(ThinkerInter):
 
     def add_task_out(self, msg: MessageExt):
         try:
-            if len(self._tasks_out) > 10000:
-                self._tasks_out.popitem()  # pop up first item
             self._tasks_out[msg.id] = msg
             if self.parent.test and not (msg.com == MsgComExt.HEARTBEAT.msg_name):
                 self.tasks_out_test[msg.id] = msg
@@ -82,22 +77,18 @@ class Thinker(ThinkerInter):
 
     def add_demand_pending(self, msg: MessageExt):
         try:
-            if len(self._pending_demands) > 10000:
-                self._pending_demands.popitem()  # pop up first item
             self._pending_demands[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
             info_msg(self, self.add_demand_pending, e)
 
     def add_reply_pending(self, msg: MessageExt):
         try:
-            if len(self._pending_replies) > 10000:
-                self._pending_replies.popitem()  # pop up first item
             self._pending_replies[msg.id] = PendingReply(message=msg)
         except KeyError as e:
             info_msg(self, self.add_demand_pending, e)
 
     @property
-    def demands_pending_answer(self) -> OrderedDictMod:
+    def demands_pending_answer(self) -> MsgDict:
         return self._pending_demands
 
     def info(self):
@@ -158,7 +149,7 @@ class Thinker(ThinkerInter):
                 raise ThinkerEventError(str(e))
 
     @property
-    def replies_pending_answer(self) -> OrderedDictMod:
+    def replies_pending_answer(self) -> MsgDict:
         return self._pending_replies
 
     @abstractmethod
@@ -204,11 +195,11 @@ class Thinker(ThinkerInter):
                          f'remove_device_from_connections: Wrong device_id {device_id} is passed')
 
     @property
-    def tasks_in(self) -> OrderedDictMod:
+    def tasks_in(self) -> MsgDict:
         return self._tasks_in
 
     @property
-    def tasks_out(self) -> OrderedDictMod:
+    def tasks_out(self) -> MsgDict:
         return self._tasks_out
 
     def start(self):
@@ -221,7 +212,7 @@ class Thinker(ThinkerInter):
         info_msg(self, 'STOPPING')
         for event_id, event in self.events.items():
             event.stop()
-        self.events = {}
+        self.events = Events_Dict()
 
     def pause(self):
         self.paused = True
