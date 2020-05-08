@@ -491,6 +491,7 @@ class Client(Device):
 class Service(Device):
     ACTIVATE = CmdStruct('activate', FuncActivateInput, FuncActivateOutput)
     GET_CONTROLLER_STATE = CmdStruct('get_controller_state', FuncGetControllerStateInput, FuncGetControllerStateOutput)
+    SERVICE_INFO = CmdStruct('service_info', FuncServiceInfoInput, FuncServiceInfoOutput)
     POWER = CmdStruct('power', FuncPowerInput, FuncPowerOutput)
 
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
@@ -550,6 +551,11 @@ class Service(Device):
 
     def set_default(self):
         pass
+
+    def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
+        info = DeviceInfoExt(available_public_functions=self.available_public_functions(), device_id=self.id,
+                             device_description=self.description())
+        return FuncServiceInfoOutput(comments='', func_success=True, info=info)
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday

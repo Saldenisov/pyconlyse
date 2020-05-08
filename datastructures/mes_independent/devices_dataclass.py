@@ -32,7 +32,6 @@ class AvailableServices:
     available_services: Dict[DeviceId, str]
 
 
-
 @dataclass(frozen=True, order=True)
 class DoIt:
     com: str
@@ -106,7 +105,9 @@ class DeviceInfoInt:
 
 @dataclass(frozen=True, order=True)
 class DeviceInfoExt:
-    pass
+    available_public_functions: List[CmdStruct]
+    device_id: str
+    device_description: Desription
 
 
 @dataclass(frozen=True, order=True)
@@ -138,6 +139,18 @@ class FuncActivateOutput(FuncOutput):
 
 
 @dataclass
+class FuncAvailableServicesInput(FuncInput):
+    com: str = 'get_available_services'
+
+
+@dataclass
+class FuncAvailableServicesOutput(FuncOutput):
+    device_id: DeviceId
+    device_available_services: Dict[DeviceId, str]
+    com: str = 'get_available_services'
+
+
+@dataclass
 class FuncGetControllerStateInput(FuncInput):
     pass
 
@@ -158,15 +171,13 @@ class FuncPowerOutput(FuncOutput):
 
 
 @dataclass
-class FuncAvailableServicesInput(FuncInput):
-    com: str = 'get_available_services'
+class FuncServiceInfoInput(FuncInput):
+    pass
 
 
 @dataclass
-class FuncAvailableServicesOutput(FuncOutput):
-    device_id: DeviceId
-    device_available_services: Dict[DeviceId, str]
-    com: str = 'get_available_services'
+class FuncServiceInfoOutput(FuncOutput):
+    info: DeviceInfoExt
 
 
 @dataclass(order=True)

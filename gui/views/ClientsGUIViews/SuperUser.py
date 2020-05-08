@@ -10,7 +10,7 @@ from typing import Union
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from datastructures.mes_independent.devices_dataclass import *
-from devices.devices import Server
+from devices.devices import Server, Service
 from gui.views.ui.SuperUser_ui import Ui_SuperUser
 from utilities.myfunc import info_msg,  get_local_ip, error_logger
 
@@ -67,8 +67,9 @@ class SuperUserView(QMainWindow):
                         names.append(f'{key}')
                     widget.addItems(names)
                     self.model.superuser.running_services = result.device_available_services
-            #elif com == MsgComExt.INFO_SERVICE_REPLY.msg_name:
-                #self.model.service_parameters[info.device_id] = info
+                elif com == Service.SERVICE_INFO.name:
+                    info: DeviceInfoExt = info
+                    self.model.service_parameters[info.device_id] = info
             elif com == MsgComExt.ERROR.msg_name:
                 self.ui.tE_info.setText(info.comments)
         except Exception as e:

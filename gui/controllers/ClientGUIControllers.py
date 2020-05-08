@@ -87,7 +87,8 @@ class SuperClientGUIcontroller():
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
-        msg = self.device.generate_msg(device=self.device, service_id=service_id)
+        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
+                                       func_input=FuncServiceInfoInput())
         self.device.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):

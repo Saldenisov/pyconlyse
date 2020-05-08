@@ -134,7 +134,10 @@ class Messenger(MessengerInter):
         # TODO: add functionality to messenger.encrypt() when TLS is realized
         if msg.crypted:
             try:
-                receiver_id: DeviceId = msg.receiver_id
+                if self.parent.type is DeviceType.SERVER:
+                    receiver_id: DeviceId = msg.receiver_id
+                else:
+                    receiver_id = self.parent.server_id
                 return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.msgpack_repr())
             except KeyError:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
