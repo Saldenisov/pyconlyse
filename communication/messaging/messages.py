@@ -21,7 +21,6 @@ class MsgComInt(Enum):
 
     @property
     def msg_name(self):
-        value: MessageInfoExt = self.value
         return self._name_
 
     @property
@@ -45,7 +44,6 @@ class MsgComExt(Enum):
 
     @property
     def msg_name(self):
-        value: MessageInfoExt = self.value
         return self._name_
 
     @property

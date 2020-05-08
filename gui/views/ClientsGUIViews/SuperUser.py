@@ -12,7 +12,7 @@ from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, 
 from datastructures.mes_independent.devices_dataclass import *
 from devices.devices import Server
 from gui.views.ui.SuperUser_ui import Ui_SuperUser
-from utilities.myfunc import info_msg,  get_local_ip
+from utilities.myfunc import info_msg,  get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
 
@@ -47,27 +47,29 @@ class SuperUserView(QMainWindow):
     def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
         com = msg.com
         info = msg.info
-        if com == MsgComExt.HEARTBEAT.msg_name:
-            widget1 = self.ui.rB_hb
-            widget2 = self.ui.rB_hb2
-            widget1v = widget1.isChecked()
-            if widget1v:
-                widget2.setChecked(True)
-            else:
-                widget1.setChecked(True)
-        elif com == MsgComExt.DONE_IT.msg_name:
-            info: Union[DoneIt, MsgError] = info
-            if info.com == Server.AVAILABLE_SERVICES.name:
-                result: FuncAvailableServicesOutput = info.result
-                widget = self.ui.lW_devices
-                widget.clear()
-                names = []
-                for key, item in result.running_services.items():
-                    names.append(f'{key}')
-                widget.addItems(names)
-                self.model.superuser.running_services = result.running_services
-        elif com == MsgComExt.INFO_SERVICE_REPLY.msg_name:
-            self.model.service_parameters[info.device_id] = info
-        elif com == MsgComExt.ERROR.msg_name:
-            self.ui.tE_info.setText(info.comments)
-
+        try:
+            if com == MsgComExt.HEARTBEAT.msg_name:
+                widget1 = self.ui.rB_hb
+                widget2 = self.ui.rB_hb2
+                widget1v = widget1.isChecked()
+                if widget1v:
+                    widget2.setChecked(True)
+                else:
+                    widget1.setChecked(True)
+            elif com == MsgComExt.DONE_IT.msg_name:
+                info: Union[DoneIt, MsgError] = info
+                if info.com == Server.AVAILABLE_SERVICES.name:
+                    result: FuncAvailableServicesOutput = info.result
+                    widget = self.ui.lW_devices
+                    widget.clear()
+                    names = []
+                    for key, item in result.running_services.items():
+                        names.append(f'{key}')
+                    widget.addItems(names)
+                    self.model.superuser.running_services = result.running_services
+            #elif com == MsgComExt.INFO_SERVICE_REPLY.msg_name:
+                #self.model.service_parameters[info.device_id] = info
+            elif com == MsgComExt.ERROR.msg_name:
+                self.ui.tE_info.setText(info.comments)
+        except Exception as e:
+            error_logger(self, self.model_is_changed, f'{self.name}: {e}')

@@ -63,7 +63,7 @@ def internal_hb_logic(event: ThinkerEvent):
             else:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)
 
-            if device.pyqtsignal_connected:
+            if device.pyqtsignal_connected and device.type is DeviceType.SERVER:
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
                 device.signal.emit(msg)
 
