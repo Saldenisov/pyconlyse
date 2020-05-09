@@ -38,7 +38,6 @@ class Thinker(ThinkerInter):
         try:
             self.timeout = int(self.parent.get_general_settings()['timeout'])
             pending_demands_tick = float(self.parent.get_general_settings()['pending_demands']) / 1000.
-            pending_replies_tick = float(self.parent.get_general_settings()['pending_replies']) / 1000.
         except KeyError as e:
             error_logger(self, self.__init__, e)
             self.timeout = 10
@@ -48,8 +47,7 @@ class Thinker(ThinkerInter):
                                                              pending_replies)
             self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
             self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
-            self.register_event(name='pending_demands', logic_func=pending_demands, tick=pending_demands_tick)
-            self.register_event(name='pending_replies', logic_func=pending_replies, tick=pending_replies_tick)
+            self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
             info_msg(self, 'CREATED')
         except (ThinkerEventError, ThinkerEventFuncError, TypeError) as e:
             error_logger(self, self.register_event, e)

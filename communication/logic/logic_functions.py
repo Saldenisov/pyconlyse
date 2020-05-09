@@ -182,37 +182,6 @@ def pending_demands(event: ThinkerEvent):
                 error_logger(event, pending_demands, e)
 
 
-def pending_replies(event: ThinkerEvent):
-    thinker: Thinker = event.parent
-    device = thinker.parent
-    tasks_pending_replies: MsgDict = thinker.pending_replies
-    info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    while event.active:
-        sleep(0.001)
-        if not event.paused and tasks_pending_replies:
-            sleep(event.tick)
-            try:
-                for key, item in tasks_pending_replies.items():
-                    pending: PendingReply = item
-                    if (time() - event.time) > event.tick and pending.attempt < 3:
-                        pending.attempt = pending.attempt + 1
-                        info_msg(event, 'INFO', f'Pending reply message waits {pending.attempt}:{pending.message.com}:'
-                                                f'{pending.message.id}')
-                    elif (time() - event.time) > event.tick and pending.attempt >= 3:
-                        try:
-                            msg = pending.message
-                            msg_out = device.generate_msg(msg_com=MsgComExt.ERROR, error_comments='timeout',
-                                                          reply_to=msg.id, receiver_id=msg.sender_id)
-                            thinker.add_task_out(msg_out)
-                            del tasks_pending_replies[key]
-                            info_msg(event, 'INFO', f'Timeout for reply msg: {msg.short}')
-                            info_msg(event, 'INFO', f'Msg: {msg.id} is deleted')
-                        except KeyError:
-                            error_logger(event, pending_replies, f'Cannot delete msg: {msg.reply_to} from pending_replies')
-            except ThinkerErrorReact as e:
-                error_logger(event, pending_replies, e)
-
-
 def postponed_reaction(replier: Callable[[MessageExt], None], reaction: MessageExt, t: float=1.0, logger=None):
     # TODO: why it is needed in the first place?
     def f():
