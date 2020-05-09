@@ -194,9 +194,10 @@ class ServerCmdLogic(GeneralCmdLogic):
         self.msg_out(msg_r)
 
     def react_forward(self, msg: MsgComExt):
-        msg_r = None
         if msg.receiver_id in self.parent.connections:
             info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
+            msg_r = msg
+            msg_r.sender_id = self.parent.id
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
                                               reply_to=msg.id),

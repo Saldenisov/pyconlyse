@@ -24,12 +24,12 @@ module_logger = logging.getLogger(__name__)
 
 class ProjectManager_controller(Service):
     # TODO: UPDATE
-    GET_PROJECT = CmdStruct('get_project', None, None)
-    GET_FILE = CmdStruct('get_file', None, None)
-    GET_FILE_DESCRIPTION = CmdStruct('get_file_description', FuncGetFileDescriptionInput, FuncGetFileDescriptionOutput)
-    GET_FILES = CmdStruct('get_files', FuncGetFilesInput, FuncGetFilesOutput)
-    GET_PROJECTS = CmdStruct('get_projects', FuncGetProjectsInput, FuncGetProjectsOutput)
-    GET_OPERATORS = CmdStruct('get_operators', FuncGetOperatorsInput, FuncGetOperatorsOutput)
+    GET_PROJECT = CmdStruct(None, None)
+    GET_FILE = CmdStruct(None, None)
+    GET_FILE_DESCRIPTION = CmdStruct(FuncGetFileDescriptionInput, FuncGetFileDescriptionOutput)
+    GET_FILES = CmdStruct(FuncGetFilesInput, FuncGetFilesOutput)
+    GET_PROJECTS = CmdStruct(FuncGetProjectsInput, FuncGetProjectsOutput)
+    GET_OPERATORS = CmdStruct(FuncGetOperatorsInput, FuncGetOperatorsOutput)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -186,7 +186,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 
     # Test available function
     res = stpmtr.available_public_functions()
-    assert type(res[0]) == CmdStruct
+    assert isinstance(res[0], CmdStruct)
     assert len(res) == 7
 
     # Test available functions names

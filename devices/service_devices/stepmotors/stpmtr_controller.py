@@ -16,10 +16,10 @@ class StpMtrController(Service):
     See Service for more functions
     These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
     """
-    ACTIVATE_AXIS = CmdStruct('activate_axis', FuncActivateAxisInput, FuncActivateAxisOutput)
-    GET_POS = CmdStruct('get_pos', FuncGetPosInput, FuncGetPosOutput)
-    MOVE_AXIS_TO = CmdStruct('move_axis_to', FuncMoveAxisToInput, FuncMoveAxisToOutput)
-    STOP_AXIS = CmdStruct('stop_axis', FuncStopAxisInput, FuncStopAxisOutput)
+    ACTIVATE_AXIS = CmdStruct(FuncActivateAxisInput, FuncActivateAxisOutput)
+    GET_POS = CmdStruct(FuncGetPosInput, FuncGetPosOutput)
+    MOVE_AXIS_TO = CmdStruct(FuncMoveAxisToInput, FuncMoveAxisToOutput)
+    STOP_AXIS = CmdStruct(FuncStopAxisInput, FuncStopAxisOutput)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

@@ -88,12 +88,14 @@ class FuncGetProjectManagerControllerStateInput(FuncGetControllerStateInput):
 
 @dataclass
 class FuncGetProjectManagerControllerStateOutput(FuncGetControllerStateOutput):
-    state: ProjectManagerControllerState
+    state: ProjectManagerControllerState = None  # Equals to None, because in FuncGetControllerStateOutput com attribute
+    # is presented with default value
 
 
 @dataclass
 class FuncGetFileDescriptionInput(FuncInput):
     file_id: str
+    com: str = 'get_file_description'
 
 
 @dataclass
@@ -127,27 +129,33 @@ class FuncGetProjectDescirptionOutput(FuncOutput):
 class FuncGetFilesInput(FuncInput):
     author_email: str = ''
     operator_email: Union[str, List[str]] = ''
+    com: str = 'get_files'
 
 
 @dataclass
 class FuncGetFilesOutput(FuncOutput):
     files: List[str]
     operator_email: Union[str, List[str]] = ''
+    com: str = 'get_files'
 
 
 @dataclass
 class FuncGetOperatorsInput(FuncInput):
     operator_id: Union[int, List[int]] = field(default_factory=list)
+    com: str = 'get_operators'
+
 
 @dataclass
 class FuncGetOperatorsOutput(FuncOutput):
     operators: List[Operator]
+    com: str = 'get_operators'
 
 
 @dataclass
 class FuncGetProjectsInput(FuncInput):
     author_email: str = ''
     operator_email: Union[str, List[str]] = ''
+    com: str = 'get_projects'
 
 
 @dataclass
@@ -155,3 +163,4 @@ class FuncGetProjectsOutput(FuncOutput):
     projects_names: List[str]
     projects_files: List[str]
     operator_email: Union[str, List[str]] = ''
+    com: str = 'get_projects'

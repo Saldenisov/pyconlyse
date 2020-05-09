@@ -1,6 +1,4 @@
 from devices.devices import Server
-from communication.messaging.messages import MsgComExt
-from datastructures.mes_independent import CmdStruct
 
 
 from tests.fixtures import server_test as server

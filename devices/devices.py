@@ -298,7 +298,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         if error:
             msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
                                       reply_to=msg.id)
-        self.thinker.msg_out(msg_r)
+        self.send_msg_externally(msg_r)
 
     @staticmethod
     def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
@@ -372,7 +372,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 class Server(Device):
     # TODO: refactor
-    GET_AVAILABLE_SERVICES = CmdStruct('get_available_services', FuncAvailableServicesInput, FuncAvailableServicesOutput)
+    GET_AVAILABLE_SERVICES = CmdStruct(FuncAvailableServicesInput, FuncAvailableServicesOutput)
 
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServerMessenger
@@ -489,10 +489,10 @@ class Client(Device):
 
 
 class Service(Device):
-    ACTIVATE = CmdStruct('activate', FuncActivateInput, FuncActivateOutput)
-    GET_CONTROLLER_STATE = CmdStruct('get_controller_state', FuncGetControllerStateInput, FuncGetControllerStateOutput)
-    SERVICE_INFO = CmdStruct('service_info', FuncServiceInfoInput, FuncServiceInfoOutput)
-    POWER = CmdStruct('power', FuncPowerInput, FuncPowerOutput)
+    ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
+    GET_CONTROLLER_STATE = CmdStruct(FuncGetControllerStateInput, FuncGetControllerStateOutput)
+    SERVICE_INFO = CmdStruct(FuncServiceInfoInput, FuncServiceInfoOutput)
+    POWER = CmdStruct(FuncPowerInput, FuncPowerOutput)
 
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):

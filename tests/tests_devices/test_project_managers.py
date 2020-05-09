@@ -2,7 +2,6 @@ from pathlib import Path
 from devices.service_devices.project_treatment import ProjectManager_controller
 from devices.service_devices.project_treatment.openers import Opener, HamamatsuFileOpener
 from utilities.myfunc import file_md5
-from datastructures.mes_independent import CmdStruct
 from datastructures.mes_independent.devices_dataclass import (FuncActivateInput, FuncActivateOutput,
                                                                              FuncPowerInput, FuncPowerOutput)
 from datastructures.mes_independent.projects_dataclass import *

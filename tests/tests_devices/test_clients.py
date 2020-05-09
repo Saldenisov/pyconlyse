@@ -1,5 +1,4 @@
 from devices.virtualdevices.clients import SuperUser
-from datastructures.mes_independent import CmdStruct
 
 
 from tests.fixtures.clients import superuser_test as superuser

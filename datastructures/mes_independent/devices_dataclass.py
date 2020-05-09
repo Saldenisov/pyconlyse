@@ -131,11 +131,13 @@ class MsgError:
 @dataclass
 class FuncActivateInput(FuncInput):
     flag: bool
+    com: str = 'activate'
 
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
     device_status: DeviceStatus
+    com: str = 'activate'
 
 
 @dataclass
@@ -152,32 +154,36 @@ class FuncAvailableServicesOutput(FuncOutput):
 
 @dataclass
 class FuncGetControllerStateInput(FuncInput):
-    pass
+    com: str = 'get_controller_state'
 
 
 @dataclass
 class FuncGetControllerStateOutput(FuncOutput):
     device_status: DeviceStatus
+    com: str = 'get_controller_state'
 
 
 @dataclass
 class FuncPowerInput(FuncInput):
     flag: bool
+    com: str = 'power'
 
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
     device_status: DeviceStatus
+    com: str = 'power'
 
 
 @dataclass
 class FuncServiceInfoInput(FuncInput):
-    pass
+    com: str = 'service_info'
 
 
 @dataclass
 class FuncServiceInfoOutput(FuncOutput):
     info: DeviceInfoExt
+    com: str = 'service_info'
 
 
 @dataclass(order=True)

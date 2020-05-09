@@ -43,11 +43,13 @@ class StpMtrCtrlStatusMultiAxes:
 class FuncActivateAxisInput(FuncInput):
     axis_id: int
     flag: bool
+    com: str = 'activate_axis'
 
 
 @dataclass
 class FuncActivateAxisOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
+    com: str = 'activate_axis'
 
 
 @dataclass
@@ -64,11 +66,13 @@ class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
 @dataclass
 class FuncGetPosInput(FuncInput):
     axis_id: int
+    com: str = 'get_pos'
 
 
 @dataclass
 class FuncGetPosOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
+    com: str = 'get_pos'
 
 
 relative = NewType('relative', str)
@@ -80,20 +84,22 @@ class FuncMoveAxisToInput(FuncInput):
     axis_id: int
     pos: Union[int, float]
     how: Union[relative, absolute]
+    com: str = 'move_axis_to'
 
 
 @dataclass
 class FuncMoveAxisToOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
+    com: str = 'move_axis_to'
 
 
 @dataclass
 class FuncStopAxisInput(FuncInput):
     axis_id: int
+    com: str = 'stop_axis'
 
 
 @dataclass
 class FuncStopAxisOutput(FuncOutput):
     axes: Dict[int, AxisStpMtrEssentials]
-
-
+    com: str = 'stop_axis'

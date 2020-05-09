@@ -19,6 +19,6 @@ class Desription:
 
 @dataclass(frozen=True)
 class CmdStruct:
-    name: str
+    #name: str
     func_input: FuncInput
     func_output: FuncOutput
