@@ -59,7 +59,7 @@ class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
 
 @dataclass
 class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
-    axes: Dict[int, AxisStpMtr]
+    axes: Dict[int, AxisStpMtr] = None
 
 
 

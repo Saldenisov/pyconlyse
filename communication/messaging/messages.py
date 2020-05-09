@@ -155,7 +155,7 @@ class MessageExt(Message):
             msgpack_repr = packb(msg_l)
             return msgpack_repr
         except (ValueError, TypeError) as e:
-            module_logger.error(e)
+            module_logger.error(f'{e}:{self.short()}')
             return b''
 
     @staticmethod
@@ -171,5 +171,5 @@ class MessageExt(Message):
             for param_name, param in zip(MessageExt.__annotations__, mes_unpacked):
                 parameters[param_name] = param
             return MessageExt(**parameters)
-        except Exception as e:
+        except TypeError as e:
             raise MessageError(f'Error {e} in msgpack_bytes_to_msg')

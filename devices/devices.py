@@ -276,6 +276,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         error = False
         com: str = msg.info.com
         input: FuncInput = msg.info
+        b = self.available_public_functions
+        a = self.available_public_functions_names
         if com in self.available_public_functions_names:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
@@ -520,7 +522,7 @@ class Service(Device):
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.POWER)
+        return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO, Service.POWER)
 
     @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:
@@ -553,8 +555,9 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-        info = DeviceInfoExt(available_public_functions=self.available_public_functions(), device_id=self.id,
-                             device_description=self.description())
+        device_description = self.description()
+        info = DeviceInfoExt(device_id=self.id, device_info=device_description.info,
+                             GUI_title=device_description.GUI_title)
         return FuncServiceInfoOutput(comments='', func_success=True, info=info)
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:

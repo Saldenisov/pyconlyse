@@ -97,21 +97,25 @@ def task_in_reaction(event: ThinkerEvent):
                 thinker.msg_counter += 1
                 react = True
                 if msg.com not in exclude_msgs:
-                    info_msg(event, 'INFO', extra=str(msg.short()))
+                    info_msg(event, 'INFO', f'Received: {msg.short()}')
 
                 if msg.reply_to == '' and msg.receiver_id != '':  # If message is not a reply, it must be a demand one
-                    thinker.add_reply_pending(msg)
-                    info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to pending_reply.')
+                    thinker.add_demand_pending_reply(msg)
+                    info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list')
 
                 elif msg.reply_to != '':
-                    if msg.reply_to in thinker.demands_pending_answer:
+                    if msg.reply_to in thinker.pending_replies:
                         # TODO: should it have else clause or not?
-                        com = thinker.demands_pending_answer[msg.reply_to].message.com
-                        event.logger.info(f'REPLY to Msg {msg.reply_to} {com} is obtained.')
-                        del thinker.demands_pending_answer[msg.reply_to]
+                        msg_awaited: MessageExt = thinker.pending_replies[msg.reply_to].message
+                        event.logger.info(f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
+                        del thinker.pending_replies[msg.reply_to]
                     else:
                         react = False
                         info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
+                    if msg.reply_to in thinker.clients_demands_pending_answer:
+                        msg_awaited: MessageExt = thinker.clients_demands_pending_answer[msg.reply_to].message
+                        msg_r = msg
+                        msg_r.receiver_id = msg_awaited.sender_id
                 if react:
                     thinker.react_external(msg)
             except (ThinkerErrorReact, Exception) as e:
@@ -121,7 +125,7 @@ def task_in_reaction(event: ThinkerEvent):
 def task_out_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_out: MsgDict = thinker.tasks_out
-    tasks_reply_pending: MsgDict = thinker.replies_pending_answer
+    tasks_reply_pending: MsgDict = thinker.pending_replies
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
@@ -132,7 +136,7 @@ def task_out_reaction(event: ThinkerEvent):
                 if msg.receiver_id != '' and msg.reply_to == '':
                     # If msg is not reply, than add to pending demand
                     info_msg(event, 'INFO', f'Msg id={msg.id} is considered to get a reply')
-                    thinker.add_demand_pending(msg)
+                    thinker.add_client_demand_pending(msg)
 
                 elif msg.reply_to != '':
                     if msg.reply_to in tasks_reply_pending:
@@ -153,7 +157,7 @@ def task_out_reaction(event: ThinkerEvent):
 
 def pending_demands(event: ThinkerEvent): 
     thinker: Thinker = event.parent
-    tasks_pending_demands: MsgDict = thinker.demands_pending_answer
+    tasks_pending_demands: MsgDict = thinker.clients_demands_pending_answer
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
@@ -181,7 +185,7 @@ def pending_demands(event: ThinkerEvent):
 def pending_replies(event: ThinkerEvent):
     thinker: Thinker = event.parent
     device = thinker.parent
-    tasks_pending_replies: MsgDict = thinker.replies_pending_answer
+    tasks_pending_replies: MsgDict = thinker.pending_replies
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
@@ -192,7 +196,8 @@ def pending_replies(event: ThinkerEvent):
                     pending: PendingReply = item
                     if (time() - event.time) > event.tick and pending.attempt < 3:
                         pending.attempt = pending.attempt + 1
-                        info_msg(event, 'INFO', f'Pending reply message waits {pending.attempt}: {pending.message}')
+                        info_msg(event, 'INFO', f'Pending reply message waits {pending.attempt}:{pending.message.com}:'
+                                                f'{pending.message.id}')
                     elif (time() - event.time) > event.tick and pending.attempt >= 3:
                         try:
                             msg = pending.message

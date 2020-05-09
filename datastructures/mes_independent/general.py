@@ -22,3 +22,7 @@ class CmdStruct:
     #name: str
     func_input: FuncInput
     func_output: FuncOutput
+
+    @property
+    def name(self):
+        return self.func_input.com

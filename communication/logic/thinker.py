@@ -31,8 +31,7 @@ class Thinker(ThinkerInter):
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._pending_demands = MsgDict(name='pending_demands', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._pending_replies = MsgDict(name='pending_replies', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit, dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -74,21 +73,11 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
 
-    def add_demand_pending(self, msg: MessageExt):
+    def add_demand_pending_reply(self, msg: MessageExt):
         try:
-            self._pending_demands[msg.id] = PendingDemand(message=msg)
+            self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
-            error_logger(self, self.add_demand_pending, e)
-
-    def add_reply_pending(self, msg: MessageExt):
-        try:
-            self._pending_replies[msg.id] = PendingReply(message=msg)
-        except KeyError as e:
-            error_logger(self, self.add_demand_pending, e)
-
-    @property
-    def demands_pending_answer(self) -> MsgDict:
-        return self._pending_demands
+            error_logger(self, self.add_demand_pending_reply, e)
 
     def info(self):
         from collections import OrderedDict as od
@@ -97,8 +86,8 @@ class Thinker(ThinkerInter):
         info['events'] = self.events
         info['tasks_in'] = self.tasks_in
         info['tasks_out'] = self.tasks_out
-        info['pending_demands'] = self.demands_pending_answer
-        info['pending_replies'] = self.replies_pending_answer
+        info['pending_clients_demands'] = self.clients_demands_pending_answer
+        info['pending_replies'] = self.pending_replies
         return info
 
     def msg_out(self, msg_out: Union[MessageExt, List[MessageExt]]):
@@ -148,8 +137,8 @@ class Thinker(ThinkerInter):
                 raise ThinkerEventError(str(e))
 
     @property
-    def replies_pending_answer(self) -> MsgDict:
-        return self._pending_replies
+    def demands_waiting_reply(self) -> MsgDict:
+        return self._demands_waiting_reply
 
     @abstractmethod
     def react_external(self, msg: MessageExt):
