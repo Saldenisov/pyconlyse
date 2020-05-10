@@ -105,11 +105,9 @@ class DeviceInfoInt:
 
 @dataclass(frozen=True, order=True)
 class DeviceInfoExt:
-    #available_public_functions: List[CmdStruct]
+    available_public_functions: List[CmdStruct]
     device_id: str
-    #device_description: Desription
-    device_info: str
-    GUI_title: str
+    device_description: Desription
 
 
 @dataclass(frozen=True, order=True)

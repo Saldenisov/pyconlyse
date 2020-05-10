@@ -556,6 +556,7 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
+
         return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id,
                                      service_description=self.description())
 

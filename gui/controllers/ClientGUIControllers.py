@@ -60,13 +60,13 @@ class SuperClientGUIcontroller():
     def create_service_gui(self):
         service_id = self.view.ui.lW_devices.currentItem().text()
         try:
-            parameters: DeviceInfoExt = self.model.service_parameters[service_id]
-            if isinstance(parameters.device_description, StpMtrDescription):
+            parameters: Desription = self.model.service_parameters[service_id]
+            if isinstance(parameters, StpMtrDescription):
                 view = StepMotorsView
                 msg = self.device.generate_msg(com='get_controller_state', device=self.device,
                                          device_id=service_id,
                                          input=FuncGetStpMtrControllerStateInput())
-            elif isinstance(parameters.device_description, ProjectManagerDescription):
+            elif isinstance(parameters, ProjectManagerDescription):
                 view = ProjectManagerView
                 msg = self.device.generate_msg(com='get_controller_state', device=self.device,
                                          device_id=service_id,
