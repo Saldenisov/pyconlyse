@@ -25,9 +25,9 @@ class AxisStpMtrEssentials:
     status: int
 
 
-@dataclass(order=True, frozen=True)
+@dataclass(order=True)
 class StpMtrDescription(Desription):
-    axes: Dict[int, AxisStpMtr]
+    axes: Dict[str, AxisStpMtr]
 
 
 @dataclass(order=True, frozen=False)

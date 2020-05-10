@@ -76,7 +76,7 @@ class ProjectManagerViewState:
                 pass
 
 
-@dataclass(order=True, frozen=True)
+@dataclass(order=True)
 class ProjectManagerDescription(Desription):
     pass
 

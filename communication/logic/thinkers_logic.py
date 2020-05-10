@@ -21,12 +21,6 @@ class GeneralCmdLogic(Thinker):
         self.timeout = int(self.parent.get_general_settings()['timeout'])
         self.connections = self.parent.connections
 
-        # Only applicable not for Server type devices
-        # if not self.connections[DeviceId(msg.sender_id)].filled() and self.parent_logger.type is not DeviceType.SERVER \
-        #         and msg.info.event_n % 3:
-        #     msg_r = self.parent_logger.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, receiver_id=msg.sender_id)
-        #     self.msg_out(msg_r)
-
     def react_broadcast(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.msg_name:
             try:
@@ -43,7 +37,8 @@ class GeneralCmdLogic(Thinker):
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
             # Convert MessageExt to MessageInt and emit it
-            self.parent.signal.emit(msg.ext_to_int())
+            msg_int = msg.ext_to_int()
+            self.parent.signal.emit(msg_int)
         msg_r = None
         if msg.com == MsgComExt.ALIVE.msg_name:
             if msg.sender_id in self.parent.connections:
@@ -57,12 +52,9 @@ class GeneralCmdLogic(Thinker):
                 msg_r = msg.copy(receiver_id=initial_msg.sender_id, reply_to=initial_msg.id,
                                  sender_id=self.parent.id)
                 del self.forwarded_messages[msg.reply_to]
-                info_msg(self, 'INFO',
-                         f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
+                info_msg(self, 'INFO', f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
             else:
                 pass  # TODO: at this moment Server does not do DO_IT command for itself, it only forwards
-            if self.parent.pyqtsignal_connected:
-                self.parent.signal.emit(msg.ext_to_int())
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
 
@@ -152,7 +144,7 @@ class GeneralCmdLogic(Thinker):
                 #         self.parent_logger.messenger._are_you_alive_send = True
                 #         self.msg_out(True, msg_i)
                 #     else:
-                #         info_msg(self, 'INFO', 'Server was away for too long...deleting info about Server')
+                #         info_msg(self, 'INFO', 'Server was away for too long...deleting service_info about Server')
                 #         del self.parent_logger.connections[event.original_owner]
 
 
@@ -220,7 +212,7 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                self.logger.info('Service was away for too long...deleting info about service')
+                info_msg(self, 'INFO', 'Service was away for too long...deleting info about service')
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt()
 

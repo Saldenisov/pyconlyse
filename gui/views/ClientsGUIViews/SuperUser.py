@@ -48,7 +48,7 @@ class SuperUserView(QMainWindow):
         com = msg.com
         info = msg.info
         try:
-            if com == MsgComExt.HEARTBEAT.msg_name:
+            if com == MsgComInt.HEARTBEAT.msg_name:
                 widget1 = self.ui.rB_hb
                 widget2 = self.ui.rB_hb2
                 widget1v = widget1.isChecked()
@@ -56,7 +56,7 @@ class SuperUserView(QMainWindow):
                     widget2.setChecked(True)
                 else:
                     widget1.setChecked(True)
-            elif com == MsgComExt.DONE_IT.msg_name:
+            elif com == MsgComInt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
                 if info.com == Server.GET_AVAILABLE_SERVICES.name:
                     result: FuncAvailableServicesOutput = info
@@ -67,10 +67,14 @@ class SuperUserView(QMainWindow):
                         names.append(f'{key}')
                     widget.addItems(names)
                     self.model.superuser.running_services = result.device_available_services
-                elif com == Service.SERVICE_INFO.name:
-                    info: DeviceInfoExt = info
-                    self.model.service_parameters[info.device_id] = info
+                elif info.com == Service.SERVICE_INFO.name:
+                    info: FuncServiceInfoOutput = info
+                    self.model.service_parameters[info.device_id] = info.service_description
+                    self.ui.tE_info.setText(info.service_description.info)
+                else:
+                    error_logger(self, self.model_is_changed, f'DONE_IT com {info.com} is not known.')
             elif com == MsgComExt.ERROR.msg_name:
                 self.ui.tE_info.setText(info.comments)
+
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')

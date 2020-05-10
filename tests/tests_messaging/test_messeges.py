@@ -68,6 +68,27 @@ def test_messages(server: Server, stpmtr_emulate: Service):
                                               event=stpmtr_emulate.thinker.events['heartbeat'])
     msgs.append(msg_welcome)
 
+
+    try:
+        from datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
+        description: StpMtrDescription = stpmtr_emulate.description()
+        axes_new = {}
+        for key, value in description.axes.items():
+            axes_new[str(key)] = value
+        description.axes = axes_new
+
+        msg_service_info = stpmtr_emulate.generate_msg(msg_com=MsgComExt.DONE_IT, reply_to='reply_to',
+                                                       receiver_id='receiver_id',
+                                                       func_output=FuncServiceInfoOutput(comments='',
+                                                                                         func_success=True,
+                                                                                         device_id=stpmtr_emulate.id,
+                                                                                         service_description=description))
+        bytes = msg_service_info.msgpack_repr()
+        msg_back = MessageExt.msgpack_bytes_to_msg(bytes)
+    except Exception as e:
+        print(e)
+    msgs.append(msg_service_info)
+
     msg_welcome_copy = msg_welcome.copy(sender_id='CHANGED_Sender', unexisting_attribute=0)
     assert msg_welcome_copy.sender_id == 'CHANGED_Sender'
     assert msg_welcome.info == msg_welcome_copy.info

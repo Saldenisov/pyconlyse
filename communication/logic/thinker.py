@@ -102,7 +102,7 @@ class Thinker(ThinkerInter):
                 for msg in msg_out:
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
-                info_msg(self, 'INFO', extra=repr(msg_out.short()))
+                info_msg(self, 'INFO', msg_out. short())
                 self.add_task_out(msg_out)
             else:
                 error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'
@@ -179,7 +179,7 @@ class Thinker(ThinkerInter):
         pass
 
     def remove_device_from_connections(self, device_id):
-        # TODO: the info is not deleted from _frontend sockets or backend sockets
+        # TODO: the service_info is not deleted from _frontend sockets or backend sockets
         connections = self.parent.connections
         if device_id in connections:
             info_msg(self, 'INFO', f'Procedure to delete {device_id} is started')

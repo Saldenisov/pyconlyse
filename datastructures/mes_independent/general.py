@@ -11,7 +11,7 @@ class FuncOutput:
     func_success: bool
 
 
-@dataclass(frozen=True, order=True)
+@dataclass(order=True)
 class Desription:
     info: str
     GUI_title: str

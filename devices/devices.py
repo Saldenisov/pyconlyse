@@ -279,8 +279,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         error = False
         com: str = msg.info.com
         input: FuncInput = msg.info
-        b = self.available_public_functions
-        a = self.available_public_functions_names
         if com in self.available_public_functions_names:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
@@ -558,10 +556,8 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-        device_description = self.description()
-        info = DeviceInfoExt(device_id=self.id, device_info=device_description.info,
-                             GUI_title=device_description.GUI_title)
-        return FuncServiceInfoOutput(comments='', func_success=True, info=info)
+        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id,
+                                     service_description=self.description())
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday

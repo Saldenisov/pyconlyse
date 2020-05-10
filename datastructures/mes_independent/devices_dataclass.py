@@ -184,7 +184,8 @@ class FuncServiceInfoInput(FuncInput):
 
 @dataclass
 class FuncServiceInfoOutput(FuncOutput):
-    info: DeviceInfoExt
+    device_id: str
+    service_description: Desription
     com: str = 'service_info'
 
 

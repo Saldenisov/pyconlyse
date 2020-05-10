@@ -124,9 +124,9 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #     # superuser receives reply
 #     reply: MessageExt = next(iter(superuser.thinker.tasks_in_test.values()))
 #     del superuser.thinker.tasks_in_test[reply.id]
-#     assert type(reply.data.info) == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_class
+#     assert type(reply.data.service_info) == MsgGenerator.AVAILABLE_SERVICES_REPLY.mes_class
 #     for service_id in services_id:
-#         assert service_id in reply.data.info.running_services
+#         assert service_id in reply.data.service_info.running_services
 #
 #     #clear devices
 #     clean_test_queues(devices)
@@ -151,7 +151,7 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #         del service.thinker.tasks_in_test[msg_id]
 #         assert msg_id in msg_ids
 #         assert msg_recieved.data.com == 'do_it'
-#         assert msg_recieved.data.info.input == FuncPowerInput(True)
+#         assert msg_recieved.data.service_info.input == FuncPowerInput(True)
 #     sleep(0.05)
 #     # checking what services are sending back
 #     for service_id in services_id:
@@ -159,7 +159,7 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #         msg_id, msg_send = next(iter(service.thinker.tasks_out_test.items()))
 #         del service.thinker.tasks_out_test[msg_id]
 #         assert msg_send.data.com == 'done_it'
-#         assert msg_send.data.info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
+#         assert msg_send.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
 #                                                                     f'But remember, that user switches power manually...',
 #                                                             func_success=True,
 #                                                             device_status=service.device_status)
@@ -168,7 +168,7 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #     msg_id, msg_recieved = next(iter(superuser.thinker.tasks_in_test.items()))
 #     del superuser.thinker.tasks_in_test[msg_id]
 #     assert msg_recieved.data.com == 'done_it'
-#     assert msg_recieved.data.info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
+#     assert msg_recieved.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
 #                                                                  f'But remember, that user switches power manually...',
 #                                                         func_success=True,
 #                                                         device_status=service.device_status)
@@ -188,8 +188,8 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #         msg_id, msg_send = next(iter(service.thinker.tasks_out_test.items()))
 #         del service.thinker.tasks_out_test[msg_id]
 #         assert msg_send.data.com == 'done_it'
-#         assert msg_send.data.info.result.func_success == True
-#         assert msg_send.data.info.result.device_status == service.device_status
+#         assert msg_send.data.service_info.result.func_success == True
+#         assert msg_send.data.service_info.result.device_status == service.device_status
 #
 #     # Testing receiving
 #     # pyqtslot is connected
