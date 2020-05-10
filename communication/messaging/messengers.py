@@ -138,11 +138,11 @@ class Messenger(MessengerInter):
                     receiver_id: DeviceId = msg.receiver_id
                 else:
                     receiver_id = self.parent.server_id
-                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.msgpack_repr())
+                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr())
             except KeyError:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
         else:
-            return msg.msgpack_repr()
+            return msg.byte_repr()
 
     def _gen_rsa_keys(self):
         """
@@ -329,7 +329,7 @@ class ClientMessenger(Messenger):
                 if int(crypted):
                     device_id = self.parent.server_id  #  !!! ONLY WHEN CLIET/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
+                mes: MessageExt = MessageExt.bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
@@ -429,7 +429,7 @@ class ClientMessenger(Messenger):
             if self.sockets[SUB_Socket] in sockets:
                 mes, crypted = self.sockets[SUB_Socket].recv_multipart()
                 # TODO: decrypt message safely with try except
-                msg: MessageExt = MessageExt.msgpack_bytes_to_msg(mes)
+                msg: MessageExt = MessageExt.bytes_to_msg(mes)
                 # TODO: first heartbeat could be received only from server! make it safe
                 if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
                     try:
@@ -512,7 +512,7 @@ class ServerMessenger(Messenger):
             try:
                 if int(crypted):
                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.msgpack_bytes_to_msg(msg)
+                mes: MessageExt = MessageExt.bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)

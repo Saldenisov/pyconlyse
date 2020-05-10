@@ -14,6 +14,8 @@ class DeviceType(str, Enum):
     SERVICE = 'service'
     DEFAULT = 'default'
 
+    def __repr__(self):  # It is a hack to make DeviceType easily json serializable
+        return self.__str__()
 
 class DeviceInter(ABC):
     pass

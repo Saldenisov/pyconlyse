@@ -1,15 +1,16 @@
 import logging
-from base64 import b64encode
+from base64 import b64encode, b64decode
 from copy import deepcopy
 from dataclasses import asdict
 from enum import Enum
 from msgpack import packb, unpackb
-from json import dumps
-from zlib import compress
+from json import dumps, loads
+from zlib import compress, decompress
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent import *
+from devices.interfaces import DeviceType
 from utilities.errors.messaging_errors import MessageError
 from utilities.myfunc import unique_id
 
@@ -69,6 +70,12 @@ class MessageInt(Message):
     sender_id: str
 
 
+class Coding(Enum):
+    JSON = 0
+    MSGPACK = 1
+
+
+
 @dataclass(order=True)
 class MessageExt(Message):
     """
@@ -112,77 +119,72 @@ class MessageExt(Message):
                 'reply_to': self.reply_to,
                 'id': self.id}
 
-    def json_repr_long(self, compression=True) -> bytes:
-        try:
-            json_str = dumps(repr(self)).encode('utf-8')
-            if compression:
-                json_str_c = compress(json_str)
-                json_str_c = b64encode(json_str_c)
-                return json_str_c
-            else:
-                return json_str
-        except Exception as e:  # TODO replace with reasonable
-            module_logger.error(e)
-            return b''
 
-    def json_repr(self, compression=True) -> bytes:
-        try:
-            msg_l = []
-            for name in self.__annotations__:
-                value = getattr(self, name)
-                if name == 'info':
-                    msg_l.append(type(value))
-                    value = asdict(value)
-                elif isinstance(value, MsgType):
-                    value = value.value
-                msg_l.append(value)
-            json_str = dumps(repr(msg_l)).encode('utf-8')
-            if compression:
-                json_str_c = compress(json_str)
-                json_str_c = b64encode(json_str_c)
-                return json_str_c
-            else:
-                return json_str
-        except Exception as e:  # TODO replace with reasonable
-            module_logger.error(e)
-            return b''
 
     def ext_to_int(self) -> MessageInt:
         return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id)
 
-    def msgpack_repr(self) -> bytes:
+    def byte_repr(self, coding: Coding = Coding.JSON, compression=True) -> bytes:
         """
         Considered to by better in performance and size compared to json representation
         :return: string of bytes when success or b'' if error
         """
-        try:
-            msg_l = []
-            for name in self.__annotations__:
-                value = getattr(self, name)
-                if name == 'info':
-                    msg_l.append(value.__class__.__name__)
-                    value = asdict(value)
-                elif isinstance(value, MsgType):
-                    value = value.value
-                msg_l.append(value)
-            msgpack_repr = packb(msg_l)
-            return msgpack_repr
-        except (ValueError, TypeError) as e:
-            module_logger.error(f'{e}:{self.short()}')
-            return b''
+        if coding is Coding.MSGPACK:
+            try:
+                msg_l = []
+                for name in self.__annotations__:
+                    value = getattr(self, name)
+                    if name == 'info':
+                        msg_l.append(value.__class__.__name__)
+                        value = asdict(value)
+                    elif isinstance(value, MsgType):
+                        value = value.value
+                    msg_l.append(value)
+                msgpack_repr = packb(msg_l)
+                return msgpack_repr
+            except (ValueError, TypeError) as e:
+                module_logger.error(f'{e}:{self.short()}')
+                return b''
+        elif coding is Coding.JSON:
+            try:
+                json_str = dumps(repr(self)).encode('utf-8')
+                if compression:
+                    json_str_c = compress(json_str)
+                    json_str_c = b64encode(json_str_c)
+                    return json_str_c
+                else:
+                    return json_str
+            except Exception as e:  # TODO replace with reasonable
+                module_logger.error(e)
+                return b''
 
     @staticmethod
-    def msgpack_bytes_to_msg(mes_bytes: bytes) -> Message:
-        try:
-            mes_unpacked = unpackb(mes_bytes)
-            info_class = eval(mes_unpacked[2])
-            mes_unpacked.pop(2)
-            info = info_class(**mes_unpacked[2])
-            mes_unpacked.pop(2)
-            mes_unpacked.insert(2, info)
-            parameters = {}
-            for param_name, param in zip(MessageExt.__annotations__, mes_unpacked):
-                parameters[param_name] = param
-            return MessageExt(**parameters)
-        except TypeError as e:
-            raise MessageError(f'Error {e} in msgpack_bytes_to_msg')
+    def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON) -> Message:
+        if coding is Coding.MSGPACK:  # MSGPACK is not realy working for all type of messages
+            try:
+                mes_unpacked = unpackb(mes_bytes)
+                info_class = eval(mes_unpacked[2])
+                mes_unpacked.pop(2)
+                info = info_class(**mes_unpacked[2])
+                mes_unpacked.pop(2)
+                mes_unpacked.insert(2, info)
+                parameters = {}
+                for param_name, param in zip(MessageExt.__annotations__, mes_unpacked):
+                    parameters[param_name] = param
+                return MessageExt(**parameters)
+            except TypeError as e:
+                raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+        elif coding is Coding.JSON:
+            try:
+                mes_str = loads(mes_bytes)
+                return eval(mes_str)
+            except Exception:
+                try:
+                    mes_dc = loads(decompress(b64decode(mes_bytes)))
+                    mes = eval(mes_dc)
+                    return mes
+                except Exception as e:
+                    raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+        else:
+            module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
+            raise MsgError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')

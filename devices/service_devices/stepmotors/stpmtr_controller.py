@@ -193,10 +193,7 @@ class StpMtrController(Service):
         """
         try:
             parameters = self.get_settings('Parameters')
-            axes_str_key = {}
-            for key, value in self.axes.items():
-                axes_str_key[str(key)] = value
-            return StpMtrDescription(axes=axes_str_key, info=parameters['info'], GUI_title=parameters['title'])
+            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'])
         except (KeyError, DeviceError) as e:
             return StpMtrError(self, f'Could not set description of controller from database: {e}')
 

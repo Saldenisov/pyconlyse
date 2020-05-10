@@ -1,14 +1,26 @@
-from datastructures.mes_dependent.dicts import Events_Dict, MsgDict
+from json import dumps, loads
+from enum import Enum, auto
+from dataclasses import dataclass
+from devices.interfaces import DeviceType
 
-tasks_out = MsgDict(name='tasks_out', size_limit=100, parent_logger=None)
 
+print(DeviceType.CLIENT.__str__())
 
-tasks_out[1] = 2
-tasks_out[100] = 200
+@dataclass
+class A:
+    type: DeviceType = DeviceType.CLIENT
 
-print(tasks_out)
+a = A()
 
-a = tasks_out.popitem(last=False)
-print(tasks_out)
+a_str = str(a)
 
-b = 2
+a_json = dumps(a_str).encode('utf-8')
+
+back_str = loads(a_json)
+
+try:
+    back = eval(back_str)
+    assert back.type is DeviceType.CLIENT
+    c = back
+except Exception as e:
+    print(e)
