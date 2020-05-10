@@ -1,5 +1,6 @@
 import logging
 from base64 import b64encode
+from copy import deepcopy
 from dataclasses import asdict
 from enum import Enum
 from msgpack import packb, unpackb
@@ -84,6 +85,17 @@ class MessageExt(Message):
     def __post_init__(self):
         if not self.id:
             object.__setattr__(self, 'id', unique_id())
+
+    def copy(self, **kwargs):
+        msg_copy = deepcopy(self)
+        for key, value in kwargs.items():
+            try:
+                getattr(msg_copy, key)
+                object.__setattr__(msg_copy, key, value)
+            except AttributeError:
+                pass
+        object.__setattr__(msg_copy, 'id', unique_id())
+        return msg_copy
 
     def short(self):
         t = str(self.info)

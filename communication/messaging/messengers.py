@@ -390,12 +390,12 @@ class ClientMessenger(Messenger):
 
             if msg.receiver_id != '':
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
-                self.logger.info(f'{msg.short()} is send from {self.parent.name}')
+                info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
-                    self.logger.info(f'Publisher socket is not available for {self.name}.')
+                    info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -590,10 +590,10 @@ class ServerMessenger(Messenger):
             else:
                 if msg.receiver_id in self._frontendpool:
                     self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                    self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from frontend to {msg.receiver_id}')
+                    info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
                 elif msg.receiver_id in self._backendpool:
                     self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                    self.logger.info(f'Msg {msg.id}, msg_com {msg.com} is send from backend to {msg.receiver_id}')
+                    info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
                 else:
                     error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
         except zmq.ZMQError as e:

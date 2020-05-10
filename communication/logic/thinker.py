@@ -31,7 +31,10 @@ class Thinker(ThinkerInter):
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
+                                              dict_parent=self)
+        # TODO: add slow thread to track after forwarded messages
+        self._forwarded = MsgDict(name='forwarded_messages', size_limit=msg_dict_size_limit, dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -43,8 +46,7 @@ class Thinker(ThinkerInter):
             self.timeout = 10
             pending_demands_tick = 0.2
         try:
-            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands,
-                                                             pending_replies)
+            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands)
             self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
             self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
             self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
@@ -71,11 +73,17 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
 
-    def add_demand_pending_reply(self, msg: MessageExt):
+    def add_demand_waiting_reply(self, msg: MessageExt):
         try:
             self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
-            error_logger(self, self.add_demand_pending_reply, e)
+            error_logger(self, self.add_demand_waiting_reply, e)
+
+    def add_to_forwarded(self, msg_forwarded: MessageExt, msg_arrived: MessageExt):
+        try:
+            self._forwarded[msg_forwarded.id] = msg_arrived
+        except KeyError as e:
+            error_logger(self, self.add_demand_waiting_reply, e)
 
     def info(self):
         from collections import OrderedDict as od
@@ -137,6 +145,10 @@ class Thinker(ThinkerInter):
     @property
     def demands_waiting_reply(self) -> MsgDict:
         return self._demands_waiting_reply
+
+    @property
+    def forwarded_messages(self) -> MsgDict:
+        return self._forwarded
 
     @abstractmethod
     def react_external(self, msg: MessageExt):

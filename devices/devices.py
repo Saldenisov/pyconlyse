@@ -237,10 +237,13 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         finally:
                             info = WelcomeInfoServer(session_key=session_key_crypted)
                     elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
-                        server_public_key = self.connections[self.server_id].device_public_key
-                        pub_key = self.messenger.public_key
-                        device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
+                        try:
+                            server_public_key = self.connections[self.server_id].device_public_key
+                            pub_key = self.messenger.public_key
+                            device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
                                                                                        server_public_key)
+                        except KeyError:
+                            device_public_key_crypted = self.messenger.public_key
                         event = kwargs['event']
                         info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
                                                  event_id=event.id, device_id=self.id, device_name=self.name,

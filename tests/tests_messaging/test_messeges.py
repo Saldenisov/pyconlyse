@@ -28,7 +28,6 @@ def test_messages(server: Server, stpmtr_emulate: Service):
 
     msg_device_info = server.generate_msg(msg_com=MsgComInt.DEVICE_INFO_INT, sender_id='sender_id')
 
-
     msgs.append(msg_device_info)
 
     msg_available_services = server.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES,
@@ -65,8 +64,15 @@ def test_messages(server: Server, stpmtr_emulate: Service):
     msgs.append(msg_error)
 
     msg_welcome = stpmtr_emulate.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE, reply_to='reply_to',
-                                              receiver_id='receiver_id')
+                                              receiver_id='receiver_id',
+                                              event=stpmtr_emulate.thinker.events['heartbeat'])
     msgs.append(msg_welcome)
+
+    msg_welcome_copy = msg_welcome.copy(sender_id='CHANGED_Sender', unexisting_attribute=0)
+    assert msg_welcome_copy.sender_id == 'CHANGED_Sender'
+    assert msg_welcome.info == msg_welcome_copy.info
+    assert msg_welcome.receiver_id == msg_welcome_copy.receiver_id
+    assert msg_welcome.id != msg_welcome_copy
 
     msg_bytes_back_assert(msgs)
 
