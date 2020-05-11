@@ -116,10 +116,16 @@ class MessageExt(Message):
             l = 300
         else:
             pass
-        return {'path':  f'{self.sender_id}->{self.receiver_id}',
-                'datastructures': f'{self.com}: {t[0:l]}...',
-                'reply_to': self.reply_to,
-                'id': self.id}
+        if not self.forwarded_from:
+            return {'path':  f'{self.sender_id}->{self.receiver_id}',
+                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'reply_to': self.reply_to,
+                    'id': self.id}
+        else:
+            return {'path':  f'{self.forwarded_from}->{self.sender_id}->{self.receiver_id}',
+                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'reply_to': self.reply_to,
+                    'id': self.id}
 
     def ext_to_int(self) -> MessageInt:
         return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id, forwarded_from=self.forwarded_from)

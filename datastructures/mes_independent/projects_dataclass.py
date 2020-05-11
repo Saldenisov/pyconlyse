@@ -99,6 +99,12 @@ class FuncGetFileDescriptionInput(FuncInput):
 
 
 @dataclass
+class FuncGetProjectDescirptionInput(FuncInput):
+    file_id: str
+    com = 'get_file_description'
+
+
+@dataclass
 class FuncGetFileDescriptionOutput(FuncOutput):
     file_id: str = ''
     file_name: str = ''
@@ -109,11 +115,7 @@ class FuncGetFileDescriptionOutput(FuncOutput):
     data_size_bytes: int = 0
     timedelays_size: int = 0
     wavelengths_size: int = 0
-
-
-@dataclass
-class FuncGetProjectDescirptionInput(FuncInput):
-    file_id: str
+    com = 'get_file_description'
 
 
 @dataclass

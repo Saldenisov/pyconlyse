@@ -57,33 +57,30 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         info_msg(self, 'INITIALIZED')
 
     def get_files(self):
-        com = ProjectManager_controller.GET_FILES.name
         operator_email = self.ui.comboBox_operators.itemText(self.ui.comboBox_operators.currentIndex())
-        msg = self.device.generate_msg(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=ProjectManager_controller.GET_FILES.func_input(operator_email))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetFilesInput(operator_email=operator_email))
+        client.send_msg_externally(msg)
 
     def get_projects(self):
-        com = ProjectManager_controller.GET_PROJECTS.name
-        msg = self.device.generate_msg(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=ProjectManager_controller.GET_PROJECTS.func_input())
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetProjectsInput())
+        client.send_msg_externally(msg)
 
     def get_operators(self):
-        com = ProjectManager_controller.GET_OPERATORS.name
-        msg = self.device.generate_msg(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=ProjectManager_controller.GET_OPERATORS.func_input())
-        self.device.send_msg_externally(msg)
+
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetOperatorsInput())
+        client.send_msg_externally(msg)
 
     def get_state(self):
-        com = ProjectManager_controller.GET_CONTROLLER_STATE.name
-        msg = self.device.generate_msg(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=ProjectManager_controller.GET_CONTROLLER_STATE.func_input())
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetControllerStateInput())
+        client.send_msg_externally(msg)
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
@@ -119,19 +116,19 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         name: str = index.data()
         if '~ID~' in name:
             file_id = name.split('~ID~')[1].split('.')[0]
-            com = ProjectManager_controller.GET_FILE_DESCRIPTION.name
-            msg = self.device.generate_msg(device=self.device, com=com,
-                                     device_id=self.service_parameters.device_id,
-                                     input=FuncGetFileDescriptionInput(file_id=file_id))
-            self.device.send_msg_externally(msg)
+            client = self.device
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                      func_input=FuncGetFileDescriptionInput(file_id=file_id))
+            client.send_msg_externally(msg)
 
-    def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
+    def model_is_changed(self, msg: MessageInt):
         try:
-            if self.service_parameters.device_id in msg.body.sender_id:
-                com = msg.data.com
-                info: Union[DoneIt, MsgError] = msg.data.info
-                if com == MsgComExt.DONE_IT.mes_name:
-                    result: Union[FuncGetFilesOutput, FuncGetFileDescriptionOutput] = info.result
+            if self.service_parameters.device_id == msg.forwarded_from or \
+                    self.service_parameters.device_id == msg.sender_id:
+                com = msg.com
+                info: Union[DoneIt, MsgError] = msg.info
+                if com == MsgComInt.DONE_IT.msg_name:
+                    result: Union[FuncGetFilesOutput, FuncGetFileDescriptionOutput] = info
                     self.ui.comments.setText(result.comments)
                     if result.func_success:
                         if info.com == ProjectManager_controller.GET_CONTROLLER_STATE.name:

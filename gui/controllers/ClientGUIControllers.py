@@ -66,7 +66,7 @@ class SuperClientGUIcontroller():
                 view = StepMotorsView
                 msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
                                           func_input=FuncGetStpMtrControllerStateInput())
-            elif isinstance(parameters, ProjectManagerDescription):
+            elif isinstance(parameters.device_description, ProjectManagerDescription):
                 view = ProjectManagerView
                 msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
                                           func_input=FuncGetProjectManagerControllerStateInput())
