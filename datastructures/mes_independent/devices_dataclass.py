@@ -105,9 +105,10 @@ class DeviceInfoInt:
 
 @dataclass(frozen=True, order=True)
 class DeviceInfoExt:
-    available_public_functions: List[CmdStruct]
+    #available_public_functions: List[CmdStruct]
     device_id: str
     device_description: Desription
+    device_status: DeviceStatus
 
 
 @dataclass(frozen=True, order=True)
@@ -182,8 +183,8 @@ class FuncServiceInfoInput(FuncInput):
 
 @dataclass
 class FuncServiceInfoOutput(FuncOutput):
-    device_id: str
-    service_description: Desription
+    device_id: DeviceId
+    service_info: DeviceInfoExt
     com: str = 'service_info'
 
 

@@ -75,7 +75,6 @@ class Coding(Enum):
     MSGPACK = 1
 
 
-
 @dataclass(order=True)
 class MessageExt(Message):
     """

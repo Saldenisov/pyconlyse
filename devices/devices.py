@@ -556,9 +556,9 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-
-        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id,
-                                     service_description=self.description())
+        service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
+                                     device_status=self.device_status)
+        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday

@@ -59,37 +59,39 @@ class SuperClientGUIcontroller():
 
     def create_service_gui(self):
         service_id = self.view.ui.lW_devices.currentItem().text()
+        client = self.device
         try:
-            parameters: Desription = self.model.service_parameters[service_id]
-            if isinstance(parameters, StpMtrDescription):
+            parameters: DeviceInfoExt = self.model.service_parameters[service_id]
+            if isinstance(parameters.device_description, StpMtrDescription):
                 view = StepMotorsView
-                msg = self.device.generate_msg(com='get_controller_state', device=self.device,
-                                         device_id=service_id,
-                                         input=FuncGetStpMtrControllerStateInput())
+                msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
+                                          func_input=FuncGetStpMtrControllerStateInput())
             elif isinstance(parameters, ProjectManagerDescription):
                 view = ProjectManagerView
-                msg = self.device.generate_msg(com='get_controller_state', device=self.device,
-                                         device_id=service_id,
-                                         input=FuncGetProjectManagerControllerStateInput())
+                msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
+                                          func_input=FuncGetProjectManagerControllerStateInput())
+
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
             self.services_views[service_id].show()
-            self.logger.info(f'GUI for service {service_id} is started')
-
-            self.device.send_msg_externally(msg)
+            info_msg(self, 'INFO', f'GUI for service {service_id} is started')
+            client.send_msg_externally(msg)
         except KeyError:
-            self.logger.error(f'Parameters for service id={service_id} was not loaded')
+            error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded')
         except Exception as e:
-            print(f'in create_service_gui {e}')
+            error_logger(self, self.create_service_gui, e)
+
 
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
 
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
-        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
+        client = self.device
+
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
                                        func_input=FuncServiceInfoInput())
-        self.device.send_msg_externally(msg)
+        client.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
         client = self.device

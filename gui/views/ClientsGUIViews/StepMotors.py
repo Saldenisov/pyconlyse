@@ -10,14 +10,14 @@ from _functools import partial
 from PyQt5.QtWidgets import (QMainWindow)
 from PyQt5 import QtCore
 
-from communication.messaging.messages import Message
+from communication.messaging.messages import MsgComExt, MessageExt
 from communication.messaging.message_utils import MsgGenerator
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ui import Ui_StpMtrGUI
-from utilities.myfunc import info_msg, get_local_ip
+from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 
 module_logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ module_logger = logging.getLogger(__name__)
 
 class StepMotorsView(QMainWindow):
 
-    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: Desription, parent=None):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
@@ -86,10 +86,10 @@ class StepMotorsView(QMainWindow):
     def get_pos(self, axis_id=None, with_return=False):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
-        com = StpMtrController.GET_POS.name
-        msg = MsgGenerator.do_it(com=com, device=self.device, device_id=self.service_parameters.device_id,
-                                 input=FuncGetPosInput(axis_id))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetPosInput(axis_id))
+        client.send_msg_externally(msg)
         if with_return:
             return True if self.controller_status.axes[axis_id].status == 2 else False
 
@@ -103,27 +103,29 @@ class StepMotorsView(QMainWindow):
                     self.controller_status.axes[axis_id].status = axis.status
                     self.controller_status.axes[axis_id].position = axis.position
         except Exception as e:
-            print(e)
+            self.logger.error(e)
 
     def move_axis(self):
         if self.ui.radioButton_absolute.isChecked():
             how = absolute.__name__
         else:
             how = relative.__name__
-        com = StpMtrController.MOVE_AXIS_TO.name
         axis_id = int(self.ui.spinBox_axis.value())
         pos = float(self.ui.lineEdit_value.text())
-        msg = MsgGenerator.do_it(com=com, device=self.device, device_id=self.service_parameters.device_id,
-                                 input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
+
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
+        client.send_msg_externally(msg)
+
         self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
-        self.device.send_msg_externally(msg)
         self.controller_status.axes[axis_id].status = 2
         self.ui.progressBar_movement.setValue(0)
         self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
                                     specific={'axis_id': axis_id, 'with_return': True})
         self._asked_status = 0
 
-    def model_is_changed(self, msg: Message):
+    def model_is_changed(self, msg: MessageExt):
         try:
             if self.service_parameters.device_id in msg.body.sender_id:
                 com = msg.data.com
