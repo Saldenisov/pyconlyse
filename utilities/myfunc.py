@@ -150,27 +150,15 @@ def get_local_ip() -> str:
         for ip in adapter.ips:
             if ip.network_prefix < 64:
                 ips_l.append(ip.ip)
-
-<<<<<<< HEAD
-=======
     ips_ls = sorted(ips_l)
 
->>>>>>> develop
     def get(ips_l):
         for ip in ips_l:
             if '129.' in ip:
                 return ip
-<<<<<<< HEAD
-            elif '127.' in ip:
-                return ip
-        return None
-    # was before return str(gethostbyname(gethostname()))
-    return get(ips_l)
-=======
         return '127.0.0.1'
     # was before return str(gethostbyname(gethostname()))
     return get(ips_ls)
->>>>>>> develop
 
 
 def test_local_port(port):

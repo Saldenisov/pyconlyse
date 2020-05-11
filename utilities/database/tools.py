@@ -20,6 +20,7 @@ def db_check_update(parent, tick: int, DB_path: Path):
 
 def db_execute_select(connection: sq3.Connection, command: str, multiple=False) -> Tuple[Any, bool]:
     #TODO: modify so it return res, comments as a Tuple
+    comments = ''
     try:
         cur = connection.cursor()
         cur.execute(command)
