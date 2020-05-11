@@ -41,7 +41,7 @@ def get_noconflict_metaclass(bases, left_metas, right_metas):
      if needed_metas in memoized_metaclasses_map:
        return memoized_metaclasses_map[needed_metas]
      # nope: compute, memoize and return needed conflict-solving meta
-     elif not needed_metas:         # wee, tests_hardware trivial case, happy us
+     elif not needed_metas:         # wee, tests_devices trivial case, happy us
          meta = type
      elif len(needed_metas) == 1: # another trivial case
         meta = needed_metas[0]

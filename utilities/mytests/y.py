@@ -18,7 +18,7 @@ derived_key = HKDF(
     algorithm=hashes.SHA256(),
     length=32,
     salt=None,
-    info=b'handshake data',
+    info=b'handshake datastructures',
     backend=default_backend()
 ).derive(shared_key)
 # For the next handshake we MUST generate another private key, but
@@ -29,7 +29,7 @@ shared_key_2 = private_key_2.exchange(peer_public_key_2)
 derived_key_2 = HKDF(algorithm=hashes.SHA256(),
     length=32,
     salt=None,
-    info=b'handshake data',
+    info=b'handshake datastructures',
     backend=default_backend()
 ).derive(shared_key_2)
 

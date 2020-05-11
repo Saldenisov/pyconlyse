@@ -8,32 +8,44 @@ Created on 7 juin 2016
 
 import socket
 from contextlib import closing
-from typing import Tuple, List
+from pathlib import Path
+from typing import Tuple, List, Iterable, Generator, Union
 import logging
 from datetime import datetime
-from hashlib import md5
+import hashlib
 from random import randint
 from time import sleep
 from typing import Any
 
 import numpy as np
 
-from errors.myexceptions import WrongInfoType
+from utilities.errors.myexceptions import WrongInfoType
 
 module_logger = logging.getLogger(__name__)
 
 
 def error_logger(obj: object, func, e):
-    obj.logger.error(f'func:{func.__name__} {e}')
+    obj.logger.error(f'func:{func.__name__}: {e}')
 
 
 def dict_to_str_repr(d: dict) -> str:
     return "\n".join("{}: {}".format(k, v) for k, v in d.items())
 
 
-def list_to_str_repr(l: list) -> str:
-    if l:
-        return "\n".join("{}".format(k) for k in l)
+def file_md5(file_path: Path, buf_size=65536) -> str:
+    md5 = hashlib.md5()
+    with open(file_path, 'rb') as f:
+        while True:
+            data = f.read(buf_size)
+            if not data:
+                break
+            md5.update(data)
+    return md5.hexdigest()
+
+
+def list_to_str_repr(list_values: list) -> str:
+    if list_values:
+        return "\n".join("{}".format(k) for k in list_values)
     else:
         return ""
 
@@ -76,11 +88,11 @@ def info_msg(obj: object, msg_type: str, extra=''):
         elif msg_type == 'STRANGE':
             r = f'Something strange happened {obj.name}{extra}'
         elif msg_type == 'DENIED':
-            r = 'Permission is denied'
+            r = 'Permission is react_denied'
         elif msg_type in ['REQUEST', 'DEMAND']:
             r = f'{msg_type}: {extra} \n____________________________\n'
         elif msg_type == 'INFO':
-            r = f': {extra} \n____________________________\n'
+            r = f'FYI: {extra} \n____________________________\n'
         elif msg_type == 'FORWARD':
             r = f'FORWARD: {extra} \n++++++++++++++++++++++++++++ N: {obj._counter}\n'
         elif msg_type in ['REPLY', 'REPLY_IN']:
@@ -88,13 +100,31 @@ def info_msg(obj: object, msg_type: str, extra=''):
 
         obj.logger.info(r)
     else:
-        raise WrongInfoType(f'func: {info_msg.__name__}: wrong type: {msg_type}')
+        raise WrongInfoType(f'func: {obj.name}: wrong type: {msg_type}')
+
+
+def paths_to_dict(paths: Union[Iterable[Union[Path, str]], Generator], d={'dirs': {}, 'files': []}) -> dict:
+    def fill_dict(parts: List[str], d: dict, filename: str):
+        part = parts.pop(0)
+        if part != filename:
+            if part not in d['dirs']:
+                d['dirs'][part] = {'dirs': {}, 'files': []}
+            if parts:
+                fill_dict(parts, d['dirs'][part], filename)
+        else:
+            d['files'].append(part)
+    if paths:
+        for path in paths:
+            if not isinstance(path, Path):
+                path = Path(path)
+            fill_dict(list(path.parts), d, path.name)
+    return d
 
 
 def unique_id(name: [Any] = '') -> str:
     """
     Calculate md5 hash of date + system time + name
-    :return: return tests_hardware uniqie id
+    :return: return tests_devices uniqie id
     """
     if not name:
         name = ''
@@ -107,7 +137,7 @@ def unique_id(name: [Any] = '') -> str:
     date_time2 = str(datetime.now())
     rint = randint(0, 1000)
     result = f'{date_time1}_{date_time2}_{rint}_{name}'
-    return md5(result.encode('ascii')).hexdigest()
+    return hashlib.md5(result.encode('ascii')).hexdigest()
 
 
 def get_local_ip() -> str:
@@ -141,6 +171,7 @@ def get_local_ip() -> str:
     # was before return str(gethostbyname(gethostname()))
     return get(ips_ls)
 >>>>>>> develop
+
 
 def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
@@ -195,8 +226,8 @@ def ndarray_tostring(arr):
     Convert ndarray to tab separated string
 
     >>> import numpy as np
-    >>> tests_hardware = np.array([1, 2, 3])
-    >>> b = ndarray_tostring(tests_hardware)
+    >>> tests_devices = np.array([1, 2, 3])
+    >>> b = ndarray_tostring(tests_devices)
     >>> print(b)
     1.000
     2.000
@@ -255,7 +286,6 @@ def dict_of_dict_to_array(dic):
         else:
             arr.extend(dict_of_dict_to_array(dic[key]))
     return arr
-
 
 if __name__ == "__main__":
     import doctest

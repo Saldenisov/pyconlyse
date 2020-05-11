@@ -10,7 +10,7 @@ from configparser import ConfigParser
 from configobj import ConfigObj, flatten_errors
 from validate import Validator
 
-from errors.myexceptions import ValidationFailed, ConfigCannotBeSet
+from utilities.errors.myexceptions import ValidationFailed, ConfigCannotBeSet
 
 module_logger = logging.getLogger(__name__)
 

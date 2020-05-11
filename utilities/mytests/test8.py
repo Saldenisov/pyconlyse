@@ -1,7 +1,7 @@
 
 def importCode(code, name, add_to_sys_modules=0):
     """ code can be any object containing code -- string, file object, or
-       compiled code object. Returns tests_hardware new module object initialized
+       compiled code object. Returns tests_devices new module object initialized
        by dynamically importing the given code and optionally adds it
        to sys.modules under the given name.
     """

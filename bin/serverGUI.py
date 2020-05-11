@@ -8,13 +8,11 @@ LCP/CNRS UMR8000 ELYSE platform
 import sys
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
-sys.path.append(str(Path(__file__).resolve().parents[1]))
+sys.path.append(str(app_folder))
 from PyQt5.QtWidgets import QApplication
-from models.ServerGUIModel import ServerGUIModel
-from controllers.ServerGUIController import ServerGUIController
+from gui.models import ServerGUIModel
+from gui.controllers import ServerGUIController
 from logs_pack import initialize_logger
-
-
 
 
 def main():

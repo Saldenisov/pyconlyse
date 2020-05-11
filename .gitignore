@@ -1,10 +1,3 @@
-
-\.idea/misc\.xml
-
-\.idea/pytlyse\.iml
-
-\.idea/workspace\.xml
-
 *.log
 
 /.mypy_cache
@@ -12,13 +5,6 @@
 *.pyc
 
 *.json
-/views/ui/widget_stpmtr_axis.py
-<<<<<<< HEAD
-.idea/
-=======
-.idea/pyconlyse.iml
-<<<<<<< HEAD
->>>>>>> develop
-=======
-.idea/mypy.xml
->>>>>>> develop
+
+*.xml
+

@@ -1,74 +1,60 @@
-from typing import List
+from time import sleep
+from collections import OrderedDict as od
+from communication.messaging.messengers import *
+from communication.messaging.message_utils import MsgGenerator
+from devices.devices import Server, Service
+from devices.virtualdevices.clients import SuperUser
+from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
+from tests.fixtures import *
+from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
+from communication.messaging.messages import MessageExt
+from datastructures.mes_independent.devices_dataclass import *
+from datastructures.mes_independent.stpmtr_dataclass import *
 
-import utilities.data.messages as mes
-from communication.messaging.messengers import ServerMessenger
-from tests.tests_messaging.fixtures import server_messenger, service_messenger, client_messenger
 import pytest
 
 
-def test_Messengers_Basics(server_messenger, service_messenger, client_messenger):
-    server_messenger: ServerMessenger = server_messenger
-    service_messenger: service_messenger = service_messenger
-    client_messenger: client_messenger = client_messenger
-    from time import sleep
+devices = [server_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
 
-    server_messenger._backendpool.add(service_messenger.id)
-    server_messenger._frontendpool.add(client_messenger.id)
 
-    msgs_correct: List[mes.Message] = mes.msgs_correct
-    msg = msgs_correct[2]
-    msg.body.receiver_id = service_messenger.id
-    msgs_correct[2] = msg
+@pytest.mark.messengers
+@pytest.mark.parametrize('device', devices)
+def test_messenger_basics(device: Device):
+    """
+    Test function designed to test functionality of 3 types of messengers: Client, Service and Server
+    Thinker operation will be paused, only messenger will be active in some stages of the test
+    """
+    # get messenger of the device
+    messenger: Messenger = device.messenger
+    assert not messenger.active
+    assert messenger.paused
+    messenger.start()
+    assert messenger.active
+    assert not messenger.paused
 
-    msg = msgs_correct[3]
-    msg.body.receiver_id = client_messenger.id
-    msgs_correct[3] = msg
+    messenger.pause()
+    assert messenger.active
+    assert messenger.paused
 
-    server_messenger.start()
-    service_messenger.start()
-    client_messenger.start()
-    assert server_messenger.active
-    assert service_messenger.active
-    assert client_messenger.active
+    messenger.unpause()
+    assert messenger.active
+    assert not messenger.paused
 
-    # Testing1 server_messenger sending
-    for msg in msgs_correct:
-        server_messenger.send_msg(msg)
-        server_messenger.add_msg_out(msg)
-    assert len(server_messenger._msg_out) == 4
-    sleep(0.05)
-    assert len(server_messenger._msg_out) == 0
+    assert messenger.id == device.id
 
-    # Testing2 service_messenger sending
-    server_messenger.pause()
-    for msg in msgs_correct:
-        server_messenger.add_msg_out(msg)
-    assert len(server_messenger._msg_out) == 4
-    sleep(0.04)
-    assert len(server_messenger._msg_out) == 4
-    server_messenger.unpause()
-    sleep(0.51)
-    assert len(server_messenger._msg_out) == 0
+    if device.type is DeviceType.SERVER:
+        assert PUB_Socket_Server in messenger.public_sockets
+        assert PUB_Socket_Server in messenger.addresses
+        assert FRONTEND_Server in messenger.public_sockets
+        assert FRONTEND_Server in messenger.public_sockets
+        assert BACKEND_Server in messenger.addresses
+        assert BACKEND_Server in messenger.addresses
 
-    # Testing service_messenger sending
-    for msg in msgs_correct:
-        service_messenger.send_msg(msg)
-        service_messenger.add_msg_out(msg)
-    assert len(service_messenger._msg_out) == 4
-    sleep(0.05)
-    assert len(service_messenger._msg_out) == 0
+    else:
+        assert PUB_Socket in messenger.public_sockets
+        assert PUB_Socket in messenger.addresses
+        assert PUB_Socket_Server in messenger.addresses
 
-    # Testing client_messenger sending
-    for msg in msgs_correct:
-        client_messenger.send_msg(msg)
-        client_messenger.add_msg_out(msg)
-    assert len(client_messenger._msg_out) == 4
-    sleep(0.05)
-    assert len(client_messenger._msg_out) == 0
-
-    server_messenger.stop()
-    service_messenger.stop()
-    client_messenger.stop()
-    assert not server_messenger.active and not server_messenger.paused
-    assert not service_messenger.active and not service_messenger.paused
-    assert not client_messenger.active and not client_messenger.paused
+    messenger.stop()
+    assert not messenger.active
+    assert messenger.paused
