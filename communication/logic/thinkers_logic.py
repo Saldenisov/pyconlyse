@@ -50,7 +50,7 @@ class GeneralCmdLogic(Thinker):
             if msg.reply_to in self.forwarded_messages:
                 initial_msg: MessageExt = self.forwarded_messages[msg.reply_to]
                 msg_r = msg.copy(receiver_id=initial_msg.sender_id, reply_to=initial_msg.id,
-                                 sender_id=self.parent.id)
+                                 sender_id=self.parent.id, forwarded_from=msg.sender_id)
                 del self.forwarded_messages[msg.reply_to]
                 info_msg(self, 'INFO', f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
             else:
@@ -199,7 +199,7 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_forward(self, msg: MessageExt):
         if msg.receiver_id in self.parent.connections:
             info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
-            msg_r = msg.copy(sender_id=self.parent.id)
+            msg_r = msg.copy(sender_id=self.parent.id, forwarded_from=msg.sender_id)
             self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,

@@ -25,7 +25,7 @@ class MsgType(str, Enum):
 class MessageInfoInt(NamedTuple):
     #name: str
     info_class: dataclass  # DataClass
-    must_have_param: Set[str]  # Set of parameters names must be present in param dict for device.generate_msg()
+    #must_have_param: Set[str]  # Set of parameters names must be present in param dict for device.generate_msg()
 
 
 class MessageInfoExt(NamedTuple):

@@ -10,7 +10,7 @@ from _functools import partial
 from PyQt5.QtWidgets import (QMainWindow)
 from PyQt5 import QtCore
 
-from communication.messaging.messages import MsgComExt, MessageExt
+from communication.messaging.messages import MsgComExt, MsgComInt, MessageExt, MessageInt
 from communication.messaging.message_utils import MsgGenerator
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
@@ -59,21 +59,20 @@ class StepMotorsView(QMainWindow):
         info_msg(self, 'INITIALIZED')
 
     def activate(self):
-        com = StpMtrController.ACTIVATE.name
-        msg = MsgGenerator.do_it(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
+        client.send_msg_externally(msg)
         self._asked_status = 0
 
     def activate_axis(self):
-        com = StpMtrController.ACTIVATE_AXIS.name
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
-        msg = MsgGenerator.do_it(device=self.device, com=com,
-                                 device_id=self.service_parameters.device_id,
-                                 input=FuncActivateAxisInput(axis_id=int(self.ui.spinBox_axis.value()),
-                                                             flag=flag))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncActivateAxisInput(axis_id=int(self.ui.spinBox_axis.value()),
+                                                                   flag=flag))
+        client.send_msg_externally(msg)
+
         self._asked_status = 0
 
     def closeEvent(self, event):
@@ -125,19 +124,20 @@ class StepMotorsView(QMainWindow):
                                     specific={'axis_id': axis_id, 'with_return': True})
         self._asked_status = 0
 
-    def model_is_changed(self, msg: MessageExt):
+    def model_is_changed(self, msg: MessageInt):
         try:
-            if self.service_parameters.device_id in msg.body.sender_id:
-                com = msg.data.com
-                info: Union[DoneIt, MsgError] = msg.data.info
-                if com == MsgGenerator.DONE_IT.mes_name:
+            if self.service_parameters.device_id == msg.forwarded_from or \
+                    self.service_parameters.device_id == msg.sender_id:
+                com = msg.com
+                info: Union[DoneIt, MsgError] = msg.info
+                if com == MsgComInt.DONE_IT.msg_name:
                     result: Union[FuncActivateOutput,
                                   FuncActivateAxisOutput,
                                   FuncGetStpMtrControllerStateOutput,
                                   FuncMoveAxisToOutput,
                                   FuncGetPosOutput,
                                   FuncStopAxisOutput,
-                                  FuncPowerOutput] = info.result
+                                  FuncPowerOutput] = info
                     self.ui.comments.setText(result.comments)
                     if info.com == StpMtrController.ACTIVATE.name:
                         result: FuncActivateOutput = result
@@ -164,32 +164,30 @@ class StepMotorsView(QMainWindow):
                         result: FuncPowerOutput = result
                         self.controller_status.device_status = result.device_status
 
-                elif com == MsgGenerator.ERROR.mes_name:
+                elif com == MsgComInt.ERROR.msg_name:
                     self.ui.comments.setText(info.comments)
-                    com = StpMtrController.GET_CONTROLLER_STATE.name
-                    msg = MsgGenerator.do_it(com=com, device=self.device,
-                                             device_id=self.service_parameters.device_id,
-                                             input=FuncGetStpMtrControllerStateInput())
-                    self.device.send_msg_externally(msg)
+                    client = self.device
+                    msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                              func_input=FuncGetStpMtrControllerStateInput())
+                    client.send_msg_externally(msg)
 
                 self.update_state()
         except Exception as e:
-            self.logger.error(e)
+            error_logger(self, self.model_is_changed, e)
 
     def stop_axis(self):
         axis_id = int(self.ui.spinBox_axis.value())
-        com = StpMtrController.STOP_AXIS.name
-        msg = MsgGenerator.do_it(com=com, device=self.device,
-                                 device_id=self.service_parameters.device_id,
-                                 input=FuncStopAxisInput(axis_id=axis_id))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncStopAxisInput(axis_id=axis_id))
+        client.send_msg_externally(msg)
         self._asked_status = 0
 
     def power(self):
-        com = StpMtrController.POWER.name
-        msg = MsgGenerator.do_it(device=self.device, com=com, device_id=self.service_parameters.device_id,
-                                 input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
-        self.device.send_msg_externally(msg)
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
+        client.send_msg_externally(msg)
 
     def update_state(self, force=False):
         cs = self.controller_status

@@ -18,18 +18,19 @@ module_logger = logging.getLogger(__name__)
 
 
 class MsgComInt(Enum):
-    DEVICE_INFO_INT = MessageInfoInt(DeviceInfoInt, set([]))
-    DONE_IT = MessageInfoInt(DoneIt, set([]))
-    HEARTBEAT = MessageInfoInt(HeartBeat, set(['event']))
+    DEVICE_INFO_INT = MessageInfoInt(DeviceInfoInt)
+    DONE_IT = MessageInfoInt(DoneIt)
+    HEARTBEAT = MessageInfoInt(HeartBeat)
+    ERROR = MessageInfoInt(MsgError)
 
     @property
     def msg_name(self):
         return self._name_
 
     @property
-    def msg_type(self):
-        value: MessageInfoExt = self.value
-        return value.type
+    def msg_info_class(self):
+        value: MessageInfoInt = self.value
+        return value.info_class
 
 
 class MsgComExt(Enum):
@@ -68,6 +69,7 @@ class MessageInt(Message):
     com: str  # command name
     info: dataclass  # DataClass
     sender_id: str
+    forwarded_from: str
 
 
 class Coding(Enum):
@@ -86,6 +88,7 @@ class MessageExt(Message):
     receiver_id: str
     reply_to: str
     sender_id: str
+    forwarded_from: str = ''
     #type: MsgType  # temporary disabled TODO: to think what to do with it
     id: str = ''
 
@@ -118,10 +121,8 @@ class MessageExt(Message):
                 'reply_to': self.reply_to,
                 'id': self.id}
 
-
-
     def ext_to_int(self) -> MessageInt:
-        return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id)
+        return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id, forwarded_from=self.forwarded_from)
 
     def byte_repr(self, coding: Coding = Coding.JSON, compression=True) -> bytes:
         """
