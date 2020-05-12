@@ -205,23 +205,16 @@ class Messenger(MessengerInter):
         # Start send loop here
         self._send_loop_logic(await_time=0.1 / 1000.)
 
-<<<<<<< HEAD
     def subscribe_sub(self, address=None, filter_opt=b""):
         try:
             self.sockets['sub'].connect(address)
             self.sockets['sub'].setsockopt(zmq.SUBSCRIBE, filter_opt)
-<<<<<<< HEAD
-            self.sockets['sub'].setsockopt(zmq.RCVHWM, 10)
-=======
             self.sockets['sub'].setsockopt(zmq.RCVHWM, 3)
->>>>>>> develop
         except (zmq.ZMQError, Exception) as e:
             error_logger(self, self.subscribe_sub, e)
-=======
     @abstractmethod
     def _receive_msgs(self):
         pass
->>>>>>> develop
 
     def restart_socket(self, socket_name: str, connect_to: str):
         #TODO: realize other sockets

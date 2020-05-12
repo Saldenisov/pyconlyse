@@ -11,7 +11,6 @@ from PyQt5.QtWidgets import (QMainWindow)
 from PyQt5 import QtCore
 
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageExt, MessageInt
-from communication.messaging.message_utils import MsgGenerator
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 from devices.devices import Device
