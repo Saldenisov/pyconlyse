@@ -38,6 +38,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     Device is an abstract class, predetermining the real devices both for software and devices soft
     """
     n_instance = 0
+    ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
 
     signal = pyqtSignal(MessageInt)
 
@@ -121,16 +122,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         pass
 
     @abstractmethod
-    def available_public_functions(self) -> Tuple[CmdStruct]:
-        pass
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [Device.ACTIVATE]
 
     @abstractmethod
-    def activate(self, flag: bool) -> Tuple[Union[bool, str]]:
-        """
-        Activates service, by connecting to hardware controller and reading settings
-        :param flag: True/False
-        :return: res, comments='' if True, else error_message
-        """
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
+        pass
 
     def add_to_executor(self, func, **kwargs) -> bool:
         # used for slow methods and functions
@@ -374,7 +371,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 
 class Server(Device):
-    # TODO: refactor
+    AUTHENTICATE_USER = CmdStruct(FuncAuthenticateUserInput, FuncAuthenticateUserOutput)
     GET_AVAILABLE_SERVICES = CmdStruct(FuncAvailableServicesInput, FuncAvailableServicesOutput)
     REGISTER_NEW_USER = CmdStruct(FuncRegiserNewUserInput, FuncRegiserNewUserOutput)
 
@@ -394,7 +391,17 @@ class Server(Device):
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
 
+    def authenticate_user(self, func_input: FuncAuthenticateUserInput) -> FuncAuthenticateUserOutput:
+        comments = ''
+        success = False
+        access_level = AccessLevel.NONE
+        permission_level = Permission.NONE
+        return FuncAuthenticateUserOutput(comments=comments, func_success=success, access_level=access_level,
+                                          permission=permission_level)
 
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [*super().available_public_functions(),Server.AUTHENTICATE_USER, Server.GET_AVAILABLE_SERVICES,
+                Server.REGISTER_NEW_USER]
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -413,17 +420,14 @@ class Server(Device):
                 clients_running[device_id] = connection.device_name
         return clients_running
 
-    def activate(self, flag: bool):
-        """Server is always active"""
-        self.logger.info("""Server is always active""")
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
+        return FuncActivateOutput(comments="Server is always active", func_success=True,
+                                  device_status=self.device_status)
 
     def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
         """Returns dict of avaiable services {DeviceID: name}"""
         return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.id,
                                            device_available_services=self.available_services)
-
-    def available_public_functions(self) -> Tuple[CmdStruct]:
-        return tuple([Server.GET_AVAILABLE_SERVICES])
 
     def description(self) -> Desription:
         parameters = self.get_settings('Parameters')
@@ -431,9 +435,8 @@ class Server(Device):
 
     def register_new_user(self, func_input: FuncRegiserNewUserInput) -> FuncRegiserNewUserOutput:
         comments = ''
-        success = True
+        success = False
         return FuncRegiserNewUserOutput(comments=comments, func_success=success)
-
 
     def start(self):
         super().start()
@@ -476,12 +479,12 @@ class Client(Device):
     def available_services(self) -> Dict[DeviceId, str]:
         pass
 
-    def available_public_functions(self) -> Tuple[CmdStruct]:
-        return ()
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [*super().available_public_functions()]
 
-    def activate(self, flag: bool):
-        """Client is always active"""
-        self.logger.info("""Client is always active""")
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
+        return FuncActivateOutput(comments="Client is always active", func_success=True,
+                                  device_status=self.device_status)
 
     def description(self) -> Desription:
         # TODO: add functionality
@@ -501,7 +504,6 @@ class Client(Device):
 
 
 class Service(Device):
-    ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
     GET_CONTROLLER_STATE = CmdStruct(FuncGetControllerStateInput, FuncGetControllerStateOutput)
     SERVICE_INFO = CmdStruct(FuncServiceInfoInput, FuncServiceInfoOutput)
     POWER = CmdStruct(FuncPowerInput, FuncPowerOutput)
@@ -526,13 +528,11 @@ class Service(Device):
     def available_services(self) -> Dict[DeviceId, str]:
         pass
 
-    @abstractmethod
-    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        pass
 
     @abstractmethod
-    def available_public_functions(self) -> Tuple[CmdStruct]:
-        return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO, Service.POWER)
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [*super().available_public_functions(), Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO,
+                Service.POWER]
 
     @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:

@@ -48,11 +48,11 @@ class ProjectManager_controller(Service):
         return FuncActivateOutput(comments=f'{self.name} active state is set to {flag}',
                                   func_success=True, device_status=self.device_status)
 
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
-        return (*super().available_public_functions(), ProjectManager_controller.GET_FILES,
+    def available_public_functions(self) -> List[CmdStruct]:
+        return [*super().available_public_functions(), ProjectManager_controller.GET_FILES,
                                                        ProjectManager_controller.GET_PROJECTS,
                                                        ProjectManager_controller.GET_OPERATORS,
-                                                       ProjectManager_controller.GET_FILE_DESCRIPTION)
+                                                       ProjectManager_controller.GET_FILE_DESCRIPTION]
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()

@@ -8,6 +8,20 @@ from datastructures.mes_independent.general import Desription, CmdStruct, FuncIn
 
 
 @dataclass
+class FuncAuthenticateUserInput(FuncInput):
+    user_email: str
+    user_password: str
+    com: str = 'authenticate_user'
+
+
+@dataclass
+class FuncAuthenticateUserOutput(FuncOutput):
+    access_level: AccessLevel
+    permission: Permission
+    com: str = 'authenticate_user'
+
+
+@dataclass
 class FuncRegiserNewUserInput(FuncInput):
     user_name: str
     user_surname: str
