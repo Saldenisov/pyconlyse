@@ -10,7 +10,6 @@ from devices.interfaces import ExecutorInter
 from devices.interfaces import DeviceType, DeviceId
 
 
-
 @dataclass(frozen=True)
 class DeviceParts(DataClass_frozen):
     messenger: MessengerInter

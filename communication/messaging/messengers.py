@@ -57,11 +57,12 @@ class Messenger(MessengerInter):
         :param pub_option: tell weather there is a publisher socket
         :param kwargs:
         """
-
         super().__init__()
+        Messenger.n_instance += 1
         self._attempts_to_restart_sub = 1  # restart subscriber
         self._are_you_alive_send = False
-        Messenger.n_instance += 1
+        self._bytes_received = 0
+        self._bytes_send = 0
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
         self.id: DeviceId = parent.id
@@ -96,6 +97,22 @@ class Messenger(MessengerInter):
         except KeyError as e:
             error_logger(self, self.add_msg_out, e)
 
+    def add_bytes_received(self, msg: bytes):
+        bytes_received = len(msg)
+        self._bytes_received += bytes_received
+
+    def add_bytes_send(self, msg: bytes):
+        bytes_send = len(msg)
+        self._bytes_send += bytes_send
+
+    @property
+    def bytes_received(self):
+        return self._bytes_received
+
+    @property
+    def bytes_send(self):
+        return self._bytes_send
+
     @abstractmethod
     def _create_sockets(self):
         pass
@@ -121,7 +138,7 @@ class Messenger(MessengerInter):
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
 
     @abstractmethod
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msgs(self, msgs: List[MsgTuple]):
         pass
 
     def encrypt_with_public(self, msg_b: bytes, pem: bytes) -> bytes:
@@ -155,7 +172,6 @@ class Messenger(MessengerInter):
             key_size = 2048
         self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size, backend=default_backend())
         self._public_key = self._private_key.public_key()
-
 
     @abstractmethod
     def info(self):
@@ -323,8 +339,9 @@ class ClientMessenger(Messenger):
             self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
             self.bind_pub()
 
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msgs(self, msgs: List[MsgTuple]):
         for msg, device_id, socket, crypted in msgs:
+            self.add_bytes_received(msg)
             try:
                 if int(crypted):
                     device_id = self.parent.server_id  #  !!! ONLY WHEN CLIET/SERVICE HAS DEALER SOCKET
@@ -353,7 +370,7 @@ class ClientMessenger(Messenger):
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        self._deal_with_reaceived_msg(msgs)
+                        self._deal_with_received_msgs(msgs)
                         msgs = []
             except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
                 self.logger.error(e)
@@ -387,7 +404,7 @@ class ClientMessenger(Messenger):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
-
+            self.add_bytes_send(msg_bytes)
             if msg.receiver_id != '':
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
                 info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
@@ -507,8 +524,9 @@ class ServerMessenger(Messenger):
             error_logger(self, self._create_sockets, e)
             raise e
 
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msgs(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
+            self.add_bytes_received(msg)
             try:
                 if int(crypted):
                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
@@ -576,7 +594,7 @@ class ServerMessenger(Messenger):
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        self._deal_with_reaceived_msg(msgs)
+                        self._deal_with_received_msgs(msgs)
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)
@@ -585,6 +603,7 @@ class ServerMessenger(Messenger):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
+            self.add_bytes_send(msg_bytes)
             if msg.receiver_id == '':
                 self.sockets[PUB_Socket_Server].send_multipart([msg_bytes, crypted])
             else:

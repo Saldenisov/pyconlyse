@@ -376,6 +376,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 class Server(Device):
     # TODO: refactor
     GET_AVAILABLE_SERVICES = CmdStruct(FuncAvailableServicesInput, FuncAvailableServicesOutput)
+    REGISTER_NEW_USER = CmdStruct(FuncRegiserNewUserInput, FuncRegiserNewUserOutput)
 
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServerMessenger
@@ -392,6 +393,8 @@ class Server(Device):
             raise Exception('DB_command_type is not determined')
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
+
+
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -425,6 +428,12 @@ class Server(Device):
     def description(self) -> Desription:
         parameters = self.get_settings('Parameters')
         return Desription(info=parameters['info'], GUI_title=parameters['title'])
+
+    def register_new_user(self, func_input: FuncRegiserNewUserInput) -> FuncRegiserNewUserOutput:
+        comments = ''
+        success = True
+        return FuncRegiserNewUserOutput(comments=comments, func_success=success)
+
 
     def start(self):
         super().start()
