@@ -156,8 +156,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             return self.config.config_to_dict(self.name)[name]
         except ValueError as e:
-            self.logger.error(e)
-            raise
+            error_logger(self, self.get_settings, e)
 
     def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('Addresses')
@@ -390,12 +389,12 @@ class Server(Device):
             raise Exception('DB_command_type is not determined')
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
+        self.users_db_path: Path = Path(app_folder).joinpath(self.get_settings('Parameters')['users_db'])
 
     def authenticate_user(self, func_input: FuncAuthenticateUserInput) -> FuncAuthenticateUserOutput:
         comments = ''
         success = False
-        access_level = AccessLevel.NONE
-        permission_level = Permission.NONE
+        access_level, permission_level = self._check_user(func_input.user_email, func_input.user_password)
         return FuncAuthenticateUserOutput(comments=comments, func_success=success, access_level=access_level,
                                           permission=permission_level)
 
@@ -423,6 +422,19 @@ class Server(Device):
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         return FuncActivateOutput(comments="Server is always active", func_success=True,
                                   device_status=self.device_status)
+
+    def _check_user(self, user_email: str, user_psw: str) -> Tuple[Union[AccessLevel, Permission]]:
+        conn = db_create_connection(self.users_db_path)
+        res, comments = db_execute_select(command=f'Select user_password_hash, salt, iterations from Users where '
+                                                  f'user_email={user_email}',)
+
+        conn.close()
+        access_level = AccessLevel.NONE
+        permission_level = Permission.NONE
+        return access_level, permission_level
+
+    def _calc_hash_password(self, password: str) -> bytes:
+        return b''
 
     def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
         """Returns dict of avaiable services {DeviceID: name}"""

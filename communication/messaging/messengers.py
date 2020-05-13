@@ -117,9 +117,6 @@ class Messenger(MessengerInter):
     def _create_sockets(self):
         pass
 
-    def create_fernet(self, session_key: bytes):
-        return Fernet(session_key)
-
     def decrypt_with_private(self, cipher_text: bytes) -> str:
         """
         Decrypt the cipher text using private key (RSA)
