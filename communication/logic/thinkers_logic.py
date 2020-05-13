@@ -93,8 +93,8 @@ class GeneralCmdLogic(Thinker):
             server_connection = self.connections[msg.sender_id]
             # TODO: Actually check AccessLevel and Permission using password checksum
             server_connection.session_key = info.session_key
-            server_connection.access_level = AccessLevel.FULL
-            server_connection.permission = Permission.GRANTED
+            server_connection.access_level = AccessLevel.NONE
+            server_connection.permission = Permission.DENIED
             self.parent.send_status_pyqt()
             info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
         except Exception as e:  # TODO: change Exception to something reasonable
@@ -173,7 +173,7 @@ class ServerCmdLogic(GeneralCmdLogic):
             for field_name in info.__annotations__:
                 param[field_name] = getattr(info, field_name)
             # TODO: Actually check AccessLevel and Permission using password checksum
-            param['access_level'] = AccessLevel.FULL
+            param['access_level'] = AccessLevel.READ_WRITE
             param['permission'] = Permission.GRANTED
             connections[info.device_id] = Connection(**param)
             connections[info.device_id].device_type = DeviceType(connections[info.device_id].device_type)

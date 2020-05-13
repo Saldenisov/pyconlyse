@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
+from hashlib import pbkdf2_hmac
+from os import urandom
 from pathlib import Path
 import sys
 import sqlite3 as sq3
@@ -12,10 +14,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from datastructures.mes_dependent.dicts import Connections_Dict
 from devices.interfaces import DeviceInter
 from communication.messaging.messages import *
-from communication.messaging.message_utils import MsgGenerator
 from utilities.database.tools import db_create_connection, db_execute_select
 from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
@@ -380,10 +380,9 @@ class Server(Device):
         if 'thinker_cls' in kwargs:
             cls_parts = {'Thinker': kwargs['thinker_cls'],
                          'Messenger': ServerMessenger}
+            kwargs['cls_parts'] = cls_parts
         else:
             raise Exception('Thinker cls was not passed to Device factory')
-
-        kwargs['cls_parts'] = cls_parts
 
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
@@ -392,9 +391,52 @@ class Server(Device):
         self.users_db_path: Path = Path(app_folder).joinpath(self.get_settings('Parameters')['users_db'])
 
     def authenticate_user(self, func_input: FuncAuthenticateUserInput) -> FuncAuthenticateUserOutput:
+        # TODO: check if access_level and permission_level passed are within the range
         comments = ''
         success = False
-        access_level, permission_level = self._check_user(func_input.user_email, func_input.user_password)
+        user_email = func_input.user_email
+        access_level_demanded = AccessLevel(func_input.access_level_demanded)
+        res, comments = self._check_user(user_email, func_input.user_password)
+        access_level = AccessLevel.NONE
+        permission_level = Permission.DENIED
+        if res:
+            info_msg(self, 'INFO', f'User with email {func_input.user_email} passed password check.')
+            conn = db_create_connection(self.users_db_path)
+            res, comments = db_execute_select(conn, command=f'Select access_level from Users where '
+                                                            f'user_email={user_email}')
+            conn.close()
+            if res:
+                access_level_allowed = AccessLevel(int(res))
+                if access_level_demanded > access_level_allowed:
+                    comments = f'Access_level asked {access_level_demanded} higher than allowed {access_level_allowed}.'
+                    access_level_demanded = access_level_allowed
+                access_levels = set([connection.access_level.value for connection in
+                                     self.available_clients_full.values()])
+
+                if access_level_demanded.value in access_levels and access_level_demanded is not AccessLevel.GOD:
+                    value = access_level_demanded - 1
+                    if value < 0:
+                        access_level = AccessLevel.NONE
+                    else:
+                        access_level = AccessLevel(value)
+                    success = True
+                    comments = f'Access_level asked {access_level_demanded} already given to another Client.'
+
+                elif access_level_demanded.value not in access_levels or access_level_demanded is AccessLevel.GOD:
+                    success = True
+                    access_level = access_level_demanded
+
+                comments = f'Access_level {access_level} is granted. {comments}'
+                info_msg(self, 'INFO', comments)
+                permission_level = Permission.GRANTED
+            else:
+                comments = f'Could not read access_level for {user_email} in Users.db. Meanwhile connection permission ' \
+                           f'is denied. Access level is None. {comments=}'
+                info_msg(self, 'INFO', comments)
+
+        else:
+            info_msg(self, 'INFO', f'User with email {func_input.user_email} did not pass password check. {comments}')
+
         return FuncAuthenticateUserOutput(comments=comments, func_success=success, access_level=access_level,
                                           permission=permission_level)
 
@@ -419,25 +461,51 @@ class Server(Device):
                 clients_running[device_id] = connection.device_name
         return clients_running
 
+    @property
+    def available_clients_full(self) -> Dict[str, Connection]:
+        """Returns dict of running clients {receiver_id: name}"""
+        clients_running = {}
+        for device_id, connection in self.connections.items():
+            if connection.device_type is DeviceType.CLIENT:
+                clients_running[device_id] = connection
+        return clients_running
+
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         return FuncActivateOutput(comments="Server is always active", func_success=True,
                                   device_status=self.device_status)
 
-    def _check_user(self, user_email: str, user_psw: str) -> Tuple[Union[AccessLevel, Permission]]:
+    def _check_user(self, user_email: str, user_password: Union[str, bytes]) -> Tuple[bool, str]:
         conn = db_create_connection(self.users_db_path)
         res, comments = db_execute_select(command=f'Select user_password_hash, salt, iterations from Users where '
-                                                  f'user_email={user_email}',)
-
+                                                  f'user_email={user_email}')
         conn.close()
-        access_level = AccessLevel.NONE
-        permission_level = Permission.NONE
-        return access_level, permission_level
+        if res:
+            psw_hash_info = self._calc_hash_password(password=user_password, salt=res[1], iterations=[res[2]])
+            if res[0] != psw_hash_info.password_hash:
+                result = False
+                comments = 'The passed user_password is wrong.'
+            else:
+                result = True
+        else:
+            comments = f'User_email {user_email} does not exist in Users.db. Please contact administrator ' \
+                       f'to register new user.'
+        return result, comments
 
-    def _calc_hash_password(self, password: str) -> bytes:
-        return b''
+    @staticmethod
+    def _calc_hash_password(password: Union[bytes, str], salt: Union[bytes, None] = None, iterations=100000) -> \
+            PasswordHashInfo:
+        if not salt:
+            salt = urandom(32)
+        if isinstance(password, str):
+            password_bytes = password.encode('utf-8')
+        elif isinstance(password, bytes):
+            password_bytes = password
+        else:
+            raise DeviceError(f'Password type is wrong {type(password)}.')
+        password_hash = pbkdf2_hmac('sha256', password_bytes, salt, iterations)
+        return PasswordHashInfo(password_hash, salt, iterations)
 
     def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
-        """Returns dict of avaiable services {DeviceID: name}"""
         return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.id,
                                            device_available_services=self.available_services)
 
@@ -448,6 +516,7 @@ class Server(Device):
     def register_new_user(self, func_input: FuncRegiserNewUserInput) -> FuncRegiserNewUserOutput:
         comments = ''
         success = False
+
         return FuncRegiserNewUserOutput(comments=comments, func_success=success)
 
     def start(self):

@@ -1,20 +1,18 @@
 from dataclasses import dataclass
 from typing import NamedTuple, Set
-from enum import Enum, auto
+from enum import Enum, IntFlag, Flag
 
 
-class Permission(Enum):
-    NONE = auto()
-    GRANTED = auto()
-    DENIED = auto()
-    TEMPORARY = auto()
+class Permission(IntFlag):
+    GRANTED = 1
+    DENIED = 0
 
 
-class AccessLevel(Enum):
-    GOD = auto()
-    FULL = auto()
-    READ_ONLY = auto()
-    NONE = auto()
+class AccessLevel(IntFlag):
+    GOD = 3
+    READ_WRITE = 2
+    READ = 1
+    NONE = 0
 
 
 class MsgType(str, Enum):

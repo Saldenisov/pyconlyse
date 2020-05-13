@@ -1,26 +1,10 @@
-from json import dumps, loads
-from enum import Enum, auto
-from dataclasses import dataclass
-from devices.interfaces import DeviceType
+import hashlib
+import os
+
+salt = os.urandom(32) # Remember this
+password = 'password123'
+
+key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt,  100000)
 
 
-print(DeviceType.CLIENT.__str__())
-
-@dataclass
-class A:
-    type: DeviceType = DeviceType.CLIENT
-
-a = A()
-
-a_str = str(a)
-
-a_json = dumps(a_str).encode('utf-8')
-
-back_str = loads(a_json)
-
-try:
-    back = eval(back_str)
-    assert back.type is DeviceType.CLIENT
-    c = back
-except Exception as e:
-    print(e)
+a = 0

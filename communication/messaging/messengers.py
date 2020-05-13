@@ -536,7 +536,8 @@ class ServerMessenger(Messenger):
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
 
-    def gen_symmetric_key(self, device_id) -> bytes:
+    @staticmethod
+    def gen_symmetric_key(device_id) -> bytes:
         """
         Session key is generated based on PBKDF2 standard, the key is stored in connected_fernets dict
         :param device_id: unique device id
