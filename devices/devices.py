@@ -194,61 +194,62 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         """
         def gen_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
             try:
-                message_info: MessageInfoExt = msg_com.value
-                if not message_info.must_have_param.issubset(set(kwargs.keys())):
-                    error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com}'
-                                                          f'{message_info.must_have_param}, only {kwargs.keys()}')
-                    raise DeviceError(f'Not all parameters are passed to device.generate_msg')
-                else:
-                    if msg_com is MsgComExt.AVAILABLE_SERVICES:
-                        info = AvailableServices(available_services=kwargs['available_services'])
-                    elif msg_com is MsgComExt.DO_IT:
-                        info = kwargs['func_input']
-                    elif msg_com is MsgComExt.DONE_IT:
-                        info = kwargs['func_output']
-                    elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
-                        event = kwargs['event']
-                        info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
-                    elif msg_com is MsgComExt.HEARTBEAT_FULL:
-                        event = kwargs['event']
-                        info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
-                                             event_id=event.id, device_id=self.id,
-                                             device_name=self.name, device_type=self.type,
-                                             device_public_key=self.messenger.public_key,
-                                             device_public_sockets=self.messenger.public_sockets)
-                    elif msg_com is MsgComExt.ERROR:
-                        info = MsgError(error_comments=kwargs['error_comments'])
-                    elif msg_com is MsgComInt.DEVICE_INFO_INT:
-                        info = DeviceInfoInt(active_connections=self.active_connections(),
-                                             available_public_functions=self.available_public_functions(),
-                                             device_id=self.id,
-                                             device_status=self.device_status, device_description=self.description(),
-                                             events_running=list(self.thinker.events.name_id.keys()))
-                    elif msg_com is MsgComExt.SHUTDOWN:
-                        info = ShutDown(device_id=self.id, reason=kwargs['reason'])
-                    elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
-                        try:
-                            session_key = self.connections[kwargs['receiver_id']].session_key
-                            device_public_key = self.connections[kwargs['receiver_id']].device_public_key
-                            # Session key Server-Device is crypted with device public key, message is not crypted
-                            session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
-                        except KeyError:
-                            session_key_crypted = b''
-                        finally:
-                            info = WelcomeInfoServer(session_key=session_key_crypted)
-                    elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
-                        try:
-                            server_public_key = self.connections[self.server_id].device_public_key
-                            pub_key = self.messenger.public_key
-                            device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
+                if isinstance(msg_com, MsgComExt):
+                    message_info: MessageInfoExt = msg_com.value
+                    if not message_info.must_have_param.issubset(set(kwargs.keys())):
+                        error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com}'
+                                                              f'{message_info.must_have_param}, only {kwargs.keys()}')
+                        raise DeviceError(f'Not all parameters are passed to device.generate_msg')
+
+                if msg_com is MsgComExt.AVAILABLE_SERVICES:
+                    info = AvailableServices(available_services=kwargs['available_services'])
+                elif msg_com is MsgComExt.DO_IT:
+                    info = kwargs['func_input']
+                elif msg_com is MsgComExt.DONE_IT:
+                    info = kwargs['func_output']
+                elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
+                    event = kwargs['event']
+                    info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
+                elif msg_com is MsgComExt.HEARTBEAT_FULL:
+                    event = kwargs['event']
+                    info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
+                                         event_id=event.id, device_id=self.id,
+                                         device_name=self.name, device_type=self.type,
+                                         device_public_key=self.messenger.public_key,
+                                         device_public_sockets=self.messenger.public_sockets)
+                elif msg_com is MsgComExt.ERROR:
+                    info = MsgError(error_comments=kwargs['error_comments'])
+                elif msg_com is MsgComInt.DEVICE_INFO_INT:
+                    info = DeviceInfoInt(active_connections=self.active_connections(),
+                                         available_public_functions=self.available_public_functions(),
+                                         device_id=self.id,
+                                         device_status=self.device_status, device_description=self.description(),
+                                         events_running=list(self.thinker.events.name_id.keys()))
+                elif msg_com is MsgComExt.SHUTDOWN:
+                    info = ShutDown(device_id=self.id, reason=kwargs['reason'])
+                elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
+                    try:
+                        session_key = self.connections[kwargs['receiver_id']].session_key
+                        device_public_key = self.connections[kwargs['receiver_id']].device_public_key
+                        # Session key Server-Device is crypted with device public key, message is not crypted
+                        session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
+                    except KeyError:
+                        session_key_crypted = b''
+                    finally:
+                        info = WelcomeInfoServer(session_key=session_key_crypted)
+                elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
+                    try:
+                        server_public_key = self.connections[self.server_id].device_public_key
+                        pub_key = self.messenger.public_key
+                        device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
                                                                                        server_public_key)
-                        except KeyError:
-                            device_public_key_crypted = self.messenger.public_key
-                        event = kwargs['event']
-                        info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
-                                                 event_id=event.id, device_id=self.id, device_name=self.name,
-                                                 device_type=self.type, device_public_key=device_public_key_crypted,
-                                                 device_public_sockets=self.messenger.public_sockets)
+                    except KeyError:
+                        device_public_key_crypted = self.messenger.public_key
+                    event = kwargs['event']
+                    info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
+                                             event_id=event.id, device_id=self.id, device_name=self.name,
+                                             device_type=self.type, device_public_key=device_public_key_crypted,
+                                             device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
                 raise e

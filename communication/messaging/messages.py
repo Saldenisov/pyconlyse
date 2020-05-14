@@ -69,7 +69,7 @@ class MessageInt(Message):
     com: str  # command name
     info: dataclass  # DataClass
     sender_id: str
-    forwarded_from: str
+    forwarded_from: str = ''
 
 
 class Coding(Enum):
