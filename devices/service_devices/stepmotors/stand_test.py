@@ -1,24 +1,6 @@
 from ctypes import *
-from pathlib import Path
-import time
 import os
-import sys
-import platform
-import tempfile
-import re
 
-
-if sys.version_info >= (3, 0):
-    import urllib.parse
-
-cur_dir = Path(os.path.dirname(__file__))
-ximc_dir = Path(cur_dir / "ximc")
-sys.path.append(ximc_dir)  # add ximc.py wrapper to python path
-
-if platform.system() == "Windows":
-    arch_dir = "win64" if "64" in platform.architecture()[0] else "win32"
-    libdir = os.path.join(Path(ximc_dir / arch_dir))
-    os.environ["Path"] = libdir + ";" + os.environ["Path"]  # add dll
 
 try:
     from devices.service_devices.stepmotors.ximc import (lib, device_information_t, Result, status_t,

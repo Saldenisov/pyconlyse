@@ -14,7 +14,7 @@ from utilities.tools.decorators import development_mode
 from pathlib import Path
 from platform import system, architecture
 from .stpmtr_controller import StpMtrController, StpMtrError
-from devices.service_devices.stepmotors.ximc.pyximc import (lib, EnumerateFlags, )
+from devices.service_devices.stepmotors.ximc.myximc import (lib, EnumerateFlags, )
 
 module_logger = logging.getLogger(__name__)
 
@@ -27,27 +27,20 @@ class StpMtrCtrl_Standa(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         file_folder = Path(__file__).resolve().parents[0]
-        self._ximc_dir = Path(file_folder / 'ximc')
+        self._dll_dir = Path(file_folder / 'ximc')
         self._devenum = None  # LP_device_enumeration_t
         self._devices: Dict[int, str] = {}
-        if system() == "Windows":
-            self._arch_dir = "win64" if "64" in architecture()[0] else "win32"
-            libdir = self._ximc_dir / self._arch_dir
-            os.environ["Path"] = str(libdir) + ";" + os.environ["Path"]  # add dll
-        else:
-            raise StpMtrError(self, text=f'OS System is {system()}. Can handle only windows')
+
+
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-
-
-
         res, comments = self._form_devices_list()
         # Check enumerated devices in accordance with database datastructures
         if not res:
             pass
         # Open available devices, but keep software status set to 0
         if res:
-
+            pass
         return res, comments
 
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
@@ -75,16 +68,12 @@ class StpMtrCtrl_Standa(StpMtrController):
         else:
             res, comments = True, ''
         if res:
-<<<<<<< HEAD
-
-=======
             for i in range(device_counts):
                 name = lib.get_device_name(self._devenum, i)
                 device_id = lib.open_device(name)
                 self._devices[device_id] = name
-                self._pos[device_id - 1]0
-                pos[device_id] = test_get_position(lib, device_ids[name])
->>>>>>> 4fd33b997ab328c14f6a258b4b0570a97f093b11
+                #self._pos[device_id - 1]0
+                #pos[device_id] = test_get_position(lib, device_ids[name])
         return res, comments
 
     def GUI_bounds(self) -> Dict[str, Any]:
