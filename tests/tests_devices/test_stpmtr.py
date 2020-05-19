@@ -2,17 +2,22 @@ from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 
-from tests.fixtures.services import stpmtr_emulate_test_non_fixture, stpmtr_a4988_4axes_test_non_fixture
+from tests.fixtures.services import (stpmtr_emulate_test_non_fixture, stpmtr_a4988_4axes_test_non_fixture,
+                                     stpmtr_Standa_test_non_fixture)
 
 import pytest
 
-one_service = [stpmtr_a4988_4axes_test_non_fixture()]
+one_service = [stpmtr_Standa_test_non_fixture()]
 all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
-test_param = all_services
+test_param = one_service
 
 
 @pytest.mark.parametrize('stpmtr', test_param)
 def test_func_stpmtr(stpmtr: StpMtrController):
+    stpmtr._form_devices_list()
+
+
+
     stpmtr.start()
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
                                  'stop_axis']

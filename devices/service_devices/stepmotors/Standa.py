@@ -14,7 +14,7 @@ from utilities.tools.decorators import development_mode
 from pathlib import Path
 from platform import system, architecture
 from .stpmtr_controller import StpMtrController, StpMtrError
-from devices.service_devices.stepmotors.ximc.myximc import (lib, EnumerateFlags, )
+from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t)
 
 module_logger = logging.getLogger(__name__)
 
@@ -26,12 +26,8 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        file_folder = Path(__file__).resolve().parents[0]
-        self._dll_dir = Path(file_folder / 'ximc')
         self._devenum = None  # LP_device_enumeration_t
         self._devices: Dict[int, str] = {}
-
-
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         res, comments = self._form_devices_list()
@@ -46,6 +42,12 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         pass
 
+    def _check_if_active(self) -> Tuple[bool, str]:
+        pass
+
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        pass
+
     def _form_devices_list(self) -> Tuple[bool, str]:
         """
         1) enumerates devices 2) count devices 3) checks vs database 4) form dict of devices {id: name}
@@ -53,7 +55,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         :return:
         """
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
-        lib.set_bindy_key(str(Path(self._ximc_dir / self._arch_dir / "keyfile.sqlite")).encode("utf-8"))
+        lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
         # Enumerate devices
         # This is device search and enumeration with probing. It gives more information about soft.
         probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
@@ -63,7 +65,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
         device_counts = lib.get_device_count(self._devenum)
         if device_counts != self._axes_number:
-            res, comments = False, f'Number of available axes {device_counts} does not correspond to ' \
+            res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                    f'database value {self._axes_number}. Check cabling or power.'
         else:
             res, comments = True, ''
@@ -72,6 +74,8 @@ class StpMtrCtrl_Standa(StpMtrController):
                 name = lib.get_device_name(self._devenum, i)
                 device_id = lib.open_device(name)
                 self._devices[device_id] = name
+                x_pos = get_position_t()
+                result = lib.get_position(device_id, ctypes.byref(x_pos))
                 #self._pos[device_id - 1]0
                 #pos[device_id] = test_get_position(lib, device_ids[name])
         return res, comments
@@ -91,8 +95,13 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         pass
 
-    def _get_pos(self) -> List[Union[int, float]]:
+    def _get_positions(self) -> List[Union[int, float]]:
         pass
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         pass
+
+    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
+        pass
+
+

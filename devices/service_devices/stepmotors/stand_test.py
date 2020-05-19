@@ -1,12 +1,13 @@
 from ctypes import *
+from pathlib import Path
 import os
-
 
 try:
     from devices.service_devices.stepmotors.ximc import (lib, device_information_t, Result, status_t,
                                                          get_position_t, motor_settings_t, move_settings_t,
                                                          engine_settings_t, MicrostepMode, EnumerateFlags,
-                                                         controller_name_t)
+                                                         controller_name_t, ximc_dir)
+
 except ImportError as err:
     print("Can't import pyximc module."
           "The most probable reason is that you changed the relative location of the testpython.py and pyximc.py files. "
