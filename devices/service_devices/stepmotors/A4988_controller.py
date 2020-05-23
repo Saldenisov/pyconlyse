@@ -77,6 +77,9 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         # TODO: to be done something with this
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
+    def _get_axes_names(self):
+        return self._get_axes_names_db()
+
     def _get_axes_status(self) -> List[int]:
         return self._axes_status
 
@@ -123,7 +126,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
             if not interrupted:
-                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} was finished.'
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} ' \
+                                      f'was finished.'
         return res, comments
 
     def _setup(self) -> Tuple[Union[bool, str]]:
@@ -146,7 +150,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions()
+        return super()._set_controller_positions(positions)
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         return super()._set_parameters(extra_func=[self._setup])

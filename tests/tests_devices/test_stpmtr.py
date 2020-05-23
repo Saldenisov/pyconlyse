@@ -14,7 +14,7 @@ test_param = one_service
 
 @pytest.mark.parametrize('stpmtr', test_param)
 def test_func_stpmtr(stpmtr: StpMtrController):
-    stpmtr._form_devices_list()
+    #stpmtr._form_devices_list()
 
 
 

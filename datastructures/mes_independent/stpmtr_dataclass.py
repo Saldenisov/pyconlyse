@@ -10,7 +10,7 @@ class AxisStpMtr:
     id: int
     name: str = ''
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
-    position: float = ''
+    position: float = 0.0
     preset_values: List[Union[int, float]] = field(default_factory=list)
     status: int = 0
 

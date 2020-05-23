@@ -40,6 +40,9 @@ class StpMtrCtrl_emulate(StpMtrController):
     def GUI_bounds(self):
         return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
 
+    def _get_axes_names(self):
+        return self._get_axes_names_db()
+
     def _get_axes_status(self) -> List[int]:
         return self._axes_status
 
@@ -80,5 +83,5 @@ class StpMtrCtrl_emulate(StpMtrController):
         return res, comments
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions()
+        return super()._set_controller_positions(positions)
 

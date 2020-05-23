@@ -24,7 +24,7 @@ class StpMtrController(Service):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._axes_number: int = 0
-        self.axes: Dict[int, AxisStpMtr] = dict()  # {receiver_id: AxisStpMtr()}
+        self.axes: Dict[int, AxisStpMtr] = dict()
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._parameters_set_hardware = False
         if not path.exists(self._file_pos):
@@ -290,6 +290,10 @@ class StpMtrController(Service):
         except (TypeError, SyntaxError):
             raise StpMtrError(self, text="Check axes_ids field in database, must be integer.")
 
+    @abstractmethod
+    def _get_axes_names(self):
+        pass
+
     def _get_axes_names_db(self):
         try:
             names: List[int] = []
@@ -401,10 +405,11 @@ class StpMtrController(Service):
                 self.axes[id_a] = AxisStpMtr(id=id_a)
 
     def _set_axes_names(self):
-        names = self._get_axes_names_db()
-        keys = list(self.axes.keys())
-        for id, name in zip(self.axes.keys(), names):
-            self.axes[id].name = name
+        if not self.device_status.connected:
+            names = self._get_axes_names_db()
+            keys = list(self.axes.keys())
+            for id, name in zip(self.axes.keys(), names):
+                self.axes[id].name = name
 
     def _set_axes_status(self):
         if self.device_status.connected:
