@@ -2,6 +2,7 @@ from abc import abstractmethod
 from os import path
 from pathlib import Path
 from utilities.errors.myexceptions import DeviceError
+from utilities.myfunc import error_logger, info_msg
 from devices.devices import Service
 from typing import Any, Callable
 from datastructures.mes_independent.devices_dataclass import *
@@ -71,7 +72,7 @@ class StpMtrController(Service):
                 if res:
                     self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
-        self.logger.info(info)
+        info_msg(self, 'INFO', info)
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
@@ -117,8 +118,12 @@ class StpMtrController(Service):
         return [axis.status for axis in self.axes.values()]
 
     @property
-    def _axes_positions(self) -> List[Union[int, float]]:
-        return [axis.position for axis in self.axes.values()]
+    def _axes_positions(self) -> Dict[str, Union[int, float]]:
+        """
+        Forms repr of Axes positions as dictionary
+        :return: dictionary of Axis.name: Axis.position
+        """
+        return {axis.name: axis.position for axis in self.axes.values()}
 
     @property
     def _axes_preset_values(self) -> List[Union[int, float]]:
@@ -343,27 +348,30 @@ class StpMtrController(Service):
     def _get_positions(self) -> List[Union[int, float]]:
         pass
 
-    def _get_positions_file(self) -> List[Union[int, float]]:
-        """Return [] if error (file is empty, number of positions is less than self._axes_number"""
-        try:
-            with open(self._file_pos, 'r') as file_pos:
-                pos_s = file_pos.readline()
-            if not pos_s:
-                raise StpMtrError('file with pos is empty')
-            pos = eval(pos_s)
-            if not isinstance(pos, list):
-                raise StpMtrError('is not a list')
+    def _get_positions_file(self) -> Dict[int, Union[int, float]]:
+        """Return Dictionary[Axis.name: Axis.position] if error (file is empty, number of positions is less than self._axes_number"""
+        with open(self._file_pos, 'r') as file_pos:
+            pos_s = file_pos.readline()
+        pos = eval(pos_s)
+        if not isinstance(pos, dict):
+            error_logger(self, self._get_positions_file, StpMtrError(self, 'is not a dict'))
+            info_msg(self, 'INFO', f'Forming axes positions dict. Setting everything to zero')
+            pos = {axis.id: 0 for axis in self.axes.values()}
+        else:
+            if pos.keys() !=  self._axes_names:
+                error_logger(self, self._get_positions_file, StpMtrError(self, f"Axes names {list(pos.keys())} in file, "
+                                                                         f"are different to those read from DB "
+                                                                         f"{self._axes_names}"))
+                info_msg(self, 'INFO', f'Setting position according DB names')
+                for axis in self.axes.values():
+                    if not axis.name in pos:
+                        pos[axis.name] = 0
             else:
-                if len(pos) != len(self.axes):
-                    raise StpMtrError(f"There is {len(pos)} positions in file, instead of {len(self.axes)}")
-                else:
-                    for val in pos:
-                        if not (isinstance(val, int) or isinstance(val, float)):
-                            raise StpMtrError(f"val {val} is not a number")
-                    return pos
-        except (StpMtrError, FileNotFoundError, SyntaxError) as e:
-            self.logger.error(f'in _get_pos_file error: {e}')
-            return []
+                for key, val in pos.items():
+                    if not (isinstance(val, int) or isinstance(val, float)):
+                        raise StpMtrError(f"val {val} is not a number")
+
+        return pos
 
     @abstractmethod
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
@@ -437,26 +445,30 @@ class StpMtrController(Service):
         self._axes_number = axes_number
 
     def _set_positions_axes(self):
-        controller_pos: List[Union[int, float]] = []
+        controller_pos: Dict[int, Union[int, float]] = {}
         if self.device_status.connected:
-             controller_pos = self._get_positions()
-        file_pos: List[Union[int, float]] = self._get_positions_file()
+            controller_pos = self._get_positions()
+        file_pos: Dict[int, Union[int, float]] = self._get_positions_file()
         if len(controller_pos) == 0 and len(file_pos) == 0:
             self.logger.error("Axes positions could not be set, setting everything to 0")
         elif not controller_pos:
             positions = file_pos
         elif controller_pos != file_pos:
-            self.logger.error("Last files positions do not correspond to controller ones. "
-                              "Controller pos set to file pos.")
-            res, comments = self._set_controller_positions(positions=file_pos)
-            if res:
-                positions = file_pos
+            error_logger(self, self._set_positions_axes, "Last files positions do not correspond to controller ones.")
+            if not int(self.get_settings('Parameters')['controller_priority']):
+                res, comments = self._set_controller_positions(positions=file_pos)
+                if res:
+                    positions = file_pos
+                else:
+                    positions = controller_pos
+                    error_logger(self, self._set_positions_axes, f'_set_positions_axes: {comments}')
             else:
                 positions = controller_pos
-                self.logger.error(f'_set_positions_axes: {comments}')
         else:
             positions = controller_pos
-        for id, pos in zip(self.axes.keys(), positions):
+
+
+        for id, pos in zip(self.axes.keys(), positions.values()):
             self.axes[id].position = pos
 
     def _set_preset_values(self):

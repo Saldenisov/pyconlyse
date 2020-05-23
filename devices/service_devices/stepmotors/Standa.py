@@ -32,9 +32,20 @@ class StpMtrCtrl_Standa(StpMtrController):
         self._devices: Dict[int, str] = {}
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        res, comments = self._form_devices_list()
-        if res:
-            self.device_status.connected = True
+        if self.device_status.power:
+            if flag:
+                res, comments = self._form_devices_list()
+            else:
+                res = []
+                for device_id, axis in self.axes.items():
+                    dev_id = ctypes.c_int32(device_id)
+                    lib.close_device(ctypes.byref(dev_id))
+                res, comments = True, ''
+            if res:
+                self.device_status.connected = flag
+        else:
+            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+
         return res, comments
 
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
@@ -42,12 +53,17 @@ class StpMtrCtrl_Standa(StpMtrController):
         if res:
             if self.axes[axis_id].status != flag:
                 info = ''
-                if self.axes[axis_id].status == 2:
+                if self.axes[axis_id].status == 2 and force:
                     self._stop_axis(axis_id)
                     info = f' Axis id={axis_id}, name={self.axes[axis_id].name} was stopped.'
-
-                self.axes[axis_id].status = flag
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
+                    self.axes[axis_id].status = flag
+                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
+                elif self.axes[axis_id].status == 2 and not force:
+                    res, comments = False, 'Axis id={axis_id}, name={self.axes[axis_id].name} is moving. ' \
+                                           'Force Stop in order to change.'
+                else:
+                    self.axes[axis_id].status = flag
+                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
             else:
                 res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
         return res, comments
@@ -101,6 +117,9 @@ class StpMtrCtrl_Standa(StpMtrController):
             for i in range(device_counts):
                 uri = lib.get_device_name(self._devenum, i)
                 device_id = lib.open_device(uri)
+                # Sometimes there is a neccesity to call stop function
+                # So we do it always for every axes
+                self._stop_axis(device_id)
                 name = controller_name_t()
                 result = lib.get_controller_name(device_id, ctypes.byref(name))
                 if result == Result.Ok:
@@ -148,14 +167,14 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         return self._axes_limits
 
-    def _get_positions(self) -> List[Union[int, float]]:
-        positions = []
+    def _get_positions(self) -> Dict[int, Union[int, float]]:
+        positions = {}
         for device_id in self.axes.keys():
             res, val = self._get_position_controller(device_id)
             if res:
-                positions.append(val)
+                positions[device_id] = val
             else:
-                positions.append(self.axes[device_id].position)
+                positions[device_id] = self.axes[device_id].position
         return positions
 
     def _get_position_controller(self, device_id: int) -> Tuple[bool, int]:
