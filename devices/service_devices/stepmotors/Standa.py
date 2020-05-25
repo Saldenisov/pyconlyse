@@ -105,8 +105,10 @@ class StpMtrCtrl_Standa(StpMtrController):
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         if not self._enumerated:
             self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
+            info_msg(self, 'INFO', f'Axes are enumerated.')
             self._enumerated = True
         device_counts = self._get_number_axes()
+        info_msg(self, 'INFO', f'Number of axes is {device_counts}.')
         if device_counts != self._axes_number and device_counts != 0:
             res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                    f'database value {self._axes_number}. Check cabling or power.'
@@ -118,6 +120,8 @@ class StpMtrCtrl_Standa(StpMtrController):
             res, comments = True, ''
         if res:
             for i in range(device_counts):
+                info_msg(self, 'INFO', f'Settings names and positions.')
+
                 uri = lib.get_device_name(self._devenum, i)
                 device_id = lib.open_device(uri)
                 # Sometimes there is a neccesity to call stop function
@@ -151,9 +155,12 @@ class StpMtrCtrl_Standa(StpMtrController):
         res, comments = self._change_axis_status(axis_id, 2)
         interrupted = False
         if res:
-            full_turn = pos // 256
-            steps = pos % 256
-            result = lib.command_move(axis_id, full_turn, steps)
+            full_turn = int(pos // 256)
+            steps = int(pos % 256)
+            try:
+                result = lib.command_move(ctypes.c_int32(axis_id), ctypes.c_int32(full_turn), ctypes.c_int32(steps))
+            except Exception as e:
+                print(e)
             if result == Result.Ok:
                 result = lib.command_wait_for_stop(axis_id, 5)
 
