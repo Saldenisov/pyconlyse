@@ -1,4 +1,5 @@
-from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrController
+from devices.service_devices.stepmotors import (StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrController,
+                                                StpMtrCtrl_Standa)
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 
@@ -16,17 +17,23 @@ test_param = one_service
 def test_func_stpmtr(stpmtr: StpMtrController):
     stpmtr.start()
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
-                                 'stop_axis']
+                                 'stop_axis', 'service_info']
     ACTIVATE = FuncActivateInput(flag=True)
     DEACTIVATE = FuncActivateInput(flag=False)
     ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1, flag=True)
     DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1,  flag=False)
     GET_POS_AXIS1 = FuncGetPosInput(axis_id=1)
     GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
-    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10, how=absolute.__name__)
-    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100, how=absolute.__name__)
-    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10, how=relative.__name__)
-    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10, how=relative.__name__)
+    if isinstance(stpmtr, StpMtrCtrl_Standa):
+        mult = 10000
+        sleep_time = 0.1
+    else:
+        mult = 1
+        sleep_time = 1
+    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10 * mult, how=absolute.__name__)
+    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100 * mult, how=absolute.__name__)
+    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10 * mult, how=relative.__name__)
+    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10 * mult, how=relative.__name__)
     STOP_AXIS1 = FuncStopAxisInput(axis_id=1)
     POWER_ON = FuncPowerInput(flag=True)
     POWER_OFF = FuncPowerInput(flag=False)
@@ -139,12 +146,12 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Move axis 1 to pos=10
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
-    assert res.axes[1].position == 10
+    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
     assert res.comments == f'Movement of Axis with id={1}, name={stpmtr.axes[1].name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
-    assert res.axes[1].position == 0
+    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
     # Move axis 1 to pos=100 and stop it immediately
 
     def move() -> FuncMoveAxisToOutput:
@@ -153,7 +160,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 
     def stop() -> FuncStopAxisOutput:
         from time import sleep
-        sleep(1)
+        sleep(sleep_time)
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         return res
 
@@ -176,7 +183,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
     assert res.func_success
     assert type(res.axes[1]) == AxisStpMtrEssentials
-    assert res.axes[1].position == 10
+    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
     assert res.axes[2].position == 0
     assert res.comments == ''
 
@@ -188,7 +195,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Test available function
     res = stpmtr.available_public_functions()
     assert isinstance(res[0], CmdStruct)
-    assert len(res) == 7
+    assert len(res) == 8
 
     # Test available functions names
     res = stpmtr.available_public_functions_names

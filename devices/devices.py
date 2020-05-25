@@ -4,7 +4,7 @@ from inspect import signature, isclass
 from pathlib import Path
 import sys
 import sqlite3 as sq3
-from time import sleep
+from time import sleep, time
 from typing import Any, Callable, List, Tuple, Union
 
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -12,10 +12,8 @@ from PyQt5.QtCore import QObject, pyqtSignal
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from datastructures.mes_dependent.dicts import Connections_Dict
 from devices.interfaces import DeviceInter
 from communication.messaging.messages import *
-from communication.messaging.message_utils import MsgGenerator
 from utilities.database.tools import db_create_connection, db_execute_select
 from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
@@ -107,7 +105,31 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             raise DeviceError(str(e))
 
+
+        from threading import Thread
+        self._observing_param: Dict[str, List[Any, int]] = {}
+        self._observing_FLAG = True
+        self._observing_thread = Thread(name='observing_thread', target=self._observing)
+        self._observing_thread.start()
+
         info_msg(self, 'CREATED')
+
+    def _register_observation(self, name: str):
+        try:
+            self._observing_param[name] = [getattr(self, name), time()]
+        except AttributeError as e:
+            error_logger(self, self._register_observation, e)
+
+    def _observing(self):
+        info_msg(self, 'INFO', f'Observing thread started.')
+        while self._observing_FLAG:
+            sleep(1)
+            for key, val in self._observing_param.items():
+                param_val = getattr(self, key)
+                if param_val != val[0]:
+                    self._observing_param[key] = [param_val, time()]
+                    info_msg(self, 'INFO', f'Attributes {key} changed its value.')
+
 
     def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
         res = []
@@ -337,6 +359,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self._start_messaging()
 
     def stop(self):
+        self._observing_FLAG = False
         self._stop_messaging()
 
     def _start_messaging(self):

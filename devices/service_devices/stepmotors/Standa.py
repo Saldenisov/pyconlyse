@@ -9,7 +9,7 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 import logging
 import ctypes
 import os
-from time import sleep
+from time import sleep, time
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import info_msg, unique_id, error_logger
 from pathlib import Path
@@ -30,6 +30,8 @@ class StpMtrCtrl_Standa(StpMtrController):
         super().__init__(**kwargs)
         self._devenum = None  # LP_device_enumeration_t
         self._devices: Dict[int, str] = {}
+        self._enumerated = False
+        #self._register_observation('_enumerated')
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -101,14 +103,15 @@ class StpMtrCtrl_Standa(StpMtrController):
         # TODO: change to database readings
         enum_hints = b"addr=192.168.0.1, 129.175.100.137"
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
-        self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
+        if not self._enumerated:
+            self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
+            self._enumerated = True
         device_counts = self._get_number_axes()
         if device_counts != self._axes_number and device_counts != 0:
             res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                    f'database value {self._axes_number}. Check cabling or power.'
             for key in range(device_counts + 1, self._axes_number + 1):
                 del self.axes[key]
-            self.device_status.connected = True
         elif device_counts == 0:
             res, comments = False, f'None of devices were found, check connection.'
         else:
@@ -146,22 +149,30 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
+        interrupted = False
         if res:
             full_turn = pos // 256
             steps = pos % 256
             result = lib.command_move(axis_id, full_turn, steps)
             if result == Result.Ok:
                 result = lib.command_wait_for_stop(axis_id, 5)
-                if result == Result.Ok:
-                    res, comments = True, ''
-                else:
-                    res, comments = False, f'Confirmation of movement finish for device_id {axis_id} was not recieved ' \
-                                           f'{result}.'
-            else:
+
+            if result != Result.Ok:
                 res, comments = False, f'Move command for device_id {axis_id} did not work {result}.'
 
+            if self.axes[axis_id].status != 2:
+                interrupted = True
+
+            if not interrupted:
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} ' \
+                                      f'was finished.'
+            else:
+                res, comments = False, f'Movement of Axis with id={axis_id} was interrupted'
+
+            self.axes[axis_id].position = self._get_position_controller(axis_id)[1]
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
 
+        self._change_axis_status(axis_id, 1, True)
         return res, comments
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:

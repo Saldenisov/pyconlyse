@@ -1,6 +1,8 @@
 from abc import abstractmethod
 from os import path
 from pathlib import Path
+from threading import Thread
+from time import sleep, time
 from utilities.errors.myexceptions import DeviceError
 from utilities.myfunc import error_logger, info_msg
 from devices.devices import Service
@@ -73,6 +75,8 @@ class StpMtrController(Service):
                     self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
+
+
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
@@ -95,6 +99,10 @@ class StpMtrController(Service):
         info = f'Axes status: {status}. {comments}'
         self.logger.info(info)
         return FuncActivateAxisOutput(axes=self.axes_essentials, comments=info, func_success=res)
+
+    @property
+    def _axes_ids(self) -> List[str]:
+        return [axis.id for axis in self.axes.values()]
 
     @property
     def _axes_names(self) -> List[str]:
@@ -123,7 +131,7 @@ class StpMtrController(Service):
         Forms repr of Axes positions as dictionary
         :return: dictionary of Axis.name: Axis.position
         """
-        return {axis.name: axis.position for axis in self.axes.values()}
+        return {axis.id: axis.position for axis in self.axes.values()}
 
     @property
     def _axes_preset_values(self) -> List[Union[int, float]]:
@@ -358,10 +366,10 @@ class StpMtrController(Service):
             info_msg(self, 'INFO', f'Forming axes positions dict. Setting everything to zero')
             pos = {axis.id: 0 for axis in self.axes.values()}
         else:
-            if pos.keys() !=  self._axes_names:
-                error_logger(self, self._get_positions_file, StpMtrError(self, f"Axes names {list(pos.keys())} in file, "
+            if pos.keys() != self._axes_ids:
+                error_logger(self, self._get_positions_file, StpMtrError(self, f"Axes ids {list(pos.keys())} in file, "
                                                                          f"are different to those read from DB "
-                                                                         f"{self._axes_names}"))
+                                                                         f"{self._axes_ids}"))
                 info_msg(self, 'INFO', f'Setting position according DB names')
                 for axis in self.axes.values():
                     if not axis.name in pos:
