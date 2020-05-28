@@ -4,13 +4,16 @@ configobj
 cryptography
 gpiozero
 ifaddr
+imutils
 matplotlib
 msgpack
 numpy
+opencv-python
 PyQt5
 pytest-qt
 pywin32
 python-socketio
+pypylon
 scipy
 tables
 vitables
