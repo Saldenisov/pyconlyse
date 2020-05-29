@@ -229,5 +229,9 @@ class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 
 
+class CameraCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
+
+
 class ProjectManagerServiceCmdLogic(ServiceCmdLogic):
     pass

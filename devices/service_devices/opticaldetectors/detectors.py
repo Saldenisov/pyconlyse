@@ -2,8 +2,10 @@ import ctypes as ct
 import numpy as np
 from time import sleep
 from utilities.errors import myexceptions as myexc
-from devices import OpticalDetector
+from devices.devices import Service
 
+class OpticalDetector(Service):
+    pass
 
 class IRdet(OpticalDetector):
     def __init__(self, dllpath, parameters={}, dev=True):
