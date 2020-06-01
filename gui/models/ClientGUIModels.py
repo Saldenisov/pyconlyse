@@ -8,6 +8,7 @@ import numpy as np
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Union
+from enum import Enum, auto
 from PyQt5.QtCore import QObject, pyqtSignal
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
@@ -68,12 +69,24 @@ class StepMotorsGUIModel(QObject):
             error_logger(self, self.treat_pyqtsignals, e)
 
 
-class VD2Treatment(QObject):
+class VD2TreatmentModel(QObject):
+
+    class ExpDataStruct(Enum):
+        HIS = 'HIS'
+        HIS_NOISE = 'HIS+NOISE'
+        ABS_BASE_NOISE = 'ABS+BASE+NOISE'
+
+    class DataTypes(Enum):
+        ABS = 'ABS'
+        BASE = 'BASE'
+        NOISE = 'NOISE'
+        ABS_BASE = 'ABS+BASE'
+        ABS_BASE_NOISE = 'ABS+BASE+NOISE'
 
     def __init__(self, app_folder: Path, parameters: Dict[str, Any]={}):
         super().__init__(parent=None)
         self.app_folder = app_folder
-        self.name = 'VD2Treatment:model: '
+        self.name = 'VD2TreatmentModel:model: '
         self.logger = module_logger
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
@@ -88,7 +101,7 @@ class VD2Treatment(QObject):
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
 
-    def add_data_path(self, file_path: Path):
+    def add_data_path(self, file_path: Path, exp_data_type: VD2TreatmentModel.DataTypes):
         res, comments = self.opener.fill_critical_info(file_path)
         if res:
             self.data_path = file_path
@@ -119,7 +132,7 @@ class VD2Treatment(QObject):
             self.noise_averaged = True
             self.notify_ui_observers({'checkbox_noise_averaged': True})
 
-    def calc_abs(self, exp: str, how: str, first_map_with_electrons: bool):
+    def calc_abs(self, exp: str, how: str, exp_data_structr: ExpDataStruct, first_map_with_electrons: bool):
         info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
         map_index = 0
         if how == 'individual':
@@ -252,3 +265,4 @@ class VD2Treatment(QObject):
         y1 = int(times_l*.2)
         y2 = int(times_l*.8)
         return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
+

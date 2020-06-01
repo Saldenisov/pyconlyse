@@ -7,8 +7,10 @@ Created on 15.11.2019
 import os
 import logging
 from pathlib import Path
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QDialogButtonBox, QErrorMessage
+from PyQt5.QtCore import QModelIndex
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from gui.models.ClientGUIModels import VD2TreatmentModel
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
                                                                FuncGetProjectManagerControllerStateInput)
@@ -30,7 +32,7 @@ class SuperClientGUIcontroller():
         self.name = 'SuperClientGUI:controller: ' + get_local_ip()
         self.services_views = {}
         info_msg(self, 'INITIALIZING')
-        self.model = in_model
+        self.model= in_model
         self.device = self.model.superuser
         self.view = SuperUserView(self, in_model=self.model)
         self.view.show()
@@ -149,10 +151,10 @@ class StepMotorsController:
 class VD2TreatmentController:
 
     def __init__(self, in_model):
-        self.logger = logging.getLogger('VD2Treatment')
-        self.name = 'VD2Treatment:controller'
+        self.logger = logging.getLogger('VD2TreatmentModel')
+        self.name = 'VD2TreatmentModel:controller'
         info_msg(self, 'INITIALIZING')
-        self.model = in_model
+        self.model: VD2TreatmentModel = in_model
         self.view = VD2TreatmentView(self)
         self.view.show()
 
@@ -168,20 +170,22 @@ class VD2TreatmentController:
             how = 'individual'
         elif self.view.ui.radiobutton_averaged:
             how = 'averaged'
+
+        if 'ABS+BASE+NOISE' in exp:
+            exp_data_structure = self.model.ExpDataStruct.ABS_BASE_NOISE
+        elif 'HIS+Noise' in exp:
+            exp_data_structure = self.model.ExpDataStruct.HIS_NOISE
+        elif 'HIS' in exp:
+            exp_data_structure = self.model.ExpDataStruct.HIS
+
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
-        self.model.calc_abs(exp, how, first_map_with_electrons)
+        self.model.calc_abs(exp, how, exp_data_structure, first_map_with_electrons)
 
     def data_cursor_update(self, eclick, erelease):
         self.model.update_data_cursors(eclick.xdata,
                                        erelease.xdata,
                                        eclick.ydata,
                                        erelease.ydata)
-
-    def slider_kinetics(self, index_slider, start, end):
-        self.model.update_data_cursors(y1=start, y2=end, pixels=True)
-
-    def slider_spectra(self, index_slider, start, end):
-        self.model.update_data_cursors(x1=start, x2=end, pixels=True)
 
     def save(self):
         self.model.save()
@@ -190,19 +194,33 @@ class VD2TreatmentController:
         a = self.view.ui.lineedit_save_file_name.text()
         self.model.save_file_path_change(a)
 
-    def set_data(self, signal: str):
+    def set_path(self, index: QModelIndex, exp_data_type: VD2TreatmentModel.DataTypes):
         try:
             x = self.view.ui.tree.selectedIndexes()
-            file_path = Path(self.view.ui.tree.model().filePath(x[0]))
 
-            if file_path.is_file() and file_path.exists():
-                if signal == 'datastructures':
-                    self.model.add_data_path(file_path)
-                elif signal == 'noise':
-                    self.model.add_noise_path(file_path)
+            if len(x) > 2 * 4:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Critical)
+                msg.setText("Error")
+                msg.setInformativeText('Only one or two files can be selected at once.')
+                msg.setWindowTitle("Error")
+                msg.exec_()
+            elif len(x) == 1 * 4:
+                file_path = Path(self.view.ui.tree.model().filePath(x[0]))
+                if file_path.is_file() and file_path.exists():
+                    self.model.add_data_path(file_path, exp_data_type)
+            elif len(x) == 2 * 4:
+                pass
+
 
         except Exception as e:
             self.logger.error(f'Error in picking files from Tree {e}')
+
+    def slider_kinetics(self, index_slider, start, end):
+        self.model.update_data_cursors(y1=start, y2=end, pixels=True)
+
+    def slider_spectra(self, index_slider, start, end):
+        self.model.update_data_cursors(x1=start, x2=end, pixels=True)
 
     def spinbox_map_selector_change(self):
         value = int(self.view.ui.spinbox.value())

@@ -6,13 +6,18 @@ Created on 01.04.2020
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar
+from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar, QMenu
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
 from datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 from gui.views.ui import Ui_GraphVD2Window
+from gui.models.ClientGUIModels import VD2TreatmentModel
 from utilities.myfunc import info_msg
 
 module_logger = logging.getLogger(__name__)
+
+
+ExpDataStruct: VD2TreatmentModel.ExpDataStruct = VD2TreatmentModel.ExpDataStruct
+DataTypes: VD2TreatmentModel.DataTypes = VD2TreatmentModel.DataTypes
 
 
 class VD2TreatmentView(QMainWindow):
@@ -20,8 +25,8 @@ class VD2TreatmentView(QMainWindow):
     def __init__(self, in_controller, parent=None):
         super().__init__(parent)
         self.controller = in_controller
-        self.name = f'VD2Treatment:view'
-        self.logger = logging.getLogger("VD2Treatment:view")
+        self.name = f'VD2TreatmentModel:view'
+        self.logger = logging.getLogger("VD2TreatmentModel:view")
         info_msg(self, 'INITIALIZING')
 
         self.ui = Ui_GraphVD2Window()
@@ -38,14 +43,61 @@ class VD2TreatmentView(QMainWindow):
         self.ui.button_play.clicked.connect(self.button_play_maps)
         self.ui.button_right.clicked.connect(partial(self.map_step, 1))
         self.ui.button_save_result.clicked.connect(self.controller.save)
-        self.ui.button_set_data.clicked.connect(partial(self.controller.set_data, 'datastructures'))
-        self.ui.button_set_noise.clicked.connect(partial(self.controller.set_data, 'noise'))
         self.ui.kinetics_slider.ValueChanged.connect(self.controller.slider_kinetics)
         self.ui.spectrum_slider.ValueChanged.connect(self.controller.slider_spectra)
         self.ui.lineedit_save_file_name.textChanged.connect(self.controller.save_file_path_changed)
         self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)
-
+        self.ui.combobox_type_exp.currentIndexChanged.connect(self._combobox_index_change)
+        self.ui.tree.customContextMenuRequested.connect(self.menuContextTree)
         info_msg(self, 'INITIALIZED')
+
+    def menuContextTree(self, point):
+        # Infos about the node selected.
+        index = self.ui.tree.indexAt(point)
+        if not index.isValid():
+            return
+
+        # We build the menu.
+        menu = QMenu()
+        if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
+            action_set_ABS = menu.addAction("set ABS HIS or IMG")
+            action_set_BASE = menu.addAction("set BASE HIS or IMG")
+            action_set_NOISE = menu.addAction("set NOISE HIS or IMG")
+        elif ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.HIS_NOISE:
+            action_set_DATA_HIS = menu.addAction("set ABS+BASE HIS")
+            action_set_NOISE= menu.addAction("set NOISE HIS or IMG")
+        elif ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.HIS:
+            action_set_DATA_NOISE_HIS = menu.addAction("set ABS+BASE+NOISE HIS")
+
+        action = menu.exec_(self.ui.tree.mapToGlobal(point))
+
+        if action:
+            if action == action_set_NOISE:
+                self.controller.set_path(index, DataTypes.NOISE)
+            elif action == action_set_ABS:
+                self.controller.set_path(index, DataTypes.ABS)
+            elif action == action_set_BASE:
+                self.controller.set_path(index, DataTypes.BASE)
+            elif action == action_set_DATA_HIS:
+                self.controller.set_path(index, DataTypes.ABS_BASE)
+            elif action == action_set_DATA_NOISE_HIS:
+                self.controller.set_path(index, DataTypes.ABS_BASE_NOISE)
+
+
+
+
+    def _combobox_index_change(self, index):
+        if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
+            self.ui.radiobutton_individual.setDisabled(True)
+            self.ui.radiobutton_averaged.setChecked(True)
+            self.ui.button_average_noise.setDisabled(True)
+            self.ui.checkbox_first_img_with_pulse.setDisabled(True)
+        else:
+            self.ui.radiobutton_individual.setDisabled(False)
+            self.ui.checkbox_first_img_with_pulse.setDisabled(False)
+            self.ui.radiobutton_individual.setChecked(True)
+            self.ui.button_average_noise.setDisabled(False)
+
 
     def map_step(self, dir: int):
         value_now = int(self.ui.spinbox.value())
@@ -77,7 +129,6 @@ class VD2TreatmentView(QMainWindow):
                 widget.setText(value)
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)
-
 
     def modelIsChanged(self, measurement: Measurement, map_index: int, critical_info: CriticalInfoHamamatsu = None,
                        new=False, cursors: Cursors2D = None):

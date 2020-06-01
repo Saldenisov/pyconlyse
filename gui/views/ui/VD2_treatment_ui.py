@@ -14,6 +14,7 @@ from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit, QRad
 from matplotlib.widgets import Cursor, RectangleSelector
 from gui.views.matplotlib_canvas import DataCanvas, KineticsCanvas, SpectrumCanvas
 from gui.views import RangeSlider
+from gui.models.ClientGUIModels import VD2TreatmentModel
 
 
 class Ui_GraphVD2Window(object):
@@ -53,10 +54,7 @@ class Ui_GraphVD2Window(object):
 
     def main_settings(self):
         # Buttons
-        self.button_set_data = QPushButton('Set datastructures HIS')
-        self.button_set_data.setMaximumWidth(100)
-        self.button_set_noise = QPushButton('Set noise HIS')
-        self.button_set_noise.setMaximumWidth(100)
+
         self.button_calc = QPushButton('Calculate Abs')
         self.button_calc.setMaximumWidth(100)
         self.button_save_result = QPushButton('Save')
@@ -70,16 +68,15 @@ class Ui_GraphVD2Window(object):
         self.combobox_type_exp = QComboBox()
         self.combobox_type_exp.setMaximumWidth(150)
 
-        self.combobox_type_exp.addItem('HIS+Noise')
-        self.combobox_type_exp.addItem('HIS')
-        self.combobox_type_exp.addItem('ABS+BASE+NOISE')
-        self.combobox_type_exp.setCurrentIndex(0)
+        for item in VD2TreatmentModel.ExpDataStruct:
+            if item.value != 'NOISE':
+                self.combobox_type_exp.addItem(item.value)
+
+        self.combobox_type_exp.setCurrentIndex(1)
 
         # Checkboxes
         self.checkbox_first_img_with_pulse = QCheckBox('First with Pulse?')
         self.checkbox_first_img_with_pulse.setChecked(True)
-        self.checkbox_noise_averaged = QCheckBox('Noise averaged?')
-        self.checkbox_noise_averaged.setChecked(False)
 
         # GroupBoxes
         groupbox_control_buttons = QGroupBox()
@@ -87,8 +84,12 @@ class Ui_GraphVD2Window(object):
 
         # LineEdit
         self.lineedit_data_set = QLineEdit()
-        self.lineedit_noise_set  = QLineEdit()
-        self.lineedit_save_file_name  = QLineEdit()
+        self.lineedit_noise_set = QLineEdit()
+        self.lineedit_save_file_name = QLineEdit()
+
+        # Labels
+        self.label_data = QtWidgets.QLabel('Data')
+        self.label_noise = QtWidgets.QLabel('Noise')
 
         # ProgressBars
         self.progressbar_calc = QProgressBar()
@@ -110,6 +111,7 @@ class Ui_GraphVD2Window(object):
 
         # SpinBoxes
         self.spinbox = QSpinBox()
+        self.spinbox.setMaximumSize(150, 50)
         self.spinbox.setValue(0)
 
         # Tabs
@@ -137,6 +139,7 @@ class Ui_GraphVD2Window(object):
         self.tree_model.setRootPath(root)
         self.tree.setRootIndex(self.tree_model.index(root))
         self.tree.setSelectionMode(QtWidgets.QTreeView.ExtendedSelection)
+        self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
         # Layouts
         layout_save = QGridLayout()
@@ -157,24 +160,24 @@ class Ui_GraphVD2Window(object):
         layout_type_exp.addWidget(self.checkbox_first_img_with_pulse)
         layout_type_exp.addWidget(self.radiobutton_individual)
         layout_type_exp.addWidget(self.radiobutton_averaged)
+        layout_type_exp.addWidget(self.button_average_noise)
         layout_type_exp.addWidget(self.button_calc)
+
         layout_type_exp.addWidget(self.button_save_result)
         #
 
         layout_noise = QtWidgets.QHBoxLayout()
         #
-        layout_noise.addWidget(self.button_set_noise)
-        layout_noise.addWidget(self.button_average_noise)
-        layout_noise_param = QtWidgets.QVBoxLayout()
+        layout_noise_param = QtWidgets.QHBoxLayout()
+        layout_noise_param.addWidget(self.label_noise)
         layout_noise_param.addWidget(self.lineedit_noise_set)
-        layout_noise_param.addWidget(self.checkbox_noise_averaged)
         layout_noise.addLayout(layout_noise_param)
         #
 
         layout_control_buttons = QtWidgets.QVBoxLayout()
         #
         layout_data_buttons = QtWidgets.QHBoxLayout()
-        layout_data_buttons.addWidget(self.button_set_data)
+        layout_data_buttons.addWidget(self.label_data)
         layout_data_buttons.addWidget(self.lineedit_data_set)
         layout_control_buttons.addLayout(layout_data_buttons)
         layout_control_buttons.addLayout(layout_noise)
