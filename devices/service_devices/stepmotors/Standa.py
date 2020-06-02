@@ -101,7 +101,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         # This is device search and enumeration with probing. It gives more information about soft.
         probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
         # TODO: change to database readings
-        enum_hints = b"addr=192.168.0.1, 129.175.100.137"
+        enum_hints = b"addr=129.175.100.137, 192.168.0.1"
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         if not self._enumerated:
             self._devenum = lib.enumerate_devices(probe_flags, enum_hints)

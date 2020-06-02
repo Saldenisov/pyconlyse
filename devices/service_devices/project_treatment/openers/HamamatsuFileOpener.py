@@ -7,10 +7,12 @@ Created on 17 avr. 2015
 
 import numpy as np
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Union, Tuple
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
+from utilities.myfunc import error_logger
 
 
 @dataclass
@@ -82,15 +84,15 @@ class HamamatsuFileOpener(Opener):
                                          timedelays_length=timedelays_length, wavelengths_length=wavelengths_length,
                                          timedelays=timedelays, wavelengths=wavelengths)
         except Exception as e:
-            raise
+            error_logger(self, self.read_critical_info, e)
 
-    def read_map(self, filepath: Path, map_index=0) -> Union[Hamamatsu, Tuple[bool, str]]:
+    @lru_cache(maxsize=50)
+    def read_map(self, file_path: Path, map_index=0) -> Union[Hamamatsu, Tuple[bool, str]]:
         res = True
-        if filepath not in self.paths:
-            res, comments = self.fill_critical_info(filepath)
-
+        if file_path not in self.paths:
+            res, comments = self.fill_critical_info(file_path)
         if res:
-            info: CriticalInfoHamamatsu = self.paths[filepath]
+            info: CriticalInfoHamamatsu = self.paths[file_path]
             size_data_bytes = info.bytes_per_point * info.timedelays_length * info.wavelengths_length
 
             if (map_index + 1) >= info.number_maps:
@@ -98,7 +100,7 @@ class HamamatsuFileOpener(Opener):
             elif map_index < 0:
                 map_index = 0
 
-            with open(filepath, 'rb') as file:
+            with open(file_path, 'rb') as file:
                 file.seek(info.data_pos + 64 * map_index + map_index * size_data_bytes, 0)  # Shift pos
                 data_bytearray = bytearray(file.read(size_data_bytes))
 
@@ -115,7 +117,7 @@ class HamamatsuFileOpener(Opener):
                 raise e
             data_array = np.frombuffer(data_bytearray, dtype=number_type)
             data = data_array.reshape(info.timedelays_length, info.wavelengths_length)
-            return Hamamatsu(type=filepath.suffix, comments=info.header, author='', timestamp=filepath.stat().st_mtime,
+            return Hamamatsu(type=file_path.suffix, comments=info.header, author='', timestamp=file_path.stat().st_mtime,
                              data=data, wavelengths=info.wavelengths, timedelays=info.timedelays,
                              time_scale=info.scaling_yunit)
         else:

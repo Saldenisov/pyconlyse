@@ -67,6 +67,7 @@ class Ui_GraphVD2Window(object):
         # Comboboxes
         self.combobox_type_exp = QComboBox()
         self.combobox_type_exp.setMaximumWidth(150)
+        self.combobox_files_selected = QComboBox()
 
         for item in VD2TreatmentModel.ExpDataStruct:
             if item.value != 'NOISE':
@@ -179,6 +180,8 @@ class Ui_GraphVD2Window(object):
         layout_data_buttons = QtWidgets.QHBoxLayout()
         layout_data_buttons.addWidget(self.label_data)
         layout_data_buttons.addWidget(self.lineedit_data_set)
+
+        layout_control_buttons.addWidget(self.combobox_files_selected)
         layout_control_buttons.addLayout(layout_data_buttons)
         layout_control_buttons.addLayout(layout_noise)
         layout_control_buttons.addLayout(layout_type_exp)

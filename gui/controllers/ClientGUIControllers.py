@@ -182,10 +182,11 @@ class VD2TreatmentController:
         self.model.calc_abs(exp, how, exp_data_structure, first_map_with_electrons)
 
     def data_cursor_update(self, eclick, erelease):
-        self.model.update_data_cursors(eclick.xdata,
-                                       erelease.xdata,
-                                       eclick.ydata,
-                                       erelease.ydata)
+        data_path = Path(self.view.ui.combobox_files_selected.currentText())
+        if data_path.is_file():
+            self.model.update_data_cursors(data_path, eclick.xdata, erelease.xdata, eclick.ydata, erelease.ydata)
+        else:
+            error_logger(self, self.data_cursor_update, f'Data path is not a file')
 
     def save(self):
         self.model.save()
@@ -196,23 +197,9 @@ class VD2TreatmentController:
 
     def set_path(self, index: QModelIndex, exp_data_type: VD2TreatmentModel.DataTypes):
         try:
-            x = self.view.ui.tree.selectedIndexes()
-
-            if len(x) > 2 * 4:
-                msg = QMessageBox()
-                msg.setIcon(QMessageBox.Critical)
-                msg.setText("Error")
-                msg.setInformativeText('Only one or two files can be selected at once.')
-                msg.setWindowTitle("Error")
-                msg.exec_()
-            elif len(x) == 1 * 4:
-                file_path = Path(self.view.ui.tree.model().filePath(x[0]))
-                if file_path.is_file() and file_path.exists():
-                    self.model.add_data_path(file_path, exp_data_type)
-            elif len(x) == 2 * 4:
-                pass
-
-
+            file_path = Path(self.view.ui.tree.model().filePath(index))
+            if file_path.is_file() and file_path.exists():
+                self.model.add_data_path(file_path, exp_data_type)
         except Exception as e:
             self.logger.error(f'Error in picking files from Tree {e}')
 

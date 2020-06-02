@@ -83,9 +83,6 @@ class VD2TreatmentView(QMainWindow):
             elif action == action_set_DATA_NOISE_HIS:
                 self.controller.set_path(index, DataTypes.ABS_BASE_NOISE)
 
-
-
-
     def _combobox_index_change(self, index):
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             self.ui.radiobutton_individual.setDisabled(True)
@@ -97,7 +94,6 @@ class VD2TreatmentView(QMainWindow):
             self.ui.checkbox_first_img_with_pulse.setDisabled(False)
             self.ui.radiobutton_individual.setChecked(True)
             self.ui.button_average_noise.setDisabled(False)
-
 
     def map_step(self, dir: int):
         value_now = int(self.ui.spinbox.value())
@@ -127,6 +123,7 @@ class VD2TreatmentView(QMainWindow):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
+                self.ui.combobox_files_selected.addItem(value)
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)
 

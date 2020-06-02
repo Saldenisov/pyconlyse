@@ -10,6 +10,7 @@ import numpy as np
 from abc import abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Union, Tuple
 from datastructures.mes_independent.measurments_dataclass import Measurement
@@ -61,6 +62,7 @@ class Opener:
         pass
 
     @abstractmethod
+    @lru_cache(maxsize=50, typed=True)
     def read_map(self, filepath: Path, map_index=0) -> Union[Measurement, Tuple[bool, str]]:
         pass
 

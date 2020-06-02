@@ -6,11 +6,12 @@ Created on 17.11.2019
 import logging
 import numpy as np
 from datetime import datetime
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Union
 from enum import Enum, auto
 from PyQt5.QtCore import QObject, pyqtSignal
-from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from communication.messaging.messages import MessageInt, MessageExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
@@ -94,30 +95,23 @@ class VD2TreatmentModel(QObject):
         self.ui_observers = []
         self.opener = HamamatsuFileOpener(logger=self.logger)
 
-        self.data_path: Path = None
-        self.noise_path: Path = None
+        self.paths: Dict[VD2TreatmentModel.DataTypes, Path] = {}
         self.noise_averaged = False
         self.noise_averaged_data: np.ndarray = None
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
 
-    def add_data_path(self, file_path: Path, exp_data_type: VD2TreatmentModel.DataTypes):
+    def add_data_path(self, file_path: Path, exp_data_type: DataTypes):
         res, comments = self.opener.fill_critical_info(file_path)
         if res:
-            self.data_path = file_path
-            self.read_data(new=True)
-            self.save_path: Path = file_path.parent / f'{file_path.stem}.dat'
-            self.notify_ui_observers({'lineedit_data_set': str(file_path),
-                                      'lineedit_save_file_name': str(self.save_path)})
-
-    def add_noise_path(self, file_path: Path):
-        res, comments = self.opener.fill_critical_info(file_path)
-        if res:
-            self.noise_path = file_path
-            self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
-            self.noise_averaged_data = None
-            self.noise_averaged = False
-            self.notify_ui_observers({'checkbox_noise_averaged': False})
+            self.paths[exp_data_type] = file_path
+            if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
+                self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
+            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE, VD2TreatmentModel.DataTypes.ABS_BASE_NOISE] :
+                self.save_path: Path = file_path.parent / f'{file_path.stem}.dat'
+                self.notify_ui_observers({'lineedit_data_set': str(file_path),
+                                          'lineedit_save_file_name': str(self.save_path)})
+            self.read_data(file_path, new=True)
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
@@ -193,16 +187,16 @@ class VD2TreatmentModel(QObject):
     def remove_observer(self, inObserver):
         self.measurements_observers.remove(inObserver)
 
-    def read_data(self, map_index=0, new=False):
-        measurement = self.opener.read_map(self.data_path, map_index)
+    def read_data(self, data_path: Path, map_index=0, new=False):
+        measurement = self.opener.read_map(data_path, map_index)
         if not isinstance(measurement, Measurement):
             measurement = None
         if new:
-            self.cursors_data = self.make_default_cursor()
+            self.cursors_data = self.make_default_cursor(data_path)
             cursors = self.cursors_data
         else:
             cursors = None
-        self.notify_measurement_observers(measurement, map_index, self.opener.paths[self.data_path], new=new,
+        self.notify_measurement_observers(measurement, map_index, self.opener.paths[data_path], new=new,
                                           cursors=cursors)
 
     def save(self):
@@ -225,8 +219,8 @@ class VD2TreatmentModel(QObject):
             self.logger.error(e)
             self.notify_ui_observers({'lineedit_save_file_name': str(self.save_path)})
 
-    def update_data_cursors(self, x1=None, x2=None, y1=None, y2=None, pixels=False):
-        info: Hamamatsu = self.opener.paths[self.data_path]
+    def update_data_cursors(self, data_path: Path, x1=None, x2=None, y1=None, y2=None, pixels=False):
+        info: Hamamatsu = self.opener.paths[data_path]
         waves = info.wavelengths
         times = info.timedelays
         if not pixels:
@@ -254,8 +248,8 @@ class VD2TreatmentModel(QObject):
         self.cursors_data = cursors
         self.notify_measurement_observers(cursors=cursors)
 
-    def make_default_cursor(self) -> Cursors2D:
-        info: Hamamatsu = self.opener.paths[self.data_path]
+    def make_default_cursor(self, data_path: Path) -> Cursors2D:
+        info: Hamamatsu = self.opener.paths[data_path]
         waves_l = len(info.wavelengths)
         times_l = len(info.timedelays)
         waves = info.wavelengths
