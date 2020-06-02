@@ -49,7 +49,25 @@ class VD2TreatmentView(QMainWindow):
         self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)
         self.ui.combobox_type_exp.currentIndexChanged.connect(self._combobox_index_change)
         self.ui.tree.customContextMenuRequested.connect(self.menuContextTree)
+        self.ui.combobox_files_selected.customContextMenuRequested.connect(self.menuContextComboBoxFiles)
+        self.ui.combobox_files_selected.currentIndexChanged.connect(self.controller.combobox_files_changed)
+
         info_msg(self, 'INITIALIZED')
+
+    def menuContextComboBoxFiles(self, point):
+        menu = QMenu()
+        action_remove_this = menu.addAction('Remove This')
+        action_remove_all = menu.addAction('Remove All')
+
+        action = menu.exec_(self.ui.combobox_files_selected.mapToGlobal(point))
+
+        if action:
+            if action == action_remove_all:
+                self.ui.combobox_files_selected.clear()
+            elif action == action_remove_this:
+                idx = self.ui.combobox_files_selected.currentIndex()
+                self.ui.combobox_files_selected.removeItem(idx)
+
 
     def menuContextTree(self, point):
         # Infos about the node selected.
@@ -59,6 +77,8 @@ class VD2TreatmentView(QMainWindow):
 
         # We build the menu.
         menu = QMenu()
+        action_set_ABS=action_set_BASE=action_set_NOISE=action_set_DATA_HIS=action_set_NOISE=action_set_DATA_NOISE_HIS=\
+            None
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             action_set_ABS = menu.addAction("set ABS HIS or IMG")
             action_set_BASE = menu.addAction("set BASE HIS or IMG")
@@ -83,7 +103,7 @@ class VD2TreatmentView(QMainWindow):
             elif action == action_set_DATA_NOISE_HIS:
                 self.controller.set_path(index, DataTypes.ABS_BASE_NOISE)
 
-    def _combobox_index_change(self, index):
+    def _combobox_index_change(self):
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             self.ui.radiobutton_individual.setDisabled(True)
             self.ui.radiobutton_averaged.setChecked(True)
@@ -101,7 +121,7 @@ class VD2TreatmentView(QMainWindow):
 
     def f(self):
         from time import sleep
-        for i in range(1,500):
+        for i in range(1, 500):
             self.ui.spinbox.setValue(i)
             sleep(0.2)
 
@@ -123,7 +143,15 @@ class VD2TreatmentView(QMainWindow):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
                 widget.setText(value)
-                self.ui.combobox_files_selected.addItem(value)
+                chk = []
+                for i in range(self.ui.combobox_files_selected.count()):
+                    if value != self.ui.combobox_files_selected.itemText(i):
+                        chk.append(True)
+                    else:
+                        chk.append(False)
+                        break
+                if all(chk):
+                    self.ui.combobox_files_selected.addItem(value)
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)
 

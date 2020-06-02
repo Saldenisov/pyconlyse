@@ -83,6 +83,7 @@ class VD2TreatmentModel(QObject):
         NOISE = 'NOISE'
         ABS_BASE = 'ABS+BASE'
         ABS_BASE_NOISE = 'ABS+BASE+NOISE'
+        SAVE = 'SAVE'
 
     def __init__(self, app_folder: Path, parameters: Dict[str, Any]={}):
         super().__init__(parent=None)
@@ -107,10 +108,12 @@ class VD2TreatmentModel(QObject):
             self.paths[exp_data_type] = file_path
             if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
                 self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
-            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE, VD2TreatmentModel.DataTypes.ABS_BASE_NOISE] :
-                self.save_path: Path = file_path.parent / f'{file_path.stem}.dat'
+            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
+                                   VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                save_path: Path = file_path.parent / f'{file_path.stem}.dat'
+                self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
                 self.notify_ui_observers({'lineedit_data_set': str(file_path),
-                                          'lineedit_save_file_name': str(self.save_path)})
+                                          'lineedit_save_file_name': str(save_path)})
             self.read_data(file_path, new=True)
 
     def add_measurement_observer(self, inObserver):

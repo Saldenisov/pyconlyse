@@ -181,6 +181,15 @@ class VD2TreatmentController:
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
         self.model.calc_abs(exp, how, exp_data_structure, first_map_with_electrons)
 
+    def combobox_files_changed(self):
+        file_path = Path(self.view.ui.combobox_files_selected.currentText())
+        if file_path.is_file():
+            if self.view.ui.data_slider.value() != 0:
+                self.view.ui.data_slider.setValue(0)
+            else:
+                self.slider_map_selector_change()
+
+
     def data_cursor_update(self, eclick, erelease):
         data_path = Path(self.view.ui.combobox_files_selected.currentText())
         if data_path.is_file():
@@ -215,5 +224,7 @@ class VD2TreatmentController:
 
     def slider_map_selector_change(self):
         value = int(self.view.ui.data_slider.value())
-        self.model.read_data(value)
-        self.view.ui.spinbox.setValue(value)
+        data_path = Path(self.view.ui.combobox_files_selected.currentText())
+        if data_path.is_file():
+            self.model.read_data(data_path, value)
+            self.view.ui.spinbox.setValue(value)

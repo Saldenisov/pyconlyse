@@ -68,6 +68,7 @@ class Ui_GraphVD2Window(object):
         self.combobox_type_exp = QComboBox()
         self.combobox_type_exp.setMaximumWidth(150)
         self.combobox_files_selected = QComboBox()
+        self.combobox_files_selected.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
         for item in VD2TreatmentModel.ExpDataStruct:
             if item.value != 'NOISE':
