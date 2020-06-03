@@ -97,7 +97,6 @@ class VD2TreatmentModel(QObject):
         self.opener = HamamatsuFileOpener(logger=self.logger)
 
         self.paths: Dict[VD2TreatmentModel.DataTypes, Path] = {}
-        self.noise_averaged = False
         self.noise_averaged_data: np.ndarray = None
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
@@ -120,14 +119,13 @@ class VD2TreatmentModel(QObject):
         self.measurements_observers.append(inObserver)
 
     def average_noise(self):
-        if self.noise_path:
-            info: CriticalInfoHamamatsu = self.opener.paths[self.noise_path]
+        if self.paths[VD2TreatmentModel.DataTypes.NOISE]:
+            noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+            info: CriticalInfoHamamatsu = self.opener.paths[noise_path]
             data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
-            for measurement in self.opener.give_all_maps(self.noise_path):
+            for measurement in self.opener.give_all_maps(noise_path):
                 data_averaged += measurement.data
             self.noise_averaged_data = data_averaged / info.number_maps
-            self.noise_averaged = True
-            self.notify_ui_observers({'checkbox_noise_averaged': True})
 
     def calc_abs(self, exp: str, how: str, exp_data_structr: ExpDataStruct, first_map_with_electrons: bool):
         info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
