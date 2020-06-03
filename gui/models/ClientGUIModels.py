@@ -104,15 +104,24 @@ class VD2TreatmentModel(QObject):
     def add_data_path(self, file_path: Path, exp_data_type: DataTypes):
         res, comments = self.opener.fill_critical_info(file_path)
         if res:
+            file_paths = []
             self.paths[exp_data_type] = file_path
+
             if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
                 self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
             elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
                                    VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
                 save_path: Path = file_path.parent / f'{file_path.stem}.dat'
                 self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
-                self.notify_ui_observers({'lineedit_data_set': str(file_path),
-                                          'lineedit_save_file_name': str(save_path)})
+                self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
+
+            elif exp_data_type is VD2TreatmentModel.DataTypes.BASE:
+                if VD2TreatmentModel.DataTypes.ABS in self.paths:
+                    file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.ABS]))
+
+                file_paths.append(file_path)
+
+            self.notify_ui_observers({'lineedit_data_set': file_paths})
             self.read_data(file_path, new=True)
 
     def add_measurement_observer(self, inObserver):
@@ -123,8 +132,11 @@ class VD2TreatmentModel(QObject):
             noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
             info: CriticalInfoHamamatsu = self.opener.paths[noise_path]
             data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
+            map_index = 0
             for measurement in self.opener.give_all_maps(noise_path):
+                map_index += 1
                 data_averaged += measurement.data
+                self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps)})
             self.noise_averaged_data = data_averaged / info.number_maps
 
     def calc_abs(self, exp: str, how: str, exp_data_structr: ExpDataStruct, first_map_with_electrons: bool):

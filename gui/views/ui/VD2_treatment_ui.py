@@ -79,6 +79,8 @@ class Ui_GraphVD2Window(object):
         # Checkboxes
         self.checkbox_first_img_with_pulse = QCheckBox('First with Pulse?')
         self.checkbox_first_img_with_pulse.setChecked(True)
+        self.checkbox_noise_averaged = QCheckBox('Averaged')
+        self.checkbox_noise_averaged.setChecked(False)
 
         # GroupBoxes
         groupbox_control_buttons = QGroupBox()

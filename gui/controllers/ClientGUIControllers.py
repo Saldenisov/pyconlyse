@@ -189,7 +189,6 @@ class VD2TreatmentController:
             else:
                 self.slider_map_selector_change()
 
-
     def data_cursor_update(self, eclick, erelease):
         data_path = Path(self.view.ui.combobox_files_selected.currentText())
         if data_path.is_file():

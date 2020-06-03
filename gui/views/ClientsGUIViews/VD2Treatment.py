@@ -68,7 +68,6 @@ class VD2TreatmentView(QMainWindow):
                 idx = self.ui.combobox_files_selected.currentIndex()
                 self.ui.combobox_files_selected.removeItem(idx)
 
-
     def menuContextTree(self, point):
         # Infos about the node selected.
         index = self.ui.tree.indexAt(point)
@@ -107,13 +106,11 @@ class VD2TreatmentView(QMainWindow):
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             self.ui.radiobutton_individual.setDisabled(True)
             self.ui.radiobutton_averaged.setChecked(True)
-            self.ui.button_average_noise.setDisabled(True)
             self.ui.checkbox_first_img_with_pulse.setDisabled(True)
         else:
             self.ui.radiobutton_individual.setDisabled(False)
             self.ui.checkbox_first_img_with_pulse.setDisabled(False)
             self.ui.radiobutton_individual.setChecked(True)
-            self.ui.button_average_noise.setDisabled(False)
 
     def map_step(self, dir: int):
         value_now = int(self.ui.spinbox.value())
