@@ -12,16 +12,21 @@ figure = plt.figure()
 # conecting to the first available camera
 camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
 camera.Open()
-#camera.GainAuto.SetValue('Once')
-camera.GainRaw.SetValue(3)
-camera.BlackLevelRaw.SetValue(-128)
+camera.GainRaw.SetValue(0)
+camera.BlackLevelRaw.SetValue(0)
 camera.TriggerSource.SetValue("Line1")
-camera.TriggerMode.SetValue("On")
-camera.ExposureTimeAbs.SetValue(100000.0)
+#camera.TriggerMode.SetValue("On")
+camera.ExposureTimeAbs.SetValue(1000.0)
 camera.AcquisitionFrameRateEnable.SetValue(True)
 camera.AcquisitionFrameRateAbs.SetValue(5)
 camera.PixelFormat.SetValue("Mono8")
 converter = pylon.ImageFormatConverter()
+
+# Transport layer
+# Packet Size
+camera.GevSCPSPacketSize.SetValue(1500)
+# Inter-Packet Delay
+camera.GevSCPD.SetValue(1000)
 
 # converting to opencv bgr format
 converter.OutputPixelFormat = pylon.PixelType_Mono8
@@ -30,20 +35,21 @@ converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
 while camera.IsGrabbing():
     grabResult = camera.RetrieveResult(5000, pylon.TimeoutHandling_ThrowException)
-    # i=0
-
     if grabResult.GrabSucceeded():
-
+        print('Done')
         # Access the image data
         image = converter.Convert(grabResult)
-        img = imutils.resize(image.GetArray(), width=600, height=600)
+        img = imutils.resize(image.GetArray(), width=480, height=480)
         img = cv2.GaussianBlur(img, (3, 3), 0)
+
         # apply thresholding
-        ret, thresh = cv2.threshold(img, 100, 255, 0)
+
+        ret, thresh = cv2.threshold(img, 120, 255, 0)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # edge detection
         # apply Canny edge detection
-        tight = cv2.Canny(thresh, 127, 255)
+        tight = cv2.Canny(thresh, 60, 255)
 
         # calculate the centre of moment
         M = cv2.moments(tight)
@@ -56,15 +62,15 @@ while camera.IsGrabbing():
 
         # put text and highlight the center
         # Draw full segment lines
-        cv2.line(tight, (cX, 0), (cX, w), (150, 0, 0), 1)
-        cv2.line(tight, (0, cY), (h, cY), (150, 0, 0), 1)
-        cv2.circle(tight, (cX, cY), 5, (255, 255, 255), -1)
-        cv2.putText(tight, "centroid", (cX - 25, cY - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.putText(tight, f"X={cX}", (cX+10, cY-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.putText(tight, f"Y={cY}", (cX+70, cY+15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.line(img, (cX, 0), (cX, w), (150, 0, 0), 1)
+        cv2.line(img, (0, cY), (h, cY), (150, 0, 0), 1)
+        cv2.circle(img, (cX, cY), 5, (255, 255, 255), -1)
+        cv2.putText(img, "centroid", (cX - 25, cY - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.putText(img, f"X={cX}", (cX+10, cY-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.putText(img, f"Y={cY}", (cX+70, cY+15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.drawContours(img, contours, -1, (0, 255, 0), 1)
 
         cv2.imshow('Raw image', img)
-        cv2.imshow('Edge detection', tight)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
