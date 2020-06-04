@@ -276,8 +276,6 @@ class Ui_GraphVD2Window(object):
         self.splitter_main_vertical.addWidget(self.groupbox_Control)
         #
 
-
-
         self.layout_FORM.addWidget(self.datacanvas.toolbar)
         self.layout_FORM.addWidget(self.splitter_main_vertical)
 

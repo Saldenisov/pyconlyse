@@ -209,10 +209,12 @@ class VD2TreatmentController:
             error_logger(self, self.set_path, f'Error in picking files from Tree: {e}')
 
     def slider_kinetics(self, index_slider, start, end):
-        self.model.update_data_cursors(y1=start, y2=end, pixels=True)
+        data_path = Path(self.view.ui.combobox_files_selected.currentText())
+        self.model.update_data_cursors(data_path=data_path, y1=start, y2=end, pixels=True)
 
     def slider_spectra(self, index_slider, start, end):
-        self.model.update_data_cursors(x1=start, x2=end, pixels=True)
+        data_path = Path(self.view.ui.combobox_files_selected.currentText())
+        self.model.update_data_cursors(data_path=data_path, x1=start, x2=end, pixels=True)
 
     def spinbox_map_selector_change(self):
         value = int(self.view.ui.spinbox.value())

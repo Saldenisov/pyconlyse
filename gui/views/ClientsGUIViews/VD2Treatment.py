@@ -182,15 +182,19 @@ class VD2TreatmentView(QMainWindow):
             self.ui.datacanvas.draw_cursors(cursors=cursors, draw=True)
             self.ui.kineticscanvas.draw_cursors(cursors=cursors, draw=True)
             self.ui.spectracanvas.draw_cursors(cursors=cursors, draw=True)
+            self.update_kinetics_slider(cursors=cursors)
+            self.update_spectrum_slider(cursors=cursors)
 
-    def update_kinetics_slider(self, maxValue: int, cursors: Cursors2D):
-        self.ui.kinetics_slider.setMax(maxValue)
-        self.ui.kinetics_slider.setStart(cursors.y1[0])
-        self.ui.kinetics_slider.setEnd(cursors.y2[0])
+    def update_kinetics_slider(self, maxValue: int = -1, cursors: Cursors2D=None):
+        self.ui.kinetics_slider.setStart(int(cursors.y1[0]))
+        self.ui.kinetics_slider.setEnd(int(cursors.y2[0]))
+        if maxValue > 0:
+            self.ui.kinetics_slider.setMax(maxValue)
         self.ui.kinetics_slider.update_Sliderpos()
 
-    def update_spectrum_slider(self, maxValue: int, cursors: Cursors2D):
-        self.ui.spectrum_slider.setMax(maxValue)
-        self.ui.spectrum_slider.setStart(cursors.x1[0])
-        self.ui.spectrum_slider.setEnd(cursors.x2[0])
+    def update_spectrum_slider(self, maxValue: int = -1, cursors: Cursors2D = None):
+        self.ui.spectrum_slider.setStart(int(cursors.x1[0]))
+        self.ui.spectrum_slider.setEnd(int(cursors.x2[0]))
+        if maxValue > 0:
+            self.ui.spectrum_slider.setMax(maxValue)
         self.ui.spectrum_slider.update_Sliderpos()
