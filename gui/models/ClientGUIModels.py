@@ -16,7 +16,7 @@ from communication.messaging.messages import MessageInt, MessageExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
-                                                               OpenersTypes, OPENER_ACCRODANCE)
+                                                               Opener, OpenersTypes, OPENER_ACCRODANCE)
 from utilities.errors.myexceptions import MsgComNotKnown
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
@@ -109,8 +109,8 @@ class VD2TreatmentModel(QObject):
         self.ui_observers.append(inObserver)
 
     def add_data_path(self, file_path: Path, exp_data_type: DataTypes):
-        try:
-            opener = self.openers[OPENER_ACCRODANCE[file_path.suffix]]
+        opener = self.get_opener(file_path)
+        if opener:
             res, comments = opener.fill_critical_info(file_path)
             if res:
                 file_paths = []
@@ -145,9 +145,6 @@ class VD2TreatmentModel(QObject):
                     self.notify_ui_observers({'lineedit_data_set': file_paths})
 
                 self.read_data(file_path, new=True)
-        except KeyError as e:
-            self.show_error(self.add_data_path, e)
-
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
@@ -155,13 +152,14 @@ class VD2TreatmentModel(QObject):
     def average_noise(self) -> Tuple[bool, str]:
         info_msg(self, 'INFO', 'Averaging Noise')
         if VD2TreatmentModel.DataTypes.NOISE in self.paths:
-            try:
-                noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
-                self.noise_averaged_data = self.opener.average_map(noise_path, self._callback_average)
+            noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+            opener = self.get_opener(noise_path)
+            if opener:
+                self.noise_averaged_data = opener.average_map(noise_path, self._callback_average)
                 res, comments = True, ''
-            except Exception as e:
-                self.show_error(self.average_noise, e)
-                res, comments = False, f'Could not average NOISE: {e}'
+            else:
+                self.show_error(self.average_noise, f'Could not average NOISE')
+                res, comments = False, f'Could not average NOISE:'
         else:
             res, comments = False, f'First add noise path, before averaging'
         return res, comments
@@ -186,46 +184,50 @@ class VD2TreatmentModel(QObject):
                 res_local = False
             if res_local:
                 data_path = self.paths[VD2TreatmentModel.DataTypes.ABS_BASE]
-                info: CriticalInfoHamamatsu = self.opener.paths[data_path]
-                od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                if len(self.noise_averaged_data) < 2:
-                    res, comments = self.average_noise()
-                    if not res:
-                        self.show_error(self.calc_abs, comments)
-                if how == 'individual':
-                    for measurements in self.opener.give_pair_maps(data_path):
-                        map_index += 1
-                        if first_map_with_electrons:
-                            abs = measurements[0].data
-                            base = measurements[1].data
-                        else:
-                            abs = measurements[1].data
-                            base = measurements[0].data
-                        try:
-                            transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
-                            od_data += np.log10(transmission)
-                        except (RuntimeError, RuntimeWarning):
-                            pass
-                        self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                    od_data = od_data / info.number_maps
-                elif how == 'averaged':
-                    abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                    base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                    for measurements in self.opener.give_pair_maps(data_path):
-                        map_index += 1
-                        if first_map_with_electrons:
-                            abs = measurements[0].data
-                            base = measurements[1].data
-                        else:
-                            abs = measurements[1].data
-                            base = measurements[0].data
-                        abs_data += abs
-                        base_data += base
-                        self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                    abs_data = abs_data / info.number_maps
-                    base_data = base_data / info.number_maps
-                    od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
-                res = True
+                opener = self.get_opener(data_path)
+                if opener:
+                    info: CriticalInfoHamamatsu = opener.paths[data_path]
+                    od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                    if len(self.noise_averaged_data) < 2:
+                        res, comments = self.average_noise()
+                        if not res:
+                            self.show_error(self.calc_abs, comments)
+                    if how == 'individual':
+                        for measurements in opener.give_pair_maps(data_path):
+                            map_index += 1
+                            if first_map_with_electrons:
+                                abs = measurements[0].data
+                                base = measurements[1].data
+                            else:
+                                abs = measurements[1].data
+                                base = measurements[0].data
+                            try:
+                                transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
+                                od_data += np.log10(transmission)
+                            except (RuntimeError, RuntimeWarning):
+                                pass
+                            self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                        od_data = od_data / info.number_maps
+                    elif how == 'averaged':
+                        abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                        base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                        for measurements in opener.give_pair_maps(data_path):
+                            map_index += 1
+                            if first_map_with_electrons:
+                                abs = measurements[0].data
+                                base = measurements[1].data
+                            else:
+                                abs = measurements[1].data
+                                base = measurements[0].data
+                            abs_data += abs
+                            base_data += base
+                            self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                        abs_data = abs_data / info.number_maps
+                        base_data = base_data / info.number_maps
+                        od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                    res = True
+
+
         elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
             if VD2TreatmentModel.DataTypes.ABS not in self.paths:
                 self.show_error(self.calc_abs, f'Set ABS pass first.')
@@ -240,11 +242,13 @@ class VD2TreatmentModel(QObject):
                         self.show_error(self.calc_abs, comments)
                 abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
                 base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
-                info: CriticalInfoHamamatsu = self.opener.paths[abs_path]
-                abs_data = self.opener.average_map(file_path=abs_path, call_back_func=self._callback_average)
-                base_data = self.opener.average_map(file_path=base_path, call_back_func=self._callback_average)
-                od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
-                res = True
+                opener = self.get_opener(abs_path)
+                if opener:
+                    info: CriticalInfoHamamatsu = opener.paths[abs_path]
+                    abs_data = opener.average_map(file_path=abs_path, call_back_func=self._callback_average)
+                    base_data = opener.average_map(file_path=base_path, call_back_func=self._callback_average)
+                    od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                    res = True
 
         if res:
             self.od = Measurement(type='Pump-Probe', comments='', author='SD',
@@ -253,17 +257,28 @@ class VD2TreatmentModel(QObject):
                                   time_scale=info.scaling_yunit)
             self.notify_measurement_observers(self.od)
 
-    def make_default_cursor(self, data_path: Path) -> Cursors2D:
-        info: Hamamatsu = self.opener.paths[data_path]
-        waves_l = len(info.wavelengths)
-        times_l = len(info.timedelays)
-        waves = info.wavelengths
-        times = info.timedelays
-        x1 = int(waves_l*.2)
-        x2 = int(waves_l*.8)
-        y1 = int(times_l*.2)
-        y2 = int(times_l*.8)
-        return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
+    def get_opener(self, file_path) -> Union[Opener, None]:
+        opener = None
+        try:
+            opener = self.openers[OPENER_ACCRODANCE[file_path.suffix]]
+        except KeyError as e:
+            self.show_error(self.get_opener, e)
+        finally:
+            return opener
+
+    def make_default_cursor(self, file_path: Path) -> Cursors2D:
+        opener = self.get_opener(file_path)
+        if opener:
+            info: Hamamatsu = opener.paths[file_path]
+            waves_l = len(info.wavelengths)
+            times_l = len(info.timedelays)
+            waves = info.wavelengths
+            times = info.timedelays
+            x1 = int(waves_l * .2)
+            x2 = int(waves_l * .8)
+            y1 = int(times_l * .2)
+            y2 = int(times_l * .8)
+            return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
 
     def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
                                      critical_info: CriticalInfoHamamatsu = None, new=False,
@@ -278,25 +293,28 @@ class VD2TreatmentModel(QObject):
     def remove_observer(self, inObserver):
         self.measurements_observers.remove(inObserver)
 
-    def read_data(self, data_path: Path, map_index=0, new=False):
-        measurement, comments = self.opener.read_map(data_path, map_index)
-        if not isinstance(measurement, Measurement):
-            measurement = None
-            self.show_error(self.read_data, comments)
-        else:
-            if new:
-                self.cursors_data = self.make_default_cursor(data_path)
-                cursors = self.cursors_data
+    def read_data(self, file_path: Path, map_index=0, new=False):
+        opener = self.get_opener(file_path)
+        if opener:
+            measurement, comments = opener.read_map(file_path, map_index)
+            if not isinstance(measurement, Measurement):
+                measurement = None
+                self.show_error(self.read_data, comments)
             else:
-                cursors = None
-            self.notify_measurement_observers(measurement, map_index, self.opener.paths[data_path], new=new,
-                                              cursors=cursors)
+                if new:
+                    self.cursors_data = self.make_default_cursor(file_path)
+                    cursors = self.cursors_data
+                else:
+                    cursors = None
+                self.notify_measurement_observers(measurement, map_index, opener.paths[file_path], new=new,
+                                                  cursors=cursors)
 
     def save(self):
         try:
             data_path = self.paths[VD2TreatmentModel.DataTypes.DATA]
             save_path = self.paths[VD2TreatmentModel.DataTypes.SAVE]
-            info = self.opener.paths[data_path]
+            opener = self.get_opener(data_path)
+            info = opener.paths[data_path]
             data = self.od.data
             wavelengths = info.wavelengths
             final_data = np.vstack((wavelengths, data))
@@ -304,7 +322,7 @@ class VD2TreatmentModel(QObject):
             timedelays = np.insert(info.timedelays, 0, 0)
             final_data = np.vstack((timedelays, final_data))
             np.savetxt(save_path, final_data, delimiter='\t', fmt='%.4f')
-        except Exception as e:
+        except KeyError as e:
             self.show_error(self.save, e)
 
     def save_file_path_change(self, file_name: str):
@@ -321,31 +339,33 @@ class VD2TreatmentModel(QObject):
         error_dialog.exec_()
 
     def update_data_cursors(self, data_path: Path, x1=None, x2=None, y1=None, y2=None, pixels=False):
-        info: Hamamatsu = self.opener.paths[data_path]
-        waves = info.wavelengths
-        times = info.timedelays
-        if not pixels:
-            if x1 > x2:
-                temp = x2
-                x2 = x1
-                x1 = temp
-            if y1 > y2:
-                temp = y2
-                y2 = y1
-                y1 = temp
-            x1 = np.searchsorted(waves, x1)
-            y1 = np.searchsorted(times, y1)
-            x2 = np.searchsorted(waves, x2)
-            y2 = np.searchsorted(times, y2)
-        if not x1:
-            x1 = self.cursors_data.x1[0]
-        if not x2:
-            x2 = self.cursors_data.x2[0]
-        if not y1:
-            y1 = self.cursors_data.y1[0]
-        if not y2:
-            y2 = self.cursors_data.y2[0]
-        cursors = Cursors2D((x1, waves[x1]), (x2, waves[x2]), (y1, times[y1]), (y2, times[y2]))
-        self.cursors_data = cursors
-        self.notify_measurement_observers(cursors=cursors)
+        opener = self.get_opener(data_path)
+        if opener:
+            info: Hamamatsu = opener.paths[data_path]
+            waves = info.wavelengths
+            times = info.timedelays
+            if not pixels:
+                if x1 > x2:
+                    temp = x2
+                    x2 = x1
+                    x1 = temp
+                if y1 > y2:
+                    temp = y2
+                    y2 = y1
+                    y1 = temp
+                x1 = np.searchsorted(waves, x1)
+                y1 = np.searchsorted(times, y1)
+                x2 = np.searchsorted(waves, x2)
+                y2 = np.searchsorted(times, y2)
+            if not x1:
+                x1 = self.cursors_data.x1[0]
+            if not x2:
+                x2 = self.cursors_data.x2[0]
+            if not y1:
+                y1 = self.cursors_data.y1[0]
+            if not y2:
+                y2 = self.cursors_data.y2[0]
+            cursors = Cursors2D((x1, waves[x1]), (x2, waves[x2]), (y1, times[y1]), (y2, times[y2]))
+            self.cursors_data = cursors
+            self.notify_measurement_observers(cursors=cursors)
 
