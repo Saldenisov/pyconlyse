@@ -151,7 +151,7 @@ class StepMotorsController:
 class VD2TreatmentController:
 
     def __init__(self, in_model):
-        self.logger = logging.getLogger('VD2TreatmentModel')
+        self.logger = logging.getLogger('VD2Treatment')
         self.name = 'VD2TreatmentModel:controller'
         info_msg(self, 'INITIALIZING')
         self.model: VD2TreatmentModel = in_model
@@ -165,21 +165,14 @@ class VD2TreatmentController:
 
     def calc_abs(self):
         self.view.ui.progressbar_calc.setValue(0)
-        exp: str = self.view.ui.combobox_type_exp.currentText()
+        exp = VD2TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
         if self.view.ui.radiobutton_individual:
             how = 'individual'
         elif self.view.ui.radiobutton_averaged:
             how = 'averaged'
 
-        if 'ABS+BASE+NOISE' in exp:
-            exp_data_structure = self.model.ExpDataStruct.ABS_BASE_NOISE
-        elif 'HIS+Noise' in exp:
-            exp_data_structure = self.model.ExpDataStruct.HIS_NOISE
-        elif 'HIS' in exp:
-            exp_data_structure = self.model.ExpDataStruct.HIS
-
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
-        self.model.calc_abs(exp, how, exp_data_structure, first_map_with_electrons)
+        self.model.calc_abs(exp, how, first_map_with_electrons)
 
     def combobox_files_changed(self):
         file_path = Path(self.view.ui.combobox_files_selected.currentText())
@@ -209,7 +202,7 @@ class VD2TreatmentController:
             if file_path.is_file() and file_path.exists():
                 self.model.add_data_path(file_path, exp_data_type)
         except Exception as e:
-            self.logger.error(f'Error in picking files from Tree {e}')
+            error_logger(self, self.set_path, f'Error in picking files from Tree: {e}')
 
     def slider_kinetics(self, index_slider, start, end):
         self.model.update_data_cursors(y1=start, y2=end, pixels=True)

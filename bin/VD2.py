@@ -18,8 +18,8 @@ from logs_pack import initialize_logger
 
 
 def main():
-    logger = initialize_logger(app_folder / 'LOG', file_name="VD2TreatmentModel")
-    logger.info('Starting VD2TreatmentModel GUI...')
+    logger = initialize_logger(app_folder / 'LOG', file_name="VD2Treatment")
+    logger.info('Starting VD2Treatment GUI...')
     app = QApplication(sys.argv)
     VD2TreatmentController(VD2TreatmentModel(app_folder))
     app.exec_()

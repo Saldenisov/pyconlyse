@@ -103,7 +103,7 @@ class SwissKnifeTestSuite(GenicamTestCase):
             <SwissKnife Name="SwsPowersDbl">
                 <pVariable Name="SK0">Dbl0</pVariable>
                 <pVariable Name="SK1">Int0</pVariable>
-                <Formula>ln(lg(SK1*5)*e*exp(SK0*2))</Formula>
+                <Formula>ln(lg(SK1*5)*e*exp_type(SK0*2))</Formula>
             </SwissKnife>
     
             <SwissKnife Name="SwsNegSgnDbl">

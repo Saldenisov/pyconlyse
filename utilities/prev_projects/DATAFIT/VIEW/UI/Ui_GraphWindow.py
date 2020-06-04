@@ -125,7 +125,7 @@ class Ui_GraphWindow(object):
         else:
             self.combobox_Fit.addItem('1exp')
             self.combobox_Fit.addItem('2exp')
-            self.combobox_Fit.addItem('Stretched exp')
+            self.combobox_Fit.addItem('Stretched exp_type')
             self.combobox_Fit.addItem('DistFRET_Gaussian')
             self.combobox_Fit.setCurrentIndex(0)
             self.checkbox_pulse.setChecked(True)

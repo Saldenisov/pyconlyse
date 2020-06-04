@@ -25,8 +25,8 @@ class VD2TreatmentView(QMainWindow):
     def __init__(self, in_controller, parent=None):
         super().__init__(parent)
         self.controller = in_controller
-        self.name = f'VD2TreatmentModel:view'
-        self.logger = logging.getLogger("VD2TreatmentModel:view")
+        self.name = f'VD2Treatment:view'
+        self.logger = logging.getLogger('VD2Treatment')
         info_msg(self, 'INITIALIZING')
 
         self.ui = Ui_GraphVD2Window()
@@ -139,16 +139,20 @@ class VD2TreatmentView(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
-                widget.setText(value)
-                chk = []
-                for i in range(self.ui.combobox_files_selected.count()):
-                    if value != self.ui.combobox_files_selected.itemText(i):
-                        chk.append(True)
-                    else:
-                        chk.append(False)
-                        break
-                if all(chk):
-                    self.ui.combobox_files_selected.addItem(value)
+                if not isinstance(value, list):
+                    value = [value]
+                for val in value:
+                    chk = []
+                    for i in range(self.ui.combobox_files_selected.count()):
+                        if val != self.ui.combobox_files_selected.itemText(i):
+                            chk.append(True)
+                        else:
+                            chk.append(False)
+                            break
+                    if all(chk):
+                        self.ui.combobox_files_selected.addItem(val)
+                widget.setText('; '.join(value))
+
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)
 

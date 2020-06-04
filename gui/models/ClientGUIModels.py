@@ -88,8 +88,8 @@ class VD2TreatmentModel(QObject):
     def __init__(self, app_folder: Path, parameters: Dict[str, Any]={}):
         super().__init__(parent=None)
         self.app_folder = app_folder
-        self.name = 'VD2TreatmentModel:model: '
-        self.logger = module_logger
+        self.name = 'VD2Treatment:model: '
+        self.logger = logging.getLogger('VD2Treatment')
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
         self.measurements_observers = []
@@ -115,13 +115,21 @@ class VD2TreatmentModel(QObject):
                 self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
                 self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
 
+            if exp_data_type is VD2TreatmentModel.DataTypes.ABS:
+                file_paths.append(str(file_path))
+                if VD2TreatmentModel.DataTypes.BASE in self.paths:
+                    file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.BASE]))
+                self.notify_ui_observers({'lineedit_data_set': file_paths})
+
             elif exp_data_type is VD2TreatmentModel.DataTypes.BASE:
                 if VD2TreatmentModel.DataTypes.ABS in self.paths:
                     file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.ABS]))
+                file_paths.append(str(file_path))
+                self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-                file_paths.append(file_path)
 
-            self.notify_ui_observers({'lineedit_data_set': file_paths})
+
+
             self.read_data(file_path, new=True)
 
     def add_measurement_observer(self, inObserver):
@@ -139,50 +147,50 @@ class VD2TreatmentModel(QObject):
                 self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps)})
             self.noise_averaged_data = data_averaged / info.number_maps
 
-    def calc_abs(self, exp: str, how: str, exp_data_structr: ExpDataStruct, first_map_with_electrons: bool):
+    def calc_abs(self, exp_type: ExpDataStruct, how: str, first_map_with_electrons: bool):
         info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
+        od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
         map_index = 0
-        if how == 'individual':
-            od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-            for measurements in self.opener.give_pair_maps(self.data_path):
-                map_index += 1
-                if first_map_with_electrons:
-                    abs = measurements[0].data
-                    base = measurements[1].data
-                else:
-                    abs = measurements[1].data
-                    base = measurements[0].data
-                abs = (base-self.noise_averaged_data) / (abs - self.noise_averaged_data)
-                od_data += np.log10(abs)
-                self.progressbar.setValue(int(map_index/info.number_maps * 2 * 100))
-                #self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                if map_index == 10:  # TODO: this could be removed later
-                    # break
-                    pass
-            od_data = od_data / info.number_maps
-        elif how == 'averaged':
-            abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-            base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-            for measurements in self.opener.give_pair_maps(self.data_path):
-                map_index += 1
-                if first_map_with_electrons:
-                    abs = measurements[0].data
-                    base = measurements[1].data
-                else:
-                    abs = measurements[1].data
-                    base = measurements[0].data
-                abs_data += abs
-                base_data += base
-                #self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                self.progressbar.setValue(int(map_index / info.number_maps * 2 * 100))
-            abs_data = abs_data / info.number_maps
-            base_data = base_data / info.number_maps
-            od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+        if exp_type is VD2TreatmentModel.ExpDataStruct.HIS:
+            pass
+        elif exp_type is VD2TreatmentModel.ExpDataStruct.HIS_NOISE:
+            if how == 'individual':
+                for measurements in self.opener.give_pair_maps(self.data_path):
+                    map_index += 1
+                    if first_map_with_electrons:
+                        abs = measurements[0].data
+                        base = measurements[1].data
+                    else:
+                        abs = measurements[1].data
+                        base = measurements[0].data
+                    abs = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
+                    od_data += np.log10(abs)
+                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                od_data = od_data / info.number_maps
+            elif how == 'averaged':
+                abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                for measurements in self.opener.give_pair_maps(self.data_path):
+                    map_index += 1
+                    if first_map_with_electrons:
+                        abs = measurements[0].data
+                        base = measurements[1].data
+                    else:
+                        abs = measurements[1].data
+                        base = measurements[0].data
+                    abs_data += abs
+                    base_data += base
+                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                abs_data = abs_data / info.number_maps
+                base_data = base_data / info.number_maps
+                od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+        elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
+            pass
 
-        self.od = Measurement(type='Pump-Probe', comments='', author='SD',timestamp=datetime.timestamp(datetime.now()),
-                              data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
-                              time_scale=info.scaling_yunit)
-        self.notify_measurement_observers(self.od)
+        od = Measurement(type='Pump-Probe', comments='', author='SD', timestamp=datetime.timestamp(datetime.now()),
+                         data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
+                         time_scale=info.scaling_yunit)
+        self.notify_measurement_observers(od)
 
     def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
                                      critical_info: CriticalInfoHamamatsu = None, new=False,

@@ -38,6 +38,7 @@ class HamamatsuFileOpener(Opener):
     def __init__(self, **kwargs):
         super().__init__()
 
+    @lru_cache(maxsize=100)
     def read_critical_info(self, filepath: Path) -> CriticalInfoHamamatsu:
         try:
             pos = 0
@@ -86,7 +87,7 @@ class HamamatsuFileOpener(Opener):
         except Exception as e:
             error_logger(self, self.read_critical_info, e)
 
-    @lru_cache(maxsize=50)
+    @lru_cache(maxsize=200)
     def read_map(self, file_path: Path, map_index=0) -> Union[Hamamatsu, Tuple[bool, str]]:
         res = True
         if file_path not in self.paths:
