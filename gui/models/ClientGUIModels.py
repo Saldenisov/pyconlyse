@@ -15,7 +15,8 @@ from PyQt5.QtWidgets import QErrorMessage
 from communication.messaging.messages import MessageInt, MessageExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
-from devices.service_devices.project_treatment.openers import HamamatsuFileOpener, CriticalInfoHamamatsu
+from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
+                                                               OpenersTypes, OPENER_ACCRODANCE)
 from utilities.errors.myexceptions import MsgComNotKnown
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
@@ -96,47 +97,57 @@ class VD2TreatmentModel(QObject):
         self.parameters = parameters
         self.measurements_observers = []
         self.ui_observers = []
-        self.opener = HamamatsuFileOpener(logger=self.logger)
+        self.openers = {OpenersTypes.Hamamatsu: HamamatsuFileOpener(logger=self.logger),
+                        OpenersTypes.ASCII: ASCIIOpener(logger=self.logger)}
 
         self.paths: Dict[VD2TreatmentModel.DataTypes, Path] = {}
         self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
 
+    def add_ui_observer(self, inObserver):
+        self.ui_observers.append(inObserver)
+
     def add_data_path(self, file_path: Path, exp_data_type: DataTypes):
-        res, comments = self.opener.fill_critical_info(file_path)
-        if res:
-            file_paths = []
-            self.paths[exp_data_type] = file_path
+        try:
+            opener = self.openers[OPENER_ACCRODANCE[file_path.suffix]]
+            res, comments = opener.fill_critical_info(file_path)
+            if res:
+                file_paths = []
+                self.paths[exp_data_type] = file_path
 
-            if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
-                self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
-                self.notify_ui_observers({'lineedit_noise_set': [str(file_path)]})
+                if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
+                    self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
+                    self.notify_ui_observers({'lineedit_noise_set': [str(file_path)]})
 
-            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
-                                   VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
-                self.paths[VD2TreatmentModel.DataTypes.DATA] = file_path
-                save_path: Path = file_path.parent / f'{file_path.stem}.dat'
-                self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
-                self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
+                elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
+                                       VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                    self.paths[VD2TreatmentModel.DataTypes.DATA] = file_path
+                    save_path: Path = file_path.parent / f'{file_path.stem}.dat'
+                    self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
+                    self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
 
-            if exp_data_type is VD2TreatmentModel.DataTypes.ABS:
-                file_paths.append(str(file_path))
-                if VD2TreatmentModel.DataTypes.BASE in self.paths:
-                    file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.BASE]))
-                self.notify_ui_observers({'lineedit_data_set': file_paths})
+                if exp_data_type is VD2TreatmentModel.DataTypes.ABS:
+                    file_paths.append(str(file_path))
+                    if VD2TreatmentModel.DataTypes.BASE in self.paths:
+                        file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.BASE]))
+                    self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-            elif exp_data_type is VD2TreatmentModel.DataTypes.BASE:
-                if VD2TreatmentModel.DataTypes.ABS in self.paths:
-                    file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.ABS]))
-                file_paths.append(str(file_path))
-                self.notify_ui_observers({'lineedit_data_set': file_paths})
+                elif exp_data_type is VD2TreatmentModel.DataTypes.BASE:
+                    if VD2TreatmentModel.DataTypes.ABS in self.paths:
+                        file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.ABS]))
+                    file_paths.append(str(file_path))
+                    self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS_BASE, VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
-                file_paths.append(str(file_path))
-                self.notify_ui_observers({'lineedit_data_set': file_paths})
+                elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS_BASE,
+                                       VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                    file_paths.append(str(file_path))
+                    self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-            self.read_data(file_path, new=True)
+                self.read_data(file_path, new=True)
+        except KeyError as e:
+            self.show_error(self.add_data_path, e)
+
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
@@ -242,14 +253,23 @@ class VD2TreatmentModel(QObject):
                                   time_scale=info.scaling_yunit)
             self.notify_measurement_observers(self.od)
 
+    def make_default_cursor(self, data_path: Path) -> Cursors2D:
+        info: Hamamatsu = self.opener.paths[data_path]
+        waves_l = len(info.wavelengths)
+        times_l = len(info.timedelays)
+        waves = info.wavelengths
+        times = info.timedelays
+        x1 = int(waves_l*.2)
+        x2 = int(waves_l*.8)
+        y1 = int(times_l*.2)
+        y2 = int(times_l*.8)
+        return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
+
     def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
                                      critical_info: CriticalInfoHamamatsu = None, new=False,
                                      cursors: Cursors2D = None):
         for x in self.measurements_observers:
             x.modelIsChanged(measurement, map_index, critical_info, new, cursors)
-
-    def add_ui_observer(self, inObserver):
-        self.ui_observers.append(inObserver)
 
     def notify_ui_observers(self, ui: dict):
         for x in self.ui_observers:
@@ -294,6 +314,12 @@ class VD2TreatmentModel(QObject):
             self.show_error(self.save_file_path_change, e)
             self.notify_ui_observers({'lineedit_save_file_name': str(self.paths[VD2TreatmentModel.DataTypes.SAVE])})
 
+    def show_error(self, func, error):
+        error_logger(self, func, error)
+        error_dialog = QErrorMessage()
+        error_dialog.showMessage(str(error))
+        error_dialog.exec_()
+
     def update_data_cursors(self, data_path: Path, x1=None, x2=None, y1=None, y2=None, pixels=False):
         info: Hamamatsu = self.opener.paths[data_path]
         waves = info.wavelengths
@@ -323,20 +349,3 @@ class VD2TreatmentModel(QObject):
         self.cursors_data = cursors
         self.notify_measurement_observers(cursors=cursors)
 
-    def make_default_cursor(self, data_path: Path) -> Cursors2D:
-        info: Hamamatsu = self.opener.paths[data_path]
-        waves_l = len(info.wavelengths)
-        times_l = len(info.timedelays)
-        waves = info.wavelengths
-        times = info.timedelays
-        x1 = int(waves_l*.2)
-        x2 = int(waves_l*.8)
-        y1 = int(times_l*.2)
-        y2 = int(times_l*.8)
-        return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
-
-    def show_error(self, func, error):
-        error_logger(self, func, error)
-        error_dialog = QErrorMessage()
-        error_dialog.showMessage(str(error))
-        error_dialog.exec_()

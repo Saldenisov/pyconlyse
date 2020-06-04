@@ -21,15 +21,19 @@ module_logger = logging.getLogger(__name__)
 @dataclass
 class CriticalInfo:
     file_path: Path
-    timedelays_length:int
-    wavelengths_length:int
+    number_maps: int
+    timedelays_length: int
+    wavelengths_length: int
     timedelays: np.array
     wavelengths: np.array
 
 
+
 class Opener:
     """
-    TODO: add description
+    Opener class is designed to opem experimental files:
+    .dat, .his, .img.
+    See for details special classes HamamatsuOpener, ASCIIOpener
     """
 
     def __init__(self, logger=None):
@@ -44,13 +48,13 @@ class Opener:
                 self.paths.popitem()  # Remove first element from ordered dict
             self.paths[info.file_path] = info
 
-    def fill_critical_info(self, filepath: Path) -> Tuple[bool, str]:
-        if filepath.suffix not in ['.img', '.his']:
+    def fill_critical_info(self, file_path: Path) -> Tuple[bool, str]:
+        if file_path.suffix not in ['.img', '.his', '.dat']:
             raise NoSuchFileType
-        if not filepath.exists():
+        if not file_path.exists():
             raise FileExistsError
         try:
-            info = self.read_critical_info(filepath)
+            info = self.read_critical_info(file_path)
             self.add_critical_info(info)
             return True, ''
         except (Exception, NoSuchFileType, FileExistsError) as e:
@@ -58,14 +62,14 @@ class Opener:
             return False, str(e)
 
     @abstractmethod
-    def read_critical_info(self, filepath: Path) -> CriticalInfo:
+    def read_critical_info(self, file_path: Path) -> CriticalInfo:
         pass
 
     @abstractmethod
     @lru_cache(maxsize=50, typed=True)
-    def read_map(self, filepath: Path, map_index=0) -> Union[Measurement, Tuple[bool, str]]:
+    def read_map(self, file_path: Path, map_index=0) -> Union[Measurement, Tuple[bool, str]]:
         pass
 
     @abstractmethod
-    def give_all_maps(self, filepath) -> Union[Measurement, Tuple[bool, str]]:
+    def give_all_maps(self, file_path) -> Union[Measurement, Tuple[bool, str]]:
         pass
