@@ -146,14 +146,7 @@ class VD2TreatmentModel(QObject):
         if VD2TreatmentModel.DataTypes.NOISE in self.paths:
             try:
                 noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
-                info: CriticalInfoHamamatsu = self.opener.paths[noise_path]
-                data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
-                map_index = 0
-                for measurement in self.opener.give_all_maps(noise_path):
-                    map_index += 1
-                    data_averaged += measurement.data
-                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps)})
-                self.noise_averaged_data = data_averaged / info.number_maps
+                self.noise_averaged_data = self.opener.average_map(noise_path, self._callback_average)
                 res, comments = True, ''
             except Exception as e:
                 self.show_error(self.average_noise, e)
@@ -162,61 +155,92 @@ class VD2TreatmentModel(QObject):
             res, comments = False, f'First add noise path, before averaging'
         return res, comments
 
+    def _callback_average(self, map_index, number_maps):
+        self.notify_ui_observers({'progressbar_calc': (map_index, number_maps)})
+
     def calc_abs(self, exp_type: ExpDataStruct, how: str, first_map_with_electrons: bool):
+        res = False
+        res_local = True
+        if VD2TreatmentModel.DataTypes.NOISE not in self.paths:
+            self.show_error(self.calc_abs, f'Set NOISE pass first.')
+            res_local = False
 
         if exp_type is VD2TreatmentModel.ExpDataStruct.HIS:
             pass
         elif exp_type is VD2TreatmentModel.ExpDataStruct.HIS_NOISE:
             map_index = 0
-            data_path = self.paths[VD2TreatmentModel.DataTypes.ABS_BASE]
-            info: CriticalInfoHamamatsu = self.opener.paths[data_path]
-            od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-            if len(self.noise_averaged_data) < 2:
-                res, comments = self.average_noise()
-                if not res:
-                    error_dialog = QErrorMessage()
-                    error_dialog.showMessage(comments)
-                    error_dialog.exec_()
-            if how == 'individual':
-                for measurements in self.opener.give_pair_maps(data_path):
-                    map_index += 1
-                    if first_map_with_electrons:
-                        abs = measurements[0].data
-                        base = measurements[1].data
-                    else:
-                        abs = measurements[1].data
-                        base = measurements[0].data
-                    try:
-                        transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
-                        od_data += np.log10(transmission)
-                    except (RuntimeError, RuntimeWarning):
-                        pass
-                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                od_data = od_data / info.number_maps
-            elif how == 'averaged':
-                abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                for measurements in self.opener.give_pair_maps(data_path):
-                    map_index += 1
-                    if first_map_with_electrons:
-                        abs = measurements[0].data
-                        base = measurements[1].data
-                    else:
-                        abs = measurements[1].data
-                        base = measurements[0].data
-                    abs_data += abs
-                    base_data += base
-                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                abs_data = abs_data / info.number_maps
-                base_data = base_data / info.number_maps
-                od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+            res_local = True
+            if VD2TreatmentModel.DataTypes.ABS_BASE not in self.paths:
+                self.show_error(self.calc_abs, f'Set ABS_BASE first.')
+                res_local = False
+            if res_local:
+                data_path = self.paths[VD2TreatmentModel.DataTypes.ABS_BASE]
+                info: CriticalInfoHamamatsu = self.opener.paths[data_path]
+                od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                if len(self.noise_averaged_data) < 2:
+                    res, comments = self.average_noise()
+                    if not res:
+                        self.show_error(self.calc_abs, comments)
+                if how == 'individual':
+                    for measurements in self.opener.give_pair_maps(data_path):
+                        map_index += 1
+                        if first_map_with_electrons:
+                            abs = measurements[0].data
+                            base = measurements[1].data
+                        else:
+                            abs = measurements[1].data
+                            base = measurements[0].data
+                        try:
+                            transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
+                            od_data += np.log10(transmission)
+                        except (RuntimeError, RuntimeWarning):
+                            pass
+                        self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                    od_data = od_data / info.number_maps
+                elif how == 'averaged':
+                    abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                    base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+                    for measurements in self.opener.give_pair_maps(data_path):
+                        map_index += 1
+                        if first_map_with_electrons:
+                            abs = measurements[0].data
+                            base = measurements[1].data
+                        else:
+                            abs = measurements[1].data
+                            base = measurements[0].data
+                        abs_data += abs
+                        base_data += base
+                        self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
+                    abs_data = abs_data / info.number_maps
+                    base_data = base_data / info.number_maps
+                    od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                res = True
         elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
-            pass
+            if VD2TreatmentModel.DataTypes.ABS not in self.paths:
+                self.show_error(self.calc_abs, f'Set ABS pass first.')
+                res_local = False
+            if VD2TreatmentModel.DataTypes.BASE not in self.paths:
+                self.show_error(self.calc_abs, f'Set BASE pass first.')
+                res_local = False
+            if res_local:
+                if len(self.noise_averaged_data) < 2:
+                    res, comments = self.average_noise()
+                    if not res:
+                        self.show_error(self.calc_abs, comments)
+                abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
+                base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
+                info: CriticalInfoHamamatsu = self.opener.paths[abs_path]
+                abs_data = self.opener.average_map(file_path=abs_path, call_back_func=self._callback_average)
+                base_data = self.opener.average_map(file_path=base_path, call_back_func=self._callback_average)
+                od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                res = True
 
-        self.od = Measurement(type='Pump-Probe', comments='', author='SD', timestamp=datetime.timestamp(datetime.now()),
-                              data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
-                              time_scale=info.scaling_yunit)
-        self.notify_measurement_observers(self.od)
+        if res:
+            self.od = Measurement(type='Pump-Probe', comments='', author='SD',
+                                  timestamp=datetime.timestamp(datetime.now()), data=od_data,
+                                  wavelengths=info.wavelengths, timedelays=info.timedelays,
+                                  time_scale=info.scaling_yunit)
+            self.notify_measurement_observers(self.od)
 
     def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
                                      critical_info: CriticalInfoHamamatsu = None, new=False,

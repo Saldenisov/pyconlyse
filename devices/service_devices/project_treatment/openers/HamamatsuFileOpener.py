@@ -41,51 +41,70 @@ class HamamatsuFileOpener(Opener):
         super().__init__()
 
     @lru_cache(maxsize=100)
+    def average_map(self, file_path: Path, call_back_func=None):
+        info = self.read_critical_info(file_path)
+        data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+        map_index = 0
+        for map in self.give_all_maps(file_path):
+            if isinstance(map, tuple):  # Means there was an error
+                return map
+            else:
+                data += map.data
+                map_index += 1
+                if call_back_func:
+                    call_back_func(map_index, info.number_maps)
+        return data / info.number_maps
+
+
+    @lru_cache(maxsize=100)
     def read_critical_info(self, filepath: Path) -> CriticalInfoHamamatsu:
         try:
-            pos = 0
-            with open(filepath, 'rb') as file:
-                head_64_bytes = bytearray(file.read(64))
-                pos += 64
-                comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
-                #TODO: need to find where ends real header with text
-                #TODO: need to understand what are the comments, how do they relate to datastructures
-                header = file.read(4610).decode(encoding='utf-8')
-                pos += comments_length
-            file_type = self.get_img_type(header)
-            # Set scales parameters
-            scaling_xscale, scaling_xunit, scaling_yscale, scaling_yunit = self.set_scales_param(header)
+            if filepath not in self.paths:
+                pos = 0
+                with open(filepath, 'rb') as file:
+                    head_64_bytes = bytearray(file.read(64))
+                    pos += 64
+                    comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
+                    # TODO: need to find where ends real header with text
+                    # TODO: need to understand what are the comments, how do they relate to datastructures
+                    header = file.read(4610).decode(encoding='utf-8')
+                    pos += comments_length
+                file_type = self.get_img_type(header)
+                # Set scales parameters
+                scaling_xscale, scaling_xunit, scaling_yscale, scaling_yunit = self.set_scales_param(header)
 
-            wavelengths_length = int.from_bytes(head_64_bytes[4:6], byteorder='little')
-            timedelays_length = int.from_bytes(head_64_bytes[6:8], byteorder='little')
-            y_offset = int.from_bytes(head_64_bytes[10:12], byteorder='little')
-            # Bytes for 1 pixel
-            pixel_size = int.from_bytes(head_64_bytes[12:14], byteorder='little')
-            if pixel_size == 3:
-                bytes_per_point = 4
-            elif pixel_size == 2:
-                bytes_per_point = 2
-            elif pixel_size == 1:
-                bytes_per_point = 1
+                wavelengths_length = int.from_bytes(head_64_bytes[4:6], byteorder='little')
+                timedelays_length = int.from_bytes(head_64_bytes[6:8], byteorder='little')
+                y_offset = int.from_bytes(head_64_bytes[10:12], byteorder='little')
+                # Bytes for 1 pixel
+                pixel_size = int.from_bytes(head_64_bytes[12:14], byteorder='little')
+                if pixel_size == 3:
+                    bytes_per_point = 4
+                elif pixel_size == 2:
+                    bytes_per_point = 2
+                elif pixel_size == 1:
+                    bytes_per_point = 1
 
-            number_maps = int.from_bytes(head_64_bytes[14:16], byteorder='little')
-            if number_maps == 0:
-                number_maps = 1
+                number_maps = int.from_bytes(head_64_bytes[14:16], byteorder='little')
+                if number_maps == 0:
+                    number_maps = 1
 
-            timedelays = self.get_timedelays_stat(filepath=filepath, header=header, file_type=file_type,
-                                                  timedelays_length=timedelays_length,
-                                                  scaling_yunit=scaling_yunit, scaling_yscale=scaling_yscale)
+                timedelays = self.get_timedelays_stat(filepath=filepath, header=header, file_type=file_type,
+                                                      timedelays_length=timedelays_length,
+                                                      scaling_yunit=scaling_yunit, scaling_yscale=scaling_yscale)
 
-            wavelengths = self.get_wavelengths_stat(filepath=filepath, header=header, file_type=file_type,
-                                                    wavelengths_length=wavelengths_length)
+                wavelengths = self.get_wavelengths_stat(filepath=filepath, header=header, file_type=file_type,
+                                                        wavelengths_length=wavelengths_length)
 
-            return CriticalInfoHamamatsu(bytes_per_point=bytes_per_point, data_pos=pos, file_path=filepath,
-                                         file_type=file_type,
-                                         number_maps=number_maps, header=header, scaling_xscale=scaling_xscale,
-                                         scaling_xunit=scaling_xunit, scaling_yscale=scaling_yscale,
-                                         scaling_yunit=scaling_yunit, y_offset=y_offset,
-                                         timedelays_length=timedelays_length, wavelengths_length=wavelengths_length,
-                                         timedelays=timedelays, wavelengths=wavelengths)
+                return CriticalInfoHamamatsu(bytes_per_point=bytes_per_point, data_pos=pos, file_path=filepath,
+                                             file_type=file_type,
+                                             number_maps=number_maps, header=header, scaling_xscale=scaling_xscale,
+                                             scaling_xunit=scaling_xunit, scaling_yscale=scaling_yscale,
+                                             scaling_yunit=scaling_yunit, y_offset=y_offset,
+                                             timedelays_length=timedelays_length, wavelengths_length=wavelengths_length,
+                                             timedelays=timedelays, wavelengths=wavelengths)
+            else:
+                return self.paths[filepath]
         except Exception as e:
             error_logger(self, self.read_critical_info, e)
 
