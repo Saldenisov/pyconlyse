@@ -9,13 +9,13 @@ import logging
 from pathlib import Path
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QDialogButtonBox, QErrorMessage
 from PyQt5.QtCore import QModelIndex
-from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from communication.messaging.messages import MessageExt, MsgComExt
 from gui.models.ClientGUIModels import VD2TreatmentModel
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
                                                                FuncGetProjectManagerControllerStateInput)
 from datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
-from devices.devices import Device, Server
+from devices.devices import Device
 from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
@@ -161,7 +161,11 @@ class VD2TreatmentController:
         info_msg(self, 'INITIALIZED')
 
     def average_noise(self):
-        self.model.average_noise()
+        res, comments = self.model.average_noise()
+        if not res:
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage(comments)
+            error_dialog.exec_()
 
     def calc_abs(self):
         self.view.ui.progressbar_calc.setValue(0)

@@ -139,19 +139,21 @@ class VD2TreatmentView(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
-                if not isinstance(value, list):
-                    value = [value]
-                for val in value:
-                    chk = []
-                    for i in range(self.ui.combobox_files_selected.count()):
-                        if val != self.ui.combobox_files_selected.itemText(i):
-                            chk.append(True)
-                        else:
-                            chk.append(False)
-                            break
-                    if all(chk):
-                        self.ui.combobox_files_selected.addItem(val)
-                widget.setText('; '.join(value))
+                if isinstance(value, list):
+                    for val in value:
+                        chk = []
+                        for i in range(self.ui.combobox_files_selected.count()):
+                            if val != self.ui.combobox_files_selected.itemText(i):
+                                chk.append(True)
+                            else:
+                                chk.append(False)
+                                break
+                        if all(chk):
+                            self.ui.combobox_files_selected.addItem(val)
+                    widget.setText('; '.join(value))
+                else:
+                    widget.setText(value)
+
 
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)

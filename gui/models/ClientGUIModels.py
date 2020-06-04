@@ -8,9 +8,10 @@ import numpy as np
 from datetime import datetime
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Union
+from typing import Any, Dict, Union, Tuple
 from enum import Enum, auto
 from PyQt5.QtCore import QObject, pyqtSignal
+from PyQt5.QtWidgets import QErrorMessage
 from communication.messaging.messages import MessageInt, MessageExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
@@ -84,6 +85,7 @@ class VD2TreatmentModel(QObject):
         ABS_BASE = 'ABS+BASE'
         ABS_BASE_NOISE = 'ABS+BASE+NOISE'
         SAVE = 'SAVE'
+        DATA = 'DATA'
 
     def __init__(self, app_folder: Path, parameters: Dict[str, Any]={}):
         super().__init__(parent=None)
@@ -97,7 +99,7 @@ class VD2TreatmentModel(QObject):
         self.opener = HamamatsuFileOpener(logger=self.logger)
 
         self.paths: Dict[VD2TreatmentModel.DataTypes, Path] = {}
-        self.noise_averaged_data: np.ndarray = None
+        self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
 
@@ -108,9 +110,12 @@ class VD2TreatmentModel(QObject):
             self.paths[exp_data_type] = file_path
 
             if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
-                self.notify_ui_observers({'lineedit_noise_set': str(file_path)})
+                self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
+                self.notify_ui_observers({'lineedit_noise_set': [str(file_path)]})
+
             elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
                                    VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                self.paths[VD2TreatmentModel.DataTypes.DATA] = file_path
                 save_path: Path = file_path.parent / f'{file_path.stem}.dat'
                 self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
                 self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
@@ -127,35 +132,53 @@ class VD2TreatmentModel(QObject):
                 file_paths.append(str(file_path))
                 self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-
-
+            elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS_BASE, VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                file_paths.append(str(file_path))
+                self.notify_ui_observers({'lineedit_data_set': file_paths})
 
             self.read_data(file_path, new=True)
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
 
-    def average_noise(self):
-        if self.paths[VD2TreatmentModel.DataTypes.NOISE]:
-            noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
-            info: CriticalInfoHamamatsu = self.opener.paths[noise_path]
-            data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
-            map_index = 0
-            for measurement in self.opener.give_all_maps(noise_path):
-                map_index += 1
-                data_averaged += measurement.data
-                self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps)})
-            self.noise_averaged_data = data_averaged / info.number_maps
+    def average_noise(self) -> Tuple[bool, str]:
+        info_msg(self, 'INFO', 'Averaging Noise')
+        if VD2TreatmentModel.DataTypes.NOISE in self.paths:
+            try:
+                noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+                info: CriticalInfoHamamatsu = self.opener.paths[noise_path]
+                data_averaged = np.zeros(shape=(info.timedelays_length, info.wavelengths_length), dtype=np.float)
+                map_index = 0
+                for measurement in self.opener.give_all_maps(noise_path):
+                    map_index += 1
+                    data_averaged += measurement.data
+                    self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps)})
+                self.noise_averaged_data = data_averaged / info.number_maps
+                res, comments = True, ''
+            except Exception as e:
+                self.show_error(self.average_noise, e)
+                res, comments = False, f'Could not average NOISE: {e}'
+        else:
+            res, comments = False, f'First add noise path, before averaging'
+        return res, comments
 
     def calc_abs(self, exp_type: ExpDataStruct, how: str, first_map_with_electrons: bool):
-        info: CriticalInfoHamamatsu = self.opener.paths[self.data_path]
-        od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-        map_index = 0
+
         if exp_type is VD2TreatmentModel.ExpDataStruct.HIS:
             pass
         elif exp_type is VD2TreatmentModel.ExpDataStruct.HIS_NOISE:
+            map_index = 0
+            data_path = self.paths[VD2TreatmentModel.DataTypes.ABS_BASE]
+            info: CriticalInfoHamamatsu = self.opener.paths[data_path]
+            od_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
+            if len(self.noise_averaged_data) < 2:
+                res, comments = self.average_noise()
+                if not res:
+                    error_dialog = QErrorMessage()
+                    error_dialog.showMessage(comments)
+                    error_dialog.exec_()
             if how == 'individual':
-                for measurements in self.opener.give_pair_maps(self.data_path):
+                for measurements in self.opener.give_pair_maps(data_path):
                     map_index += 1
                     if first_map_with_electrons:
                         abs = measurements[0].data
@@ -163,14 +186,17 @@ class VD2TreatmentModel(QObject):
                     else:
                         abs = measurements[1].data
                         base = measurements[0].data
-                    abs = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
-                    od_data += np.log10(abs)
+                    try:
+                        transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
+                        od_data += np.log10(transmission)
+                    except (RuntimeError, RuntimeWarning):
+                        pass
                     self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
                 od_data = od_data / info.number_maps
             elif how == 'averaged':
                 abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
                 base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
-                for measurements in self.opener.give_pair_maps(self.data_path):
+                for measurements in self.opener.give_pair_maps(data_path):
                     map_index += 1
                     if first_map_with_electrons:
                         abs = measurements[0].data
@@ -187,10 +213,10 @@ class VD2TreatmentModel(QObject):
         elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
             pass
 
-        od = Measurement(type='Pump-Probe', comments='', author='SD', timestamp=datetime.timestamp(datetime.now()),
-                         data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
-                         time_scale=info.scaling_yunit)
-        self.notify_measurement_observers(od)
+        self.od = Measurement(type='Pump-Probe', comments='', author='SD', timestamp=datetime.timestamp(datetime.now()),
+                              data=od_data, wavelengths=info.wavelengths, timedelays=info.timedelays,
+                              time_scale=info.scaling_yunit)
+        self.notify_measurement_observers(self.od)
 
     def notify_measurement_observers(self, measurement: Measurement = None, map_index: int=0,
                                      critical_info: CriticalInfoHamamatsu = None, new=False,
@@ -209,36 +235,40 @@ class VD2TreatmentModel(QObject):
         self.measurements_observers.remove(inObserver)
 
     def read_data(self, data_path: Path, map_index=0, new=False):
-        measurement = self.opener.read_map(data_path, map_index)
+        measurement, comments = self.opener.read_map(data_path, map_index)
         if not isinstance(measurement, Measurement):
             measurement = None
-        if new:
-            self.cursors_data = self.make_default_cursor(data_path)
-            cursors = self.cursors_data
+            self.show_error(self.read_data, comments)
         else:
-            cursors = None
-        self.notify_measurement_observers(measurement, map_index, self.opener.paths[data_path], new=new,
-                                          cursors=cursors)
+            if new:
+                self.cursors_data = self.make_default_cursor(data_path)
+                cursors = self.cursors_data
+            else:
+                cursors = None
+            self.notify_measurement_observers(measurement, map_index, self.opener.paths[data_path], new=new,
+                                              cursors=cursors)
 
     def save(self):
         try:
-            info = self.opener.paths[self.data_path]
+            data_path = self.paths[VD2TreatmentModel.DataTypes.DATA]
+            save_path = self.paths[VD2TreatmentModel.DataTypes.SAVE]
+            info = self.opener.paths[data_path]
             data = self.od.data
-            wavelengths= info.wavelengths
+            wavelengths = info.wavelengths
             final_data = np.vstack((wavelengths, data))
             final_data = final_data.transpose()
             timedelays = np.insert(info.timedelays, 0, 0)
             final_data = np.vstack((timedelays, final_data))
-            np.savetxt(self.save_path, final_data, delimiter='\t', fmt='%.4f')
+            np.savetxt(save_path, final_data, delimiter='\t', fmt='%.4f')
         except Exception as e:
-            self.logger.error(e)
+            self.show_error(self.save, e)
 
     def save_file_path_change(self, file_name: str):
         try:
-            self.save_path = Path(file_name)
+            self.paths[VD2TreatmentModel.DataTypes.SAVE] = Path(file_name)
         except Exception as e:  # TODO: to change
-            self.logger.error(e)
-            self.notify_ui_observers({'lineedit_save_file_name': str(self.save_path)})
+            self.show_error(self.save_file_path_change, e)
+            self.notify_ui_observers({'lineedit_save_file_name': str(self.paths[VD2TreatmentModel.DataTypes.SAVE])})
 
     def update_data_cursors(self, data_path: Path, x1=None, x2=None, y1=None, y2=None, pixels=False):
         info: Hamamatsu = self.opener.paths[data_path]
@@ -281,3 +311,8 @@ class VD2TreatmentModel(QObject):
         y2 = int(times_l*.8)
         return Cursors2D(x1=(x1, waves[x1]), x2=(x2, waves[x2]), y1=(y1, times[y1]), y2=(y2, times[y2]))
 
+    def show_error(self, func, error):
+        error_logger(self, func, error)
+        error_dialog = QErrorMessage()
+        error_dialog.showMessage(str(error))
+        error_dialog.exec_()

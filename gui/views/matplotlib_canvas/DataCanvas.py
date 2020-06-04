@@ -57,7 +57,6 @@ class DataCanvas(MyMplCanvas):
         return self.measurement.data
 
     def new_data(self, measurement: Measurement, cursors: Cursors2D, map_index=0):
-        print('Datacanvas Setting New Data')
         self.measurement = measurement
         self.image.set_data(self._form_data())
         self.image.set_extent(extent=[self.measurement.wavelengths[0], self.measurement.wavelengths[-1],
