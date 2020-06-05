@@ -4,8 +4,6 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-from utilities.errors.myexceptions import NoSuchFileType
-
 import numpy as np
 from abc import abstractmethod
 from collections import OrderedDict
@@ -14,6 +12,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Union, Tuple
 from datastructures.mes_independent.measurments_dataclass import Measurement
+from utilities.myfunc import error_logger
+from utilities.errors.myexceptions import NoSuchFileType
 import logging
 module_logger = logging.getLogger(__name__)
 
@@ -50,15 +50,15 @@ class Opener:
 
     def fill_critical_info(self, file_path: Path) -> Tuple[bool, str]:
         if file_path.suffix not in ['.img', '.his', '.dat']:
-            raise NoSuchFileType
+            raise NoSuchFileType(file_path.suffix)
         if not file_path.exists():
-            raise FileExistsError
+            raise FileExistsError()
         try:
             info = self.read_critical_info(file_path)
             self.add_critical_info(info)
             return True, ''
         except (Exception, NoSuchFileType, FileExistsError) as e:
-            self.logger.error(e)
+            error_logger(self, self.fill_critical_info, e)
             return False, str(e)
 
     @abstractmethod

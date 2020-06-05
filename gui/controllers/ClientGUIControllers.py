@@ -184,7 +184,7 @@ class VD2TreatmentController:
             if self.view.ui.data_slider.value() != 0:
                 self.view.ui.data_slider.setValue(0)
             else:
-                self.slider_map_selector_change()
+                self.model.read_data(file_path, 0, new=True)
 
     def data_cursor_update(self, eclick, erelease):
         data_path = Path(self.view.ui.combobox_files_selected.currentText())
@@ -197,8 +197,7 @@ class VD2TreatmentController:
         self.model.save()
 
     def save_file_path_changed(self):
-        a = self.view.ui.lineedit_save_file_name.text()
-        self.model.save_file_path_change(a)
+        self.model.save_file_path_change(self.view.ui.lineedit_save_file_name.text())
 
     def set_path(self, index: QModelIndex, exp_data_type: VD2TreatmentModel.DataTypes):
         try:

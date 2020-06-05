@@ -16,7 +16,7 @@ from communication.messaging.messages import MessageInt, MessageExt
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
-                                                               Opener, OpenersTypes, OPENER_ACCRODANCE)
+                                                               Opener, OpenersTypes, OPENER_ACCRODANCE, CriticalInfo)
 from utilities.errors.myexceptions import MsgComNotKnown
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 
@@ -326,11 +326,8 @@ class VD2TreatmentModel(QObject):
             self.show_error(self.save, e)
 
     def save_file_path_change(self, file_name: str):
-        try:
-            self.paths[VD2TreatmentModel.DataTypes.SAVE] = Path(file_name)
-        except Exception as e:  # TODO: to change
-            self.show_error(self.save_file_path_change, e)
-            self.notify_ui_observers({'lineedit_save_file_name': str(self.paths[VD2TreatmentModel.DataTypes.SAVE])})
+        self.paths[VD2TreatmentModel.DataTypes.SAVE] = Path(file_name)
+        self.notify_ui_observers({'lineedit_save_file_name': file_name})
 
     def show_error(self, func, error):
         error_logger(self, func, error)
@@ -341,18 +338,14 @@ class VD2TreatmentModel(QObject):
     def update_data_cursors(self, data_path: Path, x1=None, x2=None, y1=None, y2=None, pixels=False):
         opener = self.get_opener(data_path)
         if opener:
-            info: Hamamatsu = opener.paths[data_path]
+            info: CriticalInfo = opener.paths[data_path]
             waves = info.wavelengths
             times = info.timedelays
             if not pixels:
                 if x1 > x2:
-                    temp = x2
-                    x2 = x1
-                    x1 = temp
+                    x1, x2 = x2, x1
                 if y1 > y2:
-                    temp = y2
-                    y2 = y1
-                    y1 = temp
+                    y1, y2 = y2, y1
                 x1 = np.searchsorted(waves, x1)
                 y1 = np.searchsorted(times, y1)
                 x2 = np.searchsorted(waves, x2)

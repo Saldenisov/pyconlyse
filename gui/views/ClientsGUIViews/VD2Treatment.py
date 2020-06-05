@@ -78,6 +78,7 @@ class VD2TreatmentView(QMainWindow):
         menu = QMenu()
         action_set_ABS=action_set_BASE=action_set_NOISE=action_set_DATA_HIS=action_set_NOISE=action_set_DATA_NOISE_HIS=\
             None
+        action_plus = menu.addAction('Add file...')
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             action_set_ABS = menu.addAction("set ABS HIS or IMG")
             action_set_BASE = menu.addAction("set BASE HIS or IMG")
@@ -101,6 +102,20 @@ class VD2TreatmentView(QMainWindow):
                 self.controller.set_path(index, DataTypes.ABS_BASE)
             elif action == action_set_DATA_NOISE_HIS:
                 self.controller.set_path(index, DataTypes.ABS_BASE_NOISE)
+            elif action == action_plus:
+                idx = self.ui.tree.selectedIndexes()[0]
+                file_path = self.ui.tree.model().filePath(idx)
+                chk = []
+                combox_l = self.ui.combobox_files_selected.count()
+                for i in range(combox_l):
+                    if file_path != self.ui.combobox_files_selected.itemText(i):
+                        chk.append(True)
+                    else:
+                        chk.append(False)
+                        break
+                if all(chk):
+                    self.ui.combobox_files_selected.addItem(file_path)
+                    self.ui.combobox_files_selected.setCurrentIndex(combox_l)
 
     def _combobox_index_change(self):
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
@@ -139,21 +154,19 @@ class VD2TreatmentView(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
-                if isinstance(value, list):
-                    for val in value:
-                        chk = []
-                        for i in range(self.ui.combobox_files_selected.count()):
-                            if val != self.ui.combobox_files_selected.itemText(i):
-                                chk.append(True)
-                            else:
-                                chk.append(False)
-                                break
-                        if all(chk):
-                            self.ui.combobox_files_selected.addItem(val)
-                    widget.setText('; '.join(value))
-                else:
-                    widget.setText(value)
-
+                if not isinstance(value, list):
+                    value = [value]
+                for val in value:
+                    chk = []
+                    for i in range(self.ui.combobox_files_selected.count()):
+                        if val != self.ui.combobox_files_selected.itemText(i):
+                            chk.append(True)
+                        else:
+                            chk.append(False)
+                            break
+                    if all(chk):
+                        self.ui.combobox_files_selected.addItem(val)
+                widget.setText('; '.join(value))
 
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)

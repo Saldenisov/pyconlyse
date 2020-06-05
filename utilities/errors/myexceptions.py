@@ -108,8 +108,11 @@ class ValidationFailed(MyException):
 
 
 class NoSuchFileType(MyException):
-    def __init__(self):
-        MyException.__init__(self, "Unsupported file type")
+    def __init__(self, text=None):
+        if not text:
+            MyException.__init__(self, "Unsupported file type.")
+        else:
+            MyException.__init__(self, f"Unsupported file type {text}.")
 
 
 class GraphModelError(MyException):

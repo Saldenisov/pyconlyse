@@ -13,6 +13,7 @@ from typing import Union, Tuple
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
 from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
 from utilities.myfunc import error_logger
+from utilities.errors.myexceptions import NoSuchFileType
 
 
 @dataclass
@@ -56,7 +57,7 @@ class HamamatsuFileOpener(Opener):
 
     @lru_cache(maxsize=100)
     def read_critical_info(self, file_path: Path) -> CriticalInfoHamamatsu:
-        try:
+        if file_path.suffix in self.ALLOWED_FILES_TYPES:
             pos = 0
             with open(file_path, 'rb') as file:
                 head_64_bytes = bytearray(file.read(64))
@@ -100,19 +101,15 @@ class HamamatsuFileOpener(Opener):
                                          y_offset=y_offset, timedelays_length=timedelays_length,
                                          wavelengths_length=wavelengths_length, timedelays=timedelays,
                                          wavelengths=wavelengths)
-        except Exception as e:
-            error_logger(self, self.read_critical_info, e)
+        else:
+            raise NoSuchFileType(file_path.suffix)
 
     @lru_cache(maxsize=200)
     def read_map(self, file_path: Path, map_index=0) -> Union[Tuple[Hamamatsu, str], Tuple[bool, str]]:
-        if file_path.suffix not in HamamatsuFileOpener.ALLOWED_FILES_TYPES:
-            res, comments = False, f'File path {file_path} has a wrong extension for HamamatsuFileOpener. ' \
-                                   f'Must be {HamamatsuFileOpener.ALLOWED_FILES_TYPES}'
+        if file_path not in self.paths:
+            res, comments = self.fill_critical_info(file_path)
         else:
             res = True
-
-        if file_path not in self.paths and res:
-            res, comments = self.fill_critical_info(file_path)
         if res:
             info: CriticalInfoHamamatsu = self.paths[file_path]
             size_data_bytes = info.bytes_per_point * info.timedelays_length * info.wavelengths_length
@@ -142,7 +139,8 @@ class HamamatsuFileOpener(Opener):
             return Hamamatsu(type=file_path.suffix, comments=info.header, author='', timestamp=file_path.stat().st_mtime,
                              data=data, wavelengths=info.wavelengths, timedelays=info.timedelays,
                              time_scale=info.scaling_yunit), ''
-        return False, comments
+        else:
+            return False, comments
 
     def get_timedelays_stat(self, filepath: Path, header: str, file_type, timedelays_length,
                             scaling_yunit, scaling_yscale) -> np.array:

@@ -1,13 +1,13 @@
-from enum import Enum
-
-class A( Enum):
-    C = 'C'
-    B = 'B'
-    D= 'D'
+import numpy as np
+from pathlib import Path
 
 
+p = Path('C:\Dev\DATA\M1043.dat')
 
+a = np.loadtxt(p)
 
+l = a[0][1:]
 
-if A.D in [A.C, A.B]:
-    print(1)
+c = a[:,0][1:]
+
+d = 0

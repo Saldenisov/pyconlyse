@@ -29,76 +29,51 @@ class ASCIIOpener(Opener):
     timedelayN  XN1   XN2   XN3 ... XN4
     """
 
-    ALLOWED_FILES_TYPES = ['.his', '.img']
+    ALLOWED_FILES_TYPES = ['.dat', '.raw']
 
     def __init__(self, **kwargs):
         super().__init__()
 
-    @lru_cache(maxsize=100)
+    @lru_cache(maxsize=50)
     def read_critical_info(self, file_path: Path) -> CriticalInfo:
         try:
-            if file_path not in self.paths:
-                timedelays = np.loadtxt(file_path)
-                wavelength = np.loadtxt(file_path)
-                return CriticalInfo(file_path, timedelays_length=len(timedelays), wavelengths_length=len(wavelength))
+            if file_path.suffix == '.dat':
+                number_of_maps = 1
+                data = np.loadtxt(file_path)
+                timedelays = data[0][1:]
+                wavelength = data[:,0][1:]
+                return CriticalInfo(file_path, number_maps=number_of_maps, timedelays_length=len(timedelays),
+                                    wavelengths_length=len(wavelength), timedelays=timedelays, wavelengths=wavelength)
+            elif file_path.suffix == '.raw':
+                raise Exception(f'Do not know how to handle {file_path.suffix} data file type.')  # !!!.raw files
             else:
-                return
+                raise Exception(f'Do not know how to handle {file_path.suffix} data file type.')
+
         except Exception as e:
             error_logger(self, self.read_critical_info, e)
+            raise e
 
-
+    @lru_cache(maxsize=50)
     def read_map(self, file_path: Path, map_index=0) -> Union[Measurement, Tuple[bool, str]]:
-        pass
+        if file_path not in self.paths:
+            res, comments = self.fill_critical_info(file_path)
+        else:
+            res = True
+        if res:
+            info: CriticalInfo = self.paths[file_path]
+            data = np.loadtxt(file_path)
+            data = np.transpose(data[1:, 1:])
+            return Measurement(type=file_path.suffix, comments='', author='', timestamp=file_path.stat().st_mtime,
+                               data=data, wavelengths=info.wavelengths, timedelays=info.timedelays, time_scale='??'), ''
+        return False, comments
 
     def give_all_maps(self, file_path) -> Union[Measurement, Tuple[bool, str]]:
-        pass
-
-
-def asciiopener(filepath):
-    '''
-    Works as an opener for datastructures files: '.csv' and (tab- and
-    ',' seperated) '.txt' files
-    Two columns datastructures and multicolumn datastructures used for TRABS representation
-    Wavelength(first column) vs Timedelay (first row) -->
-    0    0    1    2    3    4    5    ...
-    400    0    0    0    0    0
-    401    0    0    0    0    0
-    402    0    0    0    0    0
-    ...    0    0    0    0    0
-    '''
-    try:
-        fileextension = os.path.splitext(filepath)[1]
-        if fileextension not in ('.csv', '.txt', '.dat'):
-            raise NoSuchFileType
-        try:
-            # try to open file with tab-sep delimiter
-            with open(filepath, encoding='utf-8') as file:
-                data = np.loadtxt(file)
-        except ValueError:
-            # in case of ',' delimiter try this
-            try:
-                with open(filepath, encoding='utf-8') as file:
-                    data = np.loadtxt(file, delimiter=',')
-            except ValueError:
-                raise
-
-        # in case of two columns datastructures: (X, Y)
-        if data.shape[1] == 2:
-            timedelays = data[:, 0]
-            # adds wavelength array in order to present datastructures as a map
-            N = 100
-            wavelengths = np.arange(400, 400 + N +1, dtype=float)
-            _data = np.transpose(np.repeat([data[:, 1]], N + 1, 0))
-
-        # in case of matrix datastructures representation (e.g. TRABS)
-        if data.shape[1] > 5:
-            timedelays = np.delete(data[0], 0)
-            wavelengths = np.delete(data[:, 0], 0)
-            _data = np.delete(np.delete(data, 0, axis=0), 0, axis=1)
-            _data = np.transpose(_data)
-
-    except (FileNotFoundError, NoSuchFileType):
-        raise
-    return {'datastructures': _data,
-            'timedelays': timedelays,
-            'wavelengths': wavelengths}
+        res = True
+        if file_path not in self.paths:
+            res, comments = self.fill_critical_info(file_path)
+        if res:
+            info: CriticalInfo = self.paths[file_path]
+            for map_index in range(info.number_maps):
+                yield self.read_map(file_path, map_index)[0]
+        else:
+            return res, comments
