@@ -83,7 +83,6 @@ class SuperClientGUIcontroller():
         except Exception as e:
             error_logger(self, self.create_service_gui, e)
 
-
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
 

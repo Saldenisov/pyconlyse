@@ -71,10 +71,5 @@ class SuperUserView(QMainWindow):
                     info: FuncServiceInfoOutput = info
                     self.model.service_parameters[info.device_id] = info.service_info
                     self.ui.tE_info.setText(str(info.service_info))
-                else:
-                    error_logger(self, self.model_is_changed, f'DONE_IT com {info.com} is not known.')
-            elif com == MsgComExt.ERROR.msg_name:
-                self.ui.tE_info.setText(info.comments)
-
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')
