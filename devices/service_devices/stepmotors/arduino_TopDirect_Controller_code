@@ -22,7 +22,6 @@ void setup() {
   pinMode(dirPin, OUTPUT);
   pinMode(enblPin, OUTPUT);
 
-
   digitalWrite(pulPin, LOW);
   digitalWrite(enblPin, LOW);
   digitalWrite(dirPin, LOW);
@@ -34,8 +33,6 @@ void setup() {
   delay(100);
   digitalWrite(enblPin, LOW);
 
-
-  digitalWrite(dirPin, 0);
 }
 
 void run(){
@@ -54,7 +51,7 @@ void loop() {
 
    if (pos < 0) {
     step_ = 1;
-    digitalWrite(dirPin, LOW1);
+    digitalWrite(dirPin, LOW);
     Serial.println("Direction change HIGH");
 
   }

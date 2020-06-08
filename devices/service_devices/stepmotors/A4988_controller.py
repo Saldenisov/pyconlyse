@@ -141,7 +141,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             parameters = self.get_settings('Parameters')
             try:
-                self._microsteps = int(parameters['step'])
+                self._microsteps = int(parameters['microstep'])
             except ValueError:
                 self._microsteps = step
             self._TTL_width = eval(parameters['ttl_width'])
@@ -218,7 +218,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             self.logger.info('setting up pins')
             parameters = self.get_settings('Parameters')
-            step = parameters['step']
+            microstep = parameters['microstep']
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
@@ -248,11 +248,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._relayIVb = LED(parameters['relayivb'], initial_value=True)
             self._pins.append(self._relayIVb)
             pins_microstep = eval(parameters['microstep_settings'])
-            self._set_led(self._ms1, pins_microstep[step][0])
-            self._set_led(self._ms2, pins_microstep[step][1])
-            self._set_led(self._ms3, pins_microstep[step][2])
+            self._set_led(self._ms1, pins_microstep[microstep][0])
+            self._set_led(self._ms2, pins_microstep[microstep][1])
+            self._set_led(self._ms3, pins_microstep[microstep][2])
             return True, ''
-        except (KeyError, ValueError, SyntaxError, Exception) as e:
+        except (KeyError, ValueError, SyntaxError) as e:
             self.logger.error(e)
             return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
 
