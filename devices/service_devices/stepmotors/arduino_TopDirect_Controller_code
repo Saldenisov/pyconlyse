@@ -1,0 +1,66 @@
+const int pulPin = 13;
+const int dirPin = 12;
+const int enblPin = 11;
+const long microstep = 16;
+int delay_time = 30;
+long n = 310;
+long steps = 200 * microstep * n;
+long pos = 0;
+long step_ = 1;
+
+//310 turns in delay line in the long one
+// 128 - 1 (better 2)
+
+// 16 - 20 (30)
+//8 - 40 (50)
+//4 - 80 (100)
+//2 - 180 (200)
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(pulPin, OUTPUT);
+  pinMode(dirPin, OUTPUT);
+  pinMode(enblPin, OUTPUT);
+
+
+  digitalWrite(pulPin, LOW);
+  digitalWrite(enblPin, LOW);
+  digitalWrite(dirPin, LOW);
+
+  Serial.begin(9600);
+  Serial.println("init");
+
+  digitalWrite(enblPin, HIGH);
+  delay(100);
+  digitalWrite(enblPin, LOW);
+
+
+  digitalWrite(dirPin, 0);
+}
+
+void run(){
+  digitalWrite(pulPin, HIGH);
+  delayMicroseconds(delay_time);
+  digitalWrite(pulPin, LOW);
+  delayMicroseconds(delay_time);
+}
+void loop() {
+  if (pos >= steps) {
+    step_ = -1;
+    digitalWrite(dirPin, HIGH);
+    Serial.println("Direction change LOW");
+
+  }
+
+   if (pos < 0) {
+    step_ = 1;
+    digitalWrite(dirPin, LOW1);
+    Serial.println("Direction change HIGH");
+
+  }
+  pos = pos + step_;
+    run();
+
+
+
+}
