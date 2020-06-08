@@ -19,7 +19,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = True
+dev_mode = False
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -137,13 +137,15 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         else:
             return res, comments
 
-    def _set_move_parameters(self, com='full') -> Tuple[Union[bool, str]]:
+    def _set_move_parameters(self, step=1) -> Tuple[Union[bool, str]]:
         try:
             parameters = self.get_settings('Parameters')
-            com = parameters['com']
+            try:
+                self._microsteps = int(parameters['step'])
+            except ValueError:
+                self._microsteps = step
             self._TTL_width = eval(parameters['ttl_width'])
             self._delay_TTL = eval(parameters['delay_ttl'])
-            self._microsteps = eval(parameters['microstep_settings'])[com][1]
             return True, ''
         except (KeyError, SyntaxError) as e:
             self.logger.error(e)
@@ -216,7 +218,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             self.logger.info('setting up pins')
             parameters = self.get_settings('Parameters')
-            com = parameters['com']
+            step = parameters['step']
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
@@ -246,9 +248,9 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._relayIVb = LED(parameters['relayivb'], initial_value=True)
             self._pins.append(self._relayIVb)
             pins_microstep = eval(parameters['microstep_settings'])
-            self._set_led(self._ms1, pins_microstep[com][0][0])
-            self._set_led(self._ms2, pins_microstep[com][0][1])
-            self._set_led(self._ms3, pins_microstep[com][0][2])
+            self._set_led(self._ms1, pins_microstep[step][0])
+            self._set_led(self._ms2, pins_microstep[step][1])
+            self._set_led(self._ms3, pins_microstep[step][2])
             return True, ''
         except (KeyError, ValueError, SyntaxError, Exception) as e:
             self.logger.error(e)
