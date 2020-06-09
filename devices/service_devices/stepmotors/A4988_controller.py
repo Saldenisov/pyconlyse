@@ -14,6 +14,7 @@ from gpiozero import LED
 import logging
 from time import sleep
 from utilities.tools.decorators import development_mode
+from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
@@ -107,8 +108,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             steps = int(abs(pos - self.axes[axis_id].position))
             interrupted = False
             self._enable_controller()
-            width = self._TTL_width[axis_id] / self._microsteps
-            delay = self._delay_TTL[axis_id] / self._microsteps
+            width = self._microstep_settings[self._microsteps][1] * self._TTL_width_corrections[axis_id] / 1000. # must be in ms
+            delay = self._microstep_settings[self._microsteps][2] * self._TTL_delay_corrections[axis_id] / 1000.
             for i in range(steps):
                 if self.axes[axis_id].status == 2:
                     for _ in range(self._microsteps):
@@ -144,12 +145,13 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 self._microsteps = int(parameters['microstep'])
             except ValueError:
                 self._microsteps = step
-            self._TTL_width = eval(parameters['ttl_width'])
-            self._delay_TTL = eval(parameters['delay_ttl'])
+            self._microstep_settings = eval(parameters['microstep_settings'])
+            self._TTL_width_corrections = eval(parameters['ttl_width_corrections'])
+            self._TTL_delay_corrections = eval(parameters['ttl_delay_corrections'])
             return True, ''
         except (KeyError, SyntaxError) as e:
-            self.logger.error(e)
-            return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
+            error_logger(self, self._set_move_parameters, e)
+            return False, f'_set_move_parameters() did not work, DB cannot be read {e}'
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
         return super()._set_controller_positions(positions)
@@ -216,7 +218,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _setup_pins(self) -> Tuple[Union[bool, str]]:
         try:
-            self.logger.info('setting up pins')
+            info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
             microstep = parameters['microstep']
             self._ttl = LED(parameters['ttl_pin'])
@@ -247,10 +249,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._pins.append(self._relayIVa)
             self._relayIVb = LED(parameters['relayivb'], initial_value=True)
             self._pins.append(self._relayIVb)
-            pins_microstep = eval(parameters['microstep_settings'])
-            self._set_led(self._ms1, pins_microstep[microstep][0])
-            self._set_led(self._ms2, pins_microstep[microstep][1])
-            self._set_led(self._ms3, pins_microstep[microstep][2])
+            microstep_settings = eval(parameters['microstep_settings'])
+            self._set_led(self._ms1, microstep_settings[microstep][0][0])
+            self._set_led(self._ms2, microstep_settings[microstep][0][1])
+            self._set_led(self._ms3, microstep_settings[microstep][0][2])
             return True, ''
         except (KeyError, ValueError, SyntaxError) as e:
             self.logger.error(e)

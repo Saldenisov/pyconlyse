@@ -9,11 +9,12 @@ INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
 from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
-
+from enum import Enum
 from gpiozero import LED
 import logging
 from time import sleep
 from utilities.tools.decorators import development_mode
+from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
@@ -23,8 +24,14 @@ dev_mode = True
 
 
 class StpMtrCtrl_TopDirect_1axis(StpMtrController):
-    ON = 0
-    OFF = 1
+
+    class States(Enum):
+        ON = 0
+        OFF = 1
+
+    class Direction(Enum):
+        FORWARD = 'forward'
+        BACKWARD = 'backward'
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -157,66 +164,33 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
-    def _change_relay_state(self, n: int, flag: int):
-        if flag:
-            if n == 0:
-                self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
-                self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 1:
-                self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
-                self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 2:
-                self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
-                self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 3:
-                self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
-                self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
-            sleep(0.1)
-        elif flag:
-            if n == 0:
-                self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
-                self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 1:
-                self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
-                self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 2:
-                self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
-                self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 3:
-                self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
-                self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
-            sleep(0.1)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _deactivate_all_relay(self):
-        for axis in range(4):
-            self._change_relay_state(axis, 0)
-        sleep(0.1)
-
-    @development_mode(dev=dev_mode, with_return=None)
     def _disable_controller(self):
-        self._set_led(self._enable, 1)
-        sleep(0.05)
+        if self.device_status.active:
+            self._set_led(self._enable, 1)
+            sleep(0.05)
+            self._set_led(self._enable, 0)
 
     @development_mode(dev=dev_mode, with_return=None)
-    def _direction(self, orientation='top'):
-        if orientation == 'top':
-            self._set_led(self._dir, 1)
-        elif orientation == 'bottom':
+    def _direction(self, orientation: Direction):
+        if orientation is StpMtrCtrl_TopDirect_1axis.Direction.FORWARD:
             self._set_led(self._dir, 0)
+        elif orientation == StpMtrCtrl_TopDirect_1axis.Direction.BACKWARD:
+            self._set_led(self._dir, 1)
         sleep(0.05)
 
     @development_mode(dev=dev_mode, with_return=None)
     def _enable_controller(self):
-        self._set_led(self._enable, 0)
-        sleep(0.05)
+        if not self.device_status.active:
+            self._set_led(self._enable, 1)
+            sleep(0.05)
+            self._set_led(self._enable, 0)
 
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _setup_pins(self) -> Tuple[Union[bool, str]]:
         try:
-            self.logger.info('setting up pins')
+            info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
-            com = parameters['com']
+            microstep = parameters['microstep']
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
@@ -250,18 +224,18 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             self._set_led(self._ms2, pins_microstep[com][0][1])
             self._set_led(self._ms3, pins_microstep[com][0][2])
             return True, ''
-        except (KeyError, ValueError, SyntaxError, Exception) as e:
-            self.logger.error(e)
+        except (KeyError, ValueError, SyntaxError) as e:
+            error_logger(self, self._setup_pins, e)
             return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
 
     @development_mode(dev=dev_mode, with_return=None)
     def _set_led(self, led: LED, value: Union[bool, int]):
-        if value == 1:
+        if value >= 1:
             led.on()
         elif value == 0:
             led.off()
         else:
-            self.logger.info(f'func _set_led value {value} is not known')
+            error_logger(self, self._set_led, f'Value {value} is out of range')
 
     def _pins_off(self) -> Tuple[Union[bool, str]]:
         if len(self._pins) == 0:
@@ -274,5 +248,5 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 except Exception as e:
                     error.append(str(e))
             self._pins = []
-            return True, '' if len(error)== 0 else str(error)
+            return True, '' if len(error) == 0 else str(error)
 

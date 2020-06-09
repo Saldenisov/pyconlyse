@@ -8,8 +8,8 @@ from tests.fixtures.services import (stpmtr_emulate_test_non_fixture, stpmtr_a49
 
 import pytest
 
-one_service = [stpmtr_Standa_test_non_fixture()]
-all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
+one_service = [stpmtr_a4988_4axes_test_non_fixture()]
+all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture()]
 test_param = one_service
 
 

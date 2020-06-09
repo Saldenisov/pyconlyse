@@ -9,9 +9,10 @@ long pos = 0;
 long step_ = 1;
 
 //310 turns in delay line in the long one
-// 128 - 1 (better 2)
-
-// 16 - 20 (30)
+// 200 steps in a turn
+// 128 - 1ms (better 2ms)
+....
+// 16 - 20 (30) !!! THIS IS THE BEST. ACCURACY AND CURRENT. CURRENT IS SET 1 A HALF is ACTIVE
 //8 - 40 (50)
 //4 - 80 (100)
 //2 - 180 (200)

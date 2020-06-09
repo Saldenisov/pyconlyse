@@ -31,11 +31,9 @@ class StpMtrController(Service):
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._parameters_set_hardware = False
         if not path.exists(self._file_pos):
-            try:
-                file = open(self._file_pos, "w+")
-                file.close()
-            except Exception as e:
-                self.logger.error(e)
+            file = open(self._file_pos, "w+")
+            file.close()
+
 
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible

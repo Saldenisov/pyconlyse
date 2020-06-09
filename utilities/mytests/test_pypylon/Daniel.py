@@ -9,30 +9,41 @@ from matplotlib.animation import FuncAnimation
 
 figure = plt.figure()
 
-# conecting to the first available camera
-camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
-camera.Open()
-camera.GainRaw.SetValue(0)
-camera.BlackLevelRaw.SetValue(-30)
-camera.TriggerSource.SetValue("Line1")
-camera.TriggerMode.SetValue("On")
-camera.TriggerDelayAbs.SetValue(190000)
-camera.ExposureTimeAbs.SetValue(10000.0)
-camera.BalanceRatioRaw.SetValue(64)
-camera.AcquisitionFrameRateEnable.SetValue(False)
-camera.AcquisitionFrameRateAbs.SetValue(5)
-camera.PixelFormat.SetValue("Mono8")
-converter = pylon.ImageFormatConverter()
+def init():
+    # conecting to the first available camera
+    camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    camera.Open()
+    camera.Width = 550
+    camera.Height = 550
+    camera.OffsetX = 310
+    camera.OffsetY = 290
+    camera.GainRaw.SetValue(0)
+    camera.BlackLevelRaw.SetValue(-30)
+    camera.TriggerSource.SetValue("Line1")
+    camera.TriggerMode.SetValue("On")
+    camera.TriggerDelayAbs.SetValue(190000)
+    camera.ExposureTimeAbs.SetValue(10000.0)
+    camera.BalanceRatioRaw.SetValue(64)
+    camera.AcquisitionFrameRateEnable.SetValue(False)
+    camera.AcquisitionFrameRateAbs.SetValue(5)
+    camera.PixelFormat.SetValue("Mono8")
+    converter = pylon.ImageFormatConverter()
 
-# Transport layer
-# Packet Size
-camera.GevSCPSPacketSize.SetValue(1500)
-# Inter-Packet Delay
-camera.GevSCPD.SetValue(1000)
+    # Transport layer
+    # Packet Size
+    camera.GevSCPSPacketSize.SetValue(1500)
+    # Inter-Packet Delay
+    camera.GevSCPD.SetValue(1000)
 
-# converting to opencv bgr format
-converter.OutputPixelFormat = pylon.PixelType_Mono8
-converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
+    # converting to opencv bgr format
+    converter.OutputPixelFormat = pylon.PixelType_Mono8
+    converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
+
+    return camera, converter
+
+
+camera, converter = init()
+
 
 camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
 while camera.IsGrabbing():
@@ -40,12 +51,12 @@ while camera.IsGrabbing():
     if grabResult.GrabSucceeded():
         # Access the image data
         image = converter.Convert(grabResult)
-        img = imutils.resize(image.GetArray(), width=480, height=480)
-        img = cv2.GaussianBlur(img, (3, 3), 0)
+        #img = imutils.resize(image.GetArray(), width=300, height=300)
+        img = cv2.GaussianBlur(image.GetArray(), (3, 3), 0)
 
         # apply thresholding
 
-        ret, thresh = cv2.threshold(img, 120, 255, 0)
+        ret, thresh = cv2.threshold(img, 80, 255, 0)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # edge detection
@@ -72,6 +83,7 @@ while camera.IsGrabbing():
         cv2.drawContours(img, contours, -1, (0, 255, 0), 1)
 
         cv2.imshow('Raw image', img)
+
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
