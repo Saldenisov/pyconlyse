@@ -10,9 +10,11 @@ if platform.system() == "Windows":
         path_dll = ximc_dir / 'win64' / 'libximc.dll'
     elif arch_type == 'win32':
         path_dll = ximc_dir / 'win32' / 'libximc.dll'
+elif platform.system() == "Linux":
+    pass
 
 else:
-    raise Exception('Only Windows is available at this moment')
+    raise Exception('Only Windows/Linux is available at this moment')
 
 
 
