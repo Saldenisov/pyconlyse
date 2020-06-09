@@ -6,6 +6,7 @@ from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
 from communication.messaging.messengers import PUB_Socket, SUB_Socket, PUB_Socket_Server
 from datastructures.mes_independent.devices_dataclass import Connection
+from devices.devices import Server
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -40,10 +41,7 @@ class GeneralCmdLogic(Thinker):
             msg_int = msg.ext_to_int()
             self.parent.signal.emit(msg_int)
         msg_r = None
-        if msg.com == MsgComExt.ALIVE.msg_name:
-            if msg.sender_id in self.parent.connections:
-                msg_r = None  # MsgGenerator.are_you_alive_reply(device=self.parent_logger, msg_i=msg)
-        elif msg.com == MsgComExt.DO_IT.msg_name:
+        if msg.com == MsgComExt.DO_IT.msg_name:
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                 self.logger.error(f'Adding to executor {msg.info} failed')
         elif msg.com == MsgComExt.DONE_IT.msg_name:
@@ -54,10 +52,16 @@ class GeneralCmdLogic(Thinker):
                 del self.forwarded_messages[msg.reply_to]
                 info_msg(self, 'INFO', f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
             else:
-                pass  # TODO: at this moment Server does not do DO_IT command for itself, it only forwards
+                info: Union[DoneIt, MsgError] = msg.info
+                if info.com == Server.ALIVE.name:
+                    info: FuncAliveOutput = info
+                    print('Alive')
+                    self.events[msg.info.event_id].time = time()
+                    self.events[msg.info.event_id].n = info.event_n
+                    if self.parent.pyqtsignal_connected:
+                        self.parent.signal.emit(msg.ext_to_int())
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
-
         self.msg_out(msg_r)
 
     def react_external(self, msg: MessageExt):
@@ -126,26 +130,26 @@ class GeneralCmdLogic(Thinker):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                self.logger.info(f'{event.name} timeout is reached. Deleting the event {event.id}.')
-                self.remove_device_from_connections(event.original_owner)
-                self.parent.send_status_pyqt()
-                # if self.parent_logger.messenger._attempts_to_restart_sub > 0:
-                #     info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
-                #     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
-                #     self.parent_logger.messenger._attempts_to_restart_sub -= 1
-                #     event.counter_timeout = 0
-                #     addr = self.parent_logger.connections[event.original_owner].device_info.public_sockets[PUB_Socket_Server]
-                #     self.parent_logger.messenger.restart_socket(SUB_Socket, addr)
-                # else:
-                #     if not self.parent_logger.messenger._are_you_alive_send:
-                #         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
-                #         event.counter_timeout = 0
-                #         msg_i = self.parent_logger.generate_msg(msg_com=MsgComExt.ALIVE, receiver_id=event.original_owner)
-                #         self.parent_logger.messenger._are_you_alive_send = True
-                #         self.msg_out(True, msg_i)
-                #     else:
-                #         info_msg(self, 'INFO', 'Server was away for too long...deleting service_info about Server')
-                #         del self.parent_logger.connections[event.original_owner]
+                if self.parent.messenger._attempts_to_restart_sub > 0:
+                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
+                    info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
+                    event.counter_timeout = 0
+                    self.parent.messenger._attempts_to_restart_sub -= 1
+                    addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
+                    self.parent.messenger.restart_socket(SUB_Socket, addr)
+                else:
+                    if not self.parent.messenger._are_you_alive_send:
+                        info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
+                        event.counter_timeout = 0
+                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
+                                                         func_input=FuncAliveInput())
+                        self.parent.messenger._are_you_alive_send = True
+                        self.msg_out(msg_i)
+                    else:
+                        info_msg(self, 'INFO', f'{event.name} timeout is reached. Deleting the event {event.id}.')
+                        info_msg(self, 'INFO', 'Server was away for too long...deleting service_info about Server')
+                        self.remove_device_from_connections(event.original_owner)
+                        self.parent.send_status_pyqt()
 
 
 class ServerCmdLogic(GeneralCmdLogic):
@@ -156,7 +160,6 @@ class ServerCmdLogic(GeneralCmdLogic):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from communication.logic.logic_functions import internal_hb_logic
 
     def react_denied(self, msg: MessageExt):
         pass

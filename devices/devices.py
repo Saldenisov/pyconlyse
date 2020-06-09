@@ -399,6 +399,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 class Server(Device):
     # TODO: refactor
+
+    ALIVE = CmdStruct(FuncAliveInput, FuncAliveOutput)
     GET_AVAILABLE_SERVICES = CmdStruct(FuncAvailableServicesInput, FuncAvailableServicesOutput)
 
     def __init__(self, **kwargs):
@@ -416,6 +418,10 @@ class Server(Device):
             raise Exception('DB_command_type is not determined')
         super().__init__(**kwargs)
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
+
+    def are_you_alive(self, func_input: FuncAliveInput) -> FuncAliveOutput:
+        event = self.thinker.events['heartbeat']
+        return FuncAliveOutput(comments='', func_success=True, device_id=self.id, event_id=event.id, event_n=event.n)
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -444,7 +450,7 @@ class Server(Device):
                                            device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return tuple([Server.GET_AVAILABLE_SERVICES])
+        return tuple([Server.ALIVE, Server.GET_AVAILABLE_SERVICES])
 
     def description(self) -> Desription:
         parameters = self.get_settings('Parameters')

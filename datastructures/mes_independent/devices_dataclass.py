@@ -142,6 +142,19 @@ class FuncActivateOutput(FuncOutput):
 
 
 @dataclass
+class FuncAliveInput(FuncInput):
+    com: str = 'are_you_alive'
+
+
+@dataclass
+class FuncAliveOutput(FuncOutput):
+    device_id: str
+    event_n: float
+    event_id: str
+    com: str = 'are_you_alive'
+
+
+@dataclass
 class FuncAvailableServicesInput(FuncInput):
     com: str = 'get_available_services'
 

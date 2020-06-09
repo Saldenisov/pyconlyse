@@ -96,7 +96,6 @@ class SuperClientGUIcontroller():
 
     def pB_checkServices_clicked(self):
         client = self.device
-
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   func_input=FuncAvailableServicesInput())
         client.send_msg_externally(msg)

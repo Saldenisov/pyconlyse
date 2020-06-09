@@ -266,7 +266,6 @@ class ThinkerEvent(Thread):
         finally:
             info_msg(self, 'STOPPED', extra=f' of {self.parent.name}')
 
-
     def stop(self):
         info_msg(self, 'STOPPING', extra=f' of {self.parent.name}')
         self.active = False

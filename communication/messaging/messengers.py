@@ -215,10 +215,10 @@ class Messenger(MessengerInter):
         self.pause()
         sock = self.sockets[socket_name]
         self.poller.unregister(sock)
-        if socket_name == 'sub':
+        if socket_name == SUB_Socket:
             sock = self.context.socket(zmq.SUB)
             self.poller.register(sock, zmq.POLLIN)
-            self.sockets['sub'] = sock
+            self.sockets[SUB_Socket] = sock
             self.subscribe_sub(connect_to)
             self.logger.info(f'socket {socket_name} is restarted')
         else:
@@ -445,8 +445,8 @@ class ClientMessenger(Messenger):
                             break
                         else:
                             raise MessengerError(f'Not all sockets are sent to {self.name}')
-                    except (AttributeError, Exception) as e:  # IN case when short Heartbeat arrived
-                        pass
+                    except (AttributeError, MessengerError) as e:  # IN case when short Heartbeat arrived
+                        error_logger(self, self._wait_server_hb, e)
         return msg_out
 
 

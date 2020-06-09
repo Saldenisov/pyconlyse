@@ -34,9 +34,7 @@ class MsgComInt(Enum):
 
 
 class MsgComExt(Enum):
-    ALIVE = MessageInfoExt(MsgType.DIRECTED, None, set(['receiver_id']), True)
-    AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices,
-                                        set(['available_services']), True)
+    AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices, set(['available_services']), True)
     DO_IT = MessageInfoExt(MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
     DONE_IT = MessageInfoExt(MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
     ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), False)
