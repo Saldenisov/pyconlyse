@@ -1,17 +1,43 @@
 from collections import deque
-from pypylon import pylon
+from pypylon import pylon, genicam
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 
-def init():
+
+countOfImagesToGrab = 1
+maxCamerasToUse = 2
+
+# Init all camera
+try:
+    # Get the transport layer factory.
+    tlFactory = pylon.TlFactory.GetInstance()
+
+    # Get all attached devices and exit application if no device is found.
+    devices = tlFactory.EnumerateDevices()
+    if len(devices) == 0:
+        raise pylon.RUNTIME_EXCEPTION("No camera present.")
+
+    # Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
+    cameras = pylon.InstantCameraArray(min(len(devices), maxCamerasToUse))
+
+except genicam.GenericException as e:
+    # Error handling
+    print("An exception occurred. {}".format(e))
+    exitCode = 1
+
+
+OffSet = {1: {'X': 310, 'Y': 290}, 0: {'X': 270, 'Y': 120}}
+
+def init(camera_id, camera, devices):
     # conecting to the first available camera
-    camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    #camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    camera.Attach(tlFactory.CreateDevice(devices[camera_id]))
     camera.Open()
     camera.Width = 550
     camera.Height = 550
-    camera.OffsetX = 310
-    camera.OffsetY = 290
+    camera.OffsetX = OffSet[camera_id]['X']
+    camera.OffsetY = OffSet[camera_id]['Y']
     camera.GainRaw.SetValue(0)
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource.SetValue("Line1")
@@ -34,7 +60,7 @@ def init():
     converter.OutputPixelFormat = pylon.PixelType_Mono8
     converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 
-    return camera, converter
+    return converter
 
 
 def read(camera, converter):
@@ -48,9 +74,11 @@ def read(camera, converter):
     grabResult.Release()
     return image.GetArray()
 
+
 def image_treat(image):
     img = cv2.GaussianBlur(image, (3, 3), 0)
     return img
+
 
 def calc(img, threshold=80):
     # apply thresholding
@@ -73,8 +101,18 @@ def calc(img, threshold=80):
     return thresh, contours, cX, cY
 
 
-camera, converter = init()
-camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+converters = []
+
+for i, camera in enumerate(cameras):
+    print(f'Camera {i} is initializing')
+    converters.append(init(i, camera, devices))
+    camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+#cameras.StartGrabbing(pylon.GrabStrategy_LatestImageOnly, pylon.GrabLoop_ProvidedByInstantCamera)
+one, two = 1, 0
+camera1 = cameras[one]
+converter1 = converters[one]
+camera2 = cameras[two]
+converter2 = converters[two]
 
 # Figure
 fig = plt.figure(figsize=(8.5, 5.5))
@@ -84,28 +122,25 @@ ax_im1 = fig.add_subplot(3, 2, 1)
 ax_im2 = fig.add_subplot(3, 2, 2)
 
 ax1_x = fig.add_subplot(3, 2, 3)
-ax1_x.set_ylim(230, 250)
+ax1_x.set_ylim(215, 245)
 ax1_x.set_ylabel('X1 position')
 
-
 ax2_x = fig.add_subplot(3, 2, 4)
-ax2_x.set_ylim(230, 250)
+ax2_x.set_ylim(265, 295)
 ax2_x.set_ylabel('X2 position')
 
 ax1_y = fig.add_subplot(3, 2, 5)
-ax1_y.set_ylim(250, 270)
+ax1_y.set_ylim(260, 280)
 ax1_y.set_ylabel('Y1 position')
 
 ax2_y = fig.add_subplot(3, 2, 6)
-ax2_y.set_ylim(250, 270)
+ax2_y.set_ylim(260, 290)
 ax2_y.set_ylabel('Y2 position')
 
-
-
-
 # create two image plots
-img1 = read(camera, converter)
-img2 = img1
+img1 = read(camera1, converter1)
+img2 = read(camera2, converter2)
+
 positionsX1 = deque([], maxlen=120)
 positionsX2 = deque([], maxlen=120)
 positionsY1 = deque([], maxlen=120)
@@ -124,11 +159,11 @@ fig.show()
 
 plt.ion()
 
-while camera.IsGrabbing():
+while camera1.IsGrabbing():
     [p.remove() for p in reversed(ax_im1.patches)]
     [p.remove() for p in reversed(ax_im2.patches)]
-    img1 = read(camera, converter)
-    img2 = img1
+    img1 = read(camera1, converter1)
+    img2 = read(camera2, converter2)
     img1 = image_treat(img1)
     img2 = image_treat(img2)
     thresh1, contours1, cX1, cY1 = calc(img1)

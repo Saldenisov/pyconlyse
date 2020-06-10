@@ -13,8 +13,6 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 from gpiozero import LED
 import logging
 from time import sleep
-
-from datastructures.mes_independent import FuncActivateInput, FuncActivateOutput
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -35,10 +33,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         super().__init__(**kwargs)
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        res, comments = super()._connect(flag)
-        if res:
-            self._disable_controller()
-        return res, comments
+        return super()._connect(flag)
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
