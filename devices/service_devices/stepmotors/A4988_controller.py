@@ -20,7 +20,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = False
+dev_mode = True
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -131,6 +131,16 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                                       f'was finished.'
         return res, comments
 
+    def _release_hardware(self) -> Tuple[bool, str]:
+        try:
+            for pin in self._pins:
+                pin.close()
+            return True, ''
+        except Exception as e:
+            error_logger(self, self._release_hardware, e)
+            return False, f'{e}'
+
+
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
         if res:
@@ -162,21 +172,20 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         else:
             return super()._set_parameters()
 
-
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
     def _change_relay_state(self, n: int, flag: int):
         if flag:
-            if n == 0:
+            if n == 1:
                 self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 1:
+            elif n == 2:
                 self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 2:
+            elif n == 3:
                 self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 3:
+            elif n == 4:
                 self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
             sleep(0.1)
@@ -198,7 +207,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     @development_mode(dev=dev_mode, with_return=None)
     def _deactivate_all_relay(self):
         for axis in range(4):
-            self._change_relay_state(axis, 0)
+            self._change_relay_state(axis + 1, 0)
         sleep(0.1)
 
     @development_mode(dev=dev_mode, with_return=None)

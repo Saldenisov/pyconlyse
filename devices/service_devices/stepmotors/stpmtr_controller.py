@@ -1,8 +1,6 @@
 from abc import abstractmethod
 from os import path
 from pathlib import Path
-from threading import Thread
-from time import sleep, time
 from utilities.errors.myexceptions import DeviceError
 from utilities.myfunc import error_logger, info_msg
 from devices.devices import Service
@@ -54,6 +52,7 @@ class StpMtrController(Service):
                         self.device_status.active = True
             else:
                 results, comments_l = ([], [])
+
                 for axis_id, axis in self.axes.items():
                     res, comments = self._change_axis_status(axis.id, 0)
                     results.append(res)
@@ -68,6 +67,10 @@ class StpMtrController(Service):
                     comments = info + comments
                 if res:
                     self.device_status.active = flag
+                res, info = self._release_hardware()
+                if not res:
+                    comments = comments + f'Hardware was not realeased properly: {info}'
+
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
 
@@ -401,6 +404,10 @@ class StpMtrController(Service):
             comments = f'Desired pos: {pos} for axis id={axis_id}, name={self.axes[axis_id].name} is not ' \
                        f'in the range {self.axes[axis_id].limits}'
             return False, comments
+
+    @abstractmethod
+    def _release_hardware(self) -> Tuple[bool, str]:
+        pass
 
     def _set_axes_ids(self):
         # Axes ids must be in ascending order
