@@ -65,6 +65,10 @@ class SuperUserView(QMainWindow):
                     names = []
                     for key, item in result.device_available_services.items():
                         names.append(f'{key}')
+                        client = self.model.superuser
+                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=key,
+                                                  func_input=FuncServiceInfoInput())
+                        client.send_msg_externally(msg)
                     widget.addItems(names)
                     self.model.superuser.running_services = result.device_available_services
                 elif info.com == Service.SERVICE_INFO.name:

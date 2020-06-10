@@ -85,3 +85,6 @@ class StpMtrCtrl_emulate(StpMtrController):
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
         return super()._set_controller_positions(positions)
 
+    def _release_hardware(self) -> Tuple[bool, str]:
+        super(StpMtrCtrl_emulate, self)._release_hardware()
+    

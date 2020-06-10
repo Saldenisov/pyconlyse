@@ -149,6 +149,7 @@ class StepMotorsView(QMainWindow):
                     elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                         result: FuncMoveAxisToOutput = result
                         self.controller_axes = result.axes
+                        self._update_progessbar_pos(force=True)
                     elif info.com == StpMtrController.GET_POS.name:
                         result: FuncGetPosOutput = result
                         self.controller_axes = result.axes
@@ -161,6 +162,7 @@ class StepMotorsView(QMainWindow):
                     elif info.com == StpMtrController.STOP_AXIS.name:
                         result: FuncStopAxisOutput = result
                         self.controller_axes = result.axes
+                        self._update_progessbar_pos(force=True)
                     elif info.com == StpMtrController.POWER.name:
                         result: FuncPowerOutput = result
                         self.controller_status.device_status = result.device_status
@@ -193,6 +195,9 @@ class StepMotorsView(QMainWindow):
     def update_state(self, force=False):
         cs = self.controller_status
         ui = self.ui
+
+        self._update_progessbar_pos()
+
         if cs.axes != cs.axes_previous or force:
             for now, then in zip(cs.axes.items(), cs.axes_previous.items()):
                 if now != then:
@@ -208,8 +213,6 @@ class StepMotorsView(QMainWindow):
             ui.label_ranges.setText(_translate("StpMtrGUI", str(axis.limits)))
             ui.label_preset.setText(_translate("StpMtrGUI", str(axis.preset_values)))
 
-            self._update_progessbar_pos()
-
             self.controller_status.axes_previous = copy.deepcopy(cs.axes)
 
         if cs.device_status != cs.device_status_previous or force:
@@ -221,10 +224,10 @@ class StepMotorsView(QMainWindow):
 
             self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
 
-    def _update_progessbar_pos(self):
+    def _update_progessbar_pos(self, force=False):
         axis = int(self.ui.spinBox_axis.value())
         pos = self.controller_status.axes[axis].position
-        if self.controller_status.axes[axis].status == 2 and self.ui.spinBox_axis.value() == axis:
+        if (self.controller_status.axes[axis].status == 2 or force) and self.ui.spinBox_axis.value() == axis:
             start = self.controller_status.start_stop[axis][0]
             stop = self.controller_status.start_stop[axis][1]
             per = int((pos - start) / (stop - start) * 100.0)
