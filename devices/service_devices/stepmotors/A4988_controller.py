@@ -13,6 +13,8 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 from gpiozero import LED
 import logging
 from time import sleep
+
+from datastructures.mes_independent import FuncActivateInput, FuncActivateOutput
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -20,7 +22,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = True
+dev_mode = False
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -32,8 +34,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         self._ttl = None  # to make controller work when dev_mode is ON
         super().__init__(**kwargs)
 
+    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
+        return super().activate(func_input)
+
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        return super()._connect(flag)
+        res, comments = super()._connect(flag)
+        if res:
+            self._disable_controller()
+        return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
@@ -174,32 +182,32 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
-    def _change_relay_state(self, n: int, flag: int):
+    def _change_relay_state(self, axis_id: int, flag: int):
         if flag:
-            if n == 1:
+            if axis_id == 1:
                 self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 2:
+            elif axis_id == 2:
                 self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 3:
+            elif axis_id == 3:
                 self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.ON)
-            elif n == 4:
+            elif axis_id == 4:
                 self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
             sleep(0.1)
-        elif flag:
-            if n == 0:
+        elif flag == 0:
+            if axis_id == 1:
                 self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
                 self._set_led(self._relayIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 1:
+            elif axis_id == 2:
                 self._set_led(self._relayIIa, StpMtrCtrl_a4988_4axes.OFF)
                 self._set_led(self._relayIIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 2:
+            elif axis_id == 3:
                 self._set_led(self._relayIIIa, StpMtrCtrl_a4988_4axes.OFF)
                 self._set_led(self._relayIIIb, StpMtrCtrl_a4988_4axes.OFF)
-            elif n == 3:
+            elif axis_id == 4:
                 self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
                 self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
             sleep(0.1)

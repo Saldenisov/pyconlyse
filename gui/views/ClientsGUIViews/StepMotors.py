@@ -34,7 +34,8 @@ class StepMotorsView(QMainWindow):
                                                            device_status=service_parameters.device_status,
                                                            device_status_previous=service_parameters.device_status)
         if not self.controller_status.start_stop:
-            self.controller_status.start_stop = [[0, 0]] * len(self.controller_status.axes)
+            self.controller_status.start_stop = {axis_id: [0, 0] for axis_id in self.controller_status.axes.keys()}
+
         self.name = f'StepMotorsClient:view: {service_parameters.device_id} {get_local_ip()}'
         self.logger = logging.getLogger("StepMotors." + __name__)
         info_msg(self, 'INITIALIZING')
