@@ -35,7 +35,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         super().__init__(**kwargs)
 
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        return super().activate(func_input)
+        res, comments = super().activate(func_input)
+        if res:
+            self._disable_controller()
+        return res, comments
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         res, comments = super()._connect(flag)
