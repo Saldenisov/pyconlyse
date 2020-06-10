@@ -20,7 +20,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = True
+dev_mode = False
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -28,9 +28,9 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     OFF = 1
 
     def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self._ttl = None  # to make controller work when dev_mode is ON
         self._pins = []
+        self._ttl = None  # to make controller work when dev_mode is ON
+        super().__init__(**kwargs)
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
@@ -157,7 +157,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return super()._set_controller_positions(positions)
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        return super()._set_parameters(extra_func=[self._setup])
+        if self.device_status.connected:
+            return super()._set_parameters(extra_func=[self._setup])
+        else:
+            return super()._set_parameters()
+
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
@@ -220,7 +224,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
-            microstep = parameters['microstep']
+            microstep = int(parameters['microstep'])
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])

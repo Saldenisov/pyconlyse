@@ -33,8 +33,6 @@ class StpMtrController(Service):
         if not path.exists(self._file_pos):
             file = open(self._file_pos, "w+")
             file.close()
-
-
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible
         if not res:
@@ -68,7 +66,6 @@ class StpMtrController(Service):
                     info = 'Cannot deactivate. '
                     comments = ' '.join(comments_l)
                     comments = info + comments
-
                 if res:
                     self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
@@ -376,7 +373,6 @@ class StpMtrController(Service):
                 for key, val in pos.items():
                     if not (isinstance(val, int) or isinstance(val, float)):
                         raise StpMtrError(f"val {val} is not a number")
-
         return pos
 
     @abstractmethod
