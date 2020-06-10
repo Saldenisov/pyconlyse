@@ -59,7 +59,7 @@ class Messenger(MessengerInter):
         """
 
         super().__init__()
-        self._attempts_to_restart_sub = 1  # restart subscriber
+        self._attempts_to_restart_sub = 10  # restart subscriber
         self._are_you_alive_send = False
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')

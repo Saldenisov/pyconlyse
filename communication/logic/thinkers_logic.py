@@ -55,9 +55,10 @@ class GeneralCmdLogic(Thinker):
                 info: Union[DoneIt, MsgError] = msg.info
                 if info.com == Server.ALIVE.name:
                     info: FuncAliveOutput = info
-                    print('Alive')
                     self.events[msg.info.event_id].time = time()
                     self.events[msg.info.event_id].n = info.event_n
+                    msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
+                                                     func_input=FuncAliveInput())
                     if self.parent.pyqtsignal_connected:
                         self.parent.signal.emit(msg.ext_to_int())
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
@@ -131,10 +132,11 @@ class GeneralCmdLogic(Thinker):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
                 if self.parent.messenger._attempts_to_restart_sub > 0:
-                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket')
+                    self.parent.messenger._attempts_to_restart_sub -= 1
+                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket. '
+                                           'Attempts left {self.parent.messenger._attempts_to_restart_sub}.')
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     event.counter_timeout = 0
-                    self.parent.messenger._attempts_to_restart_sub -= 1
                     addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
                     self.parent.messenger.restart_socket(SUB_Socket, addr)
                 else:
