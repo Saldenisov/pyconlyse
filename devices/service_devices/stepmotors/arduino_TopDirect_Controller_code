@@ -27,6 +27,19 @@ bool move_type = false;
 //max full steps is 62900
 const long max_full_steps = 62900;
 
+//errors
+// 0 - no error
+// -1 - out of range
+// -2 - wrong cmd structure
+// -3 - cmd not known
+
+
+// example cmd
+// MOVE ABS 1000.0 in full turns
+// MOVE REL -500
+// POS - get positions of controller
+// SET POS XXX - set position of contoller to a new value
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(pulPin, OUTPUT);
@@ -108,7 +121,7 @@ int execute_cmd(String &cmd, float &pos)
         move_type = true;
       }
       else {
-        res = -1;
+        res = -2;
       }
       str_object = String(strtok(p, " "));
       if (str_object != NULL){
@@ -116,7 +129,7 @@ int execute_cmd(String &cmd, float &pos)
         res = runit(go_pos, move_type, pos);
       }
       else{
-        res = -1;
+        res = -2;
       }
        return res;
      }
@@ -132,14 +145,15 @@ int execute_cmd(String &cmd, float &pos)
         pos = str_object.toFloat();
       }
       else{
-        return -1;
+        return -2;
       }
     }
       return 0;
   }
+  else{
+    return -3;
+  }
 }
-
-
 
 void loop() {
 
@@ -147,7 +161,9 @@ void loop() {
     // read the incoming String, it is not string:
     str_object = Serial.readString();
     res = execute_cmd(str_object, pos);
-    delay(200);
+    delay(100);
+    Serial.println(res);
+    delay(100);
     //clean serial before receiving the next command
     Serial.flush();
   }
