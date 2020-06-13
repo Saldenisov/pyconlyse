@@ -1,3 +1,4 @@
+const String ID = "ARDUINO:StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c";
 const int pulPin = 13;
 const int dirPin = 12;
 const int enblPin = 11;
@@ -133,9 +134,20 @@ int execute_cmd(String &cmd, float &pos)
       }
        return res;
      }
-  else if (str_object == "POS"){
-    Serial.println(pos);
-    return 0;
+  else if (str_object == "GET"){
+    str_object = String(strtok(p, " "));
+    if (str_object == "POS"){
+      Serial.println(pos);
+      return 0;
+    }
+    else if (str_object == "ID"){
+      Serial.println(ID);
+      return 0;
+    }
+    else{
+      return -2;
+    }
+
   }
   else if (str_object == "SET"){
     str_object = String(strtok(p, " "));
@@ -162,7 +174,9 @@ void loop() {
     str_object = Serial.readString();
     res = execute_cmd(str_object, pos);
     delay(100);
-    Serial.println(res);
+    if (res != 0){
+      Serial.println(res);
+    }
     delay(100);
     //clean serial before receiving the next command
     Serial.flush();
