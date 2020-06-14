@@ -28,7 +28,7 @@ class BooleanTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "BooleanTestSuite_TestValueAccess")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         value = Camera._GetNode("Trigger")
         value = Camera.GetNode("Trigger")
 
@@ -101,12 +101,12 @@ class BooleanTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "BooleanTestSuite_TestRegAccess")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
 
         Port.CreateEntry(0x00ff, "uint8_t", 0, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         value = Camera._GetNode("Trigger")
@@ -150,11 +150,11 @@ class BooleanTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "BooleanTestSuite_TestRegAccess1")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x00ff, "uint8_t", 3, RW, LittleEndian)  # for LOGICAL_ERROR_EXCEPTION in GetValue
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         value = Camera._GetNode("Trigger")
@@ -183,7 +183,7 @@ class BooleanTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "BooleanTestSuite_TestAccessMode")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         value = Camera._GetNode("Trigger")
 
         self.assertEqual(1, value.GetValue())

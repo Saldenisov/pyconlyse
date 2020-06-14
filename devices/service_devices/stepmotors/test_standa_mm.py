@@ -183,7 +183,7 @@ for dev_ind in range(0, dev_count):
     enum_name = lib.get_device_name(devenum, dev_ind)
     result = lib.get_enumerate_device_controller_name(devenum, dev_ind, byref(controller_name))
     if result == Result.Ok:
-        print("Enumerated device #{} name (port name): ".format(dev_ind)
+        print("Enumerated device #{} name (com_port name): ".format(dev_ind)
               + repr(enum_name)
               + ". Friendly name: "
               + repr(controller_name.ControllerName) + ".")

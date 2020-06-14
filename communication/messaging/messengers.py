@@ -406,7 +406,7 @@ class ClientMessenger(Messenger):
             if port not in addresses:
                 raise Exception(f'Not enough ports {port} were passed to {self.name}')
         from utilities.myfunc import verify_port
-        # Check only publisher port availability
+        # Check only publisher com_port availability
         port = verify_port(addresses[PUB_Socket])
         local_ip = get_local_ip()
         self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'

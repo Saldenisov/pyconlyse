@@ -150,7 +150,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         # TODO: not all parameters are set
         try:
-            list_param = ['DLL_path', 'interface', 'baudrate', 'port', 'speeds', 'gear_ratios', 'pitches']
+            list_param = ['DLL_path', 'interface', 'baudrate', 'com_port', 'speeds', 'gear_ratios', 'pitches']
             settings = self.get_general_settings()
             for param in list_param:
                 if param not in settings:
@@ -159,7 +159,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
             self._PS90 = ctypes.WinDLL(self._DLpath)
             self._interface = int(settings['interface'])
             self._baudrate = int(settings['baudrate'])
-            self._port = int(settings['port'])
+            self._port = int(settings['com_port'])
             self._axes_speeds: List[float] = self._get_list_db("Parameters", 'speeds', float)
             self._axes_gear_ratios: List[int] = self._get_list_db("Parameters", 'gear_ratios', int)
             return True, ''
@@ -180,24 +180,24 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         long PS90_Connect (long Index, long Interface, long p1, long p2, long p3, long p4, long p5, long p6)
         Description
-        open interface and connect to PS 90. Serial interface (communication via USB or serial port)
-        The application software can access this interface in the same way as it would access a standard serial port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
+        open interface and connect to PS 90. Serial interface (communication via USB or serial com_port)
+        The application software can access this interface in the same way as it would access a standard serial com_port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
         Example
         Open COM3 and connect to PS 90 (Index=1):
         long error = PS90_Connect(1, 0, 3, 9600, 0, 0, 0, 0);
         :param control_unit: Index control unit index 1–10 (default=1, range=1...20)  11...20 – debug mode 1...10 – standard mode
-        :param interface: Interface define interface (default=0) USB or serial port (=0)
-        :param port or p1: p1 define COM port (default=1 – COM1, range=0...255)
+        :param interface: Interface define interface (default=0) USB or serial com_port (=0)
+        :param com_port or p1: p1 define COM com_port (default=1 – COM1, range=0...255)
         :param baudrate or p2: p2 define request mode for communication (default=9600) 115200 – fast read (all bytes, fast check) 19200 – fast read (all bytes, slow check)  9600* – standard read (byte-by-byte)
         :param par3: p3 define delay value (=20+x) for serial communication (default=20 ms)
         :param par4: p4 system value (default=0) 10 – without check 0* – with check (firmware, terminal mode, clear error)
-        :param par5: p5 system value (default=0) 10 – with port flush  0* – without port flush
+        :param par5: p5 system value (default=0) 10 – with com_port flush  0* – without com_port flush
         :param par6: p6 system value (default=0) 5 – reconnect for every message  0* – without reconnect
 
         :return: 0 – function was successful 1...9 – error
         1 function error (invalid parameters)
-        3 invalid serial port (port is not found)
-        4 access react_denied (port is busy)
+        3 invalid serial com_port (com_port is not found)
+        4 access react_denied (com_port is busy)
         5 no response from control unit (check cable, connection or reset control unit)
         8 no connection to modbus/tcp
         9 no connection to tcp/ip socket
@@ -220,8 +220,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
         long PS90_SimpleConnect (long Index, const char* pszSerNum)
         Description
         find control unit with the specified serial number and connect to it.
-        Serial interface (communication via USB or serial port)
-        The application software can access this interface in the same way as it would access a standard serial port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
+        Serial interface (communication via USB or serial com_port)
+        The application software can access this interface in the same way as it would access a standard serial com_port (COM). The parameters for Baudrate, Parity, Databits and Stopbits are predefined (9600, no parity, 8 databits, 1 stopbit).
         The software handshake character is CR.
         Ethernet interface (communication via Com-Server)
         As Com-Server the OWIS software tool “OWISerialServer.exe” may be used (..\OWISoft\Application\system). Alternatively, you can use other commercial products (hardware/software). The application software can access this interface via Windows TCP socket: special communication for OWIS software (command + delay). The software handshake character is CR.
@@ -232,11 +232,11 @@ class StpMtrCtrl_OWIS(StpMtrController):
                              11...20 – debug mode
                              1...10 – standard mode
         :param sernum: pszSerNum control unit serial number (default=empty string)
-                       USB or serial port
+                       USB or serial com_port
                        empty string – the first found control unit is connected;
                        “12345678” – control unit with the specified serial number is connected;
                        Ethernet interface
-                       “net” – control unit is connected to the Com-Server (local application) by the first found local IP address and port number 1200.
+                       “net” – control unit is connected to the Com-Server (local application) by the first found local IP address and com_port number 1200.
         :return: 0 – function was successful
                  1...9 – error
                  1 function error (invalid parameters)
@@ -719,8 +719,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :param type: 0 for Connection error codes, 1 for Function error codes
         :return: error as string
         """
-        errors_connections = {0: 'no error', -1: 'function error', -2: 'invalid serial port (port is not found)',
-                  -3: 'access react_denied  (port is busy)', -4: 'access react_denied  (port is busy)',
+        errors_connections = {0: 'no error', -1: 'function error', -2: 'invalid serial com_port (com_port is not found)',
+                  -3: 'access react_denied  (com_port is busy)', -4: 'access react_denied  (com_port is busy)',
                   -5: 'no response from control unit', -7: 'control unit with the specified serial number is not found',
                   -8: 'no connection to modbus/tcp', -9: 'no connection to tcp/ip socket'}
         errors_functions = {0: 'no error', -1: 'function error', -2: 'communication error', -3: 'syntax error',

@@ -166,7 +166,7 @@ def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(('', port))  # Try to open port
+        s.bind(('', port))  # Try to open com_port
         s.close()
         return False
     except OSError:

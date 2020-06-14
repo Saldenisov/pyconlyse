@@ -632,7 +632,7 @@ class NodeTestSuite(GenicamTestCase):
         # ensure that the default caching mode is WriteThrough (for both, child and parent node, there is no caching mode specified
         self.assertEqual(genicam.WriteThrough, Int11.Node.GetCachingMode())
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         #    short s = (short)0xfdfd # *JS* removed warning
         s = 0xfdfd
@@ -640,7 +640,7 @@ class NodeTestSuite(GenicamTestCase):
         Port.CreateEntry(0x0012, "uint16_t", s, RW, LittleEndian)
         Port.CreateEntry(0x0014, "uint16_t", s, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         # No cache
@@ -658,7 +658,7 @@ class NodeTestSuite(GenicamTestCase):
         Int.SetValue(n2)
         self.assertEqual(n2, Int.GetValue())
 
-        # Let's play directly with the values within the port
+        # Let's play directly with the values within the com_port
         NoCache = Camera.GetNode("Int01")
         Through = Camera.GetNode("Int02")
         Around = Camera.GetNode("Int03")
@@ -1265,11 +1265,11 @@ class NodeTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "NodeTestSuite_TestStructReg")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x02, "uint32_t", 0xFFFFFFFF, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Bit0 = Camera.GetNode("Bit0")
@@ -1452,7 +1452,7 @@ class NodeTestSuite(GenicamTestCase):
         Camera._LoadXMLFromFile("GenApiTest", "NodeTestSuite_TestAccessModeCache")
         Camera._Connect(Port, "MyPort")
 
-        # (connect also the other tested port)
+        # (connect also the other tested com_port)
         PortJ = CTestPort()
         Camera._Connect(PortJ, "J")
 

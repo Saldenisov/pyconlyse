@@ -57,12 +57,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestValueAccessSwiss")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xfff0, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -128,12 +128,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestValueAccessIndex")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xfff0, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -203,12 +203,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestValueAccessIndexPOffset")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xfff0, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -266,12 +266,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestValueAccessIndexNoOffset")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xff04, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -325,12 +325,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestValueAccess")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xfff0, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -395,12 +395,12 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestEmbeddedSwissKnife")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0xff00, "uint32_t", 0x12345678, RW, LittleEndian)
         Port.CreateEntry(0xfff0, "uint32_t", 0x87654321, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")
@@ -449,11 +449,11 @@ class RegisterTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "RegisterTestSuite_TestEmbeddedSwissKnife2")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x400, "uint32_t", 0x12345678, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Register = Camera.GetNode("Register")

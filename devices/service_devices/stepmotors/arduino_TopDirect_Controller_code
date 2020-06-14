@@ -13,21 +13,20 @@ int delay_time = 28;
 //max full steps is 62900
 const long max_full_steps = 62900;
 
-
+//MOVING  RELATED VARIABLES
 float go_pos = 0; // in full steps at this momemnt
 long pos = 0; // in microsteps
-long delta = 0.0;
-int res = 0;
-bool ready = false;
+bool ready_to_work = false;
 bool ctrl_state = false;
 bool moving = false;
+bool move_type = false; // false corrsponds to ABS, True to RELATIVE
 
 
+//CMD RELATED VAIABLES
 const int max_size_cmd = 32;
 char buf[max_size_cmd];
 String str_object = "";
-// false corrsponds to ABS, True to RELATIVE
-bool move_type = false;
+int res = 0;
 
 //errors
 // 0 - no error
@@ -43,7 +42,7 @@ bool move_type = false;
 // SET POS XXX - set position of contoller to a new value
 
 
-void set_state(bool state){
+void set_state_ctrl(bool state){
   if (state != ctrl_state){
     digitalWrite(enblPin, HIGH);
     delay(100);
@@ -55,22 +54,6 @@ void set_state(bool state){
   }
 }
 
-void setup() {
-  // put your setup code here, to run once:
-  pinMode(pulPin, OUTPUT);
-  pinMode(dirPin, OUTPUT);
-  pinMode(enblPin, OUTPUT);
-
-  digitalWrite(pulPin, LOW);
-  digitalWrite(enblPin, LOW);
-  digitalWrite(dirPin, LOW);
-
-  set_state(true);
-
-  Serial.begin(9600);
-  Serial.println("init");
-}
-
 void set_dir(int dir){
   if (dir == 1){
     digitalWrite(dirPin, LOW);
@@ -80,33 +63,37 @@ void set_dir(int dir){
   }
 }
 
+void make_TTL(){
+    digitalWrite(pulPin, HIGH);
+    delayMicroseconds(delay_time);
+    digitalWrite(pulPin, LOW);
+    delayMicroseconds(delay_time);
+}
 
 int runit(float go_pos, bool move_type, long &pos){
-  //setting direction of rotation
+  long delta;
+  int dir;
+
   if (move_type){ // If RELATIVE
     go_pos = go_pos + pos;
   }
 
   delta = go_pos - pos;
-  int dir;
+
   if (delta != 0 & go_pos <= max_full_steps & go_pos >= 0 & ctrl_state){
     if (delta < 0){
-      set_dir(-1);
       dir = -1;
     }
     else{
-      set_dir(1);
       dir = 1;
     }
-  long n_of_microsteps = long(abs(delta) * microsteps);
 
+  set_dir(dir);  //setting direction of rotation
+  long n_of_microsteps = long(abs(delta) * microsteps);
   long pas = 0;
   moving = true;
   while (pas < n_of_microsteps & ctrl_state){
-    digitalWrite(pulPin, HIGH);
-    delayMicroseconds(delay_time);
-    digitalWrite(pulPin, LOW);
-    delayMicroseconds(delay_time);
+    make_TTL();
     pos += dir;
     pas++;
   }
@@ -189,7 +176,7 @@ int execute_cmd(String &cmd, long &pos)
       str_object = String(strtok(p, " "));
       if (str_object != NULL){
         bool state = static_cast<bool>(str_object.toInt()) ;
-        set_state(state);
+        set_state_ctrl(state);
       }
       else{
         return -2;
@@ -202,18 +189,33 @@ int execute_cmd(String &cmd, long &pos)
   }
 }
 
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(pulPin, OUTPUT);
+  pinMode(dirPin, OUTPUT);
+  pinMode(enblPin, OUTPUT);
+
+  digitalWrite(pulPin, LOW);
+  digitalWrite(enblPin, LOW);
+  digitalWrite(dirPin, LOW);
+
+  set_state_ctrl(true);
+
+  Serial.begin(9600);
+  Serial.println("init");
+}
+
 void loop() {
 
   if (Serial.available() > 0) {
-    // read the incoming String, it is not string:
-    str_object = Serial.readString();
-    res = execute_cmd(str_object, pos);
+    str_object = Serial.readString();  // read the incoming cmd into String object
+    res = execute_cmd(str_object, pos);  // obtain result 0, -1, -2, -3 (see ERRORS)
     delay(100);
     if (res != 0){
       Serial.println(res);
     }
     delay(100);
-    //clean serial before receiving the next command
-    Serial.flush();
+    Serial.flush();  //clean serial before receiving the next command. If user send other commands before the execution of previous. Arduino ctrl will reject them.
   }
 }

@@ -44,11 +44,11 @@ class FloatTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "FloatTestSuite_TestValueAccess")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x00ff, "float32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         floatValue = Camera._GetNode("MyFloat")
@@ -372,7 +372,7 @@ class FloatTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "FloatTestSuite_TestFloatRegNodeAccess")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x0000, "float32_t", 3.12159, RW, LittleEndian)
         Port.CreateEntry(0x0010, "float64_t", 2.71828, RW, LittleEndian)
@@ -383,7 +383,7 @@ class FloatTestSuite(GenicamTestCase):
         Port.CreateEntry(0x0060, "float64_t", 42.0, RW, LittleEndian)
         Port.CreateEntry(0x0070, "float64_t", 42.0, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         floatValue = Camera.GetNode("Float")
@@ -463,11 +463,11 @@ class FloatTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "FloatTestSuite_TestFloatRegWriteAroundCaching")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x0000, "float32_t", 3.0, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         floatReg = Camera.GetNode("FloatReg")
@@ -478,7 +478,7 @@ class FloatTestSuite(GenicamTestCase):
         # write a new value
         floatReg.SetValue(4.5)
 
-        # modifiy the value in the port object to simulate a hardware that modifies
+        # modifiy the value in the com_port object to simulate a hardware that modifies
         # a written value (e.g. rounding)
 
         # CLittleEndian<float> newValue = 5.0
@@ -862,12 +862,12 @@ class FloatTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "FloatTestSuite_TestFloatpLength")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x0000, "float32_t", 42.1, RW, LittleEndian)
         Port.CreateEntry(0x00ff, "float64_t", 13.2, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         floatValue = Camera.GetNode("Float")

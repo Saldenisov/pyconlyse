@@ -371,13 +371,13 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestCallback06")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x000, "float32_t", 42, RW, BigEndian)
         Port.CreateEntry(0x004, "float32_t", 42, RW, BigEndian)
         Port.CreateEntry(0x008, "float32_t", 42, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         CallbackUtility.Reset()
@@ -505,7 +505,7 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestCallback07")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0, "uint64_t", 42, RW, BigEndian)
         Port.CreateEntry(8, "uint32_t", 10, RW, BigEndian)
@@ -514,7 +514,7 @@ class CallbackTestSuite(GenicamTestCase):
         Port.CreateEntry(20, "uint32_t", 50, RW, BigEndian)
         Port.CreateEntry(24, "uint32_t", 60, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
         cbPrice, cbFood, cbPerson = [CallbackObject() for i in range(3)]
 
@@ -639,7 +639,7 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestCallback08")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0, "uint64_t", 42, RW, BigEndian)
         Port.CreateEntry(8, "uint32_t", 10, RW, BigEndian)
@@ -648,7 +648,7 @@ class CallbackTestSuite(GenicamTestCase):
         Port.CreateEntry(20, "uint32_t", 50, RW, BigEndian)
         Port.CreateEntry(24, "uint32_t", 60, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         cbA, cbB, cbC, cbD, cbE, cbF, cbG = [CallbackObject() for i in range(7)]
@@ -823,7 +823,7 @@ class CallbackTestSuite(GenicamTestCase):
      * Several tricks are used to mimic the camera.
      * - the smart feature address is directly set in the register space (see sfvalue
      *   bitset) and matches the value in XML description
-     * - the port object handles the hardcoded address (0) differently and returns
+     * - the com_port object handles the hardcoded address (0) differently and returns
      *   0 or -1 depending on an internal state.
      """
 
@@ -905,7 +905,7 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestCallback09")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CMyTestPort()
         # int8_t sfvalue[24]
         # all bits set => feature is not available
@@ -917,7 +917,7 @@ class CallbackTestSuite(GenicamTestCase):
         Port.CreateEntry(0x008, "raw", 24, sfvalue, RW)
         Port.CreateEntry(0x020, "uint32_t", -1, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         cbA, cbB, cbC, cbD, cbE, cbF, cbG = [CallbackObject() for i in range(7)]
@@ -1037,13 +1037,13 @@ class CallbackTestSuite(GenicamTestCase):
 
     def _TestCallback10(self, Camera):
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x000, "uint32_t", 42, RW, LittleEndian)
         Port.CreateEntry(0x004, "uint32_t", 42, RW, LittleEndian)
         Port.CreateEntry(0x008, "uint32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         A = Camera.GetNode("A")
@@ -1265,14 +1265,14 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestCallback11")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         testvalue = "foobar "
         testlength = 7
         Port.CreateEntry(0x000, "int32_t", testlength, RW, LittleEndian)  # StringLenght
         Port.CreateEntry(0x004, "str", testvalue, RW, LittleEndian)  # StringValue
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         CallbackUtility.Reset()
@@ -1480,12 +1480,12 @@ class CallbackTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CallbackTestSuite_TestPortInvalidate")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x000, "int32_t", 42, RW, LittleEndian)
         Port.CreateEntry(0x004, "int32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         CallbackUtility.Reset()
@@ -1498,7 +1498,7 @@ class CallbackTestSuite(GenicamTestCase):
 
         # touch the invalidator
         Invalidator.SetValue(80)
-        # verify that the values depending on the port were invalidated
+        # verify that the values depending on the com_port were invalidated
         # ie. cache bypassed
 
         Value = 88

@@ -767,7 +767,7 @@ class ConverterTestSuite(GenicamTestCase):
         self.assertEqual(3, IntResult.GetValue())
 
     def test_FormulaProperty(self):
-        # TODOT061 : port this test to new GetProperty signature
+        # TODOT061 : com_port this test to new GetProperty signature
         return
 
         # create and initialize node map

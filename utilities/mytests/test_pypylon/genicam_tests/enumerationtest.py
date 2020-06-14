@@ -111,7 +111,7 @@ class EnumerationTestSuite(GenicamTestCase):
         # StopWatch.PauseEnd()
         # TEST_END( Enumeration::FromString )
 
-        # now some tests with the other enum, connected to a real port
+        # now some tests with the other enum, connected to a real com_port
         Port = CTestPort()
         Port.CreateEntry(0x000, "int32_t", 10, RW, LittleEndian)
         Camera._Connect(Port, "Port")
@@ -314,7 +314,7 @@ class EnumerationTestSuite(GenicamTestCase):
         Port = CTestPort()
         Port.CreateEntry(0x0104, "uint32_t", 1024, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         Value = Camera.GetNode("PixelFormat")

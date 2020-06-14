@@ -155,7 +155,7 @@ class IntegerTestSuite(GenicamTestCase):
         Port = CTestPort()
         Port.CreateEntry(0x0104, "uint32_t", 1024, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         value = Camera.GetNode("Value")
@@ -201,7 +201,7 @@ class IntegerTestSuite(GenicamTestCase):
         Port = CTestPort()
         Port.CreateEntry(0x0104, "uint32_t", 1024, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "Port")
 
         value = Camera.GetNode("Value")

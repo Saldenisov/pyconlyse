@@ -79,11 +79,11 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestSelector01")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x2000, "uint32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")
@@ -159,11 +159,11 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestSelector02")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x2000, "uint32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")
@@ -233,11 +233,11 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestSelector03")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x2000, "uint32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")
@@ -314,11 +314,11 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestSelector04")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x2000, "uint32_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")
@@ -378,12 +378,12 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestSelector05")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         for i in range(40, 50):
             Port.CreateEntry(i, "uint8_t", 42, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")
@@ -570,13 +570,13 @@ class SelectorTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "SelectorTestSuite_TestBooleanSelector")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x0, "uint32_t", 0x1000, RW, LittleEndian)
         Port.CreateEntry(0x1000, "int32_t", 42, RW, LittleEndian)
         Port.CreateEntry(0x2000, "int32_t", 24, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Selector = Camera.GetNode("selector")

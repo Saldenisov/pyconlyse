@@ -190,6 +190,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('General')
 
+    @property
+    def get_parameters(self) -> Dict[str, Union[str, List[str]]]:
+        return self.get_settings('Parameters')
+
     def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict, str]) \
             -> List[Tuple[Union[float, int]]]:
         try:

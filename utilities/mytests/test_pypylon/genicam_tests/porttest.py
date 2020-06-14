@@ -17,7 +17,7 @@ from testport import CTestPort, sizeof, cast_buffer, cast_data, CQuadTestPort
 
 class PortTestSuite(GenicamTestCase):
     def test_PortAccess(self):
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         MyRegister = 42
         Port.CreateEntry(0x00ff, "uint32_t", MyRegister, RW, LittleEndian)
@@ -45,7 +45,7 @@ class PortTestSuite(GenicamTestCase):
 
     def test_TestPort(self):
         # some basics
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         MyRegister = 42
         Port.CreateEntry(0x0000, "uint32_t", 42, RW, LittleEndian)
@@ -114,7 +114,7 @@ class PortTestSuite(GenicamTestCase):
             Port.Write(0x000f, cast_data("uint32_t", LittleEndian, MyRegister))
 
     def test_PortRef(self):
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         MyRegister = 0
         Port.CreateEntry(0x00ff, "uint32_t", MyRegister, RW, LittleEndian)
@@ -163,7 +163,7 @@ class PortTestSuite(GenicamTestCase):
         port.Write(0x00ff, cast_data("uint32_t", LittleEndian, WriteBuffer))
         self.assertTrue(testReg.GetValue() != WriteBuffer)
 
-        # Invalidate the port's node cache and test for correct read back
+        # Invalidate the com_port's node cache and test for correct read back
         Port.InvalidateNode()
         self.assertTrue(testReg.GetValue() == WriteBuffer)
 
@@ -230,12 +230,12 @@ class PortTestSuite(GenicamTestCase):
         Port3 = Camera3._GetNode("BogusPort")
         # self.assertEqual ("IPort", GetInterfaceName(Port3))
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         MyPort = CQuadTestPort()
         TestValue = "30"
         MyPort.CreateEntries(0x00A0, 0x00E0, "uint32_t", TestValue, RW, LittleEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera3._Connect(MyPort, "MyPort")
 
         # Manits #95

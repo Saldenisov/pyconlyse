@@ -42,11 +42,11 @@ class CommandTestSuite(GenicamTestCase):
         Camera = CNodeMapRef()
         Camera._LoadXMLFromFile("GenApiTest", "CommandTestSuite_TestCommand01")
 
-        # create and initialize a test port
+        # create and initialize a test com_port
         Port = CTestPort()
         Port.CreateEntry(0x00ff, "uint32_t", 42, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         #
@@ -517,7 +517,7 @@ class CommandTestSuite(GenicamTestCase):
         Port.CreateEntry(0x0004, "uint32_t", 2, RW, BigEndian)  # VerticalBinningReg
         Port.CreateEntry(0x0008, "uint64_t", 0, RW, BigEndian)  # UserSetLoadReg
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Command = Camera.GetNode("Command")
@@ -649,7 +649,7 @@ class CommandTestSuite(GenicamTestCase):
         Port.CreateEntry(0x0004, "uint32_t", 2, RW, BigEndian)
         Port.CreateEntry(0x0008, "uint64_t", 0, RW, BigEndian)
 
-        # connect the node map to the port
+        # connect the node map to the com_port
         Camera._Connect(Port, "MyPort")
 
         Command = Camera.GetNode("Command")

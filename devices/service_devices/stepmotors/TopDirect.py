@@ -37,11 +37,15 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.arduino_serial = serial.Serial()
+        self._arduino_port = ''
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
             if flag:
-                res, comments = self._form_devices_list()
+                res, comments = self._find_arduino(self.get_parameters['arduino_serial_id'])
+                if res:
+
+
             else:
                 self.arduino_serial.close()
                 res, comments = True, ''
@@ -53,7 +57,10 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()
+        if self.device_status.connected:
+            pass
+        else:
+            return False, f'Arduino is not connected.'
 
     def _check_if_connected(self) -> Tuple[bool, str]:
         return super()._check_if_connected()
@@ -91,18 +98,35 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
         return res, comments
 
-    def _find_arduino(self, serial_number='75833353934351B05090') -> str:
+    def _check_arduino_port(self, com_port: serial) -> Tuple[bool, str]:
+
+        try:
+            ser = serial.Serial(com_port)
+            ser.open()
+            ser.close()
+            return True, ''
+        except serial.SerialException as e:
+            error_logger(self, self._check_arduion_port, e)
+            return False, str(e)
+
+    def _find_arduino_check(self, serial_number) -> Tuple[bool, str]:
         """
-        Searches for Arduino with a given serial number and returns its COM port.
+        Searches for Arduino with a given serial number and returns its COM com_port.
         :param serial_number: Arduino serial id
         :return: COM PORT
         """
         for pinfo in serial.tools.list_ports.comports():
             if pinfo.serial_number == serial_number:
-                return pinfo.device, ''
-        raise IOError(f"Could not find an Arduino {serial_number}. Check connection.")
-    
+                res, comments = self._check_arduino_port(pinfo.device)
+                if res:
+                    self._arduino_port = pinfo.device
+                    return True, ''
+                else:
+                    return False, f'Arduino with {serial_number} was found, but port check was not passed: {comments}.'
+        return False, f"Could not find an Arduino {serial_number}. Check connection."
 
+    def _get_reply_from_arduino(self) -> str:
+        pass
 
     def GUI_bounds(self):
         # TODO: to be done something with this
@@ -195,82 +219,8 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             self._set_led(self._enable, 0)
 
     @development_mode(dev=dev_mode, with_return=None)
-    def _direction(self, orientation: Direction):
-        if orientation is StpMtrCtrl_TopDirect_1axis.Direction.FORWARD:
-            self._set_led(self._dir, 0)
-        elif orientation == StpMtrCtrl_TopDirect_1axis.Direction.BACKWARD:
-            self._set_led(self._dir, 1)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
     def _enable_controller(self):
         if not self.device_status.active:
             self._set_led(self._enable, 1)
             sleep(0.05)
             self._set_led(self._enable, 0)
-
-    @development_mode(dev=dev_mode, with_return=(True, ''))
-    def _setup_pins(self) -> Tuple[Union[bool, str]]:
-        try:
-            info_msg(self, 'INFO', 'setting up the pins')
-            parameters = self.get_settings('Parameters')
-            microstep = parameters['microstep']
-            self._ttl = LED(parameters['ttl_pin'])
-            self._pins.append(self._ttl)
-            self._dir = LED(parameters['dir_pin'])
-            self._pins.append(self._dir)
-            self._enable = LED(parameters['enable_pin'])
-            self._pins.append(self._enable)
-            self._ms1 = LED(parameters['ms1'])
-            self._pins.append(self._ms1)
-            self._ms2 = LED(parameters['ms2'])
-            self._pins.append(self._ms2)
-            self._ms3 = LED(parameters['ms3'])
-            self._pins.append(self._ms3)
-            self._relayIa = LED(parameters['relayia'], initial_value=True)
-            self._pins.append(self._relayIa)
-            self._relayIb = LED(parameters['relayib'], initial_value=True)
-            self._pins.append(self._relayIb)
-            self._relayIIa = LED(parameters['relayiia'], initial_value=True)
-            self._pins.append(self._relayIIa)
-            self._relayIIb = LED(parameters['relayiib'], initial_value=True)
-            self._pins.append(self._relayIIb)
-            self._relayIIIa = LED(parameters['relayiiia'], initial_value=True)
-            self._pins.append(self._relayIIIa)
-            self._relayIIIb = LED(parameters['relayiiib'], initial_value=True)
-            self._pins.append(self._relayIIIb)
-            self._relayIVa = LED(parameters['relayiva'], initial_value=True)
-            self._pins.append(self._relayIVa)
-            self._relayIVb = LED(parameters['relayivb'], initial_value=True)
-            self._pins.append(self._relayIVb)
-            pins_microstep = eval(parameters['microstep_settings'])
-            self._set_led(self._ms1, pins_microstep[com][0][0])
-            self._set_led(self._ms2, pins_microstep[com][0][1])
-            self._set_led(self._ms3, pins_microstep[com][0][2])
-            return True, ''
-        except (KeyError, ValueError, SyntaxError) as e:
-            error_logger(self, self._setup_pins, e)
-            return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _set_led(self, led: LED, value: Union[bool, int]):
-        if value >= 1:
-            led.on()
-        elif value == 0:
-            led.off()
-        else:
-            error_logger(self, self._set_led, f'Value {value} is out of range')
-
-    def _pins_off(self) -> Tuple[Union[bool, str]]:
-        if len(self._pins) == 0:
-            return True, 'No pins to close()'
-        else:
-            error = []
-            for pin in self._pins:
-                try:
-                    pin.close()
-                except Exception as e:
-                    error.append(str(e))
-            self._pins = []
-            return True, '' if len(error) == 0 else str(error)
-

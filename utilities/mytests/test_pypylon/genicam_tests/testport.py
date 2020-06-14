@@ -79,7 +79,7 @@ class StructEntry(object):
 
 class CTestPort(genicam.CPortImpl):
     """
-    genicam device port implementation
+    genicam device com_port implementation
     """
 
     def __init__(self):
