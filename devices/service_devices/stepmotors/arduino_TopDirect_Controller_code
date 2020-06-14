@@ -2,31 +2,32 @@ const String ID = "ARDUINO:StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363
 const int pulPin = 13;
 const int dirPin = 12;
 const int enblPin = 11;
-long microstep = 16;
+//310 turns in delay line in the long one
+// 128 - 1 (better 2)
+// 16 - 20 (30)
+//8 - 40 (50)
+//4 - 80 (100)
+//2 - 180 (200)
+int microsteps = 16;
 int delay_time = 28;
-// in steps
-float go_pos = 0;
-float pos = 0;
-float delta = 0.0;
+//max full steps is 62900
+const long max_full_steps = 62900;
+
+
+float go_pos = 0; // in full steps at this momemnt
+long pos = 0; // in microsteps
+long delta = 0.0;
 int res = 0;
+bool ready = false;
+bool ctrl_state = false;
+bool moving = false;
+
 
 const int max_size_cmd = 32;
 char buf[max_size_cmd];
 String str_object = "";
 // false corrsponds to ABS, True to RELATIVE
 bool move_type = false;
-
-//310 turns in delay line in the long one
-// 128 - 1 (better 2)
-
-// 16 - 20 (30)
-//8 - 40 (50)
-//4 - 80 (100)
-//2 - 180 (200)
-
-
-//max full steps is 62900
-const long max_full_steps = 62900;
 
 //errors
 // 0 - no error
@@ -41,6 +42,19 @@ const long max_full_steps = 62900;
 // POS - get positions of controller
 // SET POS XXX - set position of contoller to a new value
 
+
+void set_state(bool state){
+  if (state != ctrl_state){
+    digitalWrite(enblPin, HIGH);
+    delay(100);
+    digitalWrite(enblPin, LOW);
+    ctrl_state = state;
+  }
+  if (!state){
+    moving = false;
+  }
+}
+
 void setup() {
   // put your setup code here, to run once:
   pinMode(pulPin, OUTPUT);
@@ -51,15 +65,11 @@ void setup() {
   digitalWrite(enblPin, LOW);
   digitalWrite(dirPin, LOW);
 
-
-  digitalWrite(enblPin, HIGH);
-  delay(100);
-  digitalWrite(enblPin, LOW);
+  set_state(true);
 
   Serial.begin(9600);
   Serial.println("init");
 }
-
 
 void set_dir(int dir){
   if (dir == 1){
@@ -71,32 +81,36 @@ void set_dir(int dir){
 }
 
 
-float runit(float go_pos, bool move_type, float &pos){
+int runit(float go_pos, bool move_type, long &pos){
   //setting direction of rotation
   if (move_type){ // If RELATIVE
     go_pos = go_pos + pos;
   }
 
   delta = go_pos - pos;
-
-  if (delta != 0 & go_pos <= max_full_steps & go_pos >= 0){
+  int dir;
+  if (delta != 0 & go_pos <= max_full_steps & go_pos >= 0 & ctrl_state){
     if (delta < 0){
       set_dir(-1);
+      dir = -1;
     }
     else{
       set_dir(1);
+      dir = 1;
     }
-  long n_of_microsteps = long(abs(delta) * microstep);
+  long n_of_microsteps = long(abs(delta) * microsteps);
 
   long pas = 0;
-  while (pas < n_of_microsteps){
+  moving = true;
+  while (pas < n_of_microsteps & ctrl_state){
     digitalWrite(pulPin, HIGH);
     delayMicroseconds(delay_time);
     digitalWrite(pulPin, LOW);
     delayMicroseconds(delay_time);
+    pos += dir;
     pas++;
   }
-  pos = pos + delta;
+  moving = false;
   return 0;
   }
   else{
@@ -106,7 +120,7 @@ float runit(float go_pos, bool move_type, float &pos){
 }
 
 
-int execute_cmd(String &cmd, float &pos)
+int execute_cmd(String &cmd, long &pos)
 {
   cmd.toCharArray(buf, sizeof(buf));
   char *str;
@@ -137,12 +151,23 @@ int execute_cmd(String &cmd, float &pos)
   else if (str_object == "GET"){
     str_object = String(strtok(p, " "));
     if (str_object == "POS"){
-      Serial.println(pos);
+      Serial.println(pos / microsteps);
       return 0;
     }
     else if (str_object == "ID"){
       Serial.println(ID);
       return 0;
+    }
+    else if (str_object == "READY"){
+      if (ctrl_state == 0){
+        Serial.println("NOT_ACTIVE");
+      }
+      else if (moving){
+        Serial.println("MOVING");
+      }
+      else{
+        Serial.println("READY");
+      }
     }
     else{
       return -2;
@@ -160,7 +185,17 @@ int execute_cmd(String &cmd, float &pos)
         return -2;
       }
     }
-      return 0;
+    else if (str_object == "STATE"){
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        bool state = static_cast<bool>(str_object.toInt()) ;
+        set_state(state);
+      }
+      else{
+        return -2;
+      }
+    }
+    return 0;
   }
   else{
     return -3;

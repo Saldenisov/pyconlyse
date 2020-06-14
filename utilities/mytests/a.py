@@ -1,35 +1,18 @@
-import matplotlib.pyplot as plt
-import numpy as np
+import serial
+import serial.tools.list_ports
 
 
-def func3(x, y):
-    return (1 - x / 2 + x**5 + y**3) * np.exp(-(x**2 + y**2))
+def find_arduino(serial_number='75833353934351B05090') -> str:
+    """
+    Searches for Arduino with a given serial number and returns its COM port.
+    :param serial_number: Arduino serial id
+    :return: COM PORT
+    """
+    for pinfo in serial.tools.list_ports.comports():
+        if pinfo.serial_number == serial_number:
+            return pinfo.device
+    raise IOError(f"Could not find an Arduino {serial_number}. Check connection.")
 
 
-# make these smaller to increase the resolution
-dx, dy = 0.05, 0.05
 
-x = np.arange(-3.0, 3.0, dx)
-y = np.arange(-3.0, 3.0, dy)
-X, Y = np.meshgrid(x, y)
-
-# when layering multiple images, the images need to have the same
-# extent.  This does not mean they need to have the same shape, but
-# they both need to render to the same coordinate system determined by
-# xmin, xmax, ymin, ymax.  Note if you use different interpolations
-# for the images their apparent extent could be different due to
-# interpolation edge effects
-
-extent = np.min(x), np.max(x), np.min(y), np.max(y)
-fig = plt.figure(frameon=False)
-
-Z1 = np.add.outer(range(8), range(8)) % 2  # chessboard
-im1 = plt.imshow(Z1, cmap=plt.cm.gray, interpolation='nearest',
-                 extent=extent)
-
-Z2 = func3(X, Y)
-
-im2 = plt.imshow(Z2, cmap=plt.cm.viridis, alpha=1, interpolation='bilinear',
-                 extent=extent)
-
-plt.show()
+print(find_arduino())

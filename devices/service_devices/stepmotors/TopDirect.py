@@ -12,6 +12,7 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 from enum import Enum
 from gpiozero import LED
 import logging
+import serial
 from time import sleep
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
@@ -35,11 +36,21 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._ttl = None  # to make controller work when dev_mode is ON
-        self._pins = []
+        self.arduino_serial = serial.Serial()
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        return super()._connect(flag)
+        if self.device_status.power:
+            if flag:
+                res, comments = self._form_devices_list()
+            else:
+                self.arduino_serial.close()
+                res, comments = True, ''
+            if res:
+                self.device_status.connected = flag
+        else:
+            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+
+        return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
@@ -79,6 +90,19 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             else:
                 res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
         return res, comments
+
+    def _find_arduino(self, serial_number='75833353934351B05090') -> str:
+        """
+        Searches for Arduino with a given serial number and returns its COM port.
+        :param serial_number: Arduino serial id
+        :return: COM PORT
+        """
+        for pinfo in serial.tools.list_ports.comports():
+            if pinfo.serial_number == serial_number:
+                return pinfo.device, ''
+        raise IOError(f"Could not find an Arduino {serial_number}. Check connection.")
+    
+
 
     def GUI_bounds(self):
         # TODO: to be done something with this
