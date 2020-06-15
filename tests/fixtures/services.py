@@ -1,6 +1,6 @@
 from pathlib import Path
 from devices.devices import DeviceFactory
-from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes
+from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis
 from devices.service_devices.project_treatment import ProjectManager_controller
 import pytest
 
@@ -43,6 +43,12 @@ def stpmtr_a4988_4axes_test_non_fixture(device_id='StpMtrCtrl_a4988_4axes:2ecfc6
 
 def stpmtr_Standa_test_non_fixture(device_id='StpMtrCtrl_Standa:b7257a502aef1d55485fc8ea403ac573',
                                    db_name='Devices.db') -> StpMtrCtrl_a4988_4axes:
+    return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
+                                                                       db_name), test=True)
+
+
+def stpmtr_TopDirect_test_non_fixture(device_id='StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c',
+                                      db_name='Devices.db') -> StpMtrCtrl_TopDirect_1axis:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
                                                                        db_name), test=True)
 

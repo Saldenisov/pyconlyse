@@ -67,14 +67,12 @@ class StpMtrController(Service):
                     comments = info + comments
                 if res:
                     self.device_status.active = flag
-                res, info = self._release_hardware()
+                    res, info = self._release_hardware()
                 if not res:
                     comments = comments + f'Hardware was not realeased properly: {info}'
 
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
-
-
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
@@ -95,7 +93,7 @@ class StpMtrController(Service):
         for key, axis in essentials.items():
             status.append(essentials[key].status)
         info = f'Axes status: {status}. {comments}'
-        self.logger.info(info)
+        info_msg(self, 'INFO', info)
         return FuncActivateAxisOutput(axes=self.axes_essentials, comments=info, func_success=res)
 
     @property
@@ -364,7 +362,7 @@ class StpMtrController(Service):
             info_msg(self, 'INFO', f'Forming axes positions dict. Setting everything to zero')
             pos = {axis.id: 0 for axis in self.axes.values()}
         else:
-            if pos.keys() != self._axes_ids:
+            if list(pos.keys()) != self._axes_ids:
                 error_logger(self, self._get_positions_file, StpMtrError(self, f"Axes ids {list(pos.keys())} in file, "
                                                                          f"are different to those read from DB "
                                                                          f"{self._axes_ids}"))
@@ -407,7 +405,7 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _release_hardware(self) -> Tuple[bool, str]:
-        pass
+        return True, ''
 
     def _set_axes_ids(self):
         # Axes ids must be in ascending order
@@ -416,7 +414,7 @@ class StpMtrController(Service):
             ids_c = ids.copy()
             if ids_c != ids:
                 e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
-                self.logger.error(e)
+                error_logger(self, self._set_axes_ids, e)
                 raise e
             for id_a in ids:
                 self.axes[id_a] = AxisStpMtr(id=id_a)
@@ -438,7 +436,7 @@ class StpMtrController(Service):
             self.axes[id].status = status
 
     @abstractmethod
-    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
+    def _set_controller_positions(self, positions: Dict[str, Union[int, float]]) -> Tuple[bool, str]:
         """
         This function sets user-defined positions into hardware controller.
         :param positions: list of positions passed to hardware controller

@@ -13,7 +13,10 @@ from enum import Enum
 from gpiozero import LED
 import logging
 import serial
+import serial.tools.list_ports
 from time import sleep
+
+from datastructures.mes_independent import FuncStopAxisInput, FuncStopAxisOutput
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -42,10 +45,15 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
             if flag:
-                res, comments = self._find_arduino(self.get_parameters['arduino_serial_id'])
+                res, comments = self._find_arduino_check(self.get_parameters['arduino_serial_id'])
                 if res:
-
-
+                    self.arduino_serial = serial.Serial(self._arduino_port, timeout=3)
+                    sleep(1)
+                    get = self.arduino_serial.readline().decode()
+                    if 'INITIALIZED' in get:
+                        res, comments = True, ''
+                    else:
+                        res, comments = False, 'Arduino did not initialize.'
             else:
                 self.arduino_serial.close()
                 res, comments = True, ''
@@ -58,7 +66,24 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
 
     def _check_if_active(self) -> Tuple[bool, str]:
         if self.device_status.connected:
-            pass
+            self._send_to_arduino(f'GET STATE')
+            rcv = self._get_reply_from_arduino()
+            if 'READY' in rcv:
+                try:
+                    error = int(self._get_reply_from_arduino())
+                except ValueError as e:
+                    error_logger(self, self._check_if_active, f'Could not restore Arduino error: {e}.')
+                    return False, f'Could not restore Arduino error: {e}.'
+                if not error:
+                    return True, f'Arduino error {error}.'
+                return True, ''
+            else:
+                try:
+                    error = int(self._get_reply_from_arduino())
+                except ValueError as e:
+                    error_logger(self, self._check_if_active, f'Could not restore Arduino error: {e}.')
+                    return False, f'Could not restore Arduino error: {e}.'
+                return False, f'Arduino error {error}.'
         else:
             return False, f'Arduino is not connected.'
 
@@ -66,47 +91,34 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return super()._check_if_connected()
 
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        def search(axes, status):
-            for axis_id, axis in self.axes.items():
-                if axis.status == status:
-                    return axis_id
-            return None
-
-        res, comments = super()._check_axis_flag(flag)
-        if res:
-            if self.axes[axis_id].status != flag:
-                info = ''
-                idx = search(self.axes, 1)
-                if not idx:
-                    idx = search(self.axes, 2)
-                    if force and idx:
-                        self.axes[idx].status = 1
-                        info = f' Axis id={idx}, name={self.axes[idx].name} was stopped.'
-                    elif idx:
-                        return False, f'Stop axis id={idx} to be able activate axis id={axis_id}. ' \
-                                      f'Use force, or wait movement to complete.'
-                if idx != axis_id and idx:
-                    self.axes[idx].status = 0
-                    self._change_relay_state(idx, 0)
-                    info = f'Axis id={idx}, name={self.axes[idx].name} is set 0.'
-
-                if not (self.axes[axis_id].status > 0 and flag > 0):  #only works for 0->1, 1->0, 2->0
-                    self._change_relay_state(axis_id, flag)
-                self.axes[axis_id].status = flag
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
+        if self.axes[axis_id].status == flag:
+            res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
+        else:
+            if not force:
+                if self.axes[axis_id].status != 2:
+                    self.axes[axis_id].status = flag
+                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}'
+                    if flag == 1:
+                        self._enable_controller()
+                    elif flag == 0:
+                        self._disable_controller()
+                else:
+                    return False, f'Axis id={1} is moving. Use force, or wait movement to complete to change the status.'
             else:
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
+                self.axes[axis_id].status = flag
+                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}'
+
         return res, comments
 
     def _check_arduino_port(self, com_port: serial) -> Tuple[bool, str]:
-
+        from time import sleep
         try:
             ser = serial.Serial(com_port)
-            ser.open()
+            sleep(0.1)
             ser.close()
             return True, ''
         except serial.SerialException as e:
-            error_logger(self, self._check_arduion_port, e)
+            error_logger(self, self._check_arduino_port, e)
             return False, str(e)
 
     def _find_arduino_check(self, serial_number) -> Tuple[bool, str]:
@@ -126,7 +138,11 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return False, f"Could not find an Arduino {serial_number}. Check connection."
 
     def _get_reply_from_arduino(self) -> str:
-        pass
+        line = self.arduino_serial.readline()
+        if line:
+            return line.decode()
+        else:
+            return None
 
     def GUI_bounds(self):
         # TODO: to be done something with this
@@ -185,6 +201,9 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                                       f'was finished.'
         return res, comments
 
+    def _release_hardware(self) -> Tuple[bool, str]:
+        return super(StpMtrCtrl_TopDirect_1axis, self)._release_hardware()
+
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
         if res:
@@ -192,23 +211,20 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         else:
             return res, comments
 
-    def _set_move_parameters(self, com='full') -> Tuple[Union[bool, str]]:
-        try:
-            parameters = self.get_settings('Parameters')
-            com = parameters['com']
-            self._TTL_width = eval(parameters['ttl_width'])
-            self._delay_TTL = eval(parameters['delay_ttl'])
-            self._microsteps = eval(parameters['microstep_settings'])[com][1]
-            return True, ''
-        except (KeyError, SyntaxError) as e:
-            self.logger.error(e)
-            return False, f'_set_move_parameters() did not work, DB cannot be read {str(e)}'
-
-    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions(positions)
+    def _set_controller_positions(self, positions: Dict[str, Union[int, float]]) -> Tuple[bool, str]:
+        return self._send_to_arduino(f'SET POS {positions[1]}'.encode('utf-8'))
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        return super()._set_parameters(extra_func=[self._setup])
+        return super()._set_parameters()
+
+    def _send_to_arduino(self, cmd: str) -> Tuple[bool, str]:
+        if self.device_status.connected:
+            self.arduino_serial.write(cmd.encode('utf-8'))
+
+    def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
+        return FuncStopAxisOutput(axes=self.axes_essentials,
+                                  comments=f'Cannot be stopped by user. Wait controller to finish its movement.',
+                                  func_success=False)
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
@@ -224,3 +240,5 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             self._set_led(self._enable, 1)
             sleep(0.05)
             self._set_led(self._enable, 0)
+
+

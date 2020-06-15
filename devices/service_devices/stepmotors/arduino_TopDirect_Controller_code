@@ -120,6 +120,9 @@ int runit(float go_pos, bool move_type, long &pos){
   pos_mm = float(pos / microsteps * step_mm);
   return 0;
   }
+  else if (delta ==0){
+    return 0;
+  }
   else{
     return -1;
   }
@@ -239,7 +242,7 @@ void setup() {
   set_state_ctrl(true);
 
   Serial.begin(9600);
-  Serial.println("init");
+  Serial.println("INITIALIZED");
 }
 
 

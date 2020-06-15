@@ -4,12 +4,12 @@ from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 
 from tests.fixtures.services import (stpmtr_emulate_test_non_fixture, stpmtr_a4988_4axes_test_non_fixture,
-                                     stpmtr_Standa_test_non_fixture)
+                                     stpmtr_Standa_test_non_fixture, stpmtr_TopDirect_test_non_fixture)
 
 import pytest
 
-one_service = [stpmtr_a4988_4axes_test_non_fixture()]
-all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture()]
+one_service = [stpmtr_TopDirect_test_non_fixture()]
+#all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
 
@@ -133,14 +133,16 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Test StopAxis function
     # axis 1 status has been set to 2 already.
     # stop axis 1
-    res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
-    assert res.func_success
-    assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
-    assert res.axes == stpmtr.axes_essentials
-    # stop axis 1 again
-    res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
-    assert res.func_success
-    assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was already stopped.'
+    if not isinstance(stpmtr, stpmtr_TopDirect_test_non_fixture()):
+        # Stpmtr_TopDirect cannot be stopped by user.
+        res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
+        assert res.func_success
+        assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
+        assert res.axes == stpmtr.axes_essentials
+        # stop axis 1 again
+        res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
+        assert res.func_success
+        assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was already stopped.'
 
     # Test Move_axis1
     # Move axis 1 to pos=10
