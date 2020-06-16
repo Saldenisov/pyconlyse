@@ -70,7 +70,6 @@ class StpMtrController(Service):
                     res, info = self._release_hardware()
                 if not res:
                     comments = comments + f'Hardware was not realeased properly: {info}'
-
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
@@ -513,6 +512,10 @@ class StpMtrController(Service):
             self.logger.error(e)
             return False, str(e)
 
+    def stop(self):
+        self.activate(FuncActivateInput(False))
+        super().stop()
+
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
         axis_id = func_input.axis_id
         res, comments = self._check_axis(axis_id)
@@ -529,6 +532,7 @@ class StpMtrController(Service):
     def _write_to_file(text: str, file: Path):
         with open(file, 'w') as opened_file:
             opened_file.write(text)
+
 
 
 class StpMtrError(BaseException):

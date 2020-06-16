@@ -100,6 +100,8 @@ int runit(float go_pos, bool move_type, long &pos){
   delta = go_pos_microsteps - pos;
 
   if (delta != 0 & go_pos_microsteps <= (max_full_steps * microsteps) & go_pos_microsteps >= 0 & ctrl_state){
+    Serial.println("STARTED");
+    delay(10);
     if (delta < 0){
       dir = -1;
     }
@@ -164,14 +166,17 @@ int treat_get(char* p){
       return 0;
     }
     else if (str_object == "STATE"){
-      if (ctrl_state == 0){
+      if (!ctrl_state){
         Serial.println("NOT_ACTIVE");
+        return 0;
       }
       else if (moving){
         Serial.println("MOVING");
+        return 0;
       }
       else{
         Serial.println("READY");
+        return 0;
       }
     }
     else{
@@ -240,8 +245,9 @@ void setup() {
   digitalWrite(dirPin, LOW);
 
   set_state_ctrl(true);
+  set_state_ctrl(false);
 
-  Serial.begin(9600);
+  Serial.begin(19200);
   Serial.println("INITIALIZED");
 }
 
@@ -250,9 +256,8 @@ void loop() {
   if (Serial.available() > 0) {
     str_object = Serial.readString();  // read the incoming cmd into String object
     res = execute_cmd(str_object, pos);  // obtain result 0, -1, -2, -3 (see ERRORS)
-    delay(100);
     Serial.println(res);
-    delay(100);
+    delay(30);
     Serial.flush();  //clean serial before receiving the next command. If user send other commands before the execution of previous. Arduino ctrl will reject them.
   }
 }

@@ -1,5 +1,6 @@
+from time import sleep
 from devices.service_devices.stepmotors import (StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrController,
-                                                StpMtrCtrl_Standa)
+                                                StpMtrCtrl_Standa, StpMtrCtrl_TopDirect_1axis)
 from datastructures.mes_independent.devices_dataclass import *
 from datastructures.mes_independent.stpmtr_dataclass import *
 
@@ -16,6 +17,56 @@ test_param = one_service
 @pytest.mark.parametrize('stpmtr', test_param)
 def test_func_stpmtr(stpmtr: StpMtrController):
     stpmtr.start()
+    test_comm_arduino = False
+    if isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis) and test_comm_arduino:
+        stpmtr: StpMtrCtrl_TopDirect_1axis = stpmtr
+        stpmtr.device_status.power = True
+        # checking messaging with Arduino
+        res, comments = stpmtr._connect(True)
+        if res:
+            get = stpmtr._get_reply_from_arduino()
+            assert get == None
+            stpmtr._send_to_arduino(cmd='GET STATE')
+            get = stpmtr._get_reply_from_arduino(True)
+            assert get[0] == 'NOT_ACTIVE'
+            assert get[1] == 0
+
+            stpmtr._send_to_arduino(cmd='SET STATE 1')
+            get = stpmtr._get_reply_from_arduino()
+            assert get == 0
+
+            stpmtr._send_to_arduino(cmd='GET STATE')
+            get = stpmtr._get_reply_from_arduino(True)
+            assert get[0] == 'READY'
+            assert get[1] == 0
+
+            stpmtr._send_to_arduino(cmd='GET S')
+            get = stpmtr._get_reply_from_arduino(True)
+            assert get[0] == -2
+
+            stpmtr._send_to_arduino(cmd='MOVE ABS 205')
+            get = stpmtr._get_reply_from_arduino()
+            assert get == -1
+
+            stpmtr._send_to_arduino(cmd='MOVE ABS 10')
+            get = stpmtr._get_reply_from_arduino()
+            assert get == 'STARTED'
+            get = stpmtr._get_reply_from_arduino()
+            assert get == None
+            sleep(3)
+            get = stpmtr._get_reply_from_arduino()
+            assert get == 0
+
+            stpmtr._send_to_arduino(cmd='GET POS')
+            get = stpmtr._get_reply_from_arduino(True)
+            assert get[0] == 10.0
+            assert get[1] == 0
+
+            stpmtr._send_to_arduino(cmd='MOVE ABS 0')
+            sleep(5)
+            stpmtr._connect(False)
+
+
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
                                  'stop_axis', 'service_info']
     ACTIVATE = FuncActivateInput(flag=True)
@@ -133,7 +184,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Test StopAxis function
     # axis 1 status has been set to 2 already.
     # stop axis 1
-    if not isinstance(stpmtr, stpmtr_TopDirect_test_non_fixture()):
+    if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
         # Stpmtr_TopDirect cannot be stopped by user.
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
@@ -143,6 +194,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
         assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was already stopped.'
+    else:
+        stpmtr.axes[1].status = 1
 
     # Test Move_axis1
     # Move axis 1 to pos=10
@@ -154,40 +207,42 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
     assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
-    # Move axis 1 to pos=100 and stop it immediately
 
-    def move() -> FuncMoveAxisToOutput:
-        res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_hundred)
-        return res
+    if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
+        # Move axis 1 to pos=100 and stop it immediately
 
-    def stop() -> FuncStopAxisOutput:
-        from time import sleep
-        sleep(sleep_time)
-        res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
-        return res
+        def move() -> FuncMoveAxisToOutput:
+            res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_hundred)
+            return res
 
-    import concurrent.futures
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_move = executor.submit(move)
-        future_stop = executor.submit(stop)
-        res_move: FuncMoveAxisToOutput = future_move.result()
-        res_stop: FuncStopAxisOutput = future_stop.result()
+        def stop() -> FuncStopAxisOutput:
+            from time import sleep
+            sleep(sleep_time)
+            res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
+            return res
 
-    assert not res_move.func_success
-    assert res_move.comments == f'Movement of Axis with id={1} was interrupted'
-    assert res_move.axes[1].position > 0
-    assert res_stop.func_success
-    assert res_stop.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
-    # move to 10
-    res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_move = executor.submit(move)
+            future_stop = executor.submit(stop)
+            res_move: FuncMoveAxisToOutput = future_move.result()
+            res_stop: FuncStopAxisOutput = future_stop.result()
 
-    # Test get_pos
-    res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
-    assert res.func_success
-    assert type(res.axes[1]) == AxisStpMtrEssentials
-    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
-    assert res.axes[2].position == 0
-    assert res.comments == ''
+        assert not res_move.func_success
+        assert res_move.comments == f'Movement of Axis with id={1} was interrupted'
+        assert res_move.axes[1].position > 0
+        assert res_stop.func_success
+        assert res_stop.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
+        # move to 10
+        res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
+
+        # Test get_pos
+        res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
+        assert res.func_success
+        assert type(res.axes[1]) == AxisStpMtrEssentials
+        assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
+        assert res.axes[2].position == 0
+        assert res.comments == ''
 
     # Test get_contoller_state
     res: FuncGetStpMtrControllerStateOutput = stpmtr.get_controller_state(GET_CONTOLLER_STATE)
@@ -205,5 +260,4 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert all(acc)
 
     # stop stpmtr_emulate device
-
     stpmtr.stop()
