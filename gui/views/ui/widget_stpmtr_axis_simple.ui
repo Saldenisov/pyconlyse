@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>431</width>
-    <height>317</height>
+    <width>631</width>
+    <height>339</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -31,24 +31,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QSpinBox" name="spinBox"/>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioButton_relative">
-        <property name="text">
-         <string>relative</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QRadioButton" name="radioButton_absolute">
-        <property name="text">
-         <string>absolute</string>
-        </property>
-        <property name="checked">
-         <bool>true</bool>
-        </property>
-       </widget>
+       <widget class="QSpinBox" name="spinBox_axis"/>
       </item>
       <item>
        <widget class="QCheckBox" name="checkBox_On">
@@ -61,24 +44,130 @@
        </widget>
       </item>
       <item>
-       <spacer name="horizontalSpacer_axis_movement_type1">
-        <property name="orientation">
-         <enum>Qt::Horizontal</enum>
+       <widget class="QLabel" name="label_name">
+        <property name="text">
+         <string>Name:</string>
         </property>
-        <property name="sizeHint" stdset="0">
+       </widget>
+      </item>
+      <item>
+       <widget class="QProgressBar" name="progressBar_movement">
+        <property name="minimumSize">
          <size>
-          <width>40</width>
-          <height>20</height>
+          <width>350</width>
+          <height>0</height>
          </size>
         </property>
-       </spacer>
+        <property name="value">
+         <number>0</number>
+        </property>
+       </widget>
       </item>
      </layout>
     </item>
     <item>
      <layout class="QHBoxLayout" name="axis_moveHL">
       <item>
-       <widget class="QLCDNumber" name="lcdNumber_position"/>
+       <widget class="QLCDNumber" name="lcdNumber_position">
+        <property name="smallDecimalPoint">
+         <bool>true</bool>
+        </property>
+        <property name="value" stdset="0">
+         <double>0.000000000000000</double>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_stp_or_mm">
+        <property name="title">
+         <string/>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_stp_or_mm">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QRadioButton" name="radioButton_stp">
+           <property name="text">
+            <string>stp</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="radioButton_mm">
+           <property name="enabled">
+            <bool>true</bool>
+           </property>
+           <property name="text">
+            <string>mm</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <widget class="QGroupBox" name="groupBox_how_to_move">
+        <property name="title">
+         <string/>
+        </property>
+        <layout class="QVBoxLayout" name="verticalLayout_how_to_move">
+         <property name="spacing">
+          <number>0</number>
+         </property>
+         <property name="leftMargin">
+          <number>0</number>
+         </property>
+         <property name="topMargin">
+          <number>0</number>
+         </property>
+         <property name="rightMargin">
+          <number>0</number>
+         </property>
+         <property name="bottomMargin">
+          <number>0</number>
+         </property>
+         <item>
+          <widget class="QRadioButton" name="radioButton_relative">
+           <property name="text">
+            <string>relative</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QRadioButton" name="radioButton_absolute">
+           <property name="text">
+            <string>absolute</string>
+           </property>
+           <property name="checked">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
+        <property name="rightMargin">
+         <number>0</number>
+        </property>
+       </layout>
       </item>
       <item>
        <widget class="QLineEdit" name="lineEdit_value"/>
@@ -98,6 +187,13 @@
        </widget>
       </item>
       <item>
+       <widget class="QPushButton" name="pushButton_set">
+        <property name="text">
+         <string>SET</string>
+        </property>
+       </widget>
+      </item>
+      <item>
        <spacer name="horizontalSpacer_axis_move1">
         <property name="orientation">
          <enum>Qt::Horizontal</enum>
@@ -113,19 +209,53 @@
      </layout>
     </item>
     <item>
-     <widget class="QProgressBar" name="progressBar_movement">
-      <property name="value">
+     <layout class="QHBoxLayout" name="horizontalLayout">
+      <property name="topMargin">
        <number>0</number>
       </property>
-     </widget>
+      <item>
+       <widget class="QLabel" name="label_ranges">
+        <property name="text">
+         <string>Ranges: </string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_preset">
+        <property name="text">
+         <string>Preset:</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
     </item>
     <item>
      <widget class="QPlainTextEdit" name="plainTextEdit"/>
     </item>
     <item>
-     <widget class="QPushButton" name="pushButton">
+     <widget class="QCheckBox" name="checkBox_activate">
       <property name="text">
        <string>Activate Controller</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QCheckBox" name="checkBox_power">
+      <property name="text">
+       <string>Power Controller</string>
       </property>
      </widget>
     </item>
@@ -136,7 +266,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>431</width>
+     <width>631</width>
      <height>21</height>
     </rect>
    </property>

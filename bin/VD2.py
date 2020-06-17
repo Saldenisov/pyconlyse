@@ -15,8 +15,6 @@ from gui.controllers.ClientGUIControllers import VD2TreatmentController
 from logs_pack import initialize_logger
 
 
-
-
 def main():
     logger = initialize_logger(app_folder / 'LOG', file_name="VD2Treatment")
     logger.info('Starting VD2Treatment GUI...')

@@ -162,8 +162,6 @@ class StepMotorsView(QMainWindow):
             error_dialog.showMessage(comments)
             error_dialog.exec_()
 
-
-
     def model_is_changed(self, msg: MessageInt):
         try:
             if self.service_parameters.device_id == msg.forwarded_from or \
