@@ -6,8 +6,8 @@ from typing import Callable, List, Union
 from communication.interfaces import ThinkerInter
 from utilities.errors.myexceptions import *
 from communication.messaging.messages import MessageExt, MsgComExt
-from datastructures.mes_dependent.dicts import Events_Dict, MsgDict
-from datastructures.mes_dependent.general import PendingDemand, PendingReply
+from utilities.datastructures.mes_dependent.dicts import Events_Dict, MsgDict
+from utilities.datastructures.mes_dependent.general import PendingDemand
 from utilities.myfunc import info_msg, error_logger, unique_id
 
 module_logger = logging.getLogger(__name__)

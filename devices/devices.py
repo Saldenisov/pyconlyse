@@ -244,7 +244,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                          device_public_key=self.messenger.public_key,
                                          device_public_sockets=self.messenger.public_sockets)
                 elif msg_com is MsgComExt.ERROR:
-                    info = MsgError(error_comments=kwargs['error_comments'])
+                    info = MsgError(comments=kwargs['comments'])
                 elif msg_com is MsgComInt.DEVICE_INFO_INT:
                     info = DeviceInfoInt(active_connections=self.active_connections(),
                                          available_public_functions=self.available_public_functions(),

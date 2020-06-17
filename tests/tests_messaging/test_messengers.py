@@ -1,15 +1,6 @@
-from time import sleep
-from collections import OrderedDict as od
 from communication.messaging.messengers import *
-from communication.messaging.message_utils import MsgGenerator
-from devices.devices import Server, Service
-from devices.virtualdevices.clients import SuperUser
-from devices.service_devices.stepmotors.stpmtr_emulate import StpMtrCtrl_emulate
 from tests.fixtures import *
-from tests.tests_messaging.auxil import clean_test_queues, start_devices, stop_devices
-from communication.messaging.messages import MessageExt
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.stpmtr_dataclass import *
+from utilities.datastructures.mes_independent.devices_dataclass import *
 
 import pytest
 

@@ -4,8 +4,8 @@ from typing import Dict, List, Tuple
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
-from datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
-from datastructures import DataClass_frozen, DataClass_unfrozen
+from utilities.datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
+from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
 from devices.interfaces import ExecutorInter
 from devices.interfaces import DeviceType, DeviceId
 
@@ -126,7 +126,7 @@ class ShutDown:
 
 @dataclass(frozen=True, order=True)
 class MsgError:
-    error_comments: str = ''
+    comments: str = ''
 
 
 @dataclass

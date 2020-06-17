@@ -136,7 +136,8 @@ class Ui_GraphVD2Window(object):
         self.tabs.addTab(info_tab, 'Info')
 
         # Tree
-        root = 'C:\\dev\\DATA\\'
+        #root = 'C:\\dev\\DATA\\'
+        root = 'D:\\DATA_VD2\\2020\\20200617-RK-940'
         self.tree_model = QtWidgets.QFileSystemModel()
         self.tree = QtWidgets.QTreeView()
         self.tree.setModel(self.tree_model)

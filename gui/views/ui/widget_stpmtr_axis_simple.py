@@ -9,8 +9,8 @@
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 from typing import Dict
-from datastructures.mes_independent.devices_dataclass import DeviceInfoExt
-from datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
+from utilities.datastructures.mes_independent.devices_dataclass import DeviceInfoExt
+from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
 import logging
 
 

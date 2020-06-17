@@ -1,11 +1,10 @@
 from time import sleep
-from devices.service_devices.stepmotors import (StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrController,
+from devices.service_devices.stepmotors import (StpMtrController,
                                                 StpMtrCtrl_Standa, StpMtrCtrl_TopDirect_1axis)
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.stpmtr_dataclass import *
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 
-from tests.fixtures.services import (stpmtr_emulate_test_non_fixture, stpmtr_a4988_4axes_test_non_fixture,
-                                     stpmtr_Standa_test_non_fixture, stpmtr_TopDirect_test_non_fixture)
+from tests.fixtures.services import (stpmtr_TopDirect_test_non_fixture)
 
 import pytest
 

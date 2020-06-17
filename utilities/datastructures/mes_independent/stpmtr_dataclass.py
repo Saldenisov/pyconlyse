@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Union, NewType
-from datastructures.mes_independent.general import Desription, FuncInput, FuncOutput
-from datastructures.mes_independent.devices_dataclass import (Desription, DeviceStatus, FuncGetControllerStateInput,
-                                                              FuncGetControllerStateOutput)
+from typing import Dict, List, Tuple, Union, NewType, NamedTuple
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
+from utilities.datastructures.mes_independent.devices_dataclass import (Desription, DeviceStatus, FuncGetControllerStateInput,
+                                                                        FuncGetControllerStateOutput)
 
 
 @dataclass(frozen=False)
@@ -34,6 +34,7 @@ class StpMtrDescription(Desription):
 class StpMtrCtrlStatusMultiAxes:
     axes: Dict[int, AxisStpMtrEssentials]
     device_status: DeviceStatus
+    microsteps: int = None
     axes_previous: Dict[int, AxisStpMtrEssentials] = None
     device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)
@@ -60,6 +61,7 @@ class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
 @dataclass
 class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
     axes: Dict[int, AxisStpMtr] = None
+    microsteps: int = None
 
 
 
@@ -75,14 +77,17 @@ class FuncGetPosOutput(FuncOutput):
     com: str = 'get_pos'
 
 
+
 relative = NewType('relative', str)
 absolute = NewType('absolute', str)
+move_mm = NewType('move_mm', float)
+move_steps = NewType('move_steps', tuple)
 
 
 @dataclass
 class FuncMoveAxisToInput(FuncInput):
     axis_id: int
-    pos: Union[int, float]
+    pos: Union[move_mm, move_steps]
     how: Union[relative, absolute]
     com: str = 'move_axis_to'
 

@@ -5,16 +5,15 @@ open, analyze, transform
 """
 from datetime import datetime
 from itertools import chain, tee
+from pathlib import Path
 import hashlib
 from time import time_ns
-from typing import Union, Dict, Any, Tuple, Iterable, Generator
+from typing import Any, Iterable, Generator
 from utilities.database import db_create_connection, db_execute_select, db_execute_insert
 from devices.devices import Service
 from utilities.errors.myexceptions import DeviceError
 from utilities.myfunc import file_md5
-from datastructures.mes_independent.measurments_dataclass import Measurement
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.projects_dataclass import *
+from utilities.datastructures.mes_independent import *
 
 
 import logging

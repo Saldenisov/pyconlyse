@@ -1,8 +1,8 @@
 from collections import OrderedDict
 from typing import Dict
 
-from datastructures.mes_dependent.general import PendingDemand, PendingReply
-from datastructures.mes_independent.devices_dataclass import Connection
+from utilities.datastructures.mes_dependent.general import PendingDemand, PendingReply
+from utilities.datastructures.mes_independent.devices_dataclass import Connection
 from communication.messaging.messages import MessageExt
 from utilities.myfunc import info_msg, error_logger
 

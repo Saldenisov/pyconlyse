@@ -5,13 +5,12 @@ Created on 23 avr. 2015
 '''
 
 # import logging
-import os
 import logging
 from functools import lru_cache
 import numpy as np
 from pathlib import Path
 from typing import Union, Tuple
-from datastructures.mes_independent import Measurement
+from utilities.datastructures.mes_independent import Measurement
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
 from utilities.myfunc import error_logger
 

@@ -8,7 +8,7 @@ from _functools import partial
 
 from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar, QMenu
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
-from datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 from gui.views.ui import Ui_GraphVD2Window
 from gui.models.ClientGUIModels import VD2TreatmentModel
 from utilities.myfunc import info_msg

@@ -2,7 +2,7 @@ from typing import Union
 
 import numpy as np
 from gui.views.matplotlib_canvas import MyMplCanvas
-from datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
 
 class KineticsCanvas(MyMplCanvas):

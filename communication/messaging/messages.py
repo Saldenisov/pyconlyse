@@ -9,8 +9,7 @@ from zlib import compress, decompress
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from datastructures.mes_independent import *
-from devices.interfaces import DeviceType
+from utilities.datastructures.mes_independent import *
 from utilities.errors.messaging_errors import MessageError
 from utilities.myfunc import unique_id
 
@@ -37,7 +36,7 @@ class MsgComExt(Enum):
     AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices, set(['available_services']), True)
     DO_IT = MessageInfoExt(MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
     DONE_IT = MessageInfoExt(MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
-    ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['error_comments', 'reply_to', 'receiver_id']), False)
+    ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['comments', 'reply_to', 'receiver_id']), False)
     HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
     SHUTDOWN = MessageInfoExt(MsgType.BROADCASTED, ShutDown, set(['reason']), False)

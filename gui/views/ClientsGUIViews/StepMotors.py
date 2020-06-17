@@ -7,17 +7,17 @@ import copy
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import (QMainWindow)
+from PyQt5.QtWidgets import QMainWindow, QErrorMessage
 from PyQt5 import QtCore
 
-from communication.messaging.messages import MsgComExt, MsgComInt, MessageExt, MessageInt
-from communication.messaging.message_utils import MsgGenerator
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.stpmtr_dataclass import *
+from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ui import Ui_StpMtrGUI
 from utilities.myfunc import info_msg, get_local_ip, error_logger
+from utilities.datastructures.mes_independent.stpmtr_dataclass import move_mm, move_steps
 
 
 module_logger = logging.getLogger(__name__)
@@ -57,6 +57,10 @@ class StepMotorsView(QMainWindow):
         self.ui.closeEvent = self.closeEvent
 
         self.update_state()
+
+        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetStpMtrControllerStateInput())
+        self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
 
     def activate(self):
@@ -106,24 +110,59 @@ class StepMotorsView(QMainWindow):
             self.logger.error(e)
 
     def move_axis(self):
+        def convert_pos(pos: str) -> Union[move_steps, move_mm, None]:
+            try:
+                pos = float(pos)
+                return move_mm(pos)
+            except ValueError:
+                pos = pos.split(' ')
+                if len(pos) == 2:
+                    try:
+                        steps_to_go = int(pos[0])
+                        microsteps_to_go = int(pos[1])
+                        if self.controller_status.microsteps:
+                            microsteps = int(self.controller_status.microsteps)
+                            if microsteps_to_go > microsteps:
+                                steps_to_go += microsteps_to_go // microsteps
+                                microsteps_to_go = microsteps_to_go % microsteps
+
+                            return move_steps((steps_to_go, microsteps_to_go))
+                        else:
+                            raise ValueError(f'Could not convert Pos "{pos}" to steps and microsteps. '
+                                             f'Microcontroller works with mm only.')
+                    except ValueError:
+                        raise ValueError(f'Could not convert Pos "{pos}" to steps and microsteps.')
+                else:
+                    raise ValueError(f'The structure of move command:  "value in mm" or '
+                                     f'"value in steps" "value in microsteps."')
+
         if self.ui.radioButton_absolute.isChecked():
             how = absolute.__name__
         else:
             how = relative.__name__
         axis_id = int(self.ui.spinBox_axis.value())
-        pos = float(self.ui.lineEdit_value.text())
+        try:
+            pos = self.ui.lineEdit_value.text().strip()
+            pos: Union[move_steps, move_mm, None] = convert_pos(pos)
+            client = self.device
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                      func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
+            client.send_msg_externally(msg)
 
-        client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
-                                  func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
-        client.send_msg_externally(msg)
+            self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
+            self.controller_status.axes[axis_id].status = 2
+            self.ui.progressBar_movement.setValue(0)
+            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
+                                        specific={'axis_id': axis_id, 'with_return': True})
+            self._asked_status = 0
+        except ValueError as e:
+            comments = f'Pos "{pos}" has wrong format: {e}'
+            error_logger(self, self.move_axis, comments)
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage(comments)
+            error_dialog.exec_()
 
-        self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
-        self.controller_status.axes[axis_id].status = 2
-        self.ui.progressBar_movement.setValue(0)
-        self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
-                                    specific={'axis_id': axis_id, 'with_return': True})
-        self._asked_status = 0
+
 
     def model_is_changed(self, msg: MessageInt):
         try:
@@ -157,6 +196,7 @@ class StepMotorsView(QMainWindow):
                         result: FuncGetStpMtrControllerStateOutput = result
                         self.controller_axes = result.axes
                         self.controller_status.device_status = result.device_status
+                        self.controller_status.microsteps = result.microsteps
                         if not self.controller_status.start_stop:
                             self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
                     elif info.com == StpMtrController.STOP_AXIS.name:

@@ -7,13 +7,14 @@ import logging
 
 from PyQt5 import QtCore, QtWidgets, QtGui
 from enum import Enum, auto
-from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.projects_dataclass import *
+from typing import Set
+from communication.messaging.messages import MessageInt, MsgComInt, MsgComExt
+from utilities.datastructures.mes_independent import *
 from devices.devices import Device
 from devices.service_devices.project_treatment import ProjectManager_controller
 from gui.views.ui.ProjectManager import Ui_ProjectManager
 from utilities.myfunc import info_msg, get_local_ip, paths_to_dict
+
 
 
 module_logger = logging.getLogger(__name__)
@@ -54,6 +55,9 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         self.ui.treeWidget.clicked.connect(self.file_tree_click)
         self.ui.treeWidget.doubleClicked.connect(self.file_tree_double_click)
 
+        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetStpMtrControllerStateInput())
+        self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
 
     def get_files(self):

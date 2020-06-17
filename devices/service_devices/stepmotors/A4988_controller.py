@@ -20,7 +20,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = False
+dev_mode = True
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -140,7 +140,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
 
-
     def _setup(self) -> Tuple[Union[bool, str]]:
         res, comments = self._set_move_parameters()
         if res:
@@ -148,11 +147,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         else:
             return res, comments
 
+    def _set_i_know_how(self):
+        self.i_know_how = {'mm': False, 'steps': True}
+
     def _set_move_parameters(self, step=1) -> Tuple[Union[bool, str]]:
         try:
             parameters = self.get_settings('Parameters')
             try:
-                self._microsteps = int(parameters['microstep'])
+                self._microsteps = int(parameters['microsteps'])
             except ValueError:
                 self._microsteps = step
             self._microstep_settings = eval(parameters['microstep_settings'])
@@ -233,7 +235,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
-            microstep = int(parameters['microstep'])
+            microstep = int(parameters['microsteps'])
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])

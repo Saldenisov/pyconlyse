@@ -8,17 +8,15 @@ so current does not run during waiting time
 INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
-from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
+from typing import Callable
 from enum import Enum
-from gpiozero import LED
 import logging
 import serial
 import serial.tools.list_ports
 from time import sleep
 
-from datastructures.mes_independent import *
-from utilities.tools.decorators import development_mode
-from utilities.myfunc import error_logger, info_msg
+from utilities.datastructures.mes_independent import *
+from utilities.myfunc import error_logger
 from .stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
@@ -208,7 +206,6 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         else:
             return {1: 0}
 
-
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
 
@@ -261,6 +258,9 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             return self._setup_pins()
         else:
             return res, comments
+
+    def _set_i_know_how(self):
+        self.i_know_how = {'mm': 1, 'steps': 0}
 
     def _set_controller_positions(self, positions: Dict[str, Union[int, float]]) -> Tuple[bool, str]:
         self._send_to_arduino(f'SET POS {positions[1]}')

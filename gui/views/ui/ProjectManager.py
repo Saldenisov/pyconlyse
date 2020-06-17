@@ -6,7 +6,7 @@
 #
 # WARNING! All changes made in this file will be lost!
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtCore, QtWidgets
 
 class Ui_ProjectManager(object):
     def setupUi(self, ProjectManager):
@@ -243,8 +243,7 @@ class Ui_ProjectManager(object):
         self.actionNew_Project.setText(_translate("ProjectManager", "New Project"))
         self.actionQuit.setText(_translate("ProjectManager", "Quit"))
 
-from typing import List, Union
-from datastructures.mes_independent.projects_dataclass import *
+
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)

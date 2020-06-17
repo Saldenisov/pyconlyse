@@ -11,8 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Union, Tuple
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
-from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
-from utilities.myfunc import error_logger
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
 from utilities.errors.myexceptions import NoSuchFileType
 
 

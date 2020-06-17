@@ -5,8 +5,8 @@ from utilities.errors.myexceptions import DeviceError
 from utilities.myfunc import error_logger, info_msg
 from devices.devices import Service
 from typing import Any, Callable
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.stpmtr_dataclass import *
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 import logging
 
 module_logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ class StpMtrController(Service):
         self.axes: Dict[int, AxisStpMtr] = dict()
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._parameters_set_hardware = False
+        self.i_know_how = {'mm': False, 'steps': False}  # gives information what controller understands
         if not path.exists(self._file_pos):
             file = open(self._file_pos, "w+")
             file.close()
@@ -227,8 +228,13 @@ class StpMtrController(Service):
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Axes are {self._axes_status}'
-        return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
-                                                  comments=comments, func_success=True)
+        try:
+            microsteps = int(self.get_parameters['microsteps'])
+            return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
+                                                      comments=comments, func_success=True, microsteps=microsteps)
+        except KeyError:
+            return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
+                                                      comments=comments, func_success=True)
 
     @abstractmethod
     def _get_number_axes(self) -> int:
@@ -443,6 +449,10 @@ class StpMtrController(Service):
         """
         return True, ''
 
+    @abstractmethod
+    def _set_i_know_how(self):
+        self.i_know_how = {'mm':False, 'steps': False}  # gives information what controller understands
+
     def _set_number_axes(self):
         if self.device_status.connected:
             axes_number = self._get_number_axes()
@@ -487,6 +497,7 @@ class StpMtrController(Service):
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         try:
+            self._set_i_know_how()
             self._set_number_axes()
             self._set_axes_ids()  # Ids must be set first
             self._set_axes_names()

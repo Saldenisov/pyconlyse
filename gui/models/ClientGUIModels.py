@@ -6,14 +6,13 @@ Created on 17.11.2019
 import logging
 import numpy as np
 from datetime import datetime
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Union, Tuple
-from enum import Enum, auto
+from enum import Enum
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QErrorMessage
 from communication.messaging.messages import MessageInt, MessageExt
-from datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
                                                                Opener, OpenersTypes, OPENER_ACCRODANCE, CriticalInfo)

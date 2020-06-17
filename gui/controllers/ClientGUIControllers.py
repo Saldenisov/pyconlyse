@@ -7,14 +7,14 @@ Created on 15.11.2019
 import os
 import logging
 from pathlib import Path
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QDialogButtonBox, QErrorMessage
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage
 from PyQt5.QtCore import QModelIndex
 from communication.messaging.messages import MessageExt, MsgComExt
 from gui.models.ClientGUIModels import VD2TreatmentModel
-from datastructures.mes_independent.devices_dataclass import *
-from datastructures.mes_independent.projects_dataclass import (ProjectManagerDescription,
-                                                               FuncGetProjectManagerControllerStateInput)
-from datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent import (ProjectManagerDescription,
+                                                      FuncGetProjectManagerControllerStateInput)
+from utilities.datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
 from devices.devices import Device
 from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
 from utilities.myfunc import info_msg, get_local_ip, error_logger
@@ -66,18 +66,14 @@ class SuperClientGUIcontroller():
             parameters: DeviceInfoExt = self.model.service_parameters[service_id]
             if isinstance(parameters.device_description, StpMtrDescription):
                 view = StepMotorsView
-                msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
-                                          func_input=FuncGetStpMtrControllerStateInput())
             elif isinstance(parameters.device_description, ProjectManagerDescription):
                 view = ProjectManagerView
-                msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
-                                          func_input=FuncGetProjectManagerControllerStateInput())
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
             self.services_views[service_id].show()
             info_msg(self, 'INFO', f'GUI for service {service_id} is started')
-            client.send_msg_externally(msg)
+
         except KeyError:
             error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded')
         except Exception as e:

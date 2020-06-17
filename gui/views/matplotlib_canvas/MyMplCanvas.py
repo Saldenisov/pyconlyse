@@ -12,7 +12,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 from typing import Union
-from datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
 class MyMplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""

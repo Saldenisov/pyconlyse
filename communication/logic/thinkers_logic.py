@@ -1,11 +1,10 @@
-import logging
 from time import time, sleep
 
 
 from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
 from communication.messaging.messengers import PUB_Socket, SUB_Socket, PUB_Socket_Server
-from datastructures.mes_independent.devices_dataclass import Connection
+from utilities.datastructures.mes_independent.devices_dataclass import Connection
 from devices.devices import Server
 from utilities.myfunc import info_msg, error_logger
 
@@ -16,7 +15,7 @@ class GeneralCmdLogic(Thinker):
     
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        from communication.logic.logic_functions import internal_hb_logic, external_hb_logic
+        from communication.logic.logic_functions import internal_hb_logic
         self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])

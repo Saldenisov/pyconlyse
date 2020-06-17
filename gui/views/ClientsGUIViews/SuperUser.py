@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import QMainWindow
 from typing import Union
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
-from datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.devices_dataclass import *
 from devices.devices import Server, Service
 from gui.views.ui.SuperUser_ui import Ui_SuperUser
 from utilities.myfunc import info_msg,  get_local_ip, error_logger

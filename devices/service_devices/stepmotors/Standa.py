@@ -209,6 +209,9 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
 
+    def _release_hardware(self) -> Tuple[bool, str]:
+        self.i_know_how = {'mm': 0, 'steps': 1}
+
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
         return super()._set_controller_positions(positions)
 

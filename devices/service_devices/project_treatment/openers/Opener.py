@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Union, Tuple
-from datastructures.mes_independent.measurments_dataclass import Measurement
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
 from utilities.myfunc import error_logger
 from utilities.errors.myexceptions import NoSuchFileType
 import logging

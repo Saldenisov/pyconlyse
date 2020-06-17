@@ -166,6 +166,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
         except KeyError as e:
             return False, f"_setup did not work; {e}"
 
+    def _set_i_know_how(self):
+        self.i_know_how = {'mm': 1, 'steps': 0}
+
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         if not self.device_status.connected:
             return super()._set_parameters(extra_func=[self._setup])

@@ -2,7 +2,6 @@ import base64
 import logging
 import zmq
 from abc import abstractmethod
-from enum import Enum
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -12,17 +11,16 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from time import sleep
-from typing import Dict, List, NamedTuple, NewType
+from typing import NamedTuple, NewType
 
-from communication.interfaces import MessengerInter
-from communication.messaging.messages import MessageExt, MsgType, MsgComExt
-from datastructures.mes_independent.devices_dataclass import *
+from communication.messaging.messages import MessageExt, MsgComExt
+from utilities.datastructures.mes_independent.devices_dataclass import *
 from devices.interfaces import DeviceId, DeviceType
 from devices.devices import Device
-from datastructures.mes_dependent.dicts import MsgDict
+from utilities.datastructures.mes_dependent.dicts import MsgDict
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
-from utilities.myfunc import unique_id, info_msg, error_logger, get_local_ip, get_free_port
+from utilities.myfunc import info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
 
 
