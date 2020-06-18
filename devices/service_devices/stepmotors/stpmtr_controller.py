@@ -24,11 +24,11 @@ class StpMtrController(Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._set_i_know_how()  # absolutely required to set it here
         self._axes_number: int = 0
         self.axes: Dict[int, AxisStpMtr] = dict()
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
         self._parameters_set_hardware = False
-        self.i_know_how = {'mm': False, 'steps': False}  # gives information what controller understands
         if not path.exists(self._file_pos):
             file = open(self._file_pos, "w+")
             file.close()
@@ -202,7 +202,8 @@ class StpMtrController(Service):
         """
         try:
             parameters = self.get_settings('Parameters')
-            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'])
+            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'],
+                                     known_movements=self._known_movements)
         except (KeyError, DeviceError) as e:
             return StpMtrError(self, f'Could not set description of controller from database: {e}')
 
@@ -451,7 +452,8 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _set_i_know_how(self):
-        self.i_know_how = {'mm':False, 'steps': False}  # gives information what controller understands
+        # gives information what controller understands
+        self._known_movements = {move_mm: False, move_steps: False, move_angle: False}
 
     def _set_number_axes(self):
         if self.device_status.connected:

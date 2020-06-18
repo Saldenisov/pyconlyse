@@ -61,7 +61,6 @@ class SuperClientGUIcontroller():
 
     def create_service_gui(self):
         service_id = self.view.ui.lW_devices.currentItem().text()
-        client = self.device
         try:
             parameters: DeviceInfoExt = self.model.service_parameters[service_id]
             if isinstance(parameters.device_description, StpMtrDescription):
@@ -87,7 +86,7 @@ class SuperClientGUIcontroller():
         client = self.device
 
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
-                                       func_input=FuncServiceInfoInput())
+                                  func_input=FuncServiceInfoInput())
         client.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):

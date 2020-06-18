@@ -13,6 +13,7 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
 from gpiozero import LED
 import logging
 from time import sleep
+from utilities.datastructures.mes_independent.stpmtr_dataclass import move_angle, move_mm, move_steps
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -148,7 +149,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return res, comments
 
     def _set_i_know_how(self):
-        self.i_know_how = {'mm': False, 'steps': True}
+        self.i_know_how = {move_steps: True, move_angle: False, move_steps: False}
 
     def _set_move_parameters(self, step=1) -> Tuple[Union[bool, str]]:
         try:
