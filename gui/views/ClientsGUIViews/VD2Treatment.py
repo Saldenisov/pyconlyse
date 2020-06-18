@@ -30,7 +30,7 @@ class VD2TreatmentView(QMainWindow):
         info_msg(self, 'INITIALIZING')
 
         self.ui = Ui_GraphVD2Window()
-        self.ui.setupUi(self)
+        self.ui.setupUi(self, data_folder=in_controller.model.data_folder)
 
         self.controller.model.add_measurement_observer(self)
         self.controller.model.add_ui_observer(self)
@@ -45,7 +45,8 @@ class VD2TreatmentView(QMainWindow):
         self.ui.button_save_result.clicked.connect(self.controller.save)
         self.ui.kinetics_slider.ValueChanged.connect(self.controller.slider_kinetics)
         self.ui.spectrum_slider.ValueChanged.connect(self.controller.slider_spectra)
-        self.ui.lineedit_save_file_name.textChanged.connect(self.controller.save_file_path_changed)
+        self.ui.lineedit_save_file_name.returnPressed.connect(self.controller.save_file_path_changed)
+        self.ui.lineedit_save_folder.returnPressed.connect(self.controller.save_file_folder_changed)
         self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)
         self.ui.combobox_type_exp.currentIndexChanged.connect(self._combobox_index_change)
         self.ui.tree.customContextMenuRequested.connect(self.menuContextTree)
@@ -154,19 +155,26 @@ class VD2TreatmentView(QMainWindow):
             if isinstance(widget, QCheckBox):
                 widget.setChecked(value)
             elif isinstance(widget, QLineEdit):
-                if not isinstance(value, list):
-                    value = [value]
-                for val in value:
-                    chk = []
-                    for i in range(self.ui.combobox_files_selected.count()):
-                        if val != self.ui.combobox_files_selected.itemText(i):
-                            chk.append(True)
-                        else:
-                            chk.append(False)
-                            break
-                    if all(chk):
-                        self.ui.combobox_files_selected.addItem(val)
-                widget.setText('; '.join(value))
+                if name not in ['lineedit_save_folder']:
+                    if name == 'lineedit_save_file_name':
+                        short_value = [value]
+                        value = self.ui.lineedit_save_folder.text() + '\\' + value
+                    if not isinstance(value, list):
+                        value = [value]
+                    for val in value:
+                        chk = []
+                        for i in range(self.ui.combobox_files_selected.count()):
+                            if val != self.ui.combobox_files_selected.itemText(i):
+                                chk.append(True)
+                            else:
+                                chk.append(False)
+                                break
+                        if all(chk):
+                            self.ui.combobox_files_selected.addItem(val)
+                    if name != 'lineedit_save_file_name':
+                        widget.setText('; '.join(value))
+                    else:
+                        widget.setText('; '.join(short_value))
 
             elif isinstance(widget, QProgressBar):
                 widget.setValue(value[0] / value[1] * 100)

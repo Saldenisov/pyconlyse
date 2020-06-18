@@ -190,7 +190,14 @@ class VD2TreatmentController:
         self.model.save()
 
     def save_file_path_changed(self):
-        self.model.save_file_path_change(self.view.ui.lineedit_save_file_name.text())
+        folder = self.view.ui.lineedit_save_folder.text()
+        file = self.view.ui.lineedit_save_file_name.text()
+        self.model.save_file_path_change(folder, file)
+
+    def save_file_folder_changed(self):
+        folder = self.view.ui.lineedit_save_folder.text()
+        file = self.view.ui.lineedit_save_file_name.text()
+        self.model.save_file_path_change(folder, file)
 
     def set_path(self, index: QModelIndex, exp_data_type: VD2TreatmentModel.DataTypes):
         try:

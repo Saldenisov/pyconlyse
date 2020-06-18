@@ -87,8 +87,10 @@ class VD2TreatmentModel(QObject):
         SAVE = 'SAVE'
         DATA = 'DATA'
 
-    def __init__(self, app_folder: Path, parameters: Dict[str, Any]={}):
+    def __init__(self, app_folder: Path, data_folder: Union[Path, str], parameters: Dict[str, Any]={}):
         super().__init__(parent=None)
+        self.data_folder = Path(data_folder)
+        self.save_folder = Path(data_folder)
         self.app_folder = app_folder
         self.name = 'VD2Treatment:model: '
         self.logger = logging.getLogger('VD2Treatment')
@@ -122,9 +124,9 @@ class VD2TreatmentModel(QObject):
                 elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
                                        VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
                     self.paths[VD2TreatmentModel.DataTypes.DATA] = file_path
-                    save_path: Path = file_path.parent / f'{file_path.stem}.dat'
+                    save_path: Path = self.save_folder / f'{file_path.stem}.dat'
                     self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
-                    self.notify_ui_observers({'lineedit_save_file_name': str(save_path)})
+                    #self.notify_ui_observers({'lineedit_save_file_name': f'{file_path.stem}.dat'})
 
                 if exp_data_type is VD2TreatmentModel.DataTypes.ABS:
                     file_paths.append(str(file_path))
@@ -225,8 +227,6 @@ class VD2TreatmentModel(QObject):
                         base_data = base_data / info.number_maps
                         od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
                     res = True
-
-
         elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
             if VD2TreatmentModel.DataTypes.ABS not in self.paths:
                 self.show_error(self.calc_abs, f'Set ABS pass first.')
@@ -246,10 +246,12 @@ class VD2TreatmentModel(QObject):
                     info: CriticalInfoHamamatsu = opener.paths[abs_path]
                     abs_data = opener.average_map(file_path=abs_path, call_back_func=self._callback_average)
                     base_data = opener.average_map(file_path=base_path, call_back_func=self._callback_average)
-                    od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                    noise_averaged_data = self.noise_averaged_data
+                    od_data = (base_data - noise_averaged_data) / (abs_data - noise_averaged_data)
                     res = True
 
         if res:
+            od_data = np.log10(od_data)
             self.od = Measurement(type='Pump-Probe', comments='', author='SD',
                                   timestamp=datetime.timestamp(datetime.now()), data=od_data,
                                   wavelengths=info.wavelengths, timedelays=info.timedelays,
@@ -324,9 +326,11 @@ class VD2TreatmentModel(QObject):
         except KeyError as e:
             self.show_error(self.save, e)
 
-    def save_file_path_change(self, file_name: str):
-        self.paths[VD2TreatmentModel.DataTypes.SAVE] = Path(file_name)
-        self.notify_ui_observers({'lineedit_save_file_name': file_name})
+    def save_file_path_change(self, folder: str, file_name: str):
+        save_path = Path(folder) / Path(file_name)
+        self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
+        self.notify_ui_observers({'lineedit_save_file_name': str(Path(file_name))})
+        self.notify_ui_observers({'lineedit_save_folder': str(Path(folder))})
 
     def show_error(self, func, error):
         error_logger(self, func, error)

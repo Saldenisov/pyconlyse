@@ -1,5 +1,6 @@
 import matplotlib
 matplotlib.use("Qt5Agg")
+from pathlib import Path
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit, QRadioButton, QProgressBar,
                              QTabWidget,
@@ -17,8 +18,9 @@ from gui.views import RangeSlider
 from gui.models.ClientGUIModels import VD2TreatmentModel
 
 
-class Ui_GraphVD2Window(object):
-    def setupUi(self, window, parameters=None):
+class Ui_GraphVD2Window:
+    def setupUi(self, window, data_folder: Path, parameters=None):
+        self.data_folder = data_folder
         self.inParameters = parameters
         self.parent = window
 
@@ -89,6 +91,8 @@ class Ui_GraphVD2Window(object):
         # LineEdit
         self.lineedit_data_set = QLineEdit()
         self.lineedit_noise_set = QLineEdit()
+        self.lineedit_save_folder = QLineEdit()
+        self.lineedit_save_folder.setText(str(self.data_folder))
         self.lineedit_save_file_name = QLineEdit()
 
         # Labels
@@ -136,8 +140,8 @@ class Ui_GraphVD2Window(object):
         self.tabs.addTab(info_tab, 'Info')
 
         # Tree
-        #root = 'C:\\dev\\DATA\\'
-        root = 'D:\\DATA_VD2\\2020\\20200617-RK-940'
+        root = str(self.data_folder)
+        #root = 'D:\\DATA_VD2\\2020\\20200617-RK-940'
         self.tree_model = QtWidgets.QFileSystemModel()
         self.tree = QtWidgets.QTreeView()
         self.tree.setModel(self.tree_model)
@@ -189,6 +193,7 @@ class Ui_GraphVD2Window(object):
         layout_control_buttons.addLayout(layout_data_buttons)
         layout_control_buttons.addLayout(layout_noise)
         layout_control_buttons.addLayout(layout_type_exp)
+        layout_control_buttons.addWidget(self.lineedit_save_folder)
         layout_control_buttons.addWidget(self.lineedit_save_file_name)
         layout_control_buttons.addWidget(self.progressbar_calc)
         layout_control_buttons.addLayout(layout_play_button)
