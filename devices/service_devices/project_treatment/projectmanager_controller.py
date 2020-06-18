@@ -223,7 +223,7 @@ class ProjectManager_controller(Service):
         param: List[str] = list(Operator.__annotations__.keys())
         cmd = f"SELECT {', '.join(param)} from Operators"
         if isinstance(func_input.operator_id, list):
-            if func_input.operator_id == []:
+            if not func_input.operator_id:
                 pass
             else:
                 operators_ids = [str(oper) for oper in func_input.operator_id]

@@ -119,9 +119,8 @@ class StepMotorsController:
         info_msg(self, 'INITIALIZED')
 
     def quit_clicked(self, event):
-        reply = QMessageBox.question(self.view, 'Quiting',
-                                     "Are you sure to quit?", QMessageBox.Yes |
-                                     QMessageBox.No, QMessageBox.No)
+        reply = QMessageBox.question(self.view, 'Quiting', "Are you sure to quit?",
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
         if reply == QMessageBox.Yes:
             self.logger.info('Closing')

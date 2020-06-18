@@ -149,7 +149,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return res, comments
 
     def _set_i_know_how(self):
-        self.i_know_how = {move_steps: True, move_angle: False, move_steps: False}
+        self._known_movements = {move_steps: True, move_angle: False, move_mm: False}
 
     def _set_move_parameters(self, step=1) -> Tuple[Union[bool, str]]:
         try:

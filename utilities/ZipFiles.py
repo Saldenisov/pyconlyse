@@ -6,7 +6,6 @@ import os
 import time
 import re
 import zipfile
-import zlib
 from multiprocessing import Pool
 
 

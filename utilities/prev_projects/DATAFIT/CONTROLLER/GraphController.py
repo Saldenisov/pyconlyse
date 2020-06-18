@@ -274,16 +274,10 @@ class GraphController():
         """
         Handles event generated, when the button "Fit" is pressed.
         """
-        fit_model_dict = {'pulse': False, 'constrained': False,
-                          'conv': False, 'model': '1exp'}
-
-        fit_model_dict['model'] = self.view.ui.combobox_Fit.currentText()
-
-        fit_model_dict['pulse'] = self.view.ui.checkbox_pulse.isChecked()
-
-        fit_model_dict['constrained'] = self.view.ui.checkbox_constrained.isChecked()
-
-        fit_model_dict['conv'] = self.view.ui.checkbox_conv.isChecked()
+        fit_model_dict = {'pulse': self.view.ui.checkbox_pulse.isChecked(),
+                          'constrained': self.view.ui.checkbox_constrained.isChecked(),
+                          'conv': self.view.ui.checkbox_conv.isChecked(),
+                          'model': self.view.ui.combobox_Fit.currentText()}
 
         guess, bounds, parameters_order = self.fit_model_init(fit_model_dict)
 

@@ -1,6 +1,5 @@
 import sys
 from PyQt5.QtWidgets import QApplication, QWidget, QInputDialog, QLineEdit
-from PyQt5.QtGui import QIcon
 
 
 class App(QWidget):

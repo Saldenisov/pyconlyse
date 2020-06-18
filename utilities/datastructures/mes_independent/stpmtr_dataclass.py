@@ -9,7 +9,7 @@ relative = NewType('relative', str)
 absolute = NewType('absolute', str)
 move_mm = NewType('move_mm', float)
 move_angle = NewType('move_angle', float)
-move_steps = NewType('move_steps', tuple)
+move_steps = NewType('move_steps', int)
 
 
 @dataclass(frozen=False)
@@ -17,9 +17,12 @@ class AxisStpMtr:
     id: int
     name: str = ''
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
-    position: float = 0.0
+    position: Union[move_mm, move_angle, move_steps] = 0
     preset_values: List[Union[int, float]] = field(default_factory=list)
     status: int = 0
+    known_movements: Dict[Union[move_mm, move_angle, move_steps], bool] = \
+        field(default_factory=lambda: {move_steps: False, move_mm: False, move_angle: False})
+    microsteps: int = None
 
     def short(self):
         return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status)
@@ -28,14 +31,13 @@ class AxisStpMtr:
 @dataclass(order=True, frozen=False)
 class AxisStpMtrEssentials:
     id: int
-    position: float
+    position: Union[move_mm, move_angle, move_steps]
     status: int
 
 
 @dataclass(order=True)
 class StpMtrDescription(Desription):
     axes: Dict[int, AxisStpMtr]
-    known_movements: Dict[Union[move_mm, move_angle, move_steps], bool]
 
 
 @dataclass(order=True, frozen=False)
@@ -43,7 +45,7 @@ class StpMtrCtrlStatusMultiAxes:
     axes: Dict[int, AxisStpMtrEssentials]
     device_status: DeviceStatus
     know_movements: Dict[Union[move_mm, move_angle, move_steps], bool] = \
-        field(default_factory=lambda: {move_steps: False, move_mm: False})
+        field(default_factory=lambda: {move_steps: False, move_mm: False, move_angle: False})
     axes_previous: Dict[int, AxisStpMtrEssentials] = None
     device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)

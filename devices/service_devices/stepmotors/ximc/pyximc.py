@@ -70,9 +70,9 @@ lib.get_device_name.restype = c_char_p
 # BEGIN OF GENERATED code
 # ---------------------------
 class EnumerateFlags:
-	ENUMERATE_PROBE      = 0x01
-	ENUMERATE_ALL_COM    = 0x02
-	ENUMERATE_NETWORK    = 0x04
+    ENUMERATE_PROBE      = 0x01
+    ENUMERATE_ALL_COM    = 0x02
+    ENUMERATE_NETWORK    = 0x04
 
 
 class MoveState:

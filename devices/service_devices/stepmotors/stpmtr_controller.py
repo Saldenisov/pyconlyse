@@ -69,18 +69,13 @@ class StpMtrController(Service):
                 if res:
                     self.device_status.active = flag
                     res, info = self._release_hardware()
-                if not res:
-                    comments = comments + f'Hardware was not realeased properly: {info}'
+                    if not res:
+                        comments = comments + f'Hardware was not released properly: {info}'
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
-        """
-        :param axis_id: 0-n
-        :param flag: 0=non-active, 1=ready to work, 2=running
-        :return: res, comments='' if True, else error_message
-        """
         axis_id = func_input.axis_id
         flag = func_input.flag
         res, comments = self._check_axis_range(axis_id)
@@ -113,8 +108,6 @@ class StpMtrController(Service):
 
     @property
     def _axes_limits(self) -> List[Tuple[int]]:
-        for axis in self.axes.values():
-            a = axis
         return [axis.limits for axis in self.axes.values()]
 
     @property
@@ -224,7 +217,7 @@ class StpMtrController(Service):
 
     def get_controller_state(self, func_input: FuncGetStpMtrControllerStateInput) -> FuncGetStpMtrControllerStateOutput:
         """
-        State of cotroller is returned
+        State of controller is returned
         :return:  FuncOutput
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
@@ -247,10 +240,9 @@ class StpMtrController(Service):
         except KeyError:
             raise StpMtrError(self, text="Axes_number could not be set, axes_number field is absent in the database")
         except (ValueError, SyntaxError):
-            raise StpMtrError(self, text="Check axes number in database, must be axex_number = 1 or any number")
+            raise StpMtrError(self, text="Check axes number in database, must be axes_number = 1 or any number")
 
     def get_pos(self, func_input: FuncGetPosInput) -> FuncGetPosOutput:
-        axis_id = func_input.axis_id
         return FuncGetPosOutput(axes=self.axes_essentials, comments='', func_success=True)
 
     def move_axis_to(self, func_input: FuncMoveAxisToInput) -> FuncMoveAxisToOutput:
@@ -284,7 +276,7 @@ class StpMtrController(Service):
         for axis_id in self.axes.keys():
             self.logger.info(f'Moving {axis_id} back to 0')
             _, _ = self._change_axis_status(axis_id, 1)
-            _, _ = self.move_axis_to(axis_id, 0)
+            _, _ = self.move_axis_to(axis_id, FuncMoveAxisToInput(axis_id, 0, how=absolute))
             _, _ = self._change_axis_status(axis_id, 0, force=True)
 
     def _get_axes_ids_db(self):
@@ -379,7 +371,7 @@ class StpMtrController(Service):
             else:
                 for key, val in pos.items():
                     if not (isinstance(val, int) or isinstance(val, float)):
-                        raise StpMtrError(f"val {val} is not a number")
+                        raise StpMtrError(self, f"val {val} is not a number")
         return pos
 
     @abstractmethod
@@ -428,7 +420,6 @@ class StpMtrController(Service):
     def _set_axes_names(self):
         if not self.device_status.connected:
             names = self._get_axes_names_db()
-            keys = list(self.axes.keys())
             for id, name in zip(self.axes.keys(), names):
                 self.axes[id].name = name
 
@@ -539,13 +530,14 @@ class StpMtrController(Service):
                     comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was stopped by user.'
             elif self.axes[axis_id].status == 1:
                 comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} was already stopped.'
+            elif self.axes[axis_id].status == 0:
+                comments = f'Axis id={axis_id}, name={self.axes[axis_id].name} is not even active.'
         return FuncStopAxisOutput(axes=self.axes_essentials, comments=comments, func_success=res)
 
     @staticmethod
     def _write_to_file(text: str, file: Path):
         with open(file, 'w') as opened_file:
             opened_file.write(text)
-
 
 
 class StpMtrError(BaseException):
