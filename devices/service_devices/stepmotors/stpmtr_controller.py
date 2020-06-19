@@ -24,7 +24,6 @@ class StpMtrController(Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._set_i_know_how()  # absolutely required to set it here
         self._axes_number: int = 0
         self.axes: Dict[int, AxisStpMtr] = dict()
         self._file_pos = Path(__file__).resolve().parents[0] / f"{self.name}:positions.stpmtr".replace(":","_")
@@ -223,9 +222,8 @@ class StpMtrController(Service):
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Axes are {self._axes_status}'
         try:
-            microsteps = int(self.get_parameters['microsteps'])
             return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
-                                                      comments=comments, func_success=True, microsteps=microsteps)
+                                                      comments=comments, func_success=True)
         except KeyError:
             return FuncGetStpMtrControllerStateOutput(axes=self.axes, device_status=self.device_status,
                                                       comments=comments, func_success=True)
@@ -338,7 +336,7 @@ class StpMtrController(Service):
         except (TypeError, SyntaxError):
             raise StpMtrError(self, text="Check limits field in database, must be limits = (x1, x2), (x3, x4),...")
 
-    def _set_limits(self):
+    def _set_limits_axes(self):
         if self.device_status.connected:
             limits = self._get_limits()
         else:
@@ -405,25 +403,25 @@ class StpMtrController(Service):
     def _release_hardware(self) -> Tuple[bool, str]:
         return True, ''
 
-    def _set_axes_ids(self):
+    def _set_ids_axes(self):
         # Axes ids must be in ascending order
         if not self.device_status.connected:
             ids = self._get_axes_ids_db()
             ids_c = ids.copy()
             if ids_c != ids:
                 e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
-                error_logger(self, self._set_axes_ids, e)
+                error_logger(self, self._set_ids_axes, e)
                 raise e
             for id_a in ids:
                 self.axes[id_a] = AxisStpMtr(id=id_a)
 
-    def _set_axes_names(self):
+    def _set_names_axes(self):
         if not self.device_status.connected:
             names = self._get_axes_names_db()
             for id, name in zip(self.axes.keys(), names):
                 self.axes[id].name = name
 
-    def _set_axes_status(self):
+    def _set_status_axes(self):
         if self.device_status.connected:
             statuses = self._get_axes_status()
         else:
@@ -441,17 +439,42 @@ class StpMtrController(Service):
         """
         return True, ''
 
-    @abstractmethod
-    def _set_i_know_how(self):
-        # gives information what controller understands
-        self._known_movements = {move_mm: False, move_steps: False, move_angle: False}
-
     def _set_number_axes(self):
         if self.device_status.connected:
             axes_number = self._get_number_axes()
         else:
             axes_number = self._get_number_axes_db()
         self._axes_number = axes_number
+
+    @abstractmethod
+    def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
+        try:
+            move_parameters = self.get_parameters['move_parameters']
+            move_parameters: dict = eval(move_parameters)
+            for axis_id, value in move_parameters.items():
+                if must_have_param:
+                    if set(must_have_param[axis_id]).intersection(value.keys()) != set(must_have_param[axis_id]):
+                        raise StpMtrError(self, text=f'Not all must have parameters "{must_have_param}" for axis_id '
+                                                     f'{axis_id} are present in DB.')
+
+                    if 'microsteps' not in value:
+                        self.axes[axis_id].type_move.remove(MoveType.microstep)
+                    if 'conversion_step_mm' not in value:
+                        self.axes[axis_id].type_move.remove(MoveType.mm)
+                    if 'conversion_step_angle' not in value:
+                        self.axes[axis_id].type_move.remove(MoveType.agnle)
+                    if not self.axes[axis_id].type_move:
+                        raise StpMtrError(self,
+                                          text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
+                                               f'"conversion_step_angle" for axis_id {axis_id}.')
+                    if mm in self.axes[axis_id].type_move and angle in self.axes[axis_id].type_move:
+                        raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
+                                                      f'"conversion_step_angle", not both for axis_id {axis_id}')
+
+        except KeyError:
+            raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
+        except SyntaxError as e:
+            raise StpMtrError(self, text=f'move_parameters error during eval: {e}.')
 
     def _set_positions_axes(self):
         controller_pos: Dict[int, Union[int, float]] = {}
@@ -480,7 +503,7 @@ class StpMtrController(Service):
         for id, pos in zip(self.axes.keys(), positions.values()):
             self.axes[id].position = pos
 
-    def _set_preset_values(self):
+    def _set_preset_values_axes(self):
         if self.device_status.connected:
             preset_values = self._get_preset_values()
         else:
@@ -490,14 +513,14 @@ class StpMtrController(Service):
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         try:
-            self._set_i_know_how()
             self._set_number_axes()
-            self._set_axes_ids()  # Ids must be set first
-            self._set_axes_names()
-            self._set_axes_status()
-            self._set_limits()
+            self._set_ids_axes()  # Ids must be set first
+            self._set_names_axes()
+            self._set_move_parameters_axes()
+            self._set_limits_axes()
             self._set_positions_axes()
-            self._set_preset_values()
+            self._set_preset_values_axes()
+            self._set_status_axes()
             res = []
             if extra_func:
                 comments = ''

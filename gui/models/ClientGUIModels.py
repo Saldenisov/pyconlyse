@@ -5,6 +5,7 @@ Created on 17.11.2019
 """
 import logging
 import numpy as np
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Union, Tuple
@@ -96,6 +97,7 @@ class VD2TreatmentModel(QObject):
         self.logger = logging.getLogger('VD2Treatment')
         info_msg(self, 'INITIALIZING')
         self.parameters = parameters
+        self.processes_pool = ProcessPoolExecutor(max_workers=6)
         self.measurements_observers = []
         self.ui_observers = []
         self.openers = {OpenersTypes.Hamamatsu: HamamatsuFileOpener(logger=self.logger),
@@ -235,20 +237,34 @@ class VD2TreatmentModel(QObject):
                 self.show_error(self.calc_abs, f'Set BASE pass first.')
                 res_local = False
             if res_local:
-                if len(self.noise_averaged_data) < 2:
-                    res, comments = self.average_noise()
-                    if not res:
-                        self.show_error(self.calc_abs, comments)
                 abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
                 base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
+                noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
                 opener = self.get_opener(abs_path)
                 if opener:
                     info: CriticalInfoHamamatsu = opener.paths[abs_path]
+                    abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
+                    base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
+                    noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+                    opener = self.get_opener(abs_path)
+                    #abs_data = base_data = noise_data = np.zeros(shape=(info.timedelays_length,
+                                                                        #info.wavelengths_length))
+                    #data_path = [abs_path, base_path, noise_path]
+                    #data = {abs_path: abs_data, base_path: base_data, noise_path: noise_data}
+                    #with ProcessPoolExecutor() as executor:
+                        #for path, res_calc in zip(data_path, executor.map(opener.average_map, data_path)):
+                            #data[path] = res_calc
+
                     abs_data = opener.average_map(file_path=abs_path, call_back_func=self._callback_average)
+                    #abs_data = data[abs_path]
                     base_data = opener.average_map(file_path=base_path, call_back_func=self._callback_average)
-                    noise_averaged_data = self.noise_averaged_data
-                    od_data = (base_data - noise_averaged_data) / (abs_data - noise_averaged_data)
+                    #base_data = data[base_path]
+                    noise_data = opener.average_map(file_path=noise_path, call_back_func=self._callback_average)
+                    #noise_data = data[noise_path]
+                    self.noise_averaged_data = noise_data
+                    od_data = (base_data - noise_data) / (abs_data - noise_data)
                     res = True
+
 
         if res:
             od_data = np.log10(od_data)
@@ -323,11 +339,13 @@ class VD2TreatmentModel(QObject):
             timedelays = np.insert(info.timedelays, 0, 0)
             final_data = np.vstack((timedelays, final_data))
             np.savetxt(save_path, final_data, delimiter='\t', fmt='%.4f')
-        except KeyError as e:
+        except (KeyError, Exception) as e:
             self.show_error(self.save, e)
+
 
     def save_file_path_change(self, folder: str, file_name: str):
         save_path = Path(folder) / Path(file_name)
+        info_msg(self, 'INFO', f'save file updated {save_path}')
         self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
         self.notify_ui_observers({'lineedit_save_file_name': str(Path(file_name))})
         self.notify_ui_observers({'lineedit_save_folder': str(Path(folder))})

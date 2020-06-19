@@ -8,12 +8,12 @@ so current does not run during waiting time
 INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
-from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
+from typing import List, Tuple, Union, Iterable, Dict, Any, Callable, Set
 
 from gpiozero import LED
 import logging
 from time import sleep
-from utilities.datastructures.mes_independent.stpmtr_dataclass import move_angle, move_mm, move_steps
+from utilities.datastructures.mes_independent.stpmtr_dataclass import move_angle, move_mm, move_microsteps
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -100,6 +100,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _move_axis_to(self, axis_id: int, pos: int, how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
+            self._set_microsteps_parameters(axis_id)  # Different axes could have different microsteps
             if pos - self.axes[axis_id].position > 0:
                 pas = 1
                 self._direction('top')
@@ -142,28 +143,28 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return False, f'{e}'
 
     def _setup(self) -> Tuple[Union[bool, str]]:
-        res, comments = self._set_move_parameters()
+        res, comments = self._set_move_parameters_controller()
         if res:
             return self._setup_pins()
         else:
             return res, comments
 
-    def _set_i_know_how(self):
-        self._known_movements = {move_steps: True, move_angle: False, move_mm: False}
+    def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
+        must_have_param = {1: set(['microsteps', 'conversion_step_angle']),
+                           2: set(['microsteps', 'conversion_step_angle']),
+                           3: set(['microsteps', 'conversion_step_angle']),
+                           4: set(['microsteps', 'conversion_step_angle'])}
+        return super()._set_move_parameters_axes(must_have_param)
 
-    def _set_move_parameters(self, step=1) -> Tuple[Union[bool, str]]:
+    def _set_move_parameters_controller(self, step=1) -> Tuple[Union[bool, str]]:
         try:
             parameters = self.get_settings('Parameters')
-            try:
-                self._microsteps = int(parameters['microsteps'])
-            except ValueError:
-                self._microsteps = step
             self._microstep_settings = eval(parameters['microstep_settings'])
             self._TTL_width_corrections = eval(parameters['ttl_width_corrections'])
             self._TTL_delay_corrections = eval(parameters['ttl_delay_corrections'])
             return True, ''
         except (KeyError, SyntaxError) as e:
-            error_logger(self, self._set_move_parameters, e)
+            error_logger(self, self._set_move_parameters_controller, e)
             return False, f'_set_move_parameters() did not work, DB cannot be read {e}'
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
@@ -236,7 +237,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
-            microstep = int(parameters['microsteps'])
             self._ttl = LED(parameters['ttl_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
@@ -265,10 +265,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._pins.append(self._relayIVa)
             self._relayIVb = LED(parameters['relayivb'], initial_value=True)
             self._pins.append(self._relayIVb)
-            microstep_settings = eval(parameters['microstep_settings'])
-            self._set_led(self._ms1, microstep_settings[microstep][0][0])
-            self._set_led(self._ms2, microstep_settings[microstep][0][1])
-            self._set_led(self._ms3, microstep_settings[microstep][0][2])
+            self.microstep_settings = eval(parameters['microstep_settings'])
             return True, ''
         except (KeyError, ValueError, SyntaxError) as e:
             self.logger.error(e)
@@ -296,3 +293,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._pins = []
             return True, '' if len(error)== 0 else str(error)
 
+    def _set_microsteps_parameters(self, axis_id: int):
+        self._set_led(self._ms1, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][0])
+        self._set_led(self._ms2, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][1])
+        self._set_led(self._ms3, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][2])

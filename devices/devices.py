@@ -105,7 +105,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.logger.error(e)
             raise DeviceError(str(e))
 
-
         from threading import Thread
         self._observing_param: Dict[str, List[Any, int]] = {}
         self._observing_FLAG = True
@@ -129,7 +128,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 if param_val != val[0]:
                     self._observing_param[key] = [param_val, time()]
                     info_msg(self, 'INFO', f'Attributes {key} changed its value.')
-
 
     def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
         res = []
@@ -160,7 +158,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self._main_executor.submit(func, **kwargs)
             return True
         except Exception as e:  # TODO: replace EXCEPTION with correct errors
-            self.logger.error(e)
+            error_logger(self, self.add_to_executor, e)
             return False
 
     def _connect_pyqtslot_signal(self, pyqtslot):

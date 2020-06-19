@@ -17,7 +17,7 @@ from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ui import Ui_StpMtrGUI
 from utilities.myfunc import info_msg, get_local_ip, error_logger
-from utilities.datastructures.mes_independent.stpmtr_dataclass import move_mm, move_steps
+from utilities.datastructures.mes_independent.stpmtr_dataclass import move_mm, move_microsteps
 
 
 module_logger = logging.getLogger(__name__)
@@ -110,7 +110,7 @@ class StepMotorsView(QMainWindow):
             self.logger.error(e)
 
     def move_axis(self):
-        def convert_pos(pos: str) -> Union[move_steps, move_mm, None]:
+        def convert_pos(pos: str) -> Union[move_microsteps, move_mm, None]:
             try:
                 pos = float(pos)
                 return move_mm(pos)
@@ -126,7 +126,7 @@ class StepMotorsView(QMainWindow):
                                 steps_to_go += microsteps_to_go // microsteps
                                 microsteps_to_go = microsteps_to_go % microsteps
 
-                            return move_steps((steps_to_go, microsteps_to_go))
+                            return move_microsteps((steps_to_go, microsteps_to_go))
                         else:
                             raise ValueError(f'Could not convert Pos "{pos}" to steps and microsteps. '
                                              f'Microcontroller works with mm only.')
@@ -143,7 +143,7 @@ class StepMotorsView(QMainWindow):
         axis_id = int(self.ui.spinBox_axis.value())
         try:
             pos = self.ui.lineEdit_value.text().strip()
-            pos: Union[move_steps, move_mm, None] = convert_pos(pos)
+            pos: Union[move_microsteps, move_mm, None] = convert_pos(pos)
             client = self.device
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how))
