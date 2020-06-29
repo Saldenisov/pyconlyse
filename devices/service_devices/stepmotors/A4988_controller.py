@@ -13,7 +13,7 @@ from typing import List, Tuple, Union, Iterable, Dict, Any, Callable, Set
 from gpiozero import LED
 import logging
 from time import sleep
-from utilities.datastructures.mes_independent.stpmtr_dataclass import move_angle, move_mm, move_microsteps
+from utilities.datastructures.mes_independent.stpmtr_dataclass import angle, mm, microstep
 from utilities.tools.decorators import development_mode
 from utilities.myfunc import error_logger, info_msg
 from .stpmtr_controller import StpMtrController
@@ -107,18 +107,18 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             else:
                 pas = -1
                 self._direction('bottom')
-            steps = int(abs(pos - self.axes[axis_id].position))
+            microsteps = int(abs(pos - self.axes[axis_id].position))
             interrupted = False
             self._enable_controller()
-            width = self._microstep_settings[self._microsteps][1] * self._TTL_width_corrections[axis_id] / 1000. # must be in ms
-            delay = self._microstep_settings[self._microsteps][2] * self._TTL_delay_corrections[axis_id] / 1000.
-            for i in range(steps):
+            microsteps_axis = self.axes[axis_id].move_parameters['microsteps']
+            width = self._microstep_settings[microsteps_axis][1] * self._TTL_width_corrections[axis_id] / 1000000. # must be in ms
+            delay = self._microstep_settings[microsteps_axis][2] * self._TTL_delay_corrections[axis_id] / 1000000.
+            for i in range(microsteps):
                 if self.axes[axis_id].status == 2:
-                    for _ in range(self._microsteps):
-                        self._set_led(self._ttl, 1)
-                        sleep(width)
-                        self._set_led(self._ttl, 0)
-                        sleep(delay)
+                    self._set_led(self._ttl, 1)
+                    sleep(width)
+                    self._set_led(self._ttl, 0)
+                    sleep(delay)
                     self.axes[axis_id].position += pas
                 else:
                     res = False
@@ -150,10 +150,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return res, comments
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
-        must_have_param = {1: set(['microsteps', 'conversion_step_angle']),
-                           2: set(['microsteps', 'conversion_step_angle']),
-                           3: set(['microsteps', 'conversion_step_angle']),
-                           4: set(['microsteps', 'conversion_step_angle'])}
+        must_have_param = {1: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
+                           2: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
+                           3: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
+                           4: set(['microsteps', 'conversion_step_angle', 'basic_unit'])}
         return super()._set_move_parameters_axes(must_have_param)
 
     def _set_move_parameters_controller(self, step=1) -> Tuple[Union[bool, str]]:
@@ -293,7 +293,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self._pins = []
             return True, '' if len(error)== 0 else str(error)
 
+    @development_mode(dev=dev_mode, with_return=None)
     def _set_microsteps_parameters(self, axis_id: int):
-        self._set_led(self._ms1, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][0])
-        self._set_led(self._ms2, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][1])
-        self._set_led(self._ms3, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][2])
+        try:
+            self._set_led(self._ms1, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][0])
+            self._set_led(self._ms2, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][1])
+            self._set_led(self._ms3, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][2])
+        except Exception as e:
+            raise e

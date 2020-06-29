@@ -331,7 +331,7 @@ class ClientMessenger(Messenger):
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, error_comments=str(e), reply_to='',
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=str(e), reply_to='',
                                                  receiver_id=device_id)
                 self.add_msg_out(msg_r)
 
@@ -515,7 +515,7 @@ class ServerMessenger(Messenger):
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                                 error_comments=str(e),
+                                                 comments=str(e),
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
 

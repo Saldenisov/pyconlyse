@@ -187,6 +187,70 @@ class StpMtrController(Service):
         else:
             return False, f'Controller is not active. Power is {self.device_status.power}'
 
+    def _check_move_type(self, axis_id: int, type_move: MoveType) -> Tuple[bool, str]:
+        if type_move in self.axes[axis_id].type_move:
+            return True, ''
+        else:
+            return False, f'Axis axis_id={axis_id} does not have type_move {type_move}. ' \
+                          f'It has {self.axes[axis_id].type_move}'
+
+    def _convert_to_basic_unit(self, axis_id: int, val: Union[int, float], move_type) \
+            -> Union[Tuple[bool, str], Union[int, float]]:
+        return self._convert_to_unit(self.axes[axis_id], val, move_type)
+
+    def _convert_to_unit(self, axis: AxisStpMtr, val: Union[int, float], unit: MoveType):
+        axis_basic_unit = axis.basic_unit
+        # step to microstep
+        if unit is MoveType.step and axis_basic_unit is MoveType.microstep:
+            try:
+                return int(val * axis.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert step to microstep. Error={e}.'
+        # microstep to angle
+        elif unit is MoveType.microstep and axis_basic_unit is MoveType.angle:
+            try:
+                conversion_step_angle = axis.move_parameters['conversion_step_angle']
+                return val * conversion_step_angle / axis.move_parameters['microsteps']
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert microstep to angle. Error={e}.'
+        # angle to microstep
+        elif unit is MoveType.angle and axis_basic_unit is MoveType.microstep:
+            try:
+                conversion_step_angle = axis.move_parameters['conversion_step_angle']
+                return int(val / conversion_step_angle * axis.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert angle to microstep. Error={e}.'
+        # step to angle
+        elif unit is MoveType.step and axis_basic_unit is MoveType.angle:
+            try:
+                conversion_step_angle = axis.move_parameters['conversion_step_angle']
+                return val * conversion_step_angle
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert step to angle. Error={e}.'
+        # microstep to mm
+        elif unit is MoveType.microstep and axis_basic_unit is MoveType.mm:
+            try:
+                conversion_step_mm = axis.move_parameters['conversion_step_mm']
+                return val * conversion_step_mm / axis.move_parameters['microsteps']
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert microstep to angle. Error={e}.'
+        # mm to microstep
+        elif unit is MoveType.mm and axis_basic_unit is MoveType.microstep:
+            try:
+                conversion_step_mm = axis.move_parameters['conversion_step_mm']
+                return int(val / conversion_step_mm * axis.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert angle to microstep. Error={e}.'
+        # step to mm
+        elif unit is MoveType.step and axis_basic_unit is MoveType.mm:
+            try:
+                conversion_step_mm = axis.move_parameters['conversion_step_mm']
+                return val * conversion_step_mm
+            except KeyError as e:
+                return False, f'Axis axis_id={axis.id} cannot covert step to mm. Error={e}.'
+        else:
+            return False, f'Axis axis_id={axis.id} cannot covert {unit} to {axis_basic_unit}.'
+
     def description(self) -> StpMtrDescription:
         """
         Description with important parameters
@@ -194,8 +258,7 @@ class StpMtrController(Service):
         """
         try:
             parameters = self.get_settings('Parameters')
-            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'],
-                                     known_movements=self._known_movements)
+            return StpMtrDescription(axes=self.axes, info=parameters['info'], GUI_title=parameters['title'])
         except (KeyError, DeviceError) as e:
             return StpMtrError(self, f'Could not set description of controller from database: {e}')
 
@@ -247,10 +310,20 @@ class StpMtrController(Service):
         axis_id = func_input.axis_id
         how = func_input.how
         pos = func_input.pos
+        move_type = func_input.move_type
+        if not move_type:
+            move_type = MoveType.step
         res, comments = self._check_axis(axis_id)
+        if res:
+            res, comments = self._check_move_type(axis_id, move_type)
         if res:
             res, comments = self._check_controller_activity()
         if res:
+            if move_type != self.axes[axis_id].basic_unit:
+                pos = self._convert_to_basic_unit(axis_id, pos, move_type)
+                if isinstance(pos, tuple):
+                    res, comments = pos
+                    return FuncMoveAxisToOutput(axes=self.axes_essentials, comments=comments, func_success=res)
             if how == 'relative':
                 pos = self.axes[axis_id].position + pos
             res, comments = self._is_within_limits(axis_id, pos)  # if not relative just set pos
@@ -323,13 +396,29 @@ class StpMtrController(Service):
 
     def _get_limits_db(self) -> List[Tuple[Union[float, int]]]:
         try:
-            limits: List[Tuple[Union[float, int]]] = []
+            limits = []
             limits_s: List[str] = self.get_settings('Parameters')['limits'].replace(" ", "").split(';')
             for exp in limits_s:
-                val = eval(exp)
+                exp = exp.split('_')
+                val = eval(exp[0])
+                try:
+                    val_type = exp[1]
+                    if val_type == 'angle':
+                        val_type = MoveType.angle
+                    elif val_type == 'mm':
+                        val_type = MoveType.mm
+                    elif val_type == 'microstep':
+                        val_type = MoveType.microstep
+                    else:
+                        val_type = MoveType.step
+                except IndexError:
+                    val_type = MoveType.step
+
                 if not isinstance(val, tuple):
                     raise TypeError()
-                limits.append(val)
+                if val_type is MoveType.microstep:
+                    val = (int(v) for v in val)
+                limits.append([val, val_type])
             return limits
         except KeyError:
             raise StpMtrError(self, text="Limits could not be set, limits field is absent in the database")
@@ -373,26 +462,47 @@ class StpMtrController(Service):
         return pos
 
     @abstractmethod
-    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
+    def _get_preset_values(self) -> List[Set[Union[Union[int, float], MoveType]]]:
         pass
 
-    def _get_preset_values_db(self) -> List[Tuple[Union[int, float]]]:
+    def _get_preset_values_db(self) -> List[Set[Union[Union[int, float], MoveType]]]:
         try:
-            preset_values: List[Tuple[Union[float, int]]] = []
+            preset_values = []
             preset_values_s: List[str] = self.get_settings('Parameters')['preset_values'].replace(" ", "").split(';')
             for exp in preset_values_s:
-                val = eval(exp)
+                exp = exp.split('_')
+                val = eval(exp[0])
+                try:
+                    val_type = exp[1]
+                    if val_type == 'angle':
+                        val_type = MoveType.angle
+                    elif val_type == 'mm':
+                        val_type = MoveType.mm
+                    elif val_type == 'microstep':
+                        val_type = MoveType.microstep
+                    else:
+                        val_type = MoveType.step
+                except IndexError:
+                    val_type = MoveType.step
+
                 if not isinstance(val, tuple):
                     raise TypeError()
-                preset_values.append(val)
+                if val_type is MoveType.microstep:
+                    val = (int(v) for v in val)
+                preset_values.append([val, val_type])
             return preset_values
         except KeyError:
             raise StpMtrError(self, text="Preset values could not be set, preset_values field is absent in the database")
         except (TypeError, SyntaxError):
-            raise StpMtrError(self, text="Check preset_values field in database, must be Preset values = (x1, x2), (x3, x4, x1, x5),...")
+            raise StpMtrError(self, text= "Check preset_values field in database, must be "
+                                          "Preset values = (x1, x2), (x3, x4, x1, x5),...")
 
     def _is_within_limits(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
-        if self.axes[axis_id].limits[0] <= pos <= self.axes[axis_id].limits[1]:
+        min_v, max_v = self.axes[axis_id].limits[0]
+        move_type = self.axes[axis_id].limits[1]
+        min_v = self._convert_to_basic_unit(axis_id, min_v, move_type)
+        max_v = self._convert_to_basic_unit(axis_id, max_v, move_type)
+        if min_v <= pos <= max_v:
             return True, ''
         else:
             comments = f'Desired pos: {pos} for axis id={axis_id}, name={self.axes[axis_id].name} is not ' \
@@ -457,12 +567,13 @@ class StpMtrController(Service):
                         raise StpMtrError(self, text=f'Not all must have parameters "{must_have_param}" for axis_id '
                                                      f'{axis_id} are present in DB.')
 
-                    if 'microsteps' not in value:
+                    if 'microsteps' not in value and 'microsteps' in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.microstep)
-                    if 'conversion_step_mm' not in value:
+                        self.axes[axis_id].type_move.remove(MoveType.step)
+                    if 'conversion_step_mm' not in value and 'conversion_step_mm' in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.mm)
-                    if 'conversion_step_angle' not in value:
-                        self.axes[axis_id].type_move.remove(MoveType.agnle)
+                    if 'conversion_step_angle' not in value and 'conversion_step_angle' in self.axes[axis_id].type_move:
+                        self.axes[axis_id].type_move.remove(MoveType.angle)
                     if not self.axes[axis_id].type_move:
                         raise StpMtrError(self,
                                           text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
@@ -470,7 +581,17 @@ class StpMtrController(Service):
                     if mm in self.axes[axis_id].type_move and angle in self.axes[axis_id].type_move:
                         raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
                                                       f'"conversion_step_angle", not both for axis_id {axis_id}')
-
+                try:
+                    basic_unit = MoveType(move_parameters[axis_id]['basic_unit'])
+                    if basic_unit in [MoveType.step, MoveType.microstep]:
+                        self.axes[axis_id].basic_unit = MoveType.microstep
+                        if MoveType.microstep not in self.axes[axis_id].type_move:
+                            raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
+                                                         f'axis_id={axis_id} does not have "microstep" parameter.')
+                except (KeyError, ValueError) as e:
+                    raise StpMtrError(self, text=f'Cannot set "basic_unit" for axis axis_id={axis_id}. Error = {e}')
+                finally:
+                    self.axes[axis_id].move_parameters = value
         except KeyError:
             raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
         except SyntaxError as e:

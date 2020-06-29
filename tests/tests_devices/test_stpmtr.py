@@ -1,14 +1,13 @@
 from time import sleep
-from devices.service_devices.stepmotors import (StpMtrController,
-                                                StpMtrCtrl_Standa, StpMtrCtrl_TopDirect_1axis)
+from devices.service_devices.stepmotors import *
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 
-from tests.fixtures.services import (stpmtr_TopDirect_test_non_fixture)
+from tests.fixtures.services import *
 
 import pytest
 
-one_service = [stpmtr_TopDirect_test_non_fixture()]
+one_service = [stpmtr_a4988_4axes_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
@@ -200,12 +199,14 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Move axis 1 to pos=10
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
-    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
+    assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1], MOVE_AXIS1_absolute_ten.pos, MoveType.step)
     assert res.comments == f'Movement of Axis with id={1}, name={stpmtr.axes[1].name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
-    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
+    assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1],
+                                                           MOVE_AXIS1_absolute_ten.pos +
+                                                           MOVE_AXIS1_relative_negative_ten.pos, MoveType.step)
 
     if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
         # Move axis 1 to pos=100 and stop it immediately
@@ -239,7 +240,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
         assert res.func_success
         assert type(res.axes[1]) == AxisStpMtrEssentials
-        assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
+        assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1],
+                                                               MOVE_AXIS1_absolute_ten.pos, MoveType.step)
         assert res.axes[2].position == 0
         assert res.comments == ''
 

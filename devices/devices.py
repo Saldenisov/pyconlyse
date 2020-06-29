@@ -221,8 +221,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 if isinstance(msg_com, MsgComExt):
                     message_info: MessageInfoExt = msg_com.value
                     if not message_info.must_have_param.issubset(set(kwargs.keys())):
-                        error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com}'
-                                                              f'{message_info.must_have_param}, only {kwargs.keys()}')
+                        error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com} '
+                                                              f'such as {message_info.must_have_param}, but instead '
+                                                              f'{kwargs.keys()}')
                         raise DeviceError(f'Not all parameters are passed to device.generate_msg')
 
                 if msg_com is MsgComExt.AVAILABLE_SERVICES:
