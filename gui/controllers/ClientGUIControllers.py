@@ -128,17 +128,6 @@ class StepMotorsController:
         else:
             event.ignore()
 
-    def connect_stpmtrctrl(self, motor_controller_name: str):
-        on = self.model.dlines[motor_controller_name].start
-        active = self.model.dlines[motor_controller_name].active
-        if not active:
-            self.model.dlines[motor_controller_name].check()
-        elif not on:
-            self.model.dlines[motor_controller_name].turn_on()
-
-    def move_stpmtr(self, motor_controller_name: str, axis: int, where: int):
-        pass
-
 
 class VD2TreatmentController:
 

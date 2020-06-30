@@ -151,7 +151,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
         must_have_param = {1: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
-                           2: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
+                           2: set(['microsteps', 'basic_unit']),
                            3: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
                            4: set(['microsteps', 'conversion_step_angle', 'basic_unit'])}
         return super()._set_move_parameters_axes(must_have_param)

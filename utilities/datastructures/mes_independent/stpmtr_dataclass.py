@@ -38,23 +38,87 @@ class AxisStpMtr:
     preset_values: List[Set[Union[Union[int, float], MoveType]]] = field(default_factory=list)
     status: int = 0  # 0 - not active, 1 - active, 2 - moving
 
-    def short(self, unit: MoveType = None, callback_position_calc=None):
-        if not callback_position_calc:
-            return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status, unit=self.basic_unit)
-        else:
-            if unit:
-                pos = callback_position_calc(self, self.position, unit)
-                if isinstance(pos, tuple):
-                    return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status,
-                                                unit=self.basic_unit)
-                else:
-                    return AxisStpMtrEssentials(id=self.id,
-                                                position=pos,
-                                                status=self.status,
-                                                unit=unit)
-            else:
+    def short(self, unit: MoveType = None):
+        if unit:
+            pos = self.convert_to_basic_unit(unit)
+            if isinstance(pos, tuple):
                 return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status,
                                             unit=self.basic_unit)
+            else:
+                return AxisStpMtrEssentials(id=self.id,
+                                            position=pos,
+                                            status=self.status,
+                                            unit=unit)
+        else:
+            return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status,
+                                        unit=self.basic_unit)
+
+    def convert_pos_to_unit(self, unit: MoveType) -> Union[Tuple[bool, str], Union[int, float]]:
+        return self._convert_from_to_unit(self.position, self.basic_unit, unit)
+
+    def convert_to_basic_unit(self, unit: MoveType, val: Union[int, float])\
+            -> Union[Tuple[bool, str], Union[int, float]]:
+        return self._convert_from_to_unit(val, unit, self.basic_unit)
+
+    def _convert_from_to_unit(self, val: Union[int, float], unit_from: MoveType, unit_to: MoveType) \
+            -> Union[Tuple[bool, str], Union[int, float]]:
+        error_text = f'Axis axis_id={self.id} cannot convert microstep to angle. Error='
+        # microstep to step
+        if unit_from is MoveType.microstep and unit_to is MoveType.step:
+            try:
+                return val / self.move_parameters['microsteps']
+            except KeyError as e:
+                return False, error_text + str(e)
+        # step to microstep
+        elif unit_from is MoveType.step and unit_to is MoveType.microstep:
+            try:
+                return int(val * self.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, error_text + str(e)
+        # microstep to angle
+        elif unit_from is MoveType.microstep and unit_to is MoveType.angle:
+            try:
+                conversion_step_angle = self.move_parameters['conversion_step_angle']
+                return val * conversion_step_angle / self.move_parameters['microsteps']
+            except KeyError as e:
+                return False, error_text + str(e)
+        # angle to microstep
+        elif unit_from is MoveType.angle and unit_to is MoveType.microstep:
+            try:
+                conversion_step_angle = self.move_parameters['conversion_step_angle']
+                return int(val / conversion_step_angle * self.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, error_text + str(e)
+        # step to angle
+        elif unit_from is MoveType.step and unit_to is MoveType.angle:
+            try:
+                conversion_step_angle = self.move_parameters['conversion_step_angle']
+                return val * conversion_step_angle
+            except KeyError as e:
+                return False, error_text + str(e)
+        # microstep to mm
+        elif unit_from is MoveType.microstep and unit_to is MoveType.mm:
+            try:
+                conversion_step_mm = self.move_parameters['conversion_step_mm']
+                return val * conversion_step_mm / self.move_parameters['microsteps']
+            except KeyError as e:
+                return False, error_text + str(e)
+        # mm to microstep
+        elif unit_from is MoveType.mm and unit_to is MoveType.microstep:
+            try:
+                conversion_step_mm = self.move_parameters['conversion_step_mm']
+                return int(val / conversion_step_mm * self.move_parameters['microsteps'])
+            except KeyError as e:
+                return False, error_text + str(e)
+        # step to mm
+        elif unit_from is MoveType.step and unit_to is MoveType.mm:
+            conversion_step_mm = self.move_parameters['conversion_step_mm']
+            try:
+                return val * conversion_step_mm
+            except KeyError as e:
+                return False, error_text + str(e)
+        else:
+            return False, f'Axis axis_id={self.id} cannot convert {unit_from} to {unit_to}.'
 
 
 @dataclass(order=True, frozen=False)
@@ -72,7 +136,7 @@ class StpMtrDescription(Desription):
 
 @dataclass(order=True, frozen=False)
 class StpMtrCtrlStatusMultiAxes:
-    axes: Dict[int, AxisStpMtrEssentials]
+    axes: Dict[int, AxisStpMtr]
     device_status: DeviceStatus
     know_movements: Dict[Union[mm, angle, microstep], bool] = \
         field(default_factory=lambda: {microstep: False, mm: False, angle: False})
@@ -120,7 +184,7 @@ class FuncGetPosOutput(FuncOutput):
 class FuncMoveAxisToInput(FuncInput):
     axis_id: int
     pos: Union[int, float]
-    how: Union[relative, absolute]
+    how: Union[relative, absolute]  # TODO: replace with enum class
     move_type: Union[MoveType, None] = None
     com: str = 'move_axis_to'
 

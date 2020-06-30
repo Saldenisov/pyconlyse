@@ -123,7 +123,7 @@ class StpMtrController(Service):
 
     @property
     def _axes_preset_values(self) -> List[Union[int, float]]:
-        return [axis.position for axis in self.axes.values()]
+        return [axis.preset_values for axis in self.axes.values()]
 
     @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:
@@ -196,60 +196,7 @@ class StpMtrController(Service):
 
     def _convert_to_basic_unit(self, axis_id: int, val: Union[int, float], move_type) \
             -> Union[Tuple[bool, str], Union[int, float]]:
-        return self._convert_to_unit(self.axes[axis_id], val, move_type)
-
-    def _convert_to_unit(self, axis: AxisStpMtr, val: Union[int, float], unit: MoveType):
-        axis_basic_unit = axis.basic_unit
-        # step to microstep
-        if unit is MoveType.step and axis_basic_unit is MoveType.microstep:
-            try:
-                return int(val * axis.move_parameters['microsteps'])
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert step to microstep. Error={e}.'
-        # microstep to angle
-        elif unit is MoveType.microstep and axis_basic_unit is MoveType.angle:
-            try:
-                conversion_step_angle = axis.move_parameters['conversion_step_angle']
-                return val * conversion_step_angle / axis.move_parameters['microsteps']
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert microstep to angle. Error={e}.'
-        # angle to microstep
-        elif unit is MoveType.angle and axis_basic_unit is MoveType.microstep:
-            try:
-                conversion_step_angle = axis.move_parameters['conversion_step_angle']
-                return int(val / conversion_step_angle * axis.move_parameters['microsteps'])
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert angle to microstep. Error={e}.'
-        # step to angle
-        elif unit is MoveType.step and axis_basic_unit is MoveType.angle:
-            try:
-                conversion_step_angle = axis.move_parameters['conversion_step_angle']
-                return val * conversion_step_angle
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert step to angle. Error={e}.'
-        # microstep to mm
-        elif unit is MoveType.microstep and axis_basic_unit is MoveType.mm:
-            try:
-                conversion_step_mm = axis.move_parameters['conversion_step_mm']
-                return val * conversion_step_mm / axis.move_parameters['microsteps']
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert microstep to angle. Error={e}.'
-        # mm to microstep
-        elif unit is MoveType.mm and axis_basic_unit is MoveType.microstep:
-            try:
-                conversion_step_mm = axis.move_parameters['conversion_step_mm']
-                return int(val / conversion_step_mm * axis.move_parameters['microsteps'])
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert angle to microstep. Error={e}.'
-        # step to mm
-        elif unit is MoveType.step and axis_basic_unit is MoveType.mm:
-            try:
-                conversion_step_mm = axis.move_parameters['conversion_step_mm']
-                return val * conversion_step_mm
-            except KeyError as e:
-                return False, f'Axis axis_id={axis.id} cannot covert step to mm. Error={e}.'
-        else:
-            return False, f'Axis axis_id={axis.id} cannot covert {unit} to {axis_basic_unit}.'
+        return self.axes[axis_id].convert_to_basic_unit(move_type, val)
 
     def description(self) -> StpMtrDescription:
         """
@@ -567,20 +514,20 @@ class StpMtrController(Service):
                         raise StpMtrError(self, text=f'Not all must have parameters "{must_have_param}" for axis_id '
                                                      f'{axis_id} are present in DB.')
 
-                    if 'microsteps' not in value and 'microsteps' in self.axes[axis_id].type_move:
+                    if 'microsteps' not in value and MoveType.microstep in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.microstep)
                         self.axes[axis_id].type_move.remove(MoveType.step)
-                    if 'conversion_step_mm' not in value and 'conversion_step_mm' in self.axes[axis_id].type_move:
+                    if 'conversion_step_mm' not in value and MoveType.mm in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.mm)
-                    if 'conversion_step_angle' not in value and 'conversion_step_angle' in self.axes[axis_id].type_move:
+                    if 'conversion_step_angle' not in value and MoveType.angle in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.angle)
                     if not self.axes[axis_id].type_move:
                         raise StpMtrError(self,
                                           text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
                                                f'"conversion_step_angle" for axis_id {axis_id}.')
-                    if mm in self.axes[axis_id].type_move and angle in self.axes[axis_id].type_move:
+                    if MoveType.mm in self.axes[axis_id].type_move and MoveType.angle in self.axes[axis_id].type_move:
                         raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
-                                                      f'"conversion_step_angle", not both for axis_id {axis_id}')
+                                                     f'"conversion_step_angle", not both for axis_id {axis_id}')
                 try:
                     basic_unit = MoveType(move_parameters[axis_id]['basic_unit'])
                     if basic_unit in [MoveType.step, MoveType.microstep]:

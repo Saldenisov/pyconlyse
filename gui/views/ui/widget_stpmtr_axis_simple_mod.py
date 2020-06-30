@@ -232,15 +232,27 @@ class Ui_StpMtrGUI(object):
             self.checkBox_On.setChecked(axis.status)
             self.lcdNumber_position.display(axis.position)
             name = axis.name
-            ranges = str(axis.limits)
-            preset = str(axis.preset_values)
+
+            def form_ranges(ranges) -> str:
+                out_l = []
+                for val in ranges:
+                    try:
+                        val = val.name
+                    except AttributeError:
+                        val = str(val)
+                    finally:
+                        out_l.append(val)
+                return '_'.join(out_l)
+            ranges = form_ranges(axis.limits)
+            preset = form_ranges(axis.preset_values)
         except (KeyError, AttributeError):
             #TODO: modify
             axis = 1
             title = ''
             name = 'test_name'
-            ranges = str((0, 100))
-            preset = str([0, 100])
+            ranges = str((0, 100)) + '_step'
+            preset = str([0, 100]) + '_step'
+
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis ID"))
         self.label_name.setText(_translate("StpMtrGUI", name))
