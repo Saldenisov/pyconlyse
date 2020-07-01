@@ -58,14 +58,14 @@ class StpMtrCtrl_emulate(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
 
-    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how=absolute) -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int], how=absolute) -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            if pos - self.axes[axis_id].position > 0:
+            if go_pos - self.axes[axis_id].position > 0:
                 dir = 1
             else:
                 dir = -1
-            steps = int(abs(pos - self.axes[axis_id].position))
+            steps = int(abs(go_pos - self.axes[axis_id].position))
             interrupted = False
             for i in range(steps):
                 if self.axes[axis_id].status == 2:

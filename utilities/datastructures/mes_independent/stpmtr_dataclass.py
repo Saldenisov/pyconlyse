@@ -54,16 +54,18 @@ class AxisStpMtr:
                                         unit=self.basic_unit)
 
     def convert_pos_to_unit(self, unit: MoveType) -> Union[Tuple[bool, str], Union[int, float]]:
-        return self._convert_from_to_unit(self.position, self.basic_unit, unit)
+        return self.convert_from_to_unit(self.position, self.basic_unit, unit)
 
     def convert_to_basic_unit(self, unit: MoveType, val: Union[int, float])\
             -> Union[Tuple[bool, str], Union[int, float]]:
-        return self._convert_from_to_unit(val, unit, self.basic_unit)
+        return self.convert_from_to_unit(val, unit, self.basic_unit)
 
-    def _convert_from_to_unit(self, val: Union[int, float], unit_from: MoveType, unit_to: MoveType) \
+    def convert_from_to_unit(self, val: Union[int, float], unit_from: MoveType, unit_to: MoveType) \
             -> Union[Tuple[bool, str], Union[int, float]]:
         error_text = f'Axis axis_id={self.id} cannot convert microstep to angle. Error='
         # microstep to step
+        if unit_from is unit_to:
+            return val
         if unit_from is MoveType.microstep and unit_to is MoveType.step:
             try:
                 return val / self.move_parameters['microsteps']
@@ -80,6 +82,13 @@ class AxisStpMtr:
             try:
                 conversion_step_angle = self.move_parameters['conversion_step_angle']
                 return val * conversion_step_angle / self.move_parameters['microsteps']
+            except KeyError as e:
+                return False, error_text + str(e)
+        # angle to step
+        elif unit_from is MoveType.angle and unit_to is MoveType.step:
+            try:
+                conversion_step_angle = self.move_parameters['conversion_step_angle']
+                return val / conversion_step_angle
             except KeyError as e:
                 return False, error_text + str(e)
         # angle to microstep

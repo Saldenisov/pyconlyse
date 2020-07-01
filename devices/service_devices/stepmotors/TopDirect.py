@@ -209,11 +209,11 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
 
-    def _move_axis_to(self, axis_id: int, pos: float, how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: float, how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
             interrupted = False
-            self._send_to_arduino(f'MOVE ABS {float(pos)}')
+            self._send_to_arduino(f'MOVE ABS {float(go_pos)}')
             rcv = self._get_reply_from_arduino()
             if rcv == 'STARTED':
                 timeout = True

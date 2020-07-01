@@ -8,14 +8,15 @@ so current does not run during waiting time
 INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
-from typing import List, Tuple, Union, Iterable, Dict, Any, Callable, Set
-
-from gpiozero import LED
 import logging
 from time import sleep
-from utilities.datastructures.mes_independent.stpmtr_dataclass import angle, mm, microstep
-from utilities.tools.decorators import development_mode
+from typing import List, Tuple, Union, Callable, Set
+
+from gpiozero import LED
+
+from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType
 from utilities.myfunc import error_logger, info_msg
+from utilities.tools.decorators import development_mode
 from .stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
@@ -97,34 +98,37 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
 
-    def _move_axis_to(self, axis_id: int, pos: int, how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[int, float], how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
             self._set_microsteps_parameters(axis_id)  # Different axes could have different microsteps
-            if pos - self.axes[axis_id].position > 0:
+            axis: AxisStpMtr = self.axes[axis_id]
+            if go_pos - axis.position > 0:
                 pas = 1
                 self._direction('top')
             else:
                 pas = -1
                 self._direction('bottom')
-            microsteps = int(abs(pos - self.axes[axis_id].position))
-            interrupted = False
-            self._enable_controller()
+            microsteps = abs(axis.convert_from_to_unit(go_pos - axis.position, axis.basic_unit, MoveType.microstep))
+            pos_microsteps = self.axes[axis_id].convert_pos_to_unit(MoveType.microstep)
             microsteps_axis = self.axes[axis_id].move_parameters['microsteps']
             width = self._microstep_settings[microsteps_axis][1] * self._TTL_width_corrections[axis_id] / 1000000. # must be in ms
             delay = self._microstep_settings[microsteps_axis][2] * self._TTL_delay_corrections[axis_id] / 1000000.
+            interrupted = False
+            self._enable_controller()
             for i in range(microsteps):
                 if self.axes[axis_id].status == 2:
                     self._set_led(self._ttl, 1)
                     sleep(width)
                     self._set_led(self._ttl, 0)
                     sleep(delay)
-                    self.axes[axis_id].position += pas
+                    pos_microsteps += pas
                 else:
                     res = False
                     comments = f'Movement of Axis with id={axis_id} was interrupted'
                     interrupted = True
                     break
+            self.axes[axis_id].position = self.axes[axis_id].convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             self._disable_controller()
             _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)

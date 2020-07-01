@@ -111,18 +111,18 @@ class StpMtrCtrl_OWIS(StpMtrController):
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._get_preset_values_db()
 
-    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
         """
         Move selected axis to set position. Turns on motor, set target, go target and checks position every 25ms for
         1000 cycles. Motor off when position is within 0.001mm accuracy
         :param axis_id: 1-n
-        :param pos: position in mm
+        :param go_pos: position in mm
         :param how: absolute, relative
         :return: True/False, comments
         """
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
-            res, comments = self._set_target_ex_ps90(1, axis_id, pos)
+            res, comments = self._set_target_ex_ps90(1, axis_id, go_pos)
             if res:
                 res, comments = self._go_target_ps90(1, axis_id)
             if res:
@@ -133,7 +133,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
                         pass
                     else:
                         self._pos[axis_id] = res
-                    if abs(res - pos) <= 0.001:
+                    if abs(res - go_pos) <= 0.001:
                         res, comments = True, f'Axis {axis_id} is stopped. Actual position is {res}'
                         break
                     if i == 999:

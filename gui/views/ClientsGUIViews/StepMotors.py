@@ -276,6 +276,8 @@ class StepMotorsView(QMainWindow):
                 else:
                     ui.radioButton_mm.setEnabled(False)
 
+                ui.checkBox_On.setChecked(axis.status)
+
             unit = self._get_unit()
 
             ui.lcdNumber_position.display(axis.convert_pos_to_unit(unit))

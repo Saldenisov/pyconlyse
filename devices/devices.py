@@ -1,11 +1,11 @@
+import sqlite3 as sq3
+import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
 from pathlib import Path
-import sys
-import sqlite3 as sq3
 from time import sleep, time
-from typing import Any, Callable, List, Tuple, Union
+from typing import Any, Callable
 
 from PyQt5.QtCore import QObject, pyqtSignal
 

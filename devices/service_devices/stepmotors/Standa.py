@@ -148,12 +148,12 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_number_axes(self) -> int:
         return lib.get_device_count(self._devenum)
 
-    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         interrupted = False
         if res:
-            full_turn = int(pos // 256)
-            steps = int(pos % 256)
+            full_turn = int(go_pos // 256)
+            steps = int(go_pos % 256)
             try:
                 result = lib.command_move(ctypes.c_int32(axis_id), ctypes.c_int32(full_turn), ctypes.c_int32(steps))
             except Exception as e:

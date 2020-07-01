@@ -1,13 +1,14 @@
+import logging
 from abc import abstractmethod
 from os import path
 from pathlib import Path
-from utilities.errors.myexceptions import DeviceError
-from utilities.myfunc import error_logger, info_msg
-from devices.devices import Service
 from typing import Any, Callable
+
+from devices.devices import Service
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-import logging
+from utilities.errors.myexceptions import DeviceError
+from utilities.myfunc import error_logger, info_msg
 
 module_logger = logging.getLogger(__name__)
 
@@ -194,10 +195,6 @@ class StpMtrController(Service):
             return False, f'Axis axis_id={axis_id} does not have type_move {type_move}. ' \
                           f'It has {self.axes[axis_id].type_move}'
 
-    def _convert_to_basic_unit(self, axis_id: int, val: Union[int, float], move_type) \
-            -> Union[Tuple[bool, str], Union[int, float]]:
-        return self.axes[axis_id].convert_to_basic_unit(move_type, val)
-
     def description(self) -> StpMtrDescription:
         """
         Description with important parameters
@@ -267,7 +264,7 @@ class StpMtrController(Service):
             res, comments = self._check_controller_activity()
         if res:
             if move_type != self.axes[axis_id].basic_unit:
-                pos = self._convert_to_basic_unit(axis_id, pos, move_type)
+                pos = self.axes[axis_id].convert_to_basic_unit(move_type, pos)
                 if isinstance(pos, tuple):
                     res, comments = pos
                     return FuncMoveAxisToOutput(axes=self.axes_essentials, comments=comments, func_success=res)
@@ -283,7 +280,7 @@ class StpMtrController(Service):
         return FuncMoveAxisToOutput(axes=self.axes_essentials, comments=comments, func_success=res)
 
     @abstractmethod
-    def _move_axis_to(self, axis_id: int, pos: Union[float, int], how: Union[absolute, relative]) -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int], how: Union[absolute, relative]) -> Tuple[bool, str]:
         pass
 
     def _move_all_home(self) -> Tuple[bool, str]:
@@ -447,8 +444,9 @@ class StpMtrController(Service):
     def _is_within_limits(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
         min_v, max_v = self.axes[axis_id].limits[0]
         move_type = self.axes[axis_id].limits[1]
-        min_v = self._convert_to_basic_unit(axis_id, min_v, move_type)
-        max_v = self._convert_to_basic_unit(axis_id, max_v, move_type)
+        axis = self.axes[axis_id]
+        min_v = axis.convert_to_basic_unit(move_type, min_v)
+        max_v = axis.convert_to_basic_unit(move_type, max_v)
         if min_v <= pos <= max_v:
             return True, ''
         else:
@@ -513,7 +511,6 @@ class StpMtrController(Service):
                     if set(must_have_param[axis_id]).intersection(value.keys()) != set(must_have_param[axis_id]):
                         raise StpMtrError(self, text=f'Not all must have parameters "{must_have_param}" for axis_id '
                                                      f'{axis_id} are present in DB.')
-
                     if 'microsteps' not in value and MoveType.microstep in self.axes[axis_id].type_move:
                         self.axes[axis_id].type_move.remove(MoveType.microstep)
                         self.axes[axis_id].type_move.remove(MoveType.step)
@@ -535,6 +532,7 @@ class StpMtrController(Service):
                         if MoveType.microstep not in self.axes[axis_id].type_move:
                             raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
                                                          f'axis_id={axis_id} does not have "microstep" parameter.')
+                    self.axes[axis_id].basic_unit = basic_unit
                 except (KeyError, ValueError) as e:
                     raise StpMtrError(self, text=f'Cannot set "basic_unit" for axis axis_id={axis_id}. Error = {e}')
                 finally:
@@ -566,7 +564,6 @@ class StpMtrController(Service):
                 positions = controller_pos
         else:
             positions = controller_pos
-
 
         for id, pos in zip(self.axes.keys(), positions.values()):
             self.axes[id].position = pos
