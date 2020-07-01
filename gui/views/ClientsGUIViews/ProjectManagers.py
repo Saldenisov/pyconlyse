@@ -1,8 +1,8 @@
-'''
+"""
 Created on 15.11.2019
 
 @author: saldenisov
-'''
+"""
 import logging
 from enum import auto
 

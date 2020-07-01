@@ -16,6 +16,7 @@ from matplotlib.figure import Figure
 from typing import Union
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
+
 class MyMplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
 

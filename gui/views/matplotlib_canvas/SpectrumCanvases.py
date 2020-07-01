@@ -2,7 +2,7 @@ from typing import Union
 
 import numpy as np
 
-from gui.views.matplotlib_canvas import KineticsCanvas
+from gui.views.matplotlib_canvas.KineticsCanvases import KineticsCanvas
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
 
 

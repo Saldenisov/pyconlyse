@@ -2,7 +2,7 @@ from typing import Union
 
 import numpy as np
 
-from gui.views.matplotlib_canvas import MyMplCanvas
+from gui.views.matplotlib_canvas.MyMplCanvases import MyMplCanvas
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
 

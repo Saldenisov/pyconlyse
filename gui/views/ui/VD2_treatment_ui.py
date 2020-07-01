@@ -13,7 +13,9 @@ from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit, QRad
                              QSlider,
                              QCheckBox)
 from matplotlib.widgets import Cursor, RectangleSelector
-from gui.views.matplotlib_canvas import DataCanvas, KineticsCanvas, SpectrumCanvas
+from gui.views.matplotlib_canvas.DataCanvases import DataCanvas
+from gui.views.matplotlib_canvas.KineticsCanvases import KineticsCanvas
+from gui.views.matplotlib_canvas.SpectrumCanvases import SpectrumCanvas
 from gui.views import RangeSlider
 from gui.models.ClientGUIModels import VD2TreatmentModel
 

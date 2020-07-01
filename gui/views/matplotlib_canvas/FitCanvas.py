@@ -1,13 +1,13 @@
 from matplotlib import gridspec
 from numpy import zeros
 
-from gui.views.matplotlib_canvas import MyMplCanvas
+from gui.views.matplotlib_canvas import MyMplCanvases
 
 
-class FitCanvas(MyMplCanvas):
+class FitCanvas(MyMplCanvases):
 
     def __init__(self, *args, **kwargs):
-        MyMplCanvas.__init__(self, *args, **kwargs)
+        MyMplCanvases.__init__(self, *args, **kwargs)
 
     def compute_initial_figure(self, fitmodel):
         self.fitmodel = fitmodel

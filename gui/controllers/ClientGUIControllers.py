@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMe
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
 from gui.models.ClientGUIModels import VD2TreatmentModel
-from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
+from gui.views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
 from utilities.datastructures.mes_independent import (ProjectManagerDescription)
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import (StpMtrDescription)
