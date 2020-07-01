@@ -1,5 +1,6 @@
-from PyQt5.QtCore import QObject
 from abc import ABCMeta
+
+from PyQt5.QtCore import QObject
 
 pyqtWrapperType = type(QObject)
 class Meta(pyqtWrapperType, ABCMeta):

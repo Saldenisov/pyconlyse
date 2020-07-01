@@ -1,7 +1,7 @@
-from gui.views.matplotlib_canvas import MyMplCanvas
+from matplotlib import gridspec
 from numpy import zeros
 
-from matplotlib import gridspec
+from gui.views.matplotlib_canvas import MyMplCanvas
 
 
 class FitCanvas(MyMplCanvas):

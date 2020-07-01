@@ -5,9 +5,9 @@ Created on 7 juil. 2016
 '''
 
 import unittest
-import numpy as np
-from MODEL import MModel, GraphModel
+
 from ERRORS import GraphModelError
+from MODEL import MModel
 
 
 class TestMainModel(unittest.TestCase):

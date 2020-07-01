@@ -1,7 +1,6 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
-from numpy import zeros
-
 from matplotlib import gridspec
+from numpy import zeros
+from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
 
 
 class FitCanvas(MyMplCanvas):

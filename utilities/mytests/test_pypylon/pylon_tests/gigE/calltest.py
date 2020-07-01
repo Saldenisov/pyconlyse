@@ -1,6 +1,6 @@
-from pylongigetestcase import PylonTestCase
-from pypylon import pylon
 import unittest
+
+from pylongigetestcase import PylonTestCase
 
 
 class CallTestSuite(PylonTestCase):

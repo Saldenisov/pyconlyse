@@ -1,9 +1,12 @@
 from __future__ import unicode_literals
-import sys
+
 import os
 import random
+import sys
+
 import matplotlib
 from PyQt5 import QtWidgets, QtCore
+
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
 # Uncomment this line before running, it breaks sphinx-gallery builds

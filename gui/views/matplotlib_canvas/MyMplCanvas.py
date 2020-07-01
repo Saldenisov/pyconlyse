@@ -4,7 +4,9 @@ Created on 27 juil. 2015
 @author: saldenisov
 '''
 from abc import abstractmethod
+
 import matplotlib
+
 matplotlib.use('Qt5Agg')
 import numpy as np
 from datetime import datetime

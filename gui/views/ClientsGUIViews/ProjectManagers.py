@@ -4,18 +4,16 @@ Created on 15.11.2019
 @author: saldenisov
 '''
 import logging
+from enum import auto
 
 from PyQt5 import QtCore, QtWidgets, QtGui
-from enum import Enum, auto
-from typing import Set
+
 from communication.messaging.messages import MessageInt, MsgComInt, MsgComExt
-from utilities.datastructures.mes_independent import *
 from devices.devices import Device
 from devices.service_devices.project_treatment import ProjectManager_controller
 from gui.views.ui.ProjectManager import Ui_ProjectManager
+from utilities.datastructures.mes_independent import *
 from utilities.myfunc import info_msg, get_local_ip, paths_to_dict
-
-
 
 module_logger = logging.getLogger(__name__)
 

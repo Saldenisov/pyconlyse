@@ -1,8 +1,9 @@
-from pylonemutestcase import PylonEmuTestCase
-from pypylon import pylon
 import time
 import unittest
 from sys import platform
+
+from pylonemutestcase import PylonEmuTestCase
+from pypylon import pylon
 
 
 class InstantCameraTestSuite(PylonEmuTestCase):

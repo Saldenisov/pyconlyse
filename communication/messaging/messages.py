@@ -2,10 +2,10 @@ import logging
 from base64 import b64encode, b64decode
 from copy import deepcopy
 from dataclasses import asdict
-from enum import Enum
-from msgpack import packb, unpackb
 from json import dumps, loads
 from zlib import compress, decompress
+
+from msgpack import packb, unpackb
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt

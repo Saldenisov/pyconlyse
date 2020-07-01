@@ -4,11 +4,11 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-from OPENER import hamamatsuopener, asciiopener
-from ERRORS import NoSuchFileType, OpenerError
-
 import logging
 import os.path
+
+from ERRORS import NoSuchFileType, OpenerError
+from OPENER import hamamatsuopener, asciiopener
 
 module_looger = logging.getLogger(__name__)
 

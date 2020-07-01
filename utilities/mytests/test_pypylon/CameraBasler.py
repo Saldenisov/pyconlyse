@@ -1,9 +1,9 @@
 from collections import deque
-from pypylon import pylon, genicam
+
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
-
+from pypylon import pylon, genicam
 
 countOfImagesToGrab = 1
 maxCamerasToUse = 2

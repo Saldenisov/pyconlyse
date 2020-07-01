@@ -3,8 +3,8 @@ Run all document tex files in the folder
 """
 
 import os
-import time
 import re
+import time
 import zipfile
 from multiprocessing import Pool
 

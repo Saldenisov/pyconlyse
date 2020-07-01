@@ -1,7 +1,5 @@
-from ctypes import *
 import platform
-import win32api  # I have no idea if it is needed to operate
-import win32con
+from ctypes import *
 
 
 # Load library
@@ -15,7 +13,6 @@ def ximc_shared_lib():
     elif platform.system() == "Darwin":
         return CDLL("libximc.framework/libximc")
     elif platform.system() == "Windows":
-        import os
         try:
              a = WinDLL("C:/dev/pyconlyse/devices/service_devices/stepmotors/ximc/win32/libximc.dll")
         except Exception as e:

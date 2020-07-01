@@ -6,10 +6,11 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
-from genicamtestcase import GenicamTestCase
+
 from callbackhelper import CallbackObject
+from genicam import *
+from genicamtestcase import GenicamTestCase
 
 
 class PollTestSuite(GenicamTestCase):

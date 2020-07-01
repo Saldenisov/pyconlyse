@@ -4,21 +4,21 @@ Created on 15.11.2019
 @author: saldenisov
 """
 
-import os
 import logging
+import os
 from pathlib import Path
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage
-from PyQt5.QtCore import QModelIndex
-from communication.messaging.messages import MessageExt, MsgComExt
-from gui.models.ClientGUIModels import VD2TreatmentModel
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent import (ProjectManagerDescription,
-                                                      FuncGetProjectManagerControllerStateInput)
-from utilities.datastructures.mes_independent.stpmtr_dataclass import (FuncGetStpMtrControllerStateInput, StpMtrDescription)
-from devices.devices import Device
-from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
-from utilities.myfunc import info_msg, get_local_ip, error_logger
 
+from PyQt5.QtCore import QModelIndex
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage
+
+from communication.messaging.messages import MessageExt, MsgComExt
+from devices.devices import Device
+from gui.models.ClientGUIModels import VD2TreatmentModel
+from gui.views import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
+from utilities.datastructures.mes_independent import (ProjectManagerDescription)
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.stpmtr_dataclass import (StpMtrDescription)
+from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
 

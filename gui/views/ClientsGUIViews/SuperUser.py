@@ -4,15 +4,15 @@ Created on 15.11.2019
 @author: saldenisov
 """
 import logging
-
-from PyQt5.QtWidgets import QMainWindow
 from typing import Union
 
+from PyQt5.QtWidgets import QMainWindow
+
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
-from utilities.datastructures.mes_independent.devices_dataclass import *
 from devices.devices import Server, Service
 from gui.views.ui.SuperUser_ui import Ui_SuperUser
-from utilities.myfunc import info_msg,  get_local_ip, error_logger
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
 

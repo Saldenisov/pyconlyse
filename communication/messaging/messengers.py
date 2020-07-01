@@ -1,28 +1,28 @@
 import base64
 import logging
-import zmq
 from abc import abstractmethod
-from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
-from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from time import sleep
 from typing import NamedTuple, NewType
 
+import zmq
+from cryptography.fernet import Fernet
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+
 from communication.messaging.messages import MessageExt, MsgComExt
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from devices.interfaces import DeviceId, DeviceType
 from devices.devices import Device
+from devices.interfaces import DeviceId, DeviceType
 from utilities.datastructures.mes_dependent.dicts import MsgDict
+from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import info_msg, error_logger, get_local_ip, get_free_port
 from utilities.tools.decorators import make_loop
-
 
 module_logger = logging.getLogger(__name__)
 

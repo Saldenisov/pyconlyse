@@ -1,11 +1,6 @@
-from pypylon import pylon
 import cv2
 import matplotlib.pyplot as plt
-import time
-import os
-import numpy as np
-import imutils
-from matplotlib.animation import FuncAnimation
+from pypylon import pylon
 
 figure = plt.figure()
 

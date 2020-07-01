@@ -6,11 +6,12 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
-from genicamtestcase import GenicamTestCase
-from TestPort import CTestPort
 from locale import setlocale, LC_ALL
+
+from TestPort import CTestPort
+from genicam import *
+from genicamtestcase import GenicamTestCase
 
 
 class FloatTestSuite(GenicamTestCase):

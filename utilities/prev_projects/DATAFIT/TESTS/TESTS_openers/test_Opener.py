@@ -5,9 +5,10 @@ Created on 6 juil. 2016
 '''
 
 import unittest
+
 import numpy as np
+from ERRORS.Myexceptions import OpenerError
 from OPENER import Opener
-from ERRORS.Myexceptions import NoSuchFileType, OpenerError
 
 
 class TestOpener(unittest.TestCase):

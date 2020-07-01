@@ -1,6 +1,7 @@
+import unittest
+
 from pylonusbtestcase import PylonTestCase
 from pypylon import pylon
-import unittest
 
 
 class GrabTestSuite(PylonTestCase):

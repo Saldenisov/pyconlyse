@@ -1,9 +1,7 @@
 import os
-import time
 import re
+import time
 import zipfile
-import zlib
-from multiprocessing import Pool
 
 
 def deletefile(filepath):

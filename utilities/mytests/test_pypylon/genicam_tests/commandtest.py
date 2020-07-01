@@ -6,11 +6,12 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
+
+from callbackhelper import CallbackObject
+from genicam import *
 from genicamtestcase import GenicamTestCase
 from testport import CTestPort, cast_buffer, cast_data, sizeof, CStructTestPort
-from callbackhelper import CallbackObject
 
 
 class CommandTestSuite(GenicamTestCase):

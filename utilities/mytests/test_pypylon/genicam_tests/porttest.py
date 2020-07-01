@@ -8,10 +8,10 @@
 """!
 \file
 """
-from genicam import *
 import unittest
-from genicamtestcase import GenicamTestCase
 
+from genicam import *
+from genicamtestcase import GenicamTestCase
 from testport import CTestPort, sizeof, cast_buffer, cast_data, CQuadTestPort
 
 

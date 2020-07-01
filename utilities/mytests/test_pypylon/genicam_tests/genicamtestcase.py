@@ -3,11 +3,12 @@ Created on 03.08.2015
 
 @author: TMoeller
 '''
-import snipper
 import inspect
-import unittest
-from genicam import *
 import os
+import unittest
+
+import snipper
+from genicam import *
 
 CNodeMapRef__LoadXMLFromFile = CNodeMapRef._LoadXMLFromFile
 

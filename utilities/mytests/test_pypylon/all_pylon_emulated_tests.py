@@ -1,6 +1,7 @@
 #!/usr/bin/env python
-import unittest
 import os
+import unittest
+
 
 def load_tests(loader, tests, pattern):
     thisdir = os.path.dirname(__file__)

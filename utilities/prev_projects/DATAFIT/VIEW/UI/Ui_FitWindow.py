@@ -1,12 +1,12 @@
+import matplotlib
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtWidgets import (QSplitter,
                              QGroupBox, QPushButton, QDoubleSpinBox,
                              QComboBox, QLineEdit,
                              QTableWidget, QHeaderView,
                              QRadioButton, QVBoxLayout)
-
 from prev_projects.DATAFIT.VIEW.CANVAS import FitCanvas
-import matplotlib
+
 matplotlib.use("Qt5Agg")
 
 

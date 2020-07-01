@@ -6,8 +6,9 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
+
+from genicam import *
 from genicamtestcase import GenicamTestCase
 
 

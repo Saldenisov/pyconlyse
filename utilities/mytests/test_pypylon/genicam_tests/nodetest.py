@@ -6,13 +6,13 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
+
+import genicam
+from callbackhelper import CallbackObject
+from genicam import *
 from genicamtestcase import GenicamTestCase
 from testport import CTestPort, cast_data, CStructTestPort, cast_buffer, sizeof
-from callbackhelper import CallbackObject
-import sys
-import genicam
 
 
 class NodeTestSuite(GenicamTestCase):

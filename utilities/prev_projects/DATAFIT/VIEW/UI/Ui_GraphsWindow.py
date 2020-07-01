@@ -1,12 +1,8 @@
 import matplotlib
 matplotlib.use("Qt5Agg")
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import (QGridLayout, QSplitter,
-                             QGroupBox, QPushButton,
-                             QComboBox, QListWidget,
-                             QCheckBox)
-
-from utilities.prev_projects.DATAFIT.VIEW import RangeSlider
+from PyQt5.QtWidgets import (QSplitter,
+                             QGroupBox, QPushButton)
 
 
 class Ui_GraphsWindow(object):

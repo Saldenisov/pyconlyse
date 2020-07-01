@@ -4,13 +4,13 @@ Created on 12 May 2017
 @author: Sergey Denisov
 """
 
-from PyQt5.Qt import  QWidget,QLineEdit, QSignalMapper
-
 from _functools import partial
 
-from utilities.observers.observers import SettingsObserver
-from utilities.meta.meta import Meta
+from PyQt5.Qt import QWidget, QLineEdit, QSignalMapper
+
 from gui.views.ui.settings_general_widget import Ui_settings_general_widget
+from utilities.meta.meta import Meta
+from utilities.observers.observers import SettingsObserver
 
 
 class SettingsView(QWidget, SettingsObserver, metaclass=Meta):

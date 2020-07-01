@@ -1,7 +1,5 @@
-from cryptography.fernet import Fernet
-
-
 import base64
+
 from cryptography.fernet import Fernet
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes

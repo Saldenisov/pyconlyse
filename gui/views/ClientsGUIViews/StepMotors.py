@@ -7,18 +7,17 @@ import copy
 import logging
 from _functools import partial
 
-from PyQt5.QtWidgets import QMainWindow, QErrorMessage
 from PyQt5 import QtCore
+from PyQt5.QtWidgets import QMainWindow, QErrorMessage
 
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ui import Ui_StpMtrGUI
-from utilities.myfunc import info_msg, get_local_ip, error_logger
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import mm, microstep
-
+from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
 

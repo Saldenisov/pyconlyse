@@ -1,5 +1,7 @@
-from UTILITY import singleton
 import logging
+
+from UTILITY import singleton
+
 module_logger = logging.getLogger(__name__)
 
 

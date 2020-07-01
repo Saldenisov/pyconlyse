@@ -1,8 +1,9 @@
 from collections import OrderedDict as od
+
+from communication.messaging.messages import MessageExt
 from communication.messaging.messengers import *
 from tests.fixtures import *
 from tests.tests_messaging.auxil import start_devices, stop_devices
-from communication.messaging.messages import MessageExt
 
 
 def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser, stpmtr_emulate_test: StpMtrCtrl_emulate):

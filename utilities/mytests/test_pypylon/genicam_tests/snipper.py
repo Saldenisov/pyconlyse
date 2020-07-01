@@ -4,10 +4,9 @@ Created on 03.08.2015
 @author: TMoeller
 '''
 
-import sys
-import re
-import os
 import errno
+import os
+import re
 
 
 def mkdir_p(path):

@@ -1,7 +1,8 @@
-from pylonusbtestcase import PylonTestCase
-from pypylon import pylon
-from pypylon import genicam
 import unittest
+
+from pylonusbtestcase import PylonTestCase
+from pypylon import genicam
+from pypylon import pylon
 
 
 class ChunkImageTestSuite(PylonTestCase):

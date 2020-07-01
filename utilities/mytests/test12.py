@@ -1,8 +1,9 @@
-import zmq
-import random
 import sys
 import time
 from threading import Thread
+
+import zmq
+
 
 def server():
     port = "5556"
@@ -19,7 +20,6 @@ def server():
         time.sleep(.2)
 
 def client():
-    import sys
     import zmq
 
     port = "5556"

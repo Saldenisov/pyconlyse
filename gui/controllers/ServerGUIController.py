@@ -5,13 +5,12 @@ Created on 06.08.2019
 """
 
 import os
-import logging
+
 from PyQt5.QtWidgets import QApplication
 
 from communication.messaging.messages import *
 from gui.views.ServerGUIViews import ServerGUIView
 from utilities.myfunc import info_msg, get_local_ip
-
 
 module_logger = logging.getLogger(__name__)
 

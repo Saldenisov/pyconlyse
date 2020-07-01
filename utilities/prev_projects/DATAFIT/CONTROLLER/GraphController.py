@@ -1,15 +1,15 @@
-from prev_projects.DATAFIT.VIEW import GraphView
-from prev_projects.DATAFIT.MODEL import FitModel
-from prev_projects.DATAFIT.CONTROLLER import FitController
-from prev_projects.DATAFIT.HELPFUL import ndarray_tostring
+import logging
 
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtWidgets import (QListWidgetItem,
                              QApplication,
                              QFileDialog)
-
 from numpy import searchsorted, transpose, vstack, column_stack, append, savetxt
-import logging
+from prev_projects.DATAFIT.CONTROLLER import FitController
+from prev_projects.DATAFIT.HELPFUL import ndarray_tostring
+from prev_projects.DATAFIT.MODEL import FitModel
+from prev_projects.DATAFIT.VIEW import GraphView
+
 module_logger = logging.getLogger(__name__)
 
 

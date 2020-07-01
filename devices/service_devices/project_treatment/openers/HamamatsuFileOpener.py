@@ -5,11 +5,13 @@ Created on 17 avr. 2015
 @author: saldenisov
 '''
 
-import numpy as np
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Union, Tuple
+
+import numpy as np
+
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu
 from utilities.errors.myexceptions import NoSuchFileType

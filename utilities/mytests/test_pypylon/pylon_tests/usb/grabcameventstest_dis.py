@@ -1,6 +1,6 @@
 from pylonusbtestcase import PylonTestCase
-from pypylon import pylon
 from pypylon import genicam
+from pypylon import pylon
 from samples.cameraEventPrinter import CameraEventPrinter
 
 eMyExposureEndEvent = 100

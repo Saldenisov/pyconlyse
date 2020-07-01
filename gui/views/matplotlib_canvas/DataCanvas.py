@@ -1,8 +1,10 @@
+from typing import Union
+
 import numpy as np
 from matplotlib.image import AxesImage
+
 from gui.views.matplotlib_canvas import MyMplCanvas
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
-from typing import Union
 
 
 class DataCanvas(MyMplCanvas):

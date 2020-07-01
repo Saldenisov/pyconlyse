@@ -2,13 +2,10 @@
 # -*- coding: utf-8 -*-
 
 import sys
-from PyQt5.QtGui import QIcon
 
-from PyQt5.QtCore import (QDate, QDateTime, QRegExp, QSortFilterProxyModel, Qt,
-                          QTime)
+from PyQt5.QtCore import (Qt)
 from PyQt5.QtGui import QStandardItemModel
-from PyQt5.QtWidgets import (QApplication, QCheckBox, QComboBox, QGridLayout,
-                             QGroupBox, QHBoxLayout, QLabel, QLineEdit, QTreeView, QVBoxLayout,
+from PyQt5.QtWidgets import (QApplication, QGroupBox, QHBoxLayout, QTreeView, QVBoxLayout,
                              QWidget)
 
 

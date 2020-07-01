@@ -3,20 +3,19 @@
 projectmanager_controller.py contains abstract services capable of treating experiments datastructures:
 open, analyze, transform
 """
+import hashlib
+import logging
 from datetime import datetime
 from itertools import chain, tee
 from pathlib import Path
-import hashlib
 from time import time_ns
 from typing import Any, Iterable, Generator
-from utilities.database import db_create_connection, db_execute_select, db_execute_insert
+
 from devices.devices import Service
+from utilities.database import db_create_connection, db_execute_select, db_execute_insert
+from utilities.datastructures.mes_independent import *
 from utilities.errors.myexceptions import DeviceError
 from utilities.myfunc import file_md5
-from utilities.datastructures.mes_independent import *
-
-
-import logging
 
 module_logger = logging.getLogger(__name__)
 

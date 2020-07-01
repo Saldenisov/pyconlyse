@@ -5,9 +5,10 @@ Created on 6 juil. 2016
 '''
 
 import unittest
+
 import numpy as np
-from OPENER import asciiopener
 from ERRORS.Myexceptions import NoSuchFileType
+from OPENER import asciiopener
 
 
 class TestASCIIOpener(unittest.TestCase):

@@ -1,8 +1,8 @@
-from .HamamatsuFileOpener import *
-from .ASCIIOpener import *
-from .Opener import *
-
 from enum import Enum
+
+from .ASCIIOpener import *
+from .HamamatsuFileOpener import *
+from .Opener import *
 
 
 class OpenersTypes(Enum):

@@ -6,13 +6,14 @@ Created on 06.08.2019
 import logging
 from _functools import partial
 from typing import Union
+
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
 from communication.messaging.messages import MsgComInt, MessageInt, MessageExt
+from gui.views.ui.ServerGUI_ui import Ui_ServerGUI
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
-from gui.views.ui.ServerGUI_ui import Ui_ServerGUI
 
 module_logger = logging.getLogger(__name__)
 

@@ -1,10 +1,11 @@
-from UTILITY import Configuration
-from MODEL import GraphModel
+import logging
+import os
+
 from CONTROLLER import GraphController
 from ERRORS import GraphModelError, ValidationFailed
+from MODEL import GraphModel
+from UTILITY import Configuration
 
-import os
-import logging
 module_logger = logging.getLogger(__name__)
 
 

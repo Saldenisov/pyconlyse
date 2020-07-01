@@ -1,6 +1,5 @@
-from ctypes import *
-from pathlib import Path
 import os
+from ctypes import *
 
 try:
     from devices.service_devices.stepmotors.ximc import (lib, device_information_t, Result, status_t,

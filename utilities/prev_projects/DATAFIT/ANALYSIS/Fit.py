@@ -3,16 +3,16 @@ Created on 12 aoÃ»t 2015
 
 @author: saldenisov
 '''
-from prev_projects.DATAFIT.ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
-from prev_projects.DATAFIT.ERRORS import NoSuchFittingFunction, FittingError
-from scipy.optimize import curve_fit
-from scipy.signal import fftconvolve
-from scipy.integrate import trapz
+import logging
 
 import numpy as np
-import logging
-from scipy.optimize.optimize import OptimizeWarning
+from prev_projects.DATAFIT.ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
+from prev_projects.DATAFIT.ERRORS import NoSuchFittingFunction, FittingError
 from scipy import integrate
+from scipy.optimize import curve_fit
+from scipy.optimize.optimize import OptimizeWarning
+from scipy.signal import fftconvolve
+
 module_logger = logging.getLogger(__name__)
 
 

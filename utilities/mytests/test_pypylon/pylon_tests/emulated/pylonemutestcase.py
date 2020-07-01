@@ -1,6 +1,6 @@
-import unittest
 import os
-import sys
+import unittest
+
 num = 3
 os.environ["PYLON_CAMEMU"] = "%d" % num
 from pypylon import pylon

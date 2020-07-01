@@ -1,8 +1,10 @@
 from pathlib import Path
-from devices.devices import DeviceFactory
-from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis
-from devices.service_devices.project_treatment import ProjectManager_controller
+
 import pytest
+
+from devices.devices import DeviceFactory
+from devices.service_devices.project_treatment import ProjectManager_controller
+from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis
 
 app_folder = str(Path(__file__).resolve().parents[2])
 

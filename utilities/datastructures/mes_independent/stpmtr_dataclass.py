@@ -1,10 +1,10 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Tuple, Union, NewType, NamedTuple, TypeVar, Set
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
+from typing import Dict, List, Tuple, Union, NewType, Set
+
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
-
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
 
 relative = NewType('relative', str)
 absolute = NewType('absolute', str)

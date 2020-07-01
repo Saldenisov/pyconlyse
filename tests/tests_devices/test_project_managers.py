@@ -1,10 +1,11 @@
+import logging
 from pathlib import Path
+
 from devices.service_devices.project_treatment import ProjectManager_controller
 from devices.service_devices.project_treatment.openers import Opener, HamamatsuFileOpener
-from utilities.myfunc import file_md5
 from utilities.datastructures.mes_independent import *
+from utilities.myfunc import file_md5
 
-import logging
 module_logger = logging.getLogger(__name__)
 
 from tests.fixtures.services import projectmanager_default_non_fixture

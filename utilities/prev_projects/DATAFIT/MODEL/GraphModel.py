@@ -1,11 +1,12 @@
-from OPENER import Opener
-from ERRORS import GraphModelError, OpenerError
-from ANALYSIS import correct_cursors_pos
-from UTILITY import Orddict as Odict
+import logging
 from itertools import islice
 
 import numpy as np
-import logging
+from ANALYSIS import correct_cursors_pos
+from ERRORS import GraphModelError, OpenerError
+from OPENER import Opener
+from UTILITY import Orddict as Odict
+
 module_logger = logging.getLogger(__name__)
 
 

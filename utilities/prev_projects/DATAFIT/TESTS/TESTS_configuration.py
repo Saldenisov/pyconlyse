@@ -5,7 +5,9 @@ Created on 4 juil. 2016
 '''
 
 import unittest
+
 from UTILITY import Configuration
+
 
 class TestConfiguration(unittest.TestCase):
 

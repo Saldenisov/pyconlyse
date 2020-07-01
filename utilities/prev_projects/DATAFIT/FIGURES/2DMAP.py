@@ -4,8 +4,8 @@ Created on 20 avr. 2015
 @author: saldenisov
 '''
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 import scipy.interpolate
 
 # Generate datastructures:

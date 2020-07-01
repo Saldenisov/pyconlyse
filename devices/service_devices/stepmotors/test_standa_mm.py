@@ -1,12 +1,11 @@
+import os
+import platform
+import re
+import sys
+import tempfile
+import time
 from ctypes import *
 from pathlib import Path
-import time
-import os
-import sys
-import platform
-import tempfile
-import re
-
 
 if sys.version_info >= (3, 0):
     import urllib.parse

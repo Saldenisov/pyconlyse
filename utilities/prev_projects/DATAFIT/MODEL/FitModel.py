@@ -1,8 +1,9 @@
+import logging
+
+import numpy as np
 from ANALYSIS import Fit
 from ERRORS import NoSuchFittingFunction, FittingError
 
-import numpy as np
-import logging
 module_logger = logging.getLogger(__name__)
 
 

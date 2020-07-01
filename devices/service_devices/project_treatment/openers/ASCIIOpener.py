@@ -7,11 +7,13 @@ Created on 23 avr. 2015
 # import logging
 import logging
 from functools import lru_cache
-import numpy as np
 from pathlib import Path
 from typing import Union, Tuple
-from utilities.datastructures.mes_independent import Measurement
+
+import numpy as np
+
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
+from utilities.datastructures.mes_independent import Measurement
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)

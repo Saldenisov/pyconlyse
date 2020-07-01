@@ -5,10 +5,9 @@ Created on 6 juil. 2016
 '''
 
 import unittest
-import numpy as np
-from OPENER import hamamatsuopener
+
 from ERRORS.Myexceptions import NoSuchFileType
-from struct import error as StructError
+from OPENER import hamamatsuopener
 
 
 class TestHamamatsuFileOpener(unittest.TestCase):

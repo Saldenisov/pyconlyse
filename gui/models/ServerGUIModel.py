@@ -6,9 +6,11 @@ Created on 06.08.2019
 import logging
 from pathlib import Path
 from typing import Union
+
 from PyQt5.QtCore import QObject, pyqtSignal
-from communication.messaging.messages import MessageInt, MessageExt
+
 from communication.interfaces import Message
+from communication.messaging.messages import MessageInt, MessageExt
 from utilities.errors.myexceptions import MsgComNotKnown, DeviceError
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 

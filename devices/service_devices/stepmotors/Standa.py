@@ -4,16 +4,15 @@ On ELYSE there are 4 motorized mirrors
 """
 
 
-from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
-
-import logging
 import ctypes
-from utilities.myfunc import info_msg, unique_id, error_logger
+import logging
 from pathlib import Path
-from .stpmtr_controller import StpMtrController, StpMtrError
+from typing import List, Tuple, Union, Dict, Any
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t)
+from utilities.myfunc import info_msg, error_logger
+from .stpmtr_controller import StpMtrController
 
 module_logger = logging.getLogger(__name__)
 

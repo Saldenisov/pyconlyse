@@ -1,4 +1,3 @@
-import pytest
 from utilities.myfunc import unique_id
 
 

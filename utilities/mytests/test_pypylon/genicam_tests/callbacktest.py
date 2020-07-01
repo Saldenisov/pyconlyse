@@ -6,12 +6,12 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
-from genicamtestcase import GenicamTestCase, CDFHeader, CDFFooter
-from testport import CTestPort, cast_buffer, cast_data
-import sys
+
 from callbackhelper import CallbackObject
+from genicam import *
+from genicamtestcase import GenicamTestCase, CDFHeader, CDFFooter
+from testport import CTestPort, cast_data
 
 
 # ---------------------------------------------------------------------------

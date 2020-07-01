@@ -1,6 +1,8 @@
 from pathlib import Path
+
 from PyQt5.QtWidgets import QWidget
 from utilities.data.messaging import Message
+
 from gui.views.Test import Ui_TestObserver
 
 app_folder = str(Path(__file__).resolve().parents[2])

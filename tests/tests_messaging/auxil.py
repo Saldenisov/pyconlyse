@@ -1,5 +1,6 @@
 from time import sleep
 from typing import Dict
+
 from devices.devices import Device
 
 

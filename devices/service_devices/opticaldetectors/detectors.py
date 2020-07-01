@@ -1,8 +1,11 @@
 import ctypes as ct
-import numpy as np
 from time import sleep
-from utilities.errors import myexceptions as myexc
+
+import numpy as np
+
 from devices.devices import Service
+from utilities.errors import myexceptions as myexc
+
 
 class OpticalDetector(Service):
     pass

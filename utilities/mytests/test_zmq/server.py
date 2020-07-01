@@ -1,5 +1,6 @@
-import zmq
 from random import randrange
+
+import zmq
 
 context = zmq.Context()
 socket = context.socket(zmq.PUB)

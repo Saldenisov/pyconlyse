@@ -5,7 +5,7 @@ Created on 4 juil. 2016
 '''
 
 import unittest
-from ANALYSIS import Fit
+
 
 class TestsFit(unittest.TestCase):
 

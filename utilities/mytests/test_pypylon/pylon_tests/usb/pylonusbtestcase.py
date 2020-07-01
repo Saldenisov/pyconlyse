@@ -1,5 +1,7 @@
 import unittest
+
 from pypylon import pylon
+
 
 def get_class_and_filter():
     device_class = "BaslerUsb"

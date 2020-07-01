@@ -7,12 +7,13 @@
 # WARNING! All changes made in this file will be lost!
 
 
-from PyQt5 import QtCore, QtGui, QtWidgets
+import logging
 from typing import Dict
+
+from PyQt5 import QtCore, QtGui, QtWidgets
+
 from utilities.datastructures.mes_independent.devices_dataclass import DeviceInfoExt
 from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
-import logging
-
 
 module_logger = logging.getLogger(__name__)
 

@@ -1,7 +1,9 @@
 from pathlib import Path
+
+import pytest
+
 from devices.devices import DeviceFactory
 from devices.devices import Server
-import pytest
 
 app_folder = str(Path(__file__).resolve().parents[2])
 

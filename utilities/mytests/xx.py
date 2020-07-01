@@ -1,10 +1,9 @@
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.asymmetric import rsa
-
-from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import padding
-from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
 # Working RSA encryption you can run for yourself
 MESSAGE = 'I am a very secret message'.encode('utf-8')

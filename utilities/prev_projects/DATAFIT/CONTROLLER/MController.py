@@ -1,13 +1,11 @@
+import logging
 from os.path import isfile, exists
-from prev_projects.DATAFIT.VIEW import MView
-from prev_projects.DATAFIT.MODEL import GRAPHSModel
-from prev_projects.DATAFIT.CONTROLLER import GraphsController
 
 from PyQt5.QtWidgets import (QMessageBox,
                              QApplication,
                              QFileDialog)
+from prev_projects.DATAFIT.VIEW import MView
 
-import logging
 module_logger = logging.getLogger(__name__)
 
 

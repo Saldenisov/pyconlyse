@@ -1,8 +1,10 @@
 from dataclasses import dataclass, field
 from typing import List, Union
-from utilities.datastructures.mes_independent.general import Desription, FuncInput, FuncOutput
+
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
+from utilities.datastructures.mes_independent.general import Desription, FuncInput, FuncOutput
+
 
 @dataclass(frozen=True)  # To make it hashable
 class Operator:

@@ -4,19 +4,21 @@ Created on 17.11.2019
 @author: saldenisov
 """
 import logging
-import numpy as np
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, Union, Tuple
-from enum import Enum
+
+import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QErrorMessage
+
 from communication.messaging.messages import MessageInt, MessageExt
-from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
                                                                Opener, OpenersTypes, OPENER_ACCRODANCE, CriticalInfo)
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
 from utilities.errors.myexceptions import MsgComNotKnown
 from utilities.myfunc import info_msg, error_logger, get_local_ip
 

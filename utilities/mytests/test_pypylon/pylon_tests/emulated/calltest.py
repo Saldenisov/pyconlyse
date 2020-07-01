@@ -1,6 +1,6 @@
-from pylonemutestcase import PylonEmuTestCase
-from pypylon import pylon
 import unittest
+
+from pylonemutestcase import PylonEmuTestCase
 
 
 class CallTestSuite(PylonEmuTestCase):

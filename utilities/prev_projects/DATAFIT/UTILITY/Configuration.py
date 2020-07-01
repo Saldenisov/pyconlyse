@@ -3,15 +3,14 @@ Created on 7 oct. 2015
 
 @author: saldenisov
 '''
-from prev_projects.DATAFIT.ERRORS import ValidationFailed
-from prev_projects.DATAFIT.HELPFUL import dict_of_dict_to_array
-
-from configobj import ConfigObj
-from validate import Validator
-
+import logging
 import os.path
 
-import logging
+from configobj import ConfigObj
+from prev_projects.DATAFIT.ERRORS import ValidationFailed
+from prev_projects.DATAFIT.HELPFUL import dict_of_dict_to_array
+from validate import Validator
+
 module_logger = logging.getLogger(__name__)
 
 

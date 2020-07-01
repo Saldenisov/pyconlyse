@@ -5,10 +5,11 @@ Created on 12 May 2017
 '''
 
 
-from gui.views.ExtraViews.Settings import SettingsView
+import logging
 from re import split
 
-import logging
+from gui.views.ExtraViews.Settings import SettingsView
+
 module_logger = logging.getLogger(__name__)
 
 

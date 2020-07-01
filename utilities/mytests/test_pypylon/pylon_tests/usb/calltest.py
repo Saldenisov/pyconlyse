@@ -1,6 +1,6 @@
-from pylonusbtestcase import PylonTestCase
-from pypylon import pylon
 import unittest
+
+from pylonusbtestcase import PylonTestCase
 
 
 class CallTestSuite(PylonTestCase):

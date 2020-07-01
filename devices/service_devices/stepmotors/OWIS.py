@@ -4,11 +4,11 @@ On ELYSE there are 3 cards dedicated to delaylines
 """
 
 
-from typing import List, Tuple, Union, Iterable, Dict, Any, Callable
-
-import logging
 import ctypes
+import logging
 from time import sleep
+from typing import List, Tuple, Union, Dict, Any, Callable
+
 from utilities.tools.decorators import development_mode
 from .stpmtr_controller import StpMtrController
 

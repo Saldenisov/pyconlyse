@@ -1,6 +1,6 @@
-from pypylon import pylon, genicam
 import unittest
 
+from pypylon import pylon, genicam
 
 COMPRESSION_DESCRIPTOR_MONO8 = (
     b"\x01\x00\x01\x00\x01\x00\x00\x00\x08\x00\x0a\x00\x02\x00\x01\x00"

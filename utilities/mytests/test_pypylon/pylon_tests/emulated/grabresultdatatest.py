@@ -1,6 +1,7 @@
+import unittest
+
 from pylonemutestcase import PylonEmuTestCase
 from pypylon import pylon
-import unittest
 
 
 class GrabResultDataTestSuite(PylonEmuTestCase):

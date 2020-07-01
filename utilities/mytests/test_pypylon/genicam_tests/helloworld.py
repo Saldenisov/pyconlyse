@@ -1,5 +1,6 @@
-from genicam import CNodeMapRef, GenericException, IsReadable
 import sys
+
+from genicam import CNodeMapRef, GenericException, IsReadable
 
 
 def main():

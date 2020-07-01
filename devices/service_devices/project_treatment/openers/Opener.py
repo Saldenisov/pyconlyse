@@ -4,17 +4,20 @@ Created on 17 avr. 2015
 @author: saldenisov 
 '''
 
-import numpy as np
+import logging
 from abc import abstractmethod
 from collections import OrderedDict
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Dict, Union, Tuple
+
+import numpy as np
+
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
-from utilities.myfunc import error_logger
 from utilities.errors.myexceptions import NoSuchFileType
-import logging
+from utilities.myfunc import error_logger
+
 module_logger = logging.getLogger(__name__)
 
 

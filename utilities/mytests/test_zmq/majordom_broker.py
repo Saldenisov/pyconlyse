@@ -12,10 +12,11 @@ import time
 from binascii import hexlify
 
 import zmq
+from tests.zhelpers import dump
 
 # local
 from . import MDP
-from tests.zhelpers import dump
+
 
 class Service:
     """tests_devices single Service"""

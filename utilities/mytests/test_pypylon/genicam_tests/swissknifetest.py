@@ -6,11 +6,12 @@
 #  $Header:
 # -----------------------------------------------------------------------------
 
-from genicam import *
 import unittest
-from genicamtestcase import GenicamTestCase
 from _locale import LC_ALL
 from locale import setlocale
+
+from genicam import *
+from genicamtestcase import GenicamTestCase
 
 
 class SwissKnifeTestSuite(GenicamTestCase):

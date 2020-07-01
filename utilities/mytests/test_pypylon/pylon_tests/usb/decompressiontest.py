@@ -1,7 +1,6 @@
 import unittest
 
 from numpy.testing import assert_array_equal
-
 from pylonusbtestcase import PylonTestCase
 from pypylon import pylon, genicam
 

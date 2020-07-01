@@ -1,5 +1,5 @@
-from PyQt5.QtWidgets import QApplication, QTreeWidget, QTreeWidgetItem
 from PyQt5.QtCore import QModelIndex
+from PyQt5.QtWidgets import QApplication, QTreeWidget, QTreeWidgetItem
 
 
 class ViewTree(QTreeWidget):
@@ -35,7 +35,6 @@ class ViewTree(QTreeWidget):
         fill_item(self.invisibleRootItem(), value)
 
     def click(self, item: QModelIndex):
-        from pathlib import Path
         path = []
         path.append(item.data())
         parent = item.parent()

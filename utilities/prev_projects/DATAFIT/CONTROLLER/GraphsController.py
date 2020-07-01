@@ -1,6 +1,8 @@
-from VIEW import GraphsView
-from UTILITY import singleton
 import logging
+
+from UTILITY import singleton
+from VIEW import GraphsView
+
 module_logger = logging.getLogger(__name__)
 
 

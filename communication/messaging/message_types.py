@@ -1,6 +1,6 @@
 from dataclasses import dataclass
-from typing import NamedTuple, Set
 from enum import Enum, auto
+from typing import NamedTuple, Set
 
 
 class Permission(Enum):

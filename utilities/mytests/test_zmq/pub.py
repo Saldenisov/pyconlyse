@@ -6,7 +6,9 @@
 
 """
 import time
+
 import zmq
+
 
 def main():
     """main method"""

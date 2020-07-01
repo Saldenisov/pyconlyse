@@ -4,11 +4,10 @@ from typing import Dict, List, Tuple
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
-from utilities.datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
-from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
-from devices.interfaces import ExecutorInter
 from devices.interfaces import DeviceType, DeviceId
-
+from devices.interfaces import ExecutorInter
+from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
+from utilities.datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
 
 
 @dataclass(frozen=True)

@@ -3,8 +3,9 @@ Created on 10 Jan 2017
 
 @author: Sergey Denisov
 '''
-from typing import Union, Any
 from functools import wraps
+from typing import Any
+
 
 def once(func):
     @wraps(func)

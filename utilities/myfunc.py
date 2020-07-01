@@ -6,16 +6,16 @@ Created on 7 juin 2016
 
 """
 
+import hashlib
+import logging
 import socket
 from contextlib import closing
-from pathlib import Path
-from typing import Tuple, List, Iterable, Generator, Union
-import logging
 from datetime import datetime
-import hashlib
+from pathlib import Path
 from random import randint
 from time import sleep
 from typing import Any
+from typing import Tuple, List, Iterable, Generator, Union
 
 import numpy as np
 

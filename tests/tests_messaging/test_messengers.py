@@ -1,9 +1,8 @@
+import pytest
+
 from communication.messaging.messengers import *
 from tests.fixtures import *
 from utilities.datastructures.mes_independent.devices_dataclass import *
-
-import pytest
-
 
 devices = [server_test_non_fixture(), stpmtr_emulate_test_non_fixture()]
 

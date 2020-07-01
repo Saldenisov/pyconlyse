@@ -1,4 +1,3 @@
-import dis
 from time import time_ns
 
 def func_a():

@@ -4,11 +4,12 @@ Created on 17 avr. 2015
 
 @author: saldenisov
 '''
+import os
+import struct
+
+import numpy as np
 from ERRORS import NoSuchFileType
 
-import struct
-import numpy as np
-import os
 
 # import logging
 # module_logger = logging.getLogger(__name__)

@@ -1,5 +1,6 @@
-from ctypes import *
 import platform
+from ctypes import *
+
 from devices.service_devices.stepmotors.ximc import path_dll
 
 

@@ -1,11 +1,9 @@
-import types
-import weakref
-from functools import partial
-
 import sys
 import time
+import types
+import weakref
 
- # No need for the coroutine stuff
+# No need for the coroutine stuff
 from PyQt5 import Qt
 from PyQt5.QtCore import QThread
 

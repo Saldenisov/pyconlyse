@@ -1,7 +1,6 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
 from itertools import islice
 
-import matplotlib.pyplot as plt
+from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
 
 
 class KineticsCanvas(MyMplCanvas):

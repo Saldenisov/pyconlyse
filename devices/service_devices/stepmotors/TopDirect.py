@@ -8,12 +8,12 @@ so current does not run during waiting time
 INSTEAD of RPi.GPIO -> gpiozero will be used, since it could be installed
 under windows with no problems
 """
-from typing import Callable
-from enum import Enum
 import logging
+from time import sleep
+from typing import Callable
+
 import serial
 import serial.tools.list_ports
-from time import sleep
 
 from utilities.datastructures.mes_independent import *
 from utilities.myfunc import error_logger

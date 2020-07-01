@@ -1,6 +1,8 @@
-import zmq
-from threading import Thread
 import time
+from threading import Thread
+
+import zmq
+
 
 def server_init(port=6666):
     context = zmq.Context()

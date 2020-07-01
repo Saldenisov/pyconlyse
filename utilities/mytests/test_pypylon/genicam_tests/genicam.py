@@ -8,4 +8,3 @@ from warnings import warn
 
 warn("importing from 'genicam' is deprecated. Import from 'pypylon.genicam' instead.", DeprecationWarning)
 
-from pypylon.genicam import *

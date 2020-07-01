@@ -1,11 +1,11 @@
-from prev_projects.DATAFIT.UTILITY.OBSERVER import MObserver
-from prev_projects.DATAFIT.UTILITY.META import Meta
-from prev_projects.DATAFIT.VIEW.UI import Ui_MainWindow
+from _functools import partial
 
 from PyQt5.Qt import QMainWindow
-from PyQt5.QtWidgets import QListWidgetItem
 from PyQt5.QtGui import QCloseEvent
-from _functools import partial
+from PyQt5.QtWidgets import QListWidgetItem
+from prev_projects.DATAFIT.UTILITY.META import Meta
+from prev_projects.DATAFIT.UTILITY.OBSERVER import MObserver
+from prev_projects.DATAFIT.VIEW.UI import Ui_MainWindow
 
 
 class MView(QMainWindow, MObserver, metaclass=Meta):

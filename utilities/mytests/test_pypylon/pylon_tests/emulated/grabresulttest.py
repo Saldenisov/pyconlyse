@@ -1,7 +1,8 @@
-from pylonemutestcase import PylonEmuTestCase
-from pypylon import pylon
-from pypylon import genicam
 import unittest
+
+from pylonemutestcase import PylonEmuTestCase
+from pypylon import genicam
+from pypylon import pylon
 
 
 class GrabResultTestSuite(PylonEmuTestCase):

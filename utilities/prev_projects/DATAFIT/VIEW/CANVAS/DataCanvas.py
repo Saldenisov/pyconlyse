@@ -1,5 +1,6 @@
-from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
 import numpy as np
+from prev_projects.DATAFIT.VIEW.CANVAS import MyMplCanvas
+
 
 class DataCanvas(MyMplCanvas):
     """

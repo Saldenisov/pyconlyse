@@ -1,8 +1,9 @@
-import zmq
 import sys
 import threading
 import time
-from random import randint, random
+from random import randint
+
+import zmq
 
 __author__ = "Felipe Cruz <felipecruz@loogica.net>"
 __license__ = "MIT/X11"

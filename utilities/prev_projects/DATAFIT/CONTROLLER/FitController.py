@@ -1,10 +1,11 @@
-from VIEW import FitView
-from HELPFUL import ndarray_tostring
-
-from os import path
-from PyQt5.QtWidgets import QApplication
-from numpy import vstack, transpose, savetxt
 import logging
+from os import path
+
+from HELPFUL import ndarray_tostring
+from PyQt5.QtWidgets import QApplication
+from VIEW import FitView
+from numpy import vstack, transpose, savetxt
+
 module_logger = logging.getLogger(__name__)
 
 

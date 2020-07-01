@@ -1,7 +1,7 @@
-from devices.devices import Server, Service
 from communication.messaging.messages import *
+from devices.devices import Server, Service
 from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-from tests.fixtures import server, stpmtr_a4988_4axes_test
+
 
 def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
 

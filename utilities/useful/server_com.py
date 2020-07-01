@@ -1,5 +1,4 @@
 import os
-from communication.messaging.messages import MessageExt
 import pathlib
 from time import sleep
 
