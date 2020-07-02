@@ -47,12 +47,15 @@ class StepMotorsView(QMainWindow):
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
-        self.ui.checkBox_activate.clicked.connect(self.activate)
+        self.ui.checkBox_activate.clicked.connect(self.activate_controller)
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, *[True, False]))
+        self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
+        self.ui.radioButton_mm.toggled.connect(self._update_lcd_screen)
+        self.ui.radioButton_angle.toggled.connect(self._update_lcd_screen)
         self.ui.closeEvent = self.closeEvent
 
         self.update_state(force_axis=True)
@@ -62,7 +65,7 @@ class StepMotorsView(QMainWindow):
         self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
 
-    def activate(self):
+    def activate_controller(self):
         client = self.device
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
                                   func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
@@ -277,9 +280,8 @@ class StepMotorsView(QMainWindow):
 
                 ui.checkBox_On.setChecked(axis.status)
 
-            unit = self._get_unit()
 
-            ui.lcdNumber_position.display(axis.convert_pos_to_unit(unit))
+            self._update_lcd_screen()
             _translate = QtCore.QCoreApplication.translate
             axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
             ui.label.setText(_translate("StpMtrGUI", "axis ID"))
@@ -294,6 +296,13 @@ class StepMotorsView(QMainWindow):
             ui.checkBox_activate.setChecked(cs.device_status.active)
             ui.checkBox_On.setChecked(axis.status)
             self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
+
+    def _update_lcd_screen(self):
+        axis_id = int(self.ui.spinBox_axis.value())
+        axis: AxisStpMtr = self.controller_status.axes[axis_id]
+        unit = self._get_unit()
+        pos = axis.convert_pos_to_unit(unit)
+        self.ui.lcdNumber_position.display(pos)
 
     def _update_progessbar_pos(self, force=False):
         axis = int(self.ui.spinBox_axis.value())
@@ -313,6 +322,3 @@ class StepMotorsView(QMainWindow):
                 return unit
         axis = self.controller_status.axes[int(self.ui.spinBox_axis.value())]
         return axis.basic_unit
-
-
-
