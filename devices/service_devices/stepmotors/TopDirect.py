@@ -243,7 +243,6 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 error_logger(self, self.move_axis_to, f'Could not get position of controller after the movement.')
                 res, comments = False, f'Could not get position of controller after the movement.'
 
-
             _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
 
@@ -269,6 +268,10 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             return True, ''
         else:
             return False, 'Did not update Arduino pos from file.'
+
+    def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
+        must_have_param = {1: set(['microsteps', 'conversion_step_mm', 'basic_unit'])}
+        return super()._set_move_parameters_axes(must_have_param)
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         return super()._set_parameters()
