@@ -122,19 +122,19 @@ ax_im1 = fig.add_subplot(3, 2, 1)
 ax_im2 = fig.add_subplot(3, 2, 2)
 
 ax1_x = fig.add_subplot(3, 2, 3)
-ax1_x.set_ylim(215, 245)
+ax1_x.set_ylim(240, 280)
 ax1_x.set_ylabel('X1 position')
 
 ax2_x = fig.add_subplot(3, 2, 4)
-ax2_x.set_ylim(265, 295)
+ax2_x.set_ylim(275, 300)
 ax2_x.set_ylabel('X2 position')
 
 ax1_y = fig.add_subplot(3, 2, 5)
-ax1_y.set_ylim(260, 280)
+ax1_y.set_ylim(280, 300)
 ax1_y.set_ylabel('Y1 position')
 
 ax2_y = fig.add_subplot(3, 2, 6)
-ax2_y.set_ylim(260, 290)
+ax2_y.set_ylim(290, 310)
 ax2_y.set_ylabel('Y2 position')
 
 # create two image plots

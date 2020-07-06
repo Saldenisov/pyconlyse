@@ -119,6 +119,13 @@ class AxisStpMtr:
                 return int(val / conversion_step_mm * self.move_parameters['microsteps'])
             except KeyError as e:
                 return False, error_text + str(e)
+        # mm to step
+        elif unit_from is MoveType.mm and unit_to is MoveType.step:
+            try:
+                conversion_step_mm = self.move_parameters['conversion_step_mm']
+                return val / conversion_step_mm
+            except KeyError as e:
+                return False, error_text + str(e)
         # step to mm
         elif unit_from is MoveType.step and unit_to is MoveType.mm:
             conversion_step_mm = self.move_parameters['conversion_step_mm']
