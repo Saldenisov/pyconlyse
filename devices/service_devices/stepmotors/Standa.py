@@ -7,7 +7,7 @@ On ELYSE there are 4 motorized mirrors
 import ctypes
 import logging
 from pathlib import Path
-from typing import List, Tuple, Union, Dict, Any
+from typing import List, Tuple, Union, Dict, Any, Set
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t)
@@ -216,3 +216,12 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _stop_axis(self, device_id):
         result = lib.command_stop(device_id)
+
+    def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
+        must_have_param = {1: set(['microsteps', 'basic_unit']),
+                           2: set(['microsteps', 'basic_unit']),
+                           3: set(['microsteps', 'basic_unit']),
+                           3: set(['microsteps', 'basic_unit']),
+                           }
+        return super()._set_move_parameters_axes(must_have_param)
+

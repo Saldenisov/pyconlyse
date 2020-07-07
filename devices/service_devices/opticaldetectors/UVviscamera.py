@@ -1,8 +1,8 @@
-'''
+"""
 Created on 18 Mar 2017
 
 @author: Sergey Denisov
-'''
+"""
 
 import ctypes
 from typing import Dict, NewType
