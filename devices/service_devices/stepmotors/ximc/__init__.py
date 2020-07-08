@@ -2,7 +2,9 @@ import platform
 from os import path
 from pathlib import Path
 
+
 ximc_dir = Path(path.dirname(__file__))
+
 if platform.system() == "Windows":
     arch_type = "win64" if "64" in platform.architecture()[0] else "win32"
     if arch_type == 'win64':
@@ -15,7 +17,6 @@ elif platform.system() == "Linux":
 
 else:
     raise Exception('Only Windows/Linux is available at this moment')
-
 
 
 from .myximc import *

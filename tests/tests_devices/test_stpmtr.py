@@ -67,21 +67,6 @@ def test_func_stpmtr(stpmtr: StpMtrController):
                                  'stop_axis', 'service_info']
     ACTIVATE = FuncActivateInput(flag=True)
     DEACTIVATE = FuncActivateInput(flag=False)
-    ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1, flag=True)
-    DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=1,  flag=False)
-    GET_POS_AXIS1 = FuncGetPosInput(axis_id=1)
-    GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
-    if isinstance(stpmtr, StpMtrCtrl_Standa):
-        mult = 1
-        sleep_time = 0.1
-    else:
-        mult = 1
-        sleep_time = 1
-    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10 * mult, how=absolute.__name__)
-    MOVE_AXIS1_absolute_fifty = FuncMoveAxisToInput(axis_id=1,  pos=50 * mult, how=absolute.__name__)
-    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10 * mult, how=relative.__name__)
-    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10 * mult, how=relative.__name__)
-    STOP_AXIS1 = FuncStopAxisInput(axis_id=1)
     POWER_ON = FuncPowerInput(flag=True)
     POWER_OFF = FuncPowerInput(flag=False)
     # Testing Power function
@@ -103,6 +88,27 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert type(res) == FuncActivateOutput
     assert res.func_success
     assert res.device_status.active
+
+    first_axis = list(stpmtr.axes.keys())[0]
+    second_axis = list(stpmtr.axes.keys())[1]
+
+    ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=first_axis, flag=True)
+    DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=first_axis,  flag=False)
+    GET_POS_AXIS1 = FuncGetPosInput(axis_id=first_axis)
+    GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
+    if isinstance(stpmtr, StpMtrCtrl_Standa):
+        mult = 1
+        sleep_time = 0.1
+    else:
+        mult = 1
+        sleep_time = 1
+    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=10 * mult, how=absolute.__name__)
+    MOVE_AXIS1_absolute_fifty = FuncMoveAxisToInput(axis_id=first_axis,  pos=50 * mult, how=absolute.__name__)
+    MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=first_axis,  pos=10 * mult, how=relative.__name__)
+    MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=first_axis,  pos=-10 * mult, how=relative.__name__)
+    STOP_AXIS1 = FuncStopAxisInput(axis_id=first_axis)
+
+
     # activate for a second time
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert res.func_success
@@ -135,7 +141,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     for key, axis in essentials.items():
         status.append(essentials[key].status)
     assert f'Axes status: {status}. ' in res.comments
-    assert stpmtr.axes[1].status == 1
+    assert stpmtr.axes[first_axis].status == 1
     # deactivate axis 1
     res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
     assert res.func_success
@@ -149,7 +155,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     # deactivate controller
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
-    assert stpmtr.axes[1].status == 0
+    assert stpmtr.axes[first_axis].status == 0
 
     # activate axis 1
     res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
@@ -159,7 +165,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # activate axis 1
     res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     # set axis 1 status to 1
-    axis_one = stpmtr.axes[1]
+    axis_one = stpmtr.axes[first_axis]
     axis_one.status = 1
     # deactivate controller when all axis are not running
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
@@ -169,7 +175,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # activate controller and activate axis 1, set it status to 2
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
-    stpmtr.axes[1].status = 2
+    stpmtr.axes[first_axis].status = 2
     # deactivate controller when Not all axis are not running
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert not res.func_success
@@ -184,25 +190,25 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         # Stpmtr_TopDirect cannot be stopped by user.
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
-        assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
+        assert res.comments == f'Axis id={first_axis}, name={stpmtr.axes[first_axis].name} was stopped by user.'
         assert res.axes == stpmtr.axes_essentials
         # stop axis 1 again
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
-        assert res.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was already stopped.'
+        assert res.comments == f'Axis id={first_axis}, name={stpmtr.axes[first_axis].name} was already stopped.'
     else:
-        stpmtr.axes[1].status = 1
+        stpmtr.axes[first_axis].status = 1
 
     # Test Move_axis1
     # Move axis 1 to pos=10
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
-    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
-    assert res.comments == f'Movement of Axis with id={1}, name={stpmtr.axes[1].name} was finished.'
+    assert res.axes[first_axis].position == MOVE_AXIS1_absolute_ten.pos
+    assert res.comments == f'Movement of Axis with id={first_axis}, name={stpmtr.axes[first_axis].name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
-    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
+    assert res.axes[first_axis].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
 
     if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
         # Move axis 1 to pos=100 and stop it immediately
@@ -225,25 +231,25 @@ def test_func_stpmtr(stpmtr: StpMtrController):
             res_stop: FuncStopAxisOutput = future_stop.result()
 
         assert not res_move.func_success
-        assert res_move.comments == f'Movement of Axis with id={1} was interrupted'
-        assert res_move.axes[1].position > 0
+        assert res_move.comments == f'Movement of Axis with id={first_axis} was interrupted'
+        assert res_move.axes[first_axis].position > 0
         assert res_stop.func_success
-        assert res_stop.comments == f'Axis id={1}, name={stpmtr.axes[1].name} was stopped by user.'
+        assert res_stop.comments == f'Axis id={first_axis}, name={stpmtr.axes[first_axis].name} was stopped by user.'
         # move to 10
         res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
 
         # Test get_pos
         res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
         assert res.func_success
-        assert type(res.axes[1]) == AxisStpMtrEssentials
-        assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
-        assert res.axes[2].position >= 0
+        assert type(res.axes[first_axis]) == AxisStpMtrEssentials
+        assert res.axes[first_axis].position == MOVE_AXIS1_absolute_ten.pos
+        assert res.axes[second_axis].position >= 0
         assert res.comments == ''
 
     # Test get_contoller_state
     res: FuncGetStpMtrControllerStateOutput = stpmtr.get_controller_state(GET_CONTOLLER_STATE)
     assert res.func_success
-    assert type(res.axes[1]) == AxisStpMtr
+    assert type(res.axes[first_axis]) == AxisStpMtr
 
     # Test available function
     res = stpmtr.available_public_functions()

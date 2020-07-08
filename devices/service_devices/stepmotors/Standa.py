@@ -27,6 +27,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         self._devenum = None  # LP_device_enumeration_t
         self._devices: Dict[int, str] = {}
         self._enumerated = False
+        self.lib = lib
         #self._register_observation('_enumerated')
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
@@ -37,7 +38,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res = []
                 for device_id, axis in self.axes.items():
                     dev_id = ctypes.c_int32(device_id)
-                    lib.close_device(ctypes.byref(dev_id))
+                    self.lib.close_device(ctypes.byref(dev_id))
                 res, comments = True, ''
             if res:
                 self.device_status.connected = flag
@@ -73,7 +74,7 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _check_if_connected(self) -> Tuple[bool, str]:
         status = status_t()
         if self.axes:
-            result = lib.get_status(list(self.axes.keys())[0], ctypes.byref(status))
+            result = self.lib.get_status(list(self.axes.keys())[0], ctypes.byref(status))
             if result == Result.Ok:
                 self.device_status.connected = True
                 comments = ''
@@ -93,7 +94,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         :return:
         """
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
-        lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
+        self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
         # Enumerate devices
         # This is device search and enumeration with probing. It gives more information about soft.
         probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
@@ -101,7 +102,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         enum_hints = f"addr={self.get_parameters['network_hints']}".encode('utf-8')
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         if not self._enumerated:
-            self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
+            self._devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
             info_msg(self, 'INFO', f'Axes are enumerated.')
             self._enumerated = True
         device_counts = self._get_number_axes()
@@ -120,7 +121,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             keep_ids = []
 
             for key in range(device_counts):
-                uri = lib.get_device_name(self._devenum, key)
+                uri = self.lib.get_device_name(self._devenum, key)
                 id_to_keep = search_id(self, uri)
                 if not id_to_keep:
                     return False, f'Unknown uri {uri}. Check DB, modify or add.'
@@ -128,19 +129,19 @@ class StpMtrCtrl_Standa(StpMtrController):
                     keep_ids.append(id_to_keep)
                     info_msg(self, 'INFO', f'Settings names and positions.')
                     self.axes[id_to_keep].name = uri.decode('utf-8')
-                    device_id = lib.open_device(uri)
+                    device_id = self.lib.open_device(uri)
                     # Sometimes there is a neccesity to call stop function
                     # So we do it always for every axes
                     self._stop_axis(device_id)
                     friendly_name = controller_name_t()
-                    result = lib.get_controller_name(device_id, ctypes.byref(friendly_name))
+                    result = self.lib.get_controller_name(device_id, ctypes.byref(friendly_name))
                     if result == Result.Ok:
                         friendly_name = friendly_name.ControllerName
                     else:
                         error_logger(self, self._form_devices_list, result)
                         friendly_name = f'Axis{device_id}'
                     self.axes[id_to_keep].device_id = device_id
-                    self.axes[id_to_keep].friendly_name = friendly_name
+                    self.axes[id_to_keep].friendly_name = friendly_name.decode('utf-8')
                     self.axes[id_to_keep].pos = self._get_position_controller(device_id)[1]
 
             for id_axis in list(self.axes.keys()):
@@ -164,7 +165,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         return self._axes_status
 
     def _get_number_axes(self) -> int:
-        return lib.get_device_count(self._devenum)
+        return self.lib.get_device_count(self._devenum)
 
     def _move_axis_to(self, axis_id: int, go_pos: Union[float, int]) -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
@@ -172,14 +173,14 @@ class StpMtrCtrl_Standa(StpMtrController):
         if res:
             axis = self.axes[axis_id]
             microsteps = self.axes[axis_id].move_parameters['microsteps']
-            steps = go_pos // 1
-            microsteps = int(go_pos % 10 * microsteps)
+            microsteps = int(go_pos % 1 * microsteps)
+            steps = int(go_pos // 1)
             device_id = axis.device_id
-            result = lib.command_move(device_id, steps, microsteps)
+            result = self.lib.command_move(device_id, steps, microsteps)
 
             if result == Result.Ok:
 
-                result = lib.command_wait_for_stop(device_id, 5)
+                result = self.lib.command_wait_for_stop(device_id, 5)
 
             if result != Result.Ok:
                 res, comments = False, f'Move command for device_id {axis_id} did not work {result}.'
@@ -222,7 +223,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         :return: microsteps
         """
         pos = get_position_t()
-        result = lib.get_position(device_id, ctypes.byref(pos))
+        result = self.lib.get_position(device_id, ctypes.byref(pos))
         if result == Result.Ok:
             return True, (pos.Position, pos.uPosition)
         else:
@@ -240,8 +241,9 @@ class StpMtrCtrl_Standa(StpMtrController):
                 # Sometimes there is a neccesity to call stop function
                 # So we do it always for every axes
                 self._stop_axis(device_id)
-                device_id = ctypes.c_int32(device_id)
-                result = lib.close_device(ctypes.byref(device_id))  # TODO: something wrong, return -1
+                arg = ctypes.byref(ctypes.cast(device_id, ctypes.POINTER(ctypes.c_int)))
+                #result = self.lib.close_device(arg)
+                # TODO: something wrong happens when device is closed, nothing works afterwards
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)
@@ -251,7 +253,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         return super()._set_controller_positions(positions)
 
     def _stop_axis(self, device_id):
-        result = lib.command_stop(device_id)
+        result = self.lib.command_stop(device_id)
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
         must_have_param = {1: set(['microsteps', 'basic_unit']),

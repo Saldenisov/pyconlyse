@@ -234,11 +234,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     info = kwargs['func_output']
                 elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
                     event = kwargs['event']
-                    info = HeartBeat(device_id=self.device_id, event_n=event.n, event_id=event.device_id)
+                    info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
                 elif msg_com is MsgComExt.HEARTBEAT_FULL:
                     event = kwargs['event']
                     info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
-                                         event_id=event.device_id, device_id=self.device_id,
+                                         event_id=event.id, id=self.id,
                                          device_name=self.name, device_type=self.type,
                                          device_public_key=self.messenger.public_key,
                                          device_public_sockets=self.messenger.public_sockets)
@@ -247,11 +247,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 elif msg_com is MsgComInt.DEVICE_INFO_INT:
                     info = DeviceInfoInt(active_connections=self.active_connections(),
                                          available_public_functions=self.available_public_functions(),
-                                         device_id=self.device_id,
+                                         device_id=self.id,
                                          device_status=self.device_status, device_description=self.description(),
                                          events_running=list(self.thinker.events.name_id.keys()))
                 elif msg_com is MsgComExt.SHUTDOWN:
-                    info = ShutDown(device_id=self.device_id, reason=kwargs['reason'])
+                    info = ShutDown(device_id=self.id, reason=kwargs['reason'])
                 elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
                     try:
                         session_key = self.connections[kwargs['receiver_id']].session_key
@@ -272,7 +272,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         device_public_key_crypted = self.messenger.public_key
                     event = kwargs['event']
                     info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
-                                             event_id=event.device_id, device_id=self.device_id, device_name=self.name,
+                                             event_id=event.device_id, device_id=self.id, device_name=self.name,
                                              device_type=self.type, device_public_key=device_public_key_crypted,
                                              device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
@@ -292,9 +292,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
                     return MessageExt(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info,
                                       receiver_id=receiver_id,
-                                      reply_to=reply_to, sender_id=self.messenger.device_id)
+                                      reply_to=reply_to, sender_id=self.messenger.id)
                 else:
-                    return MessageInt(com=msg_com.msg_name, info=info, sender_id=self.messenger.device_id)
+                    return MessageInt(com=msg_com.msg_name, info=info, sender_id=self.messenger.id)
         if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
             error_logger(self, self.generate_msg, f'Wrong msg_com is passed, not MsgCom')
             return None

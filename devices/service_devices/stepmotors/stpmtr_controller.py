@@ -55,7 +55,7 @@ class StpMtrController(Service):
                 results, comments_l = ([], [])
 
                 for axis_id, axis in self.axes.items():
-                    res, comments = self._change_axis_status(axis.device_id, 0)
+                    res, comments = self._change_axis_status(axis_id, 0)
                     results.append(res)
                     comments_l.append(comments)
 
@@ -120,7 +120,7 @@ class StpMtrController(Service):
         Forms repr of Axes positions as dictionary
         :return: dictionary of Axis.name: Axis.position
         """
-        return {axis.device_id: axis.position for axis in self.axes.values()}
+        return {axis_id: axis.position for axis_id, axis in self.axes.items()}
 
     @property
     def _axes_preset_values(self) -> List[Union[int, float]]:
@@ -161,7 +161,7 @@ class StpMtrController(Service):
         if axis_id in self.axes.keys():
             return True, ''
         else:
-            return False, f'Axis id={axis_id}, name={self.axes[axis_id].name} is out of range={self.axes.keys()}.'
+            return False, f'Axis id={axis_id} is out of range={self.axes.keys()}.'
 
     @abstractmethod
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
