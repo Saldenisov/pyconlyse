@@ -209,7 +209,19 @@ class StpMtrCtrl_Standa(StpMtrController):
         return self._axes_preset_values
 
     def _release_hardware(self) -> Tuple[bool, str]:
-        self.i_know_how = {'mm': 0, 'steps': 1}
+        try:
+            for i in range(device_counts):
+                info_msg(self, 'INFO', f'Settings names and positions.')
+
+                uri = lib.get_device_name(self._devenum, i)
+                device_id = lib.open_device(uri)
+                # Sometimes there is a neccesity to call stop function
+                # So we do it always for every axes
+                self._stop_axis(device_id)
+            return True, ''
+        except Exception as e:
+            error_logger(self, self._release_hardware, e)
+            return False, f'{e}'
 
     def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
         return super()._set_controller_positions(positions)
@@ -221,7 +233,11 @@ class StpMtrCtrl_Standa(StpMtrController):
         must_have_param = {1: set(['microsteps', 'basic_unit']),
                            2: set(['microsteps', 'basic_unit']),
                            3: set(['microsteps', 'basic_unit']),
-                           3: set(['microsteps', 'basic_unit']),
+                           4: set(['microsteps', 'basic_unit']),
+                           5: set(['microsteps', 'basic_unit']),
+                           6: set(['microsteps', 'basic_unit']),
+                           7: set(['microsteps', 'basic_unit']),
+                           8: set(['microsteps', 'basic_unit']),
                            }
         return super()._set_move_parameters_axes(must_have_param)
 

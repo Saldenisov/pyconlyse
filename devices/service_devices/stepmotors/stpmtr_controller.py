@@ -507,36 +507,39 @@ class StpMtrController(Service):
             move_parameters = self.get_parameters['move_parameters']
             move_parameters: dict = eval(move_parameters)
             for axis_id, value in move_parameters.items():
-                if must_have_param:
-                    if set(must_have_param[axis_id]).intersection(value.keys()) != set(must_have_param[axis_id]):
-                        raise StpMtrError(self, text=f'Not all must have parameters "{must_have_param}" for axis_id '
-                                                     f'{axis_id} are present in DB.')
-                    if 'microsteps' not in value and MoveType.microstep in self.axes[axis_id].type_move:
-                        self.axes[axis_id].type_move.remove(MoveType.microstep)
-                        self.axes[axis_id].type_move.remove(MoveType.step)
-                    if 'conversion_step_mm' not in value and MoveType.mm in self.axes[axis_id].type_move:
-                        self.axes[axis_id].type_move.remove(MoveType.mm)
-                    if 'conversion_step_angle' not in value and MoveType.angle in self.axes[axis_id].type_move:
-                        self.axes[axis_id].type_move.remove(MoveType.angle)
-                    if not self.axes[axis_id].type_move:
-                        raise StpMtrError(self,
-                                          text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
-                                               f'"conversion_step_angle" for axis_id {axis_id}.')
-                    if MoveType.mm in self.axes[axis_id].type_move and MoveType.angle in self.axes[axis_id].type_move:
-                        raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
-                                                     f'"conversion_step_angle", not both for axis_id {axis_id}')
-                try:
-                    basic_unit = MoveType(move_parameters[axis_id]['basic_unit'])
-                    if basic_unit in [MoveType.step, MoveType.microstep]:
-                        self.axes[axis_id].basic_unit = MoveType.microstep
-                        if MoveType.microstep not in self.axes[axis_id].type_move:
-                            raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
-                                                         f'axis_id={axis_id} does not have "microstep" parameter.')
-                    self.axes[axis_id].basic_unit = basic_unit
-                except (KeyError, ValueError) as e:
-                    raise StpMtrError(self, text=f'Cannot set "basic_unit" for axis axis_id={axis_id}. Error = {e}')
-                finally:
-                    self.axes[axis_id].move_parameters = value
+                if axis_id in self.axes:
+                    if must_have_param:
+                        if set(must_have_param[axis_id]).intersection(value.keys()) != set(must_have_param[axis_id]):
+                            raise StpMtrError(self,
+                                              text=f'Not all must have parameters "{must_have_param}" for axis_id '
+                                                   f'{axis_id} are present in DB.')
+                        if 'microsteps' not in value and MoveType.microstep in self.axes[axis_id].type_move:
+                            self.axes[axis_id].type_move.remove(MoveType.microstep)
+                            self.axes[axis_id].type_move.remove(MoveType.step)
+                        if 'conversion_step_mm' not in value and MoveType.mm in self.axes[axis_id].type_move:
+                            self.axes[axis_id].type_move.remove(MoveType.mm)
+                        if 'conversion_step_angle' not in value and MoveType.angle in self.axes[axis_id].type_move:
+                            self.axes[axis_id].type_move.remove(MoveType.angle)
+                        if not self.axes[axis_id].type_move:
+                            raise StpMtrError(self,
+                                              text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
+                                                   f'"conversion_step_angle" for axis_id {axis_id}.')
+                        if MoveType.mm in self.axes[axis_id].type_move and MoveType.angle in self.axes[
+                            axis_id].type_move:
+                            raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
+                                                         f'"conversion_step_angle", not both for axis_id {axis_id}')
+                    try:
+                        basic_unit = MoveType(move_parameters[axis_id]['basic_unit'])
+                        if basic_unit in [MoveType.step, MoveType.microstep]:
+                            self.axes[axis_id].basic_unit = MoveType.step
+                            if MoveType.microstep not in self.axes[axis_id].type_move:
+                                raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
+                                                             f'axis_id={axis_id} does not have "microstep" parameter.')
+                        self.axes[axis_id].basic_unit = basic_unit
+                    except (KeyError, ValueError) as e:
+                        raise StpMtrError(self, text=f'Cannot set "basic_unit" for axis axis_id={axis_id}. Error = {e}')
+                    finally:
+                        self.axes[axis_id].move_parameters = value
         except KeyError:
             raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
         except SyntaxError as e:
