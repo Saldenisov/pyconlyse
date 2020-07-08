@@ -12,7 +12,7 @@ from typing import List, Tuple, Union, Dict, Any, Set
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t)
 from utilities.myfunc import info_msg, error_logger
-from .stpmtr_controller import StpMtrController
+from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
 
@@ -49,21 +49,22 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_axis_flag(flag)
         if res:
-            if self.axes[axis_id].status != flag:
+            axis = self.axes[axis_id]
+            if axis.status != flag:
                 info = ''
-                if self.axes[axis_id].status == 2 and force:
-                    self._stop_axis(axis_id)
-                    info = f' Axis id={axis_id}, name={self.axes[axis_id].name} was stopped.'
+                if axis.status == 2 and force:
+                    self._stop_axis(axis.device_id)
+                    info = f' Axis id={axis_id}, name={axis.name} was stopped.'
                     self.axes[axis_id].status = flag
-                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
-                elif self.axes[axis_id].status == 2 and not force:
-                    res, comments = False, 'Axis id={axis_id}, name={self.axes[axis_id].name} is moving. ' \
+                    res, comments = True, f'Axis id={axis_id}, name={axis.name} is set to {flag}.' + info
+                elif axis.status == 2 and not force:
+                    res, comments = False, f'Axis id={axis_id}, name={axis.name} is moving. ' \
                                            'Force Stop in order to change.'
                 else:
                     self.axes[axis_id].status = flag
-                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
+                    res, comments = True, f'Axis id={axis_id}, name={axis.name} is set to {flag}.' + info
             else:
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
+                res, comments = True, f'Axis id={axis_id}, name={axis.name} is already set to {flag}'
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
@@ -97,7 +98,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         # This is device search and enumeration with probing. It gives more information about soft.
         probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
         # TODO: change to database readings
-        enum_hints = b"addr=129.175.100.137, 192.168.0.1"
+        enum_hints = f"addr={self.get_parameters['network_hints']}".encode('utf-8')
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         if not self._enumerated:
             self._devenum = lib.enumerate_devices(probe_flags, enum_hints)
@@ -108,30 +109,48 @@ class StpMtrCtrl_Standa(StpMtrController):
         if device_counts != self._axes_number and device_counts != 0:
             res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                    f'database value {self._axes_number}. Check cabling or power.'
-            for key in range(device_counts + 1, self._axes_number + 1):
-                del self.axes[key]
+
+            def search_id(self: StpMtrCtrl_Standa, uri: str):
+                uri = uri.decode('utf-8')
+                for axis_id, axis in self.axes.items():
+                    if axis.name in uri:
+                        return axis_id
+                return None
+
+            keep_ids = []
+
+            for key in range(device_counts):
+                uri = lib.get_device_name(self._devenum, key)
+                id_to_keep = search_id(self, uri)
+                if not id_to_keep:
+                    return False, f'Unknown uri {uri}. Check DB, modify or add.'
+                else:
+                    keep_ids.append(id_to_keep)
+                    info_msg(self, 'INFO', f'Settings names and positions.')
+                    self.axes[id_to_keep].name = uri.decode('utf-8')
+                    device_id = lib.open_device(uri)
+                    # Sometimes there is a neccesity to call stop function
+                    # So we do it always for every axes
+                    self._stop_axis(device_id)
+                    friendly_name = controller_name_t()
+                    result = lib.get_controller_name(device_id, ctypes.byref(friendly_name))
+                    if result == Result.Ok:
+                        friendly_name = friendly_name.ControllerName
+                    else:
+                        error_logger(self, self._form_devices_list, result)
+                        friendly_name = f'Axis{device_id}'
+                    self.axes[id_to_keep].device_id = device_id
+                    self.axes[id_to_keep].friendly_name = friendly_name
+                    self.axes[id_to_keep].pos = self._get_position_controller(device_id)[1]
+
+            for id_axis in list(self.axes.keys()):
+                if id_axis not in keep_ids:
+                    del self.axes[id_axis]
+
         elif device_counts == 0:
             res, comments = False, f'None of devices were found, check connection.'
         else:
             res, comments = True, ''
-        if res:
-            for i in range(device_counts):
-                info_msg(self, 'INFO', f'Settings names and positions.')
-
-                uri = lib.get_device_name(self._devenum, i)
-                device_id = lib.open_device(uri)
-                # Sometimes there is a neccesity to call stop function
-                # So we do it always for every axes
-                self._stop_axis(device_id)
-                name = controller_name_t()
-                result = lib.get_controller_name(device_id, ctypes.byref(name))
-                if result == Result.Ok:
-                    name = name.ControllerName
-                else:
-                    error_logger(self, self._form_devices_list, result)
-                    name = f'Axis{device_id}'
-                self.axes[device_id].name = name
-                self.axes[device_id].pos = self._get_position_controller(device_id)[1]
 
         return res, comments
 
@@ -147,18 +166,20 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_number_axes(self) -> int:
         return lib.get_device_count(self._devenum)
 
-    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int], how='absolute') -> Tuple[bool, str]:
+    def _move_axis_to(self, axis_id: int, go_pos: Union[float, int]) -> Tuple[bool, str]:
         res, comments = self._change_axis_status(axis_id, 2)
         interrupted = False
         if res:
-            full_turn = int(go_pos // 256)
-            steps = int(go_pos % 256)
-            try:
-                result = lib.command_move(ctypes.c_int32(axis_id), ctypes.c_int32(full_turn), ctypes.c_int32(steps))
-            except Exception as e:
-                print(e)
+            axis = self.axes[axis_id]
+            microsteps = self.axes[axis_id].move_parameters['microsteps']
+            steps = go_pos // 1
+            microsteps = int(go_pos % 10 * microsteps)
+            device_id = axis.device_id
+            result = lib.command_move(device_id, steps, microsteps)
+
             if result == Result.Ok:
-                result = lib.command_wait_for_stop(axis_id, 5)
+
+                result = lib.command_wait_for_stop(device_id, 5)
 
             if result != Result.Ok:
                 res, comments = False, f'Move command for device_id {axis_id} did not work {result}.'
@@ -172,7 +193,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             else:
                 res, comments = False, f'Movement of Axis with id={axis_id} was interrupted'
 
-            self.axes[axis_id].position = self._get_position_controller(axis_id)[1]
+            self.axes[axis_id].position = self._get_position_controller(axis.device_id)[1]
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
 
         self._change_axis_status(axis_id, 1, True)
@@ -183,12 +204,15 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _get_positions(self) -> Dict[int, Union[int, float]]:
         positions = {}
-        for device_id in self.axes.keys():
+        for key, axis in self.axes.items():
+            device_id = axis.device_id
             res, val = self._get_position_controller(device_id)
             if res:
-                positions[device_id] = val
+                microsteps = self.axes[key].move_parameters['microsteps']
+                positions[key] = self.axes[key].convert_to_basic_unit(MoveType.microstep,
+                                                                      val[0] * microsteps + val[1])
             else:
-                positions[device_id] = self.axes[device_id].position
+                positions[key] = self.axes[key].position
         return positions
 
     def _get_position_controller(self, device_id: int) -> Tuple[bool, int]:
@@ -200,7 +224,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         pos = get_position_t()
         result = lib.get_position(device_id, ctypes.byref(pos))
         if result == Result.Ok:
-            return True, pos.Position * 256 + pos.uPosition
+            return True, (pos.Position, pos.uPosition)
         else:
             error_logger(self, self._get_position_controller, str(result))
             return False, 0
@@ -210,14 +234,14 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
-            for i in range(device_counts):
+            for axis in self.axes.values():
                 info_msg(self, 'INFO', f'Settings names and positions.')
-
-                uri = lib.get_device_name(self._devenum, i)
-                device_id = lib.open_device(uri)
+                device_id = axis.device_id
                 # Sometimes there is a neccesity to call stop function
                 # So we do it always for every axes
                 self._stop_axis(device_id)
+                device_id = ctypes.c_int32(device_id)
+                result = lib.close_device(ctypes.byref(device_id))  # TODO: something wrong, return -1
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)

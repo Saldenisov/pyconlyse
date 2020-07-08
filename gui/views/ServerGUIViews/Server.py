@@ -87,7 +87,7 @@ class ServerGUIView(QMainWindow):
             self.ui.tE_queue_in.setText(list_to_str_repr(list(info.queue_in_keys)))
             self.ui.tE_queue_out.setText(list_to_str_repr(list(info.queue_out_keys)))
             self.ui.tE_queue_in_pending.setText(list_to_str_repr(list(info.queue_in_pending_keys)))
-        elif com == MsgComInt.HEARTBEAT.msg_name and msg.sender_id == self.model.server.id:
+        elif com == MsgComInt.HEARTBEAT.msg_name and msg.sender_id == self.model.server.device_id:
             widget = self.ui.rB_hb
             before = widget.isChecked()
             widget.setChecked(not before)

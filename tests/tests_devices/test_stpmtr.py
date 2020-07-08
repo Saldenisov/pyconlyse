@@ -72,13 +72,13 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     GET_POS_AXIS1 = FuncGetPosInput(axis_id=1)
     GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
     if isinstance(stpmtr, StpMtrCtrl_Standa):
-        mult = 10000
+        mult = 1
         sleep_time = 0.1
     else:
         mult = 1
         sleep_time = 1
     MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=1, pos=10 * mult, how=absolute.__name__)
-    MOVE_AXIS1_absolute_hundred = FuncMoveAxisToInput(axis_id=1,  pos=100 * mult, how=absolute.__name__)
+    MOVE_AXIS1_absolute_fifty = FuncMoveAxisToInput(axis_id=1,  pos=50 * mult, how=absolute.__name__)
     MOVE_AXIS1_relative_ten = FuncMoveAxisToInput(axis_id=1,  pos=10 * mult, how=relative.__name__)
     MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=1,  pos=-10 * mult, how=relative.__name__)
     STOP_AXIS1 = FuncStopAxisInput(axis_id=1)
@@ -197,20 +197,18 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Move axis 1 to pos=10
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
-    assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1], MOVE_AXIS1_absolute_ten.pos, MoveType.step)
+    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
     assert res.comments == f'Movement of Axis with id={1}, name={stpmtr.axes[1].name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
-    assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1],
-                                                           MOVE_AXIS1_absolute_ten.pos +
-                                                           MOVE_AXIS1_relative_negative_ten.pos, MoveType.step)
+    assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
 
     if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
         # Move axis 1 to pos=100 and stop it immediately
 
         def move() -> FuncMoveAxisToOutput:
-            res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_hundred)
+            res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_fifty)
             return res
 
         def stop() -> FuncStopAxisOutput:
@@ -238,9 +236,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         res: FuncGetPosOutput = stpmtr.get_pos(GET_POS_AXIS1)
         assert res.func_success
         assert type(res.axes[1]) == AxisStpMtrEssentials
-        assert res.axes[1].position == stpmtr._convert_to_unit(stpmtr.axes[1],
-                                                               MOVE_AXIS1_absolute_ten.pos, MoveType.step)
-        assert res.axes[2].position == 0
+        assert res.axes[1].position == MOVE_AXIS1_absolute_ten.pos
+        assert res.axes[2].position >= 0
         assert res.comments == ''
 
     # Test get_contoller_state

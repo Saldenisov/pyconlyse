@@ -55,7 +55,7 @@ class StpMtrController(Service):
                 results, comments_l = ([], [])
 
                 for axis_id, axis in self.axes.items():
-                    res, comments = self._change_axis_status(axis.id, 0)
+                    res, comments = self._change_axis_status(axis.device_id, 0)
                     results.append(res)
                     comments_l.append(comments)
 
@@ -93,7 +93,7 @@ class StpMtrController(Service):
 
     @property
     def _axes_ids(self) -> List[str]:
-        return [axis.id for axis in self.axes.values()]
+        return [axis.device_id for axis in self.axes.values()]
 
     @property
     def _axes_names(self) -> List[str]:
@@ -120,7 +120,7 @@ class StpMtrController(Service):
         Forms repr of Axes positions as dictionary
         :return: dictionary of Axis.name: Axis.position
         """
-        return {axis.id: axis.position for axis in self.axes.values()}
+        return {axis.device_id: axis.position for axis in self.axes.values()}
 
     @property
     def _axes_preset_values(self) -> List[Union[int, float]]:
@@ -256,7 +256,7 @@ class StpMtrController(Service):
         pos = func_input.pos
         move_type = func_input.move_type
         if not move_type:
-            move_type = MoveType.step
+            move_type = self.axes[axis_id].basic_unit
         res, comments = self._check_axis(axis_id)
         if res:
             res, comments = self._check_move_type(axis_id, move_type)
@@ -273,7 +273,7 @@ class StpMtrController(Service):
             res, comments = self._is_within_limits(axis_id, pos)  # if not relative just set pos
         if res:
             if self.axes[axis_id].status == 1:
-                res, comments = self._move_axis_to(axis_id, pos, how)
+                res, comments = self._move_axis_to(axis_id, pos)
             elif self.axes[axis_id].status == 2:
                 res, comments = False, f'Axis id={axis_id}, name={self.axes[axis_id].name} is running. ' \
                                        f'Please, stop it before new request.'
@@ -389,7 +389,7 @@ class StpMtrController(Service):
         if not isinstance(pos, dict):
             error_logger(self, self._get_positions_file, StpMtrError(self, 'is not a dict'))
             info_msg(self, 'INFO', f'Forming axes positions dict. Setting everything to zero')
-            pos = {axis.id: 0 for axis in self.axes.values()}
+            pos = {axis.device_id: 0 for axis in self.axes.values()}
         else:
             if list(pos.keys()) != self._axes_ids:
                 error_logger(self, self._get_positions_file, StpMtrError(self, f"Axes ids {list(pos.keys())} in file, "
@@ -397,10 +397,13 @@ class StpMtrController(Service):
                                                                          f"{self._axes_ids}"))
                 info_msg(self, 'INFO', f'Setting position according DB names')
                 for axis in self.axes.values():
-                    if not axis.name in pos:
-                        pos[axis.name] = 0
+                    if axis.device_id not in pos:
+                        pos[axis.device_id] = 0
             else:
                 for key, val in pos.items():
+                    res, _ = self._is_within_limits(key, val)
+                    if not res:
+                        pos[key] = 0
                     if not (isinstance(val, int) or isinstance(val, float)):
                         raise StpMtrError(self, f"val {val} is not a number")
         return pos
@@ -468,7 +471,7 @@ class StpMtrController(Service):
                 error_logger(self, self._set_ids_axes, e)
                 raise e
             for id_a in ids:
-                self.axes[id_a] = AxisStpMtr(id=id_a)
+                self.axes[id_a] = AxisStpMtr(device_id=id_a)
 
     def _set_names_axes(self):
         if not self.device_status.connected:
@@ -568,8 +571,9 @@ class StpMtrController(Service):
         else:
             positions = controller_pos
 
-        for id, pos in zip(self.axes.keys(), positions.values()):
+        for id, pos in positions.items():
             self.axes[id].position = pos
+        StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
 
     def _set_preset_values_axes(self):
         if self.device_status.connected:

@@ -26,8 +26,9 @@ class MoveType(Enum):
 
 @dataclass(frozen=False)
 class AxisStpMtr:
-    id: int
+    device_id: int  # TODO: rename to device_id
     name: str = ''
+    friendly_name: str = ''
     basic_unit: MoveType = MoveType.microstep
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
     move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)  # {'microsteps': 256, 'conversion_step_mm': 0.0025,
@@ -42,15 +43,15 @@ class AxisStpMtr:
         if unit:
             pos = self.convert_to_basic_unit(unit)
             if isinstance(pos, tuple):
-                return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status,
+                return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
                                             unit=self.basic_unit)
             else:
-                return AxisStpMtrEssentials(id=self.id,
+                return AxisStpMtrEssentials(id=self.device_id,
                                             position=pos,
                                             status=self.status,
                                             unit=unit)
         else:
-            return AxisStpMtrEssentials(id=self.id, position=self.position, status=self.status,
+            return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
                                         unit=self.basic_unit)
 
     def convert_pos_to_unit(self, unit: MoveType) -> Union[Tuple[bool, str], Union[int, float]]:
@@ -62,7 +63,7 @@ class AxisStpMtr:
 
     def convert_from_to_unit(self, val: Union[int, float], unit_from: MoveType, unit_to: MoveType) \
             -> Union[Tuple[bool, str], Union[int, float]]:
-        error_text = f'Axis axis_id={self.id} cannot convert microstep to angle. Error='
+        error_text = f'Axis axis_id={self.device_id} cannot convert microstep to angle. Error='
         # microstep to step
         if unit_from is unit_to:
             return val
@@ -134,7 +135,7 @@ class AxisStpMtr:
             except KeyError as e:
                 return False, error_text + str(e)
         else:
-            return False, f'Axis axis_id={self.id} cannot convert {unit_from} to {unit_to}.'
+            return False, f'Axis axis_id={self.device_id} cannot convert {unit_from} to {unit_to}.'
 
 
 @dataclass(order=True, frozen=False)
