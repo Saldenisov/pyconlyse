@@ -81,7 +81,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncPowerOutput = stpmtr.power(POWER_OFF)
     assert not res.func_success
     assert 'Cannot switch power off when device is activated.' in res.comments
-    
+
+
     # Testing Activate function
     # activate
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
@@ -109,10 +110,15 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     STOP_AXIS1 = FuncStopAxisInput(axis_id=first_axis)
 
 
+
+
     # activate for a second time
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert res.func_success
     assert res.device_status.active
+
+
+
     # deactivate
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert res.func_success

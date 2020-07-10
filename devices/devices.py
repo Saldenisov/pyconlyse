@@ -238,7 +238,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 elif msg_com is MsgComExt.HEARTBEAT_FULL:
                     event = kwargs['event']
                     info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
-                                         event_id=event.id, id=self.id,
+                                         event_id=event.id, device_id=self.id,
                                          device_name=self.name, device_type=self.type,
                                          device_public_key=self.messenger.public_key,
                                          device_public_sockets=self.messenger.public_sockets)
@@ -272,7 +272,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         device_public_key_crypted = self.messenger.public_key
                     event = kwargs['event']
                     info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
-                                             event_id=event.device_id, device_id=self.id, device_name=self.name,
+                                             event_id=event.id, device_id=self.id, device_name=self.name,
                                              device_type=self.type, device_public_key=device_public_key_crypted,
                                              device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
@@ -424,7 +424,7 @@ class Server(Device):
 
     def are_you_alive(self, func_input: FuncAliveInput) -> FuncAliveOutput:
         event = self.thinker.events['heartbeat']
-        return FuncAliveOutput(comments='', func_success=True, device_id=self.id, event_id=event.device_id, event_n=event.n)
+        return FuncAliveOutput(comments='', func_success=True, device_id=self.id, event_id=event.id, event_n=event.n)
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:

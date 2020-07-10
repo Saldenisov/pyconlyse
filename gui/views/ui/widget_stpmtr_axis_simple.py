@@ -264,7 +264,6 @@ class Ui_StpMtrGUI(object):
             else:
                 self.radioButton_mm.setEnabled(False)
 
-
         except (KeyError, AttributeError):
             #TODO: modify
             axis = 1
@@ -272,6 +271,9 @@ class Ui_StpMtrGUI(object):
             name = 'test_name'
             ranges = f'Ranges: {str((0, 100))}'
             preset = f'Preset Positions: {str([0, 100])}'
+            self.spinBox_axis.setMaximum(len(ranges))
+
+
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis ID"))
         self.label_name.setText(_translate("StpMtrGUI", name))

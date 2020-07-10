@@ -68,9 +68,6 @@ class StpMtrController(Service):
                     comments = info + comments
                 if res:
                     self.device_status.active = flag
-                    res, info = self._release_hardware()
-                    if not res:
-                        comments = comments + f'Hardware was not released properly: {info}'
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
         info_msg(self, 'INFO', info)
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)

@@ -35,13 +35,8 @@ class StpMtrCtrl_Standa(StpMtrController):
             if flag:
                 res, comments = self._form_devices_list()
             else:
-                res = []
-                for device_id, axis in self.axes.items():
-                    dev_id = ctypes.c_int32(device_id)
-                    self.lib.close_device(ctypes.byref(dev_id))
-                res, comments = True, ''
-            if res:
-                self.device_status.connected = flag
+                res, comments = self._release_hardware()
+            self.device_status.connected = flag
         else:
             res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
@@ -101,15 +96,16 @@ class StpMtrCtrl_Standa(StpMtrController):
         # TODO: change to database readings
         enum_hints = f"addr={self.get_parameters['network_hints']}".encode('utf-8')
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
-        if not self._enumerated:
-            self._devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
-            info_msg(self, 'INFO', f'Axes are enumerated.')
-            self._enumerated = True
+        self._devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
+        info_msg(self, 'INFO', f'Axes are enumerated.')
+        self._enumerated = True
         device_counts = self._get_number_axes()
         info_msg(self, 'INFO', f'Number of axes is {device_counts}.')
-        if device_counts != self._axes_number and device_counts != 0:
-            res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
-                                   f'database value {self._axes_number}. Check cabling or power.'
+        if device_counts != 0:
+            comments = ''
+            if device_counts != self._axes_number:
+                res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
+                                      f'database value {self._axes_number}. Check cabling or power.'
 
             def search_id(self: StpMtrCtrl_Standa, uri: str):
                 uri = uri.decode('utf-8')
@@ -119,7 +115,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 return None
 
             keep_ids = []
-
+            Oks = []
             for key in range(device_counts):
                 uri = self.lib.get_device_name(self._devenum, key)
                 id_to_keep = search_id(self, uri)
@@ -137,6 +133,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                     result = self.lib.get_controller_name(device_id, ctypes.byref(friendly_name))
                     if result == Result.Ok:
                         friendly_name = friendly_name.ControllerName
+                        Oks.append(True)
                     else:
                         error_logger(self, self._form_devices_list, result)
                         friendly_name = f'Axis{device_id}'
@@ -144,9 +141,14 @@ class StpMtrCtrl_Standa(StpMtrController):
                     self.axes[id_to_keep].friendly_name = friendly_name.decode('utf-8')
                     self.axes[id_to_keep].pos = self._get_position_controller(device_id)[1]
 
+
             for id_axis in list(self.axes.keys()):
                 if id_axis not in keep_ids:
                     del self.axes[id_axis]
+            if all(Oks):
+                res, comments = True, comments
+            else:
+                res, comments = f'Did not initialize Standa controller properly. {comments}'
 
         elif device_counts == 0:
             res, comments = False, f'None of devices were found, check connection.'
@@ -172,8 +174,8 @@ class StpMtrCtrl_Standa(StpMtrController):
         interrupted = False
         if res:
             axis = self.axes[axis_id]
-            microsteps = self.axes[axis_id].move_parameters['microsteps']
-            microsteps = int(go_pos % 1 * microsteps)
+            microsteps_set = self.axes[axis_id].move_parameters['microsteps']
+            microsteps = int(go_pos % 1 * microsteps_set)
             steps = int(go_pos // 1)
             device_id = axis.device_id
             result = self.lib.command_move(device_id, steps, microsteps)
@@ -194,7 +196,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             else:
                 res, comments = False, f'Movement of Axis with id={axis_id} was interrupted'
 
-            self.axes[axis_id].position = self._get_position_controller(axis.device_id)[1]
+            self.axes[axis_id].position = self._get_position_controller(axis_id)[1]
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
 
         self._change_axis_status(axis_id, 1, True)
@@ -205,27 +207,28 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _get_positions(self) -> Dict[int, Union[int, float]]:
         positions = {}
-        for key, axis in self.axes.items():
-            device_id = axis.device_id
-            res, val = self._get_position_controller(device_id)
+        for axis_id, axis in self.axes.items():
+            res, val = self._get_position_controller(axis_id)
             if res:
-                microsteps = self.axes[key].move_parameters['microsteps']
-                positions[key] = self.axes[key].convert_to_basic_unit(MoveType.microstep,
-                                                                      val[0] * microsteps + val[1])
+                positions[axis_id] = val
             else:
-                positions[key] = self.axes[key].position
+                positions[axis_id] = self.axes[axis_id].position
         return positions
 
-    def _get_position_controller(self, device_id: int) -> Tuple[bool, int]:
+    def _get_position_controller(self, axis_id: int) -> Tuple[bool, int]:
         """
         Return position in microsteps for device_id. One full turn equals to 256 microsteps
         :param device_id: corresponds to device_id of Standa controller
-        :return: microsteps
+        :return: Basic_units
         """
         pos = get_position_t()
+        axis = self.axes[axis_id]
+        device_id = axis.device_id
         result = self.lib.get_position(device_id, ctypes.byref(pos))
         if result == Result.Ok:
-            return True, (pos.Position, pos.uPosition)
+            pos_microsteps = pos.Position * axis.move_parameters['microsteps'] + pos.uPosition
+            pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
+            return True, pos_basic_units
         else:
             error_logger(self, self._get_position_controller, str(result))
             return False, 0
@@ -242,7 +245,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 # So we do it always for every axes
                 self._stop_axis(device_id)
                 arg = ctypes.byref(ctypes.cast(device_id, ctypes.POINTER(ctypes.c_int)))
-                #result = self.lib.close_device(arg)
+                result = self.lib.close_device(arg)
                 # TODO: something wrong happens when device is closed, nothing works afterwards
             return True, ''
         except Exception as e:
@@ -254,6 +257,7 @@ class StpMtrCtrl_Standa(StpMtrController):
 
     def _stop_axis(self, device_id):
         result = self.lib.command_stop(device_id)
+        a = result
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
         must_have_param = {1: set(['microsteps', 'basic_unit']),

@@ -149,7 +149,7 @@ lib.set_bindy_key(os.path.join(ximc_dir, "win32", "keyfile.sqlite").encode("utf-
 
 # This is device search and enumeration with probing. It gives more information about soft.
 probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-enum_hints = b"addr=192.168.0.1,172.16.2.3"
+enum_hints = b"addr=10.20.30.201, 10.20.30.202"
 # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
 devenum = lib.enumerate_devices(probe_flags, enum_hints)
 dev_count = lib.get_device_count(devenum)
@@ -163,6 +163,9 @@ for i in range(dev_count):
     device_id = lib.open_device(name)
     device_ids[name] = device_id
     pos[name] = test_get_position(lib, device_ids[name])
+
+for i in [2, 3, 1, 4]:
+    res = lib.close_device(byref(cast(i, POINTER(c_int))))
 
 from time import sleep
 from random import randint
@@ -185,4 +188,6 @@ for name in device_ids.keys():
 
 
 
-lib.close_device(byref(cast(device_id, POINTER(c_int))))
+res = lib.close_device(byref(cast(device_id, POINTER(c_int))))
+
+print(res)

@@ -73,8 +73,8 @@ class SuperClientGUIcontroller():
             self.services_views[service_id].show()
             info_msg(self, 'INFO', f'GUI for service {service_id} is started')
 
-        except KeyError:
-            error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded')
+        except KeyError as e:
+            error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded: {e}')
         except Exception as e:
             error_logger(self, self.create_service_gui, e)
 

@@ -183,6 +183,12 @@ class StepMotorsView(QMainWindow):
                     self.ui.comments.setText(result.comments)
                     if info.com == StpMtrController.ACTIVATE.name:
                         result: FuncActivateOutput = result
+                        if result.device_status.active:
+                            client = self.device
+                            msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
+                                                      receiver_id=self.service_parameters.device_id,
+                                                      func_input=FuncGetStpMtrControllerStateInput())
+                            client.send_msg_externally(msg)
                         self.controller_status.device_status = result.device_status
                     elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                         result: FuncActivateAxisOutput = result
@@ -285,7 +291,14 @@ class StepMotorsView(QMainWindow):
             _translate = QtCore.QCoreApplication.translate
             axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
             ui.label.setText(_translate("StpMtrGUI", "axis ID"))
-            ui.label_name.setText(_translate("StpMtrGUI", axis.name))
+            if axis.friendly_name != '':
+                name = axis.friendly_name
+            else:
+                name = axis.name
+            axis_ids = list(cs.axes)
+            ui.label_name.setText(_translate("StpMtrGUI", name))
+            ui.spinBox_axis.setMinimum(min(axis_ids))
+            ui.spinBox_axis.setMaximum(max(axis_ids))
             ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
             ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
 
@@ -305,11 +318,15 @@ class StepMotorsView(QMainWindow):
         self.ui.lcdNumber_position.display(pos)
 
     def _update_progessbar_pos(self, force=False):
-        axis = int(self.ui.spinBox_axis.value())
-        pos = self.controller_status.axes[axis].convert_pos_to_unit(self._get_unit())
-        if (self.controller_status.axes[axis].status == 2 or force) and self.ui.spinBox_axis.value() == axis:
-            start = self.controller_status.start_stop[axis][0]
-            stop = self.controller_status.start_stop[axis][1]
+        axis_id = int(self.ui.spinBox_axis.value())
+        axis = self.controller_status.axes[axis_id]
+        try:
+            pos = axis.convert_pos_to_unit(self._get_unit())
+        except KeyError:
+            pos = axis.position
+        if (self.controller_status.axes[axis_id].status == 2 or force) and self.ui.spinBox_axis.value() == axis_id:
+            start = self.controller_status.start_stop[axis_id][0]
+            stop = self.controller_status.start_stop[axis_id][1]
             per = int((pos - start) / (stop - start) * 100.0)
             self.ui.progressBar_movement.setValue(per)
             self.ui.lcdNumber_position.display(pos)

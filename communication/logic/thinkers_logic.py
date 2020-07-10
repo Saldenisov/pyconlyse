@@ -46,7 +46,7 @@ class GeneralCmdLogic(Thinker):
             if msg.reply_to in self.forwarded_messages:
                 initial_msg: MessageExt = self.forwarded_messages[msg.reply_to]
                 msg_r = msg.copy(receiver_id=initial_msg.sender_id, reply_to=initial_msg.id,
-                                 sender_id=self.parent.device_id, forwarded_from=msg.sender_id)
+                                 sender_id=self.parent.id, forwarded_from=msg.sender_id)
                 del self.forwarded_messages[msg.reply_to]
                 info_msg(self, 'INFO', f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
             else:
@@ -72,13 +72,13 @@ class GeneralCmdLogic(Thinker):
         elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
             self.react_heartbeat_full(msg)
         # Forwarding message. Applicable only for SERVER
-        elif msg.receiver_id != self.parent.device_id and msg.receiver_id != '':
+        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
             self.react_forward(msg)
         # When the message is dedicated to Device
-        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.device_id:
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
             self.react_directed(msg)
         # For Server
-        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.device_id:
+        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
             self.react_first_welcome(msg)
         else:
             pass  # TODO: that I do not know what it is...add MsgError
@@ -202,7 +202,7 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_forward(self, msg: MessageExt):
         if msg.receiver_id in self.parent.connections:
             info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
-            msg_r = msg.copy(sender_id=self.parent.device_id, forwarded_from=msg.sender_id)
+            msg_r = msg.copy(sender_id=self.parent.id, forwarded_from=msg.sender_id)
             self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
