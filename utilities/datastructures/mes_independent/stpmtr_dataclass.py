@@ -213,6 +213,20 @@ class FuncMoveAxisToOutput(FuncOutput):
 
 
 @dataclass
+class FuncSetPosInput(FuncInput):
+    axis_id: int
+    axis_pos: Union[int, float]
+    pos_unit: MoveType
+    com: str = 'set_pos'
+
+
+@dataclass
+class FuncSetPosOutput(FuncOutput):
+    axes: Dict[int, AxisStpMtrEssentials]
+    com: str = 'set_pos'
+
+
+@dataclass
 class FuncStopAxisInput(FuncInput):
     axis_id: int
     com: str = 'stop_axis'

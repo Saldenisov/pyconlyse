@@ -20,6 +20,7 @@ class StpMtrController(Service):
     """
     ACTIVATE_AXIS = CmdStruct(FuncActivateAxisInput, FuncActivateAxisOutput)
     GET_POS = CmdStruct(FuncGetPosInput, FuncGetPosOutput)
+    SET_POS = CmdStruct(FuncSetPosInput, FuncSetPosOutput)
     MOVE_AXIS_TO = CmdStruct(FuncMoveAxisToInput, FuncMoveAxisToOutput)
     STOP_AXIS = CmdStruct(FuncStopAxisInput, FuncStopAxisOutput)
 
@@ -485,14 +486,25 @@ class StpMtrController(Service):
         for id, status in zip(self.axes.keys(), statuses):
             self.axes[id].status = status
 
-    @abstractmethod
     def _set_controller_positions(self, positions: Dict[str, Union[int, float]]) -> Tuple[bool, str]:
         """
         This function sets user-defined positions into hardware controller.
         :param positions: list of positions passed to hardware controller
         :return:
         """
-        return True, ''
+        results = []
+        commentss = []
+        for axis_id, pos in positions.items():
+            try:
+                res, _ = self._check_axis_range(int(axis_id))
+                if res:
+                    res, comments = self._set_pos(axis_id, pos)
+                    results.append(res)
+                    commentss.append(comments)
+            except ValueError:
+                error_logger(self, self._set_positions_axes, f'Error: Axis_id {axis_id} cannot be converted to number.')
+
+        return all(results), '. '.join(commentss)
 
     def _set_number_axes(self):
         if self.device_status.connected:
@@ -608,9 +620,26 @@ class StpMtrController(Service):
             self.logger.error(e)
             return False, str(e)
 
+    @abstractmethod
+    def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        pass
+
     def stop(self):
         self.activate(FuncActivateInput(False))
         super().stop()
+
+    def set_pos(self, func_input: FuncSetPosInput) -> FuncSetPosOutput:
+        res, comments = self._check_axis_range(func_input.axis_id)
+        if res:
+            axis: AxisStpMtr = self.axes[func_input.axis_id]
+            if isinstance(func_input.pos_unit, MoveType):
+                pos = axis.convert_to_basic_unit(func_input.pos_unit, func_input.axis_pos)
+            else:
+                return FuncSetPosOutput(comments=f'Pos_unit {func_input.pos_unit} is not MoveType.', func_success=False,
+                                        axes=self.axes_essentials)
+            res, comments = self._set_pos(func_input.axis_id, pos)
+
+        return FuncSetPosOutput(comments=comments, func_success=res, axes=self.axes_essentials)
 
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
         axis_id = func_input.axis_id

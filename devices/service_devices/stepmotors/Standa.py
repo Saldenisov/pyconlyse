@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Tuple, Union, Dict, Any, Set
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
-                                                     controller_name_t, status_t)
+                                                     controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
@@ -181,10 +181,14 @@ class StpMtrCtrl_Standa(StpMtrController):
             result = self.lib.command_move(device_id, steps, microsteps)
 
             if result == Result.Ok:
-
-                result = self.lib.command_wait_for_stop(device_id, 5)
+                try:
+                    await_time = self.get_parameters['move_parameters'][axis_id]['wait_to_complete']
+                except KeyError:
+                    await_time = 5
+                result = self.lib.command_wait_for_stop(device_id, await_time)
 
             if result != Result.Ok:
+                # TODO: fix that
                 res, comments = False, f'Move command for device_id {axis_id} did not work {result}.'
 
             if self.axes[axis_id].status != 2:
@@ -252,12 +256,22 @@ class StpMtrCtrl_Standa(StpMtrController):
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
 
-    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions(positions)
-
-    def _stop_axis(self, device_id):
+    def _stop_axis(self, device_id) -> Tuple[bool, str]:
         result = self.lib.command_stop(device_id)
-        a = result
+        return self._standa_error(result)
+
+    def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        microsteps = self.get_parameters['move_parameters'][axis_id]['microsteps']
+        pos_steps = pos // 1
+        pos_microsteps = pos % 1 * microsteps
+        pos_standa = set_position_t()
+        pos_standa.Position = ctypes.c_int(pos_steps)
+        pos_standa.uPosition = ctypes.c_int(pos_microsteps)
+        pos_standa.EncPosition = ctypes.c_longlong(0)
+        pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
+        device_id = ctypes.c_int(self.axes[axis_id].device_id)
+        result = self.lib.set_position(device_id, ctypes.byref(pos_standa))
+        return self._standa_error(result)
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
         must_have_param = {1: set(['microsteps', 'basic_unit']),
@@ -271,3 +285,11 @@ class StpMtrCtrl_Standa(StpMtrController):
                            }
         return super()._set_move_parameters_axes(must_have_param)
 
+    def _standa_error(self, error: int) -> Tuple[bool, str]:
+        # TODO: finish filling different errors values
+        if error == 0:
+            return True, ''
+        elif error == -1:
+            return False, 'Standa: generic error.'
+        else:
+            return False, 'Standa: unknown error.'

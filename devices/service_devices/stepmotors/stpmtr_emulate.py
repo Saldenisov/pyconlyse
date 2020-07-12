@@ -82,9 +82,9 @@ class StpMtrCtrl_emulate(StpMtrController):
                 res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} was finished.'
         return res, comments
 
-    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions(positions)
+    def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        self.axes[axis_id].position = pos
+        return True, ''
 
     def _release_hardware(self) -> Tuple[bool, str]:
         super(StpMtrCtrl_emulate, self)._release_hardware()
-    

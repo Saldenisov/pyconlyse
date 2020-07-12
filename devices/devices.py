@@ -527,6 +527,7 @@ class Client(Device):
 class Service(Device):
     ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
     GET_CONTROLLER_STATE = CmdStruct(FuncGetControllerStateInput, FuncGetControllerStateOutput)
+    SET_CONTROLLER_STATE = CmdStruct(None, None)  # TODO: finilize
     SERVICE_INFO = CmdStruct(FuncServiceInfoInput, FuncServiceInfoOutput)
     POWER = CmdStruct(FuncPowerInput, FuncPowerOutput)
 

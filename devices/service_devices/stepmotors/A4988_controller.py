@@ -171,14 +171,15 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             error_logger(self, self._set_move_parameters_controller, e)
             return False, f'_set_move_parameters() did not work, DB cannot be read {e}'
 
-    def _set_controller_positions(self, positions: List[Union[int, float]]) -> Tuple[bool, str]:
-        return super()._set_controller_positions(positions)
-
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         if self.device_status.connected:
             return super()._set_parameters(extra_func=[self._setup])
         else:
             return super()._set_parameters()
+
+    def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        self.axes[axis_id].position = pos
+        return True, ''
 
     #Contoller hardware functions
     @development_mode(dev=dev_mode, with_return=None)
