@@ -295,7 +295,7 @@ class StpMtrController(Service):
     def _get_axes_ids_db(self):
         try:
             ids: List[int] = []
-            ids_s: List[str] = self.get_settings('Parameters')['axes_ids'].replace(" ", "").split(';')
+            ids_s: List[str] = self.get_parameters['axes_ids'].replace(" ", "").split(';')
             for exp in ids_s:
                 val = eval(exp)
                 if not isinstance(val, int):
@@ -306,7 +306,12 @@ class StpMtrController(Service):
                                         f'axes_number {self._axes_number}.')
             return ids
         except KeyError:
-            raise StpMtrError(self, text="Axes ids could not be set, axes_ids field is absent in the database.")
+            try:
+                axes_number = int(self.get_parameters['axes_number'])
+                return list([axis_id for axis_id in range(1, axes_number + 1)])
+            except (KeyError, ValueError):
+                raise StpMtrError(self, text="Axes ids could not be set, axes_ids or axes_number fields is absent "
+                                             "in the database.")
         except (TypeError, SyntaxError):
             raise StpMtrError(self, text="Check axes_ids field in database, must be integer.")
 
@@ -508,10 +513,9 @@ class StpMtrController(Service):
 
     def _set_number_axes(self):
         if self.device_status.connected:
-            axes_number = self._get_number_axes()
+            self._axes_number = self._get_number_axes()
         else:
-            axes_number = self._get_number_axes_db()
-        self._axes_number = axes_number
+            self._axes_number = self._get_number_axes_db()
 
     @abstractmethod
     def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
@@ -617,7 +621,7 @@ class StpMtrController(Service):
             else:
                 raise StpMtrError(self, comments)
         except (StpMtrError, Exception) as e:
-            self.logger.error(e)
+            error_logger(self, self._set_parameters, e)
             return False, str(e)
 
     @abstractmethod

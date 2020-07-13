@@ -7,7 +7,8 @@ On ELYSE there are 4 motorized mirrors
 import ctypes
 import logging
 from pathlib import Path
-from typing import List, Tuple, Union, Dict, Any, Set
+from typing import Callable, List, Tuple, Union, Dict, Any, Set
+from time import sleep
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
@@ -97,6 +98,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         enum_hints = f"addr={self.get_parameters['network_hints']}".encode('utf-8')
         # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
         self._devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
+        sleep(0.05)
         info_msg(self, 'INFO', f'Axes are enumerated.')
         self._enumerated = True
         device_counts = self._get_number_axes()
@@ -141,7 +143,6 @@ class StpMtrCtrl_Standa(StpMtrController):
                     self.axes[id_to_keep].friendly_name = friendly_name.decode('utf-8')
                     self.axes[id_to_keep].pos = self._get_position_controller(device_id)[1]
 
-
             for id_axis in list(self.axes.keys()):
                 if id_axis not in keep_ids:
                     del self.axes[id_axis]
@@ -182,8 +183,8 @@ class StpMtrCtrl_Standa(StpMtrController):
 
             if result == Result.Ok:
                 try:
-                    await_time = self.get_parameters['move_parameters'][axis_id]['wait_to_complete']
-                except KeyError:
+                    await_time = axis.move_parameters['wait_to_complete']
+                except (KeyError, ValueError):
                     await_time = 5
                 result = self.lib.command_wait_for_stop(device_id, await_time)
 
@@ -234,8 +235,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             return True, pos_basic_units
         else:
-            error_logger(self, self._get_position_controller, str(result))
-            return False, 0
+            return self._standa_error(result, func=self._get_position_controller)
 
     def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
         return self._axes_preset_values
@@ -255,21 +255,27 @@ class StpMtrCtrl_Standa(StpMtrController):
         except Exception as e:
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
+        finally:
+            sleep(1)
 
     def _stop_axis(self, device_id) -> Tuple[bool, str]:
         result = self.lib.command_stop(device_id)
         return self._standa_error(result)
 
     def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
-        microsteps = self.get_parameters['move_parameters'][axis_id]['microsteps']
-        pos_steps = pos // 1
-        pos_microsteps = pos % 1 * microsteps
+        axis = self.axes[axis_id]
+        microsteps = axis.move_parameters['microsteps']
+        pos_steps = int(pos // 1)
+        pos_microsteps = int(pos % 1 * microsteps)
         pos_standa = set_position_t()
-        pos_standa.Position = ctypes.c_int(pos_steps)
-        pos_standa.uPosition = ctypes.c_int(pos_microsteps)
-        pos_standa.EncPosition = ctypes.c_longlong(0)
-        pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-        device_id = ctypes.c_int(self.axes[axis_id].device_id)
+        try:
+            pos_standa.Position = ctypes.c_int(pos_steps)
+            pos_standa.uPosition = ctypes.c_int(pos_microsteps)
+            pos_standa.EncPosition = ctypes.c_longlong(0)
+            pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
+            device_id = ctypes.c_int(self.axes[axis_id].device_id)
+        except Exception as e:
+            pass
         result = self.lib.set_position(device_id, ctypes.byref(pos_standa))
         return self._standa_error(result)
 
@@ -285,11 +291,15 @@ class StpMtrCtrl_Standa(StpMtrController):
                            }
         return super()._set_move_parameters_axes(must_have_param)
 
-    def _standa_error(self, error: int) -> Tuple[bool, str]:
+    def _standa_error(self, error: int, func: Callable = None) -> Tuple[bool, str]:
         # TODO: finish filling different errors values
         if error == 0:
-            return True, ''
+            res, comments = True, ''
         elif error == -1:
-            return False, 'Standa: generic error.'
+            res, comments = False, 'Standa: generic error.'
         else:
-            return False, 'Standa: unknown error.'
+            res, comments = False, 'Standa: unknown error.'
+        if func:
+            error_logger(self, func, comments)
+
+        return res, comments
