@@ -22,7 +22,7 @@ class Ui_StpMtrGUI(object):
     def setupUi(self, StpMtrGUI, parameters: DeviceInfoExt = {}):
         self.parameters = parameters
         StpMtrGUI.setObjectName("StpMtrGUI")
-        StpMtrGUI.resize(529, 282)
+        StpMtrGUI.resize(529, 311)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -58,13 +58,13 @@ class Ui_StpMtrGUI(object):
         self.spinBox_axis.setObjectName("spinBox_axis")
         self.axis_movement_typeHL.addWidget(self.spinBox_axis)
         try:
-            ids = self.parameters.device_description.axes.keys()
+            ids = list(self.parameters.device_description.axes.keys())
             self.spinBox_axis.setMinimum(min(ids))
             self.spinBox_axis.setMaximum(max(ids))
+            self.spinBox_axis.setValue(min(ids))
         except (KeyError, AttributeError):
             self.spinBox_axis.setMinimum(1)
             self.spinBox_axis.setMaximum(2)
-
         self.checkBox_On = QtWidgets.QCheckBox(self.centralwidget)
         self.checkBox_On.setChecked(False)
         self.checkBox_On.setObjectName("checkBox_On")
@@ -142,6 +142,16 @@ class Ui_StpMtrGUI(object):
         self.radioButton_relative.setObjectName("radioButton_relative")
         self.horizontalLayout_3.addWidget(self.radioButton_relative)
         self.verticalLayout_radiobuttons.addWidget(self.groupBox_how_to_move)
+        self.lineEdit_value = QtWidgets.QLineEdit(self.centralwidget)
+        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.lineEdit_value.sizePolicy().hasHeightForWidth())
+        self.lineEdit_value.setSizePolicy(sizePolicy)
+        self.lineEdit_value.setMinimumSize(QtCore.QSize(0, 0))
+        self.lineEdit_value.setMaximumSize(QtCore.QSize(66, 45))
+        self.lineEdit_value.setObjectName("lineEdit_value")
+        self.verticalLayout_radiobuttons.addWidget(self.lineEdit_value)
         self.axis_moveHL.addLayout(self.verticalLayout_radiobuttons)
         self.verticalLayout_4 = QtWidgets.QVBoxLayout()
         self.verticalLayout_4.setContentsMargins(5, -1, 0, -1)
@@ -167,10 +177,9 @@ class Ui_StpMtrGUI(object):
         self.label_preset.setSizePolicy(sizePolicy)
         self.label_preset.setObjectName("label_preset")
         self.verticalLayout_4.addWidget(self.label_preset)
-        self.lineEdit_value = QtWidgets.QLineEdit(self.centralwidget)
-        self.lineEdit_value.setObjectName("lineEdit_value")
-        self.verticalLayout_4.addWidget(self.lineEdit_value)
         self.axis_moveHL.addLayout(self.verticalLayout_4)
+        spacerItem1 = QtWidgets.QSpacerItem(40, 20, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
+        self.axis_moveHL.addItem(spacerItem1)
         self.verticalLayout.addLayout(self.axis_moveHL)
         self.horizontalLayout_4 = QtWidgets.QHBoxLayout()
         self.horizontalLayout_4.setContentsMargins(-1, 0, 0, -1)
@@ -191,15 +200,14 @@ class Ui_StpMtrGUI(object):
         self.pushButton_set.setObjectName("pushButton_set")
         self.horizontalLayout_4.addWidget(self.pushButton_set)
         self.verticalLayout.addLayout(self.horizontalLayout_4)
+        self.comments = QtWidgets.QTextEdit(self.centralwidget)
+        self.comments.setObjectName("comments")
+        self.verticalLayout.addWidget(self.comments)
         self.line_2 = QtWidgets.QFrame(self.centralwidget)
         self.line_2.setFrameShape(QtWidgets.QFrame.HLine)
         self.line_2.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_2.setObjectName("line_2")
         self.verticalLayout.addWidget(self.line_2)
-        self.comments = QtWidgets.QTextEdit(self.centralwidget)
-        self.comments.setMaximumSize(QtCore.QSize(16777215, 80))
-        self.comments.setObjectName("comments")
-        self.verticalLayout.addWidget(self.comments)
         StpMtrGUI.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(StpMtrGUI)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 529, 21))
@@ -222,7 +230,7 @@ class Ui_StpMtrGUI(object):
         self.retranslateUi(StpMtrGUI)
         QtCore.QMetaObject.connectSlotsByName(StpMtrGUI)
 
-    def retranslateUi(self, StpMtrGUI, controller_status: StpMtrCtrlStatusMultiAxes=None):
+    def retranslateUi(self, StpMtrGUI, controller_status: StpMtrCtrlStatusMultiAxes = None):
         _translate = QtCore.QCoreApplication.translate
         try:
             self.checkBox_activate.setChecked(self.parameters.device_status.active)
@@ -265,14 +273,13 @@ class Ui_StpMtrGUI(object):
                 self.radioButton_mm.setEnabled(False)
 
         except (KeyError, AttributeError):
-            #TODO: modify
+            # TODO: modify
             axis = 1
             title = ''
             name = 'test_name'
             ranges = f'Ranges: {str((0, 100))}'
             preset = f'Preset Positions: {str([0, 100])}'
             self.spinBox_axis.setMaximum(len(ranges))
-
 
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis ID"))
@@ -283,6 +290,7 @@ class Ui_StpMtrGUI(object):
         _translate = QtCore.QCoreApplication.translate
         self.checkBox_power.setText(_translate("StpMtrGUI", "Power Controller"))
         self.checkBox_activate.setText(_translate("StpMtrGUI", "Activate Controller"))
+        self.label.setText(_translate("StpMtrGUI", "axis #"))
         self.checkBox_On.setText(_translate("StpMtrGUI", "On"))
         self.radioButton_angle.setText(_translate("StpMtrGUI", "angle"))
         self.radioButton_mm.setText(_translate("StpMtrGUI", "mm"))

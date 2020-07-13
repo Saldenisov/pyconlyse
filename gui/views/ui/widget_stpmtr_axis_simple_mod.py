@@ -13,13 +13,14 @@ from typing import Dict
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from utilities.datastructures.mes_independent.devices_dataclass import DeviceInfoExt
-from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, StpMtrCtrlStatusMultiAxes
+from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType, StpMtrCtrlStatusMultiAxes
 
 module_logger = logging.getLogger(__name__)
 
 class Ui_StpMtrGUI(object):
 
     def setupUi(self, StpMtrGUI, parameters: DeviceInfoExt = {}):
+        self.parameters = parameters
         StpMtrGUI.setObjectName("StpMtrGUI")
         StpMtrGUI.resize(529, 282)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
@@ -195,10 +196,10 @@ class Ui_StpMtrGUI(object):
         self.line_2.setFrameShadow(QtWidgets.QFrame.Sunken)
         self.line_2.setObjectName("line_2")
         self.verticalLayout.addWidget(self.line_2)
-        self.plainTextEdit = QtWidgets.QPlainTextEdit(self.centralwidget)
-        self.plainTextEdit.setMaximumSize(QtCore.QSize(16777215, 80))
-        self.plainTextEdit.setObjectName("plainTextEdit")
-        self.verticalLayout.addWidget(self.plainTextEdit)
+        self.comments = QtWidgets.QTextEdit(self.centralwidget)
+        self.comments.setMaximumSize(QtCore.QSize(16777215, 80))
+        self.comments.setObjectName("comments")
+        self.verticalLayout.addWidget(self.comments)
         StpMtrGUI.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(StpMtrGUI)
         self.menubar.setGeometry(QtCore.QRect(0, 0, 529, 21))
@@ -231,7 +232,7 @@ class Ui_StpMtrGUI(object):
             axes: Dict[int, AxisStpMtr] = self.parameters.device_description.axes
             axis: AxisStpMtr = axes[axis_id]
             self.checkBox_On.setChecked(axis.status)
-            self.lcdNumber_position.display(axis.position)
+
             name = axis.name
 
             def form_ranges(ranges) -> str:
@@ -244,15 +245,34 @@ class Ui_StpMtrGUI(object):
                     finally:
                         out_l.append(val)
                 return '_'.join(out_l)
-            ranges = form_ranges(axis.limits)
-            preset = form_ranges(axis.preset_values)
+
+            ranges = f'Ranges: {form_ranges(axis.limits)}'
+            preset = f'Preset Positions: {form_ranges(axis.preset_values)}'
+
+            if MoveType.step in axis.type_move or MoveType.microstep in axis.type_move:
+                self.radioButton_stp.setEnabled(True)
+            else:
+                self.radioButton_stp.setEnabled(False)
+
+            if MoveType.angle in axis.type_move:
+                self.radioButton_angle.setEnabled(True)
+            else:
+                self.radioButton_angle.setEnabled(False)
+
+            if MoveType.mm in axis.type_move:
+                self.radioButton_mm.setEnabled(True)
+            else:
+                self.radioButton_mm.setEnabled(False)
+
         except (KeyError, AttributeError):
             #TODO: modify
             axis = 1
             title = ''
             name = 'test_name'
-            ranges = str((0, 100)) + '_step'
-            preset = str([0, 100]) + '_step'
+            ranges = f'Ranges: {str((0, 100))}'
+            preset = f'Preset Positions: {str([0, 100])}'
+            self.spinBox_axis.setMaximum(len(ranges))
+
 
         StpMtrGUI.setWindowTitle(_translate("StpMtrGUI", title))
         self.label.setText(_translate("StpMtrGUI", "axis ID"))

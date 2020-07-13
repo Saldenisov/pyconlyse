@@ -40,7 +40,8 @@ class StpMtrController(Service):
 
     def available_public_functions(self) -> List[CmdStruct]:
         return (*super().available_public_functions(), StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS,
-                                                       StpMtrController.MOVE_AXIS_TO, StpMtrController.STOP_AXIS)
+                                                       StpMtrController.MOVE_AXIS_TO, StpMtrController.SET_POS,
+                StpMtrController.STOP_AXIS)
 
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         flag = func_input.flag
@@ -642,7 +643,8 @@ class StpMtrController(Service):
                 return FuncSetPosOutput(comments=f'Pos_unit {func_input.pos_unit} is not MoveType.', func_success=False,
                                         axes=self.axes_essentials)
             res, comments = self._set_pos(func_input.axis_id, pos)
-
+        if res:
+            self._set_positions_axes()
         return FuncSetPosOutput(comments=comments, func_success=res, axes=self.axes_essentials)
 
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:

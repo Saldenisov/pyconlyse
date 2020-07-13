@@ -51,6 +51,7 @@ class StepMotorsView(QMainWindow):
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
+        self.ui.pushButton_set.clicked.connect(self.set_pos)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, *[True, False]))
         self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
@@ -98,6 +99,21 @@ class StepMotorsView(QMainWindow):
         client.send_msg_externally(msg)
         if with_return:
             return True if self.controller_status.axes[axis_id].status == 2 else False
+
+    def set_pos(self, axis_id=None):
+        axis_id = int(self.ui.spinBox_axis.value())
+        try:
+            axis_pos = float(self.ui.lineEdit_value.text())
+            client = self.device
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                      func_input=FuncSetPosInput(axis_id, axis_pos, self._get_unit()))
+            client.send_msg_externally(msg)
+        except TypeError as e:
+            comments = f'Pos "{self.ui.lineEdit_value.text()}" has wrong format: {e}.'
+            error_logger(self, self.set_pos, comments)
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage(comments)
+            error_dialog.exec_()
 
     @controller_axes.setter
     def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
@@ -199,6 +215,9 @@ class StepMotorsView(QMainWindow):
                         self._update_progessbar_pos(force=True)
                     elif info.com == StpMtrController.GET_POS.name:
                         result: FuncGetPosOutput = result
+                        self.controller_axes = result.axes
+                    elif info.com == StpMtrController.SET_POS.name:
+                        result: FuncSetPosOutput = result
                         self.controller_axes = result.axes
                     elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                         result: FuncGetStpMtrControllerStateOutput = result
