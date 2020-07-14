@@ -51,6 +51,7 @@ class StepMotorsView(QMainWindow):
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
+        self.ui.pushButton_set.clicked.connect(self.set_pos)
         self.ui.checkBox_On.clicked.connect(self.activate_axis)
         self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, *[True, False]))
         self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
@@ -98,6 +99,21 @@ class StepMotorsView(QMainWindow):
         client.send_msg_externally(msg)
         if with_return:
             return True if self.controller_status.axes[axis_id].status == 2 else False
+
+    def set_pos(self, axis_id=None):
+        axis_id = int(self.ui.spinBox_axis.value())
+        try:
+            axis_pos = float(self.ui.lineEdit_value.text())
+            client = self.device
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                      func_input=FuncSetPosInput(axis_id, axis_pos, self._get_unit()))
+            client.send_msg_externally(msg)
+        except TypeError as e:
+            comments = f'Pos "{self.ui.lineEdit_value.text()}" has wrong format: {e}.'
+            error_logger(self, self.set_pos, comments)
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage(comments)
+            error_dialog.exec_()
 
     @controller_axes.setter
     def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
@@ -200,6 +216,9 @@ class StepMotorsView(QMainWindow):
                     elif info.com == StpMtrController.GET_POS.name:
                         result: FuncGetPosOutput = result
                         self.controller_axes = result.axes
+                    elif info.com == StpMtrController.SET_POS.name:
+                        result: FuncSetPosOutput = result
+                        self.controller_axes = result.axes
                     elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                         result: FuncGetStpMtrControllerStateOutput = result
                         self.controller_axes = result.axes
@@ -254,7 +273,6 @@ class StepMotorsView(QMainWindow):
 
         cs = self.controller_status
         ui = self.ui
-        self._update_progessbar_pos()
 
         if cs.axes != cs.axes_previous or force_axis:
             for now, then in zip(cs.axes.items(), cs.axes_previous.items()):
@@ -262,8 +280,30 @@ class StepMotorsView(QMainWindow):
                     axis: AxisStpMtrEssentials = now[1]
                     ui.checkBox_On.setChecked(axis.status)
 
+            axis_ids = list(cs.axes)
+            ui.spinBox_axis.setMinimum(min(axis_ids))
+            ui.spinBox_axis.setMaximum(max(axis_ids))
+            if ui.spinBox_axis.value() not in axis_ids:
+                ui.spinBox_axis.setValue(min(axis_ids))
             axis_id = int(ui.spinBox_axis.value())
             axis: AxisStpMtr = cs.axes[axis_id]
+
+            _translate = QtCore.QCoreApplication.translate
+            axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
+            ui.label.setText(_translate("StpMtrGUI", "axis ID"))
+            if axis.friendly_name != '':
+                name = axis.friendly_name
+            else:
+                name = axis.name
+
+
+            ui.label_name.setText(_translate("StpMtrGUI", name))
+
+            ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
+            ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
+
+
+
 
             if force_axis:
                 if MoveType.step in axis.type_move or MoveType.microstep in axis.type_move:
@@ -286,21 +326,8 @@ class StepMotorsView(QMainWindow):
 
                 ui.checkBox_On.setChecked(axis.status)
 
-
+            self._update_progessbar_pos()
             self._update_lcd_screen()
-            _translate = QtCore.QCoreApplication.translate
-            axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
-            ui.label.setText(_translate("StpMtrGUI", "axis ID"))
-            if axis.friendly_name != '':
-                name = axis.friendly_name
-            else:
-                name = axis.name
-            axis_ids = list(cs.axes)
-            ui.label_name.setText(_translate("StpMtrGUI", name))
-            ui.spinBox_axis.setMinimum(min(axis_ids))
-            ui.spinBox_axis.setMaximum(max(axis_ids))
-            ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
-            ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
 
             self.controller_status.axes_previous = copy.deepcopy(cs.axes)
 
