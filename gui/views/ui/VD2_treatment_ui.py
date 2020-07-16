@@ -56,6 +56,12 @@ class Ui_GraphVD2Window:
         self.main_widget.setFocus()
         window.setCentralWidget(self.main_widget)
 
+    def redraw_file_tree(self, data_folder: Path):
+        self.data_folder = data_folder
+        root = str(data_folder)
+        self.tree_model.setRootPath(root)
+        self.tree.setRootIndex(self.tree_model.index(root))
+
     def main_settings(self):
         # Buttons
 

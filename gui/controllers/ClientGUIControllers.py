@@ -9,8 +9,7 @@ import os
 from pathlib import Path
 
 from PyQt5.QtCore import QModelIndex
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage
-
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage, QFileDialog
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
 from gui.models.ClientGUIModels import TreatmentModel
@@ -183,7 +182,11 @@ class TreatmentController:
         self.model.save_file_path_change(folder, file)
 
     def data_folder_changed(self):
-        folder = self.view.ui.lineedit_save_folder.text()
+        dialog = QFileDialog()
+        foo_dir = dialog.getExistingDirectory(self.view, 'Select a directory')
+        folder = Path(str(foo_dir))
+        if folder.is_dir():
+            self.view.ui.redraw_file_tree(folder)
 
     def save_file_folder_changed(self):
         folder = self.view.ui.lineedit_save_folder.text()

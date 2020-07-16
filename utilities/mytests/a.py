@@ -1,40 +1,11 @@
-from PyQt5.QtWidgets import QFileDialog, QDialog
-from PyQt5 import QtCore
+from PyQt5.QtWidgets import QFileDialog
+from PyQt5.QtWidgets import QApplication
+import sys
 
+app = QApplication(sys.argv)
 
-def FileDialog(directory='', forOpen=True, fmt='', isFolder=False):
-    options = QFileDialog.Options()
-    options |= QFileDialog.DontUseNativeDialog
-    options |= QFileDialog.DontUseCustomDirectoryIcons
-    dialog = QFileDialog()
-    dialog.setOptions(options)
+dialog = QFileDialog()
+foo_dir = dialog.getExistingDirectory(None, 'Select an awesome directory')
+print(foo_dir)
 
-    dialog.setFilter(dialog.filter() | QtCore.QDir.Hidden)
-
-    # ARE WE TALKING ABOUT FILES OR FOLDERS
-    if isFolder:
-        dialog.setFileMode(QFileDialog.DirectoryOnly)
-    else:
-        dialog.setFileMode(QFileDialog.AnyFile)
-    # OPENING OR SAVING
-    dialog.setAcceptMode(QFileDialog.AcceptOpen) if forOpen else dialog.setAcceptMode(QFileDialog.AcceptSave)
-
-    # SET FORMAT, IF SPECIFIED
-    if fmt != '' and isFolder is False:
-        dialog.setDefaultSuffix(fmt)
-        dialog.setNameFilters([f'{fmt} (*.{fmt})'])
-
-    # SET THE STARTING DIRECTORY
-    if directory != '':
-        dialog.setDirectory(str(directory))
-    else:
-        dialog.setDirectory(str('C://'))
-
-
-    if dialog.exec_() == QDialog.Accepted:
-        path = dialog.selectedFiles()[0]  # returns a list
-        return path
-    else:
-        return ''
-
-a = FileDialog()
+sys.exit(app.exec_())
