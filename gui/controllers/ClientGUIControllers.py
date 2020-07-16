@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMe
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
-from gui.models.ClientGUIModels import VD2TreatmentModel
-from gui.views.ClientsGUIViews import SuperUserView, StepMotorsView, VD2TreatmentView, ProjectManagerView
+from gui.models.ClientGUIModels import TreatmentModel
+from gui.views.ClientsGUIViews import SuperUserView, StepMotorsView, TreatmentView, ProjectManagerView
 from utilities.datastructures.mes_independent import (ProjectManagerDescription)
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import (StpMtrDescription)
@@ -129,14 +129,14 @@ class StepMotorsController:
             event.ignore()
 
 
-class VD2TreatmentController:
+class TreatmentController:
 
     def __init__(self, in_model):
         self.logger = logging.getLogger('VD2Treatment')
         self.name = 'VD2TreatmentModel:controller'
         info_msg(self, 'INITIALIZING')
-        self.model: VD2TreatmentModel = in_model
-        self.view = VD2TreatmentView(self)
+        self.model: TreatmentModel = in_model
+        self.view = TreatmentView(self)
         self.view.show()
 
         info_msg(self, 'INITIALIZED')
@@ -150,7 +150,7 @@ class VD2TreatmentController:
 
     def calc_abs(self):
         self.view.ui.progressbar_calc.setValue(0)
-        exp = VD2TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
+        exp = TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
         if self.view.ui.radiobutton_individual:
             how = 'individual'
         elif self.view.ui.radiobutton_averaged:
@@ -182,12 +182,15 @@ class VD2TreatmentController:
         file = self.view.ui.lineedit_save_file_name.text()
         self.model.save_file_path_change(folder, file)
 
+    def data_folder_changed(self):
+        folder = self.view.ui.lineedit_save_folder.text()
+
     def save_file_folder_changed(self):
         folder = self.view.ui.lineedit_save_folder.text()
         file = self.view.ui.lineedit_save_file_name.text()
         self.model.save_file_path_change(folder, file)
 
-    def set_path(self, index: QModelIndex, exp_data_type: VD2TreatmentModel.DataTypes):
+    def set_path(self, index: QModelIndex, exp_data_type: TreatmentModel.DataTypes):
         try:
             file_path = Path(self.view.ui.tree.model().filePath(index))
             if file_path.is_file() and file_path.exists():

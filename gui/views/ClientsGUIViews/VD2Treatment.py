@@ -9,7 +9,7 @@ from _functools import partial
 from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar, QMenu
 
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
-from gui.models.ClientGUIModels import VD2TreatmentModel
+from gui.models.ClientGUIModels import TreatmentModel
 from gui.views.ui import Ui_GraphVD2Window
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 from utilities.myfunc import info_msg
@@ -17,11 +17,11 @@ from utilities.myfunc import info_msg
 module_logger = logging.getLogger(__name__)
 
 
-ExpDataStruct: VD2TreatmentModel.ExpDataStruct = VD2TreatmentModel.ExpDataStruct
-DataTypes: VD2TreatmentModel.DataTypes = VD2TreatmentModel.DataTypes
+ExpDataStruct: TreatmentModel.ExpDataStruct = TreatmentModel.ExpDataStruct
+DataTypes: TreatmentModel.DataTypes = TreatmentModel.DataTypes
 
 
-class VD2TreatmentView(QMainWindow):
+class TreatmentView(QMainWindow):
 
     def __init__(self, in_controller, parent=None):
         super().__init__(parent)
@@ -46,6 +46,7 @@ class VD2TreatmentView(QMainWindow):
         self.ui.button_save_result.clicked.connect(self.controller.save)
         self.ui.kinetics_slider.ValueChanged.connect(self.controller.slider_kinetics)
         self.ui.spectrum_slider.ValueChanged.connect(self.controller.slider_spectra)
+        self.ui.button_set_folder.clicked.connect(self.controller.data_folder_changed)
         self.ui.lineedit_save_file_name.returnPressed.connect(self.controller.save_file_path_changed)
         self.ui.lineedit_save_folder.returnPressed.connect(self.controller.save_file_folder_changed)
         self.ui.spinbox.valueChanged.connect(self.controller.spinbox_map_selector_change)

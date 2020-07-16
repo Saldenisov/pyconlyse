@@ -10,16 +10,16 @@ from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from PyQt5.QtWidgets import QApplication
-from gui.models import VD2TreatmentModel
-from gui.controllers.ClientGUIControllers import VD2TreatmentController
+from gui.models import TreatmentModel
+from gui.controllers.ClientGUIControllers import TreatmentController
 from logs_pack import initialize_logger
 
 
 def main():
-    logger = initialize_logger(app_folder / 'LOG', file_name="VD2Treatment")
-    logger.info('Starting VD2Treatment GUI...')
+    logger = initialize_logger(app_folder / 'LOG', file_name="Treatment")
+    logger.info('Starting Treatment GUI...')
     app = QApplication(sys.argv)
-    VD2TreatmentController(VD2TreatmentModel(app_folder, data_folder='D:\\DATA_VD2\\2020\\20200630-RK-1029'))
+    TreatmentController(TreatmentModel(app_folder, data_folder='D:\\DATA_VD2\\2020\\20200630-RK-1029'))
     app.exec_()
 
 

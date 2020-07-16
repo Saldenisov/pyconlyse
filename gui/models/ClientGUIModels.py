@@ -74,7 +74,7 @@ class StepMotorsGUIModel(QObject):
             error_logger(self, self.treat_pyqtsignals, e)
 
 
-class VD2TreatmentModel(QObject):
+class TreatmentModel(QObject):
 
     class ExpDataStruct(Enum):
         HIS = 'HIS'
@@ -105,7 +105,7 @@ class VD2TreatmentModel(QObject):
         self.openers = {OpenersTypes.Hamamatsu: HamamatsuFileOpener(logger=self.logger),
                         OpenersTypes.ASCII: ASCIIOpener(logger=self.logger)}
 
-        self.paths: Dict[VD2TreatmentModel.DataTypes, Path] = {}
+        self.paths: Dict[TreatmentModel.DataTypes, Path] = {}
         self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
         self.cursors_data = Cursors2D()
         info_msg(self, 'INITIALIZED')
@@ -121,31 +121,31 @@ class VD2TreatmentModel(QObject):
                 file_paths = []
                 self.paths[exp_data_type] = file_path
 
-                if exp_data_type is VD2TreatmentModel.DataTypes.NOISE:
+                if exp_data_type is TreatmentModel.DataTypes.NOISE:
                     self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
                     self.notify_ui_observers({'lineedit_noise_set': [str(file_path)]})
 
-                elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS, VD2TreatmentModel.DataTypes.ABS_BASE,
-                                       VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
-                    self.paths[VD2TreatmentModel.DataTypes.DATA] = file_path
+                elif exp_data_type in [TreatmentModel.DataTypes.ABS, TreatmentModel.DataTypes.ABS_BASE,
+                                       TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                    self.paths[TreatmentModel.DataTypes.DATA] = file_path
                     save_path: Path = self.save_folder / f'{file_path.stem}.dat'
-                    self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
+                    self.paths[TreatmentModel.DataTypes.SAVE] = save_path
                     #self.notify_ui_observers({'lineedit_save_file_name': f'{file_path.stem}.dat'})
 
-                if exp_data_type is VD2TreatmentModel.DataTypes.ABS:
+                if exp_data_type is TreatmentModel.DataTypes.ABS:
                     file_paths.append(str(file_path))
-                    if VD2TreatmentModel.DataTypes.BASE in self.paths:
-                        file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.BASE]))
+                    if TreatmentModel.DataTypes.BASE in self.paths:
+                        file_paths.append(str(self.paths[TreatmentModel.DataTypes.BASE]))
                     self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-                elif exp_data_type is VD2TreatmentModel.DataTypes.BASE:
-                    if VD2TreatmentModel.DataTypes.ABS in self.paths:
-                        file_paths.append(str(self.paths[VD2TreatmentModel.DataTypes.ABS]))
+                elif exp_data_type is TreatmentModel.DataTypes.BASE:
+                    if TreatmentModel.DataTypes.ABS in self.paths:
+                        file_paths.append(str(self.paths[TreatmentModel.DataTypes.ABS]))
                     file_paths.append(str(file_path))
                     self.notify_ui_observers({'lineedit_data_set': file_paths})
 
-                elif exp_data_type in [VD2TreatmentModel.DataTypes.ABS_BASE,
-                                       VD2TreatmentModel.DataTypes.ABS_BASE_NOISE]:
+                elif exp_data_type in [TreatmentModel.DataTypes.ABS_BASE,
+                                       TreatmentModel.DataTypes.ABS_BASE_NOISE]:
                     file_paths.append(str(file_path))
                     self.notify_ui_observers({'lineedit_data_set': file_paths})
 
@@ -156,8 +156,8 @@ class VD2TreatmentModel(QObject):
 
     def average_noise(self) -> Tuple[bool, str]:
         info_msg(self, 'INFO', 'Averaging Noise')
-        if VD2TreatmentModel.DataTypes.NOISE in self.paths:
-            noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+        if TreatmentModel.DataTypes.NOISE in self.paths:
+            noise_path = self.paths[TreatmentModel.DataTypes.NOISE]
             opener = self.get_opener(noise_path)
             if opener:
                 self.noise_averaged_data = opener.average_map(noise_path, self._callback_average)
@@ -175,20 +175,20 @@ class VD2TreatmentModel(QObject):
     def calc_abs(self, exp_type: ExpDataStruct, how: str, first_map_with_electrons: bool):
         res = False
         res_local = True
-        if VD2TreatmentModel.DataTypes.NOISE not in self.paths:
+        if TreatmentModel.DataTypes.NOISE not in self.paths:
             self.show_error(self.calc_abs, f'Set NOISE pass first.')
             res_local = False
 
-        if exp_type is VD2TreatmentModel.ExpDataStruct.HIS:
+        if exp_type is TreatmentModel.ExpDataStruct.HIS:
             pass
-        elif exp_type is VD2TreatmentModel.ExpDataStruct.HIS_NOISE:
+        elif exp_type is TreatmentModel.ExpDataStruct.HIS_NOISE:
             map_index = 0
             res_local = True
-            if VD2TreatmentModel.DataTypes.ABS_BASE not in self.paths:
+            if TreatmentModel.DataTypes.ABS_BASE not in self.paths:
                 self.show_error(self.calc_abs, f'Set ABS_BASE first.')
                 res_local = False
             if res_local:
-                data_path = self.paths[VD2TreatmentModel.DataTypes.ABS_BASE]
+                data_path = self.paths[TreatmentModel.DataTypes.ABS_BASE]
                 opener = self.get_opener(data_path)
                 if opener:
                     info: CriticalInfoHamamatsu = opener.paths[data_path]
@@ -231,23 +231,23 @@ class VD2TreatmentModel(QObject):
                         base_data = base_data / info.number_maps
                         od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
                     res = True
-        elif exp_type is VD2TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
-            if VD2TreatmentModel.DataTypes.ABS not in self.paths:
+        elif exp_type is TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
+            if TreatmentModel.DataTypes.ABS not in self.paths:
                 self.show_error(self.calc_abs, f'Set ABS pass first.')
                 res_local = False
-            if VD2TreatmentModel.DataTypes.BASE not in self.paths:
+            if TreatmentModel.DataTypes.BASE not in self.paths:
                 self.show_error(self.calc_abs, f'Set BASE pass first.')
                 res_local = False
             if res_local:
-                abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
-                base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
-                noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+                abs_path = self.paths[TreatmentModel.DataTypes.ABS]
+                base_path = self.paths[TreatmentModel.DataTypes.BASE]
+                noise_path = self.paths[TreatmentModel.DataTypes.NOISE]
                 opener = self.get_opener(abs_path)
                 if opener:
                     info: CriticalInfoHamamatsu = opener.paths[abs_path]
-                    abs_path = self.paths[VD2TreatmentModel.DataTypes.ABS]
-                    base_path = self.paths[VD2TreatmentModel.DataTypes.BASE]
-                    noise_path = self.paths[VD2TreatmentModel.DataTypes.NOISE]
+                    abs_path = self.paths[TreatmentModel.DataTypes.ABS]
+                    base_path = self.paths[TreatmentModel.DataTypes.BASE]
+                    noise_path = self.paths[TreatmentModel.DataTypes.NOISE]
                     opener = self.get_opener(abs_path)
                     #abs_data = base_data = noise_data = np.zeros(shape=(info.timedelays_length,
                                                                         #info.wavelengths_length))
@@ -330,8 +330,8 @@ class VD2TreatmentModel(QObject):
 
     def save(self):
         try:
-            data_path = self.paths[VD2TreatmentModel.DataTypes.DATA]
-            save_path = self.paths[VD2TreatmentModel.DataTypes.SAVE]
+            data_path = self.paths[TreatmentModel.DataTypes.DATA]
+            save_path = self.paths[TreatmentModel.DataTypes.SAVE]
             opener = self.get_opener(data_path)
             info = opener.paths[data_path]
             data = self.od.data
@@ -348,7 +348,7 @@ class VD2TreatmentModel(QObject):
     def save_file_path_change(self, folder: str, file_name: str):
         save_path = Path(folder) / Path(file_name)
         info_msg(self, 'INFO', f'save file updated {save_path}')
-        self.paths[VD2TreatmentModel.DataTypes.SAVE] = save_path
+        self.paths[TreatmentModel.DataTypes.SAVE] = save_path
         self.notify_ui_observers({'lineedit_save_file_name': str(Path(file_name))})
         self.notify_ui_observers({'lineedit_save_folder': str(Path(folder))})
 

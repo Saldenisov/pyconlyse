@@ -17,7 +17,7 @@ from gui.views.matplotlib_canvas.DataCanvases import DataCanvas
 from gui.views.matplotlib_canvas.KineticsCanvases import KineticsCanvas
 from gui.views.matplotlib_canvas.SpectrumCanvases import SpectrumCanvas
 from gui.views import RangeSlider
-from gui.models.ClientGUIModels import VD2TreatmentModel
+from gui.models.ClientGUIModels import TreatmentModel
 
 
 class Ui_GraphVD2Window:
@@ -67,6 +67,7 @@ class Ui_GraphVD2Window:
         self.button_left = QPushButton('<')
         self.button_right = QPushButton('>')
         self.button_play = QPushButton('Play')
+        self.button_set_folder = QPushButton('Set Main Folder')
 
         # Comboboxes
         self.combobox_type_exp = QComboBox()
@@ -74,7 +75,7 @@ class Ui_GraphVD2Window:
         self.combobox_files_selected = QComboBox()
         self.combobox_files_selected.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
-        for item in VD2TreatmentModel.ExpDataStruct:
+        for item in TreatmentModel.ExpDataStruct:
             if item.value != 'NOISE':
                 self.combobox_type_exp.addItem(item.value)
 
@@ -204,6 +205,7 @@ class Ui_GraphVD2Window:
 
         layout_file_tree = QtWidgets.QVBoxLayout()
         #
+        layout_file_tree.addWidget(self.button_set_folder)
         layout_file_tree.addWidget(self.tree)
         groupbox_tree_files.setLayout(layout_file_tree)  # GroupBox tree layout
         #
