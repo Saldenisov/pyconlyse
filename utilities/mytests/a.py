@@ -1,10 +1,8 @@
-from enum import Enum
+class A:
+    pass
 
-class A(Enum):
-    b = 'basd'
-    c = 'casdsad'
+class B(A, metaclass=None):
+    pass
 
-    def __repr__(self):
-        return str(self)
 
-print(A.b.__repr__())
+b = B()

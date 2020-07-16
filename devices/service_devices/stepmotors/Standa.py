@@ -65,7 +65,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()
+        return super()._check_if_active()  # TODO: should be replaced with something reasonable
 
     def _check_if_connected(self) -> Tuple[bool, str]:
         status = status_t()

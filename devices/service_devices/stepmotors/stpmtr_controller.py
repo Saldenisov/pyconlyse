@@ -39,9 +39,9 @@ class StpMtrController(Service):
             raise StpMtrError(self, comments)
 
     def available_public_functions(self) -> List[CmdStruct]:
-        return (*super().available_public_functions(), StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS,
+        return [*super().available_public_functions(), StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS,
                                                        StpMtrController.MOVE_AXIS_TO, StpMtrController.SET_POS,
-                StpMtrController.STOP_AXIS)
+                                                       StpMtrController.STOP_AXIS]
 
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         flag = func_input.flag

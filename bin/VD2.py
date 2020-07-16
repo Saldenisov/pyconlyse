@@ -19,7 +19,7 @@ def main():
     logger = initialize_logger(app_folder / 'LOG', file_name="VD2Treatment")
     logger.info('Starting VD2Treatment GUI...')
     app = QApplication(sys.argv)
-    VD2TreatmentController(VD2TreatmentModel(app_folder, data_folder='D:\\DATA_VD2\\2020\\20200630-RK-940'))
+    VD2TreatmentController(VD2TreatmentModel(app_folder, data_folder='D:\\DATA_VD2\\2020\\20200630-RK-1029'))
     app.exec_()
 
 

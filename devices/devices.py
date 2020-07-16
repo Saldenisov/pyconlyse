@@ -7,8 +7,6 @@ from pathlib import Path
 from time import sleep, time
 from typing import Any, Callable
 
-from PyQt5.QtCore import QObject, pyqtSignal
-
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
@@ -24,10 +22,11 @@ from logs_pack import initialize_logger
 module_logger = logging.getLogger(__name__)
 
 
+from PyQt5.QtCore import QObject, pyqtSignal
 pyqtWrapperType = type(QObject)
 
 
-class FinalMeta(type(DeviceInter), type(QObject)):
+class FinalMeta(type(DeviceInter), pyqtWrapperType):
     pass
 
 
@@ -37,7 +36,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     """
     n_instance = 0
 
-    signal = pyqtSignal(MessageInt)
+    if pyqtSignal:
+        signal = pyqtSignal(MessageInt)
 
     def __init__(self, name: str, db_path: Path, cls_parts: Dict[str, Any], type: DeviceType, parent: QObject = None,
                  db_command: str = '', logger_new=True, test=False, **kwargs):

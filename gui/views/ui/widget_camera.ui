@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>MainWindow</class>
- <widget class="QMainWindow" name="MainWindow">
+ <class>CameraWidget</class>
+ <widget class="QMainWindow" name="CameraWidget">
+  <property name="enabled">
+   <bool>true</bool>
+  </property>
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -25,44 +28,54 @@
       </property>
       <item>
        <layout class="QGridLayout" name="gridLayout">
+        <item row="4" column="3">
+         <widget class="QSpinBox" name="spinBox_blacklevel">
+          <property name="minimum">
+           <number>-127</number>
+          </property>
+          <property name="maximum">
+           <number>127</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="2">
+         <widget class="QSpinBox" name="spinBox_fps">
+          <property name="minimum">
+           <number>1</number>
+          </property>
+          <property name="maximum">
+           <number>50</number>
+          </property>
+          <property name="value">
+           <number>5</number>
+          </property>
+         </widget>
+        </item>
         <item row="6" column="0">
+         <widget class="QSpinBox" name="spinBox_Xoffset">
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QLabel" name="label_Yoffset">
+          <property name="text">
+           <string>Yoffset</string>
+          </property>
+         </widget>
+        </item>
+        <item row="7" column="0">
          <widget class="QLabel" name="label_Xshift">
           <property name="text">
            <string>Xshift</string>
           </property>
          </widget>
         </item>
-        <item row="7" column="0">
-         <widget class="QSpinBox" name="spinBox_Xshift">
-          <property name="minimum">
-           <number>-500</number>
-          </property>
-          <property name="maximum">
-           <number>500</number>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="2">
-         <widget class="QLabel" name="label_Yshift">
+        <item row="2" column="1">
+         <widget class="QLabel" name="label_Ysize">
           <property name="text">
-           <string>Yshift</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="2">
-         <widget class="QSpinBox" name="spinBox_Yshift">
-          <property name="minimum">
-           <number>-500</number>
-          </property>
-          <property name="maximum">
-           <number>500</number>
-          </property>
-         </widget>
-        </item>
-        <item row="0" column="3">
-         <widget class="QCheckBox" name="checkBox_On">
-          <property name="text">
-           <string>On</string>
+           <string>Ysize</string>
           </property>
          </widget>
         </item>
@@ -86,10 +99,20 @@
           </property>
          </widget>
         </item>
-        <item row="5" column="2">
-         <widget class="QSpinBox" name="spinBox_Yoffset">
+        <item row="8" column="0">
+         <widget class="QSpinBox" name="spinBox_Xshift">
+          <property name="minimum">
+           <number>-500</number>
+          </property>
           <property name="maximum">
-           <number>2000</number>
+           <number>500</number>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_cameraID">
+          <property name="text">
+           <string>#ID</string>
           </property>
          </widget>
         </item>
@@ -100,7 +123,17 @@
           </property>
          </widget>
         </item>
-        <item row="3" column="2">
+        <item row="1" column="1">
+         <widget class="QSpinBox" name="spinBox_cameraID"/>
+        </item>
+        <item row="2" column="3">
+         <widget class="QSpinBox" name="spinBox_gainraw">
+          <property name="maximum">
+           <number>3</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
          <widget class="QSpinBox" name="spinBox_Ysize">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -119,50 +152,81 @@
           </property>
          </widget>
         </item>
-        <item row="4" column="2">
-         <widget class="QLabel" name="label_Yoffset">
-          <property name="text">
-           <string>Yoffset</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="2">
-         <widget class="QLabel" name="label_Ysize">
-          <property name="text">
-           <string>Ysize</string>
-          </property>
-         </widget>
-        </item>
-        <item row="5" column="0">
-         <widget class="QSpinBox" name="spinBox_Xoffset">
+        <item row="6" column="1">
+         <widget class="QSpinBox" name="spinBox_Yoffset">
           <property name="maximum">
            <number>2000</number>
           </property>
          </widget>
         </item>
-        <item row="0" column="2">
-         <widget class="QSpinBox" name="spinBox_cameraID"/>
-        </item>
-        <item row="0" column="0">
-         <widget class="QLabel" name="label_cameraID">
+        <item row="7" column="1">
+         <widget class="QLabel" name="label_Yshift">
           <property name="text">
-           <string>#ID</string>
+           <string>Yshift</string>
           </property>
          </widget>
         </item>
-        <item row="3" column="3">
+        <item row="8" column="1">
+         <widget class="QSpinBox" name="spinBox_Yshift">
+          <property name="minimum">
+           <number>-500</number>
+          </property>
+          <property name="maximum">
+           <number>500</number>
+          </property>
+         </widget>
+        </item>
+        <item row="8" column="2">
          <widget class="QCheckBox" name="checkBox">
           <property name="text">
            <string>Power</string>
           </property>
          </widget>
         </item>
-        <item row="2" column="3">
+        <item row="7" column="2">
          <widget class="QCheckBox" name="checkBox_2">
           <property name="text">
-           <string>Activate Controller</string>
+           <string>Activate</string>
           </property>
          </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QCheckBox" name="checkBox_sync_clock">
+          <property name="text">
+           <string>Sync</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QCheckBox" name="checkBox_On">
+          <property name="text">
+           <string>On</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>GainRaw</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="3">
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>BlackLevel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="2">
+         <widget class="QComboBox" name="comboBox"/>
         </item>
        </layout>
       </item>

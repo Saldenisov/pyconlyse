@@ -2,6 +2,7 @@ aiohttp
 atomicwrites
 configobj
 cryptography
+cython
 gpiozero
 ifaddr
 imutils
@@ -16,6 +17,7 @@ python-socketio
 pypylon
 pyserial
 scipy
+sip
 tables
 vitables
 zmq
