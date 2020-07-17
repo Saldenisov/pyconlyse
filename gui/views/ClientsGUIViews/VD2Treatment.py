@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar, QMe
 
 from devices.service_devices.project_treatment.openers import CriticalInfoHamamatsu
 from gui.models.ClientGUIModels import TreatmentModel
-from gui.views.ui import Ui_GraphVD2Window
+from gui.views.ui import Ui_GraphWindow
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 from utilities.myfunc import info_msg
 
@@ -30,7 +30,7 @@ class TreatmentView(QMainWindow):
         self.logger = logging.getLogger('VD2Treatment')
         info_msg(self, 'INITIALIZING')
 
-        self.ui = Ui_GraphVD2Window()
+        self.ui = Ui_GraphWindow()
         self.ui.setupUi(self, data_folder=in_controller.model.data_folder)
 
         self.controller.model.add_measurement_observer(self)
@@ -44,6 +44,8 @@ class TreatmentView(QMainWindow):
         self.ui.button_play.clicked.connect(self.button_play_maps)
         self.ui.button_right.clicked.connect(partial(self.map_step, 1))
         self.ui.button_save_result.clicked.connect(self.controller.save)
+        self.ui.button_get_kinetics.clicked.connect(partial(self.controller.get_average, 'kinetics'))
+        self.ui.button_get_spectra.clicked.connect(partial(self.controller.get_average, 'spectra'))
         self.ui.kinetics_slider.ValueChanged.connect(self.controller.slider_kinetics)
         self.ui.spectrum_slider.ValueChanged.connect(self.controller.slider_spectra)
         self.ui.button_set_folder.clicked.connect(self.controller.data_folder_changed)
@@ -81,7 +83,7 @@ class TreatmentView(QMainWindow):
         menu = QMenu()
         action_set_ABS=action_set_BASE=action_set_NOISE=action_set_DATA_HIS=action_set_NOISE=action_set_DATA_NOISE_HIS=\
             None
-        action_plus = menu.addAction('Add file...')
+        action_plus = menu.addAction('Add file')
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             action_set_ABS = menu.addAction("set ABS HIS or IMG")
             action_set_BASE = menu.addAction("set BASE HIS or IMG")

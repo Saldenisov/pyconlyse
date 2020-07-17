@@ -5,10 +5,11 @@ Created on 17.11.2019
 """
 import logging
 from concurrent.futures import ProcessPoolExecutor
+from copy import deepcopy
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Union, Tuple
+from typing import Any, Dict, List, Union, Tuple
 
 import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal
@@ -153,6 +154,73 @@ class TreatmentModel(QObject):
 
     def add_measurement_observer(self, inObserver):
         self.measurements_observers.append(inObserver)
+
+    def average_range(self, line: str, file_path: Path, user_type: str = 'kinetics', n=0) -> Union[List[str], None]:
+        def analyze_line(line: str) -> Union[Dict[float, int], None]:
+            if line:
+                line_elements = line.split(';')
+                res = {}
+                for elem in line_elements:
+                    elem = ' '.join(elem.strip().split())
+                    elem_parts = elem.split()
+                    try:
+                        if len(elem_parts) == 1:
+                            res[float(elem_parts[0])] = 3
+                        elif len(elem_parts) == 2:
+                            res[float(elem_parts[0])] = float(elem_parts[1])
+                        else:
+                            pass
+                    except ValueError:
+                        pass
+                return res
+            else:
+                return None
+        line_elements = analyze_line(line)
+        if not line_elements:
+            self.show_error(self.get_average, f'First fill the required ranges using format: value range;... e.g., '
+                                              f'"500+-10; 600+-5". The values and ranges should be given in nm.')
+        else:
+            opener = self.get_opener(file_path)
+            if opener:
+                line_elements_copy = deepcopy(line_elements)
+                info: CriticalInfo = opener.paths[file_path]
+                if user_type == 'kinetics':
+                    variables = info.wavelengths
+                    x = info.timedelays
+                    file_save = Path(file_path.parent / f'{file_path.stem}_kinetics.txt')
+                    axis = 1
+                elif user_type == 'spectra':
+                    variables: np.array() = info.timedelays
+                    x = info.wavelengths
+                    file_save = Path(file_path.parent / f'{file_path.stem}_spectra.txt')
+                    axis = 0
+                averaged_ranges = []
+                data = opener.read_map(file_path, n)[0].data
+                for key, value in line_elements_copy.items():
+                    key_index = np.searchsorted(variables, key)
+                    if key_index != 0 and key_index != len(variables)-1:
+                        key_upper_index = np.searchsorted(variables, key+value)
+                        key_lower_index = np.searchsorted(variables, key-value)
+                        key_upper = variables[key_upper_index]
+                        key_lower = variables[key_lower_index]
+                        value = round((key_upper-key_lower) / 2, 1)
+                        line_elements[key] = value
+                        if user_type == 'kinetics':
+                            data_cut = data[:, key_lower_index:key_upper_index]
+                        elif user_type == 'spectra':
+                            data_cut = data[key_lower_index:key_upper_index]
+                        averaged = np.mean(data_cut, axis=axis)
+                        averaged_ranges.append(np.insert(x, 0, value))
+                        averaged_ranges.append(np.insert(averaged, 0, key))
+                    else:
+                        del line_elements[key]
+                to_save = np.array(averaged_ranges)
+                to_save = np.transpose(to_save)
+                np.savetxt(file_save, to_save, delimiter='\t', fmt='%1.3f')
+                return line_elements
+            else:
+                self.show_error(self.average_range, f'File {file_path} cannot be open.')
+                return None
 
     def average_noise(self) -> Tuple[bool, str]:
         info_msg(self, 'INFO', 'Averaging Noise')
@@ -343,7 +411,6 @@ class TreatmentModel(QObject):
             np.savetxt(save_path, final_data, delimiter='\t', fmt='%.4f')
         except (KeyError, Exception) as e:
             self.show_error(self.save, e)
-
 
     def save_file_path_change(self, folder: str, file_name: str):
         save_path = Path(folder) / Path(file_name)

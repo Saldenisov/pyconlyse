@@ -2,16 +2,7 @@ import matplotlib
 matplotlib.use("Qt5Agg")
 from pathlib import Path
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import (QMainWindow, QSizePolicy, QSpinBox, QLineEdit, QRadioButton, QProgressBar,
-                             QTabWidget,
-                             QWidget,
-                             QGridLayout,
-                             QSplitter,
-                             QGroupBox,
-                             QPushButton,
-                             QComboBox,
-                             QSlider,
-                             QCheckBox)
+from PyQt5.QtWidgets import *
 from matplotlib.widgets import Cursor, RectangleSelector
 from gui.views.matplotlib_canvas.DataCanvases import DataCanvas
 from gui.views.matplotlib_canvas.KineticsCanvases import KineticsCanvas
@@ -20,7 +11,7 @@ from gui.views import RangeSlider
 from gui.models.ClientGUIModels import TreatmentModel
 
 
-class Ui_GraphVD2Window:
+class Ui_GraphWindow:
     def setupUi(self, window, data_folder: Path, parameters=None):
         self.data_folder = data_folder
         self.inParameters = parameters
@@ -74,6 +65,8 @@ class Ui_GraphVD2Window:
         self.button_right = QPushButton('>')
         self.button_play = QPushButton('Play')
         self.button_set_folder = QPushButton('Set Main Folder')
+        self.button_get_kinetics = QPushButton('Get Kinetics')
+        self.button_get_spectra = QPushButton('Get Spectra')
 
         # Comboboxes
         self.combobox_type_exp = QComboBox()
@@ -103,6 +96,8 @@ class Ui_GraphVD2Window:
         self.lineedit_save_folder = QLineEdit()
         self.lineedit_save_folder.setText(str(self.data_folder))
         self.lineedit_save_file_name = QLineEdit()
+        self.lineedit_kinetics_ranges = QLineEdit()
+        self.lineedit_spectra_ranges = QLineEdit()
 
         # Labels
         self.label_data = QtWidgets.QLabel('Data')
@@ -143,10 +138,14 @@ class Ui_GraphVD2Window:
         info_tab = QWidget()
         info_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         info_tab.setMaximumSize(100, 100)
+        selection_tab = QWidget()
+        selection_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        selection_tab.setMaximumSize(500, 200)
 
         self.tabs.addTab(files_tab, 'Files')
         self.tabs.addTab(cleaing_tab, 'Cleaning')
         self.tabs.addTab(info_tab, 'Info')
+        self.tabs.addTab(selection_tab, 'Selection Tab')
 
         # Tree
         root = str(self.data_folder)
@@ -221,7 +220,23 @@ class Ui_GraphVD2Window:
         #TODO: add stuff
         #
 
-        layout_files = QtWidgets.QHBoxLayout()
+        layout_selection = QVBoxLayout()
+        #
+        layout_selection_kinetics = QHBoxLayout()
+        layout_selection_spectra = QHBoxLayout()
+
+        layout_selection_kinetics.addWidget(self.lineedit_kinetics_ranges)
+        layout_selection_kinetics.addWidget(self.button_get_kinetics)
+
+        layout_selection_spectra.addWidget(self.lineedit_spectra_ranges)
+        layout_selection_spectra.addWidget(self.button_get_spectra)
+
+        layout_selection.addLayout(layout_selection_kinetics)
+        layout_selection.addLayout(layout_selection_spectra)
+        selection_tab.setLayout(layout_selection)
+        #
+
+        layout_files = QHBoxLayout()
         #
         layout_files.addWidget(groupbox_control_buttons)
         layout_files.addWidget(groupbox_tree_files)
