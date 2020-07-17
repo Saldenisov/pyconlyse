@@ -40,7 +40,10 @@ class ASCIIOpener(Opener):
         try:
             if file_path.suffix == '.dat':
                 number_of_maps = 1
-                data = np.loadtxt(file_path)
+                try:
+                    data = np.loadtxt(file_path)
+                except ValueError:
+                    data = np.loadtxt(file_path, skiprows=1)
                 timedelays = data[0][1:]
                 wavelength = data[:,0][1:]
                 return CriticalInfo(file_path, number_maps=number_of_maps, timedelays_length=len(timedelays),
@@ -49,8 +52,7 @@ class ASCIIOpener(Opener):
                 raise Exception(f'Do not know how to handle {file_path.suffix} data file type.')  # !!!.raw files
             else:
                 raise Exception(f'Do not know how to handle {file_path.suffix} data file type.')
-
-        except Exception as e:
+        except ValueError as e:
             error_logger(self, self.read_critical_info, e)
             raise e
 
