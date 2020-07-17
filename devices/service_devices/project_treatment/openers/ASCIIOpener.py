@@ -64,7 +64,10 @@ class ASCIIOpener(Opener):
             res = True
         if res:
             info: CriticalInfo = self.paths[file_path]
-            data = np.loadtxt(file_path)
+            try:
+                data = np.loadtxt(file_path)
+            except ValueError:
+                data = np.loadtxt(file_path, skiprows=1)
             data = np.transpose(data[1:, 1:])
             return Measurement(type=file_path.suffix, comments='', author='', timestamp=file_path.stat().st_mtime,
                                data=data, wavelengths=info.wavelengths, timedelays=info.timedelays, time_scale='??'), ''
