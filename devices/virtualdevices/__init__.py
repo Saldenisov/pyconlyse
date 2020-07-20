@@ -1,1 +1,1 @@
-from .GUI import *
+from .clients import *

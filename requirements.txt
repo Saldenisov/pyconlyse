@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 numpy>=1.15.3
 matplotlib>=3.0.2
 configobj>=5.0.2
@@ -8,7 +9,28 @@ ifaddr
 =======
 >>>>>>> develop
 PyQt5==5.13.1
+=======
+aiohttp
+atomicwrites
+configobj
+>>>>>>> develop
 cryptography
-zmq>=0.0.0
-ifaddr
+cython
 gpiozero
+ifaddr
+imutils
+matplotlib
+msgpack
+numpy
+opencv-python
+PyQt5
+pytest-qt
+pywin32
+python-socketio
+pypylon
+pyserial
+scipy
+sip
+tables
+vitables
+zmq

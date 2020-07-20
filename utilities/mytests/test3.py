@@ -1,11 +1,11 @@
-import sys, time
-from PyQt5.QtCore import * 
-from PyQt5.QtGui import *
+import multiprocessing as mp
+import sys
+import time
+
+import numpy
+from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 
-
-import multiprocessing as mp
-import numpy
 
 class WorkThread(QThread):
     finished = pyqtSignal(int,object)

@@ -1,7 +1,7 @@
 import threading
 
 class StoppableThread(threading.Thread):
-    """Thread class with tests_hardware stop() method. The thread itself has to check
+    """Thread class with tests_devices stop() method. The thread itself has to check
     regularly for the stopped() condition."""
 
     def __init__(self, target):

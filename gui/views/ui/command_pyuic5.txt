@@ -1,0 +1,9 @@
+"C:\Users\Sergey Denisov\AppData\Local\Programs\Python\Python37-32\Scripts\pyuic5.exe" C:\dev\pyconlyse\gui\views\ui\TestObserver.ui -o C:\dev\pyconlyse\gui\views\ui\TestObserver.py
+
+python -m PyQt5.uic.pyuic widget_camera.ui -o widget_camera.py
+
+C:\dev\python_env\py37_ELYSE\Scripts\pyuic5.exe C:\dev\pytlyse\views\ui\SuperClient.ui -o C:\dev\pytlyse\views\ui\SuperClient.py
+
+
+
+C:\dev\python_env\mypy37\Lib\site-packages\PyQt5\pyuic.bat C:\dev\pytlyse\views\ui\SuperClient.ui -o C:\dev\pytlyse\views\ui\SuperClient.py

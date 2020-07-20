@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 from time import sleep
 from concurrent.futures import ThreadPoolExecutor
 class A:
@@ -43,17 +44,24 @@ a.flag = False
 
 =======
 from functools import wraps
+=======
+>>>>>>> develop
 
+from datetime import datetime
 
+# current date and time
+now = datetime.now()
 
-dev = False
-class A:
+timestamp = datetime.timestamp(now)
+print(type(timestamp))
 
-    @decor(dev=dev)
-    def f(self):
-        print('Dev is set to false')
+print("timestamp =", timestamp)
 
+<<<<<<< HEAD
 
 a = A()
 a.f()
+>>>>>>> develop
+=======
+print(datetime.fromtimestamp(timestamp))
 >>>>>>> develop

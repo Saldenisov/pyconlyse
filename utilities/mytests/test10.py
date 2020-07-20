@@ -1,10 +1,10 @@
+import random
 import time
+from threading import Thread
+
 import zmq
 from zmq.devices.monitoredqueuedevice import MonitoredQueue
 from zmq.utils.strtypes import asbytes
-from multiprocessing import Process
-from threading import Thread
-import random
 
 frontend_port = 5559
 backend_port = 5560

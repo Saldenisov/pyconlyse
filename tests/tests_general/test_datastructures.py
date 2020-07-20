@@ -1,6 +1,5 @@
-import pytest
-from utilities.data.datastructures.dicts import Events_Dict
-from communication.logic import ThinkerEvent
+from communication.logic.thinker import ThinkerEvent
+from utilities.datastructures.mes_dependent.dicts import Events_Dict
 
 
 def test_event_dict():
@@ -10,8 +9,8 @@ def test_event_dict():
     dct[event.id] = event
     assert event.id in dct
     assert event.name in dct
-    assert not 'a' in dct
-    assert not '' in dct
+    assert 'a' not in dct
+    assert '' not in dct
     print(dct, dct.name_id)
 
     try:

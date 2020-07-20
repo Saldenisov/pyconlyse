@@ -10,7 +10,7 @@ from configparser import ConfigParser
 from configobj import ConfigObj, flatten_errors
 from validate import Validator
 
-from errors.myexceptions import ValidationFailed, ConfigCannotBeSet
+from utilities.errors.myexceptions import ValidationFailed, ConfigCannotBeSet
 
 module_logger = logging.getLogger(__name__)
 
@@ -88,10 +88,10 @@ class сonfiguration_validation:
 
             results = self._config.validate(val)
 
-            if results != True:
+            if not results:
                 for (section_list, key, _) in flatten_errors(self._config, results):
-                    if key is not None:
-                        print ('The "%s" key in the section "%s" failed validation' % (key, ', '.join(section_list)))
+                    if key:
+                        print('The "%s" key in the section "%s" failed validation' % (key, ', '.join(section_list)))
                     else:
                         print('The following section was missing:%s ' % ', '.join(section_list))
                         raise ValidationFailed

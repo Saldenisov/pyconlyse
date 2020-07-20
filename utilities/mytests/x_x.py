@@ -1,27 +1,17 @@
-from abc import  abstractmethod
+from dataclasses import dataclass
 
+
+@dataclass
 class A:
+    n: int
+    data: str
 
-    @abstractmethod
-    def a(self):
-        print(300)
 
+@dataclass
 class B(A):
-    def a(self):
-        super().a()
-        print(200)
+    data: dict
 
 
-class C(B):
-    def __init__(self):
-        self._c = [1]*6
-
-    def a(self):
-        super().a()
-        print(100)
-
-
-c = C()
-c._c[1] = [20]
-
-print(c._c)
+a = A(1, '2')
+b = B(1, {})
+print(b)

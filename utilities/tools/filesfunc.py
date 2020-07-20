@@ -1,19 +1,14 @@
 import os
-import time
 import re
+import time
 import zipfile
-import zlib
-from multiprocessing import Pool
-
-
-
 
 
 def deletefile(filepath):
     pass
 
 
-def searchforfiles(folder='.', pattern='^.*(RAW)(.*)\.([tests_hardware-z]+)$', subfolder=True):
+def searchforfiles(folder='.', pattern='^.*(RAW)(.*)\.([tests_devices-z]+)$', subfolder=True):
     """
     returns list of files paths in the folder/subfolders
     accroding to specific template
@@ -38,7 +33,7 @@ def searchforfiles(folder='.', pattern='^.*(RAW)(.*)\.([tests_hardware-z]+)$', s
                                template=pattern, subfolder=subfolder)
 
     finally:
-        # pattern = re.compile("^.*([\d]+)(RAW)(.*)\.([tests_hardware-z]+)$")
+        # pattern = re.compile("^.*([\d]+)(RAW)(.*)\.([tests_devices-z]+)$")
         pattern = re.compile(pattern)
         result = []
         for path in paths:
@@ -61,7 +56,7 @@ def filetozip(filepath):
     startT = time.time()
     filesize = os.path.getsize(filename)
     if os.path.exists(filename_s + '.zip'):
-        mode = 'tests_hardware'
+        mode = 'tests_devices'
     else:
         mode = 'w'
     zf = zipfile.ZipFile(filename_s + '.zip', mode, zipfile.ZIP_DEFLATED)
