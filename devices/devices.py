@@ -583,10 +583,11 @@ class Service(Device):
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
         pass
 
-    def send_status_pyqt(self):
+    @abstractmethod
+    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         pass
 
-    def set_default(self):
+    def send_status_pyqt(self):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:

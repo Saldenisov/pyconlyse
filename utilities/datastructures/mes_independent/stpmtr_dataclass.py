@@ -140,7 +140,7 @@ class AxisStpMtr:
 
 @dataclass(order=True, frozen=False)
 class AxisStpMtrEssentials:
-    id: int
+    device_id: int
     position: Union[mm, angle, microstep]
     unit: MoveType
     status: int
