@@ -470,7 +470,7 @@ class StpMtrController(Service):
         if not self.device_status.connected:
             ids = self._get_axes_ids_db()
             ids_c = ids.copy()
-            if ids_c != ids:
+            if sorted(ids_c) != ids:
                 e = StpMtrError(self, text=f'Axes indexes must be ascending order.')
                 error_logger(self, self._set_ids_axes, e)
                 raise e

@@ -21,7 +21,7 @@ from utilities.myfunc import info_msg, get_local_ip, error_logger
 module_logger = logging.getLogger(__name__)
 
 
-class StepMotorsView(QMainWindow):
+class CamerasView(QMainWindow):
 
     def __init__(self, in_controller, in_model, service_parameters: Desription, parent=None):
         super().__init__(parent)
