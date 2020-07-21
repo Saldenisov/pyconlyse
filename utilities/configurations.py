@@ -5,7 +5,7 @@ Created on 7 oct. 2015
 '''
 import logging
 import os.path
-from configparser import ConfigParser
+from configparser import ConfigParser, RawConfigParser
 
 from configobj import ConfigObj, flatten_errors
 from validate import Validator
@@ -26,7 +26,8 @@ class configurationSD():
         self._config = {}
 
     def add_config(self, name: str, path_config=None, config_text=None) -> None:
-        self._config[name] = ConfigParser()
+        self._config[name] = RawConfigParser()
+        self._config[name].optionxform = lambda option: option
         try:
             if path_config:
                 self._config[name].read(str(path_config))

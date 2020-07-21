@@ -90,6 +90,18 @@ class FuncGetImagesOutput(FuncOutput):
     com: str = 'get_images'
 
 
+@dataclass
+class FuncStopAcquisitionInput(FuncInput):
+    camera_id: int
+    com: str = 'stop_acquisition'
+
+
+@dataclass
+class FuncStopAcquisitionOutput(FuncOutput):
+    camera_id: int
+    com: str = 'stop_acquisition'
+
+
 @dataclass(order=True, frozen=False)
 class CamerasCtrlStatusMultiCameras:
     pass

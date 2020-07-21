@@ -20,7 +20,7 @@ class CameraController(Service):
     SET_SYNC_PARAMETERS = CmdStruct(None, None)
     SET_TRANSPORT_PARAMETERS = CmdStruct(None, None)
     SET_ALL_PARAMETERS = CmdStruct(None, None)
-    STOP_ACQUISITION = CmdStruct(None, None)
+    STOP_ACQUISITION = CmdStruct(FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -50,18 +50,18 @@ class CameraController(Service):
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     def activate_camera(self, func_input: FuncActivateCameraInput) -> FuncActivateCameraOutput:
-        camera_id = func_input.axis_id
+        camera_id = func_input.camera_id
         flag = func_input.flag
         res, comments = self._check_axis_range(camera_id)
         if res:
             res, comments = self._check_controller_activity()
         if res:
             res, comments = self._change_axis_status(camera_id, flag)
-        essentials = self.axes_essentials
+        essentials = self.cameras_essentials
         status = []
-        for key, axis in essentials.items():
+        for key, camera in essentials.items():
             status.append(essentials[key].status)
-        info = f'Axes status: {status}. {comments}'
+        info = f'Cameras status: {status}. {comments}'
         info_msg(self, 'INFO', info)
         return FuncActivateCameraOutput(cameras=self.cameras_essentials, comments=info, func_success=res)
 
@@ -75,6 +75,10 @@ class CameraController(Service):
         for camera_id, camera in self.cameras.items():
             essentials[camera_id] = camera.short()
         return essentials
+
+    @property
+    def _cameras_status(self) -> List[int]:
+        return [camera.status for camera in self.cameras.values()]
 
     def description(self) -> Desription:
         """
@@ -100,7 +104,7 @@ class CameraController(Service):
         :return:  FuncOutput
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
-                   f'Axes are {self._axes_status}'
+                   f'Cameras are {self._cameras_status}'
         try:
             return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
                                                       comments=comments, func_success=True)
@@ -108,7 +112,6 @@ class CameraController(Service):
             return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
                                                       comments=comments, func_success=True)
 
-    @abstractmethod
     def _get_cameras_ids_db(self):
         try:
             ids: List[int] = []
@@ -118,16 +121,16 @@ class CameraController(Service):
                 if not isinstance(val, int):
                     raise TypeError()
                 ids.append(val)
-            if len(ids) != self._axes_number:
+            if len(ids) != self._cameras_number:
                 raise CameraError(self, f'Number of cameras_ids {len(ids)} is not equal to '
                                         f'cameras_number {self._cameras_number}.')
             return ids
         except KeyError:
             try:
-                axes_number = int(self.get_parameters['axes_number'])
-                return list([axis_id for axis_id in range(1, axes_number + 1)])
+                cameras_number = int(self.get_parameters['cameras_number'])
+                return list([camera_id for camera_id in range(1, cameras_number + 1)])
             except (KeyError, ValueError):
-                raise CameraError(self, text="Cameras ids could not be set, cameras_ids or axes_number fields is absent "
+                raise CameraError(self, text="Cameras ids could not be set, cameras_ids or cameras_number fields is absent "
                                              "in the database.")
         except (TypeError, SyntaxError):
             raise CameraError(self, text="Check cameras_ids field in database, must be integer.")
@@ -141,7 +144,7 @@ class CameraController(Service):
                 if not isinstance(val, str):
                     raise TypeError()
                 names.append(val)
-            if len(names) != self._axes_number:
+            if len(names) != self._cameras_number:
                 raise CameraError(self, f'Number of cameras_names {len(names)} is not equal to '
                                         f'cameras_number {self._cameras_number}.')
             return names
@@ -154,7 +157,6 @@ class CameraController(Service):
     def _get_number_cameras(self):
         pass
 
-    @abstractmethod
     def _get_number_cameras_db(self):
         try:
             return int(self.get_parameters['cameras_number'])
@@ -172,18 +174,17 @@ class CameraController(Service):
 
     def _set_names_cameras(self):
         if not self.device_status.connected:
-            names = self._get_axes_cameras_db()
+            names = self._get_cameras_names_db()
             for id, name in zip(self.cameras.keys(), names):
                 self.cameras[id].name = name
                 self.cameras[id].friendly_name = name
 
     def _set_ids_cameras(self):
-        # Axes ids must be in ascending order
         if not self.device_status.connected:
             ids = self._get_cameras_ids_db()
             i = 1
             for id_a in ids:
-                self.axes[i] = Camera(device_id=id_a)
+                self.cameras[i] = Camera(device_id=id_a)
                 i += 1
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
@@ -191,8 +192,8 @@ class CameraController(Service):
             self._set_number_cameras()
             self._set_ids_cameras()  # Ids must be set first
             self._set_names_cameras()
-            self._set_parameters_cameras()
-            self._set_status_axes()
+            self._set_private_parameters_db()
+            self._set_status_cameras()
             res = []
             if extra_func:
                 comments = ''
@@ -211,14 +212,19 @@ class CameraController(Service):
             error_logger(self, self._set_parameters, e)
             return False, str(e)
 
-    def _set_status_axes(self):
+    @abstractmethod
+    def _set_private_parameters_db(self):
+        pass
+
+
+    def _set_status_cameras(self):
         if self.device_status.connected:
             statuses = self._get_cameras_status()
         else:
             statuses = self._get_cameras_status_db()
 
-        for id, status in zip(self.axes.keys(), statuses):
-            self.axes[id].status = status
+        for id, status in zip(self.cameras.keys(), statuses):
+            self.cameras[id].status = status
 
     @abstractmethod
     def _stop_acquisition(self, camera_id: int):

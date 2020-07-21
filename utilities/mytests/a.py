@@ -1,11 +1,12 @@
-from PyQt5.QtWidgets import QFileDialog
-from PyQt5.QtWidgets import QApplication
-import sys
+from dataclasses import dataclass
 
-app = QApplication(sys.argv)
+@dataclass
+class A:
+    a: str = ''
+    b: int = 2
 
-dialog = QFileDialog()
-foo_dir = dialog.getExistingDirectory(None, 'Select an awesome directory')
-print(foo_dir)
+a = A().__annotations__.keys()
 
-sys.exit(app.exec_())
+b = A()
+setattr(b, 'a', 'privet')
+print(b)
