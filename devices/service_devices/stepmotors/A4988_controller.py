@@ -22,7 +22,7 @@ from .stpmtr_controller import StpMtrController
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = True
+dev_mode = False
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
