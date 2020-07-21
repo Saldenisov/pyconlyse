@@ -161,16 +161,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             error_logger(self, self.add_to_executor, e)
             return False
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
-        return self.config.config_to_dict(self.name)['General']
-
-    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
-        res = self.config.config_to_dict(self.name)['Addresses']
-        return res
-=======
-=======
     def _connect_pyqtslot_signal(self, pyqtslot):
         # Pyqt slot and signal are connected
         self.signal.connect(pyqtslot)
@@ -185,7 +175,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         """
         pass
 
->>>>>>> develop
     def get_settings(self, name: str) -> Dict[str, Union[str, List[str]]]:
         try:
             return self.config.config_to_dict(self.name)[name]
@@ -199,15 +188,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def get_general_settings(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('General')
 
-<<<<<<< HEAD
-    def get_addresses(self) -> Dict[str, Union[str, List[str]]]:
-        return self.get_settings('Addresses')
->>>>>>> develop
-=======
     @property
     def get_parameters(self) -> Dict[str, Union[str, List[str]]]:
         return self.get_settings('Parameters')
->>>>>>> develop
 
     def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict, str]) \
             -> List[Tuple[Union[float, int]]]:
@@ -348,10 +331,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @staticmethod
     def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
-<<<<<<< HEAD
-        print("_exec_mes_every_n_se")
-=======
->>>>>>> develop
         i = 0
         if delay > 5:
             delay = 5
@@ -359,21 +338,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         flag = True
         while flag and i <= n_max:
             i += 1
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
             print(f'i = {i}')
->>>>>>> develop
-=======
->>>>>>> develop
             sleep(delay)
             if f:
                 flag = f(**specific)
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-=======
     def pause(self):
         self.thinker.pause()
         self.messenger.pause()
@@ -389,9 +358,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.thinker.unpause()
         self.device_status.messaging_paused = False
         self.send_status_pyqt()
->>>>>>> develop
 
->>>>>>> develop
     def start(self):
         self._start_messaging()
 
@@ -432,7 +399,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def update_config(self, message: str):
         # TODO: realize
         self.logger.info('Config is updated: ' + message)
-
 
 class Server(Device):
     # TODO: refactor
