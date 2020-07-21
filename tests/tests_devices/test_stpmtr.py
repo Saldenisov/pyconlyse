@@ -5,7 +5,7 @@ from tests.fixtures.services import *
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 
-one_service = [stpmtr_Standa_test_non_fixture()]
+one_service = [stpmtr_a4988_4axes_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
@@ -63,7 +63,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
             stpmtr._connect(False)
 
     available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos', 'move_axis_to',
-                                 'stop_axis', 'service_info']
+                                 'stop_axis', 'service_info', 'set_pos']
     ACTIVATE = FuncActivateInput(flag=True)
     DEACTIVATE = FuncActivateInput(flag=False)
     POWER_ON = FuncPowerInput(flag=True)
@@ -266,7 +266,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Test available function
     res = stpmtr.available_public_functions()
     assert isinstance(res[0], CmdStruct)
-    assert len(res) == 8
+    assert len(res) == 9
 
     # Test available functions names
     res = stpmtr.available_public_functions_names

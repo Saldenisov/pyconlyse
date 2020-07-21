@@ -46,12 +46,12 @@ class AxisStpMtr:
                 return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
                                             unit=self.basic_unit)
             else:
-                return AxisStpMtrEssentials(id=self.device_id,
+                return AxisStpMtrEssentials(device_id=self.device_id,
                                             position=pos,
                                             status=self.status,
                                             unit=unit)
         else:
-            return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
+            return AxisStpMtrEssentials(device_id=self.device_id, position=self.position, status=self.status,
                                         unit=self.basic_unit)
 
     def convert_pos_to_unit(self, unit: MoveType) -> Union[Tuple[bool, str], Union[int, float]]:

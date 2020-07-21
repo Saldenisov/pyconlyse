@@ -644,7 +644,7 @@ class StpMtrController(Service):
                                         axes=self.axes_essentials)
             res, comments = self._set_pos(func_input.axis_id, pos)
         if res:
-            self._set_positions_axes()
+            StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
         return FuncSetPosOutput(comments=comments, func_success=res, axes=self.axes_essentials)
 
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
