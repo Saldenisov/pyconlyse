@@ -9,4 +9,4 @@ a = A().__annotations__.keys()
 
 b = A()
 setattr(b, 'a', 'privet')
-print(b)
+print(A.__name__)

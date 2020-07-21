@@ -17,16 +17,33 @@ class Analog_Controls:
 
 
 @dataclass
-class ImageFormat:
-    Pixel_Format: str = 'Mono8'  # Basic gray-scale
-
-
-@dataclass
 class AOI_Controls:
     Width: int = 0
     Height: int = 0
     OffsetX: int = 0
     OffsetY: int = 0
+
+
+@dataclass
+class Acquisition_Controls:
+    TriggerSource: str = ''
+    TriggerMode: str = 'Off'
+    TriggerDelayAbs: int = 0
+    ExposureTimeAbs: int = 0
+    AcquisitionFrameRateAbs: int = 0
+    AcquisitionFrameRateEnable: bool = False
+
+
+
+@dataclass
+class Image_Format_Control:
+    Pixel_Format: str = 'Mono8'  # Basic gray-scale
+
+
+@dataclass
+class Transport_Layer:
+    GevSCPSPacketSize: int = 1500
+    GevSCPD: int = 1000
 
 
 @dataclass(frozen=False)
