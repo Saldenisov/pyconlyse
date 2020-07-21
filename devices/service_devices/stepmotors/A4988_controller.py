@@ -164,8 +164,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             parameters = self.get_settings('Parameters')
             self._microstep_settings = eval(parameters['microstep_settings'])
-            self._TTL_width_corrections = eval(parameters['ttl_width_corrections'])
-            self._TTL_delay_corrections = eval(parameters['ttl_delay_corrections'])
+            self._TTL_width_corrections = eval(parameters['TTL_width_corrections'])
+            self._TTL_delay_corrections = eval(parameters['TTL_delay_corrections'])
             return True, ''
         except (KeyError, SyntaxError) as e:
             error_logger(self, self._set_move_parameters_controller, e)
@@ -242,7 +242,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         try:
             info_msg(self, 'INFO', 'setting up the pins')
             parameters = self.get_settings('Parameters')
-            self._ttl = LED(parameters['ttl_pin'])
+            self._ttl = LED(parameters['TTL_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
             self._pins.append(self._dir)
