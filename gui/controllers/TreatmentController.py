@@ -68,6 +68,8 @@ class TreatmentController:
         foo_dir = dialog.getExistingDirectory(self.view, 'Select a directory')
         folder = Path(str(foo_dir))
         if folder.is_dir():
+            self.view.ui.lineedit_save_folder.setText(str(folder))
+            self.model.save_folder = folder
             self.view.ui.redraw_file_tree(folder)
 
     def get_average(self, user_type: str='kinetics'):

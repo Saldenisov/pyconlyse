@@ -177,7 +177,7 @@ class TreatmentModel(QObject):
                 return None
         line_elements = analyze_line(line)
         if not line_elements:
-            self.show_error(self.get_average, f'First fill the required ranges using format: value range;... e.g., '
+            self.show_error(self.average_range, f'First fill the required ranges using format: value range;... e.g., '
                                               f'"500+-10; 600+-5". The values and ranges should be given in nm.')
         else:
             opener = self.get_opener(file_path)
@@ -408,7 +408,7 @@ class TreatmentModel(QObject):
             final_data = final_data.transpose()
             timedelays = np.insert(info.timedelays, 0, 0)
             final_data = np.vstack((timedelays, final_data))
-            np.savetxt(save_path, final_data, delimiter='\t', fmt='%.4f')
+            np.savetxt(str(save_path), final_data, delimiter='\t', fmt='%.4f')
         except (KeyError, Exception) as e:
             self.show_error(self.save, e)
 
