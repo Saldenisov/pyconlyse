@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Tuple, Union, NewType, Set
-
+from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
@@ -52,6 +52,7 @@ class Camera:
     name: str = ''
     friendly_name: str = ''
     parameters: Dict[str, Any] = field(default_factory=dict)
+    pylon_camera: pylon.InstantCamera = None
 
     def short(self):
         return CameraEssentials(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,

@@ -28,6 +28,7 @@ except genicam.GenericException as e:
 
 OffSet = {1: {'X': 310, 'Y': 290}, 0: {'X': 270, 'Y': 120}}
 
+
 def init(camera_id, camera, devices):
     # conecting to the first available camera
     #camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
@@ -64,6 +65,7 @@ def init(camera_id, camera, devices):
 
     return converter
 
+
 def read(camera, converter):
     grabResult = camera.RetrieveResult(15000, pylon.TimeoutHandling_ThrowException)
     if grabResult.GrabSucceeded():
@@ -75,9 +77,11 @@ def read(camera, converter):
     grabResult.Release()
     return image.GetArray()
 
+
 def image_treat(image):
     img = cv2.GaussianBlur(image, (3, 3), 0)
     return img
+
 
 def calc(img, threshold=80):
     # apply thresholding
@@ -98,6 +102,7 @@ def calc(img, threshold=80):
     else:
         cX, cY = 0, 0
     return thresh, contours, cX, cY
+
 
 converters = []
 

@@ -595,20 +595,24 @@ class Service(Device):
                                      device_status=self.device_status)
         return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
 
+    @abstractmethod
+    def _release_hardware(self) -> Tuple[bool, str]:
+        return True, ''
+
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
         flag = func_input.flag
         if self.device_status.power ^ flag:  # XOR
             if not flag and self.device_status.active:
                 comments = f'Power is {self.device_status.power}. Cannot switch power off when device is activated.'
-                success = False
+                res = False
             else:
                 self.device_status.power = flag
-                success = True
+                res = True
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
         else:
-            success, comments = True, ''
-        return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=success)
+            res, comments = True, ''
+        return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=res)
 
 
 class DeviceFactory:

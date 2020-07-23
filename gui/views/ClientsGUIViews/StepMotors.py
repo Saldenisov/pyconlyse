@@ -194,6 +194,7 @@ class StepMotorsView(QMainWindow):
                                   FuncGetStpMtrControllerStateOutput,
                                   FuncMoveAxisToOutput,
                                   FuncGetPosOutput,
+                                  FuncSetPosInput,
                                   FuncStopAxisOutput,
                                   FuncPowerOutput] = info
                     self.ui.comments.setText(result.comments)
@@ -275,34 +276,25 @@ class StepMotorsView(QMainWindow):
         ui = self.ui
 
         if cs.axes != cs.axes_previous or force_axis:
-            for now, then in zip(cs.axes.items(), cs.axes_previous.items()):
-                if now != then:
-                    axis: AxisStpMtrEssentials = now[1]
-                    ui.checkBox_On.setChecked(axis.status)
-
             axis_ids = list(cs.axes)
             ui.spinBox_axis.setMinimum(min(axis_ids))
             ui.spinBox_axis.setMaximum(max(axis_ids))
             if ui.spinBox_axis.value() not in axis_ids:
                 ui.spinBox_axis.setValue(min(axis_ids))
             axis_id = int(ui.spinBox_axis.value())
-            axis: AxisStpMtr = cs.axes[axis_id]
 
+            axis: AxisStpMtrEssentials = cs.axes[axis_id]
+            ui.checkBox_On.setChecked(axis.status)
             _translate = QtCore.QCoreApplication.translate
-            axis: AxisStpMtr = self.service_parameters.device_description.axes[axis_id]
             ui.label.setText(_translate("StpMtrGUI", "axis ID"))
             if axis.friendly_name != '':
                 name = axis.friendly_name
             else:
                 name = axis.name
 
-
             ui.label_name.setText(_translate("StpMtrGUI", name))
-
             ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
             ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
-
-
 
 
             if force_axis:
@@ -324,7 +316,6 @@ class StepMotorsView(QMainWindow):
                 else:
                     ui.radioButton_mm.setEnabled(False)
 
-                ui.checkBox_On.setChecked(axis.status)
 
             self._update_progessbar_pos()
             self._update_lcd_screen()

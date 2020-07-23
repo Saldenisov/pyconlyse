@@ -177,14 +177,14 @@
          </widget>
         </item>
         <item row="8" column="2">
-         <widget class="QCheckBox" name="checkBox">
+         <widget class="QCheckBox" name="checkBox_power">
           <property name="text">
            <string>Power</string>
           </property>
          </widget>
         </item>
         <item row="7" column="2">
-         <widget class="QCheckBox" name="checkBox_2">
+         <widget class="QCheckBox" name="checkBox_activate">
           <property name="text">
            <string>Activate</string>
           </property>
@@ -233,7 +233,7 @@
       <item>
        <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
-         <widget class="QTextEdit" name="textEdit_cameraDescription">
+         <widget class="QTextEdit" name="textEdit_comments">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
             <horstretch>0</horstretch>
@@ -303,7 +303,7 @@
       <item>
        <widget class="QPushButton" name="pushButton_stop">
         <property name="text">
-         <string>PushButton</string>
+         <string>Stop</string>
         </property>
        </widget>
       </item>

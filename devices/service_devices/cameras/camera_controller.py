@@ -3,7 +3,7 @@ from abc import abstractmethod
 from os import path
 from pathlib import Path
 from typing import Any, Callable
-
+from functools import lru_cache
 from devices.devices import Service
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.camera_dataclass import *
@@ -80,6 +80,28 @@ class CameraController(Service):
     def _cameras_status(self) -> List[int]:
         return [camera.status for camera in self.cameras.values()]
 
+    @abstractmethod
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
+        """
+        Connect/Disconnect to hardware controller
+        :param flag: True/False
+        :return: res, comments='' if True, else error_message
+        """
+        if self.device_status.power:
+            self.device_status.connected = flag
+            return True, ""
+        else:
+            return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+
+
+    @property
+    @lru_cache(maxsize=10)
+    def device_id_to_id(self) -> Dict[int, int]:
+        return_dict = {}
+        for camera_id, camera in self.cameras.items():
+            return_dict[camera.device_id] = camera_id
+        return return_dict
+
     def description(self) -> Desription:
         """
         Description with important parameters
@@ -98,7 +120,7 @@ class CameraController(Service):
     def _get_cameras_status_db(self) -> List[int]:
         return [0] * self._cameras_number
 
-    def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
+    def get_controller_state(self, func_input: FuncGetCameraControllerStateInput) -> FuncGetControllerStateOutput:
         """
         State of controller is returned
         :return:  FuncOutput
@@ -215,7 +237,6 @@ class CameraController(Service):
     @abstractmethod
     def _set_private_parameters_db(self):
         pass
-
 
     def _set_status_cameras(self):
         if self.device_status.connected:

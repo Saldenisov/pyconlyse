@@ -5,6 +5,7 @@ import pytest
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment import ProjectManager_controller
 from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis
+from devices.service_devices.cameras import CameraCtrl_Basler
 
 app_folder = str(Path(__file__).resolve().parents[2])
 
@@ -65,5 +66,12 @@ def projectmanager(device_id='ProjectManager_controller:2d23d885d1c63ab03166ffa8
 
 def projectmanager_default_non_fixture(device_id='ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada',
                                        db_name='Devices.db') -> ProjectManager_controller:
+    return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
+                                                                       db_name), test=True)
+
+
+# Cameras
+def camera_basler_test_non_fixture(device_id='CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02',
+                                   db_name='Devices.db') -> CameraCtrl_Basler:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
                                                                        db_name), test=True)

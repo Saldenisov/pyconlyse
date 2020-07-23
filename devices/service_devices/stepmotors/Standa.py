@@ -275,8 +275,9 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
             device_id = ctypes.c_int(self.axes[axis_id].device_id)
         except Exception as e:
-            pass
+            error_logger(self, self._set_pos, e)
         result = self.lib.set_position(device_id, ctypes.byref(pos_standa))
+        self.axes[axis_id].position = self._get_position_controller(axis_id=axis_id)[1]
         return self._standa_error(result)
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):

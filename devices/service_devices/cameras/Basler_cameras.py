@@ -3,8 +3,10 @@ Controllers of Basler cameras are described here
 
 created
 """
-from typing import Tuple, List
 from distutils.util import strtobool
+
+from pypylon import pylon, genicam
+
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
 from utilities.datastructures.mes_independent.camera_dataclass import *
 from utilities.myfunc import error_logger, info_msg
@@ -18,6 +20,49 @@ class CameraCtrl_Basler(CameraController):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
+        if self.device_status.power:
+            if flag:
+                res, comments = self._form_devices_list()
+            else:
+                res, comments = self._release_hardware()
+            self.device_status.connected = flag
+        else:
+            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+
+        return res, comments
+
+    def _check_if_active(self) -> Tuple[bool, str]:
+        return super(CameraCtrl_Basler, self)._check_if_active()
+
+    def _check_if_connected(self) -> Tuple[bool, str]:
+        pass
+
+    def _form_devices_list(self) -> Tuple[bool, str]:
+        # Init all camera
+        try:
+            # Get the transport layer factory.
+            tlFactory = pylon.TlFactory.GetInstance()
+
+            # Get all attached devices and exit application if no device is found.
+            pylon_devices: Tuple[pylon.DeviceInfo] = tlFactory.EnumerateDevices()
+            if len(pylon_devices) == 0:
+                return False, "No cameras present."
+
+            # Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
+            pylon_cameras: pylon.InstantCameraArray = pylon.InstantCameraArray(min(len(pylon_devices), self._cameras_number))
+
+            device_id_camera_id = self.device_id_to_id
+            for i, pylon_camera in enumerate(pylon_cameras):
+                pylon_camera.Attach(tlFactory.CreateDevice(pylon_devices[i]))
+                pylon_camera.Open()
+                device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
+                self.cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
+
+            return True, ''
+        except (genicam.GenericException, ValueError) as e:
+            return False, f"An exception occurred. {e}"
+
     def _get_cameras_status(self) -> List[int]:
         pass
 
@@ -25,12 +70,6 @@ class CameraCtrl_Basler(CameraController):
         pass
 
     def _stop_acquisition(self, camera_id: int):
-        pass
-
-    def _check_if_active(self) -> Tuple[bool, str]:
-        pass
-
-    def _check_if_connected(self) -> Tuple[bool, str]:
         pass
 
     def _set_private_parameters_db(self):
@@ -98,3 +137,7 @@ class CameraCtrl_Basler(CameraController):
         except (KeyError, ValueError) as e:
             error_logger(self, func, e)
             raise CameraError(self, f'Check DB for {attribute_name}: {list(obligation_keys)}. {e}')
+
+    def _release_hardware(self) -> Tuple[bool, str]:
+        pass
+
