@@ -42,7 +42,7 @@ class CameraController(Service):
                     if res:
                         self.device_status.active = True
             else:
-                res, comments = self._connect(False)
+                res, comments = self._connect(flag)
                 if res:
                     self.device_status.active = flag
         info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
@@ -116,6 +116,7 @@ class CameraController(Service):
     @abstractmethod
     def _get_cameras_status(self) -> List[int]:
         pass
+
 
     def _get_cameras_status_db(self) -> List[int]:
         return [0] * self._cameras_number

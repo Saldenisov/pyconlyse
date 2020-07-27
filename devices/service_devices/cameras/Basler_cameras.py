@@ -3,8 +3,8 @@ Controllers of Basler cameras are described here
 
 created
 """
+from dataclasses import asdict
 from distutils.util import strtobool
-
 from pypylon import pylon, genicam
 
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
@@ -19,6 +19,7 @@ class CameraCtrl_Basler(CameraController):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.tl_factory = None
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -42,32 +43,57 @@ class CameraCtrl_Basler(CameraController):
         # Init all camera
         try:
             # Get the transport layer factory.
-            tlFactory = pylon.TlFactory.GetInstance()
-
+            self.tl_factory = pylon.TlFactory.GetInstance()
             # Get all attached devices and exit application if no device is found.
-            pylon_devices: Tuple[pylon.DeviceInfo] = tlFactory.EnumerateDevices()
+            pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
             if len(pylon_devices) == 0:
                 return False, "No cameras present."
+            elif len(pylon_devices) != self._cameras_number:
+                error_logger(self, self._form_devices_list, f'Not all cameras listed in DB are present.')
 
             # Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
             pylon_cameras: pylon.InstantCameraArray = pylon.InstantCameraArray(min(len(pylon_devices), self._cameras_number))
 
             device_id_camera_id = self.device_id_to_id
+            keep_camera = []
             for i, pylon_camera in enumerate(pylon_cameras):
-                pylon_camera.Attach(tlFactory.CreateDevice(pylon_devices[i]))
-                pylon_camera.Open()
-                device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
-                self.cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
+                pylon_camera.Attach(self.tl_factory.CreateDevice(pylon_devices[i]))
+                try:
+                    device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
+                except ValueError:
+                    return False, f'Camera id {pylon_camera.GetDeviceInfo().GetSerialNumber()} ' \
+                                  f'was not correctly converted to integer value.'
+                if device_id in device_id_camera_id:
+                    self.cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
+                    self.cameras[device_id_camera_id[device_id]].pylon_camera.Open()
 
+                    # Setting Parameters for the cameras
+                    res, comments = self._set_parameters_camera(device_id_camera_id[device_id])
+                    if res:
+                        keep_camera.append(device_id)
+                    else:
+                        error_logger(self, self._form_devices_list, f'Parameters for camera with id {device_id} were '
+                                                                    f'not set: {comments}. Skipping camera.')
+                else:
+                    info_msg(self, 'INFO', f'Camera with id: {device_id} is not known. Skipping its initialization.')
+
+            # Deleting those cameras read from DB which were not found by controller.
+            for device_id, camera_id in device_id_camera_id.items():
+                if device_id not in keep_camera:
+                    del self.cameras[camera_id]
             return True, ''
         except (genicam.GenericException, ValueError) as e:
             return False, f"An exception occurred. {e}"
 
     def _get_cameras_status(self) -> List[int]:
-        pass
+        n = self._get_number_cameras()
+        return [0]*n
 
     def _get_number_cameras(self):
-        pass
+        if not self.tl_factory:
+            self.tl_factory = pylon.TlFactory.GetInstance()
+        pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
+        return len(pylon_devices)
 
     def _stop_acquisition(self, camera_id: int):
         pass
@@ -90,6 +116,40 @@ class CameraCtrl_Basler(CameraController):
 
     def _set_image_format_db(self):
         self._set_db_attribite(Image_Format_Control, self._set_analog_controls_db)
+
+    def _set_parameters_camera(self, camera_id: int) -> Tuple[bool, str]:
+        device_id: int = self.cameras[camera_id].device_id
+        camera = self.cameras[camera_id]
+        pylon_camera: pylon.InstantCamera = camera.pylon_camera
+        # Setting Friendly name
+        try:
+            try:
+                friendly_name = eval(self.get_parameters['friendly_names'])[device_id]
+            except (KeyError, ValueError, SyntaxError):
+                friendly_name = str(device_id)
+
+            pylon_camera.GetDeviceInfo().SetFriendlyName(friendly_name.format('utf-8'))
+            camera.friendly_name = friendly_name
+
+            parameters_groups = ['Transport_Layer',
+                                 'Analog_Controls',
+                                 'AOI_Controls',
+                                 'Acquisition_Controls',
+                                 'Image_Format_Control']
+            for parameters_group_name in parameters_groups:
+                if parameters_group_name not in camera.parameters:
+                    return False, f'Parameters group "{parameters_group_name}" is absent in DB.'
+                else:
+                    try:
+                        for param_name, param_value in asdict(camera.parameters[parameters_group_name]).items():
+                            setattr(camera.pylon_camera, param_name, param_value)
+                    except (genicam.GenericException, Exception) as e:
+                        raise CameraError(self, text=f'Error appeared: {e} when setting parameter "{param_name}" for '
+                                                     f'camera with id {device_id}')
+            return True, ''
+
+        except (genicam.GenericException, CameraError) as e:
+            return False, f'Error appeared when camera id {device_id} was initializing: {e}.'
 
     def _set_transport_layer_db(self):
         self._set_db_attribite(Transport_Layer, self._set_analog_controls_db)
@@ -139,5 +199,11 @@ class CameraCtrl_Basler(CameraController):
             raise CameraError(self, f'Check DB for {attribute_name}: {list(obligation_keys)}. {e}')
 
     def _release_hardware(self) -> Tuple[bool, str]:
-        pass
+        # TODO: make it work
+        for camera_id, camera in self.cameras.items():
+            try:
+                camera.pylon_camera = None
+            except (genicam.GenericException, Exception) as e:
+                error_logger(self, self._release_hardware, e)
+        return True, ''
 

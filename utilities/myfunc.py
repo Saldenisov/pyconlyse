@@ -276,6 +276,7 @@ def dict_of_dict_to_array(dic):
             arr.extend(dict_of_dict_to_array(dic[key]))
     return arr
 
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()

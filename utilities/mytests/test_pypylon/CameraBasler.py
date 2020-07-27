@@ -34,16 +34,23 @@ def init(camera_id, camera, devices):
     #camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
     camera.Attach(tlFactory.CreateDevice(devices[camera_id]))
     camera.Open()
+    camera.Close()
+    camera.Open()
+    b = camera.IsOpen()
     a = camera.GetDeviceInfo().GetModelName()
     b = camera.GetDeviceInfo().GetSerialNumber()
     c = camera.GetDeviceInfo().GetIpAddress()
+    camera.GetDeviceInfo().SetFriendlyName('Camera1'.format('utf-8'))
+    d = camera.GetDeviceInfo().GetFriendlyName()
     camera.Width = 550
+    e = getattr(camera, 'Width').GetValue()
     camera.Height = 550
-    camera.OffsetX = OffSet[camera_id]['X']
+    camera.OffsetX.SetValue(OffSet[camera_id]['X'])
     camera.OffsetY = OffSet[camera_id]['Y']
-    camera.GainRaw.SetValue(0)
+    camera.GainAuto = 'Off'
+    camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
-    camera.TriggerSource.SetValue("Line1")
+    camera.TriggerSource = "Line1"
     camera.TriggerMode.SetValue("On")
     camera.TriggerDelayAbs.SetValue(190000)
     camera.ExposureTimeAbs.SetValue(10000.0)

@@ -27,4 +27,16 @@ def test_func_stpmtr(cameractrl: CameraController):
     # activate controller
     res: FuncActivateOutput = cameractrl.activate(ACTIVATE)
     assert res.func_success
+    assert res.device_status.active
+    # deactivate controller
+    res: FuncActivateOutput = cameractrl.activate(DEACTIVATE)
+    assert res.func_success
+    assert not res.device_status.active
+    # activate controller
+    res: FuncActivateOutput = cameractrl.activate(ACTIVATE)
+    assert res.func_success
+    assert res.device_status.active
+
+    cameractrl.stop()
+
 

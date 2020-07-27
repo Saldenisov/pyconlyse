@@ -10,7 +10,7 @@ from utilities.datastructures.mes_independent.general import FuncInput, FuncOutp
 
 @dataclass
 class Analog_Controls:
-    GainAuto: bool = False
+    GainAuto: str = 'Off'
     GainRaw: int = 0
     BlackLevelRaw: int = 0
     BalanceRatioRaw: int = 0
@@ -37,7 +37,7 @@ class Acquisition_Controls:
 
 @dataclass
 class Image_Format_Control:
-    Pixel_Format: str = 'Mono8'  # Basic gray-scale
+    PixelFormat: str = 'Mono8'  # Basic gray-scale
 
 
 @dataclass
