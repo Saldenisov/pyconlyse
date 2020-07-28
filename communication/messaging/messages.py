@@ -176,18 +176,19 @@ class MessageExt(Message):
                     parameters[param_name] = param
                 return MessageExt(**parameters)
             except TypeError as e:
-                raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+                raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
         elif coding is Coding.JSON:
             try:
                 mes_str = loads(mes_bytes)
                 return eval(mes_str)
-            except Exception:
+            except Exception as e:
+                print(e, mes_bytes)
                 try:
                     mes_dc = loads(decompress(b64decode(mes_bytes)))
                     mes = eval(mes_dc)
                     return mes
                 except Exception as e:
-                    raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+                    raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
         else:
             module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
             raise MsgError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')

@@ -39,6 +39,18 @@ class CameraCtrl_Basler(CameraController):
     def _check_if_connected(self) -> Tuple[bool, str]:
         pass
 
+    @property
+    def cameras(self):
+        return self.cameras_no_pylon
+
+    @property
+    def cameras_no_pylon(self):
+        cameras = {}
+        for camera_id, camera in self._cameras.items():
+            cameras[camera_id] = camera.no_pylon()
+        return cameras
+
+
     def _form_devices_list(self) -> Tuple[bool, str]:
         # Init all camera
         try:
@@ -64,8 +76,8 @@ class CameraCtrl_Basler(CameraController):
                     return False, f'Camera id {pylon_camera.GetDeviceInfo().GetSerialNumber()} ' \
                                   f'was not correctly converted to integer value.'
                 if device_id in device_id_camera_id:
-                    self.cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
-                    self.cameras[device_id_camera_id[device_id]].pylon_camera.Open()
+                    self._cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
+                    self._cameras[device_id_camera_id[device_id]].pylon_camera.Open()
 
                     # Setting Parameters for the cameras
                     res, comments = self._set_parameters_camera(device_id_camera_id[device_id])
@@ -80,7 +92,7 @@ class CameraCtrl_Basler(CameraController):
             # Deleting those cameras read from DB which were not found by controller.
             for device_id, camera_id in device_id_camera_id.items():
                 if device_id not in keep_camera:
-                    del self.cameras[camera_id]
+                    del self._cameras[camera_id]
             return True, ''
         except (genicam.GenericException, ValueError) as e:
             return False, f"An exception occurred. {e}"
@@ -118,8 +130,8 @@ class CameraCtrl_Basler(CameraController):
         self._set_db_attribite(Image_Format_Control, self._set_analog_controls_db)
 
     def _set_parameters_camera(self, camera_id: int) -> Tuple[bool, str]:
-        device_id: int = self.cameras[camera_id].device_id
-        camera = self.cameras[camera_id]
+        device_id: int = self._cameras[camera_id].device_id
+        camera = self._cameras[camera_id]
         pylon_camera: pylon.InstantCamera = camera.pylon_camera
         # Setting Friendly name
         try:
@@ -163,7 +175,7 @@ class CameraCtrl_Basler(CameraController):
                 raise KeyError
             else:
                 # Init Analog_Controls for all cameras
-                for camera_key, camera in self.cameras.items():
+                for camera_key, camera in self._cameras.items():
                     camera.parameters[attribute_name] = dataclass()
 
             for analog_key, analog_value in analog_controls.items():
@@ -177,7 +189,7 @@ class CameraCtrl_Basler(CameraController):
                     else:
                         dict_opt = False
 
-                    for camera_key, camera in self.cameras.items():
+                    for camera_key, camera in self._cameras.items():
                         try:
                             value = analog_value if not dict_opt else analog_value[camera.device_id]
                             t = dataclass.__annotations__[analog_key]
@@ -200,7 +212,7 @@ class CameraCtrl_Basler(CameraController):
 
     def _release_hardware(self) -> Tuple[bool, str]:
         # TODO: make it work
-        for camera_id, camera in self.cameras.items():
+        for camera_id, camera in self._cameras.items():
             try:
                 camera.pylon_camera = None
             except (genicam.GenericException, Exception) as e:

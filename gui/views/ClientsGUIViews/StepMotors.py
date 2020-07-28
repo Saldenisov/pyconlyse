@@ -24,7 +24,7 @@ module_logger = logging.getLogger(__name__)
 
 class StepMotorsView(QMainWindow):
 
-    def __init__(self, in_controller, in_model, service_parameters: Desription, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
@@ -90,6 +90,18 @@ class StepMotorsView(QMainWindow):
     def controller_axes(self):
         return self.controller_status.axes
 
+    @controller_axes.setter
+    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
+        try:
+            if type(next(iter(value.values()))) == AxisStpMtr:
+                self.controller_status.axes = value
+            else:
+                for axis_id, axis in value.items():
+                    self.controller_status.axes[axis_id].status = axis.status
+                    self.controller_status.axes[axis_id].position = axis.position
+        except Exception as e:
+            error_logger(self, self.controller_axes, e)
+
     def get_pos(self, axis_id=None, with_return=False):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
@@ -114,18 +126,6 @@ class StepMotorsView(QMainWindow):
             error_dialog = QErrorMessage()
             error_dialog.showMessage(comments)
             error_dialog.exec_()
-
-    @controller_axes.setter
-    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
-        try:
-            if type(next(iter(value.values()))) == AxisStpMtr:
-                self.controller_status.axes = value
-            else:
-                for axis_id, axis in value.items():
-                    self.controller_status.axes[axis_id].status = axis.status
-                    self.controller_status.axes[axis_id].position = axis.position
-        except Exception as e:
-            error_logger(self, self.controller_axes, e)
 
     def move_axis(self):
         def convert_pos(pos: str) -> Union[microstep, mm, None]:

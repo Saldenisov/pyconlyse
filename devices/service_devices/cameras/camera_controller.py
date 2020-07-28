@@ -24,7 +24,7 @@ class CameraController(Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.cameras: Dict[int, Camera] = dict()
+        self._cameras: Dict[int, Camera] = dict()
 
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible
@@ -70,15 +70,21 @@ class CameraController(Service):
                 CameraController.STOP_ACQUISITION]
 
     @property
+    @abstractmethod
+    def cameras(self):
+        pass
+
+
+    @property
     def cameras_essentials(self):
         essentials = {}
-        for camera_id, camera in self.cameras.items():
+        for camera_id, camera in self._cameras.items():
             essentials[camera_id] = camera.short()
         return essentials
 
     @property
     def _cameras_status(self) -> List[int]:
-        return [camera.status for camera in self.cameras.values()]
+        return [camera.status for camera in self._cameras.values()]
 
     @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:
@@ -93,12 +99,11 @@ class CameraController(Service):
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
-
     @property
     @lru_cache(maxsize=10)
     def device_id_to_id(self) -> Dict[int, int]:
         return_dict = {}
-        for camera_id, camera in self.cameras.items():
+        for camera_id, camera in self._cameras.items():
             return_dict[camera.device_id] = camera_id
         return return_dict
 
@@ -117,7 +122,6 @@ class CameraController(Service):
     def _get_cameras_status(self) -> List[int]:
         pass
 
-
     def _get_cameras_status_db(self) -> List[int]:
         return [0] * self._cameras_number
 
@@ -128,12 +132,8 @@ class CameraController(Service):
         """
         comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
                    f'Cameras are {self._cameras_status}'
-        try:
-            return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
-                                                      comments=comments, func_success=True)
-        except KeyError:
-            return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
-                                                      comments=comments, func_success=True)
+        return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
+                                                  comments=comments, func_success=True)
 
     def _get_cameras_ids_db(self):
         try:
@@ -198,16 +198,16 @@ class CameraController(Service):
     def _set_names_cameras(self):
         if not self.device_status.connected:
             names = self._get_cameras_names_db()
-            for id, name in zip(self.cameras.keys(), names):
-                self.cameras[id].name = name
-                self.cameras[id].friendly_name = name
+            for id, name in zip(self._cameras.keys(), names):
+                self._cameras[id].name = name
+                self._cameras[id].friendly_name = name
 
     def _set_ids_cameras(self):
         if not self.device_status.connected:
             ids = self._get_cameras_ids_db()
             i = 1
             for id_a in ids:
-                self.cameras[i] = Camera(device_id=id_a)
+                self._cameras[i] = Camera(device_id=id_a)
                 i += 1
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
@@ -245,8 +245,8 @@ class CameraController(Service):
         else:
             statuses = self._get_cameras_status_db()
 
-        for id, status in zip(self.cameras.keys(), statuses):
-            self.cameras[id].status = status
+        for id, status in zip(self._cameras.keys(), statuses):
+            self._cameras[id].status = status
 
     @abstractmethod
     def _stop_acquisition(self, camera_id: int):

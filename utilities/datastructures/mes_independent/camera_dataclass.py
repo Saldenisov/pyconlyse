@@ -53,10 +53,16 @@ class Camera:
     friendly_name: str = ''
     parameters: Dict[str, Any] = field(default_factory=dict)
     pylon_camera: pylon.InstantCamera = None
+    status: int = 0
+
+    def no_pylon(self):
+        return Camera(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,
+                      parameters=self.parameters, status=self.status)
 
     def short(self):
-        return CameraEssentials(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,
-                                image_parameters=self.image_parameters)
+        return CameraEssentials(device_id=self.device_id, status=self.status,
+                                name=self.name, friendly_name=self.friendly_name,
+                                parameters=self.parameters)
 
 
 @dataclass(order=True, frozen=False)
@@ -64,7 +70,8 @@ class CameraEssentials:
     device_id: int
     name: str = ''
     friendly_name: str = ''
-    image_parameters: Dict[str, int] = field(default_factory=dict)  # {"X": size in pixels, "Y": ..., 'OffsetX':...}
+    parameters: Dict[str, int] = field(default_factory=dict)  # {"X": size in pixels, "Y": ..., 'OffsetX':...}
+    status: int = 0
 
 
 @dataclass(order=True)
@@ -122,4 +129,13 @@ class FuncStopAcquisitionOutput(FuncOutput):
 
 @dataclass(order=True, frozen=False)
 class CamerasCtrlStatusMultiCameras:
-    pass
+    cameras: Dict[int, Camera]
+    device_status: DeviceStatus
+    cameras_previous: Dict[int, Camera] = None
+    device_status_previous: DeviceStatus = None
+
+    def __post_init__(self):
+        if not self.cameras_previous:
+            self.cameras_previous = self.cameras
+        if not self.device_status_previous:
+            self.device_status_previous = self.device_status

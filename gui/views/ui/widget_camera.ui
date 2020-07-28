@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>CameraWidget</class>
- <widget class="QMainWindow" name="CameraWidget">
+ <class>CameraGUI</class>
+ <widget class="QMainWindow" name="CameraGUI">
   <property name="enabled">
    <bool>true</bool>
   </property>
@@ -28,16 +28,6 @@
       </property>
       <item>
        <layout class="QGridLayout" name="gridLayout">
-        <item row="4" column="3">
-         <widget class="QSpinBox" name="spinBox_blacklevel">
-          <property name="minimum">
-           <number>-127</number>
-          </property>
-          <property name="maximum">
-           <number>127</number>
-          </property>
-         </widget>
-        </item>
         <item row="4" column="2">
          <widget class="QSpinBox" name="spinBox_fps">
           <property name="minimum">
@@ -126,13 +116,6 @@
         <item row="1" column="1">
          <widget class="QSpinBox" name="spinBox_cameraID"/>
         </item>
-        <item row="2" column="3">
-         <widget class="QSpinBox" name="spinBox_gainraw">
-          <property name="maximum">
-           <number>3</number>
-          </property>
-         </widget>
-        </item>
         <item row="3" column="1">
          <widget class="QSpinBox" name="spinBox_Ysize">
           <property name="sizePolicy">
@@ -211,22 +194,46 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="3">
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>GainRaw</string>
-          </property>
-         </widget>
+        <item row="6" column="2">
+         <widget class="QComboBox" name="comboBox"/>
         </item>
-        <item row="3" column="3">
+        <item row="7" column="3">
          <widget class="QLabel" name="label_3">
           <property name="text">
            <string>BlackLevel</string>
           </property>
          </widget>
         </item>
-        <item row="6" column="2">
-         <widget class="QComboBox" name="comboBox"/>
+        <item row="8" column="3">
+         <widget class="QSpinBox" name="spinBox_blacklevel">
+          <property name="minimum">
+           <number>-127</number>
+          </property>
+          <property name="maximum">
+           <number>127</number>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="3">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>GainRaw</string>
+          </property>
+         </widget>
+        </item>
+        <item row="6" column="3">
+         <widget class="QSpinBox" name="spinBox_gainraw">
+          <property name="maximum">
+           <number>3</number>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="3">
+         <widget class="QLabel" name="label_name">
+          <property name="text">
+           <string>Name</string>
+          </property>
+         </widget>
         </item>
        </layout>
       </item>

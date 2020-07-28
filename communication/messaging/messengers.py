@@ -119,7 +119,7 @@ class Messenger(MessengerInter):
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
 
     @abstractmethod
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         pass
 
     def encrypt_with_public(self, msg_b: bytes, pem: bytes) -> bytes:
@@ -136,11 +136,11 @@ class Messenger(MessengerInter):
                     receiver_id: DeviceId = msg.receiver_id
                 else:
                     receiver_id = self.parent.server_id
-                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr())
+                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr(compression=False))
             except KeyError:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
         else:
-            return msg.byte_repr()
+            return msg.byte_repr(compression=False)
 
     def _gen_rsa_keys(self):
         """
@@ -321,7 +321,7 @@ class ClientMessenger(Messenger):
             self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
             self.bind_pub()
 
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket, crypted in msgs:
             try:
                 if int(crypted):
@@ -351,7 +351,7 @@ class ClientMessenger(Messenger):
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        self._deal_with_reaceived_msg(msgs)
+                        self._deal_with_received_msg(msgs)
                         msgs = []
             except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
                 self.logger.error(e)
@@ -505,7 +505,7 @@ class ServerMessenger(Messenger):
             error_logger(self, self._create_sockets, e)
             raise e
 
-    def _deal_with_reaceived_msg(self, msgs: List[MsgTuple]):
+    def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
             try:
                 if int(crypted):
@@ -574,7 +574,7 @@ class ServerMessenger(Messenger):
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
-                        self._deal_with_reaceived_msg(msgs)
+                        self._deal_with_received_msg(msgs)
                         msgs = []
                 except ValueError as e:
                     self.logger.error(e)

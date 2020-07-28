@@ -19,6 +19,11 @@ def test_func_stpmtr(cameractrl: CameraController):
     POWER_ON = FuncPowerInput(flag=True)
     POWER_OFF = FuncPowerInput(flag=False)
 
+    # description
+    res: CameraDescription = cameractrl.description()
+    assert res.info == 'Basler cameras controller'
+
+
     # power on
     res: FuncPowerOutput = cameractrl.power(POWER_ON)
     assert type(res) == FuncPowerOutput
