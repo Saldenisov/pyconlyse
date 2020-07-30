@@ -52,17 +52,24 @@ class Camera:
     name: str = ''
     friendly_name: str = ''
     parameters: Dict[str, Any] = field(default_factory=dict)
-    pylon_camera: pylon.InstantCamera = None
     status: int = 0
 
-    def no_pylon(self):
-        return Camera(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,
-                      parameters=self.parameters, status=self.status)
 
     def short(self):
         return CameraEssentials(device_id=self.device_id, status=self.status,
                                 name=self.name, friendly_name=self.friendly_name,
                                 parameters=self.parameters)
+
+
+@dataclass(frozen=False)
+class CameraBasler(Camera):
+    pylon_camera: pylon.InstantCamera = None
+    converter: pylon.ImageFormatConverter = None
+
+    def no_pylon(self):
+        return CameraBasler(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,
+                      parameters=self.parameters, status=self.status)
+
 
 
 @dataclass(order=True, frozen=False)
@@ -81,7 +88,7 @@ class CameraDescription(Desription):
 @dataclass
 class FuncActivateCameraInput(FuncInput):
     camera_id: int
-    flag: bool
+    flag: int
     com: str = 'activate_camera'
 
 
@@ -106,8 +113,15 @@ class FuncGetImagesInput(FuncInput):
     camera_id: int
     n_images: int
     every_n_sec: int
+    demander_device_id: str
     com: str = 'get_images'
 
+@dataclass
+class FuncGetImagesPrepared(FuncOutput):
+    camera_id: int
+    ready: bool
+    cameras: CameraEssentials
+    com: str = 'get_images_prepared'
 
 @dataclass
 class FuncGetImagesOutput(FuncOutput):

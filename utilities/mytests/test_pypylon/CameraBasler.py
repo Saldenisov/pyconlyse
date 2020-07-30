@@ -36,6 +36,7 @@ def init(camera_id, camera, devices):
     test[camera_id] = camera
     camera.Attach(tlFactory.CreateDevice(devices[camera_id]))
     camera.Open()
+    camera.StopGrabbing()
     b = camera.IsOpen()
     a = camera.GetDeviceInfo().GetModelName()
     b = camera.GetDeviceInfo().GetSerialNumber()
@@ -50,7 +51,7 @@ def init(camera_id, camera, devices):
     camera.GainAuto = 'Off'
     camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
-    camera.TriggerSource = "Line1"
+    camera.TriggerSource = "Software"
     camera.TriggerMode.SetValue("On")
     camera.TriggerDelayAbs.SetValue(190000)
     camera.ExposureTimeAbs.SetValue(10000.0)

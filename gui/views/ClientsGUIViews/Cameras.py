@@ -6,7 +6,7 @@ Created on 16.07.2020
 import copy
 import logging
 from _functools import partial
-
+from distutils.util import strtobool
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow, QErrorMessage
 
@@ -38,15 +38,20 @@ class CamerasView(QMainWindow):
         self.service_parameters: DeviceInfoExt = service_parameters
 
         self.ui = Ui_CameraGUI()
-        self.ui.setupUi(CameraGUI=self, service_parameters=service_parameters)
+        self.ui.setupUi(CameraGUI=self)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
 
+        self.ui.checkBox_On.clicked.connect(self.activate_camera)
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.checkBox_activate.clicked.connect(self.activate_controller)
+        self.ui.spinBox_cameraID.valueChanged.connect(partial(self.update_state, *[True, False]))
+        self.ui.pushButton_GetImage.clicked.connect(self.get_images)
+        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
+        self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
 
-        self.update_state(force_camera=True)
+        self.update_state(force_camera=True, force_device=True)
 
         msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
                                        func_input=FuncGetCameraControllerStateInput())
@@ -64,7 +69,7 @@ class CamerasView(QMainWindow):
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         client = self.device
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
-                                  func_input=FuncActivateCameraInput(axis_id=int(self.ui.spinBox_axis.value()),
+                                  func_input=FuncActivateCameraInput(camera_id=int(self.ui.spinBox_cameraID.value()),
                                                                      flag=flag))
         client.send_msg_externally(msg)
 
@@ -84,6 +89,20 @@ class CamerasView(QMainWindow):
                     self.controller_status.cameras[camera_id].status = camera.status
         except Exception as e:
             error_logger(self, self.controller_axes, e)
+
+    def get_images(self, images=False):
+        client = self.device
+        if images:
+            n_images = -1
+        else:
+            n_images = 1
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncGetImagesInput(camera_id=int(self.ui.spinBox_cameraID.value()),
+                                                                n_images=n_images,
+                                                                every_n_sec=int(self.ui.spinBox_seconds.value()),
+                                                                demander_device_id=client.id))
+        client.send_msg_externally(msg)
+        self._asked_status = 0
 
     def model_is_changed(self, msg: MessageInt):
         try:
@@ -111,6 +130,26 @@ class CamerasView(QMainWindow):
                         result: FuncGetCameraControllerStateOutput = result
                         self.controller_cameras = result.cameras
                         self.controller_status.device_status = result.device_status
+                    elif info.com == CameraController.GET_IMAGES.name:
+                        pass
+                    elif info.com == CameraController.GET_IMAGES.name_prepared:
+                        result: FuncGetImagesPrepared = result
+                        self.controller_cameras = result.cameras
+                        if result.ready:
+                            comments = f'Camera with id {result.camera_id} is ready to send images. ' \
+                                       f'Acquisition is started.'
+                        else:
+                            comments = f'Camera {result.camera_id} is not ready to send images.'
+                        self.ui.textEdit_comments.setText(f'{comments} {result.comments}')
+                    elif info.com == CameraController.STOP_ACQUISITION.name:
+                        result: FuncStopAcquisitionOutput = result
+                        if result.func_success:
+                            self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
+                                                              f'is stopped.')
+                        else:
+                            self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
+                                                              f'was not stopped. {result.comments}')
+
                     elif info.com == CameraController.POWER.name:
                         result: FuncPowerOutput = result
                         self.controller_status.device_status = result.device_status
@@ -132,6 +171,13 @@ class CamerasView(QMainWindow):
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.send_msg_externally(msg)
 
+    def stop_acquisition(self):
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                                  func_input=FuncStopAcquisitionInput(camera_id=int(self.ui.spinBox_cameraID.value())))
+        client.send_msg_externally(msg)
+        self._asked_status = 0
+
     def update_state(self, force_camera=False, force_device=False):
         cs = self.controller_status
         ui = self.ui
@@ -145,16 +191,35 @@ class CamerasView(QMainWindow):
             camera_id = int(ui.spinBox_cameraID.value())
 
             camera: CameraEssentials = cs.cameras[camera_id]
-            ui.checkBox_On.setChecked(camera.status)
+            acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
+            analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
+            aoi_cntrls: AOI_Controls = camera.parameters['AOI_Controls']
+
             _translate = QtCore.QCoreApplication.translate
             if camera.friendly_name != '':
                 name = camera.friendly_name
             else:
                 name = camera.name
 
+            ui.checkBox_On.setChecked(camera.status)
             ui.label_name.setText(_translate("CameraGUI", name))
+            ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
+            ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
+            ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
+            ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
+            ui.spinBox_Width.setValue(aoi_cntrls.Width)
+            ui.spinBox_Height.setValue(aoi_cntrls.Height)
+            ui.spinBox_Xoffset.setValue(aoi_cntrls.OffsetX)
+            ui.spinBox_Yoffset.setValue(aoi_cntrls.OffsetY)
+
+
+            self.controller_status.cameras_previous = copy.deepcopy(cs.cameras)
 
             if force_camera:
                 pass
 
-            self.controller_status.cameras_previous = copy.deepcopy(cs.cameras)
+            if cs.device_status != cs.device_status_previous or force_device:
+                ui.checkBox_power.setChecked(cs.device_status.power)
+                ui.checkBox_activate.setChecked(cs.device_status.active)
+                ui.checkBox_On.setChecked(camera.status)
+                self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)

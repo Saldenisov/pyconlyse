@@ -18,8 +18,10 @@ class CameraCtrl_Basler(CameraController):
     """
 
     def __init__(self, **kwargs):
+        kwargs['camera_class'] = CameraBasler
         super().__init__(**kwargs)
         self.tl_factory = None
+        self.pylon_cameras = None
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -57,22 +59,25 @@ class CameraCtrl_Basler(CameraController):
             if camera.status != flag:
                 info = ''
                 if camera.status == 2 and force:
-                    self._stop_acquisition(camera_id)
-                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped.'
+                    camera.pylon_camera.StopGrabbing()
+                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped. {comments}'
                     camera.status = flag
-                    res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}.' + info
+                    res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}. {info}'
                 elif camera.status == 2 and not force:
                     res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is acquiring. ' \
                                            'Force Stop in order to change status.'
-                elif flag in [0, 1]:
+                elif flag in [0, 1, 2]:
                     try:
-                        if flag == 1:
+                        if flag == 2:
+                            # TODO: must have some other strategies from future
+                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                        elif flag == 1:
                             camera.pylon_camera.Open()
-                        else:
+                        elif flag == 0:
                             camera.pylon_camera.Close()
                         camera.status = flag
-                        res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}.' \
-                                        + info
+                        res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} status is set to ' \
+                                              f'{flag}. {info}'
                     except pylon.GenericException as e:
                         comments = f'Tried to open connection, but failed: {e}'
                         error_logger(self, self._change_camera_status, comments)
@@ -110,6 +115,7 @@ class CameraCtrl_Basler(CameraController):
 
                 if device_id in device_id_camera_id:
                     self._cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
+                    self._cameras[device_id_camera_id[device_id]].converter = pylon.ImageFormatConverter()
                     self._cameras[device_id_camera_id[device_id]].pylon_camera.Open()
                     self._cameras[device_id_camera_id[device_id]].status = 1
 
@@ -149,8 +155,23 @@ class CameraCtrl_Basler(CameraController):
         pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
         return len(pylon_devices)
 
-    def _stop_acquisition(self, camera_id: int):
-        pass
+    def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
+        camera = self._cameras[camera_id]
+        if camera.status == 0:
+            return False, f'Camera {camera_id} is closed. Activate the camera first to start grabbing.'
+        elif camera.status == 1:
+            return self._change_camera_status(camera_id, 2)
+        elif camera.status == 2:
+            return True, 'Already grabbing.'
+        else:
+            return False, f'Camera {camera_id} has strange status {camera.status}. Internal error.'
+
+    def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
+        camera = self._cameras[camera_id]
+        try:
+            return self._change_camera_status(camera_id, 1, True)
+        except pylon.GenericException as e:
+            return False, f'During stopping Grabbing of camera {camera_id}: {e}'
 
     def _set_private_parameters_db(self):
         self._set_transport_layer_db()
@@ -200,6 +221,11 @@ class CameraCtrl_Basler(CameraController):
                     except (genicam.GenericException, Exception) as e:
                         raise CameraError(self, text=f'Error appeared: {e} when setting parameter "{param_name}" for '
                                                      f'camera with id {device_id}')
+
+            # setting converter
+            # TODO: read values from DB
+            camera.converter.OutputPixelFormat = pylon.PixelType_Mono8
+            camera.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
             return True, ''
 
         except (genicam.GenericException, CameraError) as e:

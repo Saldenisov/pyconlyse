@@ -59,7 +59,7 @@ class StepMotorsView(QMainWindow):
         self.ui.radioButton_angle.toggled.connect(self._update_lcd_screen)
         self.ui.closeEvent = self.closeEvent
 
-        self.update_state(force_axis=True)
+        self.update_state(force_axis=True, force_device=True)
 
         msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
                                   func_input=FuncGetStpMtrControllerStateInput())
@@ -296,6 +296,8 @@ class StepMotorsView(QMainWindow):
             ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
             ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
 
+            self.controller_status.axes_previous = copy.deepcopy(cs.axes)
+
 
             if force_axis:
                 if MoveType.step in axis.type_move or MoveType.microstep in axis.type_move:
@@ -320,13 +322,11 @@ class StepMotorsView(QMainWindow):
             self._update_progessbar_pos()
             self._update_lcd_screen()
 
-            self.controller_status.axes_previous = copy.deepcopy(cs.axes)
-
-        if cs.device_status != cs.device_status_previous or force_device:
-            ui.checkBox_power.setChecked(cs.device_status.power)
-            ui.checkBox_activate.setChecked(cs.device_status.active)
-            ui.checkBox_On.setChecked(axis.status)
-            self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
+            if cs.device_status != cs.device_status_previous or force_device:
+                ui.checkBox_power.setChecked(cs.device_status.power)
+                ui.checkBox_activate.setChecked(cs.device_status.active)
+                ui.checkBox_On.setChecked(axis.status)
+                self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
 
     def _update_lcd_screen(self):
         axis_id = int(self.ui.spinBox_axis.value())

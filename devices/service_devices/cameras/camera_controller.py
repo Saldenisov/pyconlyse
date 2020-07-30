@@ -15,7 +15,7 @@ module_logger = logging.getLogger(__name__)
 
 class CameraController(Service):
     ACTIVATE_CAMERA = CmdStruct(FuncActivateCameraInput, FuncActivateCameraOutput)
-    GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput)
+    GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput, FuncGetImagesPrepared)
     SET_IMAGE_PARAMETERS = CmdStruct(None, None)
     SET_SYNC_PARAMETERS = CmdStruct(None, None)
     SET_TRANSPORT_PARAMETERS = CmdStruct(None, None)
@@ -24,6 +24,7 @@ class CameraController(Service):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self._camera_class = kwargs['camera_class']
         self._cameras: Dict[int, Camera] = dict()
 
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
@@ -190,6 +191,15 @@ class CameraController(Service):
         except (TypeError, SyntaxError):
             raise CameraError(self, text="Check cameras_names field in database.")
 
+    def get_images(self, func_input: FuncGetImagesInput) -> FuncGetImagesPrepared:
+        camera_id = func_input.camera_id
+        res, comments = self._check_camera_range(camera_id)
+        if res:
+            res, comments = self._prepare_camera_reading(camera_id)
+
+        return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
+                                     cameras=self.cameras_essentials)
+
     @abstractmethod
     def _get_number_cameras(self):
         pass
@@ -202,6 +212,10 @@ class CameraController(Service):
                                               "in the database")
         except (ValueError, SyntaxError):
             raise CameraError(self, text="Check cameras number in database, must be cameras_number = number")
+
+    @abstractmethod
+    def _prepare_camera_reading(self) -> Tuple[bool, str]:
+        return True, ''
 
     def _set_number_cameras(self):
         if self.device_status.connected:
@@ -221,7 +235,7 @@ class CameraController(Service):
             ids = self._get_cameras_ids_db()
             i = 1
             for id_a in ids:
-                self._cameras[i] = Camera(device_id=id_a)
+                self._cameras[i] = self._camera_class(device_id=id_a)
                 i += 1
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
@@ -262,8 +276,16 @@ class CameraController(Service):
         for id, status in zip(self._cameras.keys(), statuses):
             self._cameras[id].status = status
 
+    def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
+        camera_id = func_input.camera_id
+        res, comments = self._check_camera_range(camera_id)
+        if res:
+            res, comments = self._stop_acquisition(camera_id)
+
+        return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera_id=camera_id)
+
     @abstractmethod
-    def _stop_acquisition(self, camera_id: int):
+    def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         pass
 
 

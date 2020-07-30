@@ -28,7 +28,157 @@
       </property>
       <item>
        <layout class="QGridLayout" name="gridLayout">
+        <item row="1" column="3">
+         <widget class="QComboBox" name="comboBox_syncmode">
+          <item>
+           <property name="text">
+            <string>On</string>
+           </property>
+          </item>
+          <item>
+           <property name="text">
+            <string>Off</string>
+           </property>
+          </item>
+         </widget>
+        </item>
+        <item row="1" column="2">
+         <widget class="QLabel" name="label_sync_mode">
+          <property name="text">
+           <string>SyncMode</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="0">
+         <widget class="QLabel" name="label_Height">
+          <property name="text">
+           <string>Height</string>
+          </property>
+         </widget>
+        </item>
         <item row="4" column="2">
+         <widget class="QLabel" name="label_3">
+          <property name="text">
+           <string>BlackLevel</string>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="1">
+         <widget class="QSpinBox" name="spinBox_Width">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="1">
+         <widget class="QSpinBox" name="spinBox_Height">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
+          <property name="minimum">
+           <number>0</number>
+          </property>
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+          <property name="value">
+           <number>0</number>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="0">
+         <widget class="QLabel" name="label_Width">
+          <property name="text">
+           <string>Width</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_cameraID">
+          <property name="text">
+           <string>#ID</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QSpinBox" name="spinBox_cameraID"/>
+        </item>
+        <item row="4" column="0">
+         <widget class="QLabel" name="label_Xoffset">
+          <property name="text">
+           <string>Xoffset</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="1">
+         <widget class="QSpinBox" name="spinBox_Xoffset">
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="0">
+         <widget class="QLabel" name="label_Yoffset">
+          <property name="text">
+           <string>Yoffset</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="1">
+         <widget class="QSpinBox" name="spinBox_Yoffset">
+          <property name="maximum">
+           <number>2000</number>
+          </property>
+         </widget>
+        </item>
+        <item row="2" column="2">
+         <widget class="QLabel" name="label_4">
+          <property name="text">
+           <string>TrigSource</string>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="2">
+         <widget class="QLabel" name="label_2">
+          <property name="text">
+           <string>GainRaw</string>
+          </property>
+         </widget>
+        </item>
+        <item row="4" column="3">
+         <widget class="QSpinBox" name="spinBox_blacklevel">
+          <property name="minimum">
+           <number>-127</number>
+          </property>
+          <property name="maximum">
+           <number>127</number>
+          </property>
+         </widget>
+        </item>
+        <item row="5" column="3">
+         <widget class="QSpinBox" name="spinBox_gainraw">
+          <property name="maximum">
+           <number>3</number>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="2">
+         <widget class="QLabel" name="label">
+          <property name="text">
+           <string>FPS</string>
+          </property>
+         </widget>
+        </item>
+        <item row="3" column="3">
          <widget class="QSpinBox" name="spinBox_fps">
           <property name="minimum">
            <number>1</number>
@@ -41,198 +191,16 @@
           </property>
          </widget>
         </item>
-        <item row="6" column="0">
-         <widget class="QSpinBox" name="spinBox_Xoffset">
-          <property name="maximum">
-           <number>2000</number>
+        <item row="2" column="3">
+         <widget class="QComboBox" name="comboBox_TrigSource">
+          <property name="enabled">
+           <bool>false</bool>
           </property>
-         </widget>
-        </item>
-        <item row="4" column="1">
-         <widget class="QLabel" name="label_Yoffset">
-          <property name="text">
-           <string>Yoffset</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="0">
-         <widget class="QLabel" name="label_Xshift">
-          <property name="text">
-           <string>Xshift</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="1">
-         <widget class="QLabel" name="label_Ysize">
-          <property name="text">
-           <string>Ysize</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="0">
-         <widget class="QSpinBox" name="spinBox_Xsize">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="maximum">
-           <number>2000</number>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="0">
-         <widget class="QLabel" name="label_Xoffset">
-          <property name="text">
-           <string>Xoffset</string>
-          </property>
-         </widget>
-        </item>
-        <item row="8" column="0">
-         <widget class="QSpinBox" name="spinBox_Xshift">
-          <property name="minimum">
-           <number>-500</number>
-          </property>
-          <property name="maximum">
-           <number>500</number>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_cameraID">
-          <property name="text">
-           <string>#ID</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="0">
-         <widget class="QLabel" name="label_Xsize">
-          <property name="text">
-           <string>Xsize</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="1">
-         <widget class="QSpinBox" name="spinBox_cameraID"/>
-        </item>
-        <item row="3" column="1">
-         <widget class="QSpinBox" name="spinBox_Ysize">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
-          </property>
-          <property name="minimum">
-           <number>0</number>
-          </property>
-          <property name="maximum">
-           <number>2000</number>
-          </property>
-          <property name="value">
-           <number>0</number>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="1">
-         <widget class="QSpinBox" name="spinBox_Yoffset">
-          <property name="maximum">
-           <number>2000</number>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="1">
-         <widget class="QLabel" name="label_Yshift">
-          <property name="text">
-           <string>Yshift</string>
-          </property>
-         </widget>
-        </item>
-        <item row="8" column="1">
-         <widget class="QSpinBox" name="spinBox_Yshift">
-          <property name="minimum">
-           <number>-500</number>
-          </property>
-          <property name="maximum">
-           <number>500</number>
-          </property>
-         </widget>
-        </item>
-        <item row="8" column="2">
-         <widget class="QCheckBox" name="checkBox_power">
-          <property name="text">
-           <string>Power</string>
-          </property>
-         </widget>
-        </item>
-        <item row="7" column="2">
-         <widget class="QCheckBox" name="checkBox_activate">
-          <property name="text">
-           <string>Activate</string>
-          </property>
-         </widget>
-        </item>
-        <item row="2" column="2">
-         <widget class="QCheckBox" name="checkBox_sync_clock">
-          <property name="text">
-           <string>Sync</string>
-          </property>
-         </widget>
-        </item>
-        <item row="3" column="2">
-         <widget class="QLabel" name="label">
-          <property name="text">
-           <string>FPS</string>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="2">
-         <widget class="QCheckBox" name="checkBox_On">
-          <property name="text">
-           <string>On</string>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="2">
-         <widget class="QComboBox" name="comboBox"/>
-        </item>
-        <item row="7" column="3">
-         <widget class="QLabel" name="label_3">
-          <property name="text">
-           <string>BlackLevel</string>
-          </property>
-         </widget>
-        </item>
-        <item row="8" column="3">
-         <widget class="QSpinBox" name="spinBox_blacklevel">
-          <property name="minimum">
-           <number>-127</number>
-          </property>
-          <property name="maximum">
-           <number>127</number>
-          </property>
-         </widget>
-        </item>
-        <item row="4" column="3">
-         <widget class="QLabel" name="label_2">
-          <property name="text">
-           <string>GainRaw</string>
-          </property>
-         </widget>
-        </item>
-        <item row="6" column="3">
-         <widget class="QSpinBox" name="spinBox_gainraw">
-          <property name="maximum">
-           <number>3</number>
-          </property>
-         </widget>
-        </item>
-        <item row="1" column="3">
-         <widget class="QLabel" name="label_name">
-          <property name="text">
-           <string>Name</string>
-          </property>
+          <item>
+           <property name="text">
+            <string>Line1</string>
+           </property>
+          </item>
          </widget>
         </item>
        </layout>
@@ -256,6 +224,54 @@
          </widget>
         </item>
        </layout>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_4">
+      <property name="topMargin">
+       <number>0</number>
+      </property>
+      <item>
+       <widget class="QCheckBox" name="checkBox_power">
+        <property name="text">
+         <string>Power</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_activate">
+        <property name="text">
+         <string>Activate</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_name">
+        <property name="text">
+         <string>Name</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_On">
+        <property name="text">
+         <string>On</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <spacer name="horizontalSpacer_2">
+        <property name="orientation">
+         <enum>Qt::Horizontal</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>40</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
       </item>
      </layout>
     </item>
@@ -325,6 +341,9 @@
        <widget class="QRadioButton" name="radioButton_RT">
         <property name="text">
          <string>Real Time</string>
+        </property>
+        <property name="checked">
+         <bool>true</bool>
         </property>
        </widget>
       </item>
