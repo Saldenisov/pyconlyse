@@ -52,15 +52,13 @@ class CameraController(Service):
     def activate_camera(self, func_input: FuncActivateCameraInput) -> FuncActivateCameraOutput:
         camera_id = func_input.camera_id
         flag = func_input.flag
-        res, comments = self._check_axis_range(camera_id)
+        res, comments = self._check_camera_range(camera_id)
         if res:
             res, comments = self._check_controller_activity()
         if res:
-            res, comments = self._change_axis_status(camera_id, flag)
+            res, comments = self._change_camera_status(camera_id, flag)
         essentials = self.cameras_essentials
-        status = []
-        for key, camera in essentials.items():
-            status.append(essentials[key].status)
+        status = [essentials[key].status for key, camera in essentials.items()]
         info = f'Cameras status: {status}. {comments}'
         info_msg(self, 'INFO', info)
         return FuncActivateCameraOutput(cameras=self.cameras_essentials, comments=info, func_success=res)
@@ -74,7 +72,6 @@ class CameraController(Service):
     def cameras(self):
         pass
 
-
     @property
     def cameras_essentials(self):
         essentials = {}
@@ -85,6 +82,23 @@ class CameraController(Service):
     @property
     def _cameras_status(self) -> List[int]:
         return [camera.status for camera in self._cameras.values()]
+
+    def _check_camera_range(self, camera_id):
+        if camera_id in self._cameras.keys():
+            return True, ''
+        else:
+            return False, f'Camera id={camera_id} is out of range={self._cameras.keys()}.'
+
+    @abstractmethod
+    def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
+        pass
+
+    def _check_camera_flag(self, flag: int):
+        FLAGS = [0, 1, 2]  # 0 - closed, 1 - opend, 2 - running
+        if flag not in FLAGS:
+            return False, f'Wrong flag {flag} was passed. FLAGS={FLAGS}'
+        else:
+            return True, ''
 
     @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:

@@ -28,13 +28,13 @@ except genicam.GenericException as e:
 
 OffSet = {1: {'X': 310, 'Y': 290}, 0: {'X': 270, 'Y': 120}}
 
+test = {}
 
 def init(camera_id, camera, devices):
     # conecting to the first available camera
     #camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    test[camera_id] = camera
     camera.Attach(tlFactory.CreateDevice(devices[camera_id]))
-    camera.Open()
-    camera.Close()
     camera.Open()
     b = camera.IsOpen()
     a = camera.GetDeviceInfo().GetModelName()
@@ -123,6 +123,7 @@ camera1 = cameras[one]
 converter1 = converters[one]
 camera2 = cameras[two]
 converter2 = converters[two]
+
 
 # Figure
 fig = plt.figure(figsize=(8.5, 5.5))

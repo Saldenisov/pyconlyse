@@ -181,12 +181,6 @@ class StpMtrController(Service):
         else:
             return True, ''
 
-    def _check_controller_activity(self):
-        if self.device_status.active:
-            return True, ''
-        else:
-            return False, f'Controller is not active. Power is {self.device_status.power}'
-
     def _check_move_type(self, axis_id: int, type_move: MoveType) -> Tuple[bool, str]:
         if type_move in self.axes[axis_id].type_move:
             return True, ''

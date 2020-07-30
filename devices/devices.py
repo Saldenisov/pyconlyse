@@ -567,6 +567,12 @@ class Service(Device):
         """
         return self.device_status.active, ''
 
+    def _check_controller_activity(self):
+        if self.device_status.active:
+            return True, ''
+        else:
+            return False, f'Controller is not active. Power is {self.device_status.power}'
+
     @abstractmethod
     def _check_if_connected(self) -> Tuple[bool, str]:
         """

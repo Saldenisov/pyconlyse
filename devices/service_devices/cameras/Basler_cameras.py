@@ -50,6 +50,36 @@ class CameraCtrl_Basler(CameraController):
             cameras[camera_id] = camera.no_pylon()
         return cameras
 
+    def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = super()._check_camera_flag(flag)
+        if res:
+            camera = self._cameras[camera_id]
+            if camera.status != flag:
+                info = ''
+                if camera.status == 2 and force:
+                    self._stop_acquisition(camera_id)
+                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped.'
+                    camera.status = flag
+                    res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}.' + info
+                elif camera.status == 2 and not force:
+                    res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is acquiring. ' \
+                                           'Force Stop in order to change status.'
+                elif flag in [0, 1]:
+                    try:
+                        if flag == 1:
+                            camera.pylon_camera.Open()
+                        else:
+                            camera.pylon_camera.Close()
+                        camera.status = flag
+                        res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}.' \
+                                        + info
+                    except pylon.GenericException as e:
+                        comments = f'Tried to open connection, but failed: {e}'
+                        error_logger(self, self._change_camera_status, comments)
+                        return False, comments
+            else:
+                res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}'
+        return res, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         # Init all camera
@@ -64,20 +94,24 @@ class CameraCtrl_Basler(CameraController):
                 error_logger(self, self._form_devices_list, f'Not all cameras listed in DB are present.')
 
             # Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
-            pylon_cameras: pylon.InstantCameraArray = pylon.InstantCameraArray(min(len(pylon_devices), self._cameras_number))
+            self.pylon_cameras: pylon.InstantCameraArray = pylon.InstantCameraArray(min(len(pylon_devices),
+                                                                                        self._cameras_number))
 
             device_id_camera_id = self.device_id_to_id
             keep_camera = []
-            for i, pylon_camera in enumerate(pylon_cameras):
+
+            for i, pylon_camera in enumerate(self.pylon_cameras):
                 pylon_camera.Attach(self.tl_factory.CreateDevice(pylon_devices[i]))
                 try:
                     device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
                 except ValueError:
                     return False, f'Camera id {pylon_camera.GetDeviceInfo().GetSerialNumber()} ' \
                                   f'was not correctly converted to integer value.'
+
                 if device_id in device_id_camera_id:
                     self._cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
                     self._cameras[device_id_camera_id[device_id]].pylon_camera.Open()
+                    self._cameras[device_id_camera_id[device_id]].status = 1
 
                     # Setting Parameters for the cameras
                     res, comments = self._set_parameters_camera(device_id_camera_id[device_id])
@@ -98,8 +132,16 @@ class CameraCtrl_Basler(CameraController):
             return False, f"An exception occurred. {e}"
 
     def _get_cameras_status(self) -> List[int]:
-        n = self._get_number_cameras()
-        return [0]*n
+        a = {}
+        device_id_camera_id = self.device_id_to_id
+        for camera_id, pylon_camera in enumerate(self.pylon_cameras):
+            device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
+            if pylon_camera.IsOpen():
+                a[device_id_camera_id[device_id]] = 1
+            else:
+                a[device_id_camera_id[device_id]] = 0
+        b = list([value for _, value in a.items()])
+        return b
 
     def _get_number_cameras(self):
         if not self.tl_factory:
@@ -212,10 +254,17 @@ class CameraCtrl_Basler(CameraController):
 
     def _release_hardware(self) -> Tuple[bool, str]:
         # TODO: make it work
-        for camera_id, camera in self._cameras.items():
-            try:
-                camera.pylon_camera = None
-            except (genicam.GenericException, Exception) as e:
-                error_logger(self, self._release_hardware, e)
-        return True, ''
+        try:
+            device_id_camera_id = self.device_id_to_id
+            for camera_id, pylon_camera in enumerate(self.pylon_cameras):
+                device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
+                if pylon_camera.IsOpen():
+                    pylon_camera.Close()
+                    self._cameras[device_id_camera_id[device_id]].status = 0
+                self._cameras[device_id_camera_id[device_id]].pylon_camera = None
+                return True, ''
+        except (genicam.GenericException, Exception) as e:
+            error_logger(self, self._release_hardware, e)
+            return False, f'Release_hardware function did not work: {e}.'
+
 
