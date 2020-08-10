@@ -6,6 +6,7 @@ created
 from dataclasses import asdict
 from distutils.util import strtobool
 from pypylon import pylon, genicam
+from typing import List, Tuple
 
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
 from utilities.datastructures.mes_independent.camera_dataclass import *

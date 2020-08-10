@@ -1,7 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Tuple, Union, NewType, Set
+from typing import Any, Dict
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
@@ -84,6 +82,7 @@ class CameraEssentials:
 @dataclass(order=True)
 class CameraDescription(Desription):
     cameras: Dict[int, Camera]
+
 
 @dataclass
 class FuncActivateCameraInput(FuncInput):

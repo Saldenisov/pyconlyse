@@ -9,7 +9,7 @@ from _functools import partial
 from distutils.util import strtobool
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow, QErrorMessage
-
+from typing import Union
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
 from devices.devices import Device
 from devices.service_devices.cameras import CameraController
