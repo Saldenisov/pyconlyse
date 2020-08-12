@@ -121,13 +121,69 @@ class FuncGetImagesInput(FuncInput):
 class FuncGetImagesPrepared(FuncOutput):
     camera_id: int
     ready: bool
-    cameras: CameraEssentials
+    camera: CameraEssentials
     com: str = 'get_images_prepared'
 
 @dataclass
 class FuncGetImagesOutput(FuncOutput):
     image: Dict[int, list]  # Image is array converted to str, second field of List is timestamp
     com: str = 'get_images'
+
+
+@dataclass
+class FuncSetImageParametersInput(FuncInput):
+    camera_id: int
+    width: int
+    height: int
+    offset_x: int
+    offset_y: int
+    gain_mode: str
+    gain: int
+    blacklevel: int
+    balance_ratio: int
+    pixel_format: str
+    com: str = 'set_image_parameters'
+
+
+@dataclass
+class FuncSetImageParametersOutput(FuncOutput):
+    camera_id: int
+    camera: CameraEssentials
+    com: str = 'set_image_parameters'
+
+
+
+@dataclass
+class FuncSetSyncParametersInput(FuncInput):
+    camera_id: int
+    exposure_time: float
+    frame_rate: int
+    trigger_source: str
+    trigger_mode: bool
+    trigger_delay: float
+    com: str = 'set_sync_parameters'
+
+
+@dataclass
+class FuncSetSyncParametersOutput(FuncOutput):
+    camera_id: int
+    camera: CameraEssentials
+    com: str = 'set_sync_parameters'
+
+
+@dataclass
+class FuncSetTransportParametersInput(FuncInput):
+    camera_id: int
+    packet_size: int
+    inter_packet_delay: int
+    com: str = 'set_transport_parameters'
+
+
+@dataclass
+class FuncSetTransportParametersOutput(FuncOutput):
+    camera_id: int
+    camera: CameraEssentials
+    com: str = 'set_transport_parameters'
 
 
 @dataclass

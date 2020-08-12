@@ -1,7 +1,5 @@
 import logging
 from abc import abstractmethod
-from os import path
-from pathlib import Path
 from typing import Any, Callable
 from functools import lru_cache
 from devices.devices import Service
@@ -16,10 +14,9 @@ module_logger = logging.getLogger(__name__)
 class CameraController(Service):
     ACTIVATE_CAMERA = CmdStruct(FuncActivateCameraInput, FuncActivateCameraOutput)
     GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput, FuncGetImagesPrepared)
-    SET_IMAGE_PARAMETERS = CmdStruct(None, None)
-    SET_SYNC_PARAMETERS = CmdStruct(None, None)
-    SET_TRANSPORT_PARAMETERS = CmdStruct(None, None)
-    SET_ALL_PARAMETERS = CmdStruct(None, None)
+    SET_IMAGE_PARAMETERS = CmdStruct(FuncSetImageParametersInput, FuncSetImageParametersOutput)
+    SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetImageParametersOutput)
+    SET_TRANSPORT_PARAMETERS = CmdStruct(FuncSetTransportParametersInput, FuncSetTransportParametersOutput)
     STOP_ACQUISITION = CmdStruct(FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
 
     def __init__(self, **kwargs):
@@ -66,7 +63,8 @@ class CameraController(Service):
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return [*super().available_public_functions(), CameraController.ACTIVATE_CAMERA, CameraController.GET_IMAGES,
-                CameraController.STOP_ACQUISITION]
+                CameraController.SET_IMAGE_PARAMETERS, CameraController.SET_SYNC_PARAMETERS,
+                CameraController.SET_TRANSPORT_PARAMETERS, CameraController.STOP_ACQUISITION]
 
     @property
     @abstractmethod
