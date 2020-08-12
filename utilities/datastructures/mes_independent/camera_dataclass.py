@@ -52,11 +52,11 @@ class Camera:
     parameters: Dict[str, Any] = field(default_factory=dict)
     status: int = 0
 
-
     def short(self):
-        return CameraEssentials(device_id=self.device_id, status=self.status,
-                                name=self.name, friendly_name=self.friendly_name,
-                                parameters=self.parameters)
+        d = {}
+        for key in CameraEssentials.__dataclass_fields__.keys():
+            d[key] = getattr(self, key)
+        return CameraEssentials(**d)
 
 
 @dataclass(frozen=False)
@@ -65,9 +65,11 @@ class CameraBasler(Camera):
     converter: pylon.ImageFormatConverter = None
 
     def no_pylon(self):
-        return CameraBasler(device_id=self.device_id, name=self.name, friendly_name=self.friendly_name,
-                      parameters=self.parameters, status=self.status)
-
+        d = {}
+        for key in CameraBasler.__dataclass_fields__.keys():
+            if key != 'pylon_camera':
+                d[key] = getattr(self, key)
+        return CameraBasler(**d)
 
 
 @dataclass(order=True, frozen=False)

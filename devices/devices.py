@@ -582,6 +582,10 @@ class Service(Device):
         return self.device_status.connected, ''
 
     @abstractmethod
+    def _connect(self, flag: bool) -> Tuple[bool, str]:
+        pass
+
+    @abstractmethod
     def description(self) -> Desription:
         pass
 

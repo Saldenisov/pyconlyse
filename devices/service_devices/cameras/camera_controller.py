@@ -131,7 +131,7 @@ class CameraController(Service):
             parameters = self.get_settings('Parameters')
             return CameraDescription(cameras=self.cameras, info=parameters['info'], GUI_title=parameters['title'])
         except (KeyError, DeviceError) as e:
-            return CameraError(self, f'Could not set description of controller in the database: {e}')
+            return CameraError(self, f'Could not set description of controller from the database: {e}')
 
     @abstractmethod
     def _get_cameras_status(self) -> List[int]:

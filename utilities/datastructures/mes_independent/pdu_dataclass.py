@@ -10,18 +10,43 @@ from utilities.datastructures.mes_independent.general import FuncInput, FuncOutp
 
 @dataclass
 class PDU:
-    ip: str
+    device_id: int
+
+    name: str
+
+    state: Dict[str, str]
+    status: int = 0
+
+    def short(self):
+        d = {}
+        for key in PDUEssentials.__dataclass_fields__.keys():
+            d[key] = getattr(self, key)
+        return PDUEssentials(**d)
+
+
+@dataclass
+class PDUNetio(PDU):
+    ip: str = ''
+    mac: str = ''
+
+
+@dataclass(order=True)
+class PDUDescription(Desription):
+    pdus: Dict[int, PDU]
+
+
+@dataclass
+class PDUEssentials:
+    device_id: int
     name: str
     state: Dict[str, str]
     status: int = 0
 
 
 @dataclass
-class PDUEssentials:
-    ip: str
-    name: str
-    state: Dict[str, str]
-    status: int = 0
+class PDUEssentialsNetio(PDUEssentials):
+    ip: str = ''
+    mac: str = ''
 
 
 @dataclass
@@ -35,6 +60,28 @@ class FuncActivatePDUInput(FuncInput):
 class FuncActivatePDUOutput(FuncOutput):
     pdus: Dict[int, PDUEssentials]
     com: str = 'activate_pdu'
+
+
+@dataclass
+class FuncGetPDUControllerStateInput(FuncGetControllerStateInput):
+    pass
+
+
+@dataclass
+class FuncGetPDUControllerStateOutput(FuncGetControllerStateOutput):
+   pdus: Dict[int, PDU] = None
+
+
+@dataclass
+class FuncGetPDUState(FuncInput):
+    pdu_id: Union[int, List[int]]
+    com: str = 'get_pdu_state'
+
+
+@dataclass
+class FuncGetPDUStateOutput(FuncOutput):
+    pdus: Dict[int, PDUEssentials]
+    com: str = 'get_pdu_state'
 
 
 @dataclass

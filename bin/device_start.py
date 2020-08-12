@@ -31,7 +31,8 @@ if __name__ == "__main__":
                     'project_default': ['ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada', 'Devices.db'],
                     'stpmtr_standa': ['StpMtrCtrl_Standa:b7257a502aef1d55485fc8ea403ac573', 'Devices.db'],
                     'topdirect': ['StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c', 'Devices.db'],
-                    'basler_cameras': ['CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02', 'Devices.db']}
+                    'basler_cameras': ['CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02', 'Devices.db'],
+                    'netio_pdus': ['PDUCtrl_NETIO:deeb24a77539736744b550885fb6ba4f', 'Devices.db']}
 
     if '-id' in sys.argv and '-db' in sys.argv:
         try:
