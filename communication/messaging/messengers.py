@@ -394,7 +394,7 @@ class ClientMessenger(Messenger):
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
                     info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
-        except zmq.ZMQError as e:
+        except (zmq.ZMQError, MessengerError) as e:
             error_logger(self, self.send_msg, e)
 
     def _verify_addresses(self, addresses: Dict[str, str]):

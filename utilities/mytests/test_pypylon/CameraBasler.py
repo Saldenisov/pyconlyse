@@ -52,7 +52,7 @@ def init(camera_id, camera, devices):
     camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource = "Software"
-    camera.TriggerMode.SetValue("On")
+    camera.TriggerMode.SetValue("Off")
     camera.TriggerDelayAbs.SetValue(190000)
     camera.ExposureTimeAbs.SetValue(10000.0)
     camera.BalanceRatioRaw.SetValue(64)
@@ -83,7 +83,8 @@ def read(camera, converter):
         # if cv2.waitKey(1) & 0xFF == ord('q'):
         # break
     grabResult.Release()
-    return image.GetArray()
+    arr = image.GetArray()
+    return arr
 
 
 def image_treat(image):

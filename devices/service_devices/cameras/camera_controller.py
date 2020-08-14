@@ -1,5 +1,7 @@
 import logging
 from abc import abstractmethod
+from time import sleep
+from threading import Thread
 from typing import Any, Callable
 from functools import lru_cache
 from devices.devices import Service
@@ -23,6 +25,7 @@ class CameraController(Service):
         super().__init__(**kwargs)
         self._camera_class = kwargs['camera_class']
         self._cameras: Dict[int, Camera] = dict()
+        self._images_demanders = {}
 
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible
@@ -93,7 +96,7 @@ class CameraController(Service):
         pass
 
     def _check_camera_flag(self, flag: int):
-        FLAGS = [0, 1, 2]  # 0 - closed, 1 - opend, 2 - running
+        FLAGS = [0, 1, 2]  # 0 - closed, 1 - opened, 2 - acquiring
         if flag not in FLAGS:
             return False, f'Wrong flag {flag} was passed. FLAGS={FLAGS}'
         else:
@@ -194,9 +197,10 @@ class CameraController(Service):
         res, comments = self._check_camera_range(camera_id)
         if res:
             res, comments = self._prepare_camera_reading(camera_id)
-
+        if res:
+            self._register_image_demander(camera_id, func_input.demander_device_id, func_input.n_images, func_input.every_n_sec)
         return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
-                                     cameras=self.cameras_essentials)
+                                     camera=self.cameras_essentials[camera_id])
 
     @abstractmethod
     def _get_number_cameras(self):
@@ -212,8 +216,22 @@ class CameraController(Service):
             raise CameraError(self, text="Check cameras number in database, must be cameras_number = number")
 
     @abstractmethod
+    def _grabbing(self, n_sec: float):
+        pass
+
+    @abstractmethod
     def _prepare_camera_reading(self) -> Tuple[bool, str]:
         return True, ''
+
+    def _register_image_demander(self, camera_id, demander_id, n_images, n_sec=1):
+        if demander_id not in self._images_demanders:
+            thread = Thread(target=self._grabbing, args=(demander_id, n_sec))
+            thread.start()
+        if demander_id in self._images_demanders and camera_id == self._images_demanders[demander_id][2]:
+            self._images_demanders[demander_id] = (n_images, self._images_demanders[demander_id][1],
+                                                   self._images_demanders[demander_id][2])
+        else:
+            self._images_demanders[demander_id] = (n_images, 0, camera_id)
 
     def _set_number_cameras(self):
         if self.device_status.connected:
@@ -235,6 +253,15 @@ class CameraController(Service):
             for id_a in ids:
                 self._cameras[i] = self._camera_class(device_id=id_a)
                 i += 1
+
+    def set_image_parameters(self, func_input: FuncSetImageParametersInput) -> FuncSetImageParametersOutput:
+        res, comments = self._set_image_parameters_device(func_input)
+        return FuncSetImageParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
+                                            camera=self.cameras[func_input.camera_id])
+
+    @abstractmethod
+    def _set_image_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
+        pass
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         try:
@@ -273,6 +300,24 @@ class CameraController(Service):
 
         for id, status in zip(self._cameras.keys(), statuses):
             self._cameras[id].status = status
+
+    def set_sync_parameters(self, func_input: FuncSetSyncParametersInput) -> FuncSetSyncParametersOutput:
+        res, comments = self._set_sync_parameters_device(func_input)
+        return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
+                                           camera=self.cameras[func_input.camera_id])
+
+    @abstractmethod
+    def _set_sync_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
+        pass
+
+    def set_transport_parameters(self, func_input: FuncSetTransportParametersInput) -> FuncSetTransportParametersOutput:
+        res, comments = self._set_transport_parameters_device(func_input)
+        return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
+                                                camera=self.cameras[func_input.camera_id])
+
+    @abstractmethod
+    def _set_transport_parameters_device(self, func_input: FuncSetTransportParametersInput) -> Tuple[bool, str]:
+        pass
 
     def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
         camera_id = func_input.camera_id

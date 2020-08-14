@@ -1,16 +1,9 @@
-from dataclasses import dataclass, asdict
+from json import dumps
+import numpy
 
-@dataclass
-class B:
-    f1: str = 'f1'
+arr = numpy.zeros(shape=(10,10)).tolist()
+a = {1: arr}
 
-@dataclass
-class A(B):
-    a: str = ''
-    b: int = 2
 
-a = A().__dataclass_fields__
-
-b = A()
-setattr(b, 'a', 'privet')
-print(a)
+b = dumps(a)
+print(b)

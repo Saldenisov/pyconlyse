@@ -24,13 +24,12 @@ class AOI_Controls:
 
 @dataclass
 class Acquisition_Controls:
-    TriggerSource: str = ''
+    TriggerSource: str = 'Line1'
     TriggerMode: str = 'Off'
     TriggerDelayAbs: int = 0
-    ExposureTimeAbs: int = 0
-    AcquisitionFrameRateAbs: int = 0
-    AcquisitionFrameRateEnable: bool = False
-
+    ExposureTimeAbs: int = 100
+    AcquisitionFrameRateAbs: int = 1
+    AcquisitionFrameRateEnable: bool = True
 
 
 @dataclass
@@ -50,7 +49,7 @@ class Camera:
     name: str = ''
     friendly_name: str = ''
     parameters: Dict[str, Any] = field(default_factory=dict)
-    status: int = 0
+    status: int = 0  # 0, 1, 2
 
     def short(self):
         d = {}
@@ -157,10 +156,10 @@ class FuncSetImageParametersOutput(FuncOutput):
 class FuncSetSyncParametersInput(FuncInput):
     camera_id: int
     exposure_time: float
-    frame_rate: int
-    trigger_source: str
     trigger_mode: bool
     trigger_delay: float
+    frame_rate: int = 1
+    trigger_source: str = 'Line1'
     com: str = 'set_sync_parameters'
 
 

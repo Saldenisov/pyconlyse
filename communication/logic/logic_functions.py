@@ -109,6 +109,8 @@ def task_in_reaction(event: ThinkerEvent):
                         msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
                         del thinker.demands_waiting_reply[msg.reply_to]
                         info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
+                    elif msg.reply_to == 'delayed_response':
+                        pass
                     else:
                         react = False
                         info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')

@@ -20,6 +20,11 @@ def test_func_stpmtr(cameractrl: CameraController):
     POWER_OFF = FuncPowerInput(flag=False)
     ACTIVATE_CAMERA_ONE = FuncActivateCameraInput(1, 1)
     DEACTIVATE_CAMERA_ONE = FuncActivateCameraInput(1, 0)
+    SET_TRANSPORT_LAYER = FuncSetTransportParametersInput(1, 1500, 1000)
+    SET_SYNC_PARAM = FuncSetSyncParametersInput(1, 9999, False, 189999, 20)
+    SET_IMAGE_PARAM = FuncSetImageParametersInput(1, 546, 550, 0, 0, 'Off', 0, -30, 64, 'Mono8')
+    GET_IMAGE = FuncGetImagesInput(1, 1, 1, 'None')
+    GET_IMAGES = FuncGetImagesInput(1, 10, 1, 'None')
 
     # description
     res: CameraDescription = cameractrl.description()
@@ -55,6 +60,33 @@ def test_func_stpmtr(cameractrl: CameraController):
     res: FuncActivateCameraOutput = cameractrl.activate_camera(ACTIVATE_CAMERA_ONE)
     assert res.func_success
     assert res.cameras[1].status == 1
+    # set transport settings for camera 1
+    assert cameractrl.cameras[1].parameters['Transport_Layer'].GevSCPSPacketSize == 1500
+    res: FuncSetTransportParametersOutput = cameractrl.set_transport_parameters(SET_TRANSPORT_LAYER)
+    assert res.func_success
+    assert res.camera.parameters['Transport_Layer'].GevSCPSPacketSize == 1500
+    # set sync settings for camera 1
+    assert cameractrl.cameras[1].parameters['Acquisition_Controls'].TriggerDelayAbs == 190000
+    res: FuncSetSyncParametersOutput = cameractrl.set_sync_parameters(SET_SYNC_PARAM)
+    assert res.func_success
+    assert res.camera.parameters['Acquisition_Controls'].TriggerDelayAbs == 189999
+    # set image settings for camera 1
+    assert cameractrl.cameras[1].parameters['AOI_Controls'].Width == 550
+    res: FuncSetImageParametersOutput = cameractrl.set_image_parameters(SET_IMAGE_PARAM)
+    assert res.func_success
+    assert res.camera.parameters['AOI_Controls'].Width == 546
+    # test GET_IMAGES
+    res: FuncGetImagesPrepared = cameractrl.get_images(GET_IMAGE)
+    assert res.func_success
+    assert res.camera.status == 2
+    assert len(cameractrl._images_demanders) == 1
+    assert cameractrl._last_image == None
+    print(cameractrl._images_demanders)
+    sleep(1)
+    print(cameractrl._images_demanders)
+
+    assert len(cameractrl._images_demanders) == 0
+    assert cameractrl._last_image.shape == (550, 546)
 
 
     cameractrl.stop()
