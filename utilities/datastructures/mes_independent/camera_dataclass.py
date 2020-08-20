@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict
+from typing import Any, Dict, List, Union
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
@@ -66,7 +66,7 @@ class CameraBasler(Camera):
     def no_pylon(self):
         d = {}
         for key in CameraBasler.__dataclass_fields__.keys():
-            if key != 'pylon_camera':
+            if key not in ['pylon_camera', 'converter']:
                 d[key] = getattr(self, key)
         return CameraBasler(**d)
 
@@ -112,7 +112,7 @@ class FuncGetCameraControllerStateOutput(FuncGetControllerStateOutput):
 class FuncGetImagesInput(FuncInput):
     camera_id: int
     n_images: int
-    every_n_sec: int
+    every_n_sec: float
     demander_device_id: str
     com: str = 'get_images'
 
@@ -125,8 +125,11 @@ class FuncGetImagesPrepared(FuncOutput):
 
 @dataclass
 class FuncGetImagesOutput(FuncOutput):
-    image: Dict[int, list]  # Image is array converted to str, second field of List is timestamp
+    image: List[int]
+    timestamp: float
+    description: str = ''
     com: str = 'get_images'
+    crypted: bool = False
 
 
 @dataclass

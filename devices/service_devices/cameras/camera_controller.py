@@ -211,7 +211,7 @@ class CameraController(Service):
             return int(self.get_parameters['cameras_number'])
         except KeyError:
             raise CameraError(self, text="Cameras_number could not be set, cameras_number field is absent "
-                                              "in the database")
+                                         "in the database")
         except (ValueError, SyntaxError):
             raise CameraError(self, text="Check cameras number in database, must be cameras_number = number")
 

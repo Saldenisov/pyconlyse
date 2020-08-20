@@ -73,6 +73,9 @@ class Thinker(ThinkerInter):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
+        finally:
+            pass
+            #info_msg(self, 'INFO', f'Size of task out dict: {len(self._tasks_out)}.')
 
     def add_demand_waiting_reply(self, msg: MessageExt):
         try:

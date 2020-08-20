@@ -23,7 +23,7 @@ def test_func_stpmtr(cameractrl: CameraController):
     SET_TRANSPORT_LAYER = FuncSetTransportParametersInput(1, 1500, 1000)
     SET_SYNC_PARAM = FuncSetSyncParametersInput(1, 9999, False, 189999, 20)
     SET_IMAGE_PARAM = FuncSetImageParametersInput(1, 546, 550, 0, 0, 'Off', 0, -30, 64, 'Mono8')
-    GET_IMAGE = FuncGetImagesInput(1, 1, 1, 'None')
+    GET_IMAGE = FuncGetImagesInput(1, 1, 0.2, 'None')
     GET_IMAGES = FuncGetImagesInput(1, 10, 1, 'None')
 
     # description
@@ -77,18 +77,13 @@ def test_func_stpmtr(cameractrl: CameraController):
     assert res.camera.parameters['AOI_Controls'].Width == 546
     # test GET_IMAGES
     res: FuncGetImagesPrepared = cameractrl.get_images(GET_IMAGE)
+    assert cameractrl._last_image == None
+    assert len(cameractrl._images_demanders) == 1
     assert res.func_success
     assert res.camera.status == 2
-    assert len(cameractrl._images_demanders) == 1
-    assert cameractrl._last_image == None
-    print(cameractrl._images_demanders)
-    sleep(1)
-    print(cameractrl._images_demanders)
-
+    sleep(0.5)
     assert len(cameractrl._images_demanders) == 0
     assert cameractrl._last_image.shape == (550, 546)
-
-
     cameractrl.stop()
 
 #test_func_stpmtr(one_service[0])

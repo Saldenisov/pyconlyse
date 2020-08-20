@@ -97,18 +97,19 @@ def task_in_reaction(event: ThinkerEvent):
                 thinker.msg_counter += 1
                 react = True
                 if msg.com not in exclude_msgs:
-                    info_msg(event, 'INFO', f'Received: {msg.short()}')
+                    pass
+                    #info_msg(event, 'INFO', f'Received: {msg.short()}')
 
                 if msg.reply_to == '' and msg.receiver_id != '':  # If message is not a reply, it must be a demand one
                     thinker.add_demand_waiting_reply(msg)
-                    info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
+                    #info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
 
                 elif msg.reply_to != '':
                     if msg.reply_to in thinker.demands_waiting_reply:
                         # TODO: should it have else clause or not?
                         msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
                         del thinker.demands_waiting_reply[msg.reply_to]
-                        info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
+                        #info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
                     elif msg.reply_to == 'delayed_response':
                         pass
                     else:
@@ -116,7 +117,7 @@ def task_in_reaction(event: ThinkerEvent):
                         info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
                 if react:
                     thinker.react_external(msg)
-            except (ThinkerErrorReact, KeyError) as e:
+            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
 
 
@@ -133,18 +134,17 @@ def task_out_reaction(event: ThinkerEvent):
                 react = True
                 if msg.receiver_id != '' and msg.reply_to == '':
                     # If msg is not reply, than add to pending demand
-                    info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
+                    #info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
                     thinker.add_demand_waiting_reply(msg)
 
                 elif msg.reply_to != '':
                     if msg.reply_to in demand_waiting_reply:
                         msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
                         del demand_waiting_reply[msg.reply_to]
-                        info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted from '
-                                                f'demand_waiting_reply')
+                        #info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted from demand_waiting_reply')
                 if react:
                     thinker.parent.messenger.add_msg_out(msg)
-            except (ThinkerErrorReact, KeyError) as e:
+            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
 
 
@@ -172,7 +172,7 @@ def pending_demands(event: ThinkerEvent):
                         except KeyError:
                             error_logger(event, pending_demands, f'Cannot delete Msg {msg.id}, com {msg.com} from '
                                                                  f'demand_waiting_reply')
-            except ThinkerErrorReact as e:
+            except (ThinkerErrorReact, RuntimeError) as e:
                 error_logger(event, pending_demands, e)
 
 

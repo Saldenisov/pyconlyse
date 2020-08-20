@@ -1,96 +1,72 @@
-from typing import Union
+from abc import abstractmethod
 
+import matplotlib
+
+matplotlib.use('Qt5Agg')
 import numpy as np
+from datetime import datetime
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
+from matplotlib.figure import Figure
+from utilities.datastructures.mes_independent.measurments_dataclass import CameraReadings
 
-from gui.views.matplotlib_canvas import MyMplCanvases
-from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
 
-
-class DataCanvas(MyMplCanvases):
+class DataCanvasCamera(FigureCanvas):
     """
     Represents 2D datastructures map using matplotlib imshow
     """
-    def __init__(self, width: int, height: int, dpi: int, canvas_parent, measurement: Measurement=None):
-        super().__init__(width, height, dpi, canvas_parent, measurement)
+    def __init__(self, width: int, height: int, dpi: int, canvas_parent, camera_reading: CameraReadings=None):
+        self.parent = canvas_parent
+        self._colors = ['g', 'c', 'm', 'y', 'k', 'w', 'b']
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        FigureCanvas.__init__(self, self.fig)
+        self.axis: Axes = self.fig.add_subplot(111)
+        if not camera_reading:
+            data = np.random.randn(400, 512)
+            timestamp = datetime.timestamp(datetime.now())
+            measurement = CameraReadings(data, timestamp, '')
+        self.camera_reading = measurement
+        self.axis.set_xlabel('Width, pixel')
+        self.axis.set_ylabel(f'Height, pixel')
+        self.compute_figure()
+
         from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-        self.toolbar = NavigationToolbar(self, self.parent)
+        #self.toolbar = NavigationToolbar(self, self.parent)
 
+    def compute_figure(self, figure_name=''):
+        self.maxv = np.max(self.camera_reading.data)
+        self.minv = np.min(self.camera_reading.data)
 
-    def compute_figure(self, figure_name='Test'):
-        self.cursors: Cursors2D = self.calc_cursors()
-        self.maxv = np.max(self.measurement.data)
-        self.minv = np.min(self.measurement.data)
-
-        self.image: AxesImage = self.axis.imshow(self.measurement.data,
-                                            extent=[self.measurement.wavelengths[0],
-                                                    self.measurement.wavelengths[-1],
-                                                    self.measurement.timedelays[-1],
-                                                    self.measurement.timedelays[0]],
-                                            aspect='auto',
-                                            vmin=self.minv,
-                                            vmax=self.maxv,
-                                            interpolation='none')
+        self.image: AxesImage = self.axis.imshow(self.camera_reading.data,
+                                                 extent=[self.camera_reading.X[0],
+                                                         self.camera_reading.X[-1],
+                                                         self.camera_reading.Y[-1],
+                                                         self.camera_reading.Y[0]],
+                                                 aspect='auto',
+                                                 vmin=self.minv,
+                                                 vmax=self.maxv,
+                                                 cmap='gray',
+                                                 interpolation='none')
         self.axis.grid(True)
-        self.axis.set_xlabel('Wavelength, nm')
-        self.axis.set_ylabel(f'Time delay, {self.measurement.time_scale}')
-        if figure_name:
-            self.axis.set_title(figure_name)
+        self.axis.set_title(self.camera_reading.description)
         self.fig.colorbar(self.image, ax=self.axis)
-        self.draw_cursors()
 
-    def draw_cursors(self, cursors=None, draw=False):
-        k = len(self.axis.lines)
-        if k > 2:
-            for _ in range(k):
-                self.axis.lines[-1].remove()
-        if cursors:
-            self.cursors = cursors
-        cur = self.cursors
-        self.axis.axhline(y=cur.y1[1], color='r')
-        self.axis.axhline(y=cur.y2[1], color='r')
-        self.axis.axvline(x=cur.x1[1], color='r')
-        self.axis.axvline(x=cur.x2[1], color='r')
+    def update_data(self, camera_readings: CameraReadings = None):
+        self.camera_reading = camera_readings
+        self.image.set_data(self.camera_reading.data)
+        self.image.set_extent(extent=[self.camera_reading.X[0], self.camera_reading.X[-1],
+                                      self.camera_reading.Y[-1], self.camera_reading.Y[0]])
+        self.axis.set_title(self.camera_reading.description)
 
-        if draw:
-            self.draw()
-
-    def _form_data(self) -> Union[np.array, np.ndarray]:
-        return self.measurement.data
-
-    def new_data(self, measurement: Measurement, cursors: Cursors2D, map_index=0):
-        self.measurement = measurement
-        self.image.set_data(self._form_data())
-        self.image.set_extent(extent=[self.measurement.wavelengths[0], self.measurement.wavelengths[-1],
-                                      self.measurement.timedelays[-1], self.measurement.timedelays[0]])
-        self.axis.set_title(f'Map index={map_index}')
-        self.draw_cursors(cursors=cursors)
         self.update_limits()
-
-    def _set_labels(self):
-        pass
-
-    def update_data(self, measurement: Measurement = None, cursors: Cursors2D = None, map_index=0):
-        if measurement:
-            draw = False
-            self.measurement = measurement
-            self.image.set_data(self.measurement.data)
-            self.axis.set_title(f'Map index={map_index}')
-        else:
-            draw = True
-
-        if cursors:
-            self.draw_cursors(draw=draw, cursors=cursors)
-
-        if not draw:
-            self.update_limits()
 
     def update_limits(self):
         """
         update vmin and vmax of imshow
         """
-        maxv = np.max(self.measurement.data)
-        minv = np.min(self.measurement.data)
+        maxv = np.max(self.camera_reading.data)
+        minv = np.min(self.camera_reading.data)
         self.image.set_clim(vmin=minv, vmax=maxv)
         self.draw()
         #print("Datacanvas redrawn")

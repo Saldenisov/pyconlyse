@@ -289,9 +289,13 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         except KeyError:
                             reply_to = ''
                         receiver_id = kwargs['receiver_id']
+                    # Sometimes heavy outputs are not crypted, to make everything work faster
+                    if hasattr(info, 'crypted'):
+                        crypted = getattr(info, 'crypted')
+                    else:
+                        crypted = msg_com.msg_crypted
 
-                    return MessageExt(com=msg_com.msg_name, crypted=msg_com.msg_crypted, info=info,
-                                      receiver_id=receiver_id,
+                    return MessageExt(com=msg_com.msg_name, crypted=crypted, info=info, receiver_id=receiver_id,
                                       reply_to=reply_to, sender_id=self.messenger.id)
                 else:
                     return MessageInt(com=msg_com.msg_name, info=info, sender_id=self.messenger.id)

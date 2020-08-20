@@ -279,6 +279,8 @@ class ClientMessenger(Messenger):
             # SOCKET DEALER
             dealer = self.context.socket(zmq.DEALER)
             dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
+            dealer.setsockopt(zmq.SNDHWM, 10)
+            dealer.setsockopt(zmq.RCVHWM, 10)
             # SOCKET SUBSCRIBER
             subscriber = self.context.socket(zmq.SUB)
             subscriber.setsockopt(zmq.RCVHWM, 10)
@@ -388,7 +390,7 @@ class ClientMessenger(Messenger):
 
             if msg.receiver_id != '':
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
-                info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
+                #info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
@@ -482,6 +484,10 @@ class ServerMessenger(Messenger):
             frontend.bind(self.addresses[FRONTEND_Server])
             backend = self.context.socket(zmq.ROUTER)
             backend.bind(self.addresses[BACKEND_Server])
+            frontend.setsockopt(zmq.SNDHWM, 10)
+            frontend.setsockopt(zmq.RCVHWM, 10)
+            backend.setsockopt(zmq.SNDHWM, 10)
+            backend.setsockopt(zmq.RCVHWM, 10)
 
             publisher = self.context.socket(zmq.PUB)
             publisher.bind(self.addresses[PUB_Socket_Server])
@@ -588,10 +594,10 @@ class ServerMessenger(Messenger):
             else:
                 if msg.receiver_id in self._frontendpool:
                     self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                    info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
+                    #info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
                 elif msg.receiver_id in self._backendpool:
                     self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                    info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
+                    #info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
                 else:
                     error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
         except zmq.ZMQError as e:

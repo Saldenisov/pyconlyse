@@ -5,17 +5,21 @@ Created on 16.07.2020
 """
 import copy
 import logging
+import numpy as np
 from _functools import partial
-from distutils.util import strtobool
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow, QErrorMessage
 from typing import Union
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
+from datetime import datetime
+
+from gui.views.matplotlib_canvas.DataCanvasCamera import DataCanvasCamera
 from devices.devices import Device
 from devices.service_devices.cameras import CameraController
 from gui.views.ui import Ui_CameraGUI
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.camera_dataclass import *
+from utilities.datastructures.mes_independent.measurments_dataclass import CameraReadings
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -39,6 +43,9 @@ class CamerasView(QMainWindow):
 
         self.ui = Ui_CameraGUI()
         self.ui.setupUi(CameraGUI=self)
+        self.ui.datacanvas = DataCanvasCamera(width=9, height=10, dpi=70, canvas_parent=self.ui.centralwidget)
+        self.ui.datacanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.ui.horizontalLayout_canvas.addWidget(self.ui.datacanvas)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
@@ -50,6 +57,8 @@ class CamerasView(QMainWindow):
         self.ui.pushButton_GetImage.clicked.connect(self.get_images)
         self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
         self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
+        self.ui.pushButton_GetImage.clicked.connect(partial(self.get_images, False))
+        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
 
         self.update_state(force_camera=True, force_device=True)
 
@@ -92,17 +101,22 @@ class CamerasView(QMainWindow):
 
     def get_images(self, images=False):
         client = self.device
+        every_sec = 0
         if images:
             n_images = -1
+            if self.ui.radioButton_RT.isChecked():
+                every_sec = 0
+            else:
+                every_sec = float(self.ui.spinBox_seconds.value())
         else:
             n_images = 1
+
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
                                   func_input=FuncGetImagesInput(camera_id=int(self.ui.spinBox_cameraID.value()),
                                                                 n_images=n_images,
-                                                                every_n_sec=int(self.ui.spinBox_seconds.value()),
+                                                                every_n_sec=every_sec,
                                                                 demander_device_id=client.id))
         client.send_msg_externally(msg)
-        self._asked_status = 0
 
     def model_is_changed(self, msg: MessageInt):
         try:
@@ -131,20 +145,28 @@ class CamerasView(QMainWindow):
                         self.controller_cameras = result.cameras
                         self.controller_status.device_status = result.device_status
                     elif info.com == CameraController.GET_IMAGES.name:
-                        pass
+                        result: FuncGetImagesOutput = result
+                        if result.func_success:
+                            datacanvas: DataCanvasCamera = self.ui.datacanvas
+                            datacanvas.update_data(CameraReadings(data=np.array(result.image),
+                                                                  time_stamp=result.timestamp,
+                                                                  description=result.description))
+
                     elif info.com == CameraController.GET_IMAGES.name_prepared:
                         result: FuncGetImagesPrepared = result
-                        self.controller_cameras = result.cameras
+                        self.controller_cameras = {result.camera_id: result.camera}
                         if result.ready:
                             comments = f'Camera with id {result.camera_id} is ready to send images. ' \
                                        f'Acquisition is started.'
                         else:
                             comments = f'Camera {result.camera_id} is not ready to send images.'
                         self.ui.textEdit_comments.setText(f'{comments} {result.comments}')
+                    elif info.com == CameraController.GET_IMAGES.name:
+                        print('Get_images')
                     elif info.com == CameraController.STOP_ACQUISITION.name:
                         result: FuncStopAcquisitionOutput = result
                         if result.func_success:
-                            self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
+                            self.ui.textEdit_comments.setText(f'Acquisition for camera with id {result.camera_id} '
                                                               f'is stopped.')
                         else:
                             self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '

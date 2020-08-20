@@ -7,7 +7,7 @@ from dataclasses import asdict
 from distutils.util import strtobool
 import numpy
 from pypylon import pylon, genicam
-from typing import List, Tuple
+from datetime import datetime
 from time import sleep
 
 from communication.messaging.messages import *
@@ -66,18 +66,21 @@ class CameraCtrl_Basler(CameraController):
                 info = ''
                 if camera.status == 2 and force:
                     camera.pylon_camera.StopGrabbing()
-                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped. {comments}'
+                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped grabbing. {comments}'
                     camera.status = flag
                     res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}. {info}'
                 elif camera.status == 2 and not force:
-                    res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is acquiring. ' \
+                    res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is grabbing. ' \
                                            'Force Stop in order to change status.'
                 elif flag in [0, 1, 2]:
                     try:
-                        if flag == 2:
-                            # TODO: must have some other strategies from future
+                        if flag == 2 and camera.status == 1:
+                            # TODO: must have some other strategies for future
                             camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                        elif flag == 1:
+                        elif flag == 2 and camera.status == 0:
+                            return False, f'First activate camera with camera id={camera_id}, ' \
+                                                   f'name={camera.friendly_name}.'
+                        if flag == 1:
                             camera.pylon_camera.Open()
                         elif flag == 0:
                             camera.pylon_camera.Close()
@@ -165,16 +168,18 @@ class CameraCtrl_Basler(CameraController):
         sleep(0.1)
         if demander_id in self._images_demanders:
             n_images, image_i, camera_id = self._images_demanders[demander_id]
-            while image_i != n_images:
+            while image_i != n_images and self._cameras[camera_id].status == 2:
                 image_i += 1
                 image = self._read_image(self._cameras[camera_id])
-                result = FuncGetImagesOutput(comments='', func_success=True, image={image_i: image.tolist()})
+                result = FuncGetImagesOutput(comments='', func_success=True, image=image.tolist(),
+                                             timestamp=datetime.timestamp(datetime.now()))
                 msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=demander_id, func_output=result,
                                           reply_to='delayed_response')
                 self.send_msg_externally(msg_r)
                 self._last_image = image
                 sleep(n_sec)
             del self._images_demanders[demander_id]
+            self._change_camera_status(camera_id, flag=1, force=True)
 
     def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
         camera = self._cameras[camera_id]
@@ -190,7 +195,7 @@ class CameraCtrl_Basler(CameraController):
     def _read_image(self, camera: CameraBasler) -> numpy.ndarray:
         try:
             if not camera.pylon_camera.IsGrabbing():
-                camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                raise CameraError(self, f"Camera {camera.friendly_name} was stopped during grabbing.")
             grabResult = camera.pylon_camera.RetrieveResult(1500, pylon.TimeoutHandling_ThrowException)
             if grabResult.GrabSucceeded():
                 # Access the image data
@@ -200,18 +205,17 @@ class CameraCtrl_Basler(CameraController):
                 return arr
             else:
                 raise pylon.GenericException
-        except (pylon.GenericException, pylon.TimeoutException) as e:
+        except (pylon.GenericException, pylon.TimeoutException, CameraError) as e:
             error_logger(self, self._read_image, e)
             w = camera.parameters['AOI_Controls'].Width
             h = camera.parameters['AOI_Controls'].Height
-            return numpy.zeros(shape=(w, h))
+            return numpy.random.randn(w, h)
 
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
-        camera = self._cameras[camera_id]
         try:
             return self._change_camera_status(camera_id, 1, True)
         except pylon.GenericException as e:
-            return False, f'During stopping Grabbing of camera {camera_id}: {e}'
+            return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'
 
     def _set_private_parameters_db(self):
         self._set_transport_layer_db()
