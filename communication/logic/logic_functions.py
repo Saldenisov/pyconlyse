@@ -1,7 +1,7 @@
 from threading import Thread
 from time import sleep, time
 from typing import Callable
-
+from communication.logic.thinkers_logic import ServerCmdLogic
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
 from communication.messaging.messages import MessageExt, MsgComInt, MsgComExt
 from devices.interfaces import DeviceType
@@ -68,7 +68,7 @@ def internal_hb_logic(event: ThinkerEvent):
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
                 device.signal.emit(msg)
 
-            thinker.add_task_out(msg_heartbeat)
+            thinker.add_task_out_publisher(msg_heartbeat)
             sleep(event.tick)
 
 
@@ -93,6 +93,8 @@ def task_in_reaction(event: ThinkerEvent):
         sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
             try:
+                if isinstance(thinker, ServerCmdLogic):
+                    print(f'{len(tasks_in)}')
                 msg: MessageExt = tasks_in.popitem(last=False)[1]
                 thinker.msg_counter += 1
                 react = True
@@ -115,6 +117,7 @@ def task_in_reaction(event: ThinkerEvent):
                     else:
                         react = False
                         info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
+
                 if react:
                     thinker.react_external(msg)
             except (ThinkerErrorReact, KeyError, RuntimeError) as e:
@@ -124,26 +127,32 @@ def task_in_reaction(event: ThinkerEvent):
 def task_out_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_out: MsgDict = thinker.tasks_out
+    tasks_out_publisher: MsgDict = thinker.tasks_out_publihser
     demand_waiting_reply: MsgDict = thinker.demands_waiting_reply
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
-        if not event.paused and tasks_out:
+        if not event.paused and (tasks_out or tasks_out_publisher):
             try:
-                msg: MessageExt = tasks_out.popitem(last=False)[1]
-                react = True
-                if msg.receiver_id != '' and msg.reply_to == '':
-                    # If msg is not reply, than add to pending demand
-                    #info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
-                    thinker.add_demand_waiting_reply(msg)
+                if tasks_out:
+                    msg: MessageExt = tasks_out.popitem(last=False)[1]
+                    react = True
+                    if msg.receiver_id != '' and msg.reply_to == '':
+                        # If msg is not reply, than add to pending demand
+                        # info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
+                        thinker.add_demand_waiting_reply(msg)
+                    elif msg.reply_to != '':
+                        if msg.reply_to in demand_waiting_reply:
+                            msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
+                            del demand_waiting_reply[msg.reply_to]
+                            # info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted from demand_waiting_reply')
+                    if react:
+                        thinker.parent.messenger.add_msg_out(msg)
 
-                elif msg.reply_to != '':
-                    if msg.reply_to in demand_waiting_reply:
-                        msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
-                        del demand_waiting_reply[msg.reply_to]
-                        #info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted from demand_waiting_reply')
-                if react:
-                    thinker.parent.messenger.add_msg_out(msg)
+                if tasks_out_publisher:
+                    msg: MessageExt = tasks_out_publisher.popitem(last=False)[1]
+                    thinker.parent.messenger.add_msg_out_publisher(msg)
+
             except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
 

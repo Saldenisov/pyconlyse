@@ -27,10 +27,11 @@ class Thinker(ThinkerInter):
         self.parent: Device = parent
         self.msg_counter = 0
         self.events = Events_Dict()
-        msg_dict_size_limit = 10000
+        msg_dict_size_limit = 50
         self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
                                               dict_parent=self)
@@ -73,9 +74,12 @@ class Thinker(ThinkerInter):
                 self.tasks_out_test[msg.id] = msg
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
-        finally:
-            pass
-            #info_msg(self, 'INFO', f'Size of task out dict: {len(self._tasks_out)}.')
+
+    def add_task_out_publisher(self, msg: MessageExt):
+        try:
+            self._tasks_out_publisher[msg.id] = msg
+        except KeyError as e:
+            error_logger(self, self.add_task_out, e)
 
     def add_demand_waiting_reply(self, msg: MessageExt):
         try:
@@ -87,7 +91,7 @@ class Thinker(ThinkerInter):
         try:
             self._forwarded[msg_forwarded.id] = msg_arrived
         except KeyError as e:
-            error_logger(self, self.add_demand_waiting_reply, e)
+            error_logger(self, self.add_to_forwarded, e)
 
     def info(self):
         from collections import OrderedDict as od
@@ -106,7 +110,7 @@ class Thinker(ThinkerInter):
                 for msg in msg_out:
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
-                info_msg(self, 'INFO', msg_out. short())
+                #info_msg(self, 'INFO', msg_out. short())
                 self.add_task_out(msg_out)
             else:
                 error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'
@@ -203,6 +207,10 @@ class Thinker(ThinkerInter):
     @property
     def tasks_out(self) -> MsgDict:
         return self._tasks_out
+
+    @property
+    def tasks_out_publihser(self) -> MsgDict:
+        return self._tasks_out_publisher
 
     def start(self):
         info_msg(self, 'STARTING')

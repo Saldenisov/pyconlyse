@@ -72,7 +72,7 @@ class GeneralCmdLogic(Thinker):
         elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
             self.react_heartbeat_full(msg)
         # Forwarding message. Applicable only for SERVER
-        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
+        elif msg.receiver_id not in [self.parent.id, '']:
             self.react_forward(msg)
         # When the message is dedicated to Device
         elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
@@ -202,8 +202,8 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_forward(self, msg: MessageExt):
         if msg.receiver_id in self.parent.connections:
             #info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
-            msg_r = msg.copy(sender_id=self.parent.id, forwarded_from=msg.sender_id)
-            self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
+            msg_r = msg.copy(sender_id=self.parent.id, forwarded_from=msg.sender_id, forwarded)
+            #self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
                                               reply_to=msg.id),

@@ -85,6 +85,7 @@ class MessageExt(Message):
     receiver_id: str
     reply_to: str
     sender_id: str
+    forward_to: str = ''
     forwarded_from: str = ''
     #type: MsgType  # temporary disabled TODO: to think what to do with it
     id: str = ''
