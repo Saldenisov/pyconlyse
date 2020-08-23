@@ -66,7 +66,7 @@ class SuperUserView(QMainWindow):
                     for key, item in result.device_available_services.items():
                         names.append(f'{key}')
                         client = self.model.superuser
-                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=key,
+                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id, forward_to=key,
                                                   func_input=FuncServiceInfoInput())
                         client.send_msg_externally(msg)
                     widget.addItems(names)

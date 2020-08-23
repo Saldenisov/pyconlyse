@@ -283,12 +283,23 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     if msg_com.msg_type is MsgType.BROADCASTED:
                         reply_to = ''
                         receiver_id = ''
+                        forward_to = ''
+                        forwarded_from = ''
                     elif msg_com.msg_type is MsgType.DIRECTED:
                         try:
                             reply_to = kwargs['reply_to']
                         except KeyError:
                             reply_to = ''
+                        try:
+                            forward_to = kwargs['forward_to']
+                        except KeyError:
+                            forward_to = ''
+                        try:
+                            forwarded_from = kwargs['forwarded_from']
+                        except KeyError:
+                            forwarded_from = ''
                         receiver_id = kwargs['receiver_id']
+
                     # Sometimes heavy outputs are not crypted, to make everything work faster
                     if hasattr(info, 'crypted'):
                         crypted = getattr(info, 'crypted')
@@ -296,7 +307,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         crypted = msg_com.msg_crypted
 
                     return MessageExt(com=msg_com.msg_name, crypted=crypted, info=info, receiver_id=receiver_id,
-                                      reply_to=reply_to, sender_id=self.messenger.id)
+                                      reply_to=reply_to, sender_id=self.messenger.id, forward_to=forward_to,
+                                      forwarded_from=forwarded_from)
                 else:
                     return MessageInt(com=msg_com.msg_name, info=info, sender_id=self.messenger.id)
         if not (isinstance(msg_com, MsgComExt) or isinstance(msg_com, MsgComInt)):
@@ -315,8 +327,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             if func_input_type == type(input):
                 try:
                     result: FuncOutput = f(input)
+                    if msg.forwarded_from != '':
+                        forward_to = msg.forwarded_from
+                    else:
+                        forward_to = ''
                     msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=msg.sender_id, func_output=result,
-                                              reply_to=msg.id)
+                                              reply_to=msg.id, forward_to=forward_to)
                 except Exception as e:  # TODO: replace Exception
                     error_logger(self, self.execute_com, e)
                     error = True
@@ -329,8 +345,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
         if error:
+            if msg.forwarded_from != '':
+                forward_to = msg.forwarded_from
+            else:
+                forward_to = ''
             msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
-                                      reply_to=msg.id)
+                                      forward_to=forward_to, reply_to=msg.id)
         self.send_msg_externally(msg_r)
 
     @staticmethod

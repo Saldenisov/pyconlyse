@@ -102,7 +102,7 @@ class MessageExt(Message):
                 object.__setattr__(msg_copy, key, value)
             except AttributeError:
                 pass
-        object.__setattr__(msg_copy, 'id', unique_id())
+        #object.__setattr__(msg_copy, 'id', unique_id())
         return msg_copy
 
     def short(self):
@@ -114,13 +114,18 @@ class MessageExt(Message):
             l = 300
         else:
             pass
-        if not self.forwarded_from:
+        if not self.forwarded_from and not self.forward_to:
             return {'path':  f'{self.sender_id}->{self.receiver_id}',
                     'datastructures': f'{self.com}: {t[0:l]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
-        else:
-            return {'path':  f'{self.forwarded_from}->{self.sender_id}->{self.receiver_id}',
+        elif self.forward_to:
+            return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARD_TO->{self.forward_to}',
+                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'reply_to': self.reply_to,
+                    'id': self.id}
+        elif self.forwarded_from:
+            return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARDED_FROM->{self.forwarded_from}',
                     'datastructures': f'{self.com}: {t[0:l]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}

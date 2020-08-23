@@ -408,9 +408,9 @@ class ClientMessenger(Messenger):
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
 
-            if msg.receiver_id != '':
+            if msg.receiver_id:
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
-                #info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
+                info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
@@ -622,10 +622,10 @@ class ServerMessenger(Messenger):
             msg_bytes = self.encrypt_with_session_key(msg)
             if msg.receiver_id in self._frontendpool:
                 self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                # info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
+                info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
             elif msg.receiver_id in self._backendpool:
                 self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                # info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
+                info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
             else:
                 pass
                 #error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')

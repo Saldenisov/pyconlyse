@@ -69,7 +69,8 @@ class CamerasView(QMainWindow):
 
     def activate_controller(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
         client.send_msg_externally(msg)
         self._asked_status = 0
@@ -77,7 +78,8 @@ class CamerasView(QMainWindow):
     def activate_camera(self):
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncActivateCameraInput(camera_id=int(self.ui.spinBox_cameraID.value()),
                                                                      flag=flag))
         client.send_msg_externally(msg)
@@ -111,7 +113,8 @@ class CamerasView(QMainWindow):
         else:
             n_images = 1
 
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetImagesInput(camera_id=int(self.ui.spinBox_cameraID.value()),
                                                                 n_images=n_images,
                                                                 every_n_sec=every_sec,
@@ -189,13 +192,15 @@ class CamerasView(QMainWindow):
 
     def power(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.send_msg_externally(msg)
 
     def stop_acquisition(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncStopAcquisitionInput(camera_id=int(self.ui.spinBox_cameraID.value())))
         client.send_msg_externally(msg)
         self._asked_status = 0

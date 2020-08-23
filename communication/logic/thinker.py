@@ -35,8 +35,6 @@ class Thinker(ThinkerInter):
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
                                               dict_parent=self)
-        # TODO: add slow thread to track after forwarded messages
-        self._forwarded = MsgDict(name='forwarded_messages', size_limit=msg_dict_size_limit, dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -86,12 +84,6 @@ class Thinker(ThinkerInter):
             self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
             error_logger(self, self.add_demand_waiting_reply, e)
-
-    def add_to_forwarded(self, msg_forwarded: MessageExt, msg_arrived: MessageExt):
-        try:
-            self._forwarded[msg_forwarded.id] = msg_arrived
-        except KeyError as e:
-            error_logger(self, self.add_to_forwarded, e)
 
     def info(self):
         from collections import OrderedDict as od
@@ -154,9 +146,6 @@ class Thinker(ThinkerInter):
     def demands_waiting_reply(self) -> MsgDict:
         return self._demands_waiting_reply
 
-    @property
-    def forwarded_messages(self) -> MsgDict:
-        return self._forwarded
 
     @abstractmethod
     def react_external(self, msg: MessageExt):

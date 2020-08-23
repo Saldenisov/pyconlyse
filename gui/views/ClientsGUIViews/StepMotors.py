@@ -61,14 +61,16 @@ class StepMotorsView(QMainWindow):
 
         self.update_state(force_axis=True, force_device=True)
 
-        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
-                                  func_input=FuncGetStpMtrControllerStateInput())
+        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.device.server_id,
+                                       forward_to=self.service_parameters.device_id,
+                                       func_input=FuncGetStpMtrControllerStateInput())
         self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
 
     def activate_controller(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
         client.send_msg_externally(msg)
         self._asked_status = 0
@@ -76,7 +78,8 @@ class StepMotorsView(QMainWindow):
     def activate_axis(self):
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncActivateAxisInput(axis_id=int(self.ui.spinBox_axis.value()),
                                                                    flag=flag))
         client.send_msg_externally(msg)
@@ -106,7 +109,8 @@ class StepMotorsView(QMainWindow):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetPosInput(axis_id))
         client.send_msg_externally(msg)
         if with_return:
@@ -117,7 +121,8 @@ class StepMotorsView(QMainWindow):
         try:
             axis_pos = float(self.ui.lineEdit_value.text())
             client = self.device
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                      forward_to=self.service_parameters.device_id,
                                       func_input=FuncSetPosInput(axis_id, axis_pos, self._get_unit()))
             client.send_msg_externally(msg)
         except TypeError as e:
@@ -164,7 +169,8 @@ class StepMotorsView(QMainWindow):
             pos = float(self.ui.lineEdit_value.text())
 
             client = self.device
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                      forward_to=self.service_parameters.device_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how,
                                                                      move_type=self._get_unit()))
             client.send_msg_externally(msg)
@@ -248,14 +254,16 @@ class StepMotorsView(QMainWindow):
     def stop_axis(self):
         axis_id = int(self.ui.spinBox_axis.value())
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncStopAxisInput(axis_id=axis_id))
         client.send_msg_externally(msg)
         self._asked_status = 0
 
     def power(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.send_msg_externally(msg)
 
