@@ -62,7 +62,8 @@ class CamerasView(QMainWindow):
 
         self.update_state(force_camera=True, force_device=True)
 
-        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.device.server_id,
+                                       forward_to=self.service_parameters.device_id,
                                        func_input=FuncGetCameraControllerStateInput())
         self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
@@ -135,8 +136,8 @@ class CamerasView(QMainWindow):
                         result: FuncActivateOutput = result
                         if result.device_status.active:
                             client = self.device
-                            msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
-                                                      receiver_id=self.service_parameters.device_id,
+                            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                                      forward_to=self.service_parameters.device_id,
                                                       func_input=FuncGetCameraControllerStateInput())
                             client.send_msg_externally(msg)
                         self.controller_status.device_status = result.device_status
@@ -182,7 +183,8 @@ class CamerasView(QMainWindow):
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.textEdit_comments.setText(info.comments)
                     client = self.device
-                    msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+                    msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                              forward_to=self.service_parameters.device_id,
                                               func_input=FuncGetCameraControllerStateInput())
                     client.send_msg_externally(msg)
 

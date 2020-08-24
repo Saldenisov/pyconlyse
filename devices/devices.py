@@ -400,8 +400,19 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def _stop_messaging(self):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
-        stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, reason='normal_shutdown')
-        self.thinker.msg_out(stop_msg)
+        self.thinker.flush_tasks()
+        for device_id, connection in self.connections.items():
+            if isinstance(self, Server):
+                stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=device_id,
+                                             reason='normal_shutdown')
+            else:
+                if device_id == self.server_id:
+                    stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=device_id,
+                                                 reason='normal_shutdown')
+                else:
+                    stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=self.server_id,
+                                                 forward_to=device_id, reason='normal_shutdown')
+            self.thinker.add_task_out(stop_msg)
         sleep(0.1)
         self.thinker.pause()
         self.messenger.pause()

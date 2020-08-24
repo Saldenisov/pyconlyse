@@ -29,9 +29,6 @@ class GeneralCmdLogic(Thinker):
                     self.parent.signal.emit(msg.ext_to_int())
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
-        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
-            self.remove_device_from_connections(msg.sender_id)
-            self.parent.send_status_pyqt()
 
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
@@ -54,6 +51,9 @@ class GeneralCmdLogic(Thinker):
                     self.parent.signal.emit(msg.ext_to_int())
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
+        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
+            self.remove_device_from_connections(msg.sender_id)
+            self.parent.send_status_pyqt()
         self.msg_out(msg_r)
 
     def react_external(self, msg: MessageExt):

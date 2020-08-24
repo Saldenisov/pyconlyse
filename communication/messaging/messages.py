@@ -39,7 +39,7 @@ class MsgComExt(Enum):
     ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['comments', 'reply_to', 'receiver_id']), False)
     HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
-    SHUTDOWN = MessageInfoExt(MsgType.BROADCASTED, ShutDown, set(['reason']), False)
+    SHUTDOWN = MessageInfoExt(MsgType.DIRECTED, ShutDown, set(['reason', 'receiver_id']), True)
     WELCOME_INFO_DEVICE = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoDevice, set(['receiver_id', 'event']), False)
     WELCOME_INFO_SERVER = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoServer, set(['reply_to', 'receiver_id']), False)
 

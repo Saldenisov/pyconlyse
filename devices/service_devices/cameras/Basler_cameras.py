@@ -173,8 +173,8 @@ class CameraCtrl_Basler(CameraController):
                 image = self._read_image(self._cameras[camera_id])
                 result = FuncGetImagesOutput(comments='', func_success=True, image=image.tolist(),
                                              timestamp=datetime.timestamp(datetime.now()))
-                msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=demander_id, func_output=result,
-                                          reply_to='delayed_response')
+                msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id, forward_to=demander_id,
+                                          func_output=result, reply_to='delayed_response')
                 self.send_msg_externally(msg_r)
                 self._last_image = image
                 sleep(n_sec)

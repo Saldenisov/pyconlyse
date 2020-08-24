@@ -109,7 +109,8 @@ def task_in_reaction(event: ThinkerEvent):
                 if msg.com not in exclude_msgs:
                     #pass
                     info_msg(event, 'INFO', f'Received: {msg.short()}')
-                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.id:
+                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.id \
+                            and msg.com != MsgComExt.SHUTDOWN.msg_name:
                         # If message is not a reply or forward, it must be a demand one
                         thinker.add_demand_waiting_reply(msg)
                         info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
@@ -127,10 +128,11 @@ def task_in_reaction(event: ThinkerEvent):
                             info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
                     elif msg.forward_to:
                         info_msg(event, 'INFO', f'Message {msg.short()} is forwarded.')
+                    elif msg.com == MsgComExt.SHUTDOWN.msg_name:
+                        pass
                     else:
                         react = False
                         info_msg(event, 'INFO', f'STRANGE Message: {msg}')
-
 
                 if react:
                     thinker.react_external(msg)

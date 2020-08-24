@@ -85,6 +85,13 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_demand_waiting_reply, e)
 
+    def flush_tasks(self):
+        self._tasks_in.clear()
+        self.tasks_in_test.clear()
+        self._tasks_out.clear()
+        self.tasks_out_test.clear()
+        self._tasks_out_publisher.clear()
+
     def info(self):
         from collections import OrderedDict as od
         info = od()
