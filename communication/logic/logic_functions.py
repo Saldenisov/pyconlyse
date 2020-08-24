@@ -8,7 +8,14 @@ from devices.interfaces import DeviceType
 from utilities.datastructures.mes_dependent.dicts import MsgDict
 from utilities.datastructures.mes_dependent.general import PendingReply
 from utilities.errors.myexceptions import ThinkerErrorReact
-from utilities.myfunc import info_msg, error_logger
+from utilities.myfunc import info_msg as i_msg
+from utilities.myfunc import error_logger
+from utilities.tools.decorators import turn_off
+
+
+@turn_off(active=True)
+def info_msg(*args, **kwargs):
+    return i_msg(*args, **kwargs)
 
 
 def external_hb_logic(event: ThinkerEvent):
