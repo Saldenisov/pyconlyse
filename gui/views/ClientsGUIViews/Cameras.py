@@ -59,6 +59,24 @@ class CamerasView(QMainWindow):
         self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_GetImage.clicked.connect(partial(self.get_images, False))
         self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
+        # Sync and acquisition parameters
+        self.ui.spinBox_trigger_delay.valueChanged.connect(self.set_sync_parameters)
+        self.ui.spinBox_exposure_time.valueChanged.connect(self.set_sync_parameters)
+        self.ui.spinBox_fps.valueChanged.connect(self.set_sync_parameters)
+        self.ui.comboBox_syncmode.currentIndexChanged.connect(self.set_sync_parameters)
+        # Image parameters
+        self.ui.spinBox_Width.valueChanged.connect(self.set_image_parameters)
+        self.ui.spinBox_Height.valueChanged.connect(self.set_image_parameters)
+        self.ui.spinBox_Xoffset.valueChanged.connect(self.set_image_parameters)
+        self.ui.spinBox_Yoffset.valueChanged.connect(self.set_image_parameters)
+        self.ui.spinBox_blacklevel.valueChanged.connect(self.set_image_parameters)
+        self.ui.spinBox_gainraw.valueChanged.connect(self.set_image_parameters)
+
+        # Transport Parameters
+        self.ui.spinBox_packetsize.valueChanged.connect(self.set_transport_parameters)
+        self.ui.spinBox_interpacket_delay.valueChanged.connect(self.set_transport_parameters)
+
+
 
         self.update_state(force_camera=True, force_device=True)
 
@@ -155,7 +173,6 @@ class CamerasView(QMainWindow):
                             datacanvas.update_data(CameraReadings(data=np.array(result.image),
                                                                   time_stamp=result.timestamp,
                                                                   description=result.description))
-
                     elif info.com == CameraController.GET_IMAGES.name_prepared:
                         result: FuncGetImagesPrepared = result
                         self.controller_cameras = {result.camera_id: result.camera}
@@ -165,8 +182,10 @@ class CamerasView(QMainWindow):
                         else:
                             comments = f'Camera {result.camera_id} is not ready to send images.'
                         self.ui.textEdit_comments.setText(f'{comments} {result.comments}')
-                    elif info.com == CameraController.GET_IMAGES.name:
-                        print('Get_images')
+                    elif info.com == CameraController.SET_TRANSPORT_PARAMETERS.name:
+                        result: FuncSetTransportParametersOutput = result
+                        self.controller_cameras = {result.camera_id: result.camera}
+                        self.ui.textEdit_comments.setText(result.comments)
                     elif info.com == CameraController.STOP_ACQUISITION.name:
                         result: FuncStopAcquisitionOutput = result
                         if result.func_success:
@@ -176,10 +195,17 @@ class CamerasView(QMainWindow):
                             self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
                                                               f'was not stopped. {result.comments}')
 
+                    elif info.com == CameraController.STOP_ACQUISITION.name:
+                        result: FuncStopAcquisitionOutput = result
+                        if result.func_success:
+                            self.ui.textEdit_comments.setText(f'Acquisition for camera with id {result.camera_id} '
+                                                              f'is stopped.')
+                        else:
+                            self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
+                                                              f'was not stopped. {result.comments}')
                     elif info.com == CameraController.POWER.name:
                         result: FuncPowerOutput = result
                         self.controller_status.device_status = result.device_status
-
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.textEdit_comments.setText(info.comments)
                     client = self.device
@@ -198,6 +224,64 @@ class CamerasView(QMainWindow):
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.send_msg_externally(msg)
+
+    def set_image_parameters(self):
+        ui = self.ui
+        width = ui.spinBox_Width.value()
+        height = ui.spinBox_Height.value()
+        xoffset = ui.spinBox_Xoffset.value()
+        yoffset = ui.spinBox_Yoffset.value()
+        blacklevel = ui.spinBox_blacklevel.value()
+        gainraw = ui.spinBox_gainraw.value()
+        gain_mode = ui.comboBox_gain_mode.currentText()
+        balance_ratio = ui.spinBox_balance_ratio.value()
+        camera_id = ui.spinBox_cameraID.value()
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
+                                  func_input=FuncSetImageParametersInput(camera_id=camera_id, width=width,
+                                                                         height=height, offset_x=xoffset,
+                                                                         offset_y=yoffset, gain_mode=gain_mode,
+                                                                         gain=gainraw, blacklevel=blacklevel,
+                                                                         balance_ratio=balance_ratio,
+                                                                         pixel_format='Mono8'))
+        client.send_msg_externally(msg)
+        self._asked_status = 0
+
+    def set_sync_parameters(self):
+        from distutils.util import strtobool
+        ui = self.ui
+        exposure_time = ui.spinBox_exposure_time.value()
+        trigger_mode = strtobool(ui.comboBox_syncmode.currentText())
+        trigger_delay = ui.spinBox_trigger_delay.value()
+        fps = ui.spinBox_fps.value()
+        trigger_source = ui.comboBox_TrigSource.currentText()
+        camera_id = ui.spinBox_cameraID.value()
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
+                                  func_input=FuncSetSyncParametersInput(camera_id=camera_id,
+                                                                        exposure_time=exposure_time,
+                                                                        trigger_mode=trigger_mode,
+                                                                        trigger_delay=trigger_delay,
+                                                                        frame_rate=fps,
+                                                                        trigger_source=trigger_source))
+        client.send_msg_externally(msg)
+        self._asked_status = 0
+
+    def set_transport_parameters(self):
+        ui = self.ui
+        packet_size = ui.spinBox_packetsize.value()
+        interpacket_delay = ui.spinBox_interpacket_delay.value()
+        camera_id = ui.spinBox_cameraID.value()
+        client = self.device
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
+                                  func_input=FuncSetTransportParametersInput(camera_id=camera_id,
+                                                                             packet_size=packet_size,
+                                                                             inter_packet_delay=interpacket_delay))
+        client.send_msg_externally(msg)
+        self._asked_status = 0
 
     def stop_acquisition(self):
         client = self.device
@@ -223,6 +307,7 @@ class CamerasView(QMainWindow):
             acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
             analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
             aoi_cntrls: AOI_Controls = camera.parameters['AOI_Controls']
+            transport_cntrls: Transport_Layer = camera.parameters['Transport_Layer']
 
             _translate = QtCore.QCoreApplication.translate
             if camera.friendly_name != '':
@@ -233,14 +318,19 @@ class CamerasView(QMainWindow):
             ui.checkBox_On.setChecked(camera.status)
             ui.label_name.setText(_translate("CameraGUI", name))
             ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
+            ui.spinBox_exposure_time.setValue(acq_ctrls.ExposureTimeAbs)
+            ui.spinBox_trigger_delay.setValue(acq_ctrls.TriggerDelayAbs)
             ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
             ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
             ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
+
             ui.spinBox_Width.setValue(aoi_cntrls.Width)
             ui.spinBox_Height.setValue(aoi_cntrls.Height)
             ui.spinBox_Xoffset.setValue(aoi_cntrls.OffsetX)
             ui.spinBox_Yoffset.setValue(aoi_cntrls.OffsetY)
 
+            ui.spinBox_packetsize.setValue(transport_cntrls.GevSCPSPacketSize)
+            ui.spinBox_interpacket_delay.setValue(transport_cntrls.GevSCPD)
 
             self.controller_status.cameras_previous = copy.deepcopy(cs.cameras)
 

@@ -1,6 +1,5 @@
 import logging
 from abc import abstractmethod
-from time import sleep
 from threading import Thread
 from typing import Any, Callable
 from functools import lru_cache
