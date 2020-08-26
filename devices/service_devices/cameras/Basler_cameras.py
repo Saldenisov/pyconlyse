@@ -3,7 +3,7 @@ Controllers of Basler cameras are described here
 
 created
 """
-from dataclasses import asdict
+from collections import OrderedDict
 from distutils.util import strtobool
 import numpy
 from pypylon import pylon, genicam
@@ -243,11 +243,14 @@ class CameraCtrl_Basler(CameraController):
         try:
             try:
                 friendly_name = eval(self.get_parameters['friendly_names'])[device_id]
+                size_of_matrix = eval(self.get_parameters['size_of_matrix'])[device_id]
             except (KeyError, ValueError, SyntaxError):
                 friendly_name = str(device_id)
+                size_of_matrix = (512, 512)
 
             pylon_camera.GetDeviceInfo().SetFriendlyName(friendly_name.format('utf-8'))
             camera.friendly_name = friendly_name
+            camera.matrix_size = size_of_matrix
 
             parameters_groups = ['Transport_Layer',
                                  'Analog_Controls',
@@ -313,8 +316,11 @@ class CameraCtrl_Basler(CameraController):
         blacklevel = func_input.blacklevel
         balance_ratio = func_input.balance_ratio
         pixel_format = func_input.pixel_format
-
-        formed_parameters_dict_AOI = {'Width': width, 'Height': height, 'OffsetX': offset_x, 'OffsetY': offset_y}
+        formed_parameters_dict_AOI = OrderedDict()
+        formed_parameters_dict_AOI['OffsetX'] = offset_x
+        formed_parameters_dict_AOI['OffsetY'] = offset_y
+        formed_parameters_dict_AOI['Width'] = width
+        formed_parameters_dict_AOI['Height'] = height
         formed_parameters_dict_analog_controls = {'GainAuto': gain_mode, 'GainRaw': gain, 'BlackLevelRaw': blacklevel,
                                                   'BalanceRatioRaw': balance_ratio}
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}

@@ -1,9 +1,7 @@
-from json import dumps
-import numpy
+class A:
+    pass
 
-arr = numpy.zeros(shape=(10,10)).tolist()
-a = {1: arr}
+class B(A):
+    pass
 
-
-b = dumps(a)
-print(b)
+print(type(B()).__bases__)

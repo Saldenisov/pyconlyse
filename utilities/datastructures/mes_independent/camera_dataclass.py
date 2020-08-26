@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
@@ -48,6 +48,7 @@ class Camera:
     device_id: int
     name: str = ''
     friendly_name: str = ''
+    matrix_size: Tuple[int] = field(default_factory=tuple)
     parameters: Dict[str, Any] = field(default_factory=dict)
     status: int = 0  # 0, 1, 2
 

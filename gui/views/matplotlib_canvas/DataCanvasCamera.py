@@ -32,7 +32,7 @@ class DataCanvasCamera(FigureCanvas):
         self.compute_figure()
 
         from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
-        #self.toolbar = NavigationToolbar(self, self.parent)
+        self.toolbar = NavigationToolbar(self, self.parent)
 
     def compute_figure(self, figure_name=''):
         self.maxv = np.max(self.camera_reading.data)
@@ -55,8 +55,8 @@ class DataCanvasCamera(FigureCanvas):
     def update_data(self, camera_readings: CameraReadings = None):
         self.camera_reading = camera_readings
         self.image.set_data(self.camera_reading.data)
-        self.image.set_extent(extent=[self.camera_reading.X[0], self.camera_reading.X[-1],
-                                      self.camera_reading.Y[-1], self.camera_reading.Y[0]])
+        self.image.set_extent(extent=[self.camera_reading.Y[0], self.camera_reading.Y[-1],
+                                      self.camera_reading.X[-1], self.camera_reading.X[0]])
         self.axis.set_title(self.camera_reading.description)
 
         self.update_limits()

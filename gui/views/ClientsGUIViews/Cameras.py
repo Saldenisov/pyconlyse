@@ -8,8 +8,9 @@ import logging
 import numpy as np
 from _functools import partial
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMainWindow, QErrorMessage
+from PyQt5.QtWidgets import QMainWindow, QErrorMessage, QMenu
 from typing import Union
+from time import sleep
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
 from datetime import datetime
 
@@ -43,8 +44,19 @@ class CamerasView(QMainWindow):
 
         self.ui = Ui_CameraGUI()
         self.ui.setupUi(CameraGUI=self)
-        self.ui.datacanvas = DataCanvasCamera(width=9, height=10, dpi=70, canvas_parent=self.ui.centralwidget)
+        from matplotlib.widgets import Cursor, RectangleSelector
+
+        self.ui.datacanvas = DataCanvasCamera(width=9, height=10, dpi=70, canvas_parent=self.ui.verticalWidget_toolbox)
+        self.RS = RectangleSelector(self.ui.datacanvas.axis,
+                                    self.update_cursors,
+                                    drawtype='box',
+                                    useblit=True,
+                                    button=[1, 3],
+                                    minspanx=5,
+                                    minspany=5,
+                                    spancoords='pixels')
         self.ui.datacanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
+        self.ui.datacanvas.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.horizontalLayout_canvas.addWidget(self.ui.datacanvas)
 
         self.model.add_observer(self)
@@ -59,24 +71,10 @@ class CamerasView(QMainWindow):
         self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_GetImage.clicked.connect(partial(self.get_images, False))
         self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
-        # Sync and acquisition parameters
-        self.ui.spinBox_trigger_delay.valueChanged.connect(self.set_sync_parameters)
-        self.ui.spinBox_exposure_time.valueChanged.connect(self.set_sync_parameters)
-        self.ui.spinBox_fps.valueChanged.connect(self.set_sync_parameters)
-        self.ui.comboBox_syncmode.currentIndexChanged.connect(self.set_sync_parameters)
-        # Image parameters
-        self.ui.spinBox_Width.valueChanged.connect(self.set_image_parameters)
-        self.ui.spinBox_Height.valueChanged.connect(self.set_image_parameters)
-        self.ui.spinBox_Xoffset.valueChanged.connect(self.set_image_parameters)
-        self.ui.spinBox_Yoffset.valueChanged.connect(self.set_image_parameters)
-        self.ui.spinBox_blacklevel.valueChanged.connect(self.set_image_parameters)
-        self.ui.spinBox_gainraw.valueChanged.connect(self.set_image_parameters)
+        self.ui.pushButton_set_parameters.clicked.connect(self.set_parameters)
 
-        # Transport Parameters
-        self.ui.spinBox_packetsize.valueChanged.connect(self.set_transport_parameters)
-        self.ui.spinBox_interpacket_delay.valueChanged.connect(self.set_transport_parameters)
-
-
+        # Context Menus
+        self.ui.datacanvas.customContextMenuRequested.connect(self.menuContextDataCanvas)
 
         self.update_state(force_camera=True, force_device=True)
 
@@ -85,6 +83,24 @@ class CamerasView(QMainWindow):
                                        func_input=FuncGetCameraControllerStateInput())
         self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
+
+    def menuContextDataCanvas(self, point):
+        menu = QMenu()
+        action_full_image = menu.addAction('Full Image')
+
+        action = menu.exec_(self.ui.datacanvas.mapToGlobal(point))
+
+        if action:
+            if action == action_full_image:
+                camera_id = self.ui.spinBox_cameraID.value()
+                size_of_matrix = self.controller_status.cameras[camera_id].matrix_size
+                if len(size_of_matrix) != 0:
+                    self.ui.spinBox_Xoffset.setValue(0)
+                    self.ui.spinBox_Yoffset.setValue(0)
+                    self.ui.spinBox_Width.setValue(size_of_matrix[0])
+                    self.ui.spinBox_Height.setValue(size_of_matrix[1])
+                    self.set_image_parameters()
+
 
     def activate_controller(self):
         client = self.device
@@ -112,8 +128,9 @@ class CamerasView(QMainWindow):
     @controller_cameras.setter
     def controller_cameras(self, value: Union[Dict[int, CameraEssentials], Dict[int, Camera]]):
         try:
-            if type(next(iter(value.values()))) == Camera:
-                self.controller_status.cameras = value
+            if Camera in type(next(iter(value.values()))).__bases__:
+                for camera_id, camera in value.items():
+                    self.controller_status.cameras[camera_id] = camera
             else:
                 for camera_id, camera in value.items():
                     self.controller_status.cameras[camera_id].status = camera.status
@@ -182,10 +199,21 @@ class CamerasView(QMainWindow):
                         else:
                             comments = f'Camera {result.camera_id} is not ready to send images.'
                         self.ui.textEdit_comments.setText(f'{comments} {result.comments}')
+                    elif info.com == CameraController.SET_IMAGE_PARAMETERS.name:
+                        result: FuncSetImageParametersOutput = result
+                        self.controller_cameras = {result.camera_id: result.camera}
+                        if result.comments:
+                            self.ui.textEdit_comments.setText(result.comments)
+                    elif info.com == CameraController.SET_SYNC_PARAMETERS.name:
+                        result: FuncSetSyncParametersOutput = result
+                        self.controller_cameras = {result.camera_id: result.camera}
+                        if result.comments:
+                            self.ui.textEdit_comments.setText(result.comments)
                     elif info.com == CameraController.SET_TRANSPORT_PARAMETERS.name:
                         result: FuncSetTransportParametersOutput = result
                         self.controller_cameras = {result.camera_id: result.camera}
-                        self.ui.textEdit_comments.setText(result.comments)
+                        if result.comments:
+                            self.ui.textEdit_comments.setText(result.comments)
                     elif info.com == CameraController.STOP_ACQUISITION.name:
                         result: FuncStopAcquisitionOutput = result
                         if result.func_success:
@@ -194,7 +222,6 @@ class CamerasView(QMainWindow):
                         else:
                             self.ui.textEdit_comments.setText(f'Acqusition for camera with id {result.camera_id} '
                                                               f'was not stopped. {result.comments}')
-
                     elif info.com == CameraController.STOP_ACQUISITION.name:
                         result: FuncStopAcquisitionOutput = result
                         if result.func_success:
@@ -224,6 +251,53 @@ class CamerasView(QMainWindow):
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.send_msg_externally(msg)
+
+    def set_parameters(self):
+        cs = self.controller_status
+        ui = self.ui
+        camera_id = int(ui.spinBox_cameraID.value())
+        camera: CameraEssentials = cs.cameras[camera_id]
+        acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
+        analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
+        aoi_cntrls: AOI_Controls = camera.parameters['AOI_Controls']
+        transport_cntrls: Transport_Layer = camera.parameters['Transport_Layer']
+
+
+        # Acqusition controls
+        from distutils.util import strtobool
+        exposure_time = ui.spinBox_exposure_time.value()
+        trigger_mode = strtobool(ui.comboBox_syncmode.currentText())
+        trigger_delay = ui.spinBox_trigger_delay.value()
+        fps = ui.spinBox_fps.value()
+        trigger_source = ui.comboBox_TrigSource.currentText()
+        acq_ctrls_new = Acquisition_Controls(TriggerSource=trigger_source, TriggerMode=trigger_mode,
+                                             TriggerDelayAbs=trigger_delay, ExposureTimeAbs=exposure_time,
+                                             AcquisitionFrameRateAbs=fps, AcquisitionFrameRateEnable=trigger_mode)
+        if acq_ctrls_new != acq_ctrls:
+            self.set_sync_parameters()
+
+        # Transport layer
+        packet_size = ui.spinBox_packetsize.value()
+        interpacket_delay = ui.spinBox_interpacket_delay.value()
+        transport_cntrls_new = Transport_Layer(GevSCPSPacketSize=packet_size, GevSCPD=interpacket_delay)
+        if transport_cntrls_new != transport_cntrls:
+            self.set_transport_parameters()
+
+        # Image parameters
+        width = ui.spinBox_Width.value()
+        height = ui.spinBox_Height.value()
+        xoffset = ui.spinBox_Xoffset.value()
+        yoffset = ui.spinBox_Yoffset.value()
+        blacklevel = ui.spinBox_blacklevel.value()
+        gainraw = ui.spinBox_gainraw.value()
+        gain_mode = ui.comboBox_gain_mode.currentText()
+        balance_ratio = ui.spinBox_balance_ratio.value()
+        analog_ctrls_new = Analog_Controls(GainAuto=gain_mode, GainRaw=gainraw, BlackLevelRaw=blacklevel,
+                                           BalanceRatioRaw=balance_ratio)
+        aoi_cntrls_new = AOI_Controls(Width=width, Height=height, OffsetX=xoffset, OffsetY=yoffset)
+
+        if analog_ctrls_new != analog_ctrls or aoi_cntrls_new != aoi_cntrls:
+            self.set_image_parameters()
 
     def set_image_parameters(self):
         ui = self.ui
@@ -301,7 +375,7 @@ class CamerasView(QMainWindow):
             ui.spinBox_cameraID.setMaximum(max(camera_ids))
             if ui.spinBox_cameraID.value() not in camera_ids:
                 ui.spinBox_cameraID.setValue(min(camera_ids))
-            camera_id = int(ui.spinBox_cameraID.value())
+            camera_id = ui.spinBox_cameraID.value()
 
             camera: CameraEssentials = cs.cameras[camera_id]
             acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
@@ -342,3 +416,47 @@ class CamerasView(QMainWindow):
                 ui.checkBox_activate.setChecked(cs.device_status.active)
                 ui.checkBox_On.setChecked(camera.status)
                 self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
+
+    def update_cursors(self, eclick, erelease):
+        camera_id = self.ui.spinBox_cameraID.value()
+        size_of_matrix = self.controller_status.cameras[camera_id].matrix_size
+        width_prev = self.ui.spinBox_Width.value()
+        height_prev = self.ui.spinBox_Height.value()
+        xoffset_prev = self.ui.spinBox_Xoffset.value()
+        yoffset_prev = self.ui.spinBox_Yoffset.value()
+
+        pixel_x_start, pixel_x_end, pixel_y_start, pixel_y_end = int(eclick.xdata), int(erelease.xdata), \
+                                                                 int(eclick.ydata), int(erelease.ydata)
+
+        if pixel_x_start > pixel_x_end:
+            pixel_x_start, pixel_x_end = pixel_x_end, pixel_x_start
+
+        if pixel_y_start > pixel_y_end:
+            pixel_y_start, pixel_y_end = pixel_y_end, pixel_y_start
+
+        width_new = pixel_x_end - pixel_x_start
+        if width_new % 2 != 0:
+            width_new += 1
+
+        height_new = pixel_y_end - pixel_y_start
+        if height_new % 2 != 0:
+            height_new += 1
+
+        xoffset_new = xoffset_prev + pixel_x_start
+        if xoffset_new % 2 != 0:
+            xoffset_new += 1
+
+        yoffset_new = yoffset_prev + pixel_y_start
+        if yoffset_new % 2 != 0:
+            yoffset_new += 1
+
+        if width_new + xoffset_new > size_of_matrix[0]:
+            width_new = size_of_matrix[0] - xoffset_new
+
+        if height_new + yoffset_new > size_of_matrix[1]:
+            height_new = size_of_matrix[1] - yoffset_new
+
+        self.ui.spinBox_Width.setValue(width_new)
+        self.ui.spinBox_Height.setValue(height_new)
+        self.ui.spinBox_Xoffset.setValue(xoffset_new)
+        self.ui.spinBox_Yoffset.setValue(yoffset_new)
