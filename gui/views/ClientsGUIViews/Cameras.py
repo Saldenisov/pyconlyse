@@ -57,6 +57,8 @@ class CamerasView(QMainWindow):
                                     spancoords='pixels')
         self.ui.datacanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.ui.datacanvas.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.comboBox_x_stepmotor.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.comboBox_y_stepmotor.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.horizontalLayout_canvas.addWidget(self.ui.datacanvas)
 
         self.model.add_observer(self)
@@ -66,15 +68,19 @@ class CamerasView(QMainWindow):
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.checkBox_activate.clicked.connect(self.activate_controller)
         self.ui.spinBox_cameraID.valueChanged.connect(partial(self.update_state, *[True, False]))
-        self.ui.pushButton_GetImage.clicked.connect(self.get_images)
-        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
+        self.ui.pushButton_GetImage.clicked.connect(self.get_image)
+        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
         self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
-        self.ui.pushButton_GetImage.clicked.connect(partial(self.get_images, False))
-        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_images, True))
+        self.ui.pushButton_GetImage.clicked.connect(partial(self.get_image, False))
+        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
         self.ui.pushButton_set_parameters.clicked.connect(self.set_parameters)
+        self.ui.comboBox_x_stepmotor.activated.connect(partial(self.step_motor_changed, 'X'))
+        self.ui.comboBox_y_stepmotor.activated.connect(partial(self.step_motor_changed, 'Y'))
 
         # Context Menus
         self.ui.datacanvas.customContextMenuRequested.connect(self.menuContextDataCanvas)
+        self.ui.comboBox_x_stepmotor.customContextMenuRequested.connect(partial(self.menuContextStepMotor, 'X'))
+        self.ui.comboBox_y_stepmotor.customContextMenuRequested.connect(partial(self.menuContextStepMotor, 'Y'))
 
         self.update_state(force_camera=True, force_device=True)
 
@@ -100,6 +106,27 @@ class CamerasView(QMainWindow):
                     self.ui.spinBox_Width.setValue(size_of_matrix[0])
                     self.ui.spinBox_Height.setValue(size_of_matrix[1])
                     self.set_image_parameters()
+
+    def menuContextStepMotor(self, axis: str, point):
+        menu = QMenu()
+        action_get_axes = menu.addAction('Get Axes')
+
+        if axis == 'X':
+            action = menu.exec_(self.ui.comboBox_x_stepmotor.mapToGlobal(point))
+        elif axis == 'Y':
+            action = menu.exec_(self.ui.comboBox_y_stepmotor.mapToGlobal(point))
+
+        if action:
+            camera_id = self.ui.spinBox_cameraID.value()
+            camera: Camera = self.controller_status.cameras[camera_id]
+            if action == action_get_axes:
+                if camera.stpmtr_ctrl_id != '' and camera.stpmtr_ctrl_id in list(self.device.service_parameters.keys()):
+                    client = self.device
+                    msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                              forward_to=camera.stpmtr_ctrl_id,
+                                              func_input=FuncGetControllerStateInput())
+                    client.send_msg_externally(msg)
+                    self._asked_status = 0
 
 
     def activate_controller(self):
@@ -137,24 +164,31 @@ class CamerasView(QMainWindow):
         except Exception as e:
             error_logger(self, self.controller_axes, e)
 
-    def get_images(self, images=False):
+    def get_image(self, grab_cont=False):
         client = self.device
-        every_sec = 0
-        if images:
-            n_images = -1
+
+        if grab_cont:
             if self.ui.radioButton_RT.isChecked():
                 every_sec = 0
             else:
                 every_sec = float(self.ui.spinBox_seconds.value())
         else:
-            n_images = 1
+            every_sec = -1
+
+        send_images_back = self.ui.checkBox_images.isChecked()
+        if self.ui.checkBox_cg.isChecked():
+            cg_points = self.ui.spinBox_cg_points.value()
+        else:
+            cg_points = -1
 
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetImagesInput(camera_id=int(self.ui.spinBox_cameraID.value()),
-                                                                n_images=n_images,
+                                                                demander_device_id=client.id,
                                                                 every_n_sec=every_sec,
-                                                                demander_device_id=client.id))
+                                                                return_images=self.ui.checkBox_images.isChecked(),
+                                                                post_treatment='cg',
+                                                                history_post_treament_n=cg_points))
         client.send_msg_externally(msg)
 
     def model_is_changed(self, msg: MessageInt):
@@ -186,10 +220,11 @@ class CamerasView(QMainWindow):
                     elif info.com == CameraController.GET_IMAGES.name:
                         result: FuncGetImagesOutput = result
                         if result.func_success:
-                            datacanvas: DataCanvasCamera = self.ui.datacanvas
-                            datacanvas.update_data(CameraReadings(data=np.array(result.image),
-                                                                  time_stamp=result.timestamp,
-                                                                  description=result.description))
+                            if result.image and self.ui.spinBox_cameraID.value() == result.camera_id:
+                                datacanvas: DataCanvasCamera = self.ui.datacanvas
+                                datacanvas.update_data(CameraReadings(data=np.array(result.image),
+                                                                      time_stamp=result.timestamp,
+                                                                      description=result.description))
                     elif info.com == CameraController.GET_IMAGES.name_prepared:
                         result: FuncGetImagesPrepared = result
                         self.controller_cameras = {result.camera_id: result.camera}
@@ -357,6 +392,9 @@ class CamerasView(QMainWindow):
         client.send_msg_externally(msg)
         self._asked_status = 0
 
+    def step_motor_changed(self, axis: str):
+        pass
+
     def stop_acquisition(self):
         client = self.device
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
@@ -460,3 +498,4 @@ class CamerasView(QMainWindow):
         self.ui.spinBox_Height.setValue(height_new)
         self.ui.spinBox_Xoffset.setValue(xoffset_new)
         self.ui.spinBox_Yoffset.setValue(yoffset_new)
+

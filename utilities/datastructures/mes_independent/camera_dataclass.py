@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple
+from threading import Thread
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
@@ -51,6 +52,7 @@ class Camera:
     matrix_size: Tuple[int] = field(default_factory=tuple)
     parameters: Dict[str, Any] = field(default_factory=dict)
     status: int = 0  # 0, 1, 2
+    stpmtr_ctrl_id: str = ''
 
     def short(self):
         d = {}
@@ -87,6 +89,17 @@ class CameraDescription(Desription):
 
 
 @dataclass
+class ImageDemand:
+    camera_id: int
+    demander_id: str
+    every_n_sec: int
+    return_images: bool
+    post_treatment: str
+    history_post_treament_n: int
+    grabbing_thread: Thread=None
+
+
+@dataclass
 class FuncActivateCameraInput(FuncInput):
     camera_id: int
     flag: int
@@ -112,10 +125,13 @@ class FuncGetCameraControllerStateOutput(FuncGetControllerStateOutput):
 @dataclass
 class FuncGetImagesInput(FuncInput):
     camera_id: int
-    n_images: int
-    every_n_sec: float
     demander_device_id: str
+    every_n_sec: float
+    return_images: bool
+    post_treatment: str
+    history_post_treament_n: int
     com: str = 'get_images'
+
 
 @dataclass
 class FuncGetImagesPrepared(FuncOutput):
@@ -124,10 +140,13 @@ class FuncGetImagesPrepared(FuncOutput):
     camera: CameraEssentials
     com: str = 'get_images_prepared'
 
+
 @dataclass
 class FuncGetImagesOutput(FuncOutput):
     image: List[int]
+    cg_points: List[Tuple[int]]
     timestamp: float
+    camera_id: int
     description: str = ''
     com: str = 'get_images'
     crypted: bool = False
@@ -187,6 +206,31 @@ class FuncSetTransportParametersOutput(FuncOutput):
     camera_id: int
     camera: CameraEssentials
     com: str = 'set_transport_parameters'
+
+
+@dataclass
+class FuncStartTrackingInput(FuncInput):
+    camera_id: int
+    history_points: int
+    tracking_type: str = 'center_gravity'  # Extend later number of tracking types
+    com: str = 'start_tracking'
+
+
+@dataclass
+class FuncStartTrackingPrepared(FuncOutput):
+    camera_id: int
+    ready: bool
+    camera: CameraEssentials
+    com: str = 'start_tracking_prepared'
+
+
+@dataclass
+class FuncStartTrackingOutput(FuncOutput):
+    camera_id: int
+    points: List[Tuple[int]]
+    history_points: List[Tuple[int]]
+    tracking_type: str = 'center_gravity'  # Extend later number of tracking types
+    com: str = 'start_tracking'
 
 
 @dataclass

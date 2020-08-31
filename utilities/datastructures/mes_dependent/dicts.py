@@ -1,7 +1,7 @@
 from collections import OrderedDict
 from typing import Dict
 
-from communication.messaging.messages import MessageExt
+from communication.messaging.messages import MessageExt, MsgComExt
 from utilities.datastructures.mes_dependent.general import PendingDemand, PendingReply
 from utilities.datastructures.mes_independent.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
@@ -121,10 +121,14 @@ class MsgDict(OrderedDict):
     def _check_size_limit(self):
         if self.size_limit is not None:
             while len(self) > self.size_limit:
-                element = self.popitem(last=False)  # Remove first element
+                element: MessageExt = self.popitem(last=False)[1]  # Remove first element
+                if element.com in [MsgComExt.WELCOME_INFO_DEVICE, MsgComExt.WELCOME_INFO_SERVER]:
+                    element_back = element
+                    element = self.popitem(last=False)
+                    self[element_back.id] = element_back
                 if self.dict_parent:
                     info_msg(self.dict_parent, 'INFO', f'Limit size={self.size_limit} was exceeded for {self.name}, '
-                                                f'first element {element[1].short()} was removed')
+                                                       f'first element {element[1].short()} was removed')
 
 
 class OrderedDictMesTypeCounter(OrderedDict):

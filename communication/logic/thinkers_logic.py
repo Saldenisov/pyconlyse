@@ -199,9 +199,7 @@ class ServerCmdLogic(GeneralCmdLogic):
                              forwarded_from=msg.sender_id, id=msg.id)
             #self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
-            msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
-                                              reply_to=msg.id),
-                     self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+            msg_r = [self.parent.generate_msg(msg_com=MsgComExt.ERROR,
                                               comments=f'service {msg.forward_to} is not available',
                                               receiver_id=msg.sender_id, reply_to=msg.id)]
         self.msg_out(msg_r)
@@ -215,7 +213,12 @@ class ServerCmdLogic(GeneralCmdLogic):
 
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
-    pass
+    def react_first_welcome(self, msg: MessageExt):
+        super().react_first_welcome(msg)
+        client = self.parent
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  func_input=FuncAvailableServicesInput())
+        self.msg_out(msg)
 
 
 class ServiceCmdLogic(GeneralCmdLogic):

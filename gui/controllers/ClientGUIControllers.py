@@ -58,8 +58,12 @@ class SuperClientGUIcontroller():
                     exc = exc + r
                 os.system(exc)
 
-    def create_service_gui(self):
-        service_id = self.view.ui.lW_devices.currentItem().text()
+    def create_service_gui(self, service_id_ext=''):
+        if service_id_ext:
+            service_id = service_id_ext
+        else:
+            service_id = self.view.ui.lW_devices.currentItem().text()
+
         try:
             parameters: DeviceInfoExt = self.model.service_parameters[service_id]
             if isinstance(parameters.device_description, StpMtrDescription):
@@ -73,11 +77,13 @@ class SuperClientGUIcontroller():
                                                    service_parameters=parameters)
             self.services_views[service_id].show()
             info_msg(self, 'INFO', f'GUI for service {service_id} is started')
-
         except KeyError as e:
-            error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded: {e}')
+            error_logger(self, self.create_service_gui,
+                         f'Parameters for service id={service_id} was not loaded: {e}')
         except Exception as e:
             error_logger(self, self.create_service_gui, e)
+
+
 
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)

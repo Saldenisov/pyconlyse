@@ -145,7 +145,7 @@ class Messenger(MessengerInter):
                 else:
                     receiver_id = self.parent.server_id
                 return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr(compression=False))
-            except KeyError:
+            except (KeyError, ValueError):
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
         else:
             return msg.byte_repr(compression=False)

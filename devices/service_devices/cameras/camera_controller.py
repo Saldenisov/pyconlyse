@@ -18,14 +18,14 @@ class CameraController(Service):
     SET_IMAGE_PARAMETERS = CmdStruct(FuncSetImageParametersInput, FuncSetImageParametersOutput)
     SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetImageParametersOutput)
     SET_TRANSPORT_PARAMETERS = CmdStruct(FuncSetTransportParametersInput, FuncSetTransportParametersOutput)
+    START_TRACKING = CmdStruct(FuncStartTrackingInput, FuncStartTrackingOutput, FuncStartTrackingPrepared)
     STOP_ACQUISITION = CmdStruct(FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self._camera_class = kwargs['camera_class']
         self._cameras: Dict[int, Camera] = dict()
-        self._images_demanders = {}
-
+        self._images_demanders: Dict[str, Dict[int, ImageDemand]] = {}
         res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
                                                 # from hardware controller if possible
         if not res:
@@ -197,7 +197,11 @@ class CameraController(Service):
         if res:
             res, comments = self._prepare_camera_reading(camera_id)
         if res:
-            self._register_image_demander(camera_id, func_input.demander_device_id, func_input.n_images, func_input.every_n_sec)
+            image_demand = ImageDemand(camera_id=camera_id, demander_id=func_input.demander_device_id,
+                                       every_n_sec=func_input.every_n_sec, return_images=func_input.return_images,
+                                       post_treatment=func_input.post_treatment,
+                                       history_post_treament_n=func_input.history_post_treament_n)
+            self._register_image_demander(image_demand)
         return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
                                      camera=self.cameras_essentials[camera_id])
 
@@ -215,22 +219,36 @@ class CameraController(Service):
             raise CameraError(self, text="Check cameras number in database, must be cameras_number = number")
 
     @abstractmethod
-    def _grabbing(self, n_sec: float):
+    def _grabbing(self, image_demander: ImageDemand):
         pass
 
     @abstractmethod
     def _prepare_camera_reading(self) -> Tuple[bool, str]:
         return True, ''
 
-    def _register_image_demander(self, camera_id, demander_id, n_images, n_sec=1):
+    def _register_image_demander(self, image_demand: ImageDemand):
+        camera_id = image_demand.camera_id
+        demander_id = image_demand.demander_id
+
+        def prepare_thread(camera_id, demander_id) -> Thread:
+            return Thread(target=self._grabbing, args=(camera_id, demander_id))
+
         if demander_id not in self._images_demanders:
-            thread = Thread(target=self._grabbing, args=(demander_id, n_sec))
-            thread.start()
-        if demander_id in self._images_demanders and camera_id == self._images_demanders[demander_id][2]:
-            self._images_demanders[demander_id] = (n_images, self._images_demanders[demander_id][1],
-                                                   self._images_demanders[demander_id][2])
+            thread = prepare_thread(camera_id, demander_id)
+            image_demand.grabbing_thread = thread
+            image_demand.grabbing_thread.start()
+            self._images_demanders[demander_id] = {camera_id: image_demand}
         else:
-            self._images_demanders[demander_id] = (n_images, 0, camera_id)
+            demands = self._images_demanders[demander_id]
+            if camera_id not in demands:
+                thread = prepare_thread(camera_id, demander_id)
+                image_demand.grabbing_thread = thread
+                image_demand.grabbing_thread.start()
+                self._images_demanders[demander_id][camera_id] = image_demand
+            else:
+                demand: ImageDemand = self._images_demanders[demander_id][camera_id]
+                image_demand.grabbing_thread = demand.grabbing_thread
+                self._images_demanders[demander_id][camera_id] = image_demand
 
     def _set_number_cameras(self):
         if self.device_status.connected:
@@ -318,12 +336,22 @@ class CameraController(Service):
     def _set_transport_parameters_device(self, func_input: FuncSetTransportParametersInput) -> Tuple[bool, str]:
         pass
 
+    def start_tracking(self, func_input: FuncStartTrackingInput) -> FuncStartTrackingPrepared:
+        camera_id = func_input.camera_id
+        res, comments = self._check_camera_range(camera_id)
+        if res:
+            res, comments = self._prepare_camera_reading(camera_id)
+        if res:
+            self._register_image_demander(camera_id, func_input.demander_device_id, func_input.n_images,
+                                          func_input.every_n_sec)
+        return FuncStartTrackingPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
+                                         camera=self.cameras_essentials[camera_id])
+
     def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
         camera_id = func_input.camera_id
         res, comments = self._check_camera_range(camera_id)
         if res:
             res, comments = self._stop_acquisition(camera_id)
-
         return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera_id=camera_id)
 
     @abstractmethod

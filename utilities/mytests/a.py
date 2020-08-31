@@ -1,7 +1,4 @@
-class A:
-    pass
+from threading import Thread
 
-class B(A):
-    pass
-
-print(type(B()).__bases__)
+def prepare_thread(*args, **kwargs) -> Thread:
+    return Thread(target=self._grabbing, args=(camera_id, demander_id))

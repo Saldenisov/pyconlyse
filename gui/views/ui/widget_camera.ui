@@ -438,7 +438,7 @@
         <item row="2" column="2">
          <layout class="QHBoxLayout" name="horizontalLayout_2">
           <item>
-           <widget class="QCheckBox" name="checkBox_show_track_history">
+           <widget class="QCheckBox" name="checkBox_show_history">
             <property name="text">
              <string>Show History</string>
             </property>
@@ -452,7 +452,11 @@
            </widget>
           </item>
           <item>
-           <widget class="QSpinBox" name="spinBox"/>
+           <widget class="QSpinBox" name="spinBox_cg_points">
+            <property name="value">
+             <number>20</number>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
@@ -463,17 +467,10 @@
           </property>
          </widget>
         </item>
-        <item row="1" column="2">
-         <widget class="QPushButton" name="pushButton_start_tracking">
-          <property name="text">
-           <string>Start Tracking</string>
-          </property>
-         </widget>
-        </item>
         <item row="1" column="1">
          <widget class="QPushButton" name="pushButton_GetImages">
           <property name="text">
-           <string>GetImages</string>
+           <string>Start Grabbing</string>
           </property>
          </widget>
         </item>
@@ -487,7 +484,7 @@
         <item row="0" column="1">
          <widget class="QPushButton" name="pushButton_GetImage">
           <property name="text">
-           <string>GetImage</string>
+           <string>Grab Once</string>
           </property>
          </widget>
         </item>
@@ -584,7 +581,32 @@
            </widget>
           </item>
           <item>
-           <widget class="QSpinBox" name="spinBox_update_time"/>
+           <widget class="QSpinBox" name="spinBox_update_time">
+            <property name="minimum">
+             <number>1</number>
+            </property>
+            <property name="value">
+             <number>5</number>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="1" column="2">
+         <layout class="QHBoxLayout" name="horizontalLayout_8">
+          <item>
+           <widget class="QCheckBox" name="checkBox_images">
+            <property name="text">
+             <string>Images?</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBox_cg">
+            <property name="text">
+             <string>CG tracking</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
@@ -625,7 +647,7 @@
            <double>0.500000000000000</double>
           </property>
           <property name="value">
-           <double>0.500000000000000</double>
+           <double>1.000000000000000</double>
           </property>
          </widget>
         </item>

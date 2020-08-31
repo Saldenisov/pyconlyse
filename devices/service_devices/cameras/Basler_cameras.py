@@ -77,6 +77,7 @@ class CameraCtrl_Basler(CameraController):
                         if flag == 2 and camera.status == 1:
                             # TODO: must have some other strategies for future
                             camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                            sleep(0.02)
                         elif flag == 2 and camera.status == 0:
                             return False, f'First activate camera with camera id={camera_id}, ' \
                                                    f'name={camera.friendly_name}.'
@@ -164,21 +165,39 @@ class CameraCtrl_Basler(CameraController):
         pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
         return len(pylon_devices)
 
-    def _grabbing(self, demander_id, n_sec: float):
+    def _grabbing(self, camera_id: int, demander_id: str):
         sleep(0.1)
-        if demander_id in self._images_demanders:
-            n_images, image_i, camera_id = self._images_demanders[demander_id]
-            while image_i != n_images and self._cameras[camera_id].status == 2:
-                image_i += 1
+        import copy
+        if demander_id in self._images_demanders and camera_id in self._images_demanders[demander_id]:
+            while self._cameras[camera_id].status == 2 and (demander_id in self._images_demanders and
+                                                            camera_id in self._images_demanders[demander_id]):
+                image_demand: ImageDemand = self._images_demanders[demander_id][camera_id]
+
                 image = self._read_image(self._cameras[camera_id])
-                result = FuncGetImagesOutput(comments='', func_success=True, image=image.tolist(),
-                                             timestamp=datetime.timestamp(datetime.now()))
-                msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id, forward_to=demander_id,
-                                          func_output=result, reply_to='delayed_response')
+
+                if image_demand.return_images:
+                    image = image.tolist()
+                else:
+                    image = None
+
+                result = FuncGetImagesOutput(comments='', func_success=True, image=image, cg_points=[],
+                                             timestamp=datetime.timestamp(datetime.now()), camera_id=camera_id)
+
+                msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id,
+                                          forward_to=demander_id, func_output=result, reply_to='delayed_response')
+
                 self.send_msg_externally(msg_r)
+
                 self._last_image = image
-                sleep(n_sec)
-            del self._images_demanders[demander_id]
+
+                if image_demand.every_n_sec == -1:
+                    break
+                else:
+                    sleep(image_demand.every_n_sec)
+
+            del self._images_demanders[demander_id][camera_id]
+            if not self._images_demanders[demander_id]:
+                del self._images_demanders[demander_id]
             self._change_camera_status(camera_id, flag=1, force=True)
 
     def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
@@ -196,6 +215,7 @@ class CameraCtrl_Basler(CameraController):
         try:
             if not camera.pylon_camera.IsGrabbing():
                 raise CameraError(self, f"Camera {camera.friendly_name} was stopped during grabbing.")
+            sleep(0.005)
             grabResult = camera.pylon_camera.RetrieveResult(1500, pylon.TimeoutHandling_ThrowException)
             if grabResult.GrabSucceeded():
                 # Access the image data
@@ -238,19 +258,22 @@ class CameraCtrl_Basler(CameraController):
 
     def _set_parameters_camera(self, camera_id: int) -> Tuple[bool, str]:
         device_id: int = self._cameras[camera_id].device_id
-        camera = self._cameras[camera_id]
+        camera: CameraBasler = self._cameras[camera_id]
         pylon_camera: pylon.InstantCamera = camera.pylon_camera
         try:
             try:
                 friendly_name = eval(self.get_parameters['friendly_names'])[device_id]
                 size_of_matrix = eval(self.get_parameters['size_of_matrix'])[device_id]
+                stpmtr_ctrl_id = eval(self.get_parameters['stepmotor_controller'])[device_id]
             except (KeyError, ValueError, SyntaxError):
                 friendly_name = str(device_id)
                 size_of_matrix = (512, 512)
+                stepmotor_controller = ''
 
             pylon_camera.GetDeviceInfo().SetFriendlyName(friendly_name.format('utf-8'))
             camera.friendly_name = friendly_name
             camera.matrix_size = size_of_matrix
+            camera.stpmtr_ctrl_id = stpmtr_ctrl_id
 
             parameters_groups = ['Transport_Layer',
                                  'Analog_Controls',

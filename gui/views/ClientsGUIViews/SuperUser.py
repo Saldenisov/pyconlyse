@@ -75,5 +75,6 @@ class SuperUserView(QMainWindow):
                     info: FuncServiceInfoOutput = info
                     self.model.service_parameters[info.device_id] = info.service_info
                     self.ui.tE_info.setText(str(info.service_info))
+                    self.controller.create_service_gui(info.device_id)
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')
