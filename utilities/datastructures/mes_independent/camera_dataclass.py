@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 from threading import Thread
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
@@ -8,7 +8,12 @@ from utilities.datastructures.mes_independent.general import FuncInput, FuncOutp
 
 
 @dataclass
-class Analog_Controls:
+class Controls:
+    pass
+
+
+@dataclass
+class Analog_Controls(Controls):
     GainAuto: str = 'Off'
     GainRaw: int = 0
     BlackLevelRaw: int = 0
@@ -16,7 +21,7 @@ class Analog_Controls:
 
 
 @dataclass
-class AOI_Controls:
+class AOI_Controls(Controls):
     Width: int = 0
     Height: int = 0
     OffsetX: int = 0
@@ -24,9 +29,9 @@ class AOI_Controls:
 
 
 @dataclass
-class Acquisition_Controls:
+class Acquisition_Controls(Controls):
     TriggerSource: str = 'Line1'
-    TriggerMode: str = 'Off'
+    TriggerMode: bool = False
     TriggerDelayAbs: int = 0
     ExposureTimeAbs: int = 100
     AcquisitionFrameRateAbs: int = 1
@@ -34,12 +39,12 @@ class Acquisition_Controls:
 
 
 @dataclass
-class Image_Format_Control:
+class Image_Format_Control(Controls):
     PixelFormat: str = 'Mono8'  # Basic gray-scale
 
 
 @dataclass
-class Transport_Layer:
+class Transport_Layer(Controls):
     GevSCPSPacketSize: int = 1500
     GevSCPD: int = 1000
 
@@ -50,7 +55,7 @@ class Camera:
     name: str = ''
     friendly_name: str = ''
     matrix_size: Tuple[int] = field(default_factory=tuple)
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: Dict[str, Controls] = field(default_factory=dict)
     status: int = 0  # 0, 1, 2
     stpmtr_ctrl_id: str = ''
 
@@ -79,7 +84,7 @@ class CameraEssentials:
     device_id: int
     name: str = ''
     friendly_name: str = ''
-    parameters: Dict[str, int] = field(default_factory=dict)  # {"X": size in pixels, "Y": ..., 'OffsetX':...}
+    parameters: Dict[str, Controls] = field(default_factory=dict)  # {"X": size in pixels, "Y": ..., 'OffsetX':...}
     status: int = 0
 
 
@@ -249,7 +254,7 @@ class FuncStopAcquisitionOutput(FuncOutput):
 
 @dataclass(order=True, frozen=False)
 class CamerasCtrlStatusMultiCameras:
-    cameras: Dict[int, Camera]
+    cameras: Dict[int, Union[Camera, CameraEssentials]]
     device_status: DeviceStatus
     cameras_previous: Dict[int, Camera] = None
     device_status_previous: DeviceStatus = None

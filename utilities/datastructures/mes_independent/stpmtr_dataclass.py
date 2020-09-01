@@ -26,13 +26,13 @@ class MoveType(Enum):
 
 @dataclass(frozen=False)
 class AxisStpMtr:
-    device_id: int  # TODO: rename to device_id
+    device_id: int
     name: str = ''
     friendly_name: str = ''
     basic_unit: MoveType = MoveType.microstep
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
-    move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)  # {'microsteps': 256, 'conversion_step_mm': 0.0025,
-                                                                                       # 'basic_unit': 'angle' or 'step', 'mm'}
+    move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)
+    # {'microsteps': 256, 'conversion_step_mm': 0.0025, 'basic_unit': 'angle' or 'step', 'mm'}
     type_move: Set[MoveType] = field(default_factory=lambda: set([MoveType.angle, MoveType.mm,
                                                                   MoveType.step, MoveType.microstep]))
     position: Union[mm, angle, microstep] = 0.0
@@ -41,9 +41,9 @@ class AxisStpMtr:
 
     def short(self, unit: MoveType = None):
         if unit:
-            pos = self.convert_to_basic_unit(unit)
+            pos = self.convert_to_basic_unit(unit, self.position)
             if isinstance(pos, tuple):
-                return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
+                return AxisStpMtrEssentials(device_id=self.device_id, position=self.position, status=self.status,
                                             unit=self.basic_unit)
             else:
                 return AxisStpMtrEssentials(device_id=self.device_id,

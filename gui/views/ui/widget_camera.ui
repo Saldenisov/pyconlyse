@@ -9,8 +9,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>646</width>
-    <height>864</height>
+    <width>741</width>
+    <height>835</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -501,7 +501,14 @@
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="comboBox_x_stepmotor"/>
+           <widget class="QComboBox" name="comboBox_x_stepmotor">
+            <property name="minimumSize">
+             <size>
+              <width>150</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_decrease_X">
@@ -529,7 +536,14 @@
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="comboBox_y_stepmotor"/>
+           <widget class="QComboBox" name="comboBox_y_stepmotor">
+            <property name="minimumSize">
+             <size>
+              <width>150</width>
+              <height>0</height>
+             </size>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QPushButton" name="pushButton_decrease_Y">
@@ -701,7 +715,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>646</width>
+     <width>741</width>
      <height>21</height>
     </rect>
    </property>

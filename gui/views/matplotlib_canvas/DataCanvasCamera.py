@@ -40,14 +40,15 @@ class DataCanvasCamera(FigureCanvas):
         circles = []
         c_map = DataCanvasCamera.get_cmap(n=len(points))
         for coordinate, n in zip(points, range(len(points))):
-            x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
-            coordinate = (x, y)
+            #x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
+            #coordinate = (x, y)
             circles.append(Circle(coordinate, radius=10, color=c_map(n), zorder=n+1))
 
         if self.image:
             [p.remove() for p in reversed(self.axis.patches)]
             for circle in circles:
                 self.axis.add_patch(circle)
+            self.draw()
 
     def compute_figure(self, figure_name=''):
         self.image: AxesImage = self.axis.imshow(self.camera_reading.data,
