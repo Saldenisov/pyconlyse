@@ -3,6 +3,7 @@ Controllers of Basler cameras are described here
 
 created
 """
+import cv2
 from collections import OrderedDict
 from distutils.util import strtobool
 import numpy
@@ -165,22 +166,68 @@ class CameraCtrl_Basler(CameraController):
         pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
         return len(pylon_devices)
 
+    def _cg_point(self, image: np.ndarray, treatment_param: dict) -> Tuple[Union[int, bool, str]]:
+        try:
+            # apply thresholding
+            threshold = treatment_param['threshold']
+            ret, thresh = cv2.threshold(image, threshold, 255, 0)
+            #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+
+            # edge detection
+            # apply Canny edge detection
+            tight = cv2.Canny(thresh, threshold, 255)
+
+            # calculate the centre of moment
+            M = cv2.moments(tight)
+            if M["m00"] != 0:
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+            else:
+                cX, cY = 0, 0
+
+            return (cX, cY), ''
+        except KeyError:
+            return False, f'Treatment_param was not passed threshold.'
+
     def _grabbing(self, camera_id: int, demander_id: str):
         sleep(0.1)
-        import copy
+        from collections import deque
         if demander_id in self._images_demanders and camera_id in self._images_demanders[demander_id]:
+            if self._images_demanders[demander_id][camera_id].post_treatment:
+                image_demand: ImageDemand = self._images_demanders[demander_id][camera_id]
+                post_treatment = deque(maxlen=image_demand.history_post_treament_n)
+
             while self._cameras[camera_id].status == 2 and (demander_id in self._images_demanders and
                                                             camera_id in self._images_demanders[demander_id]):
+                res, comments = False, ''
                 image_demand: ImageDemand = self._images_demanders[demander_id][camera_id]
 
-                image = self._read_image(self._cameras[camera_id])
+                res, comments = self._read_image(self._cameras[camera_id])
 
-                if image_demand.return_images:
-                    image = image.tolist()
+                if not isinstance(res, bool):
+                    image = res
+                    res = True
+                    if image_demand.return_images:
+                        image_list = image.tolist()
+                    else:
+                        image_list = None
                 else:
-                    image = None
+                    image_list = None
 
-                result = FuncGetImagesOutput(comments='', func_success=True, image=image, cg_points=[],
+                if res and image_demand.post_treatment == 'cg':
+                    res, comments = self._cg_point(image, image_demand.treatment_param)
+
+                if res:
+                    point = res
+                    if post_treatment.maxlen != image_demand.history_post_treament_n:
+                        post_treatment = deque(post_treatment, maxlen=image_demand.history_post_treament_n)
+                    post_treatment.append(point)
+
+                if res:
+                    res = True
+
+                result = FuncGetImagesOutput(comments=comments, func_success=res, image=image_list,
+                                             post_treatment_points=list(post_treatment),
                                              timestamp=datetime.timestamp(datetime.now()), camera_id=camera_id)
 
                 msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id,
@@ -188,7 +235,6 @@ class CameraCtrl_Basler(CameraController):
 
                 self.send_msg_externally(msg_r)
 
-                self._last_image = image
 
                 if image_demand.every_n_sec == -1:
                     break
@@ -222,14 +268,12 @@ class CameraCtrl_Basler(CameraController):
                 image = camera.converter.Convert(grabResult)
                 grabResult.Release()
                 arr = image.GetArray()
-                return arr
+                return arr, ''
             else:
                 raise pylon.GenericException
         except (pylon.GenericException, pylon.TimeoutException, CameraError) as e:
             error_logger(self, self._read_image, e)
-            w = camera.parameters['AOI_Controls'].Width
-            h = camera.parameters['AOI_Controls'].Height
-            return numpy.random.randn(w, h)
+            return False, f'During _read_image {e}. Camera_id {camera.friendly_name}.'
 
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         try:

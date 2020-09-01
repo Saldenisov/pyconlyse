@@ -179,7 +179,9 @@ class CamerasView(QMainWindow):
         if self.ui.checkBox_cg.isChecked():
             cg_points = self.ui.spinBox_cg_points.value()
         else:
-            cg_points = -1
+            cg_points = 0
+
+
 
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
@@ -188,6 +190,8 @@ class CamerasView(QMainWindow):
                                                                 every_n_sec=every_sec,
                                                                 return_images=self.ui.checkBox_images.isChecked(),
                                                                 post_treatment='cg',
+                                                                treatment_param={'threshold':
+                                                                                     self.ui.spinBox_threshold.value()},
                                                                 history_post_treament_n=cg_points))
         client.send_msg_externally(msg)
 
@@ -225,6 +229,9 @@ class CamerasView(QMainWindow):
                                 datacanvas.update_data(CameraReadings(data=np.array(result.image),
                                                                       time_stamp=result.timestamp,
                                                                       description=result.description))
+                                if result.post_treatment_points and self.ui.checkBox_show_history.isChecked():
+                                    datacanvas.add_points(result.post_treatment_points)
+
                     elif info.com == CameraController.GET_IMAGES.name_prepared:
                         result: FuncGetImagesPrepared = result
                         self.controller_cameras = {result.camera_id: result.camera}

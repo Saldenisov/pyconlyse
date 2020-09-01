@@ -200,6 +200,7 @@ class CameraController(Service):
             image_demand = ImageDemand(camera_id=camera_id, demander_id=func_input.demander_device_id,
                                        every_n_sec=func_input.every_n_sec, return_images=func_input.return_images,
                                        post_treatment=func_input.post_treatment,
+                                       treatment_param=func_input.treatment_param,
                                        history_post_treament_n=func_input.history_post_treament_n)
             self._register_image_demander(image_demand)
         return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,

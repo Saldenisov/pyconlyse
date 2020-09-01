@@ -95,6 +95,7 @@ class ImageDemand:
     every_n_sec: int
     return_images: bool
     post_treatment: str
+    treatment_param: dict
     history_post_treament_n: int
     grabbing_thread: Thread=None
 
@@ -129,6 +130,7 @@ class FuncGetImagesInput(FuncInput):
     every_n_sec: float
     return_images: bool
     post_treatment: str
+    treatment_param: dict
     history_post_treament_n: int
     com: str = 'get_images'
 
@@ -144,7 +146,7 @@ class FuncGetImagesPrepared(FuncOutput):
 @dataclass
 class FuncGetImagesOutput(FuncOutput):
     image: List[int]
-    cg_points: List[Tuple[int]]
+    post_treatment_points: List[Tuple[int]]
     timestamp: float
     camera_id: int
     description: str = ''

@@ -51,8 +51,8 @@ def init(camera_id, camera, devices):
     camera.GainAuto = 'Off'
     camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
-    camera.TriggerSource = "Software"
-    camera.TriggerMode.SetValue("Off")
+    camera.TriggerSource = "Line1"
+    camera.TriggerMode.SetValue("On")
     camera.TriggerDelayAbs.SetValue(190000)
     camera.ExposureTimeAbs.SetValue(10000.0)
     camera.BalanceRatioRaw.SetValue(64)
@@ -75,7 +75,7 @@ def init(camera_id, camera, devices):
 
 
 def read(camera, converter):
-    grabResult = camera.RetrieveResult(15000, pylon.TimeoutHandling_ThrowException)
+    grabResult = camera.RetrieveResult(1500, pylon.TimeoutHandling_ThrowException)
     if grabResult.GrabSucceeded():
         # Access the image data
         image = converter.Convert(grabResult)
