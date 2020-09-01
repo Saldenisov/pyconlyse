@@ -527,9 +527,14 @@ class Client(Device):
         kwargs['cls_parts'] = cls_parts
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         kwargs['type'] = DeviceType.CLIENT
+        # Every Client gets its parameters from SuperUser at this moment, thus its id changes to unique by adding ::
+        id = kwargs['id']
+        from random import randint
+        kwargs['id'] = f'{id}::{randint(0, 10)}::{randint(0,10)}'
         super().__init__(**kwargs)
         self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
+
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:

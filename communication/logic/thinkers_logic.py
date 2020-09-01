@@ -177,7 +177,7 @@ class ServerCmdLogic(GeneralCmdLogic):
             if PUB_Socket in info.device_public_sockets:
                 from communication.logic.logic_functions import external_hb_logic
                 messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
-                self.register_event(name=f'heartbeat:{info.device_name}',
+                self.register_event(name=f'heartbeat:{info.device_name}:{info.device_id[-10:]}',
                                     logic_func=external_hb_logic,
                                     event_id=f'heartbeat:{info.device_id}',
                                     original_owner=info.device_id,
