@@ -9,8 +9,7 @@ from _functools import partial
 
 import numpy as np
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMainWindow, QMenu
-
+from PyQt5.QtWidgets import QMainWindow, QMenu, QErrorMessage
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
 from devices.devices import Device
 from devices.service_devices.cameras import CameraController
@@ -56,9 +55,13 @@ class CamerasView(QMainWindow):
                                     spancoords='pixels')
         self.ui.datacanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
         self.ui.datacanvas.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.horizontalLayout_canvas.addWidget(self.ui.datacanvas)
         self.ui.comboBox_x_stepmotor.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.comboBox_y_stepmotor.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        self.ui.horizontalLayout_canvas.addWidget(self.ui.datacanvas)
+        self.ui.pushButton_increase_X.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.pushButton_increase_Y.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.pushButton_decrease_X.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self.ui.pushButton_decrease_Y.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
@@ -75,11 +78,19 @@ class CamerasView(QMainWindow):
         self.ui.pushButton_set_parameters.clicked.connect(self.set_parameters)
         self.ui.comboBox_x_stepmotor.activated.connect(partial(self.step_motor_changed, 'X'))
         self.ui.comboBox_y_stepmotor.activated.connect(partial(self.step_motor_changed, 'Y'))
+        self.ui.pushButton_increase_X.clicked.connect(partial(self.move_actuator, 'X_increase'))
+        self.ui.pushButton_increase_Y.clicked.connect(partial(self.move_actuator, 'Y_increase'))
+        self.ui.pushButton_decrease_X.clicked.connect(partial(self.move_actuator, 'X_decrease'))
+        self.ui.pushButton_decrease_Y.clicked.connect(partial(self.move_actuator, 'Y_decrease'))
 
         # Context Menus
         self.ui.datacanvas.customContextMenuRequested.connect(self.menu_datacanvas)
         self.ui.comboBox_x_stepmotor.customContextMenuRequested.connect(partial(self.menu_stepmotor, 'X'))
         self.ui.comboBox_y_stepmotor.customContextMenuRequested.connect(partial(self.menu_stepmotor, 'Y'))
+        self.ui.pushButton_increase_X.customContextMenuRequested.connect(partial(self.menu_actuator, 'X_increase'))
+        self.ui.pushButton_increase_Y.customContextMenuRequested.connect(partial(self.menu_actuator, 'Y_increase'))
+        self.ui.pushButton_decrease_X.customContextMenuRequested.connect(partial(self.menu_actuator, 'X_decrease'))
+        self.ui.pushButton_decrease_Y.customContextMenuRequested.connect(partial(self.menu_actuator, 'Y_decrease'))
 
         self.update_state(force_camera=True, force_device=True)
 
@@ -87,6 +98,8 @@ class CamerasView(QMainWindow):
                                        forward_to=self.service_parameters.device_id,
                                        func_input=FuncGetCameraControllerStateInput())
         self.device.send_msg_externally(msg)
+
+        self._displacement = 0.5
         info_msg(self, 'INITIALIZED')
 
     def menu_datacanvas(self, point):
@@ -127,9 +140,47 @@ class CamerasView(QMainWindow):
                     self.ui.comboBox_x_stepmotor.clear()
                     self.ui.comboBox_y_stepmotor.clear()
                     for i, axis in stpmtr_ctrl_descrip.axes.items():
-                        self.ui.comboBox_x_stepmotor.addItem(f'{axis.friendly_name}::{axis.device_id}')
-                        self.ui.comboBox_y_stepmotor.addItem(f'{axis.friendly_name}::{axis.device_id}')
+                        self.ui.comboBox_x_stepmotor.addItem(f'{axis.friendly_name}::{i}')
+                        self.ui.comboBox_y_stepmotor.addItem(f'{axis.friendly_name}::{i}')
 
+    def menu_actuator(self, button: str, point):
+        menu = QMenu()
+        action_displacement_half = menu.addAction('0.5')
+        action_displacement_one = menu.addAction('1')
+        action_displacement_two = menu.addAction('2')
+        action_displacement_five = menu.addAction('5')
+        action_displacement_ten = menu.addAction('10')
+        action_displacement_twenty = menu.addAction('20')
+        action_displacement_fifty = menu.addAction('50')
+        action_displacement_hundred = menu.addAction('100')
+
+        if button == 'X_decrease':
+            action = menu.exec_(self.ui.pushButton_decrease_X.mapToGlobal(point))
+        elif button == 'X_increase':
+            action = menu.exec_(self.ui.pushButton_increase_X.mapToGlobal(point))
+        elif button == 'Y_decrease':
+            action = menu.exec_(self.ui.pushButton_decrease_Y.mapToGlobal(point))
+        elif button == 'Y_increase':
+            action = menu.exec_(self.ui.pushButton_increase_Y.mapToGlobal(point))
+        else:
+            action = None
+
+        if action == action_displacement_half:
+            self._displacement = 0.5
+        elif action == action_displacement_one:
+            self._displacement = 1
+        elif action == action_displacement_two:
+            self._displacement = 2
+        elif action == action_displacement_five:
+            self._displacement = 5
+        elif action == action_displacement_ten:
+            self._displacement = 10
+        elif action == action_displacement_twenty:
+            self._displacement = 20
+        elif action == action_displacement_fifty:
+            self._displacement = 50
+        elif action == action_displacement_hundred:
+            self._displacement = 100
 
     def activate_controller(self):
         client = self.device
@@ -164,7 +215,7 @@ class CamerasView(QMainWindow):
                 for camera_id, camera in value.items():
                     self.controller_status.cameras[camera_id].status = camera.status
         except Exception as e:
-            error_logger(self, self.controller_axes, e)
+            error_logger(self, self.controller_cameras, e)
 
     def get_image(self, grab_cont=False):
         client = self.device
@@ -233,7 +284,6 @@ class CamerasView(QMainWindow):
                                                                           description=result.description))
                                 if result.post_treatment_points and self.ui.checkBox_show_history.isChecked():
                                     datacanvas.add_points(result.post_treatment_points)
-
                     elif info.com == CameraController.GET_IMAGES.name_prepared:
                         result: FuncGetImagesPrepared = result
                         self.controller_cameras = {result.camera_id: result.camera}
@@ -288,6 +338,35 @@ class CamerasView(QMainWindow):
                 self.update_state()
         except Exception as e:
             error_logger(self, self.model_is_changed, f'Error:"{e}". Msg={msg}')
+
+    def move_actuator(self, button_name: str):
+        client = self.device
+        camera_id = self.ui.spinBox_cameraID.value()
+        camera: Camera = self.controller_status.cameras[camera_id]
+        axis_id = 0
+        try:
+            if 'X' in button_name:
+                axis_id = int(self.ui.comboBox_x_stepmotor.currentText().split('::')[1])
+            else:
+                axis_id = int(self.ui.comboBox_y_stepmotor.currentText().split('::')[1])
+
+            if 'decrease' in button_name:
+                direction = -1
+            elif 'increase' in button_name:
+                direction = 1
+
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                      forward_to=camera.stpmtr_ctrl_id,
+                                      func_input=FuncMoveAxisToInput(axis_id=axis_id,
+                                                                     pos=self._displacement * direction,
+                                                                     how=relative.__name__))
+            client.send_msg_externally(msg)
+        except (IndexError, ValueError) as e:
+            comments = f'During attempt to move actuator error occurred: {e}.'
+            error_logger(self, self.move_actuator, )
+            error_dialog = QErrorMessage()
+            error_dialog.showMessage(comments)
+            error_dialog.exec_()
 
     def power(self):
         client = self.device

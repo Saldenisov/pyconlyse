@@ -31,7 +31,7 @@ class AOI_Controls(Controls):
 @dataclass
 class Acquisition_Controls(Controls):
     TriggerSource: str = 'Line1'
-    TriggerMode: bool = False
+    TriggerMode: str = 'Off'
     TriggerDelayAbs: int = 0
     ExposureTimeAbs: int = 100
     AcquisitionFrameRateAbs: int = 1

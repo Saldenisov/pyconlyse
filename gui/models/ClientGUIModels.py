@@ -8,8 +8,11 @@ from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, List, Union, Tuple
+
+import sys
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
 from PyQt5.QtCore import QObject, pyqtSignal

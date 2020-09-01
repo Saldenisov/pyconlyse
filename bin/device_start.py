@@ -10,7 +10,9 @@ app_folder = str(Path(__file__).resolve().parents[1])
 sys.path.append(app_folder)
 
 from devices.devices import DeviceFactory
-
+from gui.models.ClientGUIModels import SuperUserGUIModel
+from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
+from logs_pack import initialize_logger
 
 def init(device_id: str, db_name: str):
     service = DeviceFactory.make_device(device_id=device_id,

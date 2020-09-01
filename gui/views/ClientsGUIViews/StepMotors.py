@@ -164,10 +164,7 @@ class StepMotorsView(QMainWindow):
             how = relative.__name__
         axis_id = int(self.ui.spinBox_axis.value())
         try:
-            #pos = self.ui.lineEdit_value.text().strip()
-            #pos: Union[microstep, mm, None] = convert_pos(pos)
             pos = float(self.ui.lineEdit_value.text())
-
             client = self.device
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                       forward_to=self.service_parameters.device_id,

@@ -3,10 +3,10 @@ import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
-from pathlib import Path
 from time import sleep, time
 from typing import Any, Callable
 
+from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
