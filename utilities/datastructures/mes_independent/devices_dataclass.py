@@ -1,13 +1,13 @@
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
 from devices.interfaces import DeviceType, DeviceId
 from devices.interfaces import ExecutorInter
 from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
-from utilities.datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
+from utilities.datastructures.mes_independent.general import *
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,60 @@ class DeviceParts(DataClass_frozen):
     messenger: MessengerInter
     thinker: ThinkerInter
     executor: ExecutorInter
+
+
+@dataclass
+class HardwareDevice:
+    device_id: int
+    name: str = ''
+    friendly_name: str = ''
+    status: int = 0  # 0, 1, 2
+
+
+class HardwareDeviceDict(dict):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.device_id = {}
+
+    def __setitem__(self, key_id, device: HardwareDevice):
+        device_id = device.device_id
+        if device_id not in self.device_id:
+            super().__setitem__(key_id, device)
+            self.device_id[device_id] = key_id
+        else:
+            raise KeyError(f'Hardware Device id: {device_id} already exists in {self.device_id}')
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            if key in self.device_id:
+                return super().__getitem__(self.device_id[key])
+            else:
+                raise KeyError('Neither device_id nor device_seq_id are present in the dictionary.')
+
+    def __delitem__(self, key):
+        try:
+            device: HardwareDevice = self[key]
+            device_id = device.device_id
+            super().__delitem__(key)
+            del self.device_id[device_id]
+        except KeyError:
+            device_id = key
+            if device_id in self.device_id:
+                key = self.device_id[device_id]
+                del self.device_id[device_id]
+                super().__delitem__(key)
+            else:
+                raise KeyError(f'Key {key} is not present in the dictionary.')
+
+    def __contains__(self, item):
+        if super().__contains__(item):
+            return True
+        else:
+            if item in self.device_id:
+                return super().__contains__(self.device_id[item])
 
 
 @dataclass
@@ -41,6 +95,28 @@ class DoIt:
 class DoneIt:
     com: str
     result: FuncOutput
+
+
+@dataclass(order=True)
+class Description:
+    info: str
+    GUI_title: str
+
+
+@dataclass(order=True)
+class ServiceDescription(Description):
+    hardware_devices: HardwareDevice
+    class_name: str
+
+
+@dataclass(order=True)
+class ServerDescription(Description):
+    pass
+
+
+@dataclass(order=True)
+class ClientDescription:
+    pass
 
 
 @dataclass
@@ -98,7 +174,7 @@ class DeviceInfoInt:
     available_public_functions: List[CmdStruct]
     device_id: str
     device_status: DeviceStatus
-    device_description: Desription
+    device_description: Description
     events_running: List[str]  # event names
 
 
@@ -106,7 +182,7 @@ class DeviceInfoInt:
 class DeviceInfoExt:
     #available_public_functions: List[CmdStruct]
     device_id: str
-    device_description: Desription
+    device_description: Union[ServiceDescription, ClientDescription, ServerDescription]
     device_status: DeviceStatus
 
 
@@ -214,4 +290,3 @@ class Connection(DataClass_unfrozen):
     session_key: bytes = b''
     permission: Permission = Permission.DENIED
     password_checksum: bytes = b''
-

@@ -17,6 +17,7 @@ from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
 from utilities.myfunc import info_msg, unique_id, error_logger
+from utilities.datastructures.mes_independent.devices_dataclass import HardwareDevice, HardwareDeviceDict
 from logs_pack import initialize_logger
 
 module_logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             self.thinker: Thinker = self.cls_parts['Thinker'](parent=self)
         except (sq3.Error, KeyError, MessengerError) as e:
             self.logger.error(e)
-            raise DeviceError(str(e))
+            raise DeviceError(self, str(e))
 
         from threading import Thread
         self._observing_param: Dict[str, List[Any, int]] = {}
@@ -165,12 +166,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         # Pyqt slot and signal are connected
         self.signal.connect(pyqtslot)
         self.pyqtsignal_connected = True
-        self.logger.info(f'pyqtsignal is set to True')
 
     @abstractmethod
     def description(self) -> Dict[str, Any]:
         """
-        return descirption of device, configuration depends on device type: stpmtr, detector, etc.
+        return description of device, configuration depends on device type: stpmtr, detector, etc.
         :return: Dict[str, Any]
         """
         pass
@@ -189,8 +189,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         return self.get_settings('General')
 
     @property
+    def get_main_device_parameters(self) -> Dict[str, Union[str, List[str]]]:
+        return self.get_settings('Parameters_Main_Devices')
+
+    @property
     def get_parameters(self) -> Dict[str, Union[str, List[str]]]:
-        return self.get_settings('Parameters')
+        return self.get_settings('Parameters_Controller')
 
     def _get_list_db(self, from_section: str, what: str, type_value: Union[tuple, float, int, dict, str]) \
             -> List[Tuple[Union[float, int]]]:
@@ -205,9 +209,9 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 listed_param.append(val)
             return listed_param
         except KeyError:
-            raise DeviceError(f"_get_list_db: field {what} or section {from_section} is absent in the DB", self.name)
+            raise DeviceError(self, f"_get_list_db: field {what} or section {from_section} is absent in the DB")
         except (TypeError, SyntaxError):
-            raise DeviceError(f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...", self.name)
+            raise DeviceError(self, f"_get_list_db: list param should be = (x1, x2); (x3, x4); or X1; X2;...")
 
     def generate_msg(self, msg_com: Union[MsgComInt, MsgComExt], **kwargs) -> Union[MessageExt, MessageInt, None]:
         """
@@ -224,7 +228,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com} '
                                                               f'such as {message_info.must_have_param}, but instead '
                                                               f'{kwargs.keys()}')
-                        raise DeviceError(f'Not all parameters are passed to device.generate_msg')
+                        raise DeviceError(self, f'Not all parameters are passed to device.generate_msg')
 
                 if msg_com is MsgComExt.AVAILABLE_SERVICES:
                     info = AvailableServices(available_services=kwargs['available_services'])
@@ -436,8 +440,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
 
 class Server(Device):
-    # TODO: refactor
-
     ALIVE = CmdStruct(FuncAliveInput, FuncAliveOutput)
     GET_AVAILABLE_SERVICES = CmdStruct(FuncAvailableServicesInput, FuncAvailableServicesOutput)
 
@@ -483,16 +485,16 @@ class Server(Device):
         self.logger.info("""Server is always active""")
 
     def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
-        """Returns dict of avaiable services {DeviceID: name}"""
+        """Returns dict of available services {DeviceID: name}"""
         return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.id,
                                            device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return tuple([Server.ALIVE, Server.GET_AVAILABLE_SERVICES])
 
-    def description(self) -> Desription:
-        parameters = self.get_settings('Parameters')
-        return Desription(info=parameters['info'], GUI_title=parameters['title'])
+    def description(self) -> ServerDescription:
+        parameters = self.get_parameters
+        return ServerDescription(info=parameters['info'], GUI_title=parameters['title'])
 
     def start(self):
         super().start()
@@ -535,7 +537,6 @@ class Client(Device):
         self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
 
-
     @property
     def available_services(self) -> Dict[DeviceId, str]:
         pass
@@ -547,7 +548,7 @@ class Client(Device):
         """Client is always active"""
         self.logger.info("""Client is always active""")
 
-    def description(self) -> Desription:
+    def description(self) -> ClientDescription:
         # TODO: add functionality
         pass
 
@@ -567,7 +568,7 @@ class Client(Device):
 class Service(Device):
     ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
     GET_CONTROLLER_STATE = CmdStruct(FuncGetControllerStateInput, FuncGetControllerStateOutput)
-    SET_CONTROLLER_STATE = CmdStruct(None, None)  # TODO: finilize
+    SET_CONTROLLER_STATE = CmdStruct(None, None)  # TODO: finalize
     SERVICE_INFO = CmdStruct(FuncServiceInfoInput, FuncServiceInfoOutput)
     POWER = CmdStruct(FuncPowerInput, FuncPowerOutput)
 
@@ -578,14 +579,15 @@ class Service(Device):
             cls_parts = {'Thinker': kwargs['thinker_cls'],
                          'Messenger': ServiceMessenger}
         else:
-            raise Exception('Thinker cls was not passed to Device factory')
-
+            raise DeviceError(self, 'Thinker cls was not passed to Device factory')
         kwargs['cls_parts'] = cls_parts
         if 'db_command' not in kwargs:
-            raise Exception('DB_command_type is not determined')
+            raise DeviceError(self, 'DB_command is not defined.')
         kwargs['type'] = DeviceType.SERVICE
         super().__init__(**kwargs)
-        self.server_id: DeviceId = self.get_settings('General')['server_id']
+        self.server_id: DeviceId = self.get_settings('General')['server_id']  # must be here
+        self._hardware_device_dataclass = kwargs['hardware_device_dataclass']
+        self._hardware_devices: Dict[Union[int, str], HardwareDevice] = HardwareDeviceDict()
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -613,6 +615,11 @@ class Service(Device):
         else:
             return False, f'Controller is not active. Power is {self.device_status.power}'
 
+    @staticmethod
+    @abstractmethod
+    def _check_status_flag(self, flag: int):
+        pass
+
     @abstractmethod
     def _check_if_connected(self) -> Tuple[bool, str]:
         """
@@ -625,8 +632,35 @@ class Service(Device):
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         pass
 
+    def _get_hardware_devices_ids_db(self):
+        try:
+            ids: List[Union[int, str]] = []
+            for exp in self.get_main_device_parameters['ids'].replace(" ", "").split(';'):
+                try:
+                    val = eval(exp)
+                except (SyntaxError, NameError, TypeError):
+                    val = exp
+                ids.append(val)
+            if len(ids) != self._hardware_devices_number:
+                raise DeviceError(self, f"Number of devices {len(ids)} is not equal to "
+                                        f"'hardware_devices_number={self._hardware_devices_number}'.")
+            return ids
+        except KeyError:
+            raise DeviceError(self, text="Hardware devices 'ids' could not be set, field is absent in the DB.")
+
+    def description(self) -> ServiceDescription:
+        """
+        Description with important parameters
+        :return: ServiceDescription with parameters essential for understanding what this device is used for
+        """
+        try:
+            return ServiceDescription(hardware_devices=self.hardware_devices, info=self.get_parameters['info'],
+                                      GUI_title=self.get_parameters['title'], class_name=self.__class__.__name__)
+        except (KeyError, DeviceError) as e:
+            return DeviceError(self, f'Could not find description of the controller: {e}. Check the DB.')
+
     @abstractmethod
-    def description(self) -> Desription:
+    def _form_devices_list(self) -> Tuple[bool, str]:
         pass
 
     @abstractmethod
@@ -634,20 +668,23 @@ class Service(Device):
         pass
 
     @abstractmethod
-    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
+    def _get_number_hardware_devices(self):
         pass
 
-    def send_status_pyqt(self):
-        pass
+    def _get_number_hardware_devices_db(self):
+        try:
+            return int(self.get_main_device_parameters['devices_number'])
+        except KeyError:
+            raise DeviceError(self, text="Number of devices for controller could not be set, number field is absent "
+                                         "in the database")
+        except (ValueError, SyntaxError):
+            raise DeviceError(self, text=f"Check 'number' field in the database for {self.id}, the line "
+                                         f"'number = value' must be present")
 
-    def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-        service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
-                                     device_status=self.device_status)
-        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
-
+    @property
     @abstractmethod
-    def _release_hardware(self) -> Tuple[bool, str]:
-        return True, ''
+    def hardware_devices(self):
+        pass
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
@@ -663,6 +700,97 @@ class Service(Device):
         else:
             res, comments = True, ''
         return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=res)
+
+    @abstractmethod
+    def _release_hardware(self) -> Tuple[bool, str]:
+        return True, ''
+
+    def _set_ids_devices(self):
+        """"
+        """
+        if not self.device_status.connected:
+            ids = self._get_hardware_devices_ids_db()
+            for id_a, seq_id in zip(ids, range(1, self._hardware_devices_number + 1)):
+                self._hardware_devices[seq_id] = self._hardware_device_dataclass(device_id=id_a)
+
+    def _set_parameters_main_devices(self, parameters: List[Tuple[str, Any]] = None, extra_func: List[Callable] = None) -> Tuple[bool, str]:
+        try:
+            self._set_number_hardware_devices()
+            self._set_ids_devices()  # Ids must be set first, just after number of hardware devices
+
+            if parameters:
+                for name_to_set, parameter, parameter_type in parameters:
+                    self._set_parameter_device_by_name(name_to_set, parameter, parameter_type)
+
+            res, comments = [], ''
+
+            if extra_func:
+                for func in extra_func:
+                    r, com = func()
+                    res.append(r)
+                    comments = comments + com
+
+            res = all(res)
+        except DeviceError as e:
+            error_logger(self, self._set_parameters, e)
+            res, comments = False, str(e)
+        finally:
+            if self.device_status.connected and res:
+                self._parameters_set_hardware = True
+            return res, comments
+
+    def _set_parameter_device_by_name(self, name_set: str, parameter_name: str, parameter_type: type):
+        """
+
+        :param name_set: how the parameter is called withing dataclass of the hardware device
+        :param parameter_name: parameter field in the DB
+        :param parameter_type: str, int, etc...
+        :return: None
+        """
+        try:
+            parameter_value = self.get_main_device_parameters[parameter_name]
+            try:
+                parameter_value = eval(parameter_value)
+            except (SyntaxError, NameError, TypeError) as e:
+                raise DeviceError(self, f'Parameter {parameter_name} could not be set: {e}')
+            if not isinstance(parameter_value, dict):
+                raise DeviceError(self, f'Parameter {parameter_name} could not be set, field is not python-like dict.')
+            else:
+                if len(parameter_value) != self._hardware_devices_number:
+                    raise DeviceError(self, f'Parameter {parameter_name} could not be set: Number of parameters in dict '
+                                            f'does not equal to number of hardware devices.')
+                else:
+                    for device_id, param_value in parameter_value.items():
+                        try:
+                            hardware_device = self._hardware_devices[device_id]
+                            setattr(hardware_device, name_set, param_value)
+                        except KeyError as e:
+                            raise DeviceError(self, f'Parameter {parameter_name} could not be set: '
+                                                    f'Wrong device_id {device_id} was passed. Check the DB.')
+
+        except KeyError:
+            raise DeviceError(self, f'Parameter {parameter_name} could not be set, it is absent in the DB.')
+
+    def send_status_pyqt(self):
+        pass
+
+    def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
+        service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
+                                     device_status=self.device_status)
+        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
+
+    def _set_number_hardware_devices(self):
+        if self.device_status.connected:
+            n = self._get_number_hardware_devices()
+            if n != self._hardware_devices_number:
+                raise DeviceError(self, f'Number of hardware of device during activation of controller is not equal to '
+                                        f'those indicated in DB.')
+        else:
+            self._hardware_devices_number = self._get_number_hardware_devices_db()
+
+    def stop(self):
+        self.activate(FuncActivateInput(False))
+        super().stop()
 
 
 class DeviceFactory:
@@ -696,7 +824,7 @@ class DeviceFactory:
                 from importlib import import_module
                 module_comm_thinkers = import_module('communication.logic.thinkers_logic')
                 if project_type == 'Client':
-                    module_devices = import_module('devices.virtualdevices')
+                    module_devices = import_module('devices.virtual_devices')
                     type = DeviceType.CLIENT
                 elif project_type == 'Service':
                     module_devices = import_module('devices.service_devices')

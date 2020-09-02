@@ -101,7 +101,7 @@ class PDUController(Service):
         except (ValueError, SyntaxError):
             raise PDUError(self, text="Check PDUs number in database, must be PDUs_number = number")
 
-    def description(self) -> Desription:
+    def description(self) -> Description:
         """
         Description with important parameters
         :return: PDUDescription with parameters essential for understanding what this device is used for

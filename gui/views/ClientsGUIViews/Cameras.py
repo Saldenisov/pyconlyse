@@ -30,8 +30,8 @@ class CamerasView(QMainWindow):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
-        self.controller_status = CamerasCtrlStatusMultiCameras(cameras=service_parameters.device_description.cameras,
-                                                               device_status=service_parameters.device_status)
+        self.controller_status = CtrlStatusMultiCameras(cameras=service_parameters.device_description.hardware_devices,
+                                                        device_status=service_parameters.device_status)
 
         self.name = f'CamerasClient:view: {service_parameters.device_id} {get_local_ip()}'
         self.logger = logging.getLogger("Cameras." + __name__)
@@ -228,13 +228,10 @@ class CamerasView(QMainWindow):
         else:
             every_sec = -1
 
-        send_images_back = self.ui.checkBox_images.isChecked()
         if self.ui.checkBox_cg.isChecked():
             cg_points = self.ui.spinBox_cg_points.value()
         else:
             cg_points = 0
-
-
 
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
@@ -244,8 +241,8 @@ class CamerasView(QMainWindow):
                                                                 return_images=self.ui.checkBox_images.isChecked(),
                                                                 post_treatment='cg',
                                                                 treatment_param={'threshold':
-                                                                                     self.ui.spinBox_threshold.value()},
-                                                                history_post_treament_n=cg_points))
+                                                                                 self.ui.spinBox_threshold.value()},
+                                                                history_post_treatment_n=cg_points))
         client.send_msg_externally(msg)
 
     def model_is_changed(self, msg: MessageInt):
@@ -385,7 +382,6 @@ class CamerasView(QMainWindow):
         aoi_ctrls: AOI_Controls = camera.parameters['AOI_Controls']
         transport_ctrls: Transport_Layer = camera.parameters['Transport_Layer']
 
-
         # Acquisition controls
         from distutils.util import strtobool
         exposure_time = ui.spinBox_exposure_time.value()
@@ -438,7 +434,8 @@ class CamerasView(QMainWindow):
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetImageParametersInput(camera_id=camera_id, width=width,
                                                                          height=height, offset_x=xoffset,
-                                                                         offset_y=yoffset, gain_mode=gain_mode,
+                                                                         offset_y=yoffset,
+                                                                         gain_mode=gain_mode,
                                                                          gain=gainraw, blacklevel=blacklevel,
                                                                          balance_ratio=balance_ratio,
                                                                          pixel_format='Mono8'))

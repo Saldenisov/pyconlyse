@@ -3,7 +3,7 @@ from typing import List, Union
 
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import Desription, FuncInput, FuncOutput
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
 @dataclass(frozen=True)  # To make it hashable
@@ -75,11 +75,6 @@ class ProjectManagerViewState:
                 self.operators_future.remove(operator)
             except ValueError:
                 pass
-
-
-@dataclass(order=True)
-class ProjectManagerDescription(Desription):
-    pass
 
 
 @dataclass

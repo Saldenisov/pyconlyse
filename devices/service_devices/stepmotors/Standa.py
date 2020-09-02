@@ -13,6 +13,7 @@ from time import sleep
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
+from utilities.datastructures.mes_independent.stpmtr_dataclass import StandaAxisStpMtr
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
@@ -24,12 +25,24 @@ dev_mode = False
 class StpMtrCtrl_Standa(StpMtrController):
 
     def __init__(self, **kwargs):
+        kwargs['stpmtr_dataclass'] = StandaAxisStpMtr
         super().__init__(**kwargs)
         self._devenum = None  # LP_device_enumeration_t
-        self._devices: Dict[int, str] = {}
         self._enumerated = False
         self.lib = lib
-        #self._register_observation('_enumerated')
+
+        res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
+                                                                      ('friendly_name', 'friendly_names', str),
+                                                                      ('stpmtr_ctrl_id', 'stepmotor_controllers', str),
+                                                                      ('matrix_size', 'size_of_matrix', tuple)],
+                                                          extra_func=[self._set_transport_layer_db,
+                                                                      self._set_analog_controls_db,
+                                                                      self._set_aoi_controls_db,
+                                                                      self._set_acquisition_controls_db,
+                                                                      self._set_image_format_db])
+        # Set parameters from database first and after connection is done; update from hardware controller if possible
+        if not res:
+            raise StpMtrError(self, comments)
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -158,16 +171,13 @@ class StpMtrCtrl_Standa(StpMtrController):
 
         return res, comments
 
-    def GUI_bounds(self) -> Dict[str, Any]:
-        pass
-
     def _get_axes_names(self) -> List[str]:
         return [val.name for val in self.axes.values()]
 
     def _get_axes_status(self) -> List[int]:
         return self._axes_status
 
-    def _get_number_axes(self) -> int:
+    def _get_number_hardware_devices(self):
         return self.lib.get_device_count(self._devenum)
 
     def _move_axis_to(self, axis_id: int, go_pos: Union[float, int]) -> Tuple[bool, str]:

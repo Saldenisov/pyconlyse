@@ -11,12 +11,6 @@ class FuncOutput:
     func_success: bool
 
 
-@dataclass(order=True)
-class Desription:
-    info: str
-    GUI_title: str
-
-
 @dataclass(frozen=True)
 class CmdStruct:
     #name: str

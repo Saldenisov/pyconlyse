@@ -23,12 +23,23 @@ class CameraCtrl_Basler(CameraController):
     """
 
     def __init__(self, **kwargs):
-        kwargs['camera_class'] = CameraBasler
+        kwargs['camera_dataclass'] = CameraBasler
         super().__init__(**kwargs)
         self.tl_factory = None
         self.pylon_cameras = None
-        self._images_demanders = {}
-        self._last_image = None
+
+        res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
+                                                                      ('friendly_name', 'friendly_names', str),
+                                                                      ('stpmtr_ctrl_id', 'stepmotor_controllers', str),
+                                                                      ('matrix_size', 'size_of_matrix', tuple)],
+                                                          extra_func=[self._set_transport_layer_db,
+                                                                      self._set_analog_controls_db,
+                                                                      self._set_aoi_controls_db,
+                                                                      self._set_acquisition_controls_db,
+                                                                      self._set_image_format_db])
+        # Set parameters from database first and after connection is done; update from hardware controller if possible
+        if not res:
+            raise CameraError(self, comments)
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         if self.device_status.power:
@@ -55,14 +66,14 @@ class CameraCtrl_Basler(CameraController):
     @property
     def cameras_no_pylon(self) -> Dict[int, CameraBasler]:
         cameras = {}
-        for camera_id, camera in self._cameras.items():
+        for camera_id, camera in self._hardware_devices.items():
             cameras[camera_id] = camera.no_pylon()
         return cameras
 
     def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._check_camera_flag(flag)
+        res, comments = super()._check_status_flag(flag)
         if res:
-            camera = self._cameras[camera_id]
+            camera = self._hardware_devices[camera_id]
             if camera.status != flag:
                 info = ''
                 if camera.status == 2 and force:
@@ -106,14 +117,14 @@ class CameraCtrl_Basler(CameraController):
             pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
             if len(pylon_devices) == 0:
                 return False, "No cameras present."
-            elif len(pylon_devices) != self._cameras_number:
+            elif len(pylon_devices) != self._hardware_devices_number:
                 error_logger(self, self._form_devices_list, f'Not all cameras listed in DB are present.')
 
             # Create an array of instant cameras for the found devices and avoid exceeding a maximum number of devices.
             self.pylon_cameras: pylon.InstantCameraArray = pylon.InstantCameraArray(min(len(pylon_devices),
-                                                                                        self._cameras_number))
+                                                                                        self._hardware_devices_number))
 
-            device_id_camera_id = self.device_id_to_id
+            device_id_camera_id = self._hardware_devices.device_id
             keep_camera = []
 
             for i, pylon_camera in enumerate(self.pylon_cameras):
@@ -125,10 +136,10 @@ class CameraCtrl_Basler(CameraController):
                                   f'was not correctly converted to integer value.'
 
                 if device_id in device_id_camera_id:
-                    self._cameras[device_id_camera_id[device_id]].pylon_camera = pylon_camera
-                    self._cameras[device_id_camera_id[device_id]].converter = pylon.ImageFormatConverter()
-                    self._cameras[device_id_camera_id[device_id]].pylon_camera.Open()
-                    self._cameras[device_id_camera_id[device_id]].status = 1
+                    self._hardware_devices[device_id].pylon_camera = pylon_camera
+                    self._hardware_devices[device_id].converter = pylon.ImageFormatConverter()
+                    self._hardware_devices[device_id].pylon_camera.Open()
+                    self._hardware_devices[device_id].status = 1
 
                     # Setting Parameters for the cameras
                     res, comments = self._set_parameters_camera(device_id_camera_id[device_id])
@@ -143,10 +154,10 @@ class CameraCtrl_Basler(CameraController):
             # Deleting those cameras read from DB which were not found by controller.
             for device_id, camera_id in device_id_camera_id.items():
                 if device_id not in keep_camera:
-                    del self._cameras[camera_id]
+                    del self._hardware_devices[camera_id]
             return True, ''
         except (genicam.GenericException, ValueError) as e:
-            return False, f"An exception occurred. {e}"
+            return False, f"An exception occurred during: {e}"
 
     def _get_cameras_status(self) -> List[int]:
         a = {}
@@ -160,7 +171,7 @@ class CameraCtrl_Basler(CameraController):
         b = list([value for _, value in a.items()])
         return b
 
-    def _get_number_cameras(self):
+    def _get_number_hardware_devices(self):
         if not self.tl_factory:
             self.tl_factory = pylon.TlFactory.GetInstance()
         pylon_devices: Tuple[pylon.DeviceInfo] = self.tl_factory.EnumerateDevices()
@@ -195,14 +206,14 @@ class CameraCtrl_Basler(CameraController):
         if demander_id in self._images_demanders and camera_id in self._images_demanders[demander_id]:
             if self._images_demanders[demander_id][camera_id].post_treatment:
                 image_demand: ImageDemand = self._images_demanders[demander_id][camera_id]
-                post_treatment = deque(maxlen=image_demand.history_post_treament_n)
+                post_treatment = deque(maxlen=image_demand.history_post_treatment_n)
 
-            while self._cameras[camera_id].status == 2 and (demander_id in self._images_demanders and
-                                                            camera_id in self._images_demanders[demander_id]):
+            while self._hardware_devices[camera_id].status == 2 and (demander_id in self._images_demanders and
+                                                                     camera_id in self._images_demanders[demander_id]):
                 res, comments = False, ''
                 image_demand: ImageDemand = self._images_demanders[demander_id][camera_id]
 
-                res, comments = self._read_image(self._cameras[camera_id])
+                res, comments = self._read_image(self._hardware_devices[camera_id])
 
                 if not isinstance(res, bool):
                     image = res
@@ -219,8 +230,8 @@ class CameraCtrl_Basler(CameraController):
 
                 if res:
                     point = res
-                    if post_treatment.maxlen != image_demand.history_post_treament_n:
-                        post_treatment = deque(post_treatment, maxlen=image_demand.history_post_treament_n)
+                    if post_treatment.maxlen != image_demand.history_post_treatment_n:
+                        post_treatment = deque(post_treatment, maxlen=image_demand.history_post_treatment_n)
                     post_treatment.append(point)
 
                 if res:
@@ -246,8 +257,12 @@ class CameraCtrl_Basler(CameraController):
                 del self._images_demanders[demander_id]
             self._change_camera_status(camera_id, flag=1, force=True)
 
+    @property
+    def hardware_devices(self):
+        return self.cameras
+
     def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
-        camera = self._cameras[camera_id]
+        camera = self._hardware_devices[camera_id]
         if camera.status == 0:
             return False, f'Camera {camera_id} is closed. Activate the camera first to start grabbing.'
         elif camera.status == 1:
@@ -281,43 +296,25 @@ class CameraCtrl_Basler(CameraController):
         except pylon.GenericException as e:
             return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'
 
-    def _set_private_parameters_db(self):
-        self._set_transport_layer_db()
-        self._set_analog_controls_db()
-        self._set_aoi_controls_db()
-        self._set_acquisition_controls_db()
-        self._set_image_format_db()
+    def _set_analog_controls_db(self) -> Tuple[str, bool]:
+        return self._set_db_attribute(Analog_Controls, self._set_analog_controls_db)
 
-    def _set_analog_controls_db(self):
-        self._set_db_attribute(Analog_Controls, self._set_analog_controls_db)
+    def _set_acquisition_controls_db(self) -> Tuple[str, bool]:
+       return self._set_db_attribute(Acquisition_Controls, self._set_acquisition_controls_db)
 
-    def _set_acquisition_controls_db(self):
-        self._set_db_attribute(Acquisition_Controls, self._set_acquisition_controls_db)
+    def _set_aoi_controls_db(self) -> Tuple[str, bool]:
+        return self._set_db_attribute(AOI_Controls, self._set_aoi_controls_db)
 
-    def _set_aoi_controls_db(self):
-        self._set_db_attribute(AOI_Controls, self._set_aoi_controls_db)
-
-    def _set_image_format_db(self):
-        self._set_db_attribute(Image_Format_Control, self._set_image_format_db)
+    def _set_image_format_db(self) -> Tuple[str, bool]:
+        return self._set_db_attribute(Image_Format_Control, self._set_image_format_db)
 
     def _set_parameters_camera(self, camera_id: int) -> Tuple[bool, str]:
-        device_id: int = self._cameras[camera_id].device_id
-        camera: CameraBasler = self._cameras[camera_id]
+        device_id: int = self._hardware_devices[camera_id].device_id
+        camera: CameraBasler = self._hardware_devices[camera_id]
         pylon_camera: pylon.InstantCamera = camera.pylon_camera
         try:
-            try:
-                friendly_name = eval(self.get_parameters['friendly_names'])[device_id]
-                size_of_matrix = eval(self.get_parameters['size_of_matrix'])[device_id]
-                stpmtr_ctrl_id = eval(self.get_parameters['stepmotor_controller'])[device_id]
-            except (KeyError, ValueError, SyntaxError):
-                friendly_name = str(device_id)
-                size_of_matrix = (512, 512)
-                stepmotor_controller = ''
 
-            pylon_camera.GetDeviceInfo().SetFriendlyName(friendly_name.format('utf-8'))
-            camera.friendly_name = friendly_name
-            camera.matrix_size = size_of_matrix
-            camera.stpmtr_ctrl_id = stpmtr_ctrl_id
+            pylon_camera.GetDeviceInfo().SetFriendlyName(camera.friendly_name.format('utf-8'))
 
             parameters_groups = ['Transport_Layer',
                                  'Analog_Controls',
@@ -343,13 +340,13 @@ class CameraCtrl_Basler(CameraController):
         except (genicam.GenericException, CameraError) as e:
             return False, f'Error appeared when camera id {device_id} was initializing: {e}.'
 
-    def _set_transport_layer_db(self):
-        self._set_db_attribute(Transport_Layer, self._set_transport_layer_db)
+    def _set_transport_layer_db(self) -> Tuple[str, bool]:
+        return self._set_db_attribute(Transport_Layer, self._set_transport_layer_db)
 
     def _set_transport_parameters_device(self, func_input: FuncSetTransportParametersInput) -> Tuple[bool, str]:
         # Essential parameters for Basler are Packet size with default value 1500 and Inter-Packet Delay with 1000
         camera_id = func_input.camera_id
-        camera: CameraBasler = self._cameras[camera_id]
+        camera: CameraBasler = self._hardware_devices[camera_id]
         packet_size = func_input.packet_size
         inter_packet_delay = func_input.inter_packet_delay
         formed_parameters_dict = {'GevSCPSPacketSize': packet_size, 'GevSCPD': inter_packet_delay}
@@ -370,7 +367,7 @@ class CameraCtrl_Basler(CameraController):
         # Essential parameters for Basler are Width, Height, OffsetX, OffsetY, GainAuto, GainRaw, BlackLevelRaw,
         # BalanceRatio, Pixel_Format
         camera_id = func_input.camera_id
-        camera: CameraBasler = self._cameras[camera_id]
+        camera: CameraBasler = self._hardware_devices[camera_id]
         width = func_input.width
         height = func_input.height
         offset_x = func_input.offset_x
@@ -412,7 +409,7 @@ class CameraCtrl_Basler(CameraController):
     def _set_sync_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
         # Essential parameters for Basler are FrameRate, TriggerMode, TriggerSource, ExposureTime
         camera_id = func_input.camera_id
-        camera: CameraBasler = self._cameras[camera_id]
+        camera: CameraBasler = self._hardware_devices[camera_id]
         exposure_time = func_input.exposure_time
         trigger_delay = func_input.trigger_delay
         frame_rate = func_input.frame_rate
@@ -438,7 +435,7 @@ class CameraCtrl_Basler(CameraController):
             return False, f'Device_status: {DeviceStatus}, Basler_Camera with id {camera.device_id} connected ' \
                           f'{camera.pylon_camera.IsOpen()}'
 
-    def _set_db_attribute(self, data_class, func):
+    def _set_db_attribute(self, data_class, func) -> Tuple[str, bool]:
         obligation_keys = set(data_class.__annotations__.keys())
         attribute_name = data_class.__name__
         try:
@@ -446,7 +443,7 @@ class CameraCtrl_Basler(CameraController):
             if set(settings.keys()).intersection(obligation_keys) != obligation_keys:
                 raise KeyError
             else:
-                for camera_key, camera in self._cameras.items():
+                for camera_key, camera in self._hardware_devices.items():
                     camera.parameters[attribute_name] = data_class()
             for analog_key, analog_value in settings.items():
                 if analog_key in obligation_keys:
@@ -459,7 +456,7 @@ class CameraCtrl_Basler(CameraController):
                     else:
                         dict_opt = False
 
-                    for camera_key, camera in self._cameras.items():
+                    for camera_key, camera in self._hardware_devices.items():
                         try:
                             value = analog_value if not dict_opt else analog_value[camera.device_id]
                             t = data_class.__annotations__[analog_key]
@@ -474,9 +471,10 @@ class CameraCtrl_Basler(CameraController):
                                              f'{data_class.__annotations__[analog_key]}.')
                 else:
                     info_msg(self, 'INFO', f'Unknown parameter {analog_key} in {attribute_name} settings. Passing by.')
+            return True, ''
         except (KeyError, ValueError) as e:
             error_logger(self, func, e)
-            raise CameraError(self, f'Check DB for {attribute_name}: {list(obligation_keys)}. {e}')
+            return False, f'Check DB for {attribute_name}: {list(obligation_keys)}. {e}'
 
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
@@ -485,13 +483,14 @@ class CameraCtrl_Basler(CameraController):
                 device_id = int(pylon_camera.GetDeviceInfo().GetSerialNumber())
                 if pylon_camera.IsOpen():
                     pylon_camera.Close()
-                    self._cameras[device_id_camera_id[device_id]].status = 0
-                self._cameras[device_id_camera_id[device_id]].pylon_camera = None
+                    self._hardware_devices[device_id_camera_id[device_id]].status = 0
+                self._hardware_devices[device_id_camera_id[device_id]].pylon_camera = None
                 return True, ''
             self.tl_factory = None
             self.pylon_cameras = None
         except (genicam.GenericException, Exception) as e:
             error_logger(self, self._release_hardware, e)
             return False, f'Release_hardware function did not work: {e}.'
+
 
 

@@ -3,8 +3,8 @@ from enum import Enum
 from typing import Dict, List, Tuple, Union, NewType, Set
 
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
+                                                                        FuncGetControllerStateOutput, HardwareDevice)
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 relative = NewType('relative', str)
 absolute = NewType('absolute', str)
@@ -25,10 +25,7 @@ class MoveType(Enum):
 
 
 @dataclass(frozen=False)
-class AxisStpMtr:
-    device_id: int
-    name: str = ''
-    friendly_name: str = ''
+class AxisStpMtr(HardwareDevice):
     basic_unit: MoveType = MoveType.microstep
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
     move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)
@@ -37,7 +34,6 @@ class AxisStpMtr:
                                                                   MoveType.step, MoveType.microstep]))
     position: Union[mm, angle, microstep] = 0.0
     preset_values: List[Set[Union[Union[int, float], MoveType]]] = field(default_factory=list)
-    status: int = 0  # 0 - not active, 1 - active, 2 - moving
 
     def short(self, unit: MoveType = None):
         if unit:
@@ -138,17 +134,17 @@ class AxisStpMtr:
             return False, f'Axis axis_id={self.device_id} cannot convert {unit_from} to {unit_to}.'
 
 
+@dataclass(frozen=False)
+class StandaAxisStpMtr(AxisStpMtr):
+    pass
+
+
 @dataclass(order=True, frozen=False)
 class AxisStpMtrEssentials:
     device_id: int
     position: Union[mm, angle, microstep]
     unit: MoveType
     status: int
-
-
-@dataclass(order=True)
-class StpMtrDescription(Desription):
-    axes: Dict[int, AxisStpMtr]
 
 
 @dataclass(order=True, frozen=False)

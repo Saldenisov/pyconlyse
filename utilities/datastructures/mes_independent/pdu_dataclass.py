@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Tuple, Union, NewType, Set
 from pypylon import pylon
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
 @dataclass
@@ -28,11 +28,6 @@ class PDU:
 class PDUNetio(PDU):
     ip: str = ''
     mac: str = ''
-
-
-@dataclass(order=True)
-class PDUDescription(Desription):
-    pdus: Dict[int, PDU]
 
 
 @dataclass

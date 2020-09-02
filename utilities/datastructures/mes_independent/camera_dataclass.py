@@ -1,10 +1,10 @@
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Union
 from threading import Thread
+from typing import Union
+
 from pypylon import pylon
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
+
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
 @dataclass
@@ -50,13 +50,9 @@ class Transport_Layer(Controls):
 
 
 @dataclass(frozen=False)
-class Camera:
-    device_id: int
-    name: str = ''
-    friendly_name: str = ''
+class Camera(HardwareDevice):
     matrix_size: Tuple[int] = field(default_factory=tuple)
     parameters: Dict[str, Controls] = field(default_factory=dict)
-    status: int = 0  # 0, 1, 2
     stpmtr_ctrl_id: str = ''
 
     def short(self):
@@ -88,11 +84,6 @@ class CameraEssentials:
     status: int = 0
 
 
-@dataclass(order=True)
-class CameraDescription(Desription):
-    cameras: Dict[int, Camera]
-
-
 @dataclass
 class ImageDemand:
     camera_id: int
@@ -101,8 +92,8 @@ class ImageDemand:
     return_images: bool
     post_treatment: str
     treatment_param: dict
-    history_post_treament_n: int
-    grabbing_thread: Thread=None
+    history_post_treatment_n: int
+    grabbing_thread: Thread = None
 
 
 @dataclass
@@ -136,7 +127,7 @@ class FuncGetImagesInput(FuncInput):
     return_images: bool
     post_treatment: str
     treatment_param: dict
-    history_post_treament_n: int
+    history_post_treatment_n: int
     com: str = 'get_images'
 
 
@@ -179,7 +170,6 @@ class FuncSetImageParametersOutput(FuncOutput):
     camera_id: int
     camera: CameraEssentials
     com: str = 'set_image_parameters'
-
 
 
 @dataclass
@@ -253,7 +243,7 @@ class FuncStopAcquisitionOutput(FuncOutput):
 
 
 @dataclass(order=True, frozen=False)
-class CamerasCtrlStatusMultiCameras:
+class CtrlStatusMultiCameras:
     cameras: Dict[int, Union[Camera, CameraEssentials]]
     device_status: DeviceStatus
     cameras_previous: Dict[int, Camera] = None

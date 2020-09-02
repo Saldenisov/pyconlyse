@@ -2,8 +2,8 @@ import pytest
 
 from devices.service_devices.cameras import *
 from tests.fixtures.services import *
-from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.camera_dataclass import *
+from utilities.datastructures.mes_independent.camera_dataclass import FuncGetImagesInput
 
 one_service = [camera_basler_test_non_fixture()]
 #all_services = []
@@ -23,11 +23,11 @@ def test_func_stpmtr(cameractrl: CameraController):
     SET_TRANSPORT_LAYER = FuncSetTransportParametersInput(1, 1500, 1000)
     SET_SYNC_PARAM = FuncSetSyncParametersInput(1, 9999, False, 189999, 20)
     SET_IMAGE_PARAM = FuncSetImageParametersInput(1, 546, 550, 0, 0, 'Off', 0, -30, 64, 'Mono8')
-    GET_IMAGE = FuncGetImagesInput(1, 1, 0.2, 'None')
-    GET_IMAGES = FuncGetImagesInput(1, 10, 1, 'None')
+    GET_IMAGE = FuncGetImagesInput(1, '', 1, True, '', {}, 0)
+    GET_IMAGES = FuncGetImagesInput(1, '', 1, True, '', {}, 0)
 
     # description
-    res: CameraDescription = cameractrl.description()
+    res: ServiceDescription = cameractrl.description()
     assert res.info == 'Basler cameras controller'
 
     # power on
@@ -66,7 +66,7 @@ def test_func_stpmtr(cameractrl: CameraController):
     assert res.func_success
     assert res.camera.parameters['Transport_Layer'].GevSCPSPacketSize == 1500
     # set sync settings for camera 1
-    assert cameractrl.cameras[1].parameters['Acquisition_Controls'].TriggerDelayAbs == 190000
+    assert cameractrl.cameras[1].parameters['Acquisition_Controls'].TriggerDelayAbs == 189000
     res: FuncSetSyncParametersOutput = cameractrl.set_sync_parameters(SET_SYNC_PARAM)
     assert res.func_success
     assert res.camera.parameters['Acquisition_Controls'].TriggerDelayAbs == 189999

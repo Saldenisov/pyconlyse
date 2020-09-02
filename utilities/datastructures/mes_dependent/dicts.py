@@ -3,7 +3,7 @@ from typing import Dict
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from utilities.datastructures.mes_dependent.general import PendingDemand, PendingReply
-from utilities.datastructures.mes_independent.devices_dataclass import Connection
+from utilities.datastructures.mes_independent.devices_dataclass import Connection, HardwareDevice
 from utilities.myfunc import info_msg, error_logger
 
 
@@ -51,52 +51,6 @@ class Events_Dict(dict):
         else:
             if item in self.name_id:
                 return super().__contains__(self.name_id[item])
-
-
-class Connections_Dict(dict):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.device_id = {}
-
-    def __setitem__(self, key_id, connection: Connection):
-        device_id = connection.device_id
-        if device_id not in self.device_id:
-            super().__setitem__(key_id, connection)
-            self.device_id[device_id] = key_id
-        else:
-            raise KeyError(f'Messenger id: {device_id} already exists in {self.device_id}')
-
-    def __getitem__(self, key):
-        try:
-            return super().__getitem__(key)
-        except KeyError:
-            if key in self.device_id:
-                return super().__getitem__(self.device_id[key])
-            else:
-                raise KeyError('Neither receiver_id nor device_id were passed correctly to get the connection...')
-
-    def __delitem__(self, key):
-        try:
-            connection: Connection = self[key]
-            device_id = connection.device_id
-            super().__delitem__(key)
-            del self.device_id[device_id]
-        except KeyError:
-            messenger_id = key
-            if device_id in self.device_id:
-                key = self.device_id[device_id]
-                del self.device_id[device_id]
-                super().__delitem__(key)
-            else:
-                raise KeyError('Neither receiver_id nor device_id were passed correctly to delete the connection...')
-
-    def __contains__(self, item):
-        if super().__contains__(item):
-            return True
-        else:
-            if item in self.device_id:
-                return super().__contains__(self.device_id[item])
 
 
 class MsgDict(OrderedDict):

@@ -13,10 +13,7 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMe
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
 from gui.views.ClientsGUIViews import CamerasView, SuperUserView, StepMotorsView, ProjectManagerView
-from utilities.datastructures.mes_independent import (ProjectManagerDescription)
 from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
-from utilities.datastructures.mes_independent.camera_dataclass import CameraDescription
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -66,11 +63,11 @@ class SuperClientGUIcontroller():
 
         try:
             parameters: DeviceInfoExt = self.model.service_parameters[service_id]
-            if isinstance(parameters.device_description, StpMtrDescription):
+            if 'StpMtr' in parameters.device_description.class_name:
                 view = StepMotorsView
-            elif isinstance(parameters.device_description, ProjectManagerDescription):
+            elif 'ProjectManager' in parameters.device_description.class_name:
                 view = ProjectManagerView
-            elif isinstance(parameters.device_description, CameraDescription):
+            elif 'Camera' in parameters.device_description.class_name:
                 view = CamerasView
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,

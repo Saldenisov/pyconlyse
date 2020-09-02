@@ -58,16 +58,6 @@ class ProjectManager_controller(Service):
     def _check_if_connected(self) -> Tuple[bool, str]:
         return super()._check_if_connected()
 
-    def description(self) -> ProjectManagerDescription:
-        """
-        Description with important parameters
-        :return: StpMtrDescription with parameters essential for understanding what this device is used for
-        """
-        try:
-            parameters = self.get_settings('Parameters')
-            return ProjectManagerDescription(info=parameters['info'], GUI_title=parameters['title'])
-        except KeyError as e:
-            return DeviceError(self, f'Could not set description of controller from database: {e}')
 
     def get_state(self):
         files_len = -1
