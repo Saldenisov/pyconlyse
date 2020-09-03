@@ -136,7 +136,7 @@ class AxisStpMtr(HardwareDevice):
 
 @dataclass(frozen=False)
 class StandaAxisStpMtr(AxisStpMtr):
-    pass
+    device_id_seq: int = None
 
 
 @dataclass(order=True, frozen=False)
@@ -161,7 +161,7 @@ class StpMtrCtrlStatusMultiAxes:
 @dataclass
 class FuncActivateAxisInput(FuncInput):
     axis_id: int
-    flag: bool
+    flag: 1
     com: str = 'activate_axis'
 
 
@@ -178,19 +178,20 @@ class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
 
 @dataclass
 class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
-    axes: Dict[int, AxisStpMtr] = None
+    devices: Dict[Union[int, str], HardwareDevice] = None
 
 
 @dataclass
 class FuncGetPosInput(FuncInput):
     axis_id: int
-    com: str = 'get_pos'
+    com: str = 'get_pos_axis'
 
 
 @dataclass
 class FuncGetPosOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
-    com: str = 'get_pos'
+    axis_id: int
+    position: float
+    com: str = 'get_pos_axis'
 
 
 @dataclass
@@ -204,22 +205,25 @@ class FuncMoveAxisToInput(FuncInput):
 
 @dataclass
 class FuncMoveAxisToOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
+    axis_id: int
+    position: float
     com: str = 'move_axis_to'
 
 
 @dataclass
 class FuncSetPosInput(FuncInput):
     axis_id: int
-    axis_pos: Union[int, float]
+    axis_pos: float
     pos_unit: MoveType
-    com: str = 'set_pos'
+    com: str = 'set_pos_axis'
 
 
 @dataclass
 class FuncSetPosOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
-    com: str = 'set_pos'
+    axis_id: int
+    position: float
+    pos_unit: MoveType = None
+    com: str = 'set_pos_axis'
 
 
 @dataclass

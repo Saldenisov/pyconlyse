@@ -70,7 +70,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :param force: is not needed for this controller
         :return: res, comments='' if True, else error_message
         """
-        res, comments = super()._check_axis_flag(flag)
+        res, comments = super()._check_status_flag(flag)
         if res:
             if self._axes_status[axis_id] != flag:
                 local_axis_state = self._axes_status[axis_id]

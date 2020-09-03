@@ -290,12 +290,6 @@ class CameraCtrl_Basler(CameraController):
             error_logger(self, self._read_image, e)
             return False, f'During _read_image {e}. Camera_id {camera.friendly_name}.'
 
-    def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
-        try:
-            return self._change_camera_status(camera_id, 1, True)
-        except pylon.GenericException as e:
-            return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'
-
     def _set_analog_controls_db(self) -> Tuple[str, bool]:
         return self._set_db_attribute(Analog_Controls, self._set_analog_controls_db)
 
@@ -492,5 +486,8 @@ class CameraCtrl_Basler(CameraController):
             error_logger(self, self._release_hardware, e)
             return False, f'Release_hardware function did not work: {e}.'
 
-
-
+    def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
+        try:
+            return self._change_camera_status(camera_id, 1, True)
+        except pylon.GenericException as e:
+            return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'

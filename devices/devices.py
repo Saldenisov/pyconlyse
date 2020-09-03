@@ -325,7 +325,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         error = False
         com: str = msg.info.com
         input: FuncInput = msg.info
-        if com in self.available_public_functions_names:
+        if com in self.available_public_functions_names and self.device_status.active:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
             if func_input_type == type(input):
@@ -345,9 +345,12 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 error = True
                 comments = f'Device {self.id} function: execute_com: Input type: {type(input)} do not match to ' \
                            f'func_input type : {func_input_type}'
-        else:
+        elif com not in self.available_public_functions_names:
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+        elif not self.device_status.active:
+            error = True
+            comments = f'{self.id} is not active. Cannot execute command {com}.'
         if error:
             if msg.forwarded_from != '':
                 forward_to = msg.forwarded_from
@@ -572,6 +575,7 @@ class Service(Device):
     SERVICE_INFO = CmdStruct(FuncServiceInfoInput, FuncServiceInfoOutput)
     POWER = CmdStruct(FuncPowerInput, FuncPowerOutput)
 
+    # TODO: add loop to observed controller activity, maybe connection is lost, or something like this
     # TODO: Service and Client are basically the same thing. So they must be merged somehow
     def __init__(self, **kwargs):
         from communication.messaging.messengers import ServiceMessenger
@@ -617,7 +621,7 @@ class Service(Device):
 
     @staticmethod
     @abstractmethod
-    def _check_status_flag(self, flag: int):
+    def _check_status_flag(flag: int):
         pass
 
     @abstractmethod
@@ -663,9 +667,9 @@ class Service(Device):
     def _form_devices_list(self) -> Tuple[bool, str]:
         pass
 
-    @abstractmethod
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
-        pass
+        return FuncGetStpMtrControllerStateOutput(devices=self.hardware_devices, device_status=self.device_status,
+                                                  func_success=True, comments='')
 
     @abstractmethod
     def _get_number_hardware_devices(self):
@@ -684,7 +688,7 @@ class Service(Device):
     @property
     @abstractmethod
     def hardware_devices(self):
-        pass
+        return self._hardware_devices
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday

@@ -45,35 +45,35 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         def search(axes, status):
-            for axis_id, axis in self.axes.items():
+            for axis_id, axis in self.axes_stpmtr.items():
                 if axis.status == status:
                     return axis_id
             return None
 
-        res, comments = super()._check_axis_flag(flag)
+        res, comments = super()._check_status_flag(flag)
         if res:
-            if self.axes[axis_id].status != flag:
+            if self.axes_stpmtr[axis_id].status != flag:
                 info = ''
-                idx = search(self.axes, 1)
+                idx = search(self.axes_stpmtr, 1)
                 if not idx:
-                    idx = search(self.axes, 2)
+                    idx = search(self.axes_stpmtr, 2)
                     if force and idx:
-                        self.axes[idx].status = 1
-                        info = f' Axis id={idx}, name={self.axes[idx].name} was stopped.'
+                        self.axes_stpmtr[idx].status = 1
+                        info = f' Axis id={idx}, name={self.axes_stpmtr[idx].name} was stopped.'
                     elif idx:
                         return False, f'Stop axis id={idx} to be able activate axis id={axis_id}. ' \
                                       f'Use force, or wait movement to complete.'
                 if idx != axis_id and idx:
-                    self.axes[idx].status = 0
+                    self.axes_stpmtr[idx].status = 0
                     self._change_relay_state(idx, 0)
-                    info = f'Axis id={idx}, name={self.axes[idx].name} is set 0.'
+                    info = f'Axis id={idx}, name={self.axes_stpmtr[idx].name} is set 0.'
 
-                if not (self.axes[axis_id].status > 0 and flag > 0):  #only works for 0->1, 1->0, 2->0
+                if not (self.axes_stpmtr[axis_id].status > 0 and flag > 0):  #only works for 0->1, 1->0, 2->0
                     self._change_relay_state(axis_id, flag)
-                self.axes[axis_id].status = flag
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}.' + info
+                self.axes_stpmtr[axis_id].status = flag
+                res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is set to {flag}.' + info
             else:
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
+                res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is already set to {flag}'
         return res, comments
 
     def GUI_bounds(self):
@@ -87,7 +87,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return self._axes_status
 
     def _get_number_axes(self) -> int:
-        return len(self.axes)
+        return len(self.axes_stpmtr)
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         return self._axes_limits
@@ -102,7 +102,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         res, comments = self._change_axis_status(axis_id, 2)
         if res:
             self._set_microsteps_parameters(axis_id)  # Different axes could have different microsteps
-            axis: AxisStpMtr = self.axes[axis_id]
+            axis: AxisStpMtr = self.axes_stpmtr[axis_id]
             if go_pos - axis.position > 0:
                 pas = 1
                 self._direction('top')
@@ -110,14 +110,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 pas = -1
                 self._direction('bottom')
             microsteps = abs(axis.convert_from_to_unit(go_pos - axis.position, axis.basic_unit, MoveType.microstep))
-            pos_microsteps = self.axes[axis_id].convert_pos_to_unit(MoveType.microstep)
-            microsteps_axis = self.axes[axis_id].move_parameters['microsteps']
+            pos_microsteps = self.axes_stpmtr[axis_id].convert_pos_to_unit(MoveType.microstep)
+            microsteps_axis = self.axes_stpmtr[axis_id].move_parameters['microsteps']
             width = self._microstep_settings[microsteps_axis][1] * self._TTL_width_corrections[axis_id] / 1000000. # must be in ms
             delay = self._microstep_settings[microsteps_axis][2] * self._TTL_delay_corrections[axis_id] / 1000000.
             interrupted = False
             self._enable_controller()
             for i in range(microsteps):
-                if self.axes[axis_id].status == 2:
+                if self.axes_stpmtr[axis_id].status == 2:
                     self._set_led(self._ttl, 1)
                     sleep(width)
                     self._set_led(self._ttl, 0)
@@ -128,12 +128,12 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     comments = f'Movement of Axis with id={axis_id} was interrupted'
                     interrupted = True
                     break
-            self.axes[axis_id].position = self.axes[axis_id].convert_to_basic_unit(MoveType.microstep, pos_microsteps)
+            self.axes_stpmtr[axis_id].position = self.axes_stpmtr[axis_id].convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             self._disable_controller()
             _, _ = self._change_axis_status(axis_id, 1, force=True)
             StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
             if not interrupted:
-                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} ' \
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes_stpmtr[axis_id].name} ' \
                                       f'was finished.'
         return res, comments
 
@@ -178,7 +178,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             return super()._set_parameters()
 
     def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
-        self.axes[axis_id].position = pos
+        self.axes_stpmtr[axis_id].position = pos
         return True, ''
 
     #Contoller hardware functions
@@ -301,8 +301,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     @development_mode(dev=dev_mode, with_return=None)
     def _set_microsteps_parameters(self, axis_id: int):
         try:
-            self._set_led(self._ms1, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][0])
-            self._set_led(self._ms2, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][1])
-            self._set_led(self._ms3, self.microstep_settings[self.axes[axis_id].move_parameters['microsteps']][0][2])
+            self._set_led(self._ms1, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][0])
+            self._set_led(self._ms2, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][1])
+            self._set_led(self._ms3, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][2])
         except Exception as e:
             raise e

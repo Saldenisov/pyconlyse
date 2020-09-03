@@ -139,7 +139,7 @@ class CamerasView(QMainWindow):
                     stpmtr_ctrl_descrip: StpMtrDescription = param[camera.stpmtr_ctrl_id].device_description
                     self.ui.comboBox_x_stepmotor.clear()
                     self.ui.comboBox_y_stepmotor.clear()
-                    for i, axis in stpmtr_ctrl_descrip.axes.items():
+                    for i, axis in stpmtr_ctrl_descrip.axes_stpmtr.items():
                         self.ui.comboBox_x_stepmotor.addItem(f'{axis.friendly_name}::{i}')
                         self.ui.comboBox_y_stepmotor.addItem(f'{axis.friendly_name}::{i}')
 
