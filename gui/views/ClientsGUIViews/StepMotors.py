@@ -296,7 +296,6 @@ class StepMotorsView(QMainWindow):
 
             self.controller_status.axes_previous = copy.deepcopy(cs.axes)
 
-
             if force_axis:
                 if MoveType.step in axis.type_move or MoveType.microstep in axis.type_move:
                     ui.radioButton_stp.setEnabled(True)
@@ -343,9 +342,10 @@ class StepMotorsView(QMainWindow):
         if (self.controller_status.axes[axis_id].status == 2 or force) and self.ui.spinBox_axis.value() == axis_id:
             start = self.controller_status.start_stop[axis_id][0]
             stop = self.controller_status.start_stop[axis_id][1]
-            per = int((pos - start) / (stop - start) * 100.0)
-            self.ui.progressBar_movement.setValue(per)
-            self.ui.lcdNumber_position.display(pos)
+            if (stop-start) != 0:
+                per = int((pos - start) / (stop - start) * 100.0)
+                self.ui.progressBar_movement.setValue(per)
+                self.ui.lcdNumber_position.display(pos)
 
     def _get_unit(self) -> MoveType:
         rb_dict = {self.ui.radioButton_angle: MoveType.angle, self.ui.radioButton_stp: MoveType.step,

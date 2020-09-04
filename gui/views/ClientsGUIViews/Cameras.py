@@ -10,6 +10,7 @@ from _functools import partial
 import numpy as np
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow, QMenu, QErrorMessage
+from time import sleep
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
 from devices.devices import Device
 from devices.service_devices.cameras import CameraController
@@ -136,10 +137,10 @@ class CamerasView(QMainWindow):
             if action == action_get_axes:
                 if camera.stpmtr_ctrl_id != '' and camera.stpmtr_ctrl_id in list(self.model.service_parameters.keys()):
                     param = self.model.service_parameters
-                    stpmtr_ctrl_descrip: StpMtrDescription = param[camera.stpmtr_ctrl_id].device_description
+                    stpmtr_ctrl_descrip: ServiceDescription = param[camera.stpmtr_ctrl_id].device_description
                     self.ui.comboBox_x_stepmotor.clear()
                     self.ui.comboBox_y_stepmotor.clear()
-                    for i, axis in stpmtr_ctrl_descrip.axes_stpmtr.items():
+                    for i, axis in stpmtr_ctrl_descrip.hardware_devices.items():
                         self.ui.comboBox_x_stepmotor.addItem(f'{axis.friendly_name}::{i}')
                         self.ui.comboBox_y_stepmotor.addItem(f'{axis.friendly_name}::{i}')
 
@@ -352,6 +353,11 @@ class CamerasView(QMainWindow):
             elif 'increase' in button_name:
                 direction = 1
 
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                      forward_to=camera.stpmtr_ctrl_id,
+                                      func_input=FuncActivateAxisInput(axis_id=axis_id, flag=1))
+            client.send_msg_externally(msg)
+            sleep(0.02)
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                       forward_to=camera.stpmtr_ctrl_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id,
