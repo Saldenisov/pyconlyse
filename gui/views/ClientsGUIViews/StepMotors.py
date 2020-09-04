@@ -44,6 +44,7 @@ class StepMotorsView(QMainWindow):
 
         self.ui = Ui_StpMtrGUI()
         self.ui.setupUi(self, service_parameters)
+        self.setWindowTitle(service_parameters.device_description.GUI_title)
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
@@ -220,7 +221,7 @@ class StepMotorsView(QMainWindow):
                             self.controller_status.axes[result.axis_id] = result.axis
                         elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                             result: FuncGetControllerStateOutput = result
-                            self.controller_axes = result.device_hardware
+                            self.controller_axes = result.devices_hardware
                             self.controller_status.device_status = result.device_status
                             if not self.controller_status.start_stop:
                                 self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)

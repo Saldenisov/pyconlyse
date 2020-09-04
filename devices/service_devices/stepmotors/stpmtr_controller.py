@@ -104,9 +104,16 @@ class StpMtrController(Service):
     def axes_stpmtr_essentials(self):
         return {axis_id: axis.short() for axis_id, axis in self.axes_stpmtr.items()}
 
-    @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        pass
+        if self.device_status.power:
+            if flag:
+                res, comments = self._form_devices_list()
+            else:
+                res, comments = self._release_hardware()
+            self.device_status.connected = flag
+        else:
+            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
+        return res, comments
 
     def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
         """
@@ -172,7 +179,7 @@ class StpMtrController(Service):
 
     @abstractmethod
     def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
-        pass
+        return True, ''
 
     def _get_positions_file(self) -> Tuple[bool, str]:
         with open(self._file_pos, 'r') as file_pos:

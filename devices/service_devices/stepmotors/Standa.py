@@ -43,18 +43,6 @@ class StpMtrCtrl_Standa(StpMtrController):
         if not res:
             raise StpMtrError(self, comments)
 
-    def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
-            if flag:
-                res, comments = self._form_devices_list()
-            else:
-                res, comments = self._release_hardware()
-            self.device_status.connected = flag
-        else:
-            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
-
-        return res, comments
-
     def _change_axis_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)
         if res:
@@ -210,7 +198,6 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = False, f'Movement of Axis with id={device_id} was interrupted'
 
             _, _ = self._get_position_axis(device_id)
-
         self._change_axis_status(device_id, 1, True)
         return res, comments
 

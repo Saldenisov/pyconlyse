@@ -81,7 +81,6 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert not res.func_success
     assert 'Cannot switch power off when device is activated.' in res.comments
 
-
     # Testing Activate function
     # activate
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
@@ -150,7 +149,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert res.func_success
     res: FuncGetPosOutput = stpmtr.get_pos_axis(GET_POS_AXIS1)
     assert res.func_success
-    assert res.position == 100.5
+    assert res.axis.position == 100.5
     res: FuncSetPosOutput = stpmtr.set_pos_axis(FuncSetPosInput(1, pos_var, MoveType.step))
     assert stpmtr.axes_stpmtr[1].position == pos_var
 
@@ -203,7 +202,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
         assert res.comments == f'Axis id={first_axis}, name={stpmtr.axes_stpmtr[first_axis].friendly_name} was stopped by user.'
-        assert res.axes == stpmtr.axes_stpmtr_essentials
+        assert res.axis == stpmtr.axes_stpmtr[first_axis]
         # stop axis 1 again
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
@@ -215,13 +214,13 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # Move axis 1 to pos=10
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
-    assert res.position == MOVE_AXIS1_absolute_ten.pos
+    assert res.axis.position == MOVE_AXIS1_absolute_ten.pos
     assert res.comments == f'Movement of Axis with id={first_axis}, ' \
                            f'name={stpmtr.axes_stpmtr[first_axis].friendly_name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
-    assert res.position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
+    assert res.axis.position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
 
     if not isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
         # Move axis 1 to pos=100 and stop it immediately
@@ -245,7 +244,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 
         assert not res_move.func_success
         assert res_move.comments == f'Movement of Axis with id={first_axis} was interrupted'
-        assert res_move.position != 0
+        assert res_move.axis.position != 0
         assert res_stop.func_success
         assert res_stop.comments == f'Axis id={first_axis}, name={stpmtr.axes_stpmtr[first_axis].friendly_name} ' \
                                     f'was stopped by user.'
@@ -255,14 +254,13 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         # Test get_pos
         res: FuncGetPosOutput = stpmtr.get_pos_axis(GET_POS_AXIS1)
         assert res.func_success
-        assert res.position == MOVE_AXIS1_absolute_ten.pos
-        assert stpmtr.axes_stpmtr[second_axis].position != 0
+        assert res.axis.position == MOVE_AXIS1_absolute_ten.pos
         assert res.comments == ''
 
     # Test get_contoller_state
-    res: FuncGetStpMtrControllerStateOutput = stpmtr.get_controller_state(GET_CONTOLLER_STATE)
+    res: FuncGetControllerStateOutput = stpmtr.get_controller_state(GET_CONTOLLER_STATE)
     assert res.func_success
-    assert isinstance(res.devices[first_axis], AxisStpMtr)
+    assert isinstance(res.devices_hardware[first_axis], AxisStpMtr)
 
     # Test available function
     res = stpmtr.available_public_functions()

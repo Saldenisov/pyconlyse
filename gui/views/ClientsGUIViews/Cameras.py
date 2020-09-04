@@ -43,6 +43,7 @@ class CamerasView(QMainWindow):
 
         self.ui = Ui_CameraGUI()
         self.ui.setupUi(CameraGUI=self)
+        self.setWindowTitle(service_parameters.device_description.GUI_title)
         from matplotlib.widgets import RectangleSelector
 
         self.ui.datacanvas = DataCanvasCamera(width=9, height=10, dpi=70, canvas_parent=self.ui.verticalWidget_toolbox)
@@ -269,7 +270,7 @@ class CamerasView(QMainWindow):
                         self.controller_cameras = result.cameras
                     elif info.com == CameraController.GET_CONTROLLER_STATE.name:
                         result: FuncGetControllerStateOutput = result
-                        self.controller_cameras = result.device_hardware
+                        self.controller_cameras = result.devices_hardware
                         self.controller_status.device_status = result.device_status
                     elif info.com == CameraController.GET_IMAGES.name:
                         result: FuncGetImagesOutput = result

@@ -687,8 +687,8 @@ class Service(Device):
         pass
 
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
-        return FuncGetStpMtrControllerStateOutput(device_hardware=self.hardware_devices, device_status=self.device_status,
-                                                  func_success=True, comments='')
+        return FuncGetControllerStateOutput(devices_hardware=self.hardware_devices, device_status=self.device_status,
+                                            func_success=True, comments='')
 
     @abstractmethod
     def _get_number_hardware_devices(self):

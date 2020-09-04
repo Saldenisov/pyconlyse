@@ -14,7 +14,8 @@ from typing import List, Tuple, Union, Callable, Set
 
 from gpiozero import LED
 
-from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType
+from utilities.datastructures.mes_independent.stpmtr_dataclass import *
+from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict
 from utilities.myfunc import error_logger, info_msg
 from utilities.tools.decorators import development_mode
 from .stpmtr_controller import StpMtrController
@@ -30,12 +31,20 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     OFF = 1
 
     def __init__(self, **kwargs):
+        kwargs['stpmtr_dataclass'] = A4988AxisStpMtr
+        super().__init__(**kwargs)
+        self._hardware_devices: Dict[int, StandaAxisStpMtr] = HardwareDeviceDict()
         self._pins = []
         self._ttl = None  # to make controller work when dev_mode is ON
-        super().__init__(**kwargs)
-
-    def _connect(self, flag: bool) -> Tuple[bool, str]:
-        return super()._connect(flag)
+        # Set parameters from database first and after connection is done; update from hardware controller if possible
+        res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
+                                                                      ('friendly_name', 'friendly_names', str),
+                                                                      ('move_parameters', 'move_parameters', dict),
+                                                                      ('limits', 'limits', tuple),
+                                                                      ('preset_values', 'preset_values', tuple)],
+                                                          extra_func=[self._get_positions_file,
+                                                                      self._set_move_parameters_axes,
+                                                                      self._set_move_parameters_controller])
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
@@ -76,33 +85,23 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is already set to {flag}'
         return res, comments
 
-    def GUI_bounds(self):
-        # TODO: to be done something with this
-        return {'visual_components': [[('activate'), 'button'], [('move_pos', 'get_pos'), 'text_edit']]}
+    def _form_devices_list(self) -> Tuple[bool, str]:
+        # A4988 chip does not have any means to communicate. Only pins of RPi3 or Rpi4 can be activated.
+        return self._setup_pins()
 
-    def _get_axes_names(self):
-        return self._get_axes_names_db()
+    def _get_number_hardware_devices(self):
+        return 4
 
-    def _get_axes_status(self) -> List[int]:
-        return self._axes_status
+    def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
+        # Nothing is necessary, A4988 chip does not have any microstep counter.
+        self._write_positions_to_file(positions=self._form_axes_positions())
+        return True, ''
 
-    def _get_number_axes(self) -> int:
-        return len(self.axes_stpmtr)
-
-    def _get_limits(self) -> List[Tuple[Union[float, int]]]:
-        return self._axes_limits
-
-    def _get_positions(self) -> List[Union[int, float]]:
-        return self._axes_positions
-
-    def _get_preset_values(self) -> List[Tuple[Union[int, float]]]:
-        return self._axes_preset_values
-
-    def _move_axis_to(self, axis_id: int, go_pos: Union[int, float], how='absolute') -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(axis_id, 2)
+    def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[int, float], how='absolute') -> Tuple[bool, str]:
+        res, comments = self._change_axis_status(device_id, 2)
         if res:
-            self._set_microsteps_parameters(axis_id)  # Different axes could have different microsteps
-            axis: AxisStpMtr = self.axes_stpmtr[axis_id]
+            self._set_microsteps_parameters(device_id)  # Different axes could have different microsteps
+            axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
             if go_pos - axis.position > 0:
                 pas = 1
                 self._direction('top')
@@ -110,14 +109,14 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 pas = -1
                 self._direction('bottom')
             microsteps = abs(axis.convert_from_to_unit(go_pos - axis.position, axis.basic_unit, MoveType.microstep))
-            pos_microsteps = self.axes_stpmtr[axis_id].convert_pos_to_unit(MoveType.microstep)
-            microsteps_axis = self.axes_stpmtr[axis_id].move_parameters['microsteps']
-            width = self._microstep_settings[microsteps_axis][1] * self._TTL_width_corrections[axis_id] / 1000000. # must be in ms
-            delay = self._microstep_settings[microsteps_axis][2] * self._TTL_delay_corrections[axis_id] / 1000000.
+            pos_microsteps = axis.convert_pos_to_unit(MoveType.microstep)
+            microsteps_axis = axis.move_parameters['microsteps']
+            width = self._microstep_settings[microsteps_axis][1] * axis.move_parameters['TTL_width_correction'] / 1000000. # must be in ms
+            delay = self._microstep_settings[microsteps_axis][2] * axis.move_parameters['TTL_delay_correction'] / 1000000.
             interrupted = False
             self._enable_controller()
             for i in range(microsteps):
-                if self.axes_stpmtr[axis_id].status == 2:
+                if axis.status == 2:
                     self._set_led(self._ttl, 1)
                     sleep(width)
                     self._set_led(self._ttl, 0)
@@ -125,15 +124,15 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     pos_microsteps += pas
                 else:
                     res = False
-                    comments = f'Movement of Axis with id={axis_id} was interrupted'
+                    comments = f'Movement of Axis with id={device_id} was interrupted'
                     interrupted = True
                     break
-            self.axes_stpmtr[axis_id].position = self.axes_stpmtr[axis_id].convert_to_basic_unit(MoveType.microstep, pos_microsteps)
+            axis.position = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             self._disable_controller()
-            _, _ = self._change_axis_status(axis_id, 1, force=True)
-            StpMtrController._write_to_file(str(self._axes_positions), self._file_pos)
+            _, _ = self._change_axis_status(device_id, 1, force=True)
+            _, _ = self._get_position_axis(device_id)
             if not interrupted:
-                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes_stpmtr[axis_id].name} ' \
+                res, comments = True, f'Movement of Axis with id={device_id}, name={axis.friendly_name} ' \
                                       f'was finished.'
         return res, comments
 
@@ -146,44 +145,31 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
 
-    def _setup(self) -> Tuple[Union[bool, str]]:
-        res, comments = self._set_move_parameters_controller()
-        if res:
-            return self._setup_pins()
-        else:
-            return res, comments
-
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
-        must_have_param = {1: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
-                           2: set(['microsteps', 'basic_unit']),
-                           3: set(['microsteps', 'conversion_step_angle', 'basic_unit']),
-                           4: set(['microsteps', 'conversion_step_angle', 'basic_unit'])}
+        must_have_param = {'Iflip_flop': set(['microsteps', 'conversion_step_angle', 'basic_unit',
+                                              'TTL_width_correction', 'TTL_delay_correction']),
+                           'IIiris': set(['microsteps', 'basic_unit', 'TTL_width_correction', 'TTL_delay_correction']),
+                           'IIIfilter1': set(['microsteps', 'conversion_step_angle', 'basic_unit',
+                                              'TTL_width_correction', 'TTL_delay_correction']),
+                           'IVfilter2': set(['microsteps', 'conversion_step_angle', 'basic_unit',
+                                              'TTL_width_correction', 'TTL_delay_correction'])}
         return super()._set_move_parameters_axes(must_have_param)
 
-    def _set_move_parameters_controller(self, step=1) -> Tuple[Union[bool, str]]:
+    def _set_move_parameters_controller(self) -> Tuple[Union[bool, str]]:
         try:
-            parameters = self.get_settings('Parameters')
-            self._microstep_settings = eval(parameters['microstep_settings'])
-            self._TTL_width_corrections = eval(parameters['TTL_width_corrections'])
-            self._TTL_delay_corrections = eval(parameters['TTL_delay_corrections'])
+            self._microstep_settings = eval(self.get_parameters['microstep_settings'])
             return True, ''
         except (KeyError, SyntaxError) as e:
             error_logger(self, self._set_move_parameters_controller, e)
-            return False, f'_set_move_parameters() did not work, DB cannot be read {e}'
+            return False, f'_set_move_parameters did not work, DB cannot be read: {e}.'
 
-    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        if self.device_status.connected:
-            return super()._set_parameters(extra_func=[self._setup])
-        else:
-            return super()._set_parameters()
-
-    def _set_pos(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
-        self.axes_stpmtr[axis_id].position = pos
+    def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
+        self.axes_stpmtr[device_id].position = pos
         return True, ''
 
     #Contoller hardware functions
-    @development_mode(dev=dev_mode, with_return=None)
-    def _change_relay_state(self, axis_id: int, flag: int):
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _change_relay_state(self, axis_id: int, flag: int) -> Tuple[bool, str]:
         if flag:
             if axis_id == 1:
                 self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.ON)
@@ -197,7 +183,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             elif axis_id == 4:
                 self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.ON)
                 self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.ON)
-            sleep(0.1)
         elif flag == 0:
             if axis_id == 1:
                 self._set_led(self._relayIa, StpMtrCtrl_a4988_4axes.OFF)
@@ -211,37 +196,34 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             elif axis_id == 4:
                 self._set_led(self._relayIVa, StpMtrCtrl_a4988_4axes.OFF)
                 self._set_led(self._relayIVb, StpMtrCtrl_a4988_4axes.OFF)
-            sleep(0.1)
+        return True, ''
 
-    @development_mode(dev=dev_mode, with_return=None)
-    def _deactivate_all_relay(self):
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _deactivate_all_relay(self) -> Tuple[bool, str]:
         for axis in range(4):
             self._change_relay_state(axis + 1, 0)
         sleep(0.1)
 
-    @development_mode(dev=dev_mode, with_return=None)
-    def _disable_controller(self):
-        self._set_led(self._enable, 1)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _direction(self, orientation='top'):
-        if orientation == 'top':
-            self._set_led(self._dir, 1)
-        elif orientation == 'bottom':
-            self._set_led(self._dir, 0)
-        sleep(0.05)
-
-    @development_mode(dev=dev_mode, with_return=None)
-    def _enable_controller(self):
-        self._set_led(self._enable, 0)
-        sleep(0.05)
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _disable_controller(self) -> Tuple[bool, str]:
+        return self._set_led(self._enable, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, ''))
-    def _setup_pins(self) -> Tuple[Union[bool, str]]:
+    def _direction(self, orientation='top') -> Tuple[bool, str]:
+        if orientation == 'top':
+            return self._set_led(self._dir, 1)
+        elif orientation == 'bottom':
+            return self._set_led(self._dir, 0)
+
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _enable_controller(self) -> Tuple[bool, str]:
+        return self._set_led(self._enable, 0)
+
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _setup_pins(self) -> Tuple[bool, str]:
         try:
             info_msg(self, 'INFO', 'setting up the pins')
-            parameters = self.get_settings('Parameters')
+            parameters = self.get_parameters
             self._ttl = LED(parameters['TTL_pin'])
             self._pins.append(self._ttl)
             self._dir = LED(parameters['dir_pin'])
@@ -273,21 +255,24 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             self.microstep_settings = eval(parameters['microstep_settings'])
             return True, ''
         except (KeyError, ValueError, SyntaxError) as e:
-            self.logger.error(e)
-            return False, f'_setup_pins() did not work, DB cannot be read {str(e)}'
+            error_logger(self, self._setup_pins, e)
+            return False, f'_setup_pins() did not work, DB cannot be read {str(e)}.'
 
     @development_mode(dev=dev_mode, with_return=None)
-    def _set_led(self, led: LED, value: Union[bool, int]):
+    def _set_led(self, led: LED, value: Union[bool, int]) -> Tuple[bool, str]:
+        res, comments = True, ''
         if value == 1:
             led.on()
         elif value == 0:
             led.off()
         else:
-            self.logger.info(f'func _set_led value {value} is not known')
+            res, comments = False, f'func _set_led value {value} is not known.'
+        sleep(0.05)
+        return res, comments
 
     def _pins_off(self) -> Tuple[Union[bool, str]]:
         if len(self._pins) == 0:
-            return True, 'No pins to close()'
+            return True, 'No pins to close().'
         else:
             error = []
             for pin in self._pins:
@@ -296,13 +281,16 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                 except Exception as e:
                     error.append(str(e))
             self._pins = []
-            return True, '' if len(error)== 0 else str(error)
+            return True, '' if len(error) == 0 else str(error)
 
-    @development_mode(dev=dev_mode, with_return=None)
-    def _set_microsteps_parameters(self, axis_id: int):
+    @development_mode(dev=dev_mode, with_return=(True, ''))
+    def _set_microsteps_parameters(self, device_id: Union[int, str]) -> Tuple[bool, str] :
         try:
-            self._set_led(self._ms1, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][0])
-            self._set_led(self._ms2, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][1])
-            self._set_led(self._ms3, self.microstep_settings[self.axes_stpmtr[axis_id].move_parameters['microsteps']][0][2])
-        except Exception as e:
-            raise e
+            axis = self.axes_stpmtr[device_id]
+            self._set_led(self._ms1, axis.move_parameters['microsteps'][0][0])
+            self._set_led(self._ms2, axis.move_parameters['microsteps'][0][1])
+            self._set_led(self._ms3, axis.move_parameters['microsteps'][0][2])
+            return True, ''
+        except KeyError as e:
+            error_logger(self, self._set_microsteps_parameters, e)
+            return False, ''
