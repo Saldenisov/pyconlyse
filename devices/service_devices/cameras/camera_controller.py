@@ -31,7 +31,7 @@ class CameraController(Service):
             if flag:
                 res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
                 if res:  # parameters should be set from hardware controller if possible
-                    res, comments = self._set_parameters_main_devices()  # This must be realized for all controllers
+                    res, comments = self._set_parameters_main_devices(extra_func=[self._set_overall_parameters])  # This must be realized for all controllers
                     if res:
                         self.device_status.active = True
             else:
@@ -166,6 +166,10 @@ class CameraController(Service):
                 demand: ImageDemand = self._images_demanders[demander_id][camera_id]
                 image_demand.grabbing_thread = demand.grabbing_thread
                 self._images_demanders[demander_id][camera_id] = image_demand
+
+    @abstractmethod
+    def _set_overall_parameters(self) -> Tuple[bool, str]:
+        pass
 
     def set_image_parameters(self, func_input: FuncSetImageParametersInput) -> FuncSetImageParametersOutput:
         res, comments = self._set_image_parameters_device(func_input)

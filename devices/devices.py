@@ -754,7 +754,7 @@ class Service(Device):
                     comments = comments + com
 
             res = all(res)
-        except DeviceError as e:
+        except (DeviceError, Exception) as e:
             error_logger(self, self._set_parameters, e)
             res, comments = False, str(e)
         finally:

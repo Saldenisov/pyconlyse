@@ -60,7 +60,7 @@ class CameraCtrl_Basler(CameraController):
         pass
 
     @property
-    def cameras(self):
+    def cameras(self) -> Dict[int, CameraBasler]:
         return self.cameras_no_pylon
 
     @property
@@ -290,6 +290,60 @@ class CameraCtrl_Basler(CameraController):
             error_logger(self, self._read_image, e)
             return False, f'During _read_image {e}. Camera_id {camera.friendly_name}.'
 
+    def _set_overall_parameters(self) -> Tuple[bool, str]:
+        results, comments_ = [], ''
+        for camera_id, camera in self._hardware_devices.items():
+            packet_size = camera.parameters['Transport_Layer'].GevSCPSPacketSize
+            inter_packet_delay = camera.parameters['Transport_Layer'].GevSCPD
+            func_input: FuncSetTransportParametersInput = FuncSetTransportParametersInput(camera_id=camera_id,
+                                                                                          packet_size=packet_size,
+                                                                                          inter_packet_delay=inter_packet_delay)
+            res, comments = self._set_transport_parameters_device(func_input)
+            results.append(res)
+            if not res:
+                comments_ = f'{comments_}. {comments}'
+
+            exposure_time = camera.parameters['Acquisition_Controls'].ExposureTimeAbs
+            trigger_mode = strtobool(camera.parameters['Acquisition_Controls'].TriggerMode)
+            trigger_delay = camera.parameters['Acquisition_Controls'].TriggerDelayAbs
+            frame_rate = camera.parameters['Acquisition_Controls'].AcquisitionFrameRateAbs
+            trigger_source = camera.parameters['Acquisition_Controls'].TriggerSource
+
+            func_input: FuncSetSyncParametersInput = FuncSetSyncParametersInput(camera_id=camera_id,
+                                                                                exposure_time=exposure_time,
+                                                                                trigger_mode=trigger_mode,
+                                                                                trigger_delay=trigger_delay,
+                                                                                frame_rate=frame_rate,
+                                                                                trigger_source=trigger_source)
+            res, comments = self._set_sync_parameters_device(func_input)
+            results.append(res)
+            if not res:
+                comments_ = f'{comments_}. {comments}'
+
+            width = camera.parameters['AOI_Controls'].Width
+            height = camera.parameters['AOI_Controls'].Height
+            offset_x = camera.parameters['AOI_Controls'].OffsetX
+            offset_y = camera.parameters['AOI_Controls'].OffsetY
+            gain_mode = camera.parameters['Analog_Controls'].GainAuto
+            gain = camera.parameters['Analog_Controls'].GainRaw
+            blacklevel = camera.parameters['Analog_Controls'].BlackLevelRaw
+            balance_ratio = camera.parameters['Analog_Controls'].BalanceRatioRaw
+            pixel_format = camera.parameters['Image_Format_Control'].PixelFormat
+
+            func_input: FuncSetImageParametersInput = FuncSetImageParametersInput(camera_id=camera_id, width=width,
+                                                                                  height=height, offset_x=offset_x,
+                                                                                  offset_y=offset_y, gain_mode=gain_mode,
+                                                                                  gain=gain, blacklevel=blacklevel,
+                                                                                  balance_ratio=balance_ratio,
+                                                                                  pixel_format=pixel_format)
+
+            res, comments = self._set_image_parameters_device(func_input)
+            results.append(res)
+            if not res:
+                comments_ = f'{comments_}. {comments}'
+
+        return all(results), comments_
+
     def _set_analog_controls_db(self) -> Tuple[str, bool]:
         return self._set_db_attribute(Analog_Controls, self._set_analog_controls_db)
 
@@ -344,7 +398,7 @@ class CameraCtrl_Basler(CameraController):
         packet_size = func_input.packet_size
         inter_packet_delay = func_input.inter_packet_delay
         formed_parameters_dict = {'GevSCPSPacketSize': packet_size, 'GevSCPD': inter_packet_delay}
-        if self.device_status.active and camera.pylon_camera.IsOpen() and camera.status != 2:
+        if camera.pylon_camera.IsOpen() and camera.status != 2:
             try:
                 for param_name, param_value in formed_parameters_dict.items():
                     setattr(camera.pylon_camera, param_name, param_value)
@@ -383,7 +437,7 @@ class CameraCtrl_Basler(CameraController):
                                                   'BalanceRatioRaw': balance_ratio}
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
 
-        if self.device_status.active and camera.pylon_camera.IsOpen() and camera.status != 2:
+        if camera.pylon_camera.IsOpen() and camera.status != 2:
             try:
                 for param_name, param_value in {**formed_parameters_dict_AOI, **formed_parameters_dict_analog_controls,
                                                 **formed_parameters_dict_image_format}.items():
@@ -414,7 +468,7 @@ class CameraCtrl_Basler(CameraController):
                                   'TriggerDelayAbs': trigger_delay, 'ExposureTimeAbs': exposure_time,
                                   'AcquisitionFrameRateAbs': frame_rate, 'AcquisitionFrameRateEnable': True}
 
-        if self.device_status.active and camera.pylon_camera.IsOpen() and camera.status != 2:
+        if camera.pylon_camera.IsOpen() and camera.status != 2:
             try:
                 for param_name, param_value in formed_parameters_dict.items():
                     setattr(camera.pylon_camera, param_name, param_value)
