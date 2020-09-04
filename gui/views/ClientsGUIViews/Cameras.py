@@ -96,7 +96,7 @@ class CamerasView(QMainWindow):
 
         msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.device.server_id,
                                        forward_to=self.service_parameters.device_id,
-                                       func_input=FuncGetCameraControllerStateInput())
+                                       func_input=FuncGetControllerStateInput())
         self.device.send_msg_externally(msg)
 
         self._displacement = 0.5
@@ -260,15 +260,15 @@ class CamerasView(QMainWindow):
                             client = self.device
                             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                                       forward_to=self.service_parameters.device_id,
-                                                      func_input=FuncGetCameraControllerStateInput())
+                                                      func_input=FuncGetControllerStateInput())
                             client.send_msg_externally(msg)
                         self.controller_status.device_status = result.device_status
                     elif info.com == CameraController.ACTIVATE_CAMERA.name:
                         result: FuncActivateCameraOutput = result
                         self.controller_cameras = result.cameras
                     elif info.com == CameraController.GET_CONTROLLER_STATE.name:
-                        result: FuncGetCameraControllerStateOutput = result
-                        self.controller_cameras = result.cameras
+                        result: FuncGetControllerStateOutput = result
+                        self.controller_cameras = result.device_hardware
                         self.controller_status.device_status = result.device_status
                     elif info.com == CameraController.GET_IMAGES.name:
                         result: FuncGetImagesOutput = result
@@ -329,7 +329,7 @@ class CamerasView(QMainWindow):
                     client = self.device
                     msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                               forward_to=self.service_parameters.device_id,
-                                              func_input=FuncGetCameraControllerStateInput())
+                                              func_input=FuncGetControllerStateInput())
                     client.send_msg_externally(msg)
 
                 self.update_state()

@@ -75,14 +75,18 @@ class StpMtrController(Service):
         axis_id = func_input.axis_id
         flag = func_input.flag
         res, comments = self._check_axis_range(axis_id)
+
         if res:
+            axis = self.axes_stpmtr[axis_id]
             res, comments = self._change_axis_status(axis_id, flag)
-        essentials = self.axes_stpmtr_essentials
-        status = []
-        for key, axis in essentials.items():
-            status.append(essentials[key].status)
+        else:
+            axis = None
+            axis_id = None
+
+        status = [axis_l.status for axis_l in self.axes_stpmtr_essentials.values()]
         info = f'Axes status: {status}. {comments}'
-        return FuncActivateAxisOutput(axes=self.axes_stpmtr_essentials, comments=info, func_success=res)
+
+        return FuncActivateAxisOutput(axis_id=axis_id, axis=axis, comments=info, func_success=res)
 
     @property
     def axes_stpmtr(self) -> Dict[int, AxisStpMtr]:
@@ -153,10 +157,14 @@ class StpMtrController(Service):
 
     def get_pos_axis(self, func_input: FuncGetPosInput) -> FuncGetPosOutput:
         res, comments = self._check_axis(func_input.axis_id)
+        axis_id = func_input.axis_id
         if res:
-            res, comments = self._get_position_axis(func_input.axis_id)
-        position = self.axes_stpmtr[func_input.axis_id].position
-        return FuncGetPosOutput(axis_id=func_input.axis_id, position=position, comments=comments, func_success=res)
+            axis = self.axes_stpmtr[axis_id]
+            res, comments = self._get_position_axis(axis_id)
+        else:
+            axis = None
+            axis_id = None
+        return FuncGetPosOutput(axis_id=axis_id, axis=axis, comments=comments, func_success=res)
 
     @abstractmethod
     def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
@@ -172,25 +180,30 @@ class StpMtrController(Service):
         move_type = func_input.move_type
         if not move_type:
             move_type = self.axes_stpmtr[axis_id].basic_unit
+
         res, comments = self._check_axis(axis_id)
         if res:
             res, comments = self._check_move_type(axis_id, move_type)
+            axis = self.axes_stpmtr[axis_id]
+        else:
+            axis = None
+            axis_id = None
         if res:
-            if move_type != self.axes_stpmtr[axis_id].basic_unit:
+            if move_type != axis.basic_unit:
                 pos = self.axes_stpmtr[axis_id].convert_to_basic_unit(move_type, pos)
                 if isinstance(pos, tuple):
                     res, comments = pos
                     return FuncMoveAxisToOutput(axes=self.axes_stpmtr_essentials, comments=comments, func_success=res)
             if how == 'relative':
-                pos = self.axes_stpmtr[axis_id].position + pos
+                pos = axis.position + pos
             res, comments = self._is_within_limits(axis_id, pos)  # if not relative just set pos
         if res:
-            if self.axes_stpmtr[axis_id].status == 1:
+            if axis.status == 1:
                 res, comments = self._move_axis_to(axis_id, pos)
-            elif self.axes_stpmtr[axis_id].status == 2:
-                res, comments = False, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is running. ' \
-                                       f'Please, stop it before new request.'
-        return FuncMoveAxisToOutput(axis_id=axis_id, position=self.axes_stpmtr[axis_id].position, comments=comments,
+            elif axis.status == 2:
+                res, comments = False, f'Axis id={axis_id}, name={axis.name} is running. Please, stop it before ' \
+                                       f'new request.'
+        return FuncMoveAxisToOutput(axis_id=axis_id, axis=axis, comments=comments,
                                     func_success=res)
 
     @abstractmethod
@@ -223,7 +236,6 @@ class StpMtrController(Service):
             if c:
                 comments = f'{c}. {comments}'
         return all(res), comments
-
 
     @abstractmethod
     def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
@@ -271,9 +283,10 @@ class StpMtrController(Service):
             raise StpMtrError(self, text=f'move_parameters error during eval: {e}.')
 
     def set_pos_axis(self, func_input: FuncSetPosInput) -> FuncSetPosOutput:
-        res, comments = self._check_axis_range(func_input.axis_id)
+        axis_id = func_input.axis_id
+        res, comments = self._check_axis_range(axis_id)
         if res:
-            axis: AxisStpMtr = self.axes_stpmtr[func_input.axis_id]
+            axis: AxisStpMtr = self.axes_stpmtr[axis_id]
             if isinstance(func_input.pos_unit, MoveType):
                 pos = axis.convert_to_basic_unit(func_input.pos_unit, func_input.axis_pos)
             else:
@@ -282,8 +295,7 @@ class StpMtrController(Service):
             res, comments = self._set_pos_axis(func_input.axis_id, pos)
             if res:
                 self._write_positions_to_db(self._form_axes_positions())
-        return FuncSetPosOutput(comments=comments, func_success=res, axis_id=func_input.axis_id,
-                                position=axis.position)
+        return FuncSetPosOutput(comments=comments, func_success=res, axis_id=axis_id, axis=self.axes_stpmtr[axis_id])
 
     @abstractmethod
     def _set_pos_axis(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
@@ -293,15 +305,19 @@ class StpMtrController(Service):
         axis_id = func_input.axis_id
         res, comments = self._check_axis(axis_id)
         if res:
-            if self.axes_stpmtr[axis_id].status == 2:
+            axis = self.axes_stpmtr[axis_id]
+            if axis.status == 2:
                 res, comments = self._change_axis_status(axis_id, 1, force=True)
                 if res:
-                    comments = f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].friendly_name} was stopped by user.'
-            elif self.axes_stpmtr[axis_id].status == 1:
-                comments = f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].friendly_name} was already stopped.'
-            elif self.axes_stpmtr[axis_id].status == 0:
-                comments = f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].friendly_name} is not even active.'
-        return FuncStopAxisOutput(axes=self.axes_stpmtr_essentials, comments=comments, func_success=res)
+                    comments = f'Axis id={axis_id}, name={axis.friendly_name} was stopped by user.'
+            elif axis.status == 1:
+                comments = f'Axis id={axis_id}, name={axis.friendly_name} was already stopped.'
+            elif axis.status == 0:
+                comments = f'Axis id={axis_id}, name={axis.friendly_name} is not even active.'
+        else:
+            axis = None
+            axis_id = None
+        return FuncStopAxisOutput(axis_id=axis_id, axis=axis, comments=comments, func_success=res)
 
     def _write_positions_to_db(self, positions):
         # TODO: make it work

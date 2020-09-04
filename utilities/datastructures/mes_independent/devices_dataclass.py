@@ -248,6 +248,7 @@ class FuncGetControllerStateInput(FuncInput):
 
 @dataclass
 class FuncGetControllerStateOutput(FuncOutput):
+    device_hardware: Dict[int, HardwareDevice]
     device_status: DeviceStatus
     com: str = 'get_controller_state'
 

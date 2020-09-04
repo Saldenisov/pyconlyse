@@ -45,6 +45,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         super().__init__()
         Device.n_instance += 1
         self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
+        self.always_available_public_functions_names = list(cmd.name for cmd in self.always_available_public_functions())
         self.config = configurationSD(self)
         self.connections: Dict[DeviceId, Connection] = {}
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
@@ -143,6 +144,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
+        pass
+
+    @abstractmethod
+    def always_available_public_functions(self) -> Tuple[CmdStruct]:
         pass
 
     @abstractmethod
@@ -325,7 +330,18 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         error = False
         com: str = msg.info.com
         input: FuncInput = msg.info
+        do = False
         if com in self.available_public_functions_names and self.device_status.active:
+            do = True
+        elif com in self.always_available_public_functions_names:
+            do = True
+        elif com not in self.available_public_functions_names:
+            error = True
+            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+        elif not self.device_status.active:
+            error = True
+            comments = f'{self.id} is not active. Cannot execute command {com}.'
+        if do:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
             if func_input_type == type(input):
@@ -345,12 +361,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 error = True
                 comments = f'Device {self.id} function: execute_com: Input type: {type(input)} do not match to ' \
                            f'func_input type : {func_input_type}'
-        elif com not in self.available_public_functions_names:
-            error = True
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-        elif not self.device_status.active:
-            error = True
-            comments = f'{self.id} is not active. Cannot execute command {com}.'
         if error:
             if msg.forwarded_from != '':
                 forward_to = msg.forwarded_from
@@ -493,7 +503,10 @@ class Server(Device):
                                            device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return tuple([Server.ALIVE, Server.GET_AVAILABLE_SERVICES])
+        return self.always_available_public_functions()
+
+    def always_available_public_functions(self) -> Tuple[CmdStruct]:
+        return ([Server.ALIVE, Server.GET_AVAILABLE_SERVICES])
 
     def description(self) -> ServerDescription:
         parameters = self.get_parameters
@@ -545,6 +558,9 @@ class Client(Device):
         pass
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
+        return ()
+
+    def always_available_public_functions(self) -> Tuple[CmdStruct]:
         return ()
 
     def activate(self, flag: bool):
@@ -603,6 +619,9 @@ class Service(Device):
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
+        return self.always_available_public_functions()
+
+    def always_available_public_functions(self) -> Tuple[CmdStruct]:
         return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO, Service.POWER)
 
     @abstractmethod
@@ -668,7 +687,7 @@ class Service(Device):
         pass
 
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
-        return FuncGetStpMtrControllerStateOutput(devices=self.hardware_devices, device_status=self.device_status,
+        return FuncGetStpMtrControllerStateOutput(device_hardware=self.hardware_devices, device_status=self.device_status,
                                                   func_success=True, comments='')
 
     @abstractmethod

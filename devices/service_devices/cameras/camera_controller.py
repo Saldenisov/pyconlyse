@@ -120,16 +120,6 @@ class CameraController(Service):
     def _get_cameras_status(self) -> List[int]:
         pass
 
-    def get_controller_state(self, func_input: FuncGetCameraControllerStateInput) -> FuncGetControllerStateOutput:
-        """
-        State of controller is returned
-        :return:  FuncOutput
-        """
-        comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
-                   f'Cameras are {self._cameras_status}'
-        return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
-                                                  comments=comments, func_success=True)
-
     def get_images(self, func_input: FuncGetImagesInput) -> FuncGetImagesPrepared:
         camera_id = func_input.camera_id
         res, comments = self._check_camera_range(camera_id)

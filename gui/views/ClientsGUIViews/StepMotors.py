@@ -28,8 +28,8 @@ class StepMotorsView(QMainWindow):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
-        self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.axes,
-                                                           axes_previous=dict(service_parameters.device_description.axes),
+        self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.hardware_devices,
+                                                           axes_previous=dict(service_parameters.device_description.hardware_devices),
                                                            device_status=service_parameters.device_status,
                                                            device_status_previous=service_parameters.device_status)
         if not self.controller_status.start_stop:
@@ -63,7 +63,7 @@ class StepMotorsView(QMainWindow):
 
         msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.device.server_id,
                                        forward_to=self.service_parameters.device_id,
-                                       func_input=FuncGetStpMtrControllerStateInput())
+                                       func_input=FuncGetControllerStateInput())
         self.device.send_msg_externally(msg)
         info_msg(self, 'INITIALIZED')
 
@@ -105,7 +105,7 @@ class StepMotorsView(QMainWindow):
         except Exception as e:
             error_logger(self, self.controller_axes, e)
 
-    def get_pos(self, axis_id=None, with_return=False):
+    def get_pos_axis(self, axis_id=None, with_return=False):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_axis.value())
         client = self.device
@@ -175,7 +175,7 @@ class StepMotorsView(QMainWindow):
             self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
             self.controller_status.axes[axis_id].status = 2
             self.ui.progressBar_movement.setValue(0)
-            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos, delay=1, n_max=25,
+            self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=25,
                                         specific={'axis_id': axis_id, 'with_return': True})
             self._asked_status = 0
         except ValueError as e:
@@ -192,61 +192,54 @@ class StepMotorsView(QMainWindow):
                 com = msg.com
                 info: Union[DoneIt, MsgError] = msg.info
                 if com == MsgComInt.DONE_IT.msg_name:
-                    result: Union[FuncActivateOutput,
-                                  FuncActivateAxisOutput,
-                                  FuncGetStpMtrControllerStateOutput,
-                                  FuncMoveAxisToOutput,
-                                  FuncGetPosOutput,
-                                  FuncSetPosInput,
-                                  FuncStopAxisOutput,
-                                  FuncPowerOutput] = info
+                    result = info
                     self.ui.comments.setText(result.comments)
-                    if info.com == StpMtrController.ACTIVATE.name:
-                        result: FuncActivateOutput = result
-                        if result.device_status.active:
-                            client = self.device
-                            msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
-                                                      receiver_id=self.service_parameters.device_id,
-                                                      func_input=FuncGetStpMtrControllerStateInput())
-                            client.send_msg_externally(msg)
-                        self.controller_status.device_status = result.device_status
-                    elif info.com == StpMtrController.ACTIVATE_AXIS.name:
-                        result: FuncActivateAxisOutput = result
-                        self.controller_axes = result.axes
-                    elif info.com == StpMtrController.MOVE_AXIS_TO.name:
-                        result: FuncMoveAxisToOutput = result
-                        self.controller_axes = result.axes
-                        self._update_progessbar_pos(force=True)
-                    elif info.com == StpMtrController.GET_POS.name:
-                        result: FuncGetPosOutput = result
-                        self.controller_axes = result.axes
-                    elif info.com == StpMtrController.SET_POS.name:
-                        result: FuncSetPosOutput = result
-                        self.controller_axes = result.axes
-                    elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
-                        result: FuncGetStpMtrControllerStateOutput = result
-                        self.controller_axes = result.axes
-                        self.controller_status.device_status = result.device_status
-                        if not self.controller_status.start_stop:
-                            self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
-                    elif info.com == StpMtrController.STOP_AXIS.name:
-                        result: FuncStopAxisOutput = result
-                        self.controller_axes = result.axes
-                        self._update_progessbar_pos(force=True)
-                    elif info.com == StpMtrController.POWER.name:
-                        result: FuncPowerOutput = result
-                        self.controller_status.device_status = result.device_status
+                    if result.func_success:
+                        if info.com == StpMtrController.ACTIVATE.name:
+                            result: FuncActivateOutput = result
 
+                            if result.device_status.active:
+                                client = self.device
+                                msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
+                                                          receiver_id=self.service_parameters.device_id,
+                                                          func_input=FuncGetControllerStateInput())
+                                client.send_msg_externally(msg)
+                            self.controller_status.device_status = result.device_status
+                        elif info.com == StpMtrController.ACTIVATE_AXIS.name:
+                            result: FuncActivateAxisOutput = result
+                            self.controller_status.axes[result.axis_id] = result.axis
+                        elif info.com == StpMtrController.MOVE_AXIS_TO.name:
+                            result: FuncMoveAxisToOutput = result
+                            self.controller_status.axes[result.axis_id] = result.axis
+                            self._update_progessbar_pos(force=True)
+                        elif info.com == StpMtrController.GET_POS_AXIS.name:
+                            result: FuncGetPosOutput = result
+                            self.controller_status.axes[result.axis_id] = result.axis
+                        elif info.com == StpMtrController.SET_POS_AXIS.name:
+                            result: FuncSetPosOutput = result
+                            self.controller_status.axes[result.axis_id] = result.axis
+                        elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
+                            result: FuncGetControllerStateOutput = result
+                            self.controller_axes = result.device_hardware
+                            self.controller_status.device_status = result.device_status
+                            if not self.controller_status.start_stop:
+                                self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
+                        elif info.com == StpMtrController.STOP_AXIS.name:
+                            result: FuncStopAxisOutput = result
+                            self.controller_status[result.axis_id] = result.axis
+                            self._update_progessbar_pos(force=True)
+                        elif info.com == StpMtrController.POWER.name:
+                            result: FuncPowerOutput = result
+                            self.controller_status.device_status = result.device_status
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.comments.setText(info.comments)
                     client = self.device
                     msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
-                                              func_input=FuncGetStpMtrControllerStateInput())
+                                              func_input=FuncGetControllerStateInput())
                     client.send_msg_externally(msg)
-
                 self.update_state()
         except Exception as e:
-            error_logger(self, self.model_is_changed, e)
+            error_logger(self, self.model_is_changed, f'{e}:{msg}')
 
     def stop_axis(self):
         axis_id = int(self.ui.spinBox_axis.value())

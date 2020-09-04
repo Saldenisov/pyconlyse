@@ -167,7 +167,8 @@ class FuncActivateAxisInput(FuncInput):
 
 @dataclass
 class FuncActivateAxisOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
+    axis_id: int
+    axis: AxisStpMtr
     com: str = 'activate_axis'
 
 
@@ -190,7 +191,7 @@ class FuncGetPosInput(FuncInput):
 @dataclass
 class FuncGetPosOutput(FuncOutput):
     axis_id: int
-    position: float
+    axis: AxisStpMtr
     com: str = 'get_pos_axis'
 
 
@@ -206,7 +207,7 @@ class FuncMoveAxisToInput(FuncInput):
 @dataclass
 class FuncMoveAxisToOutput(FuncOutput):
     axis_id: int
-    position: float
+    axis: AxisStpMtr
     com: str = 'move_axis_to'
 
 
@@ -221,8 +222,7 @@ class FuncSetPosInput(FuncInput):
 @dataclass
 class FuncSetPosOutput(FuncOutput):
     axis_id: int
-    position: float
-    pos_unit: MoveType = None
+    axis: AxisStpMtr
     com: str = 'set_pos_axis'
 
 
@@ -234,5 +234,6 @@ class FuncStopAxisInput(FuncInput):
 
 @dataclass
 class FuncStopAxisOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
+    axis_id: int
+    axis: AxisStpMtr
     com: str = 'stop_axis'
