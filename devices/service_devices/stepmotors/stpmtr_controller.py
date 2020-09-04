@@ -92,6 +92,10 @@ class StpMtrController(Service):
     def axes_stpmtr(self) -> Dict[int, AxisStpMtr]:
         return self._hardware_devices
 
+    @property
+    def axes_stpmtr_ids(self) -> List[Union[int, str]]:
+        return [axis.device_id for axis in self.axes_stpmtr.values()]
+
     @axes_stpmtr.setter
     def axes_stpmtr(self, value):
         self._hardware_devices = value
@@ -169,6 +173,29 @@ class StpMtrController(Service):
     @abstractmethod
     def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
         pass
+
+    def _get_positions_file(self) -> Tuple[bool, str]:
+        with open(self._file_pos, 'r') as file_pos:
+            pos_s = file_pos.readline()
+        try:
+            pos = eval(pos_s)
+            if not isinstance(pos, dict):
+                error_logger(self, self._get_positions_file, StpMtrError(self, 'File does not have dict.'))
+                info_msg(self, 'INFO', f'Forming axes positions dict. Setting everything to zero.')
+                for axis in self.axes_stpmtr.values():
+                    axis.position = 0
+            else:
+                for device_id, value in pos.items():
+                    if device_id in self.axes_stpmtr_ids:
+                        if isinstance(value, int) or isinstance(value, float):
+                            self.axes_stpmtr[device_id].position = value
+                        else:
+                            self.axes_stpmtr[device_id].position = 0
+
+        except (SyntaxError, ValueError) as e:
+            error_logger(self, self._get_positions_file, f'{e}')
+        finally:
+            return True, ''
 
     def _form_axes_positions(self) -> Dict[Union[int, str], float]:
         return {axis.device_id: axis.position for axis in self.axes_stpmtr.values()}
@@ -294,7 +321,7 @@ class StpMtrController(Service):
                                         axes=self.axes_stpmtr_essentials)
             res, comments = self._set_pos_axis(func_input.axis_id, pos)
             if res:
-                self._write_positions_to_db(self._form_axes_positions())
+                self._write_positions_to_file(self._form_axes_positions())
         return FuncSetPosOutput(comments=comments, func_success=res, axis_id=axis_id, axis=self.axes_stpmtr[axis_id])
 
     @abstractmethod
@@ -319,9 +346,9 @@ class StpMtrController(Service):
             axis_id = None
         return FuncStopAxisOutput(axis_id=axis_id, axis=axis, comments=comments, func_success=res)
 
-    def _write_positions_to_db(self, positions):
-        # TODO: make it work
-        pass
+    def _write_positions_to_file(self, positions: Dict[Union[int, str], float]):
+        with open(self._file_pos, 'w') as opened_file:
+            opened_file.write(str(positions))
 
 
 class StpMtrError(BaseException):

@@ -36,9 +36,9 @@ class StpMtrCtrl_Standa(StpMtrController):
         res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
                                                                       ('move_parameters', 'move_parameters', dict),
                                                                       ('limits', 'limits', tuple),
-                                                                      ('preset_values', 'preset_values', tuple),
-                                                                      ('position', 'positions', float)],
-                                                          extra_func=[self._set_move_parameters_axes])
+                                                                      ('preset_values', 'preset_values', tuple)],
+                                                          extra_func=[self._get_positions_file,
+                                                                      self._set_move_parameters_axes])
 
         if not res:
             raise StpMtrError(self, comments)
@@ -228,7 +228,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_microsteps = pos.Position * axis.move_parameters['microsteps'] + pos.uPosition
             pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             axis.position = pos_basic_units
-            self._write_positions_to_db(positions=self._form_axes_positions())
+            self._write_positions_to_file(positions=self._form_axes_positions())
             return True, ''
         else:
             return self._standa_error(result, func=self._get_position_axis)
