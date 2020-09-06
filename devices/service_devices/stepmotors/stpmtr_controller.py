@@ -39,42 +39,10 @@ class StpMtrController(Service):
                                                        StpMtrController.MOVE_AXIS_TO, StpMtrController.SET_POS_AXIS,
                                                        StpMtrController.STOP_AXIS]
 
-    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        flag = func_input.flag
-        res, comments = self._check_if_active()
-        if res ^ flag:  # res XOR Flag
-            if flag:
-                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
-                if res:
-                    # parameters should be set from hardware controller if possible
-                    res, comments = self._set_parameters_main_devices(extra_func=[self._read_set_positions])
-                    if res:
-                        self.device_status.active = True
-            else:
-                results, comments_l = ([], [])
-
-                for axis_id, axis in self.axes_stpmtr.items():
-                    res, comments = self._change_axis_status(axis_id, 0)
-                    results.append(res)
-                    comments_l.append(comments)
-
-                if all(results):  # if all axis can be set to 0
-                    res, comments = self._connect(False)
-                else:
-                    res = False
-                    info = 'Cannot deactivate. '
-                    comments = ' '.join(comments_l)
-                    comments = info + comments
-                if res:
-                    self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
-        info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
-
     def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
         axis_id = func_input.axis_id
         flag = func_input.flag
-        res, comments = self._check_axis_range(axis_id)
+        res, comments = self._check_device_range(axis_id)
 
         if res:
             axis = self.axes_stpmtr[axis_id]
@@ -104,24 +72,13 @@ class StpMtrController(Service):
     def axes_stpmtr_essentials(self):
         return {axis_id: axis.short() for axis_id, axis in self.axes_stpmtr.items()}
 
-    def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
-            if flag:
-                res, comments = self._form_devices_list()
-            else:
-                res, comments = self._release_hardware()
-            self.device_status.connected = flag
-        else:
-            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
-        return res, comments
-
     def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
         """
         Checks if axis n is a valid axis for this controller and if it is active
         :param axis_id:
         :return: res, comments='' if True, else error_message
         """
-        res, comments = self._check_axis_range(axis_id)
+        res, comments = self._check_device_range(axis_id)
         if res:
             return self._check_axis_active(axis_id)
         else:
@@ -132,12 +89,6 @@ class StpMtrController(Service):
             return True, ''
         else:
             return False, f'Axis id={device_id}, name={self.axes_stpmtr[device_id].name} is not active.'
-
-    def _check_axis_range(self, axis_id: int) -> Tuple[bool, str]:
-        if axis_id in self.axes_stpmtr:
-            return True, ''
-        else:
-            return False, f'Axis id={axis_id} is out of range={self.axes_stpmtr.keys()}.'
 
     @abstractmethod
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
@@ -262,6 +213,9 @@ class StpMtrController(Service):
                        f'in the range {self.axes_stpmtr[axis_id].limits}'
             return False, comments
 
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        return self._read_set_positions()
+
     def _read_set_positions(self):
         res, comments = [], ''
         for axis in self.axes_stpmtr.values():
@@ -318,7 +272,7 @@ class StpMtrController(Service):
 
     def set_pos_axis(self, func_input: FuncSetPosInput) -> FuncSetPosOutput:
         axis_id = func_input.axis_id
-        res, comments = self._check_axis_range(axis_id)
+        res, comments = self._check_device_range(axis_id)
         if res:
             axis: AxisStpMtr = self.axes_stpmtr[axis_id]
             if isinstance(func_input.pos_unit, MoveType):

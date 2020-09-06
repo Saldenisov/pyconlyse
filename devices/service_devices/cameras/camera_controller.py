@@ -24,28 +24,10 @@ class CameraController(Service):
         self._hardware_devices: Dict[int, Camera] = HardwareDeviceDict()
         self._images_demanders: Dict[str, Dict[str, ImageDemand]] = {}
 
-    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        flag = func_input.flag
-        res, comments = self._check_if_active()
-        if res ^ flag:  # res XOR Flag
-            if flag:
-                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
-                if res:  # parameters should be set from hardware controller if possible
-                    res, comments = self._set_parameters_main_devices(extra_func=[self._set_overall_parameters])  # This must be realized for all controllers
-                    if res:
-                        self.device_status.active = True
-            else:
-                res, comments = self._connect(flag)
-                if res:
-                    self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
-        info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
-
     def activate_camera(self, func_input: FuncActivateCameraInput) -> FuncActivateCameraOutput:
         camera_id = func_input.camera_id
         flag = func_input.flag
-        res, comments = self._check_camera_range(camera_id)
+        res, comments = self._check_device_range(camera_id)
         if res:
             res, comments = self._check_controller_activity()
         if res:
@@ -68,23 +50,14 @@ class CameraController(Service):
 
     @property
     def cameras_essentials(self):
-        essentials = {}
-        for camera_id, camera in self._hardware_devices.items():
-            essentials[camera_id] = camera.short()
-        return essentials
+        return {camera_id: camera.short() for camera_id, camera in self._hardware_devices.items()}
 
     @property
     def _cameras_status(self) -> List[int]:
         return [camera.status for camera in self._hardware_devices.values()]
 
-    def _check_camera_range(self, camera_id):
-        if camera_id in self._hardware_devices.keys():
-            return True, ''
-        else:
-            return False, f'Camera id={camera_id} is out of range={self._hardware_devices.keys()}.'
-
     @abstractmethod
-    def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_camera_status(self, camera_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         pass
 
     @staticmethod
@@ -94,19 +67,6 @@ class CameraController(Service):
             return False, f'Wrong flag {flag} was passed. FLAGS={flags}.'
         else:
             return True, ''
-
-    @abstractmethod
-    def _connect(self, flag: bool) -> Tuple[bool, str]:
-        """
-        Connect/Disconnect to hardware controller
-        :param flag: True/False
-        :return: res, comments='' if True, else error_message
-        """
-        if self.device_status.power:
-            self.device_status.connected = flag
-            return True, ""
-        else:
-            return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
 
     @property
     @lru_cache(maxsize=10)
@@ -122,7 +82,7 @@ class CameraController(Service):
 
     def get_images(self, func_input: FuncGetImagesInput) -> FuncGetImagesPrepared:
         camera_id = func_input.camera_id
-        res, comments = self._check_camera_range(camera_id)
+        res, comments = self._check_device_range(camera_id)
         if res:
             res, comments = self._prepare_camera_reading(camera_id)
         if res:
@@ -167,9 +127,6 @@ class CameraController(Service):
                 image_demand.grabbing_thread = demand.grabbing_thread
                 self._images_demanders[demander_id][camera_id] = image_demand
 
-    @abstractmethod
-    def _set_overall_parameters(self) -> Tuple[bool, str]:
-        pass
 
     def set_image_parameters(self, func_input: FuncSetImageParametersInput) -> FuncSetImageParametersOutput:
         res, comments = self._set_image_parameters_device(func_input)
@@ -200,7 +157,7 @@ class CameraController(Service):
 
     def start_tracking(self, func_input: FuncStartTrackingInput) -> FuncStartTrackingPrepared:
         camera_id = func_input.camera_id
-        res, comments = self._check_camera_range(camera_id)
+        res, comments = self._check_device_range(camera_id)
         if res:
             res, comments = self._prepare_camera_reading(camera_id)
         if res:
@@ -211,7 +168,7 @@ class CameraController(Service):
 
     def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
         camera_id = func_input.camera_id
-        res, comments = self._check_camera_range(camera_id)
+        res, comments = self._check_device_range(camera_id)
         if res:
             res, comments = self._stop_acquisition(camera_id)
         return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera_id=camera_id)

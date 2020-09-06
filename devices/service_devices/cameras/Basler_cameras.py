@@ -27,6 +27,7 @@ class CameraCtrl_Basler(CameraController):
         super().__init__(**kwargs)
         self.tl_factory = None
         self.pylon_cameras = None
+        self._hardware_devices: Dict[int, CameraBasler] = HardwareDeviceDict()
 
         res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
                                                                       ('friendly_name', 'friendly_names', str),
@@ -40,18 +41,6 @@ class CameraCtrl_Basler(CameraController):
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise CameraError(self, comments)
-
-    def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
-            if flag:
-                res, comments = self._form_devices_list()
-            else:
-                res, comments = self._release_hardware()
-            self.device_status.connected = flag
-        else:
-            res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
-
-        return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super(CameraCtrl_Basler, self)._check_if_active()
@@ -71,7 +60,10 @@ class CameraCtrl_Basler(CameraController):
         return cameras
 
     def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._check_status_flag(flag)
+        # TODO: this function could be generalized for all types of controllers
+        res, comments = super()._check_device_range(camera_id)
+        if res:
+            res, comments = super()._check_status_flag(flag)
         if res:
             camera = self._hardware_devices[camera_id]
             if camera.status != flag:
@@ -290,8 +282,9 @@ class CameraCtrl_Basler(CameraController):
             error_logger(self, self._read_image, e)
             return False, f'During _read_image {e}. Camera_id {camera.friendly_name}.'
 
-    def _set_overall_parameters(self) -> Tuple[bool, str]:
-        results, comments_ = [], ''
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        res, comment = super()._set_parameters_after_connect()
+        results, comments_ = [res], comment
         for camera_id, camera in self._hardware_devices.items():
             packet_size = camera.parameters['Transport_Layer'].GevSCPSPacketSize
             inter_packet_delay = camera.parameters['Transport_Layer'].GevSCPD

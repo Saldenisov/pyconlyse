@@ -14,6 +14,8 @@ test_param = one_service
 def test_func_stpmtr(pdu: PDUController):
     pdu.start()
 
+    ACTIVATE = FuncActivateInput(flag=True)
 
+    res: FuncActivateOutput = pdu.activate(ACTIVATE)
 
     pdu.stop()

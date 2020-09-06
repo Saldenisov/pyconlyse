@@ -3,19 +3,20 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Tuple, Union, NewType, Set
 from pypylon import pylon
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput)
+from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
 @dataclass
-class PDU:
-    device_id: int
-
+class PDUOutputInfo:
+    id: Union[int, str]
     name: str
+    state: int
 
-    state: Dict[str, str]
-    status: int = 0
+
+@dataclass
+class PDU(HardwareDevice):
+    outputs_info: Dict[Union[int, str], PDUOutputInfo] = field(default_factory=dict)
 
     def short(self):
         d = {}
@@ -25,21 +26,29 @@ class PDU:
 
 
 @dataclass
+class PDUNetioOutput(PDUOutputInfo):
+    action: int
+    delay: int
+
+
+@dataclass
 class PDUNetio(PDU):
-    ip: str = ''
-    mac: str = ''
+    ip_address: str = ''
+    mac_address: str = ''
+    n_outputs: int = 0
+    authentication: Tuple[str] = field(default_factory=tuple)
 
 
 @dataclass
 class PDUEssentials:
     device_id: int
     name: str
-    state: Dict[str, str]
+    friendly_name: str
     status: int = 0
 
 
 @dataclass
-class PDUEssentialsNetio(PDUEssentials):
+class PDUNetioEssentials(PDUEssentials):
     ip: str = ''
     mac: str = ''
 
@@ -69,24 +78,28 @@ class FuncGetPDUControllerStateOutput(FuncGetControllerStateOutput):
 
 @dataclass
 class FuncGetPDUState(FuncInput):
-    pdu_id: Union[int, List[int]]
+    pdu_id: int
     com: str = 'get_pdu_state'
 
 
 @dataclass
 class FuncGetPDUStateOutput(FuncOutput):
-    pdus: Dict[int, PDUEssentials]
+    pdu_id: int
+    pdu_state: PDU
     com: str = 'get_pdu_state'
 
 
 @dataclass
 class FuncSetPDUState(FuncInput):
-    pdu_id: Union[int, List[int]]
-    state: Union[Dict[str, str], List[Dict[str, str]]]
+    pdu_id: int
+    pdu_output_id: Union[int, str]
+    output_info: PDUOutputInfo
     com: str = 'set_pdu_state'
 
 
 @dataclass
 class FuncSetPDUStateOutput(FuncOutput):
-    pdus: Dict[int, PDUEssentials]
+    pdu_id: int
+    pdu_output_id: Union[int, str]
+    output_info: PDUOutputInfo
     com: str = 'set_pdu_state'

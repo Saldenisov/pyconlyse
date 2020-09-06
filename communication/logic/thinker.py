@@ -117,13 +117,10 @@ class Thinker(ThinkerInter):
 
     def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
                        start_now=False, **kwargs):
-        # TODO: to complicated. Need to optimize.
         try:
-            if 'tick' in kwargs:
-                tick = kwargs['tick']
-            else:
-                tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
+            tick = kwargs['tick']
         except KeyError as e:
+            tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
             error_logger(self, self.register_event, f'{e}. Tick value is set to {tick}s')
         finally:
             print_every_n = int(self.parent.get_general_settings()['print_every_n'])
@@ -132,22 +129,23 @@ class Thinker(ThinkerInter):
                     external_name = name
                 if not event_id:
                     event_id = f'{external_name}:{self.parent.id}'
-                if original_owner == '':
+                if not original_owner:
                     original_owner = self.parent.id
-                self.events[event_id] = ThinkerEvent(name=name,
-                                                     external_name=external_name,
-                                                     parent=self,
-                                                     logic_func=logic_func,
-                                                     tick=tick,
-                                                     print_every_n=print_every_n,
-                                                     event_id=event_id,
-                                                     original_owner=original_owner)
-
+                    event = ThinkerEvent(name=name,
+                                         external_name=external_name,
+                                         parent=self,
+                                         logic_func=logic_func,
+                                         tick=tick,
+                                         print_every_n=print_every_n,
+                                         event_id=event_id,
+                                         original_owner=original_owner)
                 if start_now:
-                    self.events[event_id].start()
+                    event.start()
+
+                self.events[event_id] = event
 
             except ThinkerEventFuncError as e:
-                raise ThinkerEventError(str(e))
+                raise ThinkerEventError(e)
 
     @property
     def demands_waiting_reply(self) -> MsgDict:

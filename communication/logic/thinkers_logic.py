@@ -225,13 +225,15 @@ class ServiceCmdLogic(GeneralCmdLogic):
     pass
 
 
-class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
-    pass
-
-
 class CameraCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 
+
+class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
+
+class PDUCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
 
 class ProjectManagerServiceCmdLogic(ServiceCmdLogic):
     pass

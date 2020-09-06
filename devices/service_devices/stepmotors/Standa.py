@@ -223,11 +223,10 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
             for axis in self.axes_stpmtr.values():
-                info_msg(self, 'INFO', f'Settings names and positions.')
-                # Sometimes there is a neccesity to call stop function
+                # Sometimes there is a necessity to call stop function
                 # So we do it always for every axes
                 if axis.device_id_seq:
-                    self._stop_axis(axis.device_id_seq)
+                    self._change_axis_status(axis.device_id, flag=0, force=True)
                     arg = ctypes.byref(ctypes.cast(axis.device_id_seq, ctypes.POINTER(ctypes.c_int)))
                     result = self.lib.close_device(arg)
             return True, ''
@@ -235,7 +234,8 @@ class StpMtrCtrl_Standa(StpMtrController):
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
         finally:
-            sleep(1)
+            # Give time to DLL to do its job.
+            sleep(0.2)
 
     def _stop_axis(self, device_id: str) -> Tuple[bool, str]:
         result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_seq)

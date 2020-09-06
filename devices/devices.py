@@ -613,9 +613,23 @@ class Service(Device):
     def available_services(self) -> Dict[DeviceId, str]:
         pass
 
-    @abstractmethod
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        pass
+        flag = func_input.flag
+        res, comments = self._check_if_active()
+        if res ^ flag:  # res XOR Flag
+            if flag:
+                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
+                if res:  # parameters should be set from hardware controller if possible
+                    res, comments = self._set_parameters_main_devices(extra_func=[self._set_parameters_after_connect])  # This must be realized for all controllers
+                    if res:
+                        self.device_status.active = True
+            else:
+                res, comments = self._connect(flag)
+                if res:
+                    self.device_status.active = flag
+        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
+        info_msg(self, 'INFO', info)
+        return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
@@ -623,6 +637,12 @@ class Service(Device):
 
     def always_available_public_functions(self) -> Tuple[CmdStruct]:
         return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO, Service.POWER)
+
+    def _check_device_range(self, device_id):
+        if device_id in self._hardware_devices.keys():
+            return True, ''
+        else:
+            return False, f'Device id={device_id} is out of range={self._hardware_devices.keys()}.'
 
     @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:
@@ -636,7 +656,7 @@ class Service(Device):
         if self.device_status.active:
             return True, ''
         else:
-            return False, f'Controller is not active. Power is {self.device_status.power}'
+            return False, f'Controller is not active. Power is {self.device_status.power}.'
 
     @staticmethod
     @abstractmethod
@@ -651,9 +671,16 @@ class Service(Device):
         """
         return self.device_status.connected, ''
 
-    @abstractmethod
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        pass
+        if self.device_status.power:
+            if flag:
+                res, comments = self._form_devices_list()
+            else:
+                res, comments = self._release_hardware()
+            self.device_status.connected = flag
+        else:
+            res, comments = False, f'Power is off, cannot not call "connect(flag={flag})" controller.'
+        return res, comments
 
     def _get_hardware_devices_ids_db(self):
         try:
@@ -729,8 +756,6 @@ class Service(Device):
         return True, ''
 
     def _set_ids_devices(self):
-        """"
-        """
         if not self.device_status.connected:
             ids = self._get_hardware_devices_ids_db()
             for id_a, seq_id in zip(ids, range(1, self._hardware_devices_number + 1)):
@@ -793,6 +818,10 @@ class Service(Device):
 
         except KeyError:
             raise DeviceError(self, f'Parameter {parameter_name} could not be set, it is absent in the DB.')
+
+    @abstractmethod
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        return True, ''
 
     def send_status_pyqt(self):
         pass

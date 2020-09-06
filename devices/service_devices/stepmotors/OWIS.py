@@ -30,7 +30,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :param axis: 1-n
         :return: True/False, comments
         """
-        res, comments = self._check_axis_range(axis)
+        res, comments = self._check_device_range(axis)
         if res:
             res, comments = self._motor_init_ps90(1, axis)
             if res:
