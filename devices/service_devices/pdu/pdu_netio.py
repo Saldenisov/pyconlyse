@@ -84,7 +84,7 @@ class PDUCtrl_NETIO(PDUController):
 
     def _set_mac_addresses(self):
         for pdu_id, pdu in self.pdus.items():
-            res, com =self._send_request(pdu_id, {"Outputs": []})
+            res, com = self._send_request(pdu_id, {"Outputs": []})
             if isinstance(res, requests.Response):
                 if res.status_code == 200:
                     pdu.mac_address = res.json()['Agent']['MAC']

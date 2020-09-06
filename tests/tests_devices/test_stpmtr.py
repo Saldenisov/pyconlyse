@@ -142,7 +142,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert f'Axes status: {status}. ' in res.comments
     assert stpmtr.axes_stpmtr[first_axis].status == 1
 
-    # Test set_pos
+    # Test set_pos_axis
     pos_var = stpmtr.axes_stpmtr[1].position
     input = FuncSetPosInput(1, 100.50, MoveType.step)
     res: FuncSetPosOutput = stpmtr.set_pos_axis(input)
