@@ -131,14 +131,14 @@ class Thinker(ThinkerInter):
                     event_id = f'{external_name}:{self.parent.id}'
                 if not original_owner:
                     original_owner = self.parent.id
-                    event = ThinkerEvent(name=name,
-                                         external_name=external_name,
-                                         parent=self,
-                                         logic_func=logic_func,
-                                         tick=tick,
-                                         print_every_n=print_every_n,
-                                         event_id=event_id,
-                                         original_owner=original_owner)
+                event = ThinkerEvent(name=name,
+                                     external_name=external_name,
+                                     parent=self,
+                                     logic_func=logic_func,
+                                     tick=tick,
+                                     print_every_n=print_every_n,
+                                     event_id=event_id,
+                                     original_owner=original_owner)
                 if start_now:
                     event.start()
 
