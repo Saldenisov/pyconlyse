@@ -27,7 +27,6 @@ class MoveType(Enum):
 @dataclass(frozen=False)
 class AxisStpMtr(HardwareDevice):
     basic_unit: MoveType = MoveType.microstep
-    device_id_seq: int = None
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
     move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)
     # {'microsteps': 256, 'conversion_step_mm': 0.0025, 'basic_unit': 'angle' or 'step', 'mm'}
@@ -137,7 +136,7 @@ class AxisStpMtr(HardwareDevice):
 
 @dataclass(frozen=False)
 class StandaAxisStpMtr(AxisStpMtr):
-    pass
+    device_id_internal_seq: int = None
 
 
 @dataclass(frozen=False)
@@ -162,20 +161,6 @@ class StpMtrCtrlStatusMultiAxes:
     axes_previous: Dict[int, AxisStpMtrEssentials] = None
     device_status_previous: DeviceStatus = None
     start_stop: list = field(default_factory=list)
-
-
-@dataclass
-class FuncActivateAxisInput(FuncInput):
-    axis_id: int
-    flag: 1
-    com: str = 'activate_axis'
-
-
-@dataclass
-class FuncActivateAxisOutput(FuncOutput):
-    axis_id: int
-    axis: AxisStpMtr
-    com: str = 'activate_axis'
 
 
 @dataclass

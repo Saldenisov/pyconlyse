@@ -54,12 +54,9 @@ class CameraCtrl_Basler(CameraController):
 
     @property
     def cameras_no_pylon(self) -> Dict[int, CameraBasler]:
-        cameras = {}
-        for camera_id, camera in self._hardware_devices.items():
-            cameras[camera_id] = camera.no_pylon()
-        return cameras
+        return {camera.device_id_seq: camera.no_pylon() for camera in self._hardware_devices.values()}
 
-    def _change_camera_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_device_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
         # TODO: this function could be generalized for all types of controllers
         res, comments = super()._check_device_range(camera_id)
         if res:
@@ -94,7 +91,7 @@ class CameraCtrl_Basler(CameraController):
                                               f'{flag}. {info}'
                     except pylon.GenericException as e:
                         comments = f'Tried to open connection, but failed: {e}'
-                        error_logger(self, self._change_camera_status, comments)
+                        error_logger(self, self._change_device_status, comments)
                         return False, comments
             else:
                 res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}'
@@ -147,6 +144,8 @@ class CameraCtrl_Basler(CameraController):
             for device_id, camera_id in device_id_camera_id.items():
                 if device_id not in keep_camera:
                     del self._hardware_devices[camera_id]
+                else:
+                    self._hardware_devices[camera_id].device_id_seq = camera_id
             return True, ''
         except (genicam.GenericException, ValueError) as e:
             return False, f"An exception occurred during: {e}"
@@ -247,18 +246,22 @@ class CameraCtrl_Basler(CameraController):
             del self._images_demanders[demander_id][camera_id]
             if not self._images_demanders[demander_id]:
                 del self._images_demanders[demander_id]
-            self._change_camera_status(camera_id, flag=1, force=True)
+            self._change_device_status(camera_id, flag=1, force=True)
 
     @property
     def hardware_devices(self):
         return self.cameras
+
+    @property
+    def hardware_devices_essentials(self) -> Dict[int, HardwareDeviceEssentials]:
+        return super(CameraCtrl_Basler, self).hardware_devices_essentials()
 
     def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
         camera = self._hardware_devices[camera_id]
         if camera.status == 0:
             return False, f'Camera {camera_id} is closed. Activate the camera first to start grabbing.'
         elif camera.status == 1:
-            return self._change_camera_status(camera_id, 2)
+            return self._change_device_status(camera_id, 2)
         elif camera.status == 2:
             return True, 'Already grabbing.'
         else:
@@ -535,6 +538,6 @@ class CameraCtrl_Basler(CameraController):
 
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         try:
-            return self._change_camera_status(camera_id, 1, True)
+            return self._change_device_status(camera_id, 1, True)
         except pylon.GenericException as e:
             return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'

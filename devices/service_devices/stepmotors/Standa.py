@@ -43,7 +43,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         if not res:
             raise StpMtrError(self, comments)
 
-    def _change_axis_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
+    def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)
         if res:
             axis = self.axes_stpmtr[device_id]
@@ -116,35 +116,37 @@ class StpMtrCtrl_Standa(StpMtrController):
                 return None
 
             Oks = []
+
             for key in range(device_counts):
                 uri = self.lib.get_device_name(self._devenum, key)
                 device_id = search_id(self, uri)
                 if not device_id:
                     return False, f'Unknown uri {uri}. Check DB, modify or add.'
                 else:
-                    device_id_seq = self.lib.open_device(uri)
-                    self.axes_stpmtr[device_id].device_id_seq = device_id_seq
+                    axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
+                    device_id_internal_seq = self.lib.open_device(uri)
+                    axis.device_id_internal_seq = device_id_internal_seq
                     info_msg(self, 'INFO', f'Settings names and positions.')
-                    self.axes_stpmtr[device_id].name = uri.decode('utf-8')
+                    axis.name = uri.decode('utf-8')
                     # Sometimes there is a neccesity to call stop function
                     # So we do it always for every axes
                     self._stop_axis(device_id)
                     friendly_name = controller_name_t()
-                    result = self.lib.get_controller_name(device_id_seq, ctypes.byref(friendly_name))
+                    result = self.lib.get_controller_name(device_id_internal_seq, ctypes.byref(friendly_name))
                     if result == Result.Ok:
                         friendly_name = friendly_name.ControllerName
                         Oks.append(True)
                     else:
                         error_logger(self, self._form_devices_list, result)
                         comments = f'{comments}. friendly_name for {device_id} was not set.'
-                        friendly_name = f'Axis{device_id_seq}'.encode('utf-8')
-                    self.axes_stpmtr[device_id].friendly_name = friendly_name.decode('utf-8')
+                        friendly_name = f'Axis:{axis.name}:{axis.device_id}'.encode('utf-8')
+                    axis.friendly_name = friendly_name.decode('utf-8')
                     _,_ = self._get_position_axis(device_id)
 
             cleaned_axes = HardwareDeviceDict()
             i = 1
             for axis in self.axes_stpmtr.values():
-                if not axis.device_id_seq:
+                if not axis.device_id_internal_seq:
                     del self.axes_stpmtr[axis.device_id]
                 else:
                     cleaned_axes[i] = axis
@@ -166,23 +168,42 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _get_number_hardware_devices(self):
         return self.lib.get_device_count(self._devenum)
 
+    def _get_position_axis(self, device_id: str) -> Tuple[bool, int]:
+        """
+        Return position in microsteps for device_id. One full turn equals to 256 microsteps
+        :param device_id: corresponds to device_id of Standa controller
+        :return: Basic_units
+        """
+        pos = get_position_t()
+        axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
+        device_id_internal_seq = axis.device_id_internal_seq
+        result = self.lib.get_position(device_id_internal_seq, ctypes.byref(pos))
+        if result == Result.Ok:
+            pos_microsteps = pos.Position * axis.move_parameters['microsteps'] + pos.uPosition
+            pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
+            axis.position = pos_basic_units
+            self._write_positions_to_file(positions=self._form_axes_positions())
+            return True, ''
+        else:
+            return self._standa_error(result, func=self._get_position_axis)
+
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int]) -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(device_id, 2)
+        res, comments = self._change_device_status(device_id, 2)
         interrupted = False
         if res:
-            axis = self.axes_stpmtr[device_id]
+            axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
             microsteps_set = axis.move_parameters['microsteps']
             microsteps = int(go_pos % 1 * microsteps_set)
             steps = int(go_pos // 1)
-            device_id_seq = axis.device_id_seq
-            result = self.lib.command_move(device_id_seq, steps, microsteps)
+            device_id_internal_seq = axis.device_id_internal_seq
+            result = self.lib.command_move(device_id_internal_seq, steps, microsteps)
 
             if result == Result.Ok:
                 try:
                     await_time = axis.move_parameters['wait_to_complete']
                 except (KeyError, ValueError):
                     await_time = 5
-                result = self.lib.command_wait_for_stop(device_id_seq, await_time)
+                result = self.lib.command_wait_for_stop(device_id_internal_seq, await_time)
 
             if result != Result.Ok:
                 # TODO: fix that
@@ -198,36 +219,17 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = False, f'Movement of Axis with id={device_id} was interrupted'
 
             _, _ = self._get_position_axis(device_id)
-        self._change_axis_status(device_id, 1, True)
+        self._change_device_status(device_id, 1, True)
         return res, comments
-
-    def _get_position_axis(self, device_id: str) -> Tuple[bool, int]:
-        """
-        Return position in microsteps for device_id. One full turn equals to 256 microsteps
-        :param device_id: corresponds to device_id of Standa controller
-        :return: Basic_units
-        """
-        pos = get_position_t()
-        axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
-        device_id_seq = axis.device_id_seq
-        result = self.lib.get_position(device_id_seq, ctypes.byref(pos))
-        if result == Result.Ok:
-            pos_microsteps = pos.Position * axis.move_parameters['microsteps'] + pos.uPosition
-            pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
-            axis.position = pos_basic_units
-            self._write_positions_to_file(positions=self._form_axes_positions())
-            return True, ''
-        else:
-            return self._standa_error(result, func=self._get_position_axis)
 
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
             for axis in self.axes_stpmtr.values():
                 # Sometimes there is a necessity to call stop function
                 # So we do it always for every axes
-                if axis.device_id_seq:
-                    self._change_axis_status(axis.device_id, flag=0, force=True)
-                    arg = ctypes.byref(ctypes.cast(axis.device_id_seq, ctypes.POINTER(ctypes.c_int)))
+                if axis.device_id_internal_seq:
+                    self._change_device_status(axis.device_id, flag=0, force=True)
+                    arg = ctypes.byref(ctypes.cast(axis.device_id_internal_seq, ctypes.POINTER(ctypes.c_int)))
                     result = self.lib.close_device(arg)
             return True, ''
         except Exception as e:
@@ -238,7 +240,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             sleep(0.2)
 
     def _stop_axis(self, device_id: str) -> Tuple[bool, str]:
-        result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_seq)
+        result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_internal_seq)
         return self._standa_error(result)
 
     def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
@@ -252,10 +254,10 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_standa.uPosition = ctypes.c_int(pos_microsteps)
             pos_standa.EncPosition = ctypes.c_longlong(0)
             pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-            device_id_seq = ctypes.c_int(self.axes_stpmtr[device_id].device_id_seq)
+            device_id_internal_seq = ctypes.c_int(self.axes_stpmtr[device_id].device_id_internal_seq)
         except Exception as e:
             error_logger(self, self._set_pos, e)
-        result = self.lib.set_position(device_id_seq, ctypes.byref(pos_standa))
+        result = self.lib.set_position(device_id_internal_seq, ctypes.byref(pos_standa))
         _, _ = self._get_position_axis(device_id)
         return self._standa_error(result)
 

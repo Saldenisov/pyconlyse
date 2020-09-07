@@ -68,7 +68,7 @@ class CamerasView(QMainWindow):
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
 
-        self.ui.checkBox_On.clicked.connect(self.activate_camera)
+        self.ui.checkBox_On.clicked.connect(self.activate_device)
         self.ui.checkBox_power.clicked.connect(self.power)
         self.ui.checkBox_activate.clicked.connect(self.activate_controller)
         self.ui.spinBox_cameraID.valueChanged.connect(partial(self.update_state, *[True, False]))
@@ -192,12 +192,12 @@ class CamerasView(QMainWindow):
         client.send_msg_externally(msg)
         self._asked_status = 0
 
-    def activate_camera(self):
+    def activate_device(self):
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         client = self.device
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateCameraInput(camera_id=int(self.ui.spinBox_cameraID.value()),
+                                  func_input=FuncActivateDeviceInput(device_id=int(self.ui.spinBox_cameraID.value()),
                                                                      flag=flag))
         client.send_msg_externally(msg)
 
@@ -265,8 +265,8 @@ class CamerasView(QMainWindow):
                                                       func_input=FuncGetControllerStateInput())
                             client.send_msg_externally(msg)
                         self.controller_status.device_status = result.device_status
-                    elif info.com == CameraController.ACTIVATE_CAMERA.name:
-                        result: FuncActivateCameraOutput = result
+                    elif info.com == CameraController.ACTIVATE_DEVICE.name:
+                        result: FuncActivateDeviceOutput = result
                         self.controller_cameras = result.cameras
                     elif info.com == CameraController.GET_CONTROLLER_STATE.name:
                         result: FuncGetControllerStateOutput = result
@@ -356,7 +356,7 @@ class CamerasView(QMainWindow):
 
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                       forward_to=camera.stpmtr_ctrl_id,
-                                      func_input=FuncActivateAxisInput(axis_id=axis_id, flag=1))
+                                      func_input=FuncActivateDeviceInput(axis_id=axis_id, flag=1))
             client.send_msg_externally(msg)
             sleep(0.02)
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,

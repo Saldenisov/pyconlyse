@@ -53,7 +53,7 @@ class StepMotorsView(QMainWindow):
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.pushButton_set.clicked.connect(self.set_pos_axis)
-        self.ui.checkBox_On.clicked.connect(self.activate_axis)
+        self.ui.checkBox_On.clicked.connect(self.activate_device)
         self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, *[True, False]))
         self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
         self.ui.radioButton_mm.toggled.connect(self._update_lcd_screen)
@@ -76,15 +76,14 @@ class StepMotorsView(QMainWindow):
         client.send_msg_externally(msg)
         self._asked_status = 0
 
-    def activate_axis(self):
+    def activate_device(self):
         flag = 1 if self.ui.checkBox_On.isChecked() else 0
         client = self.device
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateAxisInput(axis_id=int(self.ui.spinBox_axis.value()),
-                                                                   flag=flag))
+                                  func_input=FuncActivateDeviceInput(device_id=int(self.ui.spinBox_axis.value()),
+                                                                     flag=flag))
         client.send_msg_externally(msg)
-
         self._asked_status = 0
 
     def closeEvent(self, event):
@@ -206,9 +205,9 @@ class StepMotorsView(QMainWindow):
                                                           func_input=FuncGetControllerStateInput())
                                 client.send_msg_externally(msg)
                             self.controller_status.device_status = result.device_status
-                        elif info.com == StpMtrController.ACTIVATE_AXIS.name:
-                            result: FuncActivateAxisOutput = result
-                            self.controller_status.axes[result.axis_id] = result.axis
+                        elif info.com == StpMtrController.ACTIVATE_DEVICE.name:
+                            result: FuncActivateDeviceInput = result
+                            self.controller_status.axes[result.device_id] = result.device
                         elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                             result: FuncMoveAxisToOutput = result
                             self.controller_status.axes[result.axis_id] = result.axis

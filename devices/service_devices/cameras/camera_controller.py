@@ -10,7 +10,6 @@ module_logger = logging.getLogger(__name__)
 
 
 class CameraController(Service):
-    ACTIVATE_CAMERA = CmdStruct(FuncActivateCameraInput, FuncActivateCameraOutput)
     GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput, FuncGetImagesPrepared)
     SET_IMAGE_PARAMETERS = CmdStruct(FuncSetImageParametersInput, FuncSetImageParametersOutput)
     SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetImageParametersOutput)
@@ -24,22 +23,8 @@ class CameraController(Service):
         self._hardware_devices: Dict[int, Camera] = HardwareDeviceDict()
         self._images_demanders: Dict[str, Dict[str, ImageDemand]] = {}
 
-    def activate_camera(self, func_input: FuncActivateCameraInput) -> FuncActivateCameraOutput:
-        camera_id = func_input.camera_id
-        flag = func_input.flag
-        res, comments = self._check_device_range(camera_id)
-        if res:
-            res, comments = self._check_controller_activity()
-        if res:
-            res, comments = self._change_camera_status(camera_id, flag)
-        essentials = self.cameras_essentials
-        status = [essentials[key].status for key, camera in essentials.items()]
-        info = f'Cameras status: {status}. {comments}'
-        info_msg(self, 'INFO', info)
-        return FuncActivateCameraOutput(cameras=self.cameras_essentials, comments=info, func_success=res)
-
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return [*super().available_public_functions(), CameraController.ACTIVATE_CAMERA, CameraController.GET_IMAGES,
+        return [*super().available_public_functions(), CameraController.GET_IMAGES,
                 CameraController.SET_IMAGE_PARAMETERS, CameraController.SET_SYNC_PARAMETERS,
                 CameraController.SET_TRANSPORT_PARAMETERS, CameraController.STOP_ACQUISITION]
 
@@ -55,10 +40,6 @@ class CameraController(Service):
     @property
     def _cameras_status(self) -> List[int]:
         return [camera.status for camera in self._hardware_devices.values()]
-
-    @abstractmethod
-    def _change_camera_status(self, camera_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
-        pass
 
     @staticmethod
     def _check_status_flag(flag: int):

@@ -48,16 +48,16 @@ def test_func_stpmtr(cameractrl: CameraController):
     assert res.func_success
     assert res.device_status.active
     # turn on first camera
-    res: FuncActivateCameraOutput = cameractrl.activate_camera(ACTIVATE_CAMERA_ONE)
+    res: FuncActivateDeviceOutput = cameractrl.activate_camera(ACTIVATE_CAMERA_ONE)
     assert res.func_success
     assert res.cameras[1].status == 1
     assert res.cameras[1].friendly_name == 'Camera1LaserSpot'
     # turn off first camera
-    res: FuncActivateCameraOutput = cameractrl.activate_camera(DEACTIVATE_CAMERA_ONE)
+    res: FuncActivateDeviceOutput = cameractrl.activate_camera(DEACTIVATE_CAMERA_ONE)
     assert res.func_success
     assert res.cameras[1].status == 0
     # turn on first camera
-    res: FuncActivateCameraOutput = cameractrl.activate_camera(ACTIVATE_CAMERA_ONE)
+    res: FuncActivateDeviceOutput = cameractrl.activate_camera(ACTIVATE_CAMERA_ONE)
     assert res.func_success
     assert res.cameras[1].status == 1
     # set transport settings for camera 1

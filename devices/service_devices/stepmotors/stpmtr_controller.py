@@ -18,7 +18,6 @@ class StpMtrController(Service):
     See Service for more functions
     These functions are default for any step motor controller, e.g.: A4098, OWIS, Standa
     """
-    ACTIVATE_AXIS = CmdStruct(FuncActivateAxisInput, FuncActivateAxisOutput)
     GET_POS_AXIS = CmdStruct(FuncGetPosInput, FuncGetPosOutput)
     SET_POS_AXIS = CmdStruct(FuncSetPosInput, FuncSetPosOutput)
     MOVE_AXIS_TO = CmdStruct(FuncMoveAxisToInput, FuncMoveAxisToOutput)
@@ -34,27 +33,10 @@ class StpMtrController(Service):
             file = open(self._file_pos, "w+")
             file.close()
 
-    def available_public_functions(self) -> List[CmdStruct]:
-        return [*super().available_public_functions(), StpMtrController.ACTIVATE_AXIS, StpMtrController.GET_POS_AXIS,
-                                                       StpMtrController.MOVE_AXIS_TO, StpMtrController.SET_POS_AXIS,
-                                                       StpMtrController.STOP_AXIS]
-
-    def activate_axis(self, func_input: FuncActivateAxisInput) -> FuncActivateAxisOutput:
-        axis_id = func_input.axis_id
-        flag = func_input.flag
-        res, comments = self._check_device_range(axis_id)
-
-        if res:
-            axis = self.axes_stpmtr[axis_id]
-            res, comments = self._change_axis_status(axis_id, flag)
-        else:
-            axis = None
-            axis_id = None
-
-        status = [axis_l.status for axis_l in self.axes_stpmtr_essentials.values()]
-        info = f'Axes status: {status}. {comments}'
-
-        return FuncActivateAxisOutput(axis_id=axis_id, axis=axis, comments=info, func_success=res)
+    def available_public_functions(self) -> Tuple[CmdStruct]:
+        return (*super().available_public_functions(), StpMtrController.GET_POS_AXIS, StpMtrController.MOVE_AXIS_TO,
+                                                       StpMtrController.SET_POS_AXIS,
+                                                       StpMtrController.STOP_AXIS)
 
     @property
     def axes_stpmtr(self) -> Dict[int, AxisStpMtr]:
@@ -89,18 +71,6 @@ class StpMtrController(Service):
             return True, ''
         else:
             return False, f'Axis id={device_id}, name={self.axes_stpmtr[device_id].name} is not active.'
-
-    @abstractmethod
-    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        """
-        Changes axis status on software/hardware level.
-        :param axis_id: 0-n
-        :param flag: 0, 1, 2
-        :param force: True/False is required to force axis status to be changed from 2 to 1 or 0 for controllers, which
-        do not support parallel axis moving
-        :return: res, comments='' if True, else error_message
-        """
-        pass
 
     @staticmethod
     def _check_status_flag(flag: int):
@@ -200,6 +170,10 @@ class StpMtrController(Service):
     def hardware_devices(self):
         return self.axes_stpmtr
 
+    @property
+    def hardware_devices_essentials(self) -> Dict[int, HardwareDeviceEssentials]:
+        return super(StpMtrController, self).hardware_devices_essentials()
+
     def _is_within_limits(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
         min_v, max_v = self.axes_stpmtr[axis_id].limits
         move_type = self.axes_stpmtr[axis_id].basic_unit
@@ -295,7 +269,7 @@ class StpMtrController(Service):
         if res:
             axis = self.axes_stpmtr[axis_id]
             if axis.status == 2:
-                res, comments = self._change_axis_status(axis_id, 1, force=True)
+                res, comments = self._change_device_status(axis_id, 1, force=True)
                 if res:
                     comments = f'Axis id={axis_id}, name={axis.friendly_name} was stopped by user.'
             elif axis.status == 1:

@@ -52,7 +52,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     def _check_if_connected(self) -> Tuple[bool, str]:
         return super()._check_if_connected()
 
-    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_device_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         def search(axes, status):
             for axis_id, axis in self.axes_stpmtr.items():
                 if axis.status == status:
@@ -87,6 +87,8 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         # A4988 chip does not have any means to communicate. Only pins of RPi3 or Rpi4 can be activated.
+        for axis_id, axis in self.axes_stpmtr.items():
+            axis.device_id_seq = axis_id
         return self._setup_pins()
 
     def _get_number_hardware_devices(self):

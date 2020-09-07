@@ -1,6 +1,6 @@
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
@@ -20,9 +20,18 @@ class DeviceParts(DataClass_frozen):
 @dataclass
 class HardwareDevice:
     device_id: int
+    device_id_seq: int = None
     name: str = ''
     friendly_name: str = ''
     status: int = 0  # 0, 1, 2
+
+    def short(self):
+        pass
+
+
+@dataclass
+class HardwareDeviceEssentials(HardwareDevice):
+    pass
 
 
 class HardwareDeviceDict(dict):
@@ -68,8 +77,12 @@ class HardwareDeviceDict(dict):
             return True
         else:
             if item in self.device_id:
-                return super().__contains__(self.device_id[item])
+                return True
+            else:
+                return False
 
+    def all_keys(self) -> Set[Any]:
+        return self.keys() | self.device_id.keys()
 
 @dataclass
 class DeviceStatus(DataClass_unfrozen):
@@ -214,6 +227,20 @@ class FuncActivateInput(FuncInput):
 class FuncActivateOutput(FuncOutput):
     device_status: DeviceStatus
     com: str = 'activate'
+
+
+@dataclass
+class FuncActivateDeviceInput(FuncInput):
+    device_id: int
+    flag: int
+    com: str = 'activate_device'
+
+
+@dataclass
+class FuncActivateDeviceOutput(FuncOutput):
+    device_id: int
+    device: HardwareDevice
+    com: str = 'activate_device'
 
 
 @dataclass

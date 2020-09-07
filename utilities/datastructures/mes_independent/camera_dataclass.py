@@ -97,19 +97,6 @@ class ImageDemand:
 
 
 @dataclass
-class FuncActivateCameraInput(FuncInput):
-    camera_id: int
-    flag: int
-    com: str = 'activate_camera'
-
-
-@dataclass
-class FuncActivateCameraOutput(FuncOutput):
-    cameras: Dict[int, CameraEssentials]
-    com: str = 'activate_camera'
-
-
-@dataclass
 class FuncGetCameraControllerStateInput(FuncGetControllerStateInput):
     pass
 

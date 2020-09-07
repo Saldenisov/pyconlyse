@@ -16,7 +16,7 @@ from utilities.database.tools import db_create_connection, db_execute_select
 from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
-from utilities.myfunc import info_msg, unique_id, error_logger
+from utilities.myfunc import info_msg, unique_id, error_logger, join_smart_comments
 from utilities.datastructures.mes_independent.devices_dataclass import HardwareDevice, HardwareDeviceDict
 from logs_pack import initialize_logger
 
@@ -585,6 +585,7 @@ class Client(Device):
 
 
 class Service(Device):
+    ACTIVATE_DEVICE = CmdStruct(FuncActivateDeviceInput, FuncActivateDeviceOutput)
     ACTIVATE = CmdStruct(FuncActivateInput, FuncActivateOutput)
     GET_CONTROLLER_STATE = CmdStruct(FuncGetControllerStateInput, FuncGetControllerStateOutput)
     SET_CONTROLLER_STATE = CmdStruct(None, None)  # TODO: finalize
@@ -627,22 +628,39 @@ class Service(Device):
                 res, comments = self._connect(flag)
                 if res:
                     self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
+        info = join_smart_comments(f'{self.id}:{self.name} active state is {self.device_status.active}', comments)
         info_msg(self, 'INFO', info)
         return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
+
+    def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
+        device_id = func_input.device_id
+        flag = func_input.flag
+        res, comments = self._check_device_range(device_id)
+        if res:
+            res, comments = self._check_controller_activity()
+        if res:
+            device = self.hardware_devices[device_id]
+            res, comments = self._change_device_status(device_id, flag)
+
+        status = dict(sorted({d.device_id_seq: d.status for d in self.hardware_devices.values()}.items()))
+
+        info = join_smart_comments(f'Controller status: {status}', comments)
+        info_msg(self, 'INFO', info)
+        return FuncActivateDeviceOutput(device_id=device_id, device=device, comments=info, func_success=res)
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return self.always_available_public_functions()
 
     def always_available_public_functions(self) -> Tuple[CmdStruct]:
-        return (Service.ACTIVATE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO, Service.POWER)
+        return (Service.ACTIVATE, Service.ACTIVATE_DEVICE, Service.GET_CONTROLLER_STATE, Service.SERVICE_INFO,
+                Service.POWER)
 
     def _check_device_range(self, device_id):
-        if device_id in self._hardware_devices.keys():
+        if device_id in self._hardware_devices:
             return True, ''
         else:
-            return False, f'Device id={device_id} is out of range={self._hardware_devices.keys()}.'
+            return False, f'Device id={device_id} is out of range={self._hardware_devices.all_keys()}.'
 
     @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:
@@ -657,6 +675,10 @@ class Service(Device):
             return True, ''
         else:
             return False, f'Controller is not active. Power is {self.device_status.power}.'
+
+    @abstractmethod
+    def _change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
+        return False, ''
 
     @staticmethod
     @abstractmethod
@@ -733,8 +755,13 @@ class Service(Device):
 
     @property
     @abstractmethod
-    def hardware_devices(self):
+    def hardware_devices(self) -> Dict[int, HardwareDevice]:
         return self._hardware_devices
+
+    @property
+    @abstractmethod
+    def hardware_devices_essentials(self) -> Dict[int, HardwareDeviceEssentials]:
+        return {device.device_id_seq: device.short() for device in self.hardware_devices.values()}
 
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
@@ -759,7 +786,7 @@ class Service(Device):
         if not self.device_status.connected:
             ids = self._get_hardware_devices_ids_db()
             for id_a, seq_id in zip(ids, range(1, self._hardware_devices_number + 1)):
-                self._hardware_devices[seq_id] = self._hardware_device_dataclass(device_id=id_a)
+                self._hardware_devices[seq_id] = self._hardware_device_dataclass(device_id=id_a, device_id_seq=seq_id)
 
     def _set_parameters_main_devices(self, parameters: List[Tuple[str, Any]] = None, extra_func: List[Callable] = None) -> Tuple[bool, str]:
         try:
@@ -776,7 +803,7 @@ class Service(Device):
                 for func in extra_func:
                     r, com = func()
                     res.append(r)
-                    comments = comments + com
+                    comments = join_smart_comments(comments, com)
 
             res = all(res)
         except (DeviceError, Exception) as e:

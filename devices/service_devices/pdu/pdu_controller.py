@@ -8,45 +8,44 @@ from devices.devices import Service
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.pdu_dataclass import *
 from utilities.errors.myexceptions import DeviceError
-from utilities.myfunc import error_logger, info_msg
+from utilities.myfunc import error_logger, info_msg, join_smart_comments
 
 module_logger = logging.getLogger(__name__)
 
 
 class PDUController(Service):
-    ACTIVATE_PDU = CmdStruct(FuncActivatePDUInput, FuncActivatePDUOutput)
-    GET_PDU_STATE = CmdStruct(FuncSetPDUState, FuncSetPDUStateOutput)
-    SET_PDU_STATE = CmdStruct(FuncSetPDUState, FuncSetPDUStateOutput)
+    GET_PDU_STATE = CmdStruct(FuncGetPDUStateInput, FuncGetPDUStateOutput)
+    SET_PDU_STATE = CmdStruct(FuncSetPDUStateInput, FuncSetPDUStateOutput)
 
     def __init__(self, **kwargs):
         kwargs['hardware_device_dataclass'] = kwargs['pdu_dataclass']
         super().__init__(**kwargs)
         self._hardware_devices: Dict[int, PDU] = HardwareDeviceDict()
 
-    def activate_pdu(self, func_input: FuncActivatePDUInput) -> FuncActivatePDUOutput:
-
-        return FuncActivatePDUOutput()
-
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return [*super().available_public_functions(), PDUController.ACTIVATE_PDU, PDUController.GET_PDU_STATE,
-                PDUController.SET_PDU_STATE]
+        return [*super().available_public_functions(), PDUController.GET_PDU_STATE, PDUController.SET_PDU_STATE]
+
+    def get_pdu_state(self, func_input: FuncGetPDUStateInput) -> FuncGetPDUStateOutput:
+        res, comments = self._check_device_range(func_input.pdu_id)
+        if res:
+            pdu = self.pdus[func_input.pdu_id]
+            res, comments = self._get_pdu_outputs(pdu.device_id)
+        else:
+            pdu = None
+        return FuncGetPDUStateOutput(func_success=res, comments=comments, pdu=pdu)
 
     @property
     @abstractmethod
     def pdus(self):
-        self._hardware_devices
+        return self._hardware_devices
 
     @property
     def pdus_essentials(self):
-        return {camera_id: camera.short() for camera_id, camera in self._hardware_devices.items()}
+        return {device.device_id_seq: device.short() for device in self.hardware_devices.values()}
 
     @property
     def _pdus_status(self) -> List[int]:
         return [pdu.status for pdu in self._hardware_devices.values()]
-
-    @abstractmethod
-    def _change_pdu_status(self, pdu_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
-        pass
 
     @staticmethod
     def _check_status_flag(flag: int):
@@ -59,6 +58,38 @@ class PDUController(Service):
     @property
     def hardware_devices(self):
         return self.pdus
+
+    @property
+    def hardware_devices_essentials(self) -> Dict[int, HardwareDeviceEssentials]:
+        return super(PDUController, self).hardware_devices_essentials()
+
+    def set_pdu_state(self, func_input: FuncSetPDUStateInput) -> FuncSetPDUStateOutput:
+        res, comments = self._check_device_range(func_input.pdu_id)
+        if res:
+            pdu = self.pdus[func_input.pdu_id]
+            res, comments = self._set_pdu_state(func_input)
+        else:
+            pdu = None
+        return FuncSetPDUStateOutput(func_success=res, comments=comments, pdu=pdu)
+
+    @abstractmethod
+    def _set_pdu_state(self, func_input: FuncSetPDUStateInput) -> Tuple[bool, str]:
+        return False, ''
+
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        return self._set_all_pdu_outputs()
+
+    def _set_all_pdu_outputs(self) -> Tuple[bool, str]:
+        results, comments = [], ''
+        for pdu in self.pdus.values():
+            res, com = self._get_pdu_outputs(pdu.device_id)
+            results.append(res)
+            comments = join_smart_comments(comments, com)
+        return all(results), comments
+
+    @abstractmethod
+    def _get_pdu_outputs(self, pdu_id: Union[int, str]) -> Tuple[bool, str]:
+        return False, ''
 
 
 class PDUError(BaseException):

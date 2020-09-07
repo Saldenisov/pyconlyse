@@ -8,7 +8,7 @@ from utilities.datastructures.mes_independent.general import FuncInput, FuncOutp
 
 
 @dataclass
-class PDUOutputInfo:
+class PDUOutput:
     id: Union[int, str]
     name: str
     state: int
@@ -16,7 +16,7 @@ class PDUOutputInfo:
 
 @dataclass
 class PDU(HardwareDevice):
-    outputs_info: Dict[Union[int, str], PDUOutputInfo] = field(default_factory=dict)
+    outputs: Dict[Union[int, str], PDUOutput] = field(default_factory=dict)
 
     def short(self):
         d = {}
@@ -26,7 +26,7 @@ class PDU(HardwareDevice):
 
 
 @dataclass
-class PDUNetioOutput(PDUOutputInfo):
+class PDUNetioOutput(PDUOutput):
     action: int
     delay: int
 
@@ -77,29 +77,26 @@ class FuncGetPDUControllerStateOutput(FuncGetControllerStateOutput):
 
 
 @dataclass
-class FuncGetPDUState(FuncInput):
+class FuncGetPDUStateInput(FuncInput):
     pdu_id: int
     com: str = 'get_pdu_state'
 
 
 @dataclass
 class FuncGetPDUStateOutput(FuncOutput):
-    pdu_id: int
-    pdu_state: PDU
+    pdu: PDU
     com: str = 'get_pdu_state'
 
 
 @dataclass
-class FuncSetPDUState(FuncInput):
+class FuncSetPDUStateInput(FuncInput):
     pdu_id: int
     pdu_output_id: Union[int, str]
-    output_info: PDUOutputInfo
+    output: PDUOutput
     com: str = 'set_pdu_state'
 
 
 @dataclass
 class FuncSetPDUStateOutput(FuncOutput):
-    pdu_id: int
-    pdu_output_id: Union[int, str]
-    output_info: PDUOutputInfo
+    pdu: PDU
     com: str = 'set_pdu_state'
