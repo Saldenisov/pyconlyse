@@ -198,7 +198,7 @@ class Messenger(MessengerInter):
     def pause(self):
         "put executation of thread on pause"
         self.paused = True
-        self.parent.device_status.messaging_paused = self.paused
+        self.parent.ctrl_status.messaging_paused = self.paused
         self.logger.info(f'{self.name} is paused')
         sleep(0.01)
 
@@ -207,8 +207,8 @@ class Messenger(MessengerInter):
         info_msg(self, 'STARTING')
         self.active = True
         self.paused = False
-        self.parent.device_status.messaging_on = self.active
-        self.parent.device_status.messaging_paused = self.paused
+        self.parent.ctrl_status.messaging_on = self.active
+        self.parent.ctrl_status.messaging_paused = self.paused
         # Start send loop here
         self._send_loop_logic(await_time=0.1 / 1000.)
         self._send_publisher_loop_logic(await_time=0.1 / 1000.)
@@ -258,8 +258,8 @@ class Messenger(MessengerInter):
         info_msg(self, 'STOPPING')
         self.active = False
         self.paused = True
-        self.parent.device_status.messaging_on = self.active
-        self.parent.device_status.messaging_paused = self.paused
+        self.parent.ctrl_status.messaging_on = self.active
+        self.parent.ctrl_status.messaging_paused = self.paused
         self._msg_out.clear()
 
     def subscribe_sub(self, address=None, filter_opt=b""):

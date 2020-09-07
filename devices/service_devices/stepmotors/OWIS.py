@@ -49,7 +49,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         return res, comments
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
+        if self.ctrl_status.power:
             if flag:
                 res, comments = self._connect_ps90(1, self._interface, self._port, self._baudrate)
                 if not res:
@@ -57,7 +57,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
             else:
                 res, comments = self._disconnect_ps90(1)
             if res:
-                self.device_status.connected = flag
+                self.ctrl_status.connected = flag
             return res, comments
         else:
             return False, f'Power is off, connect to controller function cannot be called with flag {flag}'
@@ -170,7 +170,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         self.i_know_how = {'mm': 1, 'steps': 0}
 
     def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        if not self.device_status.connected:
+        if not self.ctrl_status.connected:
             return super()._set_parameters(extra_func=[self._setup])
         else:
             return super()._set_parameters()

@@ -42,9 +42,9 @@ class ProjectManager_controller(Service):
 
     def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
         flag = func_input.flag
-        self.device_status.active = flag
+        self.ctrl_status.active = flag
         return FuncActivateOutput(comments=f'{self.name} active state is set to {flag}',
-                                  func_success=True, device_status=self.device_status)
+                                  func_success=True, device_status=self.ctrl_status)
 
     def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
         return (*super().available_public_functions(), ProjectManager_controller.GET_FILES,
@@ -83,7 +83,7 @@ class ProjectManager_controller(Service):
             operators_len = res
         conn.close()
         db_md5_checksum = file_md5(self.database_path)
-        return ProjectManagerControllerState(self.device_status, db_md5_checksum, files_len, operators_len, project_len)
+        return ProjectManagerControllerState(self.ctrl_status, db_md5_checksum, files_len, operators_len, project_len)
 
     def get_controller_state(self, func_input: FuncGetProjectManagerControllerStateInput) \
             -> FuncGetProjectManagerControllerStateOutput:
@@ -94,7 +94,7 @@ class ProjectManager_controller(Service):
         if file_md5(self.database_path) != self.state.db_md5_sum:
             self.state = self.get_state()
         return FuncGetProjectManagerControllerStateOutput(comments='', func_success=True,
-                                                          device_status=self.device_status,
+                                                          device_status=self.ctrl_status,
                                                           state=self.state)
 
     def get_file_description(self, func_input: FuncGetFileDescriptionInput) -> FuncGetFileDescriptionOutput:

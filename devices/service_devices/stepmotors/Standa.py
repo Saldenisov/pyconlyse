@@ -72,15 +72,15 @@ class StpMtrCtrl_Standa(StpMtrController):
         if self.axes_stpmtr:
             result = self.lib.get_status(list(self.axes_stpmtr.keys())[0], ctypes.byref(status))
             if result == Result.Ok:
-                self.device_status.connected = True
+                self.ctrl_status.connected = True
                 comments = ''
             else:
-                self.device_status.connected = False
+                self.ctrl_status.connected = False
                 comments = False, f'No connection with 8SMC5-USB {result}.'
         else:
-            self.device_status.connected = False
+            self.ctrl_status.connected = False
             comments = f'No connection with 8SMC5-USB, since there are not devices found.'
-        return self.device_status.connected, comments
+        return self.ctrl_status.connected, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         """

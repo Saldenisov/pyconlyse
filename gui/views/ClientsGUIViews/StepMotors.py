@@ -163,10 +163,11 @@ class StepMotorsView(DeviceControllerView):
         ui = self.ui
 
         if cs.devices != cs.devices_previous or force_device:
-            ui.label_ranges.setText(device.limits)
-            ui.label_preset.setText(device.preset_values)
+            ui.label_ranges.setText(str(device.limits))
+            ui.label_preset.setText(str(device.preset_values))
 
         if force_device:
+            # TODO: this is stange...strange activation of update_lcd_screen()
             if MoveType.step in device.type_move or MoveType.microstep in device.type_move:
                 ui.radioButton_stp.setEnabled(True)
                 ui.radioButton_stp.setChecked(True)
@@ -186,10 +187,11 @@ class StepMotorsView(DeviceControllerView):
                 ui.radioButton_mm.setEnabled(False)
 
         self._update_progressbar_pos(device)
-        self._update_lcd_screen(device)
+        self._update_lcd_screen()
 
-    def _update_lcd_screen(self, axis: AxisStpMtr):
+    def _update_lcd_screen(self):
         unit = self._get_unit()
+        axis: AxisStpMtr = self.device_ctrl_state.devices[self.ui.spinBox_device_id.value()]
         pos = axis.convert_pos_to_unit(unit)
         self.ui.lcdNumber_position.display(pos)
 

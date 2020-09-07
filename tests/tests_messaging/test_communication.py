@@ -60,17 +60,17 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #     sleep(5)
 #
 #     # Verify Server status
-#     #assert server.device_status.active
+#     #assert server.ctrl_status.active
 #     #assert stpmtr_emulate.id in server.services_running
 #     #assert superuser.id in server.clients_running
 #
 #     # Verify SuperUser status
-#     #assert superuser.device_status.active
+#     #assert superuser.ctrl_status.active
 #     #assert server.id in superuser.connections
 #
 #     # Verify Stpmtr_emulate
-#     #assert not stpmtr_emulate.device_status.power
-#     #assert not stpmtr_emulate.device_status.active
+#     #assert not stpmtr_emulate.ctrl_status.power
+#     #assert not stpmtr_emulate.ctrl_status.active
 #     #assert server.id in stpmtr_emulate.connections
 #
 #     # !SuperUser-Server-Stpmtr_emulate are connected!
@@ -151,19 +151,19 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #         msg_id, msg_send = next(iter(service.thinker.tasks_out_test.items()))
 #         del service.thinker.tasks_out_test[msg_id]
 #         assert msg_send.data.com == 'done_it'
-#         assert msg_send.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
+#         assert msg_send.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.ctrl_status.power}. '
 #                                                                     f'But remember, that user switches power manually...',
 #                                                             func_success=True,
-#                                                             device_status=service.device_status)
+#                                                             ctrl_status=service.ctrl_status)
 #     sleep(0.01)
 #     # checking what superuser recieves
 #     msg_id, msg_recieved = next(iter(superuser.thinker.tasks_in_test.items()))
 #     del superuser.thinker.tasks_in_test[msg_id]
 #     assert msg_recieved.data.com == 'done_it'
-#     assert msg_recieved.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.device_status.power}. '
+#     assert msg_recieved.data.service_info.result == FuncPowerOutput(comments=f'Power is {service.ctrl_status.power}. '
 #                                                                  f'But remember, that user switches power manually...',
 #                                                         func_success=True,
-#                                                         device_status=service.device_status)
+#                                                         ctrl_status=service.ctrl_status)
 #
 #     # superuser now asks all services ACTIVATE ON
 #     msg_ids = []
@@ -181,7 +181,7 @@ def test_server_stpmtr_superuser(server_test: Server, superuser_test: SuperUser,
 #         del service.thinker.tasks_out_test[msg_id]
 #         assert msg_send.data.com == 'done_it'
 #         assert msg_send.data.service_info.result.func_success == True
-#         assert msg_send.data.service_info.result.device_status == service.device_status
+#         assert msg_send.data.service_info.result.ctrl_status == service.ctrl_status
 #
 #     # Testing receiving
 #     # pyqtslot is connected

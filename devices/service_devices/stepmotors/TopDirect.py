@@ -38,7 +38,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         self._arduino_port = ''
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
+        if self.ctrl_status.power:
             if flag:
                 res, comments = self._find_arduino_check(self.get_parameters['arduino_serial_id'])
                 if res:
@@ -56,13 +56,13 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 self.arduino_serial = None
                 res, comments = True, ''
             if res:
-                self.device_status.connected = flag
+                self.ctrl_status.connected = flag
         else:
             res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
-        if self.device_status.connected:
+        if self.ctrl_status.connected:
             self._send_to_arduino(f'GET STATE')
             rcv = self._get_reply_from_arduino(True)
             if rcv[1] == 0:
@@ -277,7 +277,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return super()._set_parameters()
 
     def _send_to_arduino(self, cmd: str) -> Tuple[bool, str]:
-        if self.device_status.connected:
+        if self.ctrl_status.connected:
             self.arduino_serial.write(cmd.encode('utf-8'))
             sleep(0.1)
 

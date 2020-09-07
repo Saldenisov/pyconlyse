@@ -404,7 +404,7 @@ class CameraCtrl_Basler(CameraController):
                 return False, f'Error appeared: {e} when setting parameter "{param_name}" for camera with id ' \
                               f'{camera.device_id}.'
         else:
-            return False, f'Device_status: {self.device_status}, Basler_Camera with id {camera.device_id} connected ' \
+            return False, f'Device_status: {self.ctrl_status}, Basler_Camera with id {camera.device_id} connected ' \
                           f'{camera.pylon_camera.IsOpen()}'
 
     def _set_image_parameters_device(self, func_input: FuncSetImageParametersInput) -> Tuple[bool, str]:

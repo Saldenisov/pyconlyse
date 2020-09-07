@@ -25,10 +25,10 @@ def test_func_project_manager(project_manager: ProjectManager_controller):
 
     # Power TODO: to finilize
     res = pm.power(FuncPowerInput(True))
-    assert pm.device_status.power
+    assert pm.ctrl_status.power
     # Activate TODO: to finilize
     res = pm.activate(FuncActivateInput(True))
-    assert pm.device_status.active
+    assert pm.ctrl_status.active
 
     # Verify state of controller
     res: ProjectManagerControllerState = pm.state

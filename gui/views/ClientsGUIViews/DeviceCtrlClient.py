@@ -63,18 +63,18 @@ class DeviceControllerView(QMainWindow):
         client = self.superuser
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
-        client.send_msg(msg)
+                                  func_input=FuncActivateInput(flag=self.ui.checkBox_ctrl_activate.isChecked()))
+        self.send_msg(msg)
         self._asked_status = 0
 
     def activate_device(self):
-        flag = 1 if self.ui.checkBox_device_on.isChecked() else 0
-        client = self.device
+        flag = 1 if self.ui.checkBox_device_activate.isChecked() else 0
+        client = self.superuser
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateDeviceInput(device_id=int(self.ui.spinBox_device_id.value()),
+                                  func_input=FuncActivateDeviceInput(device_id=self.ui.spinBox_device_id.value(),
                                                                      flag=flag))
-        client.send_msg_externally(msg)
+        self.send_msg(msg)
         self._asked_status = 0
 
     def closeEvent(self, event):
@@ -113,8 +113,7 @@ class DeviceControllerView(QMainWindow):
                             self.device_ctrl_state.controller_status = result.controller_status
                         elif info.com == StpMtrController.POWER.name:
                             result: FuncPowerOutput = result
-                            self.device_ctrl_state.controller_status = result.co
-
+                            self.device_ctrl_state.controller_status = result.controller_status
                         func_local(info)
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.comments.setText(info.comments)
@@ -165,6 +164,6 @@ class DeviceControllerView(QMainWindow):
                 name = device.name
 
             ui.label_name.setText('name')
-            self.device_ctrl_state.axes_previous = copy.deepcopy(cs.axes)
+            self.device_ctrl_state.axes_previous = copy.deepcopy(device_state.devices)
         return device
 

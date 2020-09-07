@@ -49,7 +49,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.config = configurationSD(self)
         self.connections: Dict[DeviceId, Connection] = {}
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
-        self.device_status: DeviceControllerStatus = DeviceControllerStatus(*[False] * 5)
+        self.ctrl_status: DeviceControllerStatus = DeviceControllerStatus(*[False] * 5)
         self.db_path = db_path
         self.name: str = name
         self._main_executor = ThreadPoolExecutor(max_workers=100)
@@ -331,14 +331,14 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         com: str = msg.info.com
         input: FuncInput = msg.info
         do = False
-        if com in self.available_public_functions_names and self.device_status.active:
+        if com in self.available_public_functions_names and self.ctrl_status.active:
             do = True
         elif com in self.always_available_public_functions_names:
             do = True
         elif com not in self.available_public_functions_names:
             error = True
             comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
-        elif not self.device_status.active:
+        elif not self.ctrl_status.active:
             error = True
             comments = f'{self.id} is not active. Cannot execute command {com}.'
         if do:
@@ -386,7 +386,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def pause(self):
         self.thinker.pause()
         self.messenger.pause()
-        self.device_status.messaging_paused = True
+        self.ctrl_status.messaging_paused = True
         self.send_status_pyqt()
 
     @property
@@ -396,7 +396,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def unpause(self):
         self.messenger.unpause()
         self.thinker.unpause()
-        self.device_status.messaging_paused = False
+        self.ctrl_status.messaging_paused = False
         self.send_status_pyqt()
 
     def start(self):
@@ -436,8 +436,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.thinker.stop()
         self.messenger.stop()
         self.send_status_pyqt()
-        self.device_status.messaging_paused = False
-        self.device_status.messaging_on = False
+        self.ctrl_status.messaging_paused = False
+        self.ctrl_status.messaging_on = False
         info_msg(self, 'STOPPED')
 
     @abstractmethod
@@ -623,14 +623,14 @@ class Service(Device):
                 if res:  # parameters should be set from hardware controller if possible
                     res, comments = self._set_parameters_main_devices(extra_func=[self._set_parameters_after_connect])  # This must be realized for all controllers
                     if res:
-                        self.device_status.active = True
+                        self.ctrl_status.active = True
             else:
                 res, comments = self._connect(flag)
                 if res:
-                    self.device_status.active = flag
-        info = join_smart_comments(f'{self.id}:{self.name} active state is {self.device_status.active}', comments)
+                    self.ctrl_status.active = flag
+        info = join_smart_comments(f'{self.id}:{self.name} active state is {self.ctrl_status.active}', comments)
         info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
+        return FuncActivateOutput(comments=info, device_status=self.ctrl_status, func_success=res)
 
     def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
         device_id = func_input.device_id
@@ -668,13 +668,13 @@ class Service(Device):
         In real devices should ask hardware controller
         :return:
         """
-        return self.device_status.active, ''
+        return self.ctrl_status.active, ''
 
     def _check_controller_activity(self):
-        if self.device_status.active:
+        if self.ctrl_status.active:
             return True, ''
         else:
-            return False, f'Controller is not active. Power is {self.device_status.power}.'
+            return False, f'Controller is not active. Power is {self.ctrl_status.power}.'
 
     @abstractmethod
     def _change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
@@ -691,15 +691,15 @@ class Service(Device):
         In real devices should ask hardware controller
         :return:
         """
-        return self.device_status.connected, ''
+        return self.ctrl_status.connected, ''
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
+        if self.ctrl_status.power:
             if flag:
                 res, comments = self._form_devices_list()
             else:
                 res, comments = self._release_hardware()
-            self.device_status.connected = flag
+            self.ctrl_status.connected = flag
         else:
             res, comments = False, f'Power is off, cannot not call "connect(flag={flag})" controller.'
         return res, comments
@@ -736,8 +736,8 @@ class Service(Device):
         pass
 
     def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
-        return FuncGetControllerStateOutput(devices_hardware=self.hardware_devices, device_status=self.device_status,
-                                            func_success=True, comments='')
+        return FuncGetControllerStateOutput(devices_hardware=self.hardware_devices, func_success=True, comments='',
+                                            controller_status=self.ctrl_status)
 
     @abstractmethod
     def _get_number_hardware_devices(self):
@@ -766,24 +766,24 @@ class Service(Device):
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
         flag = func_input.flag
-        if self.device_status.power ^ flag:  # XOR
-            if not flag and self.device_status.active:
-                comments = f'Power is {self.device_status.power}. Cannot switch power off when device is activated.'
+        if self.ctrl_status.power ^ flag:  # XOR
+            if not flag and self.ctrl_status.active:
+                comments = f'Power is {self.ctrl_status.power}. Cannot switch power off when device is activated.'
                 res = False
             else:
-                self.device_status.power = flag
+                self.ctrl_status.power = flag
                 res = True
-                comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
+                comments = f'Power is {self.ctrl_status.power}. But remember, that user switches power manually...'
         else:
             res, comments = True, ''
-        return FuncPowerOutput(comments=comments, controller_status=self.device_status, func_success=res)
+        return FuncPowerOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
 
     @abstractmethod
     def _release_hardware(self) -> Tuple[bool, str]:
         return True, ''
 
     def _set_ids_devices(self):
-        if not self.device_status.connected:
+        if not self.ctrl_status.connected:
             ids = self._get_hardware_devices_ids_db()
             for id_a, seq_id in zip(ids, range(1, self._hardware_devices_number + 1)):
                 self._hardware_devices[seq_id] = self._hardware_device_dataclass(device_id=id_a, device_id_seq=seq_id)
@@ -810,7 +810,7 @@ class Service(Device):
             error_logger(self, self._set_parameters, e)
             res, comments = False, str(e)
         finally:
-            if self.device_status.connected and res:
+            if self.ctrl_status.connected and res:
                 self._parameters_set_hardware = True
             return res, comments
 
@@ -855,11 +855,11 @@ class Service(Device):
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
         service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
-                                     controller_status=self.device_status)
+                                     controller_status=self.ctrl_status)
         return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
 
     def _set_number_hardware_devices(self):
-        if self.device_status.connected:
+        if self.ctrl_status.connected:
             n = self._get_number_hardware_devices()
             if n != self._hardware_devices_number:
                 raise DeviceError(self, f'Number of hardware of device during activation of controller is not equal to '

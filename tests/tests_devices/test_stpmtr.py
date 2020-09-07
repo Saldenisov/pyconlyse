@@ -16,7 +16,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     test_comm_arduino = False
     if isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis) and test_comm_arduino:
         stpmtr: StpMtrCtrl_TopDirect_1axis = stpmtr
-        stpmtr.device_status.power = True
+        stpmtr.ctrl_status.power = True
         # checking messaging with Arduino
         res, comments = stpmtr._connect(True)
         if res:
@@ -181,8 +181,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # deactivate controller when all axis are not running
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert res.func_success
-    assert not stpmtr.device_status.active
-    assert not stpmtr.device_status.connected
+    assert not stpmtr.ctrl_status.active
+    assert not stpmtr.ctrl_status.connected
     # activate controller and activate axis 1, set it status to 2
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
@@ -190,9 +190,9 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # deactivate controller when Not all axis are not running
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert not res.func_success
-    assert stpmtr.device_status.active
-    assert stpmtr.device_status.connected
-    assert stpmtr.device_status.power
+    assert stpmtr.ctrl_status.active
+    assert stpmtr.ctrl_status.connected
+    assert stpmtr.ctrl_status.power
 
     # Test StopAxis function
     # axis 1 status has been set to 2 already.
