@@ -84,13 +84,26 @@ class HardwareDeviceDict(dict):
     def all_keys(self) -> Set[Any]:
         return self.keys() | self.device_id.keys()
 
+
 @dataclass
-class DeviceStatus(DataClass_unfrozen):
+class DeviceControllerStatus(DataClass_unfrozen):
     active: bool = False
     connected: bool = False
     messaging_on: bool = False
     messaging_paused: bool = False
     power: bool = False
+
+
+@dataclass
+class DeviceControllerState:
+    devices: Dict[int, HardwareDevice]
+    controller_status: DeviceControllerStatus
+    devices_previous: Dict[int, HardwareDevice] = None
+    controller_status_previous: DeviceControllerStatus = None
+
+    def __post_init__(self):
+        self.devices_previous = self.devices
+        self.controller_status_previous = self.controller_status
 
 
 @dataclass(frozen=True, order=True)
@@ -186,7 +199,7 @@ class DeviceInfoInt:
     active_connections: List[Tuple[DeviceId, DeviceType]]  # [(receiver_id, DeviceType), ...]
     available_public_functions: List[CmdStruct]
     device_id: str
-    device_status: DeviceStatus
+    device_status: DeviceControllerStatus
     device_description: Description
     events_running: List[str]  # event names
 
@@ -196,7 +209,7 @@ class DeviceInfoExt:
     #available_public_functions: List[CmdStruct]
     device_id: str
     device_description: Union[ServiceDescription, ClientDescription, ServerDescription]
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
 
 
 @dataclass(frozen=True, order=True)
@@ -225,7 +238,7 @@ class FuncActivateInput(FuncInput):
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
     com: str = 'activate'
 
 
@@ -238,7 +251,6 @@ class FuncActivateDeviceInput(FuncInput):
 
 @dataclass
 class FuncActivateDeviceOutput(FuncOutput):
-    device_id: int
     device: HardwareDevice
     com: str = 'activate_device'
 
@@ -276,7 +288,7 @@ class FuncGetControllerStateInput(FuncInput):
 @dataclass
 class FuncGetControllerStateOutput(FuncOutput):
     devices_hardware: Dict[int, HardwareDevice]
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
     com: str = 'get_controller_state'
 
 
@@ -288,7 +300,7 @@ class FuncPowerInput(FuncInput):
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
     com: str = 'power'
 
 

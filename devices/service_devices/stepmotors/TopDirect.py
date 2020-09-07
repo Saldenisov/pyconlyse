@@ -143,9 +143,9 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         """
         for pinfo in serial.tools.list_ports.comports():
             if pinfo.serial_number == serial_number:
-                res, comments = self._check_arduino_port(pinfo.device)
+                res, comments = self._check_arduino_port(pinfo.superuser)
                 if res:
-                    self._arduino_port = pinfo.device
+                    self._arduino_port = pinfo.superuser
                     return True, ''
                 else:
                     return False, f'Arduino with {serial_number} was found, but port check was not passed: {comments}.'

@@ -25,11 +25,28 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_activate">
+       <widget class="QCheckBox" name="checkBox_ctrl_activate">
         <property name="text">
          <string>Activate</string>
         </property>
        </widget>
+      </item>
+      <item>
+       <widget class="QCheckBox" name="checkBox_device_activate">
+        <property name="text">
+         <string>On</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_device_id">
+        <property name="text">
+         <string>PDU #</string>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QSpinBox" name="spinBox_device_id"/>
       </item>
       <item>
        <spacer name="horizontalSpacer">

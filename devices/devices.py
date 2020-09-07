@@ -49,7 +49,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.config = configurationSD(self)
         self.connections: Dict[DeviceId, Connection] = {}
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
-        self.device_status: DeviceStatus = DeviceStatus(*[False] * 5)
+        self.device_status: DeviceControllerStatus = DeviceControllerStatus(*[False] * 5)
         self.db_path = db_path
         self.name: str = name
         self._main_executor = ThreadPoolExecutor(max_workers=100)
@@ -257,7 +257,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     info = DeviceInfoInt(active_connections=self.active_connections(),
                                          available_public_functions=self.available_public_functions(),
                                          device_id=self.id,
-                                         device_status=self.device_status, device_description=self.description(),
+                                         device_status=self.controller_status, device_description=self.description(),
                                          events_running=list(self.thinker.events.name_id.keys()))
                 elif msg_com is MsgComExt.SHUTDOWN:
                     info = ShutDown(device_id=self.id, reason=kwargs['reason'])
@@ -470,7 +470,7 @@ class Server(Device):
         if 'db_command' not in kwargs:
             raise Exception('DB_command_type is not determined')
         super().__init__(**kwargs)
-        self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for server and it is active
+        self.device_status = DeviceControllerStatus(active=True, power=True)  # Power is always ON for server and it is active
 
     def are_you_alive(self, func_input: FuncAliveInput) -> FuncAliveOutput:
         event = self.thinker.events['heartbeat']
@@ -551,7 +551,7 @@ class Client(Device):
         kwargs['id'] = f'{id}::{randint(0, 10)}::{randint(0,10)}'
         super().__init__(**kwargs)
         self.server_id = self.get_settings('General')['server_id']
-        self.device_status = DeviceStatus(active=True, power=True)  # Power is always ON for client and it is active
+        self.device_status = DeviceControllerStatus(active=True, power=True)  # Power is always ON for client and it is active
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -646,7 +646,7 @@ class Service(Device):
 
         info = join_smart_comments(f'Controller status: {status}', comments)
         info_msg(self, 'INFO', info)
-        return FuncActivateDeviceOutput(device_id=device_id, device=device, comments=info, func_success=res)
+        return FuncActivateDeviceOutput(device=device, comments=info, func_success=res)
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
@@ -776,7 +776,7 @@ class Service(Device):
                 comments = f'Power is {self.device_status.power}. But remember, that user switches power manually...'
         else:
             res, comments = True, ''
-        return FuncPowerOutput(comments=comments, device_status=self.device_status, func_success=res)
+        return FuncPowerOutput(comments=comments, controller_status=self.device_status, func_success=res)
 
     @abstractmethod
     def _release_hardware(self) -> Tuple[bool, str]:
@@ -855,7 +855,7 @@ class Service(Device):
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
         service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
-                                     device_status=self.device_status)
+                                     controller_status=self.device_status)
         return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
 
     def _set_number_hardware_devices(self):

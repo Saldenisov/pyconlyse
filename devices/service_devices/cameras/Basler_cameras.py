@@ -447,7 +447,7 @@ class CameraCtrl_Basler(CameraController):
                 return False, f'Error appeared: {e} when setting parameter "{param_name}" for camera with id ' \
                               f'{camera.device_id}.'
         else:
-            return False, f'Device_status: {DeviceStatus}, Basler_Camera with id {camera.device_id} connected ' \
+            return False, f'Device_status: {DeviceControllerStatus}, Basler_Camera with id {camera.device_id} connected ' \
                           f'{camera.pylon_camera.IsOpen()}'
 
     def _set_sync_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
@@ -476,7 +476,7 @@ class CameraCtrl_Basler(CameraController):
                 return False, f'Error appeared: {e} when setting parameter "{param_name}" for camera with id ' \
                               f'{camera.device_id}.'
         else:
-            return False, f'Device_status: {DeviceStatus}, Basler_Camera with id {camera.device_id} connected ' \
+            return False, f'Device_status: {DeviceControllerStatus}, Basler_Camera with id {camera.device_id} connected ' \
                           f'{camera.pylon_camera.IsOpen()}'
 
     def _set_db_attribute(self, data_class, func) -> Tuple[str, bool]:

@@ -96,7 +96,7 @@ class StpMtrController(Service):
         else:
             axis = None
             axis_id = None
-        return FuncGetPosOutput(axis_id=axis_id, axis=axis, comments=comments, func_success=res)
+        return FuncGetPosOutput(axis=axis, comments=comments, func_success=res)
 
     @abstractmethod
     def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
@@ -158,8 +158,7 @@ class StpMtrController(Service):
             elif axis.status == 2:
                 res, comments = False, f'Axis id={axis_id}, name={axis.name} is running. Please, stop it before ' \
                                        f'new request.'
-        return FuncMoveAxisToOutput(axis_id=axis_id, axis=axis, comments=comments,
-                                    func_success=res)
+        return FuncMoveAxisToOutput(axis=axis, comments=comments, func_success=res)
 
     @abstractmethod
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int],
@@ -257,7 +256,7 @@ class StpMtrController(Service):
             res, comments = self._set_pos_axis(func_input.axis_id, pos)
             if res:
                 self._write_positions_to_file(self._form_axes_positions())
-        return FuncSetPosOutput(comments=comments, func_success=res, axis_id=axis_id, axis=self.axes_stpmtr[axis_id])
+        return FuncSetPosOutput(comments=comments, func_success=res, axis=axis)
 
     @abstractmethod
     def _set_pos_axis(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
@@ -278,8 +277,7 @@ class StpMtrController(Service):
                 comments = f'Axis id={axis_id}, name={axis.friendly_name} is not even active.'
         else:
             axis = None
-            axis_id = None
-        return FuncStopAxisOutput(axis_id=axis_id, axis=axis, comments=comments, func_success=res)
+        return FuncStopAxisOutput(axis=axis, comments=comments, func_success=res)
 
     def _write_positions_to_file(self, positions: Dict[Union[int, str], float]):
         with open(self._file_pos, 'w') as opened_file:

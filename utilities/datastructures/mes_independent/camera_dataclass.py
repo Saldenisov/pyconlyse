@@ -232,9 +232,9 @@ class FuncStopAcquisitionOutput(FuncOutput):
 @dataclass(order=True, frozen=False)
 class CtrlStatusMultiCameras:
     cameras: Dict[int, Union[Camera, CameraEssentials]]
-    device_status: DeviceStatus
+    device_status: DeviceControllerStatus
     cameras_previous: Dict[int, Camera] = None
-    device_status_previous: DeviceStatus = None
+    device_status_previous: DeviceControllerStatus = None
 
     def __post_init__(self):
         if not self.cameras_previous:

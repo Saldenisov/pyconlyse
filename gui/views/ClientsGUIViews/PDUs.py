@@ -29,8 +29,8 @@ class PDUsView(QMainWindow):
         self.controller = in_controller
         self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.hardware_devices,
                                                            axes_previous=dict(service_parameters.device_description.hardware_devices),
-                                                           device_status=service_parameters.device_status,
-                                                           device_status_previous=service_parameters.device_status)
+                                                           device_status=service_parameters.controller_status,
+                                                           device_status_previous=service_parameters.controller_status)
         if not self.controller_status.start_stop:
             self.controller_status.start_stop = {axis_id: [0, 0] for axis_id in self.controller_status.axes.keys()}
 
@@ -180,13 +180,13 @@ class PDUsView(QMainWindow):
                         if info.com == StpMtrController.ACTIVATE.name:
                             result: FuncActivateOutput = result
 
-                            if result.device_status.active:
+                            if result.controller_status.active:
                                 client = self.device
                                 msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
                                                           receiver_id=self.service_parameters.device_id,
                                                           func_input=FuncGetControllerStateInput())
                                 client.send_msg_externally(msg)
-                            self.controller_status.device_status = result.device_status
+                            self.controller_status.controller_status = result.controller_status
                         elif info.com == StpMtrController.ACTIVATE_AXIS.name:
                             result: FuncActivateAxisOutput = result
                             self.controller_status.axes[result.axis_id] = result.axis
@@ -203,12 +203,12 @@ class PDUsView(QMainWindow):
                         elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
                             result: FuncGetControllerStateOutput = result
                             self.controller_pdus = result.devices_hardware
-                            self.controller_status.device_status = result.device_status
+                            self.controller_status.controller_status = result.controller_status
                             if not self.controller_status.start_stop:
                                 self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
                         elif info.com == StpMtrController.POWER.name:
                             result: FuncPowerOutput = result
-                            self.controller_status.device_status = result.device_status
+                            self.controller_status.controller_status = result.controller_status
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.comments.setText(info.comments)
                     client = self.device
@@ -239,9 +239,9 @@ class PDUsView(QMainWindow):
             if force_axis:
                 pass
 
-            if cs.device_status != cs.device_status_previous or force_device:
-                ui.checkBox_power.setChecked(cs.device_status.power)
-                ui.checkBox_activate.setChecked(cs.device_status.active)
+            if cs.controller_status != cs.controller_status_previous or force_device:
+                ui.checkBox_power.setChecked(cs.controller_status.power)
+                ui.checkBox_activate.setChecked(cs.controller_status.active)
                 #ui.checkBox_On.setChecked(axis.status)
-                self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
+                self.controller_status.controller_status_previous = copy.deepcopy(self.controller_status.controller_status)
 

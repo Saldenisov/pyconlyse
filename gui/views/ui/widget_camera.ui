@@ -60,7 +60,7 @@
            </widget>
           </item>
           <item row="0" column="0">
-           <widget class="QLabel" name="label_cameraID">
+           <widget class="QLabel" name="label_device_id">
             <property name="text">
              <string>#ID</string>
             </property>
@@ -292,7 +292,7 @@
            </widget>
           </item>
           <item row="0" column="1">
-           <widget class="QSpinBox" name="spinBox_cameraID"/>
+           <widget class="QSpinBox" name="spinBox_device_id"/>
           </item>
           <item row="5" column="2">
            <widget class="QLabel" name="label_gainmode">
@@ -369,7 +369,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_activate">
+         <widget class="QCheckBox" name="checkBox_ctrl_activate">
           <property name="text">
            <string>Activate</string>
           </property>
@@ -383,7 +383,7 @@
          </widget>
         </item>
         <item>
-         <widget class="QCheckBox" name="checkBox_On">
+         <widget class="QCheckBox" name="checkBox_device_activate">
           <property name="text">
            <string>On</string>
           </property>

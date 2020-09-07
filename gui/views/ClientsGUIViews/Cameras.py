@@ -32,7 +32,7 @@ class CamerasView(QMainWindow):
         self._asked_status = 0
         self.controller = in_controller
         self.controller_status = CtrlStatusMultiCameras(cameras=service_parameters.device_description.hardware_devices,
-                                                        device_status=service_parameters.device_status)
+                                                        device_status=service_parameters.controller_status)
 
         self.name = f'CamerasClient:view: {service_parameters.device_id} {get_local_ip()}'
         self.logger = logging.getLogger("Cameras." + __name__)
@@ -258,20 +258,20 @@ class CamerasView(QMainWindow):
                     self.ui.textEdit_comments.setText(result.comments)
                     if info.com == CameraController.ACTIVATE.name:
                         result: FuncActivateOutput = result
-                        if result.device_status.active:
+                        if result.controller_status.active:
                             client = self.device
                             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                                       forward_to=self.service_parameters.device_id,
                                                       func_input=FuncGetControllerStateInput())
                             client.send_msg_externally(msg)
-                        self.controller_status.device_status = result.device_status
+                        self.controller_status.device_status = result.controller_status
                     elif info.com == CameraController.ACTIVATE_DEVICE.name:
                         result: FuncActivateDeviceOutput = result
                         self.controller_cameras = result.cameras
                     elif info.com == CameraController.GET_CONTROLLER_STATE.name:
                         result: FuncGetControllerStateOutput = result
                         self.controller_cameras = result.devices_hardware
-                        self.controller_status.device_status = result.device_status
+                        self.controller_status.device_status = result.controller_status
                     elif info.com == CameraController.GET_IMAGES.name:
                         result: FuncGetImagesOutput = result
                         if result.func_success:
@@ -325,7 +325,7 @@ class CamerasView(QMainWindow):
                                                               f'was not stopped. {result.comments}')
                     elif info.com == CameraController.POWER.name:
                         result: FuncPowerOutput = result
-                        self.controller_status.device_status = result.device_status
+                        self.controller_status.device_status = result.controller_status
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.textEdit_comments.setText(info.comments)
                     client = self.device

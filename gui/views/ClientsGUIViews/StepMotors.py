@@ -8,8 +8,8 @@ import logging
 from _functools import partial
 
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMainWindow, QErrorMessage
-
+from PyQt5.QtWidgets import QErrorMessage
+from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from communication.messaging.messages import MsgComExt, MsgComInt, MessageInt
 from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
@@ -22,109 +22,65 @@ from utilities.myfunc import info_msg, get_local_ip, error_logger
 module_logger = logging.getLogger(__name__)
 
 
-class StepMotorsView(QMainWindow):
+class StepMotorsView(DeviceControllerView):
 
-    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
-        super().__init__(parent)
-        self._asked_status = 0
-        self.controller = in_controller
-        self.controller_status = StpMtrCtrlStatusMultiAxes(axes=service_parameters.device_description.hardware_devices,
-                                                           axes_previous=dict(service_parameters.device_description.hardware_devices),
-                                                           device_status=service_parameters.device_status,
-                                                           device_status_previous=service_parameters.device_status)
-        if not self.controller_status.start_stop:
-            self.controller_status.start_stop = {axis_id: [0, 0] for axis_id in self.controller_status.axes.keys()}
-
-        self.name = f'StepMotorsClient:view: {service_parameters.device_id} {get_local_ip()}'
-        self.logger = logging.getLogger("StepMotors." + __name__)
-        info_msg(self, 'INITIALIZING')
-        self.model = in_model
-        self.device: Device = self.model.superuser
-        self.service_parameters: DeviceInfoExt = service_parameters
-
-        self.ui = Ui_StpMtrGUI()
-        self.ui.setupUi(self, service_parameters)
-        self.setWindowTitle(service_parameters.device_description.GUI_title)
-
-        self.model.add_observer(self)
-        self.model.model_changed.connect(self.model_is_changed)
-        self.ui.checkBox_activate.clicked.connect(self.activate_controller)
-        self.ui.checkBox_power.clicked.connect(self.power)
-        self.ui.pushButton_move.clicked.connect(self.move_axis)
-        self.ui.pushButton_stop.clicked.connect(self.stop_axis)
-        self.ui.pushButton_set.clicked.connect(self.set_pos_axis)
-        self.ui.checkBox_On.clicked.connect(self.activate_device)
-        self.ui.spinBox_axis.valueChanged.connect(partial(self.update_state, *[True, False]))
-        self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
-        self.ui.radioButton_mm.toggled.connect(self._update_lcd_screen)
-        self.ui.radioButton_angle.toggled.connect(self._update_lcd_screen)
-        self.ui.closeEvent = self.closeEvent
-
-        self.update_state(force_axis=True, force_device=True)
-
-        msg = self.device.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.device.server_id,
-                                       forward_to=self.service_parameters.device_id,
-                                       func_input=FuncGetControllerStateInput())
-        self.device.send_msg_externally(msg)
-        info_msg(self, 'INITIALIZED')
-
-    def activate_controller(self):
-        client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateInput(flag=self.ui.checkBox_activate.isChecked()))
-        client.send_msg_externally(msg)
-        self._asked_status = 0
-
-    def activate_device(self):
-        flag = 1 if self.ui.checkBox_On.isChecked() else 0
-        client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateDeviceInput(device_id=int(self.ui.spinBox_axis.value()),
-                                                                     flag=flag))
-        client.send_msg_externally(msg)
-        self._asked_status = 0
-
-    def closeEvent(self, event):
-        self.controller.quit_clicked(event)
+    def __init__(self, **kwargs):
+        kwargs['ui_class'] = Ui_StpMtrGUI
+        super().__init__(**kwargs)
 
     @property
     def controller_axes(self):
-        return self.controller_status.axes
+        return self.device_ctrl_state.devices
 
     @controller_axes.setter
-    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr]]):
+    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr],
+                                           AxisStpMtr, AxisStpMtrEssentials]):
         try:
-            if type(next(iter(value.values()))) == AxisStpMtr:
-                self.controller_status.axes = value
+            if isinstance(value, dict):
+                if isinstance(next(iter(value.values())), AxisStpMtr):
+                    self.device_ctrl_state.devices = value
+                else:
+                    for axis_id, axis in value.items():
+                        self.device_ctrl_state.devices[axis_id].status = axis.status
+                        self.device_ctrl_state.devices[axis_id].position = axis.position
+            elif isinstance(value, AxisStpMtr):
+                self.device_ctrl_state.devices[value.device_id_seq] = value
+            elif isinstance(value, AxisStpMtrEssentials):
+                self.device_ctrl_state.devices[value.device_id_seq].status = value.status
+                self.device_ctrl_state.devices[value.device_id_seq].position = value.position
             else:
-                for axis_id, axis in value.items():
-                    self.controller_status.axes[axis_id].status = axis.status
-                    self.controller_status.axes[axis_id].position = axis.position
+                raise Exception(f'Unknown value type: {type(value)}.')
         except Exception as e:
             error_logger(self, self.controller_axes, e)
 
+    def extra_ui_init(self):
+        self.ui.pushButton_move.clicked.connect(self.move_axis)
+        self.ui.pushButton_stop.clicked.connect(self.stop_axis)
+        self.ui.pushButton_set.clicked.connect(self.set_pos_axis)
+        self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
+        self.ui.radioButton_mm.toggled.connect(self._update_lcd_screen)
+        self.ui.radioButton_angle.toggled.connect(self._update_lcd_screen)
+
     def get_pos_axis(self, axis_id=None, with_return=False):
         if axis_id is None:
-            axis_id = int(self.ui.spinBox_axis.value())
-        client = self.device
+            axis_id = int(self.ui.spinBox_device_id.value())
+        client = self.superuser
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetPosInput(axis_id))
-        client.send_msg_externally(msg)
+        self.send_msg(msg)
         if with_return:
-            return True if self.controller_status.axes[axis_id].status == 2 else False
+            return True if self.device_ctrl_state.devices[axis_id].status == 2 else False
 
     def set_pos_axis(self, axis_id=None):
-        axis_id = int(self.ui.spinBox_axis.value())
+        axis_id = int(self.ui.spinBox_device_id.value())
         try:
             axis_pos = float(self.ui.lineEdit_value.text())
-            client = self.device
+            client = self.superuser
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                       forward_to=self.service_parameters.device_id,
                                       func_input=FuncSetPosInput(axis_id, axis_pos, self._get_unit()))
-            client.send_msg_externally(msg)
+            self.send_msg(msg)
         except TypeError as e:
             comments = f'Pos "{self.ui.lineEdit_value.text()}" has wrong format: {e}.'
             error_logger(self, self.set_pos_axis, comments)
@@ -133,47 +89,22 @@ class StepMotorsView(QMainWindow):
             error_dialog.exec_()
 
     def move_axis(self):
-        def convert_pos(pos: str) -> Union[microstep, mm, None]:
-            try:
-                pos = float(pos)
-                return mm(pos)
-            except ValueError:
-                pos = pos.split(' ')
-                if len(pos) == 2:
-                    try:
-                        steps_to_go = int(pos[0])
-                        microsteps_to_go = int(pos[1])
-                        if self.controller_status.microsteps:
-                            microsteps = int(self.controller_status.microsteps)
-                            if microsteps_to_go > microsteps:
-                                steps_to_go += microsteps_to_go // microsteps
-                                microsteps_to_go = microsteps_to_go % microsteps
-                            return microstep((steps_to_go, microsteps_to_go))
-                        else:
-                            raise ValueError(f'Could not convert Pos "{pos}" to steps and microsteps. '
-                                             f'Microcontroller works with mm only.')
-                    except ValueError:
-                        raise ValueError(f'Could not convert Pos "{pos}" to steps and microsteps.')
-                else:
-                    raise ValueError(f'The structure of move command:  "value in mm" or '
-                                     f'"value in steps" "value in microsteps."')
-
         if self.ui.radioButton_absolute.isChecked():
             how = absolute.__name__
         else:
             how = relative.__name__
-        axis_id = int(self.ui.spinBox_axis.value())
+        axis_id = int(self.ui.spinBox_device_id.value())
         try:
             pos = float(self.ui.lineEdit_value.text())
-            client = self.device
+            client = self.superuser
             msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                       forward_to=self.service_parameters.device_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how,
                                                                      move_type=self._get_unit()))
-            client.send_msg_externally(msg)
+            self.send_msg(msg)
 
-            self.controller_status.start_stop[axis_id] = [self.controller_status.axes[axis_id].position, pos]
-            self.controller_status.axes[axis_id].status = 2
+            self.device_ctrl_state.start_stop[axis_id] = [self.device_ctrl_state.axes[axis_id].position, pos]
+            self.device_ctrl_state.devices[axis_id].status = 2
             self.ui.progressBar_movement.setValue(0)
             self.device.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=25,
                                         specific={'axis_id': axis_id, 'with_return': True})
@@ -186,78 +117,36 @@ class StepMotorsView(QMainWindow):
             error_dialog.exec_()
 
     def model_is_changed(self, msg: MessageInt):
-        try:
-            if self.service_parameters.device_id == msg.forwarded_from or \
-                    self.service_parameters.device_id == msg.sender_id:
-                com = msg.com
-                info: Union[DoneIt, MsgError] = msg.info
-                if com == MsgComInt.DONE_IT.msg_name:
-                    result = info
-                    self.ui.comments.setText(result.comments)
-                    if result.func_success:
-                        if info.com == StpMtrController.ACTIVATE.name:
-                            result: FuncActivateOutput = result
+        def func_local(info: Union[DoneIt]):
+            result = info
+            if info.com == StpMtrController.MOVE_AXIS_TO.name:
+                result: FuncMoveAxisToOutput = result
+                self.controller_axes = result.axis
+                self._update_progressbar_pos(force=True)
+            elif info.com == StpMtrController.GET_POS_AXIS.name:
+                result: FuncGetPosOutput = result
+                self.controller_axes = result.axis
+            elif info.com == StpMtrController.SET_POS_AXIS.name:
+                result: FuncSetPosOutput = result
+                self.controller_axes = result.axis
+            elif info.com == StpMtrController.STOP_AXIS.name:
+                result: FuncStopAxisOutput = result
+                self.controller_axes = result.axis
+                self._update_progressbar_pos(force=True)
 
-                            if result.device_status.active:
-                                client = self.device
-                                msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
-                                                          receiver_id=self.service_parameters.device_id,
-                                                          func_input=FuncGetControllerStateInput())
-                                client.send_msg_externally(msg)
-                            self.controller_status.device_status = result.device_status
-                        elif info.com == StpMtrController.ACTIVATE_DEVICE.name:
-                            result: FuncActivateDeviceInput = result
-                            self.controller_status.axes[result.device_id] = result.device
-                        elif info.com == StpMtrController.MOVE_AXIS_TO.name:
-                            result: FuncMoveAxisToOutput = result
-                            self.controller_status.axes[result.axis_id] = result.axis
-                            self._update_progessbar_pos(force=True)
-                        elif info.com == StpMtrController.GET_POS_AXIS.name:
-                            result: FuncGetPosOutput = result
-                            self.controller_status.axes[result.axis_id] = result.axis
-                        elif info.com == StpMtrController.SET_POS_AXIS.name:
-                            result: FuncSetPosOutput = result
-                            self.controller_status.axes[result.axis_id] = result.axis
-                        elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
-                            result: FuncGetControllerStateOutput = result
-                            self.controller_axes = result.devices_hardware
-                            self.controller_status.device_status = result.device_status
-                            if not self.controller_status.start_stop:
-                                self.controller_status.start_stop = [[0.0, 0.0]] * len(self.controller_status.axes)
-                        elif info.com == StpMtrController.STOP_AXIS.name:
-                            result: FuncStopAxisOutput = result
-                            self.controller_status[result.axis_id] = result.axis
-                            self._update_progessbar_pos(force=True)
-                        elif info.com == StpMtrController.POWER.name:
-                            result: FuncPowerOutput = result
-                            self.controller_status.device_status = result.device_status
-                elif com == MsgComInt.ERROR.msg_name:
-                    self.ui.comments.setText(info.comments)
-                    client = self.device
-                    msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
-                                              func_input=FuncGetControllerStateInput())
-                    client.send_msg_externally(msg)
-                self.update_state()
-        except Exception as e:
-            error_logger(self, self.model_is_changed, f'{e}:{msg}')
+        super(StepMotorsView, self).model_is_changed(msg, func_local=func_local)
 
     def stop_axis(self):
-        axis_id = int(self.ui.spinBox_axis.value())
-        client = self.device
+        axis_id = int(self.ui.spinBox_device_id.value())
+        client = self.superuser
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncStopAxisInput(axis_id=axis_id))
-        client.send_msg_externally(msg)
+        self.send_msg(msg)
         self._asked_status = 0
 
-    def power(self):
-        client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
-                                  func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
-        client.send_msg_externally(msg)
-
-    def update_state(self, force_axis=False, force_device=False):
+    def update_state(self, force_device=True, force_ctrl=True):
+        device: AxisStpMtr = super(StepMotorsView, self).update_state(force_device, force_ctrl)
 
         def form_ranges(ranges: List) -> str:
             out_l = []
@@ -270,78 +159,48 @@ class StepMotorsView(QMainWindow):
                     out_l.append(val)
             return '_'.join(out_l)
 
-        cs = self.controller_status
+        cs = self.device_ctrl_state
         ui = self.ui
 
-        if cs.axes != cs.axes_previous or force_axis:
-            axis_ids = list(cs.axes)
-            ui.spinBox_axis.setMinimum(min(axis_ids))
-            ui.spinBox_axis.setMaximum(max(axis_ids))
-            if ui.spinBox_axis.value() not in axis_ids:
-                ui.spinBox_axis.setValue(min(axis_ids))
-            axis_id = int(ui.spinBox_axis.value())
+        if cs.devices != cs.devices_previous or force_device:
+            ui.label_ranges.setText(device.limits)
+            ui.label_preset.setText(device.preset_values)
 
-            axis: AxisStpMtrEssentials = cs.axes[axis_id]
-            ui.checkBox_On.setChecked(axis.status)
-            _translate = QtCore.QCoreApplication.translate
-            ui.label.setText(_translate("StpMtrGUI", "axis ID"))
-            if axis.friendly_name != '':
-                name = axis.friendly_name
+        if force_device:
+            if MoveType.step in device.type_move or MoveType.microstep in device.type_move:
+                ui.radioButton_stp.setEnabled(True)
+                ui.radioButton_stp.setChecked(True)
             else:
-                name = axis.name
+                ui.radioButton_stp.setEnabled(False)
 
-            ui.label_name.setText(_translate("StpMtrGUI", name))
-            ui.label_ranges.setText(_translate("StpMtrGUI", form_ranges(axis.limits)))
-            ui.label_preset.setText(_translate("StpMtrGUI", form_ranges(axis.preset_values)))
+            if MoveType.angle in device.type_move:
+                ui.radioButton_angle.setEnabled(True)
+                ui.radioButton_angle.setChecked(True)
+            else:
+                ui.radioButton_angle.setEnabled(False)
 
-            self.controller_status.axes_previous = copy.deepcopy(cs.axes)
+            if MoveType.mm in device.type_move:
+                ui.radioButton_mm.setEnabled(True)
+                ui.radioButton_mm.setChecked(True)
+            else:
+                ui.radioButton_mm.setEnabled(False)
 
-            if force_axis:
-                if MoveType.step in axis.type_move or MoveType.microstep in axis.type_move:
-                    ui.radioButton_stp.setEnabled(True)
-                    ui.radioButton_stp.setChecked(True)
-                else:
-                    ui.radioButton_stp.setEnabled(False)
+        self._update_progressbar_pos(device)
+        self._update_lcd_screen(device)
 
-                if MoveType.angle in axis.type_move:
-                    ui.radioButton_angle.setEnabled(True)
-                    ui.radioButton_angle.setChecked(True)
-                else:
-                    ui.radioButton_angle.setEnabled(False)
-
-                if MoveType.mm in axis.type_move:
-                    ui.radioButton_mm.setEnabled(True)
-                    ui.radioButton_mm.setChecked(True)
-                else:
-                    ui.radioButton_mm.setEnabled(False)
-
-
-            self._update_progessbar_pos()
-            self._update_lcd_screen()
-
-            if cs.device_status != cs.device_status_previous or force_device:
-                ui.checkBox_power.setChecked(cs.device_status.power)
-                ui.checkBox_activate.setChecked(cs.device_status.active)
-                ui.checkBox_On.setChecked(axis.status)
-                self.controller_status.device_status_previous = copy.deepcopy(self.controller_status.device_status)
-
-    def _update_lcd_screen(self):
-        axis_id = int(self.ui.spinBox_axis.value())
-        axis: AxisStpMtr = self.controller_status.axes[axis_id]
+    def _update_lcd_screen(self, axis: AxisStpMtr):
         unit = self._get_unit()
         pos = axis.convert_pos_to_unit(unit)
         self.ui.lcdNumber_position.display(pos)
 
-    def _update_progessbar_pos(self, force=False):
-        axis_id = int(self.ui.spinBox_axis.value())
-        axis = self.controller_status.axes[axis_id]
+    def _update_progressbar_pos(self, axis: AxisStpMtr, force=False):
         try:
             pos = axis.convert_pos_to_unit(self._get_unit())
         except KeyError:
             pos = axis.position
-        if (self.controller_status.axes[axis_id].status == 2 or force) and self.ui.spinBox_axis.value() == axis_id:
-            start = self.controller_status.start_stop[axis_id][0]
-            stop = self.controller_status.start_stop[axis_id][1]
+        if (axis.status == 2 or force) and self.ui.spinBox_device_id.value() == axis.device_id_seq:
+            start = axis.start_stop[axis.device_id_seq][0]
+            stop = axis.start_stop[axis.device_id_seq][1]
             if (stop-start) != 0:
                 per = int((pos - start) / (stop - start) * 100.0)
                 self.ui.progressBar_movement.setValue(per)
@@ -353,5 +212,5 @@ class StepMotorsView(QMainWindow):
         for rb, unit in rb_dict.items():
             if rb.isChecked():
                 return unit
-        axis = self.controller_status.axes[int(self.ui.spinBox_axis.value())]
+        axis = self.device_ctrl_state.devices[int(self.ui.spinBox_device_id.value())]
         return axis.basic_unit

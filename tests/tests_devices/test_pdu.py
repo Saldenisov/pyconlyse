@@ -24,23 +24,23 @@ def test_func_stpmtr(pdu: PDUController):
     # Power on
     res: FuncPowerOutput = pdu.power(POWER_ON)
     assert res.func_success
-    assert res.device_status.power
+    assert res.controller_status.power
     # Activate
     res: FuncActivateOutput = pdu.activate(ACTIVATE)
     assert res.func_success
-    assert res.device_status.active
+    assert res.controller_status.active
     # Deactivate
     res: FuncActivateOutput = pdu.activate(DEACTIVATE)
     assert res.func_success
-    assert not res.device_status.active
+    assert not res.controller_status.active
     # Activate
     res: FuncActivateOutput = pdu.activate(ACTIVATE)
     assert res.func_success
-    assert res.device_status.active
+    assert res.controller_status.active
     # Power off when active
     res: FuncPowerOutput = pdu.power(POWER_OFF)
     assert not res.func_success
-    assert res.device_status.power
+    assert res.controller_status.power
     # Activate PDU number 4
     res: FuncActivateDeviceOutput = pdu.activate_device(ACTIVATE_DEVICE_FOUR)
     assert res.func_success

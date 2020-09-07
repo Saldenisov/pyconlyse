@@ -73,7 +73,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncPowerOutput = stpmtr.power(POWER_ON)
     assert type(res) == FuncPowerOutput
     assert res.func_success
-    assert res.device_status.power
+    assert res.controller_status.power
     # power off when device is active
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert res.func_success
@@ -86,7 +86,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert type(res) == FuncActivateOutput
     assert res.func_success
-    assert res.device_status.active
+    assert res.controller_status.active
 
     first_axis = list(stpmtr.axes_stpmtr.keys())[0]
     second_axis = list(stpmtr.axes_stpmtr.keys())[1]
@@ -110,24 +110,24 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # activate for a second time
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert res.func_success
-    assert res.device_status.active
+    assert res.controller_status.active
 
     # deactivate
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert res.func_success
-    assert not res.device_status.active
+    assert not res.controller_status.active
     # deactivate for a second time
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert not res.func_success
-    assert not res.device_status.active
+    assert not res.controller_status.active
     # power off
     res: FuncPowerOutput = stpmtr.power(POWER_OFF)
     assert res.func_success
-    assert not res.device_status.power
+    assert not res.controller_status.power
     # activate when device power is Off
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert not res.func_success
-    assert not res.device_status.active
+    assert not res.controller_status.active
 
     # Test Activate axis, for example with id=1
     res: FuncPowerOutput = stpmtr.power(POWER_ON)  # power is On

@@ -20,7 +20,7 @@ from logs_pack import initialize_logger
 
 
 def main():
-    logger = initialize_logger(app_folder/ 'LOG', file_name="SuperUserGUI")
+    logger = initialize_logger(app_folder / 'LOG', file_name="SuperUserGUI")
     logger.info('Starting SuperUser GUI')
     app = QApplication(sys.argv)
     SuperClientGUIcontroller(SuperUserGUIModel(app_folder))

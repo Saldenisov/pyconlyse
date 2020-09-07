@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Union
 
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
+from utilities.datastructures.mes_independent.devices_dataclass import (DeviceControllerStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
@@ -24,7 +24,7 @@ class Project:
 
 @dataclass
 class ProjectManagerControllerState:
-    device_status: DeviceStatus
+    device_status: DeviceControllerStatus
     db_md5_sum: str  # Allows to check if DB was updated
     files_len: int
     operators_len: int
