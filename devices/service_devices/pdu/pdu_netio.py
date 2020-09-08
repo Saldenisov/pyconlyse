@@ -51,7 +51,7 @@ class PDUCtrl_NETIO(PDUController):
     def _check_if_connected(self) -> Tuple[bool, str]:
         results, comments = [], ''
         for pdu_id, pdu in self.pdus.items():
-            res, com = self._send_request(pdu_id, {"Outputs": []})
+            res, com = self._get_json(pdu_id)
             if isinstance(res, requests.Response):
                 if res.status_code == 200:
                     results.append(True)
@@ -71,7 +71,7 @@ class PDUCtrl_NETIO(PDUController):
         discard_id = []
         results, comments = [], ''
         for pdu in self.pdus.values():
-            res, com = self._send_request(pdu.device_id)
+            res, com = self._get_json(pdu.device_id)
             discard = False
             if isinstance(res, requests.Response):
                 if res.status_code != 200:
@@ -83,7 +83,6 @@ class PDUCtrl_NETIO(PDUController):
                 discard_id.append(pdu.device_id)
         for pdu_id in discard_id:
             del self.pdus[pdu_id]
-
         if self.pdus:
             return True, ''
         else:
@@ -105,7 +104,7 @@ class PDUCtrl_NETIO(PDUController):
 
     def _set_mac_addresses(self):
         for pdu_id, pdu in self.pdus.items():
-            res, com = self._send_request(pdu_id, {"Outputs": []})
+            res, com = self._get_json(pdu_id)
             if isinstance(res, requests.Response):
                 if res.status_code == 200:
                     pdu.mac_address = res.json()['Agent']['MAC']
@@ -126,7 +125,17 @@ class PDUCtrl_NETIO(PDUController):
         else:
             return False, f'Output id {func_input.pdu_id} is not present in {pdu.outputs.keys()}.'
 
-    def _send_request(self, pdu_id: int, j_string={'Outputs': []}) -> Tuple[Union[bool, requests.Response], str]:
+    def _get_json(self, pdu_id: int) -> Tuple[Union[bool, requests.Response], str]:
+        res, comments = self._check_device_range(device_id=pdu_id)
+        if res:
+            pdu: PDUNetio = self.pdus[pdu_id]
+            addr = f'http://{pdu.ip_address}/netio.json'
+            authentication = pdu.authentication
+            return requests.get(addr, auth=authentication), ''
+        else:
+            return res, comments
+
+    def _send_request(self, pdu_id: int, j_string: Dict[Union[int, str], Union[str, int]]) -> Tuple[Union[bool, requests.Response], str]:
         res, comments = self._check_device_range(device_id=pdu_id)
         if res:
             pdu: PDUNetio = self.pdus[pdu_id]
@@ -151,13 +160,12 @@ class PDUCtrl_NETIO(PDUController):
         results.append(res)
         comments = join_smart_comments(comments, com)
         if res:
-            res, com = self._send_request(pdu_id)
+            res, com = self._get_json(pdu_id)
             if isinstance(res, requests.Response):
                 if res.status_code == 200:
                     results.append(True)
                     pdu: PDUNetio = self.pdus[pdu_id]
                     outputs_l = res.json()['Outputs']
-                    pdu.n_outputs = len(outputs_l)
                     outputs = {}
                     for output in outputs_l:
                         outputs[output['ID']] = PDUNetioOutput(id=output['ID'], name=output['Name'],

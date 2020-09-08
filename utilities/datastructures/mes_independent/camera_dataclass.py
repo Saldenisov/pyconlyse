@@ -154,8 +154,7 @@ class FuncSetImageParametersInput(FuncInput):
 
 @dataclass
 class FuncSetImageParametersOutput(FuncOutput):
-    camera_id: int
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'set_image_parameters'
 
 
@@ -172,8 +171,7 @@ class FuncSetSyncParametersInput(FuncInput):
 
 @dataclass
 class FuncSetSyncParametersOutput(FuncOutput):
-    camera_id: int
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'set_sync_parameters'
 
 
@@ -187,8 +185,7 @@ class FuncSetTransportParametersInput(FuncInput):
 
 @dataclass
 class FuncSetTransportParametersOutput(FuncOutput):
-    camera_id: int
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'set_transport_parameters'
 
 
@@ -202,9 +199,8 @@ class FuncStartTrackingInput(FuncInput):
 
 @dataclass
 class FuncStartTrackingPrepared(FuncOutput):
-    camera_id: int
     ready: bool
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'start_tracking_prepared'
 
 
@@ -225,19 +221,5 @@ class FuncStopAcquisitionInput(FuncInput):
 
 @dataclass
 class FuncStopAcquisitionOutput(FuncOutput):
-    camera_id: int
+    camera: Camera
     com: str = 'stop_acquisition'
-
-
-@dataclass(order=True, frozen=False)
-class CtrlStatusMultiCameras:
-    cameras: Dict[int, Union[Camera, CameraEssentials]]
-    device_status: DeviceControllerStatus
-    cameras_previous: Dict[int, Camera] = None
-    device_status_previous: DeviceControllerStatus = None
-
-    def __post_init__(self):
-        if not self.cameras_previous:
-            self.cameras_previous = self.cameras
-        if not self.device_status_previous:
-            self.device_status_previous = self.device_status

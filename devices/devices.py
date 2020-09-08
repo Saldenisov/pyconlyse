@@ -337,7 +337,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             do = True
         elif com not in self.available_public_functions_names:
             error = True
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}'
+            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}.'
         elif not self.ctrl_status.active:
             error = True
             comments = f'{self.id} is not active. Cannot execute command {com}.'
@@ -630,14 +630,12 @@ class Service(Device):
                     self.ctrl_status.active = flag
         info = join_smart_comments(f'{self.id}:{self.name} active state is {self.ctrl_status.active}', comments)
         info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, device_status=self.ctrl_status, func_success=res)
+        return FuncActivateOutput(comments=info, controller_status=self.ctrl_status, func_success=res)
 
     def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
         device_id = func_input.device_id
         flag = func_input.flag
         res, comments = self._check_device_range(device_id)
-        if res:
-            res, comments = self._check_controller_activity()
         if res:
             device = self.hardware_devices[device_id]
             res, comments = self._change_device_status(device_id, flag)
@@ -669,6 +667,19 @@ class Service(Device):
         :return:
         """
         return self.ctrl_status.active, ''
+
+    def _check_device(self, device_id: int) -> Tuple[bool, str]:
+        res, comments = self._check_device_range(device_id)
+        if res:
+            return self._check_device_active(device_id)
+        else:
+            return res, comments
+
+    def _check_device_active(self, device_id: Union[int, str]) -> Tuple[bool, str]:
+        if self.hardware_devices[device_id].status:
+            return True, ''
+        else:
+            return False, f'Device id={device_id}, name={self.hardware_devices[device_id].friendly_name} is not active.'
 
     def _check_controller_activity(self):
         if self.ctrl_status.active:

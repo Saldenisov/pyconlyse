@@ -46,7 +46,18 @@
        </widget>
       </item>
       <item>
-       <widget class="QSpinBox" name="spinBox_device_id"/>
+       <widget class="QSpinBox" name="spinBox_device_id">
+        <property name="value">
+         <number>1</number>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <widget class="QLabel" name="label_name">
+        <property name="text">
+         <string>TextLabel</string>
+        </property>
+       </widget>
       </item>
       <item>
        <spacer name="horizontalSpacer">
@@ -62,6 +73,9 @@
        </spacer>
       </item>
      </layout>
+    </item>
+    <item>
+     <widget class="QTextEdit" name="comments"/>
     </item>
     <item>
      <layout class="QHBoxLayout" name="horizontalLayout_pdu_outputs"/>

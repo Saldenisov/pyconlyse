@@ -63,9 +63,12 @@ class CameraController(Service):
 
     def get_images(self, func_input: FuncGetImagesInput) -> FuncGetImagesPrepared:
         camera_id = func_input.camera_id
-        res, comments = self._check_device_range(camera_id)
+        res, comments = self._check_device(camera_id)
         if res:
+            camera = self.cameras[camera_id]
             res, comments = self._prepare_camera_reading(camera_id)
+        else:
+            camera = None
         if res:
             image_demand = ImageDemand(camera_id=camera_id, demander_id=func_input.demander_device_id,
                                        every_n_sec=func_input.every_n_sec, return_images=func_input.return_images,
@@ -73,8 +76,7 @@ class CameraController(Service):
                                        treatment_param=func_input.treatment_param,
                                        history_post_treatment_n=func_input.history_post_treatment_n)
             self._register_image_demander(image_demand)
-        return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
-                                     camera=self.cameras_essentials[camera_id])
+        return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera=camera)
 
     @abstractmethod
     def _grabbing(self, image_demander: ImageDemand):
@@ -108,29 +110,43 @@ class CameraController(Service):
                 image_demand.grabbing_thread = demand.grabbing_thread
                 self._images_demanders[demander_id][camera_id] = image_demand
 
-
     def set_image_parameters(self, func_input: FuncSetImageParametersInput) -> FuncSetImageParametersOutput:
-        res, comments = self._set_image_parameters_device(func_input)
-        return FuncSetImageParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
-                                            camera=self.cameras[func_input.camera_id])
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_image_parameters_device(func_input)
+        else:
+            camera = None
+        return FuncSetImageParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
     def _set_image_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
         pass
 
     def set_sync_parameters(self, func_input: FuncSetSyncParametersInput) -> FuncSetSyncParametersOutput:
-        res, comments = self._set_sync_parameters_device(func_input)
-        return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
-                                           camera=self.cameras[func_input.camera_id])
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_sync_parameters_device(func_input)
+        else:
+            camera = None
+        return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
     def _set_sync_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
         pass
 
     def set_transport_parameters(self, func_input: FuncSetTransportParametersInput) -> FuncSetTransportParametersOutput:
-        res, comments = self._set_transport_parameters_device(func_input)
-        return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera_id=func_input.camera_id,
-                                                camera=self.cameras[func_input.camera_id])
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_transport_parameters_device(func_input)
+        else:
+            camera = None
+        return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
     def _set_transport_parameters_device(self, func_input: FuncSetTransportParametersInput) -> Tuple[bool, str]:
@@ -140,19 +156,24 @@ class CameraController(Service):
         camera_id = func_input.camera_id
         res, comments = self._check_device_range(camera_id)
         if res:
+            camera = self.cameras[camera_id]
             res, comments = self._prepare_camera_reading(camera_id)
+        else:
+            camera = None
         if res:
             self._register_image_demander(camera_id, func_input.demander_device_id, func_input.n_images,
                                           func_input.every_n_sec)
-        return FuncStartTrackingPrepared(comments=comments, func_success=True, ready=res, camera_id=camera_id,
-                                         camera=self.cameras_essentials[camera_id])
+        return FuncStartTrackingPrepared(comments=comments, func_success=True, ready=res, camera=camera)
 
     def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
         camera_id = func_input.camera_id
-        res, comments = self._check_device_range(camera_id)
+        res, comments = self._check_device(camera_id)
         if res:
+            camera = self.cameras[camera_id]
             res, comments = self._stop_acquisition(camera_id)
-        return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera_id=camera_id)
+        else:
+            camera = None
+        return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:

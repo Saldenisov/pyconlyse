@@ -26,7 +26,7 @@ def treat_com(com: str, commands: dict, messenger, logger, path):
             except Exception as e:
                 print(e)
         elif com == '-stop_server':
-            msg = MessageOld(message_type='demand', from_=messenger.device_id, to_='Server_messenger')
+            msg = MessageOld(message_type='demand', from_=messenger.selected_device_id, to_='Server_messenger')
             msg['datastructures']['com'] = 'stop_server'
             messenger.add_task_out()
             print('yes')

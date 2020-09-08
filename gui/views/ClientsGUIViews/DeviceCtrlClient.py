@@ -7,16 +7,22 @@ import copy
 import logging
 from _functools import partial
 from abc import abstractmethod
+from typing import Callable, Dict, Union
+
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMainWindow, QErrorMessage
-from typing import Callable
-from communication.messaging.messages import *
-from devices.devices import Device, Client
-from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
-from gui.views.ui import Ui_StpMtrGUI
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import mm, microstep
+from PyQt5.QtWidgets import QMainWindow
+
+from communication.messaging.messages import MessageInt, MessageExt, MsgComExt, MsgComInt
+from devices.devices import Client, Service
+from utilities.datastructures.mes_independent.devices_dataclass import (DeviceInfoExt, DeviceControllerState,
+                                                                        DoneIt, MsgError,
+                                                                        FuncActivateInput, FuncActivateOutput,
+                                                                        FuncActivateDeviceInput,
+                                                                        FuncActivateDeviceOutput,
+                                                                        FuncGetControllerStateInput,
+                                                                        FuncGetControllerStateOutput,
+                                                                        FuncPowerInput, FuncPowerOutput,
+                                                                        HardwareDevice, HardwareDeviceEssentials)
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -72,13 +78,42 @@ class DeviceControllerView(QMainWindow):
         client = self.superuser
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
-                                  func_input=FuncActivateDeviceInput(device_id=self.ui.spinBox_device_id.value(),
+                                  func_input=FuncActivateDeviceInput(device_id=self.selected_device_id,
                                                                      flag=flag))
         self.send_msg(msg)
         self._asked_status = 0
 
     def closeEvent(self, event):
         self.controller.quit_clicked(event)
+
+    @property
+    def controller_devices(self) -> Dict[int, HardwareDevice]:
+        return self.device_ctrl_state.devices
+
+    @controller_devices.setter
+    def controller_devices(self, value: Union[Dict[int, HardwareDeviceEssentials], Dict[int, HardwareDevice],
+                                           HardwareDevice, HardwareDeviceEssentials]):
+        try:
+            if isinstance(value, dict):
+                if isinstance(next(iter(value.values())), HardwareDevice):
+                    self.device_ctrl_state.devices = value
+                else:
+                    for device_id, device in value.items():
+                        self.device_ctrl_state.devices[device_id].status = device.status
+                        self.device_ctrl_state.devices[device_id].position = device.position
+            elif isinstance(value, HardwareDevice):
+                self.device_ctrl_state.devices[value.device_id_seq] = value
+            elif isinstance(value, HardwareDeviceEssentials):
+                self.device_ctrl_state.devices[value.device_id_seq].status = value.status
+                self.device_ctrl_state.devices[value.device_id_seq].position = value.position
+            else:
+                raise Exception(f'Unknown value type: {type(value)}.')
+        except Exception as e:
+            error_logger(self, self.controller_devices, e)
+
+    @property
+    def selected_device_id(self) -> int:
+        return self.ui.spinBox_device_id.value()
 
     @abstractmethod
     def extra_ui_init(self):
@@ -93,10 +128,9 @@ class DeviceControllerView(QMainWindow):
                 info: Union[DoneIt, MsgError] = msg.info
                 if com == MsgComInt.DONE_IT.msg_name:
                     result = info
-                    self.ui.comments.setText(result.comments)
                     if result.func_success:
                         client = self.superuser
-                        if info.com == StpMtrController.ACTIVATE.name:
+                        if info.com == Service.ACTIVATE.name:
                             result: FuncActivateOutput = result
                             if result.controller_status.active:
                                 msg = client.generate_msg(msg_com=MsgComExt.DO_IT,
@@ -104,17 +138,18 @@ class DeviceControllerView(QMainWindow):
                                                           func_input=FuncGetControllerStateInput())
                                 self.send_msg(msg)
                             self.device_ctrl_state.controller_status = result.controller_status
-                        elif info.com == StpMtrController.ACTIVATE_DEVICE.name:
+                        elif info.com == Service.ACTIVATE_DEVICE.name:
                             result: FuncActivateDeviceInput = result
-                            self.controller_axes = result.device
-                        elif info.com == StpMtrController.GET_CONTROLLER_STATE.name:
+                            self.controller_devices = result.device
+                        elif info.com == Service.GET_CONTROLLER_STATE.name:
                             result: FuncGetControllerStateOutput = result
                             self.device_ctrl_state.devices = result.devices_hardware
                             self.device_ctrl_state.controller_status = result.controller_status
-                        elif info.com == StpMtrController.POWER.name:
+                        elif info.com == Service.POWER.name:
                             result: FuncPowerOutput = result
                             self.device_ctrl_state.controller_status = result.controller_status
-                        func_local(info)
+                        result = func_local(info)
+                    self.ui.comments.setText(result.comments)
                 elif com == MsgComInt.ERROR.msg_name:
                     self.ui.comments.setText(info.comments)
                     client = self.superuser
@@ -140,8 +175,7 @@ class DeviceControllerView(QMainWindow):
     def update_state(self, force_device=False, force_ctrl=False):
         device_state = self.device_ctrl_state
         ui = self.ui
-        device_id = ui.spinBox_device_id.value()
-        device: HardwareDevice = device_state.devices[device_id]
+        device: HardwareDevice = device_state.devices[self.selected_device_id]
         if device_state.controller_status != device_state.controller_status_previous or force_ctrl:
             ui.checkBox_power.setChecked(device_state.controller_status.power)
             ui.checkBox_ctrl_activate.setChecked(device_state.controller_status.active)
@@ -152,7 +186,7 @@ class DeviceControllerView(QMainWindow):
             device_id_list = list(device_state.devices.keys())
             ui.spinBox_device_id.setMinimum(min(device_id_list))
             ui.spinBox_device_id.setMaximum(max(device_id_list))
-            if ui.spinBox_device_id.value() not in device_id_list:
+            if self.selected_device_id not in device_id_list:
                 ui.spinBox_device_id.setValue(min(device_id_list))
 
             ui.checkBox_device_activate.setChecked(device.status)
@@ -163,7 +197,8 @@ class DeviceControllerView(QMainWindow):
             else:
                 name = device.name
 
-            ui.label_name.setText('name')
+            ui.label_name.setText(f'Name: {name}')
+            ui.checkBox_device_activate.setChecked(device.status)
             self.device_ctrl_state.axes_previous = copy.deepcopy(device_state.devices)
         return device
 

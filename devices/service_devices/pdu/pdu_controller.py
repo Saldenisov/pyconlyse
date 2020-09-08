@@ -64,7 +64,7 @@ class PDUController(Service):
         return super(PDUController, self).hardware_devices_essentials()
 
     def set_pdu_state(self, func_input: FuncSetPDUStateInput) -> FuncSetPDUStateOutput:
-        res, comments = self._check_device_range(func_input.pdu_id)
+        res, comments = self._check_device(func_input.pdu_id)
         if res:
             pdu = self.pdus[func_input.pdu_id]
             res, comments = self._set_pdu_state(func_input)

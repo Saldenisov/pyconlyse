@@ -54,24 +54,6 @@ class StpMtrController(Service):
     def axes_stpmtr_essentials(self):
         return {axis_id: axis.short() for axis_id, axis in self.axes_stpmtr.items()}
 
-    def _check_axis(self, axis_id: int) -> Tuple[bool, str]:
-        """
-        Checks if axis n is a valid axis for this controller and if it is active
-        :param axis_id:
-        :return: res, comments='' if True, else error_message
-        """
-        res, comments = self._check_device_range(axis_id)
-        if res:
-            return self._check_axis_active(axis_id)
-        else:
-            return res, comments
-
-    def _check_axis_active(self, device_id: Union[int, str]) -> Tuple[bool, str]:
-        if self.axes_stpmtr[device_id].status:
-            return True, ''
-        else:
-            return False, f'Axis id={device_id}, name={self.axes_stpmtr[device_id].name} is not active.'
-
     @staticmethod
     def _check_status_flag(flag: int):
         flags = [0, 1, 2]
@@ -88,7 +70,7 @@ class StpMtrController(Service):
                           f'It has {self.axes_stpmtr[device_id].type_move}'
 
     def get_pos_axis(self, func_input: FuncGetPosInput) -> FuncGetPosOutput:
-        res, comments = self._check_axis(func_input.axis_id)
+        res, comments = self._check_device(func_input.axis_id)
         axis_id = func_input.axis_id
         if res:
             axis = self.axes_stpmtr[axis_id]
@@ -136,7 +118,7 @@ class StpMtrController(Service):
         if not move_type:
             move_type = self.axes_stpmtr[axis_id].basic_unit
 
-        res, comments = self._check_axis(axis_id)
+        res, comments = self._check_device(axis_id)
         if res:
             res, comments = self._check_move_type(axis_id, move_type)
             axis = self.axes_stpmtr[axis_id]
@@ -264,7 +246,7 @@ class StpMtrController(Service):
 
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
         axis_id = func_input.axis_id
-        res, comments = self._check_axis(axis_id)
+        res, comments = self._check_device(axis_id)
         if res:
             axis = self.axes_stpmtr[axis_id]
             if axis.status == 2:

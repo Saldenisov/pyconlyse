@@ -17,6 +17,7 @@ class PDUOutput:
 @dataclass
 class PDU(HardwareDevice):
     outputs: Dict[Union[int, str], PDUOutput] = field(default_factory=dict)
+    authentication: Tuple[str] = field(default_factory=tuple)
 
     def short(self):
         d = {}
@@ -35,8 +36,6 @@ class PDUNetioOutput(PDUOutput):
 class PDUNetio(PDU):
     ip_address: str = ''
     mac_address: str = ''
-    n_outputs: int = 0
-    authentication: Tuple[str] = field(default_factory=tuple)
 
 
 @dataclass

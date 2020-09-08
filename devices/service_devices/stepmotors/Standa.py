@@ -39,7 +39,6 @@ class StpMtrCtrl_Standa(StpMtrController):
                                                                       ('preset_values', 'preset_values', tuple)],
                                                           extra_func=[self._get_positions_file,
                                                                       self._set_move_parameters_axes])
-
         if not res:
             raise StpMtrError(self, comments)
 
@@ -53,15 +52,15 @@ class StpMtrCtrl_Standa(StpMtrController):
                     self._stop_axis(axis.device_id)
                     info = f' Axis id={device_id}, name={axis.name} was stopped.'
                     self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.name} is set to {flag}.' + info
+                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
                 elif axis.status == 2 and not force:
-                    res, comments = False, f'Axis id={device_id}, name={axis.name} is moving. ' \
+                    res, comments = False, f'Axis id={device_id}, name={axis.friendly_name} is moving. ' \
                                            'Force Stop in order to change.'
                 else:
                     self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.name} is set to {flag}.' + info
+                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
             else:
-                res, comments = True, f'Axis id={device_id}, name={axis.name} is already set to {flag}'
+                res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is already set to {flag}'
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:

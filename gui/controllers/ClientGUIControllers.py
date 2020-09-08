@@ -12,7 +12,11 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMe
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
-from gui.views.ClientsGUIViews import CamerasView, SuperUserView, StepMotorsView, ProjectManagerView
+from gui.views.ClientsGUIViews.Cameras import CamerasView
+from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
+from gui.views.ClientsGUIViews.SuperUser import SuperUserView
+from gui.views.ClientsGUIViews.StepMotors import StepMotorsView
+from gui.views.ClientsGUIViews.PDUs import PDUsView
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
@@ -69,6 +73,8 @@ class SuperClientGUIcontroller():
                 view = ProjectManagerView
             elif 'Camera' in parameters.device_description.class_name:
                 view = CamerasView
+            elif 'PDU' in parameters.device_description.class_name:
+                view = PDUsView
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
