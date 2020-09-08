@@ -2,9 +2,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Tuple, Union, NewType, Set
 
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput, Desription
+from utilities.datastructures.mes_independent.devices_dataclass import *
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 relative = NewType('relative', str)
 absolute = NewType('absolute', str)
@@ -25,34 +24,28 @@ class MoveType(Enum):
 
 
 @dataclass(frozen=False)
-class AxisStpMtr:
-    device_id: int  # TODO: rename to device_id
-    name: str = ''
-    friendly_name: str = ''
+class AxisStpMtr(HardwareDevice):
     basic_unit: MoveType = MoveType.microstep
     limits: Tuple[Union[int, float]] = field(default_factory=tuple)
-    move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)  # {'microsteps': 256, 'conversion_step_mm': 0.0025,
-                                                                                       # 'basic_unit': 'angle' or 'step', 'mm'}
+    move_parameters: Dict[str, Union[int, float, str]] = field(default_factory=dict)
+    # {'microsteps': 256, 'conversion_step_mm': 0.0025, 'basic_unit': 'angle' or 'step', 'mm'}
     type_move: Set[MoveType] = field(default_factory=lambda: set([MoveType.angle, MoveType.mm,
                                                                   MoveType.step, MoveType.microstep]))
     position: Union[mm, angle, microstep] = 0.0
     preset_values: List[Set[Union[Union[int, float], MoveType]]] = field(default_factory=list)
-    status: int = 0  # 0 - not active, 1 - active, 2 - moving
 
     def short(self, unit: MoveType = None):
         if unit:
-            pos = self.convert_to_basic_unit(unit)
+            pos = self.convert_to_basic_unit(unit, self.position)
             if isinstance(pos, tuple):
-                return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
+                return AxisStpMtrEssentials(device_id=self.device_id, position=self.position, status=self.status,
                                             unit=self.basic_unit)
             else:
-                return AxisStpMtrEssentials(id=self.device_id,
-                                            position=pos,
-                                            status=self.status,
-                                            unit=unit)
+                return AxisStpMtrEssentials(device_id=self.device_id, device_id_seq=self.device_id_seq, position=pos,
+                                            status=self.status, unit=unit)
         else:
-            return AxisStpMtrEssentials(id=self.device_id, position=self.position, status=self.status,
-                                        unit=self.basic_unit)
+            return AxisStpMtrEssentials(device_id=self.device_id, position=self.position, status=self.status,
+                                        unit=self.basic_unit, device_id_seq=self.device_id_seq)
 
     def convert_pos_to_unit(self, unit: MoveType) -> Union[Tuple[bool, str], Union[int, float]]:
         return self.convert_from_to_unit(self.position, self.basic_unit, unit)
@@ -138,41 +131,33 @@ class AxisStpMtr:
             return False, f'Axis axis_id={self.device_id} cannot convert {unit_from} to {unit_to}.'
 
 
+@dataclass(frozen=False)
+class StandaAxisStpMtr(AxisStpMtr):
+    device_id_internal_seq: int = None
+
+
+@dataclass(frozen=False)
+class A4988AxisStpMtr(AxisStpMtr):
+    pass
+
+
 @dataclass(order=True, frozen=False)
 class AxisStpMtrEssentials:
-    device_id: int
+    device_id: Union[int, str]
+    device_id_seq: int
     position: Union[mm, angle, microstep]
     unit: MoveType
     status: int
 
 
-@dataclass(order=True)
-class StpMtrDescription(Desription):
-    axes: Dict[int, AxisStpMtr]
-
-
 @dataclass(order=True, frozen=False)
-class StpMtrCtrlStatusMultiAxes:
-    axes: Dict[int, AxisStpMtr]
-    device_status: DeviceStatus
+class StepMotorsControllerState(DeviceControllerState):
     know_movements: Dict[Union[mm, angle, microstep], bool] = \
         field(default_factory=lambda: {microstep: False, mm: False, angle: False})
-    axes_previous: Dict[int, AxisStpMtrEssentials] = None
-    device_status_previous: DeviceStatus = None
-    start_stop: list = field(default_factory=list)
+    start_stop: Dict[int, Tuple[float]] = field(default_factory=dict)
 
-
-@dataclass
-class FuncActivateAxisInput(FuncInput):
-    axis_id: int
-    flag: bool
-    com: str = 'activate_axis'
-
-
-@dataclass
-class FuncActivateAxisOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
-    com: str = 'activate_axis'
+    def __post_init__(self):
+        self.start_stop = {device_id: (0.0, 0.0) for device_id in self.devices.keys()}
 
 
 @dataclass
@@ -182,19 +167,18 @@ class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
 
 @dataclass
 class FuncGetStpMtrControllerStateOutput(FuncGetControllerStateOutput):
-    axes: Dict[int, AxisStpMtr] = None
-
+    pass
 
 @dataclass
 class FuncGetPosInput(FuncInput):
     axis_id: int
-    com: str = 'get_pos'
+    com: str = 'get_pos_axis'
 
 
 @dataclass
 class FuncGetPosOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
-    com: str = 'get_pos'
+    axis: AxisStpMtr
+    com: str = 'get_pos_axis'
 
 
 @dataclass
@@ -208,22 +192,22 @@ class FuncMoveAxisToInput(FuncInput):
 
 @dataclass
 class FuncMoveAxisToOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
+    axis: AxisStpMtr
     com: str = 'move_axis_to'
 
 
 @dataclass
 class FuncSetPosInput(FuncInput):
     axis_id: int
-    axis_pos: Union[int, float]
+    axis_pos: float
     pos_unit: MoveType
-    com: str = 'set_pos'
+    com: str = 'set_pos_axis'
 
 
 @dataclass
 class FuncSetPosOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
-    com: str = 'set_pos'
+    axis: AxisStpMtr
+    com: str = 'set_pos_axis'
 
 
 @dataclass
@@ -234,5 +218,5 @@ class FuncStopAxisInput(FuncInput):
 
 @dataclass
 class FuncStopAxisOutput(FuncOutput):
-    axes: Dict[int, AxisStpMtrEssentials]
+    axis: AxisStpMtr
     com: str = 'stop_axis'

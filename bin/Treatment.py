@@ -19,7 +19,7 @@ def main():
     logger = initialize_logger(app_folder / 'LOG', file_name="Treatment")
     logger.info('Starting Treatment GUI...')
     app = QApplication(sys.argv)
-    TreatmentController(TreatmentModel(app_folder, data_folder='D:\\DATA_VD2\\2020\\20200630-RK-1029'))
+    TreatmentController(TreatmentModel(app_folder, data_folder=''))
     app.exec_()
 
 

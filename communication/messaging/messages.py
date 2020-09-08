@@ -39,7 +39,7 @@ class MsgComExt(Enum):
     ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['comments', 'reply_to', 'receiver_id']), False)
     HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, set(['event']), False)
     HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
-    SHUTDOWN = MessageInfoExt(MsgType.BROADCASTED, ShutDown, set(['reason']), False)
+    SHUTDOWN = MessageInfoExt(MsgType.DIRECTED, ShutDown, set(['reason', 'receiver_id']), True)
     WELCOME_INFO_DEVICE = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoDevice, set(['receiver_id', 'event']), False)
     WELCOME_INFO_SERVER = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoServer, set(['reply_to', 'receiver_id']), False)
 
@@ -85,6 +85,7 @@ class MessageExt(Message):
     receiver_id: str
     reply_to: str
     sender_id: str
+    forward_to: str = ''
     forwarded_from: str = ''
     #type: MsgType  # temporary disabled TODO: to think what to do with it
     id: str = ''
@@ -101,7 +102,7 @@ class MessageExt(Message):
                 object.__setattr__(msg_copy, key, value)
             except AttributeError:
                 pass
-        object.__setattr__(msg_copy, 'id', unique_id())
+        #object.__setattr__(msg_copy, 'id', unique_id())
         return msg_copy
 
     def short(self):
@@ -113,13 +114,18 @@ class MessageExt(Message):
             l = 300
         else:
             pass
-        if not self.forwarded_from:
+        if not self.forwarded_from and not self.forward_to:
             return {'path':  f'{self.sender_id}->{self.receiver_id}',
                     'datastructures': f'{self.com}: {t[0:l]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
-        else:
-            return {'path':  f'{self.forwarded_from}->{self.sender_id}->{self.receiver_id}',
+        elif self.forward_to:
+            return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARD_TO->{self.forward_to}',
+                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'reply_to': self.reply_to,
+                    'id': self.id}
+        elif self.forwarded_from:
+            return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARDED_FROM->{self.forwarded_from}',
                     'datastructures': f'{self.com}: {t[0:l]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
@@ -176,18 +182,19 @@ class MessageExt(Message):
                     parameters[param_name] = param
                 return MessageExt(**parameters)
             except TypeError as e:
-                raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+                raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
         elif coding is Coding.JSON:
             try:
                 mes_str = loads(mes_bytes)
                 return eval(mes_str)
-            except Exception:
+            except Exception as e:
+                print(e, mes_bytes)
                 try:
                     mes_dc = loads(decompress(b64decode(mes_bytes)))
                     mes = eval(mes_dc)
                     return mes
                 except Exception as e:
-                    raise MessageError(f'Error {e} in bytes_to_msg coding {coding}')
+                    raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
         else:
             module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
             raise MsgError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')

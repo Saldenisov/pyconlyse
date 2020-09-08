@@ -12,11 +12,12 @@ from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMe
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
-from gui.views.ClientsGUIViews import CamerasView, SuperUserView, StepMotorsView, ProjectManagerView
-from utilities.datastructures.mes_independent import (ProjectManagerDescription)
+from gui.views.ClientsGUIViews.Cameras import CamerasView
+from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
+from gui.views.ClientsGUIViews.SuperUser import SuperUserView
+from gui.views.ClientsGUIViews.StepMotors import StepMotorsView
+from gui.views.ClientsGUIViews.PDUs import PDUsView
 from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
-from utilities.datastructures.mes_independent.camera_dataclass import CameraDescription
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -58,26 +59,34 @@ class SuperClientGUIcontroller():
                     exc = exc + r
                 os.system(exc)
 
-    def create_service_gui(self):
-        service_id = self.view.ui.lW_devices.currentItem().text()
+    def create_service_gui(self, service_id_ext=''):
+        if service_id_ext:
+            service_id = service_id_ext
+        else:
+            service_id = self.view.ui.lW_devices.currentItem().text()
+
         try:
             parameters: DeviceInfoExt = self.model.service_parameters[service_id]
-            if isinstance(parameters.device_description, StpMtrDescription):
+            if 'StpMtr' in parameters.device_description.class_name:
                 view = StepMotorsView
-            elif isinstance(parameters.device_description, ProjectManagerDescription):
+            elif 'ProjectManager' in parameters.device_description.class_name:
                 view = ProjectManagerView
-            elif isinstance(parameters.device_description, CameraDescription):
+            elif 'Camera' in parameters.device_description.class_name:
                 view = CamerasView
+            elif 'PDU' in parameters.device_description.class_name:
+                view = PDUsView
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
             self.services_views[service_id].show()
             info_msg(self, 'INFO', f'GUI for service {service_id} is started')
-
         except KeyError as e:
-            error_logger(self, self.create_service_gui, f'Parameters for service id={service_id} was not loaded: {e}')
+            error_logger(self, self.create_service_gui,
+                         f'Parameters for service id={service_id} was not loaded: {e}')
         except Exception as e:
             error_logger(self, self.create_service_gui, e)
+
+
 
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
@@ -86,7 +95,8 @@ class SuperClientGUIcontroller():
         service_id = item.text()
         client = self.device
 
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=service_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=service_id,
                                   func_input=FuncServiceInfoInput())
         client.send_msg_externally(msg)
 

@@ -13,7 +13,7 @@ from typing import Dict
 from PyQt5 import QtCore, QtGui, QtWidgets
 
 from utilities.datastructures.mes_independent.devices_dataclass import DeviceInfoExt
-from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType, StpMtrCtrlStatusMultiAxes
+from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType, StepMotorsControllerState
 
 module_logger = logging.getLogger(__name__)
 
@@ -222,11 +222,11 @@ class Ui_StpMtrGUI(object):
         self.retranslateUi(StpMtrGUI)
         QtCore.QMetaObject.connectSlotsByName(StpMtrGUI)
 
-    def retranslateUi(self, StpMtrGUI, controller_status: StpMtrCtrlStatusMultiAxes=None):
+    def retranslateUi(self, StpMtrGUI, controller_status: StepMotorsControllerState=None):
         _translate = QtCore.QCoreApplication.translate
         try:
-            self.checkBox_activate.setChecked(self.parameters.device_status.active)
-            self.checkBox_power.setChecked(self.parameters.device_status.power)
+            self.checkBox_activate.setChecked(self.parameters.controller_status.active)
+            self.checkBox_power.setChecked(self.parameters.controller_status.power)
             title = self.parameters.device_description.GUI_title
             axis_id = int(self.spinBox_axis.value())
             axes: Dict[int, AxisStpMtr] = self.parameters.device_description.axes

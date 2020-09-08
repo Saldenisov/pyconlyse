@@ -38,7 +38,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         self._arduino_port = ''
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
-        if self.device_status.power:
+        if self.ctrl_status.power:
             if flag:
                 res, comments = self._find_arduino_check(self.get_parameters['arduino_serial_id'])
                 if res:
@@ -56,13 +56,13 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 self.arduino_serial = None
                 res, comments = True, ''
             if res:
-                self.device_status.connected = flag
+                self.ctrl_status.connected = flag
         else:
             res, comments = False, f'Power is off, connect to controller function cannot be called with flag {flag}'
         return res, comments
 
     def _check_if_active(self) -> Tuple[bool, str]:
-        if self.device_status.connected:
+        if self.ctrl_status.connected:
             self._send_to_arduino(f'GET STATE')
             rcv = self._get_reply_from_arduino(True)
             if rcv[1] == 0:
@@ -84,13 +84,13 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             return False, 'Not connected, serial connection is absent. First Connect.'
 
     def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        if self.axes[axis_id].status == flag:
-            res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is already set to {flag}'
+        if self.axes_stpmtr[axis_id].status == flag:
+            res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is already set to {flag}'
         else:
             if not force:
-                if self.axes[axis_id].status != 2:
-                    self.axes[axis_id].status = flag
-                    res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}'
+                if self.axes_stpmtr[axis_id].status != 2:
+                    self.axes_stpmtr[axis_id].status = flag
+                    res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is set to {flag}'
                     if flag == 2:
                         self._enable_controller()
                     elif flag == 1:
@@ -100,8 +100,8 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                 else:
                     return False, f'Axis id={1} is moving. Use force, or wait movement to complete to change the status.'
             else:
-                self.axes[axis_id].status = flag
-                res, comments = True, f'Axis id={axis_id}, name={self.axes[axis_id].name} is set to {flag}'
+                self.axes_stpmtr[axis_id].status = flag
+                res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is set to {flag}'
 
         return res, comments
 
@@ -143,9 +143,9 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         """
         for pinfo in serial.tools.list_ports.comports():
             if pinfo.serial_number == serial_number:
-                res, comments = self._check_arduino_port(pinfo.device)
+                res, comments = self._check_arduino_port(pinfo.superuser)
                 if res:
-                    self._arduino_port = pinfo.device
+                    self._arduino_port = pinfo.superuser
                     return True, ''
                 else:
                     return False, f'Arduino with {serial_number} was found, but port check was not passed: {comments}.'
@@ -193,7 +193,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return self._axes_status
 
     def _get_number_axes(self) -> int:
-        return len(self.axes)
+        return len(self.axes_stpmtr)
 
     def _get_limits(self) -> List[Tuple[Union[float, int]]]:
         return self._axes_limits
@@ -227,10 +227,10 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
                     rcv = -4  # timeout
 
             if rcv != 0:
-                res, comments = False, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} ' \
+                res, comments = False, f'Movement of Axis with id={axis_id}, name={self.axes_stpmtr[axis_id].name} ' \
                                        f'did not start. Error {rcv}.'
             else:
-                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes[axis_id].name} ' \
+                res, comments = True, f'Movement of Axis with id={axis_id}, name={self.axes_stpmtr[axis_id].name} ' \
                                       f'was finished.'
 
             self.arduino_serial.flush()
@@ -238,7 +238,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             self._send_to_arduino('GET POS')
             rcv = self._get_reply_from_arduino(True)
             if rcv[1] == 0:
-                self.axes[axis_id].position = rcv[0]
+                self.axes_stpmtr[axis_id].position = rcv[0]
             else:
                 error_logger(self, self.move_axis_to, f'Could not get position of controller after the movement.')
                 res, comments = False, f'Could not get position of controller after the movement.'
@@ -277,11 +277,11 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return super()._set_parameters()
 
     def _send_to_arduino(self, cmd: str) -> Tuple[bool, str]:
-        if self.device_status.connected:
+        if self.ctrl_status.connected:
             self.arduino_serial.write(cmd.encode('utf-8'))
             sleep(0.1)
 
     def stop_axis(self, func_input: FuncStopAxisInput) -> FuncStopAxisOutput:
-        return FuncStopAxisOutput(axes=self.axes_essentials,
+        return FuncStopAxisOutput(axes=self.axes_stpmtr_essentials,
                                   comments=f'Cannot be stopped by user. Wait controller to finish its movement.',
                                   func_success=False)

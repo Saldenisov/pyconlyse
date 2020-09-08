@@ -1,12 +1,10 @@
-from dataclasses import dataclass
+def a():
+    return 1
 
-@dataclass
-class A:
-    a: str = ''
-    b: int = 2
 
-a = A().__annotations__.keys()
+def b():
+    a()
+    a()
+    print(2)
 
-b = A()
-setattr(b, 'a', 'privet')
-print(b)
+b()

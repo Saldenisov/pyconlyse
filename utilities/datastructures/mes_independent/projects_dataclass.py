@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import List, Union
 
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceStatus, FuncGetControllerStateInput,
+from utilities.datastructures.mes_independent.devices_dataclass import (DeviceControllerStatus, FuncGetControllerStateInput,
                                                                         FuncGetControllerStateOutput)
-from utilities.datastructures.mes_independent.general import Desription, FuncInput, FuncOutput
+from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
 @dataclass(frozen=True)  # To make it hashable
@@ -24,7 +24,7 @@ class Project:
 
 @dataclass
 class ProjectManagerControllerState:
-    device_status: DeviceStatus
+    device_status: DeviceControllerStatus
     db_md5_sum: str  # Allows to check if DB was updated
     files_len: int
     operators_len: int
@@ -75,11 +75,6 @@ class ProjectManagerViewState:
                 self.operators_future.remove(operator)
             except ValueError:
                 pass
-
-
-@dataclass(order=True)
-class ProjectManagerDescription(Desription):
-    pass
 
 
 @dataclass

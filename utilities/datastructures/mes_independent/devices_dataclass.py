@@ -1,13 +1,13 @@
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Set, Tuple, Union
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
 from devices.interfaces import DeviceType, DeviceId
 from devices.interfaces import ExecutorInter
 from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
-from utilities.datastructures.mes_independent.general import Desription, CmdStruct, FuncInput, FuncOutput
+from utilities.datastructures.mes_independent.general import *
 
 
 @dataclass(frozen=True)
@@ -18,12 +18,92 @@ class DeviceParts(DataClass_frozen):
 
 
 @dataclass
-class DeviceStatus(DataClass_unfrozen):
+class HardwareDevice:
+    device_id: int
+    device_id_seq: int = None
+    name: str = ''
+    friendly_name: str = ''
+    status: int = 0  # 0, 1, 2
+
+    def short(self):
+        pass
+
+
+@dataclass
+class HardwareDeviceEssentials(HardwareDevice):
+    pass
+
+
+class HardwareDeviceDict(dict):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.device_id = {}
+
+    def __setitem__(self, key_id, device: HardwareDevice):
+        device_id = device.device_id
+        if device_id not in self.device_id:
+            super().__setitem__(key_id, device)
+            self.device_id[device_id] = key_id
+        else:
+            raise KeyError(f'Hardware Device id: {device_id} already exists in {self.device_id}')
+
+    def __getitem__(self, key):
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            if key in self.device_id:
+                return super().__getitem__(self.device_id[key])
+            else:
+                raise KeyError('Neither device_id nor device_seq_id are present in the dictionary.')
+
+    def __delitem__(self, key):
+        try:
+            device: HardwareDevice = self[key]
+            device_id = device.device_id
+            super().__delitem__(key)
+            del self.device_id[device_id]
+        except KeyError:
+            device_id = key
+            if device_id in self.device_id:
+                key = self.device_id[device_id]
+                del self.device_id[device_id]
+                super().__delitem__(key)
+            else:
+                raise KeyError(f'Key {key} is not present in the dictionary.')
+
+    def __contains__(self, item):
+        if super().__contains__(item):
+            return True
+        else:
+            if item in self.device_id:
+                return True
+            else:
+                return False
+
+    def all_keys(self) -> Set[Any]:
+        return self.keys() | self.device_id.keys()
+
+
+@dataclass
+class DeviceControllerStatus(DataClass_unfrozen):
     active: bool = False
     connected: bool = False
     messaging_on: bool = False
     messaging_paused: bool = False
     power: bool = False
+
+
+@dataclass
+class DeviceControllerState:
+    devices: Dict[int, HardwareDevice]
+    controller_status: DeviceControllerStatus
+    devices_previous: Dict[int, HardwareDevice] = None
+    controller_status_previous: DeviceControllerStatus = None
+
+    def __post_init__(self):
+        self.devices_previous = self.devices
+        self.controller_status_previous = self.controller_status
 
 
 @dataclass(frozen=True, order=True)
@@ -41,6 +121,28 @@ class DoIt:
 class DoneIt:
     com: str
     result: FuncOutput
+
+
+@dataclass(order=True)
+class Description:
+    info: str
+    GUI_title: str
+
+
+@dataclass(order=True)
+class ServiceDescription(Description):
+    hardware_devices: HardwareDevice
+    class_name: str
+
+
+@dataclass(order=True)
+class ServerDescription(Description):
+    pass
+
+
+@dataclass(order=True)
+class ClientDescription:
+    pass
 
 
 @dataclass
@@ -97,8 +199,8 @@ class DeviceInfoInt:
     active_connections: List[Tuple[DeviceId, DeviceType]]  # [(receiver_id, DeviceType), ...]
     available_public_functions: List[CmdStruct]
     device_id: str
-    device_status: DeviceStatus
-    device_description: Desription
+    device_status: DeviceControllerStatus
+    device_description: Description
     events_running: List[str]  # event names
 
 
@@ -106,8 +208,8 @@ class DeviceInfoInt:
 class DeviceInfoExt:
     #available_public_functions: List[CmdStruct]
     device_id: str
-    device_description: Desription
-    device_status: DeviceStatus
+    device_description: Union[ServiceDescription, ClientDescription, ServerDescription]
+    controller_status: DeviceControllerStatus
 
 
 @dataclass(frozen=True, order=True)
@@ -136,8 +238,21 @@ class FuncActivateInput(FuncInput):
 
 @dataclass
 class FuncActivateOutput(FuncOutput):
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
     com: str = 'activate'
+
+
+@dataclass
+class FuncActivateDeviceInput(FuncInput):
+    device_id: int
+    flag: int
+    com: str = 'activate_device'
+
+
+@dataclass
+class FuncActivateDeviceOutput(FuncOutput):
+    device: HardwareDevice
+    com: str = 'activate_device'
 
 
 @dataclass
@@ -172,7 +287,8 @@ class FuncGetControllerStateInput(FuncInput):
 
 @dataclass
 class FuncGetControllerStateOutput(FuncOutput):
-    device_status: DeviceStatus
+    devices_hardware: Dict[int, HardwareDevice]
+    controller_status: DeviceControllerStatus
     com: str = 'get_controller_state'
 
 
@@ -184,7 +300,7 @@ class FuncPowerInput(FuncInput):
 
 @dataclass
 class FuncPowerOutput(FuncOutput):
-    device_status: DeviceStatus
+    controller_status: DeviceControllerStatus
     com: str = 'power'
 
 
@@ -214,4 +330,3 @@ class Connection(DataClass_unfrozen):
     session_key: bytes = b''
     permission: Permission = Permission.DENIED
     password_checksum: bytes = b''
-

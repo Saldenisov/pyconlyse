@@ -1,233 +1,182 @@
 import logging
 from abc import abstractmethod
-from os import path
-from pathlib import Path
-from typing import Any, Callable
-
+from functools import lru_cache
 from devices.devices import Service
-from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.camera_dataclass import *
-from utilities.errors.myexceptions import DeviceError
+from utilities.datastructures.mes_independent.general import *
 from utilities.myfunc import error_logger, info_msg
 
 module_logger = logging.getLogger(__name__)
 
 
 class CameraController(Service):
-    ACTIVATE_CAMERA = CmdStruct(FuncActivateCameraInput, FuncActivateCameraOutput)
-    GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput)
-    SET_IMAGE_PARAMETERS = CmdStruct(None, None)
-    SET_SYNC_PARAMETERS = CmdStruct(None, None)
-    SET_TRANSPORT_PARAMETERS = CmdStruct(None, None)
-    SET_ALL_PARAMETERS = CmdStruct(None, None)
+    GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput, FuncGetImagesPrepared)
+    SET_IMAGE_PARAMETERS = CmdStruct(FuncSetImageParametersInput, FuncSetImageParametersOutput)
+    SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetImageParametersOutput)
+    SET_TRANSPORT_PARAMETERS = CmdStruct(FuncSetTransportParametersInput, FuncSetTransportParametersOutput)
+    START_TRACKING = CmdStruct(FuncStartTrackingInput, FuncStartTrackingOutput, FuncStartTrackingPrepared)
     STOP_ACQUISITION = CmdStruct(FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
 
     def __init__(self, **kwargs):
+        kwargs['hardware_device_dataclass'] = kwargs['camera_dataclass']
         super().__init__(**kwargs)
-        self.cameras: Dict[int, Camera] = dict()
-
-        res, comments = self._set_parameters()  # Set parameters from database first and after connection is done update
-                                                # from hardware controller if possible
-        if not res:
-            raise CameraError(self, comments)
-
-    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        flag = func_input.flag
-        res, comments = self._check_if_active()
-        if res ^ flag:  # res XOR Flag
-            if flag:
-                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
-                if res:  # parameters should be set from hardware controller if possible
-                    res, comments = self._set_parameters()  # This must be realized for all controllers
-                    if res:
-                        self.device_status.active = True
-            else:
-                res, comments = self._connect(False)
-                if res:
-                    self.device_status.active = flag
-        info = f'{self.id}:{self.name} active state is {self.device_status.active}. {comments}'
-        info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, device_status=self.device_status, func_success=res)
-
-    def activate_camera(self, func_input: FuncActivateCameraInput) -> FuncActivateCameraOutput:
-        camera_id = func_input.camera_id
-        flag = func_input.flag
-        res, comments = self._check_axis_range(camera_id)
-        if res:
-            res, comments = self._check_controller_activity()
-        if res:
-            res, comments = self._change_axis_status(camera_id, flag)
-        essentials = self.cameras_essentials
-        status = []
-        for key, camera in essentials.items():
-            status.append(essentials[key].status)
-        info = f'Cameras status: {status}. {comments}'
-        info_msg(self, 'INFO', info)
-        return FuncActivateCameraOutput(cameras=self.cameras_essentials, comments=info, func_success=res)
+        self._hardware_devices: Dict[int, Camera] = HardwareDeviceDict()
+        self._images_demanders: Dict[str, Dict[str, ImageDemand]] = {}
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return [*super().available_public_functions(), CameraController.ACTIVATE_CAMERA, CameraController.GET_IMAGES,
-                CameraController.STOP_ACQUISITION]
+        return [*super().available_public_functions(), CameraController.GET_IMAGES,
+                CameraController.SET_IMAGE_PARAMETERS, CameraController.SET_SYNC_PARAMETERS,
+                CameraController.SET_TRANSPORT_PARAMETERS, CameraController.STOP_ACQUISITION]
+
+    @property
+    @abstractmethod
+    def cameras(self):
+        pass
 
     @property
     def cameras_essentials(self):
-        essentials = {}
-        for camera_id, camera in self.cameras.items():
-            essentials[camera_id] = camera.short()
-        return essentials
+        return {camera_id: camera.short() for camera_id, camera in self._hardware_devices.items()}
 
     @property
     def _cameras_status(self) -> List[int]:
-        return [camera.status for camera in self.cameras.values()]
+        return [camera.status for camera in self._hardware_devices.values()]
 
-    def description(self) -> Desription:
-        """
-        Description with important parameters
-        :return: CameraDescription with parameters essential for understanding what this device is used for
-        """
-        try:
-            parameters = self.get_settings('Parameters')
-            return CameraDescription(cameras=self.cameras, info=parameters['info'], GUI_title=parameters['title'])
-        except (KeyError, DeviceError) as e:
-            return CameraError(self, f'Could not set description of controller in the database: {e}')
+    @staticmethod
+    def _check_status_flag(flag: int):
+        flags = [0, 1, 2]  # 0 - closed, 1 - opened, 2 - acquiring
+        if flag not in flags:
+            return False, f'Wrong flag {flag} was passed. FLAGS={flags}.'
+        else:
+            return True, ''
+
+    @property
+    @lru_cache(maxsize=10)
+    def device_id_to_id(self) -> Dict[int, int]:
+        return_dict = {}
+        for camera_id, camera in self._hardware_devices.items():
+            return_dict[camera.device_id] = camera_id
+        return return_dict
 
     @abstractmethod
     def _get_cameras_status(self) -> List[int]:
         pass
 
-    def _get_cameras_status_db(self) -> List[int]:
-        return [0] * self._cameras_number
-
-    def get_controller_state(self, func_input: FuncGetControllerStateInput) -> FuncGetControllerStateOutput:
-        """
-        State of controller is returned
-        :return:  FuncOutput
-        """
-        comments = f'Controller is {self.device_status.active}. Power is {self.device_status.power}. ' \
-                   f'Cameras are {self._cameras_status}'
-        try:
-            return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
-                                                      comments=comments, func_success=True)
-        except KeyError:
-            return FuncGetCameraControllerStateOutput(cameras=self.cameras, device_status=self.device_status,
-                                                      comments=comments, func_success=True)
-
-    def _get_cameras_ids_db(self):
-        try:
-            ids: List[int] = []
-            ids_s: List[str] = self.get_parameters['cameras_ids'].replace(" ", "").split(';')
-            for exp in ids_s:
-                val = eval(exp)
-                if not isinstance(val, int):
-                    raise TypeError()
-                ids.append(val)
-            if len(ids) != self._cameras_number:
-                raise CameraError(self, f'Number of cameras_ids {len(ids)} is not equal to '
-                                        f'cameras_number {self._cameras_number}.')
-            return ids
-        except KeyError:
-            try:
-                cameras_number = int(self.get_parameters['cameras_number'])
-                return list([camera_id for camera_id in range(1, cameras_number + 1)])
-            except (KeyError, ValueError):
-                raise CameraError(self, text="Cameras ids could not be set, cameras_ids or cameras_number fields is absent "
-                                             "in the database.")
-        except (TypeError, SyntaxError):
-            raise CameraError(self, text="Check cameras_ids field in database, must be integer.")
-
-    def _get_cameras_names_db(self):
-        try:
-            names: List[int] = []
-            names_s: List[str] = self.get_parameters['cameras_names'].replace(" ", "").split(';')
-            for exp in names_s:
-                val = exp
-                if not isinstance(val, str):
-                    raise TypeError()
-                names.append(val)
-            if len(names) != self._cameras_number:
-                raise CameraError(self, f'Number of cameras_names {len(names)} is not equal to '
-                                        f'cameras_number {self._cameras_number}.')
-            return names
-        except KeyError:
-            raise CameraError(self, text="Cameras names could not be set, cameras_names field is absent in the database.")
-        except (TypeError, SyntaxError):
-            raise CameraError(self, text="Check cameras_names field in database.")
+    def get_images(self, func_input: FuncGetImagesInput) -> FuncGetImagesPrepared:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._prepare_camera_reading(camera_id)
+        else:
+            camera = None
+        if res:
+            image_demand = ImageDemand(camera_id=camera_id, demander_id=func_input.demander_device_id,
+                                       every_n_sec=func_input.every_n_sec, return_images=func_input.return_images,
+                                       post_treatment=func_input.post_treatment,
+                                       treatment_param=func_input.treatment_param,
+                                       history_post_treatment_n=func_input.history_post_treatment_n)
+            self._register_image_demander(image_demand)
+        return FuncGetImagesPrepared(comments=comments, func_success=True, ready=res, camera=camera)
 
     @abstractmethod
-    def _get_number_cameras(self):
+    def _grabbing(self, image_demander: ImageDemand):
         pass
 
-    def _get_number_cameras_db(self):
-        try:
-            return int(self.get_parameters['cameras_number'])
-        except KeyError:
-            raise CameraError(self, text="Cameras_number could not be set, cameras_number field is absent "
-                                              "in the database")
-        except (ValueError, SyntaxError):
-            raise CameraError(self, text="Check cameras number in database, must be cameras_number = number")
+    @abstractmethod
+    def _prepare_camera_reading(self) -> Tuple[bool, str]:
+        return True, ''
 
-    def _set_number_cameras(self):
-        if self.device_status.connected:
-            self._cameras_number = self._get_number_cameras()
+    def _register_image_demander(self, image_demand: ImageDemand):
+        camera_id = image_demand.camera_id
+        demander_id = image_demand.demander_id
+
+        def prepare_thread(camera_id, demander_id) -> Thread:
+            return Thread(target=self._grabbing, args=(camera_id, demander_id))
+
+        if demander_id not in self._images_demanders:
+            thread = prepare_thread(camera_id, demander_id)
+            image_demand.grabbing_thread = thread
+            image_demand.grabbing_thread.start()
+            self._images_demanders[demander_id] = {camera_id: image_demand}
         else:
-            self._cameras_number = self._get_number_cameras_db()
-
-    def _set_names_cameras(self):
-        if not self.device_status.connected:
-            names = self._get_cameras_names_db()
-            for id, name in zip(self.cameras.keys(), names):
-                self.cameras[id].name = name
-                self.cameras[id].friendly_name = name
-
-    def _set_ids_cameras(self):
-        if not self.device_status.connected:
-            ids = self._get_cameras_ids_db()
-            i = 1
-            for id_a in ids:
-                self.cameras[i] = Camera(device_id=id_a)
-                i += 1
-
-    def _set_parameters(self, extra_func: List[Callable] = None) -> Tuple[bool, str]:
-        try:
-            self._set_number_cameras()
-            self._set_ids_cameras()  # Ids must be set first
-            self._set_names_cameras()
-            self._set_private_parameters_db()
-            self._set_status_cameras()
-            res = []
-            if extra_func:
-                comments = ''
-                for func in extra_func:
-                    r, com = func()
-                    res.append(r)
-                    comments = comments + com
-
-            if self.device_status.connected:
-                self._parameters_set_hardware = True
-            if all(res):
-                return True, ''
+            demands = self._images_demanders[demander_id]
+            if camera_id not in demands:
+                thread = prepare_thread(camera_id, demander_id)
+                image_demand.grabbing_thread = thread
+                image_demand.grabbing_thread.start()
+                self._images_demanders[demander_id][camera_id] = image_demand
             else:
-                raise CameraError(self, comments)
-        except CameraError as e:
-            error_logger(self, self._set_parameters, e)
-            return False, str(e)
+                demand: ImageDemand = self._images_demanders[demander_id][camera_id]
+                image_demand.grabbing_thread = demand.grabbing_thread
+                self._images_demanders[demander_id][camera_id] = image_demand
+
+    def set_image_parameters(self, func_input: FuncSetImageParametersInput) -> FuncSetImageParametersOutput:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_image_parameters_device(func_input)
+        else:
+            camera = None
+        return FuncSetImageParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
-    def _set_private_parameters_db(self):
+    def _set_image_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
         pass
 
-
-    def _set_status_cameras(self):
-        if self.device_status.connected:
-            statuses = self._get_cameras_status()
+    def set_sync_parameters(self, func_input: FuncSetSyncParametersInput) -> FuncSetSyncParametersOutput:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_sync_parameters_device(func_input)
         else:
-            statuses = self._get_cameras_status_db()
-
-        for id, status in zip(self.cameras.keys(), statuses):
-            self.cameras[id].status = status
+            camera = None
+        return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
-    def _stop_acquisition(self, camera_id: int):
+    def _set_sync_parameters_device(self, func_input: FuncSetSyncParametersInput) -> Tuple[bool, str]:
+        pass
+
+    def set_transport_parameters(self, func_input: FuncSetTransportParametersInput) -> FuncSetTransportParametersOutput:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._set_transport_parameters_device(func_input)
+        else:
+            camera = None
+        return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera=camera)
+
+    @abstractmethod
+    def _set_transport_parameters_device(self, func_input: FuncSetTransportParametersInput) -> Tuple[bool, str]:
+        pass
+
+    def start_tracking(self, func_input: FuncStartTrackingInput) -> FuncStartTrackingPrepared:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device_range(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._prepare_camera_reading(camera_id)
+        else:
+            camera = None
+        if res:
+            self._register_image_demander(camera_id, func_input.demander_device_id, func_input.n_images,
+                                          func_input.every_n_sec)
+        return FuncStartTrackingPrepared(comments=comments, func_success=True, ready=res, camera=camera)
+
+    def stop_acquisition(self, func_input: FuncStopAcquisitionInput) -> FuncStopAcquisitionOutput:
+        camera_id = func_input.camera_id
+        res, comments = self._check_device(camera_id)
+        if res:
+            camera = self.cameras[camera_id]
+            res, comments = self._stop_acquisition(camera_id)
+        else:
+            camera = None
+        return FuncStopAcquisitionOutput(comments=comments, func_success=res, camera=camera)
+
+    @abstractmethod
+    def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         pass
 
 

@@ -61,26 +61,30 @@ class ProjectManagerView(QtWidgets.QMainWindow):
     def get_files(self):
         operator_email = self.ui.comboBox_operators.itemText(self.ui.comboBox_operators.currentIndex())
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetFilesInput(operator_email=operator_email))
         client.send_msg_externally(msg)
 
     def get_projects(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetProjectsInput())
         client.send_msg_externally(msg)
 
     def get_operators(self):
 
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetOperatorsInput())
         client.send_msg_externally(msg)
 
     def get_state(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.service_parameters.device_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetControllerStateInput())
         client.send_msg_externally(msg)
 

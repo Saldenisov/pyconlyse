@@ -28,21 +28,30 @@ except genicam.GenericException as e:
 
 OffSet = {1: {'X': 310, 'Y': 290}, 0: {'X': 270, 'Y': 120}}
 
+test = {}
+
 def init(camera_id, camera, devices):
     # conecting to the first available camera
     #camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
+    test[camera_id] = camera
     camera.Attach(tlFactory.CreateDevice(devices[camera_id]))
     camera.Open()
+    camera.StopGrabbing()
+    b = camera.IsOpen()
     a = camera.GetDeviceInfo().GetModelName()
     b = camera.GetDeviceInfo().GetSerialNumber()
     c = camera.GetDeviceInfo().GetIpAddress()
+    camera.GetDeviceInfo().SetFriendlyName('Camera1'.format('utf-8'))
+    d = camera.GetDeviceInfo().GetFriendlyName()
     camera.Width = 550
+    e = getattr(camera, 'Width').GetValue()
     camera.Height = 550
-    camera.OffsetX = OffSet[camera_id]['X']
+    camera.OffsetX.SetValue(OffSet[camera_id]['X'])
     camera.OffsetY = OffSet[camera_id]['Y']
-    camera.GainRaw.SetValue(0)
+    camera.GainAuto = 'Off'
+    camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
-    camera.TriggerSource.SetValue("Line1")
+    camera.TriggerSource = "Line1"
     camera.TriggerMode.SetValue("On")
     camera.TriggerDelayAbs.SetValue(190000)
     camera.ExposureTimeAbs.SetValue(10000.0)
@@ -64,8 +73,9 @@ def init(camera_id, camera, devices):
 
     return converter
 
+
 def read(camera, converter):
-    grabResult = camera.RetrieveResult(15000, pylon.TimeoutHandling_ThrowException)
+    grabResult = camera.RetrieveResult(1500, pylon.TimeoutHandling_ThrowException)
     if grabResult.GrabSucceeded():
         # Access the image data
         image = converter.Convert(grabResult)
@@ -73,11 +83,14 @@ def read(camera, converter):
         # if cv2.waitKey(1) & 0xFF == ord('q'):
         # break
     grabResult.Release()
-    return image.GetArray()
+    arr = image.GetArray()
+    return arr
+
 
 def image_treat(image):
     img = cv2.GaussianBlur(image, (3, 3), 0)
     return img
+
 
 def calc(img, threshold=80):
     # apply thresholding
@@ -99,6 +112,7 @@ def calc(img, threshold=80):
         cX, cY = 0, 0
     return thresh, contours, cX, cY
 
+
 converters = []
 
 for i, camera in enumerate(cameras):
@@ -111,6 +125,7 @@ camera1 = cameras[one]
 converter1 = converters[one]
 camera2 = cameras[two]
 converter2 = converters[two]
+
 
 # Figure
 fig = plt.figure(figsize=(8.5, 5.5))

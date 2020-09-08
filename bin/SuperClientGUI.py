@@ -10,16 +10,17 @@ ELYSE platform
 import sys
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
-sys.path.append(app_folder)
+sys.path.append(str(app_folder))
 
 from PyQt5.QtWidgets import QApplication
-from gui.models import SuperUserGUIModel
+
+from gui.models.ClientGUIModels import SuperUserGUIModel
 from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
 
 def main():
-    logger = initialize_logger(app_folder/ 'LOG', file_name="SuperUserGUI")
+    logger = initialize_logger(app_folder / 'LOG', file_name="SuperUserGUI")
     logger.info('Starting SuperUser GUI')
     app = QApplication(sys.argv)
     SuperClientGUIcontroller(SuperUserGUIModel(app_folder))

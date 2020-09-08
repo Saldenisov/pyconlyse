@@ -1,4 +1,4 @@
-from devices.virtualdevices.clients import SuperUser
+from devices.virtual_devices.clients import SuperUser
 
 
 def test_superuser(superuser: SuperUser):

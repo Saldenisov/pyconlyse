@@ -7,17 +7,17 @@ from functools import wraps
 from typing import Any
 
 
-def once(func):
-    @wraps(func)
-    def inner(*args, **kwargs):
-        if inner.called:
-            print(func.__name__ + ' already done')
-            return None
-        if not inner.called:
-            inner.called = True
-            return func(*args, **kwargs)
-    inner.called = False
-    return inner
+def development_mode(dev: bool, with_return: Any):
+    def decorator_function(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            if not dev:
+                return func(*args, **kwargs)
+            else:
+                if with_return != None:
+                    return with_return
+        return inner
+    return decorator_function
 
 
 def make_loop(func):
@@ -48,6 +48,19 @@ def make_loop(func):
     return func_wrapper
 
 
+def once(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        if inner.called:
+            print(func.__name__ + ' already done')
+            return None
+        if not inner.called:
+            inner.called = True
+            return func(*args, **kwargs)
+    inner.called = False
+    return inner
+
+
 def save_parameters(commands: {}, messenger, logger, path):
     def decorator(func):
         @wraps(func)
@@ -61,20 +74,26 @@ def save_parameters(commands: {}, messenger, logger, path):
     return decorator
 
 
-def development_mode(dev: bool, with_return: Any):
-    def decorator_function(func):
-        @wraps(func)
+def turn_off(active=True):
+
+    def inner_decorator(f):
+        @wraps(f)
         def inner(*args, **kwargs):
-            if not dev:
-                return func(*args, **kwargs)
+            if not active:
+                pass
             else:
-                if with_return != None:
-                    return with_return
+                return f(*args, **kwargs)
         return inner
-    return decorator_function
+
+    return inner_decorator
 
 
 
+def a(e=10):
+    print(e)
 
+@turn_off(active=False)
+def b(*args, **kwargs):
+    return a(**kwargs)
 
-
+b(e=5)

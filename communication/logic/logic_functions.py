@@ -1,14 +1,21 @@
 from threading import Thread
 from time import sleep, time
 from typing import Callable
-
+from communication.logic.thinkers_logic import ServerCmdLogic
 from communication.logic.thinkers_logic import Thinker, ThinkerEvent
 from communication.messaging.messages import MessageExt, MsgComInt, MsgComExt
 from devices.interfaces import DeviceType
 from utilities.datastructures.mes_dependent.dicts import MsgDict
 from utilities.datastructures.mes_dependent.general import PendingReply
 from utilities.errors.myexceptions import ThinkerErrorReact
-from utilities.myfunc import info_msg, error_logger
+from utilities.myfunc import info_msg as i_msg
+from utilities.myfunc import error_logger
+from utilities.tools.decorators import turn_off
+
+
+@turn_off(active=True)
+def info_msg(*args, **kwargs):
+    return i_msg(*args, **kwargs)
 
 
 def external_hb_logic(event: ThinkerEvent):
@@ -68,7 +75,7 @@ def internal_hb_logic(event: ThinkerEvent):
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
                 device.signal.emit(msg)
 
-            thinker.add_task_out(msg_heartbeat)
+            thinker.add_task_out_publisher(msg_heartbeat)
             sleep(event.tick)
 
 
@@ -93,56 +100,77 @@ def task_in_reaction(event: ThinkerEvent):
         sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
             try:
+                if isinstance(thinker, ServerCmdLogic):
+                    pass
+                    #print(f'{len(tasks_in)}')
                 msg: MessageExt = tasks_in.popitem(last=False)[1]
                 thinker.msg_counter += 1
                 react = True
                 if msg.com not in exclude_msgs:
+                    #pass
                     info_msg(event, 'INFO', f'Received: {msg.short()}')
+                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.id \
+                            and msg.com != MsgComExt.SHUTDOWN.msg_name:
+                        # If message is not a reply or forward, it must be a demand one
+                        thinker.add_demand_waiting_reply(msg)
+                        info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
 
-                if msg.reply_to == '' and msg.receiver_id != '':  # If message is not a reply, it must be a demand one
-                    thinker.add_demand_waiting_reply(msg)
-                    info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
-
-                elif msg.reply_to != '':
-                    if msg.reply_to in thinker.demands_waiting_reply:
-                        # TODO: should it have else clause or not?
-                        msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
-                        del thinker.demands_waiting_reply[msg.reply_to]
-                        info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
+                    elif msg.reply_to and not msg.forward_to:
+                        if msg.reply_to in thinker.demands_waiting_reply:
+                            # TODO: should it have else clause or not?
+                            msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
+                            del thinker.demands_waiting_reply[msg.reply_to]
+                            info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
+                        elif msg.reply_to == 'delayed_response':
+                            pass
+                        else:
+                            react = False
+                            info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
+                    elif msg.forward_to:
+                        info_msg(event, 'INFO', f'Message {msg.short()} is forwarded.')
+                    elif msg.com == MsgComExt.SHUTDOWN.msg_name:
+                        pass
                     else:
                         react = False
-                        info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
+                        info_msg(event, 'INFO', f'STRANGE Message: {msg}')
+
                 if react:
                     thinker.react_external(msg)
-            except (ThinkerErrorReact, KeyError) as e:
+            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
 
 
 def task_out_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_out: MsgDict = thinker.tasks_out
+    tasks_out_publisher: MsgDict = thinker.tasks_out_publihser
     demand_waiting_reply: MsgDict = thinker.demands_waiting_reply
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
-        if not event.paused and tasks_out:
+        if not event.paused and (tasks_out or tasks_out_publisher):
             try:
-                msg: MessageExt = tasks_out.popitem(last=False)[1]
-                react = True
-                if msg.receiver_id != '' and msg.reply_to == '':
-                    # If msg is not reply, than add to pending demand
-                    info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
-                    thinker.add_demand_waiting_reply(msg)
+                if tasks_out:
+                    msg: MessageExt = tasks_out.popitem(last=False)[1]
+                    react = True
+                    if msg.receiver_id and not msg.reply_to:
+                        # If msg is not reply, than add to pending demand
+                        info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
+                        thinker.add_demand_waiting_reply(msg)
+                    elif msg.reply_to:
+                        if msg.reply_to in demand_waiting_reply:
+                            msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
+                            del demand_waiting_reply[msg.reply_to]
+                            info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} '
+                                                    f'is deleted from demand_waiting_reply')
+                    if react:
+                        thinker.parent.messenger.add_msg_out(msg)
 
-                elif msg.reply_to != '':
-                    if msg.reply_to in demand_waiting_reply:
-                        msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
-                        del demand_waiting_reply[msg.reply_to]
-                        info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted from '
-                                                f'demand_waiting_reply')
-                if react:
-                    thinker.parent.messenger.add_msg_out(msg)
-            except (ThinkerErrorReact, KeyError) as e:
+                if tasks_out_publisher:
+                    msg: MessageExt = tasks_out_publisher.popitem(last=False)[1]
+                    thinker.parent.messenger.add_msg_out_publisher(msg)
+
+            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
 
 
@@ -170,7 +198,7 @@ def pending_demands(event: ThinkerEvent):
                         except KeyError:
                             error_logger(event, pending_demands, f'Cannot delete Msg {msg.id}, com {msg.com} from '
                                                                  f'demand_waiting_reply')
-            except ThinkerErrorReact as e:
+            except (ThinkerErrorReact, RuntimeError) as e:
                 error_logger(event, pending_demands, e)
 
 

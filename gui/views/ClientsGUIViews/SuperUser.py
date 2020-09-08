@@ -66,7 +66,7 @@ class SuperUserView(QMainWindow):
                     for key, item in result.device_available_services.items():
                         names.append(f'{key}')
                         client = self.model.superuser
-                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=key,
+                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id, forward_to=key,
                                                   func_input=FuncServiceInfoInput())
                         client.send_msg_externally(msg)
                     widget.addItems(names)
@@ -75,5 +75,6 @@ class SuperUserView(QMainWindow):
                     info: FuncServiceInfoOutput = info
                     self.model.service_parameters[info.device_id] = info.service_info
                     self.ui.tE_info.setText(str(info.service_info))
+                    self.controller.create_service_gui(info.device_id)
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')

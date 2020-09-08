@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>529</width>
-    <height>311</height>
+    <height>414</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -44,7 +44,7 @@
        </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_activate">
+       <widget class="QCheckBox" name="checkBox_ctrl_activate">
         <property name="text">
          <string>Activate Controller</string>
         </property>
@@ -68,17 +68,24 @@
     <item>
      <layout class="QHBoxLayout" name="axis_movement_typeHL">
       <item>
-       <widget class="QLabel" name="label">
+       <widget class="QLabel" name="label_device_id">
         <property name="text">
          <string>axis #</string>
         </property>
        </widget>
       </item>
       <item>
-       <widget class="QSpinBox" name="spinBox_axis"/>
+       <widget class="QSpinBox" name="spinBox_device_id">
+        <property name="minimum">
+         <number>1</number>
+        </property>
+        <property name="value">
+         <number>1</number>
+        </property>
+       </widget>
       </item>
       <item>
-       <widget class="QCheckBox" name="checkBox_On">
+       <widget class="QCheckBox" name="checkBox_device_activate">
         <property name="text">
          <string>On</string>
         </property>

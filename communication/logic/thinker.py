@@ -27,15 +27,14 @@ class Thinker(ThinkerInter):
         self.parent: Device = parent
         self.msg_counter = 0
         self.events = Events_Dict()
-        msg_dict_size_limit = 10000
+        msg_dict_size_limit = 50
         self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
                                               dict_parent=self)
-        # TODO: add slow thread to track after forwarded messages
-        self._forwarded = MsgDict(name='forwarded_messages', size_limit=msg_dict_size_limit, dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
@@ -74,17 +73,24 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
 
+    def add_task_out_publisher(self, msg: MessageExt):
+        try:
+            self._tasks_out_publisher[msg.id] = msg
+        except KeyError as e:
+            error_logger(self, self.add_task_out, e)
+
     def add_demand_waiting_reply(self, msg: MessageExt):
         try:
             self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
             error_logger(self, self.add_demand_waiting_reply, e)
 
-    def add_to_forwarded(self, msg_forwarded: MessageExt, msg_arrived: MessageExt):
-        try:
-            self._forwarded[msg_forwarded.id] = msg_arrived
-        except KeyError as e:
-            error_logger(self, self.add_demand_waiting_reply, e)
+    def flush_tasks(self):
+        self._tasks_in.clear()
+        self.tasks_in_test.clear()
+        self._tasks_out.clear()
+        self.tasks_out_test.clear()
+        self._tasks_out_publisher.clear()
 
     def info(self):
         from collections import OrderedDict as od
@@ -103,7 +109,7 @@ class Thinker(ThinkerInter):
                 for msg in msg_out:
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
-                info_msg(self, 'INFO', msg_out. short())
+                #info_msg(self, 'INFO', msg_out. short())
                 self.add_task_out(msg_out)
             else:
                 error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'
@@ -111,13 +117,10 @@ class Thinker(ThinkerInter):
 
     def register_event(self, name: str, logic_func: Callable, event_id='', external_name='', original_owner='',
                        start_now=False, **kwargs):
-        # TODO: to complicated. Need to optimize.
         try:
-            if 'tick' in kwargs:
-                tick = kwargs['tick']
-            else:
-                tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
+            tick = kwargs['tick']
         except KeyError as e:
+            tick = float(self.parent.get_general_settings()[name.split(':')[0]]) / 1000
             error_logger(self, self.register_event, f'{e}. Tick value is set to {tick}s')
         finally:
             print_every_n = int(self.parent.get_general_settings()['print_every_n'])
@@ -126,30 +129,28 @@ class Thinker(ThinkerInter):
                     external_name = name
                 if not event_id:
                     event_id = f'{external_name}:{self.parent.id}'
-                if original_owner == '':
+                if not original_owner:
                     original_owner = self.parent.id
-                self.events[event_id] = ThinkerEvent(name=name,
-                                                     external_name=external_name,
-                                                     parent=self,
-                                                     logic_func=logic_func,
-                                                     tick=tick,
-                                                     print_every_n=print_every_n,
-                                                     event_id=event_id,
-                                                     original_owner=original_owner)
-
+                event = ThinkerEvent(name=name,
+                                     external_name=external_name,
+                                     parent=self,
+                                     logic_func=logic_func,
+                                     tick=tick,
+                                     print_every_n=print_every_n,
+                                     event_id=event_id,
+                                     original_owner=original_owner)
                 if start_now:
-                    self.events[event_id].start()
+                    event.start()
+
+                self.events[event_id] = event
 
             except ThinkerEventFuncError as e:
-                raise ThinkerEventError(str(e))
+                raise ThinkerEventError(e)
 
     @property
     def demands_waiting_reply(self) -> MsgDict:
         return self._demands_waiting_reply
 
-    @property
-    def forwarded_messages(self) -> MsgDict:
-        return self._forwarded
 
     @abstractmethod
     def react_external(self, msg: MessageExt):
@@ -200,6 +201,10 @@ class Thinker(ThinkerInter):
     @property
     def tasks_out(self) -> MsgDict:
         return self._tasks_out
+
+    @property
+    def tasks_out_publihser(self) -> MsgDict:
+        return self._tasks_out_publisher
 
     def start(self):
         info_msg(self, 'STARTING')

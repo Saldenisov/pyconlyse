@@ -29,9 +29,6 @@ class GeneralCmdLogic(Thinker):
                     self.parent.signal.emit(msg.ext_to_int())
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
-        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
-            self.remove_device_from_connections(msg.sender_id)
-            self.parent.send_status_pyqt()
 
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
@@ -43,39 +40,35 @@ class GeneralCmdLogic(Thinker):
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
                 self.logger.error(f'Adding to executor {msg.info} failed')
         elif msg.com == MsgComExt.DONE_IT.msg_name:
-            if msg.reply_to in self.forwarded_messages:
-                initial_msg: MessageExt = self.forwarded_messages[msg.reply_to]
-                msg_r = msg.copy(receiver_id=initial_msg.sender_id, reply_to=initial_msg.id,
-                                 sender_id=self.parent.id, forwarded_from=msg.sender_id)
-                del self.forwarded_messages[msg.reply_to]
-                info_msg(self, 'INFO', f'Msg {initial_msg.id} com {initial_msg.com} is deleted from forwarded messages')
-            else:
-                info: Union[DoneIt, MsgError] = msg.info
-                if info.com == Server.ALIVE.name:
-                    info: FuncAliveOutput = info
-                    self.events[msg.info.event_id].time = time()
-                    self.events[msg.info.event_id].n = info.event_n
-                    msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
-                                                     func_input=FuncAliveInput())
-                    if self.parent.pyqtsignal_connected:
-                        self.parent.signal.emit(msg.ext_to_int())
+            info: Union[DoneIt, MsgError] = msg.info
+            if info.com == Server.ALIVE.name:
+                info: FuncAliveOutput = info
+                self.events[msg.info.event_id].time = time()
+                self.events[msg.info.event_id].n = info.event_n
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
+                                                 func_input=FuncAliveInput())
+                if self.parent.pyqtsignal_connected:
+                    self.parent.signal.emit(msg.ext_to_int())
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
+        elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
+            self.remove_device_from_connections(msg.sender_id)
+            self.parent.send_status_pyqt()
         self.msg_out(msg_r)
 
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if msg.receiver_id == '' and msg.sender_id in self.connections:
+        if not msg.receiver_id and msg.sender_id in self.connections:
             self.react_broadcast(msg)
         # Only works for non-Server devices, since only Server emits MsgComExt.HEARTBEAT_FULL
         elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
             self.react_heartbeat_full(msg)
-        # Forwarding message. Applicable only for SERVER
-        elif msg.receiver_id != self.parent.id and msg.receiver_id != '':
+        # Forwarding message. Applicable only for SERVER at this moment
+        elif msg.forward_to:
             self.react_forward(msg)
         # When the message is dedicated to Device
-        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id:
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id and not msg.forward_to:
             self.react_directed(msg)
         # For Server
         elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
@@ -184,7 +177,7 @@ class ServerCmdLogic(GeneralCmdLogic):
             if PUB_Socket in info.device_public_sockets:
                 from communication.logic.logic_functions import external_hb_logic
                 messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
-                self.register_event(name=f'heartbeat:{info.device_name}',
+                self.register_event(name=f'heartbeat:{info.device_name}:{info.device_id[-10:]}',
                                     logic_func=external_hb_logic,
                                     event_id=f'heartbeat:{info.device_id}',
                                     original_owner=info.device_id,
@@ -200,15 +193,14 @@ class ServerCmdLogic(GeneralCmdLogic):
         self.msg_out(msg_r)
 
     def react_forward(self, msg: MessageExt):
-        if msg.receiver_id in self.parent.connections:
-            info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
-            msg_r = msg.copy(sender_id=self.parent.id, forwarded_from=msg.sender_id)
-            self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
+        if msg.forward_to in self.parent.connections:
+            #info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
+            msg_r = msg.copy(sender_id=self.parent.id, receiver_id=msg.forward_to, forward_to='',
+                             forwarded_from=msg.sender_id, id=msg.id)
+            #self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
-            msg_r = [self.parent.generate_msg(msg_com=MsgComExt.AVAILABLE_SERVICES, receiver_id=msg.sender_id,
-                                              reply_to=msg.id),
-                     self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                              comments=f'service {msg.receiver_id} is not available',
+            msg_r = [self.parent.generate_msg(msg_com=MsgComExt.ERROR,
+                                              comments=f'service {msg.forward_to} is not available',
                                               receiver_id=msg.sender_id, reply_to=msg.id)]
         self.msg_out(msg_r)
 
@@ -221,20 +213,27 @@ class ServerCmdLogic(GeneralCmdLogic):
 
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
-    pass
+    def react_first_welcome(self, msg: MessageExt):
+        super().react_first_welcome(msg)
+        client = self.parent
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+                                  func_input=FuncAvailableServicesInput())
+        self.msg_out(msg)
 
 
 class ServiceCmdLogic(GeneralCmdLogic):
     pass
 
 
-class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
-    pass
-
-
 class CameraCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 
+
+class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
+
+class PDUCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
 
 class ProjectManagerServiceCmdLogic(ServiceCmdLogic):
     pass

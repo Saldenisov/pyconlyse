@@ -60,7 +60,20 @@ class StroboscopicPulseProbeRaw(Measurement):
     pass
 
 
+#CameraReadings
+@dataclass
+class CameraReadings:
+    data: np.ndarray
+    time_stamp: float
+    description: str
+    X: np.array = None
+    Y: np.array = None
 
+    def __post_init__(self):
+        if not self.X:
+            self.X = np.arange(self.data.shape[0])
+        if not self.Y:
+            self.Y = np.arange(self.data.shape[1])
 
 
 

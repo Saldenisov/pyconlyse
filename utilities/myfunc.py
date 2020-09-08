@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from random import randint
 from time import sleep
-from typing import Any
+from typing import Any, AnyStr
 from typing import Tuple, List, Iterable, Generator, Union
 
 import numpy as np
@@ -41,6 +41,15 @@ def file_md5(file_path: Path, buf_size=65536) -> str:
                 break
             md5.update(data)
     return md5.hexdigest()
+
+
+def join_smart_comments(comments: AnyStr, com: Any):
+    com = str(com)
+    if comments:
+        comments = f'{comments}. {com}'
+    else:
+        comments = f'{com}.'
+    return comments
 
 
 def list_to_str_repr(list_values: list) -> str:
@@ -274,6 +283,7 @@ def dict_of_dict_to_array(dic):
         else:
             arr.extend(dict_of_dict_to_array(dic[key]))
     return arr
+
 
 if __name__ == "__main__":
     import doctest
