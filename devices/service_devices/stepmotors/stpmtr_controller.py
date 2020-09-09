@@ -168,9 +168,6 @@ class StpMtrController(Service):
                        f'in the range {self.axes_stpmtr[axis_id].limits}'
             return False, comments
 
-    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
-        return self._read_set_positions()
-
     def _read_set_positions(self):
         res, comments = [], ''
         for axis in self.axes_stpmtr.values():
@@ -179,6 +176,9 @@ class StpMtrController(Service):
             if c:
                 comments = f'{c}. {comments}'
         return all(res), comments
+
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        return self._read_set_positions()
 
     @abstractmethod
     def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):

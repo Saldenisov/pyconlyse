@@ -37,7 +37,8 @@ class CameraCtrl_Basler(CameraController):
                                                                       self._set_analog_controls_db,
                                                                       self._set_aoi_controls_db,
                                                                       self._set_acquisition_controls_db,
-                                                                      self._set_image_format_db])
+                                                                      self._set_image_format_db,
+                                                                      self._set_power_settings])
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise CameraError(self, comments)

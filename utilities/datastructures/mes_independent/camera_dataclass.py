@@ -58,7 +58,10 @@ class Camera(HardwareDevice):
     def short(self):
         d = {}
         for key in CameraEssentials.__dataclass_fields__.keys():
-            d[key] = getattr(self, key)
+            try:
+                d[key] = getattr(self, key)
+            except KeyError:
+                d[key] = None
         return CameraEssentials(**d)
 
 
@@ -81,6 +84,7 @@ class CameraEssentials:
     name: str = ''
     friendly_name: str = ''
     parameters: Dict[str, Controls] = field(default_factory=dict)  # {"X": size in pixels, "Y": ..., 'OffsetX':...}
+    power_settings = PowerSettings()
     status: int = 0
 
 

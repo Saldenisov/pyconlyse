@@ -14,7 +14,7 @@ from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, E
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
 from utilities.datastructures.mes_independent.stpmtr_dataclass import StandaAxisStpMtr
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict
+from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict, PowerSettings, FuncPowerInput
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
@@ -38,9 +38,11 @@ class StpMtrCtrl_Standa(StpMtrController):
                                                                       ('limits', 'limits', tuple),
                                                                       ('preset_values', 'preset_values', tuple)],
                                                           extra_func=[self._get_positions_file,
-                                                                      self._set_move_parameters_axes])
+                                                                      self._set_move_parameters_axes,
+                                                                      self._set_power_settings])
         if not res:
             raise StpMtrError(self, comments)
+
 
     def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)
@@ -242,6 +244,16 @@ class StpMtrCtrl_Standa(StpMtrController):
         result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_internal_seq)
         return self._standa_error(result)
 
+    def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
+        must_have_param = {'00003D73': set(['microsteps', 'basic_unit']),
+                           '00003D6A': set(['microsteps', 'basic_unit']),
+                           '00003D98': set(['microsteps', 'basic_unit']),
+                           '00003D8F': set(['microsteps', 'basic_unit']),
+                           '00003B1B': set(['microsteps', 'basic_unit']),
+                           '00003B37': set(['microsteps', 'basic_unit'])
+                           }
+        return super()._set_move_parameters_axes(must_have_param)
+
     def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
         axis = self.axes_stpmtr[device_id]
         microsteps = axis.move_parameters['microsteps']
@@ -259,16 +271,6 @@ class StpMtrCtrl_Standa(StpMtrController):
         result = self.lib.set_position(device_id_internal_seq, ctypes.byref(pos_standa))
         _, _ = self._get_position_axis(device_id)
         return self._standa_error(result)
-
-    def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
-        must_have_param = {'00003D73': set(['microsteps', 'basic_unit']),
-                           '00003D6A': set(['microsteps', 'basic_unit']),
-                           '00003D98': set(['microsteps', 'basic_unit']),
-                           '00003D8F': set(['microsteps', 'basic_unit']),
-                           '00003B1B': set(['microsteps', 'basic_unit']),
-                           '00003B37': set(['microsteps', 'basic_unit'])
-                           }
-        return super()._set_move_parameters_axes(must_have_param)
 
     def _standa_error(self, error: int, func: Callable = None) -> Tuple[bool, str]:
         # TODO: finish filling different errors values

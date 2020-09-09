@@ -13,7 +13,7 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComExt, MsgComInt
-from devices.devices import Client, Service
+from devices.devices import Device, Client, Service
 from utilities.datastructures.mes_independent.devices_dataclass import (DeviceInfoExt, DeviceControllerState,
                                                                         DoneIt, MsgError,
                                                                         FuncActivateInput, FuncActivateOutput,
@@ -59,10 +59,8 @@ class DeviceControllerView(QMainWindow):
 
         self.update_state(force_device=True, force_ctrl=True)
 
-        msg = self.superuser.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.superuser.server_id,
-                                          forward_to=self.service_parameters.device_id,
-                                          func_input=FuncGetControllerStateInput())
-        self.send_msg(msg)
+        self.get_controller_state()
+
         info_msg(self, 'INITIALIZED')
 
     def activate_controller(self):
@@ -110,6 +108,12 @@ class DeviceControllerView(QMainWindow):
                 raise Exception(f'Unknown value type: {type(value)}.')
         except Exception as e:
             error_logger(self, self.controller_devices, e)
+
+    def get_controller_state(self):
+        msg = self.superuser.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.superuser.server_id,
+                                          forward_to=self.service_parameters.device_id,
+                                          func_input=FuncGetControllerStateInput())
+        self.send_msg(msg)
 
     @property
     def selected_device_id(self) -> int:
@@ -166,6 +170,8 @@ class DeviceControllerView(QMainWindow):
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
+        client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_controller_state, delay=1, n_max=1)
+
         self.send_msg(msg)
 
     def send_msg(self, msg: MessageExt):

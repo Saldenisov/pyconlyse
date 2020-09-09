@@ -91,7 +91,7 @@ class FuncGetPDUStateOutput(FuncOutput):
 class FuncSetPDUStateInput(FuncInput):
     pdu_id: int
     pdu_output_id: Union[int, str]
-    output: PDUOutput
+    output: Union[PDUOutput, int]
     com: str = 'set_pdu_state'
 
 
