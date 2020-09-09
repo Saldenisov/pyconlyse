@@ -371,18 +371,20 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.send_msg_externally(msg_r)
 
     @staticmethod
-    def exec_mes_every_n_sec(f: Callable[[Any], bool], delay=5, n_max=10, specific={}) -> None:
+    def exec_mes_every_n_sec(f: Callable, delay=5, n_max=10, specific={'with_return': False}) -> None:
         i = 0
         if delay > 5:
             delay = 5
         from time import sleep
         flag = True
-        while flag and i <= n_max:
+        while flag and i < n_max:
             i += 1
             print(f'i = {i}')
             sleep(delay)
-            if f:
+            if specific['with_return']:
                 flag = f(**specific)
+            else:
+                f()
 
     def pause(self):
         self.thinker.pause()
@@ -609,6 +611,7 @@ class Service(Device):
         self.server_id: DeviceId = self.get_settings('General')['server_id']  # must be here
         self._hardware_device_dataclass = kwargs['hardware_device_dataclass']
         self._hardware_devices: Dict[Union[int, str], HardwareDevice] = HardwareDeviceDict()
+        self._power_settings: PowerSettings = PowerSettings()
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -738,7 +741,8 @@ class Service(Device):
         """
         try:
             return ServiceDescription(hardware_devices=self.hardware_devices, info=self.get_parameters['info'],
-                                      GUI_title=self.get_parameters['title'], class_name=self.__class__.__name__)
+                                      GUI_title=self.get_parameters['title'], power_settings=self._power_settings,
+                                      class_name=self.__class__.__name__)
         except (KeyError, DeviceError) as e:
             return DeviceError(self, f'Could not find description of the controller: {e}. Check the DB.')
 
@@ -779,12 +783,24 @@ class Service(Device):
         flag = func_input.flag
         if self.ctrl_status.power ^ flag:  # XOR
             if not flag and self.ctrl_status.active:
-                comments = f'Power is {self.ctrl_status.power}. Cannot switch power off when device is activated.'
-                res = False
+                res, comments = False, f'Power is {self.ctrl_status.power}. Cannot switch power off ' \
+                                       f'when device is activated.'
             else:
-                self.ctrl_status.power = flag
-                res = True
-                comments = f'Power is {self.ctrl_status.power}. But remember, that user switches power manually...'
+                if not self._power_settings.controller_id:
+                    self.ctrl_status.power = flag
+                    res, comments = True, f'Power is {self.ctrl_status.power}. Device does not require power.'
+                elif self._power_settings.controller_id == 'manually':
+                    self.ctrl_status.power = flag
+                    res, comments = True, f'Power is {self.ctrl_status.power}. But remember, ' \
+                                          f'that user must switch power manually...'
+                else:
+                    msg = self.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.server_id,
+                                            forward_to=self._power_settings.controller_id,
+                                            func_input=FuncSetPDUStateInput(pdu_id=self._power_settings.pdu_id,
+                                                                            pdu_output_id=self._power_settings.output_id,
+                                                                            output=int(flag)))
+                    self.send_msg_externally(msg)
+                    res, comments = True, ''
         else:
             res, comments = True, ''
         return FuncPowerOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
@@ -860,6 +876,15 @@ class Service(Device):
     @abstractmethod
     def _set_parameters_after_connect(self) -> Tuple[bool, str]:
         return True, ''
+
+    def _set_power_settings(self) -> Tuple[bool, str]:
+        try:
+            power_param = eval(self.get_parameters['power_controller_parameters'])
+            self._power_settings = PowerSettings(*power_param)
+            return True, ''
+        except (SyntaxError, ValueError) as e:
+            error_logger(self, self._set_power_settings, e)
+            return False, f'During setting power controller setting error occurred: {e}.'
 
     def send_status_pyqt(self):
         pass

@@ -4,6 +4,7 @@ from communication.logic.thinker import Thinker, ThinkerEvent
 from communication.messaging.messages import *
 from communication.messaging.messengers import PUB_Socket, SUB_Socket, PUB_Socket_Server
 from devices.devices import Server
+from devices.service_devices.pdu import PDUController
 from utilities.datastructures.mes_independent.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
 
@@ -49,6 +50,11 @@ class GeneralCmdLogic(Thinker):
                                                  func_input=FuncAliveInput())
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg.ext_to_int())
+            elif info.com == PDUController.SET_PDU_STATE.name:
+                power_settings: PowerSettings = self.parent._power_settings
+                if power_settings.controller_id and power_settings.controller_id != 'manually':
+                    result: FuncSetPDUStateOutput = info
+                    self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
@@ -93,6 +99,8 @@ class GeneralCmdLogic(Thinker):
             server_connection.permission = Permission.GRANTED
             self.parent.send_status_pyqt()
             info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
+            # Turn On Power
+            self.parent.power(func_input=FuncPowerInput(flag=True))
         except Exception as e:  # TODO: change Exception to something reasonable
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
@@ -234,6 +242,7 @@ class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
 
 class PDUCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
+
 
 class ProjectManagerServiceCmdLogic(ServiceCmdLogic):
     pass

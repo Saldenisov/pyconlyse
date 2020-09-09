@@ -24,6 +24,11 @@ class PDUCtrl_NETIO(PDUController):
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise PDUError(self, comments)
+        else:
+            self.power(func_input=FuncPowerInput(flag=True))
+            self.activate(func_input=FuncActivateInput(flag=True))
+            for pdu in self.pdus.values():
+                self.activate_device(func_input=FuncActivateDeviceInput(device_id=pdu.device_id_seq, flag=True))
 
     def _change_device_status(self, pdu_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_device_range(pdu_id)
@@ -112,8 +117,11 @@ class PDUCtrl_NETIO(PDUController):
     def _set_pdu_state(self, func_input: FuncSetPDUStateInput) -> Tuple[bool, str]:
         pdu: PDUNetio = self.pdus[func_input.pdu_id]
         if func_input.pdu_output_id in pdu.outputs:
-            state_to_set: PDUNetioOutput = func_input.output
-            action = 1 if state_to_set.state else 0
+            if isinstance(func_input.output, int):
+                action = func_input.output
+            elif isinstance(func_input.output, PDUNetioOutput):
+                state_to_set: PDUNetioOutput = func_input.output
+                action = 1 if state_to_set.state else 0
             j_string = {"Outputs": [{"ID": func_input.pdu_output_id,  "Action": action}]}
             res, comments = self._send_request(pdu.device_id, j_string)
             if isinstance(res, requests.Response):

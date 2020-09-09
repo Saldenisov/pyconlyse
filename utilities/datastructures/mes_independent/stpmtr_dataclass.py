@@ -132,13 +132,21 @@ class AxisStpMtr(HardwareDevice):
 
 
 @dataclass(frozen=False)
-class StandaAxisStpMtr(AxisStpMtr):
-    device_id_internal_seq: int = None
+class A4988AxisStpMtr(AxisStpMtr):
+    pass
 
 
 @dataclass(frozen=False)
-class A4988AxisStpMtr(AxisStpMtr):
-    pass
+class OwisAxisStpMtr(AxisStpMtr):
+    gear_ratio: float = 0.0
+    pitch: float = 1.0
+    revolution: int = 200
+    speed: float = 5.0
+
+
+@dataclass(frozen=False)
+class StandaAxisStpMtr(AxisStpMtr):
+    device_id_internal_seq: int = None
 
 
 @dataclass(order=True, frozen=False)

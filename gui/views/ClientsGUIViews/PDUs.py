@@ -5,21 +5,14 @@ Created on 08.09.2020
 """
 import logging
 from _functools import partial
-from time import sleep
-from typing import Dict, Union
-import numpy as np
-from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMenu, QErrorMessage, QCheckBox
-from matplotlib.widgets import RectangleSelector
+
+from PyQt5.QtWidgets import QCheckBox
 
 from communication.messaging.messages import MessageInt, MsgComExt
 from devices.service_devices.pdu import PDUController
-
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
-from gui.views.matplotlib_canvas.DataCanvasCamera import DataCanvasCamera
 from gui.views.ui import Ui_PDUs
 from utilities.datastructures.mes_independent.pdu_dataclass import *
-from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)
 

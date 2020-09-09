@@ -10,6 +10,13 @@ from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
 from utilities.datastructures.mes_independent.general import *
 
 
+@dataclass
+class PowerSettings:
+    controller_id: Union[int, str] = ''
+    pdu_id: Union[int, str] = ''
+    output_id: Union[int, str] = ''
+
+
 @dataclass(frozen=True)
 class DeviceParts(DataClass_frozen):
     messenger: MessengerInter
@@ -132,6 +139,7 @@ class Description:
 @dataclass(order=True)
 class ServiceDescription(Description):
     hardware_devices: HardwareDevice
+    power_settings: PowerSettings
     class_name: str
 
 
