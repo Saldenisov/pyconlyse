@@ -63,24 +63,27 @@ class PDUsView(DeviceControllerView):
         self._asked_status = 0
 
     def update_state(self, force_device=False, force_ctrl=False):
-        pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl)
 
-        cs = self.device_ctrl_state
-        ui = self.ui
+        def update_func_local(self, force_device=False, force_ctrl=False):
+            cs = self.device_ctrl_state
+            ui = self.ui
+            pdu: PDU = cs.devices[self.selected_device_id]
 
-        if force_device:
-            pass
+            if force_device:
+                pass
 
-        if cs.devices != cs.devices_previous or force_device:
-            for i in reversed(range(ui.horizontalLayout_pdu_outputs.count())):
-                ui.horizontalLayout_pdu_outputs.itemAt(i).widget().deleteLater()
+            if cs.devices != cs.devices_previous or force_device:
+                for i in reversed(range(ui.horizontalLayout_pdu_outputs.count())):
+                    ui.horizontalLayout_pdu_outputs.itemAt(i).widget().deleteLater()
 
-            for output_id, output in pdu.outputs.items():
-                checkbox = QCheckBox(text=output.name)
-                checkbox.setChecked(bool(output.state))
-                checkbox.clicked.connect(partial(self.set_output, output_id))
-                ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
-                self.output_checkboxes[output_id] = checkbox
+                for output_id, output in pdu.outputs.items():
+                    checkbox = QCheckBox(text=output.name)
+                    checkbox.setChecked(bool(output.state))
+                    checkbox.clicked.connect(partial(self.set_output, output_id))
+                    ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
+                    self.output_checkboxes[output_id] = checkbox
+
+        pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl, func=update_func_local)
 
 
 

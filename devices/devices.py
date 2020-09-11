@@ -3,13 +3,10 @@ import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from inspect import signature, isclass
-from time import sleep, time
-from typing import Any, Callable
-
 from pathlib import Path
-app_folder = Path(__file__).resolve().parents[1]
-sys.path.append(str(Path(__file__).resolve().parents[1]))
-
+from PyQt5.QtCore import QObject, pyqtSignal
+from time import sleep, time
+from typing import Callable
 from devices.interfaces import DeviceInter
 from communication.messaging.messages import *
 from utilities.database.tools import db_create_connection, db_execute_select
@@ -20,10 +17,12 @@ from utilities.myfunc import info_msg, unique_id, error_logger, join_smart_comme
 from utilities.datastructures.mes_independent.devices_dataclass import HardwareDevice, HardwareDeviceDict
 from logs_pack import initialize_logger
 
+
+app_folder = Path(__file__).resolve().parents[1]
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 module_logger = logging.getLogger(__name__)
 
 
-from PyQt5.QtCore import QObject, pyqtSignal
 pyqtWrapperType = type(QObject)
 
 
@@ -108,28 +107,49 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             raise DeviceError(self, str(e))
 
         from threading import Thread
-        self._observing_param: Dict[str, List[Any, int]] = {}
+        self._observing_func: Dict[str, List[Callable, int]] = {}
         self._observing_FLAG = True
+        self._observing_locked = False
         self._observing_thread = Thread(name='observing_thread', target=self._observing)
         self._observing_thread.start()
 
         info_msg(self, 'CREATED')
 
-    def _register_observation(self, name: str):
-        try:
-            self._observing_param[name] = [getattr(self, name), time()]
-        except AttributeError as e:
-            error_logger(self, self._register_observation, e)
+    def _register_observation(self, name: str, func: Callable, every_n_sec=1):
+        def register(self: Device, name: str, func: Callable, every_n_sec=1):
+            if callable(func):
+                self._observing_locked = True
+                self._observing_func[name] = [func, int(every_n_sec)]
+                self._observing_locked = False
+            else:
+                error_logger(self, self._register_observation, f'Func object {func} is not callable.')
+
+        if not self._observing_locked:
+            register(self, name, func, every_n_sec)
+        else:
+            for i in range(500):
+                sleep(0.05)
+                i += 1
+                if not self._observing_locked:
+                    register(self, name, func, every_n_sec)
+                    break
+                if i == 500:
+                    error_logger(self, self._register_observation, f'Observing function was always locked, try again.')
 
     def _observing(self):
         info_msg(self, 'INFO', f'Observing thread started.')
+        time = 0
+        sleep_time = 0.5
         while self._observing_FLAG:
-            sleep(1)
-            for key, val in self._observing_param.items():
-                param_val = getattr(self, key)
-                if param_val != val[0]:
-                    self._observing_param[key] = [param_val, time()]
-                    info_msg(self, 'INFO', f'Attributes {key} changed its value.')
+            sleep(sleep_time)
+            time += sleep_time
+            if not self._observing_locked:
+                for name, value in self._observing_func.items():
+                    every_n_sec = value[1]
+                    if time % every_n_sec == 0:
+                        self._observing_locked = True
+                        value[0]()
+                        self._observing_locked = False
 
     def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
         res = []
@@ -234,7 +254,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                                               f'such as {message_info.must_have_param}, but instead '
                                                               f'{kwargs.keys()}')
                         raise DeviceError(self, f'Not all parameters are passed to device.generate_msg')
-
                 if msg_com is MsgComExt.AVAILABLE_SERVICES:
                     info = AvailableServices(available_services=kwargs['available_services'])
                 elif msg_com is MsgComExt.DO_IT:
@@ -368,6 +387,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 forward_to = ''
             msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
                                       forward_to=forward_to, reply_to=msg.id)
+            error_logger(self, self.execute_com, msg_r)
         self.send_msg_externally(msg_r)
 
     @staticmethod

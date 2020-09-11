@@ -79,7 +79,7 @@ def turn_off(active=True):
     def inner_decorator(f):
         @wraps(f)
         def inner(*args, **kwargs):
-            if not active:
+            if active:
                 pass
             else:
                 return f(*args, **kwargs)

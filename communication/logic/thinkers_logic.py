@@ -50,7 +50,8 @@ class GeneralCmdLogic(Thinker):
                                                  func_input=FuncAliveInput())
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg.ext_to_int())
-            elif info.com == PDUController.SET_PDU_STATE.name:
+            elif info.com == PDUController.SET_PDU_STATE.name and not isinstance(self, SuperUserClientCmdLogic):
+                # TODO: and not isinstance(self, SuperUserClientCmdLogic) IS STUPID
                 power_settings: PowerSettings = self.parent._power_settings
                 if power_settings.controller_id and power_settings.controller_id != 'manually':
                     result: FuncSetPDUStateOutput = info
@@ -99,11 +100,13 @@ class GeneralCmdLogic(Thinker):
             server_connection.permission = Permission.GRANTED
             self.parent.send_status_pyqt()
             info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
-            # Turn On Power
-            self.parent.power(func_input=FuncPowerInput(flag=True))
+            # Turn On Power if option available
+            if hasattr(self.parent, 'power'):
+                self.parent.power(func_input=FuncPowerInput(flag=True))
         except Exception as e:  # TODO: change Exception to something reasonable
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
+            error_logger(self, self.react_first_welcome, msg_r)
         self.msg_out(msg_r)
 
     def react_heartbeat_full(self, msg: MessageExt):
@@ -221,6 +224,7 @@ class ServerCmdLogic(GeneralCmdLogic):
 
 
 class SuperUserClientCmdLogic(GeneralCmdLogic):
+
     def react_first_welcome(self, msg: MessageExt):
         super().react_first_welcome(msg)
         client = self.parent
@@ -239,6 +243,7 @@ class CameraCtrlServiceCmdLogic(ServiceCmdLogic):
 
 class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
+
 
 class PDUCtrlServiceCmdLogic(ServiceCmdLogic):
     pass

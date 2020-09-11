@@ -130,6 +130,14 @@ class DoneIt:
     result: FuncOutput
 
 
+@dataclass
+class FYI:
+    func_name: str
+    func_success: bool = None
+    comments: bool = ''
+    com = 'for_your_info'
+
+
 @dataclass(order=True)
 class Description:
     info: str

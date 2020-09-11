@@ -86,8 +86,6 @@ class SuperClientGUIcontroller():
         except Exception as e:
             error_logger(self, self.create_service_gui, e)
 
-
-
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
 
@@ -109,6 +107,7 @@ class SuperClientGUIcontroller():
     def quit_clicked(self, event, total_close=False):
         if total_close:
             try:
+                self.view._state_observing = False
                 self.device.stop()
             except Exception as e:  # TODO something reasonable
                 error_logger(self, self.quit_clicked, f'{self.name}: {e}')

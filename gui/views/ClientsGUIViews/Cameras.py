@@ -84,7 +84,7 @@ class CamerasView(DeviceControllerView):
         if action:
             if action == action_full_image:
                 camera_id = self.selected_device_id
-                size_of_matrix = self.controller_status.cameras[camera_id].matrix_size
+                size_of_matrix = self.device_ctrl_state.cameras[camera_id].matrix_size
                 if len(size_of_matrix) != 0:
                     self.ui.spinBox_Xoffset.setValue(0)
                     self.ui.spinBox_Yoffset.setValue(0)
@@ -375,40 +375,42 @@ class CamerasView(DeviceControllerView):
         self._asked_status = 0
 
     def update_state(self, force_device=False, force_ctrl=False):
-        camera: Camera = super(CamerasView, self).update_state(force_device, force_ctrl)
+        def update_func_local(self,force_device, force_ctrl):
+            cs = self.device_ctrl_state
+            ui = self.ui
+            camera: Camera = cs.devices[self.selected_device_id]
 
-        cs = self.device_ctrl_state
-        ui = self.ui
+            if cs.devices != cs.devices_previous or force_device:
+                acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
+                analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
+                aoi_ctrls: AOI_Controls = camera.parameters['AOI_Controls']
+                transport_ctrls: Transport_Layer = camera.parameters['Transport_Layer']
 
-        if cs.devices != cs.devices_previous or force_device:
-            acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
-            analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
-            aoi_ctrls: AOI_Controls = camera.parameters['AOI_Controls']
-            transport_ctrls: Transport_Layer = camera.parameters['Transport_Layer']
+                # Setting Acquisition_Controls
+                ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
+                ui.spinBox_exposure_time.setValue(acq_ctrls.ExposureTimeAbs)
+                ui.spinBox_trigger_delay.setValue(acq_ctrls.TriggerDelayAbs)
+                # Setting Analog_Controls
+                ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
+                ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
+                ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
+                # Setting AOI_Controls
+                ui.spinBox_Width.setValue(aoi_ctrls.Width)
+                ui.spinBox_Height.setValue(aoi_ctrls.Height)
+                ui.spinBox_Xoffset.setValue(aoi_ctrls.OffsetX)
+                ui.spinBox_Yoffset.setValue(aoi_ctrls.OffsetY)
+                # Setting Transport_Layer
+                ui.spinBox_packetsize.setValue(transport_ctrls.GevSCPSPacketSize)
+                ui.spinBox_interpacket_delay.setValue(transport_ctrls.GevSCPD)
 
-            # Setting Acquisition_Controls
-            ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
-            ui.spinBox_exposure_time.setValue(acq_ctrls.ExposureTimeAbs)
-            ui.spinBox_trigger_delay.setValue(acq_ctrls.TriggerDelayAbs)
-            # Setting Analog_Controls
-            ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
-            ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
-            ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
-            # Setting AOI_Controls
-            ui.spinBox_Width.setValue(aoi_ctrls.Width)
-            ui.spinBox_Height.setValue(aoi_ctrls.Height)
-            ui.spinBox_Xoffset.setValue(aoi_ctrls.OffsetX)
-            ui.spinBox_Yoffset.setValue(aoi_ctrls.OffsetY)
-            # Setting Transport_Layer
-            ui.spinBox_packetsize.setValue(transport_ctrls.GevSCPSPacketSize)
-            ui.spinBox_interpacket_delay.setValue(transport_ctrls.GevSCPD)
+            if force_device:
+                pass
 
-        if force_device:
-            pass
+        super(CamerasView, self).update_state(force_device, force_ctrl, func=update_func_local)
 
     def update_cursors(self, eclick, erelease):
         camera_id = self.selected_device_id
-        size_of_matrix = self.controller_status.devices[camera_id].matrix_size
+        size_of_matrix = self.device_ctrl_state.devices[camera_id].matrix_size
         xoffset_prev = self.ui.spinBox_Xoffset.value()
         yoffset_prev = self.ui.spinBox_Yoffset.value()
 

@@ -19,6 +19,7 @@ module_logger = logging.getLogger(__name__)
 class MsgComInt(Enum):
     DEVICE_INFO_INT = MessageInfoInt(DeviceInfoInt)
     DONE_IT = MessageInfoInt(DoneIt)
+    FYI = MessageInfoInt(FYI)
     HEARTBEAT = MessageInfoInt(HeartBeat)
     ERROR = MessageInfoInt(MsgError)
 
@@ -67,6 +68,35 @@ class MessageInt(Message):
     info: dataclass  # DataClass
     sender_id: str
     forwarded_from: str = ''
+    forward_to: str = ''
+    receiver_id: str = ''
+
+    def fyi_repr(self):
+        if self.com == MsgComInt.FYI.msg_name:
+            t = []
+            info: FYI = self.info
+            if info.func_name:
+                t.append(f'COM: {info.func_name}')
+            if info.func_success:
+                t.append(f'Success: {info.func_success}')
+            if info.func_success:
+                t.append(f'{info.comments}')
+            if self.forwarded_from:
+                t.append(f'SENDER*: {self.forwarded_from[0:15]}...')
+            else:
+                if self.sender_id:
+                    t.append(f'SENDER: {self.sender_id[0:15]}...')
+                else:
+                    t.append(f'SENDER: ?___?')
+
+            if self.forward_to:
+                t.append(f'RECEIVER*: {self.forward_to[0:15]}...')
+            else:
+                t.append(f'RECEIVER: {self.receiver_id[0:15]}...')
+
+            return '. '.join(t)
+        else:
+            return self.__repr__()
 
 
 class Coding(Enum):
@@ -132,6 +162,20 @@ class MessageExt(Message):
 
     def ext_to_int(self) -> MessageInt:
         return MessageInt(com=self.com, info=self.info, sender_id=self.sender_id, forwarded_from=self.forwarded_from)
+
+    def fyi(self):
+        func_name, func_success, comments = '', None, ''
+        if hasattr(self.info, 'func_success'):
+            func_success = self.info.func_success
+        if hasattr(self.info, 'comments'):
+            comments = self.info.comments
+        if hasattr(self.info, 'com'):
+            func_name = self.info.com
+
+        info: FYI = FYI(func_name, func_success, comments)
+        return MessageInt(com=MsgComInt.FYI.msg_name, info=info, sender_id=self.sender_id,
+                          receiver_id=self.receiver_id, forward_to=self.forward_to,
+                          forwarded_from=self.forwarded_from)
 
     def byte_repr(self, coding: Coding = Coding.JSON, compression=True) -> bytes:
         """

@@ -1,0 +1,1 @@
+start cmd /k "python C:\dev\pyconlyse\bin\SuperClientGUI.py"

@@ -9,4 +9,4 @@ r = requests.get('http://10.20.30.43/netio.json', auth=('radiolyse', 'Elys3!lcp'
 print(type(r))
 print('STATUS: ', r.status_code)
 
-print(r.json()['Outputs'])
+print(r.json())

@@ -7,8 +7,9 @@ import copy
 import logging
 from _functools import partial
 from abc import abstractmethod
+from time import sleep
 from typing import Callable, Dict, Union
-
+from threading import Thread
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import QMainWindow
 
@@ -60,7 +61,9 @@ class DeviceControllerView(QMainWindow):
         self.update_state(force_device=True, force_ctrl=True)
 
         self.get_controller_state()
-
+        self._state_observing = True
+        thread = Thread(target=self.controller_state_observation)
+        #thread.start()
         info_msg(self, 'INITIALIZED')
 
     def activate_controller(self):
@@ -108,6 +111,15 @@ class DeviceControllerView(QMainWindow):
                 raise Exception(f'Unknown value type: {type(value)}.')
         except Exception as e:
             error_logger(self, self.controller_devices, e)
+
+    def controller_state_observation(self):
+        info_msg(self, 'INFO', 'Starting Controller state observation thread.')
+        while self._state_observing:
+            sleep(1)
+            self.get_controller_state()
+        print('Done')
+        info_msg(self, 'INFO', 'Controller state observation thread Terminated.')
+
 
     def get_controller_state(self):
         msg = self.superuser.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.superuser.server_id,
@@ -178,7 +190,7 @@ class DeviceControllerView(QMainWindow):
         self.superuser.send_msg_externally(msg)
 
     @abstractmethod
-    def update_state(self, force_device=False, force_ctrl=False):
+    def update_state(self, force_device=False, force_ctrl=False, func: Callable=None):
         device_state = self.device_ctrl_state
         ui = self.ui
         device: HardwareDevice = device_state.devices[self.selected_device_id]
@@ -205,6 +217,9 @@ class DeviceControllerView(QMainWindow):
 
             ui.label_name.setText(f'Name: {name}')
             ui.checkBox_device_activate.setChecked(device.status)
+
+            if func:
+                func(self, force_device, force_ctrl)
+
             self.device_ctrl_state.axes_previous = copy.deepcopy(device_state.devices)
-        return device
 

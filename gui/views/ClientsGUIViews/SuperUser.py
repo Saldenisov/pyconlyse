@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import QMainWindow
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from devices.devices import Server, Service
-from gui.views.ui.SuperUser_ui import Ui_SuperUser
+from gui.views.ui.SuperUser import Ui_SuperUser
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
@@ -38,7 +38,6 @@ class SuperUserView(QMainWindow):
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
-        a = 2
 
     def closeEvent(self, event):
         info_msg(self,'INFO', f'{self.name} is closing.')
@@ -49,13 +48,13 @@ class SuperUserView(QMainWindow):
         info = msg.info
         try:
             if com == MsgComInt.HEARTBEAT.msg_name:
-                widget1 = self.ui.rB_hb
-                widget2 = self.ui.rB_hb2
-                widget1v = widget1.isChecked()
-                if widget1v:
-                    widget2.setChecked(True)
+                hB1 = self.ui.radioButton_hB
+                hB2 = self.ui.radioButton_hB2
+                hb_s = hB1.isChecked()
+                if hb_s:
+                   hB2.setChecked(True)
                 else:
-                    widget1.setChecked(True)
+                   hB1.setChecked(True)
             elif com == MsgComInt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
                 if info.com == Server.GET_AVAILABLE_SERVICES.name:
@@ -76,5 +75,11 @@ class SuperUserView(QMainWindow):
                     self.model.service_parameters[info.device_id] = info.service_info
                     self.ui.tE_info.setText(str(info.service_info))
                     self.controller.create_service_gui(info.device_id)
+            elif com == MsgComInt.FYI.msg_name:
+                if msg.sender_id == self.model.superuser.id:
+                    text = f'SENDING: {msg.fyi_repr()}.'
+                else:
+                    text = f'RECEIVED: {msg.fyi_repr()}.'
+                self.ui.lineEdit_msg.setText(text)
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')

@@ -42,7 +42,7 @@ class DataCanvasCamera(FigureCanvas):
         for coordinate, n in zip(points, range(len(points))):
             #x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
             #coordinate = (x, y)
-            circles.append(Circle(coordinate, radius=10, color=c_map(n), zorder=n+1))
+            circles.append(Circle(coordinate, radius=1, color=c_map(n), zorder=n+1))
 
         if self.image:
             [p.remove() for p in reversed(self.axis.patches)]

@@ -1,3 +1,4 @@
+from copy import deepcopy
 from threading import Thread
 from time import sleep, time
 from typing import Callable
@@ -104,11 +105,16 @@ def task_in_reaction(event: ThinkerEvent):
                     pass
                     #print(f'{len(tasks_in)}')
                 msg: MessageExt = tasks_in.popitem(last=False)[1]
+
                 thinker.msg_counter += 1
                 react = True
                 if msg.com not in exclude_msgs:
-                    #pass
-                    info_msg(event, 'INFO', f'Received: {msg.short()}')
+                    if thinker.parent.pyqtsignal_connected:
+                        # Convert MessageExt to MessageInt and emit it
+                        msg_int = msg.fyi()
+                        thinker.parent.signal.emit(msg_int)
+
+                    info_msg(event, 'INFO', f'Received: {msg.short()}.')
                     if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.id \
                             and msg.com != MsgComExt.SHUTDOWN.msg_name:
                         # If message is not a reply or forward, it must be a demand one
@@ -155,15 +161,19 @@ def task_out_reaction(event: ThinkerEvent):
                     react = True
                     if msg.receiver_id and not msg.reply_to:
                         # If msg is not reply, than add to pending demand
-                        info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply')
+                        info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply.')
                         thinker.add_demand_waiting_reply(msg)
                     elif msg.reply_to:
                         if msg.reply_to in demand_waiting_reply:
                             msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
                             del demand_waiting_reply[msg.reply_to]
-                            info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} '
-                                                    f'is deleted from demand_waiting_reply')
+                            info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted '
+                                                    f'from demand_waiting_reply.')
                     if react:
+                        if thinker.parent.pyqtsignal_connected:
+                            # Convert MessageExt to MessageInt and emit it
+                            msg_int = msg.fyi()
+                            thinker.parent.signal.emit(msg_int)
                         thinker.parent.messenger.add_msg_out(msg)
 
                 if tasks_out_publisher:
@@ -183,7 +193,8 @@ def pending_demands(event: ThinkerEvent):
         if not event.paused and demands_waiting_reply:
             try:
                 sleep(event.tick)
-                for key, item in demands_waiting_reply.items():
+                demands = deepcopy(dict(demands_waiting_reply.items()))
+                for key, item in demands.items():
                     pending: PendingReply = item
                     if (time() - event.time) > event.tick and pending.attempt < 3:
                         pending.attempt += 1
@@ -193,8 +204,8 @@ def pending_demands(event: ThinkerEvent):
                         try:
                             msg = pending.message
                             del demands_waiting_reply[key]
-                            info_msg(event, 'INFO', f'Reply timeout for msg: {msg.short()}')
-                            info_msg(event, 'INFO', f'Msg {msg.id} is deleted')
+                            i_msg(event, 'INFO', f'Reply timeout for msg: {msg.short()}.')
+                            i_msg(event, 'INFO', f'Msg {msg.id} is deleted.')
                         except KeyError:
                             error_logger(event, pending_demands, f'Cannot delete Msg {msg.id}, com {msg.com} from '
                                                                  f'demand_waiting_reply')

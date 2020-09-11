@@ -109,7 +109,6 @@ class Thinker(ThinkerInter):
                 for msg in msg_out:
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
-                #info_msg(self, 'INFO', msg_out. short())
                 self.add_task_out(msg_out)
             else:
                 error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'

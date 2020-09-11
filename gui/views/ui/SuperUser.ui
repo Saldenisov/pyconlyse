@@ -74,6 +74,20 @@
            </widget>
           </item>
           <item>
+           <widget class="QRadioButton" name="radioButton_hB">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QRadioButton" name="radioButton_hB2">
+            <property name="text">
+             <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
            <spacer name="horizontalSpacer_2">
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
@@ -158,14 +172,7 @@
        <number>2</number>
       </property>
       <item>
-       <widget class="QLineEdit" name="lE_command"/>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pB_execute">
-        <property name="text">
-         <string>Execute</string>
-        </property>
-       </widget>
+       <widget class="QLineEdit" name="lineEdit_msg"/>
       </item>
      </layout>
     </item>

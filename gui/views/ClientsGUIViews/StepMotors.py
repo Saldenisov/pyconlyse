@@ -61,7 +61,7 @@ class StepMotorsView(DeviceControllerView):
                                       forward_to=self.service_parameters.device_id,
                                       func_input=FuncSetPosInput(self.selected_device_id, axis_pos, self._get_unit()))
             self.send_msg(msg)
-        except TypeError as e:
+        except (TypeError, ValueError) as e:
             comments = f'Pos "{self.ui.lineEdit_value.text()}" has wrong format: {e}.'
             error_logger(self, self.set_pos_axis, comments)
             error_dialog = QErrorMessage()
@@ -89,7 +89,7 @@ class StepMotorsView(DeviceControllerView):
             client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=25,
                                    specific={'axis_id': axis_id, 'with_return': True})
             self._asked_status = 0
-        except ValueError as e:
+        except (ValueError, TypeError) as e:
             comments = f'Pos "{pos}" has wrong format: {e}.'
             error_logger(self, self.move_axis, comments)
             error_dialog = QErrorMessage()
@@ -125,48 +125,51 @@ class StepMotorsView(DeviceControllerView):
         self._asked_status = 0
 
     def update_state(self, force_device=True, force_ctrl=True):
-        device: AxisStpMtr = super(StepMotorsView, self).update_state(force_device, force_ctrl)
 
-        def form_ranges(ranges: List) -> str:
-            out_l = []
-            for val in ranges:
-                try:
-                    val = val.name
-                except AttributeError:
-                    val = str(val)
-                finally:
-                    out_l.append(val)
-            return '_'.join(out_l)
+        def update_func_local(self, force_device=True, force_ctrl=True):
+            def form_ranges(ranges: List) -> str:
+                out_l = []
+                for val in ranges:
+                    try:
+                        val = val.name
+                    except AttributeError:
+                        val = str(val)
+                    finally:
+                        out_l.append(val)
+                return '_'.join(out_l)
 
-        cs = self.device_ctrl_state
-        ui = self.ui
+            cs = self.device_ctrl_state
+            ui = self.ui
+            device: AxisStpMtr = cs.devices[self.selected_device_id]
 
-        if cs.devices != cs.devices_previous or force_device:
-            ui.label_ranges.setText(str(device.limits))
-            ui.label_preset.setText(str(device.preset_values))
+            if cs.devices != cs.devices_previous or force_device:
+                ui.label_ranges.setText(str(device.limits))
+                ui.label_preset.setText(str(device.preset_values))
 
-        if force_device:
-            # TODO: this is stange...strange activation of update_lcd_screen()
-            if MoveType.step in device.type_move or MoveType.microstep in device.type_move:
-                ui.radioButton_stp.setEnabled(True)
-                ui.radioButton_stp.setChecked(True)
-            else:
-                ui.radioButton_stp.setEnabled(False)
+            if force_device:
+                # TODO: this is stange...strange activation of update_lcd_screen()
+                if MoveType.step in device.type_move or MoveType.microstep in device.type_move:
+                    ui.radioButton_stp.setEnabled(True)
+                    ui.radioButton_stp.setChecked(True)
+                else:
+                    ui.radioButton_stp.setEnabled(False)
 
-            if MoveType.angle in device.type_move:
-                ui.radioButton_angle.setEnabled(True)
-                ui.radioButton_angle.setChecked(True)
-            else:
-                ui.radioButton_angle.setEnabled(False)
+                if MoveType.angle in device.type_move:
+                    ui.radioButton_angle.setEnabled(True)
+                    ui.radioButton_angle.setChecked(True)
+                else:
+                    ui.radioButton_angle.setEnabled(False)
 
-            if MoveType.mm in device.type_move:
-                ui.radioButton_mm.setEnabled(True)
-                ui.radioButton_mm.setChecked(True)
-            else:
-                ui.radioButton_mm.setEnabled(False)
+                if MoveType.mm in device.type_move:
+                    ui.radioButton_mm.setEnabled(True)
+                    ui.radioButton_mm.setChecked(True)
+                else:
+                    ui.radioButton_mm.setEnabled(False)
 
-        self._update_progressbar_pos(device)
-        self._update_lcd_screen()
+            self._update_progressbar_pos(device)
+            self._update_lcd_screen()
+
+        super(StepMotorsView, self).update_state(force_device, force_ctrl, update_func_local)
 
     def _update_lcd_screen(self):
         unit = self._get_unit()
