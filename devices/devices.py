@@ -80,6 +80,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             pyqtslot: Callable = kwargs['pyqtslot']
             self._connect_pyqtslot_signal(pyqtslot)
+            self._fyi_msg_dict: Dict[str, MessageInt] = {}
+
         except KeyError:
             self.pyqtsignal_connected = False
             self.logger.info(f'pyqtsignal is set to False')
