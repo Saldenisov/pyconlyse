@@ -3,8 +3,5 @@ from time import sleep
 
 
 a = datetime.timestamp(datetime.now())
-sleep(1)
-b = datetime.timestamp(datetime.now())
-
-
-print(a-b)
+t = datetime.fromtimestamp(a).time()
+print(t.strftime("%H:%M:%S"))

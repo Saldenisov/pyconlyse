@@ -12,7 +12,7 @@ from PyQt5.QtCore import QModelIndex
 from PyQt5.QtWidgets import QErrorMessage, QFileDialog
 
 from gui.models.ClientGUIModels import TreatmentModel
-from gui.views.ClientsGUIViews import TreatmentView
+from gui.views.ClientsGUIViews.VD2Treatment import TreatmentView
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)

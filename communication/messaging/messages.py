@@ -68,10 +68,12 @@ class MessageInt(Message):
     com: str  # command name
     info: dataclass  # DataClass
     sender_id: str
-    time_creation: int
+    time_creation: int = 0
+    time_bonus: float = 0.0
     forwarded_from: str = ''
     forward_to: str = ''
     receiver_id: str = ''
+    id: str = ''
 
     def fyi_repr(self):
         if self.com == MsgComInt.FYI.msg_name:
@@ -101,7 +103,8 @@ class MessageInt(Message):
             return self.__repr__()
 
     def __post_init__(self):
-        self.time_creation = datetime.timestamp(datetime.now())
+        if not self.time_creation:
+            self.time_creation = datetime.timestamp(datetime.now())
 
 
 class Coding(Enum):
@@ -178,9 +181,20 @@ class MessageExt(Message):
             func_name = self.info.com
 
         info: FYI = FYI(func_name, func_success, comments)
+        time_bonus = 0
+        if self.com == MsgComExt.ERROR.msg_name:
+            time_bonus = 5
+        elif self.com == MsgComExt.DO_IT.msg_name:
+            time_bonus = 2
+        elif self.com == MsgComExt.DONE_IT.msg_name:
+            time_bonus = 2
+        elif self.com == MsgComExt.HEARTBEAT.msg_name:
+            time_bonus = 0
+        elif self.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
+            time_bonus = 3
         return MessageInt(com=MsgComInt.FYI.msg_name, info=info, sender_id=self.sender_id,
                           receiver_id=self.receiver_id, forward_to=self.forward_to,
-                          forwarded_from=self.forwarded_from)
+                          forwarded_from=self.forwarded_from, id=self.id, time_bonus=time_bonus)
 
     def byte_repr(self, coding: Coding = Coding.JSON, compression=True) -> bytes:
         """

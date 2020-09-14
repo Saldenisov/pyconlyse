@@ -172,7 +172,7 @@
        <number>2</number>
       </property>
       <item>
-       <widget class="QLineEdit" name="lineEdit_msg"/>
+       <widget class="QListWidget" name="listWidget_msg"/>
       </item>
      </layout>
     </item>

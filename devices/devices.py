@@ -2,11 +2,12 @@ import sqlite3 as sq3
 import sys
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from collections import OrderedDict as od
 from inspect import signature, isclass
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
 from time import sleep, time
-from typing import Callable
+from typing import Callable, OrderedDict
 from devices.interfaces import DeviceInter
 from communication.messaging.messages import *
 from utilities.database.tools import db_create_connection, db_execute_select
@@ -50,6 +51,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
         self.ctrl_status: DeviceControllerStatus = DeviceControllerStatus(*[False] * 5)
         self.db_path = db_path
+        self._fyi_msg_dict: OrderedDict[str, MessageInt] = od()
         self.name: str = name
         self._main_executor = ThreadPoolExecutor(max_workers=100)
         self.parent: QObject = parent
@@ -80,8 +82,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         try:
             pyqtslot: Callable = kwargs['pyqtslot']
             self._connect_pyqtslot_signal(pyqtslot)
-            self._fyi_msg_dict: Dict[str, MessageInt] = {}
-
         except KeyError:
             self.pyqtsignal_connected = False
             self.logger.info(f'pyqtsignal is set to False')

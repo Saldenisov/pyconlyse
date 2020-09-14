@@ -4,12 +4,15 @@ Created on 15.11.2019
 @author: saldenisov
 """
 import logging
+from copy import deepcopy
+from datetime import datetime as dt
+from threading import Thread
+from time import sleep
 from typing import Union
-
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMainWindow, QListWidgetItem
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
-from devices.devices import Server, Service
+from devices.devices import Server, Service, Client
 from gui.views.ui.SuperUser import Ui_SuperUser
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
@@ -37,6 +40,8 @@ class SuperUserView(QMainWindow):
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
+        self.msg_vis_thread = Thread(target=self.update_msg_list)
+        self.msg_vis_thread.start()
         info_msg(self, 'INITIALIZED')
 
     def closeEvent(self, event):
@@ -80,7 +85,53 @@ class SuperUserView(QMainWindow):
                     text = f'SENDING: {msg.fyi_repr()}.'
                 else:
                     text = f'RECEIVED: {msg.fyi_repr()}.'
-                self.model.superuser._fyi_msg_dict[msg.id] = msg
-                self.ui.lineEdit_msg.setText(text)
+                superuser: Client = self.model.superuser
+                priority_dict = {MsgComInt.HEARTBEAT.msg_name: 1, MsgComInt.ERROR.msg_name: 5,
+                                 MsgComInt.DONE_IT.msg_name: 3, MsgComInt.DEVICE_INFO_INT.msg_name: 4}
+                superuser._fyi_msg_dict[msg.id] = msg
+
+
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')
+
+    def update_msg_list(self):
+        superuser: Client = self.model.superuser
+
+        def get_oldest(superuser: Client, older=0):
+            timestamp_now = dt.timestamp(dt.now())
+            id_msg_oldest = None
+            oldest_time = older
+            for msg_id, value in superuser._fyi_msg_dict.items():
+                a = timestamp_now - (value.time_creation - value.time_bonus)
+                if (timestamp_now - (value.time_creation - value.time_bonus)) > oldest_time:
+                    id_msg_oldest = msg_id
+                    oldest_time = value.time_creation - value.time_bonus
+
+            return id_msg_oldest
+        redraw = True
+        while superuser.ctrl_status.messaging_on:
+
+            if len(superuser._fyi_msg_dict) > 13:
+                id_msg_oldest = get_oldest(superuser)
+                if not id_msg_oldest:
+                    id_msg_oldest = superuser._fyi_msg_dict.popitem(last=False)[0]
+                redraw = True
+                del superuser._fyi_msg_dict[id_msg_oldest]
+
+            id_msg_oldest = get_oldest(superuser, older=5)
+            if id_msg_oldest:
+                del superuser._fyi_msg_dict[id_msg_oldest]
+                redraw = True
+                if not superuser._fyi_msg_dict:
+                    self.ui.listWidget_msg.clear()
+
+            if superuser._fyi_msg_dict:
+                if redraw:
+                    self.ui.listWidget_msg.clear()
+                    for value in superuser._fyi_msg_dict.values():
+                        time = dt.fromtimestamp(value.time_creation)
+                        self.ui.listWidget_msg.addItem(
+                            QListWidgetItem(f'{time.strftime("%H:%M:%S")}_{value.fyi_repr()}'))
+                redraw = False
+
+            sleep(0.5)
