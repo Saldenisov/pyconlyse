@@ -52,10 +52,10 @@ class DataCanvasCamera(FigureCanvas):
 
     def compute_figure(self, figure_name=''):
         self.image: AxesImage = self.axis.imshow(self.camera_reading.data,
-                                                 extent=[self.camera_reading.X[0],
-                                                         self.camera_reading.X[-1],
+                                                 extent=[self.camera_reading.Y[0],
                                                          self.camera_reading.Y[-1],
-                                                         self.camera_reading.Y[0]],
+                                                         self.camera_reading.X[-1],
+                                                         self.camera_reading.X[0]],
                                                  aspect='auto',
                                                  vmin=np.min(self.camera_reading.data),
                                                  vmax=np.max(self.camera_reading.data),
@@ -71,11 +71,15 @@ class DataCanvasCamera(FigureCanvas):
         RGB color; the keyword argument name must be a standard mpl colormap name.'''
         return plt.cm.get_cmap(name, n)
 
-    def update_data(self, camera_readings: CameraReadings = None):
-        self.camera_reading = camera_readings
+    def update_data(self, camera_reading: CameraReadings = None, offsets:Tuple[int] = None):
+        self.camera_reading = camera_reading
         self.image.set_data(self.camera_reading.data)
-        self.image.set_extent(extent=[self.camera_reading.Y[0], self.camera_reading.Y[-1],
-                                      self.camera_reading.X[-1], self.camera_reading.X[0]])
+        if offsets:
+            extent = [offsets[0], camera_reading.X[-1] + offsets[0], camera_reading.Y[-1],  camera_reading.Y[0] + offsets[1]]
+        else:
+            extent = [camera_reading.X[0], camera_reading.X[-1], camera_reading.Y[-1], camera_reading.Y[0]]
+        print(f'EXTENT: {extent}. OFFSET: {offsets}')
+        self.image.set_extent(extent=extent)
         self.axis.set_title(self.camera_reading.description)
 
         self.update_limits()

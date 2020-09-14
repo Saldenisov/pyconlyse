@@ -202,7 +202,9 @@ class CamerasView(DeviceControllerView):
                     if result.image and self.selected_device_id == result.camera_id:
                         datacanvas.update_data(CameraReadings(data=np.array(result.image),
                                                               time_stamp=result.timestamp,
-                                                              description=result.description))
+                                                              description=result.description),
+                                               offsets=(self.ui.spinBox_Xoffset.value(),
+                                                        self.ui.spinBox_Yoffset.value()))
                     if result.post_treatment_points and self.ui.checkBox_show_history.isChecked():
                         datacanvas.add_points(result.post_treatment_points)
             elif info.com == CameraController.GET_IMAGES.name_prepared:
@@ -423,6 +425,8 @@ class CamerasView(DeviceControllerView):
         if pixel_y_start > pixel_y_end:
             pixel_y_start, pixel_y_end = pixel_y_end, pixel_y_start
 
+        print(pixel_x_start, pixel_x_end, pixel_y_start, pixel_y_end)
+
         width_new = pixel_x_end - pixel_x_start
         if width_new % 2 != 0:
             width_new += 1
@@ -431,11 +435,11 @@ class CamerasView(DeviceControllerView):
         if height_new % 2 != 0:
             height_new += 1
 
-        xoffset_new = xoffset_prev + pixel_x_start
+        xoffset_new = pixel_x_start
         if xoffset_new % 2 != 0:
             xoffset_new += 1
 
-        yoffset_new = yoffset_prev + pixel_y_start
+        yoffset_new = pixel_y_start
         if yoffset_new % 2 != 0:
             yoffset_new += 1
 

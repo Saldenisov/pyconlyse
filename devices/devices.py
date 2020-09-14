@@ -385,6 +385,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 forward_to = msg.forwarded_from
             else:
                 forward_to = ''
+            comments=join_smart_comments(comments, str(msg.short()))
             msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
                                       forward_to=forward_to, reply_to=msg.id)
             error_logger(self, self.execute_com, msg_r)
@@ -641,6 +642,7 @@ class Service(Device):
         flag = func_input.flag
         res, comments = self._check_if_active()
         if res ^ flag:  # res XOR Flag
+            info_msg(self, 'INFO', f'Func "activate" is called: {func_input}.')
             if flag:
                 res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
                 if res:  # parameters should be set from hardware controller if possible
@@ -651,23 +653,22 @@ class Service(Device):
                 res, comments = self._connect(flag)
                 if res:
                     self.ctrl_status.active = flag
-        info = join_smart_comments(f'{self.id}:{self.name} active state is {self.ctrl_status.active}', comments)
-        info_msg(self, 'INFO', info)
-        return FuncActivateOutput(comments=info, controller_status=self.ctrl_status, func_success=res)
+
+        comments = f'Func "activate" is accomplished with success: {res}. State of controller is ' \
+                   f'{self.ctrl_status.active}. {comments}'
+        return FuncActivateOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
 
     def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
         device_id = func_input.device_id
         flag = func_input.flag
         res, comments = self._check_device_range(device_id)
+        info_msg(self, 'INFO', f'Func "activate_device" is called: {func_input}.')
         if res:
             device = self.hardware_devices[device_id]
             res, comments = self._change_device_status(device_id, flag)
-
-        status = dict(sorted({d.device_id_seq: d.status for d in self.hardware_devices.values()}.items()))
-
-        info = join_smart_comments(f'Controller status: {status}', comments)
-        info_msg(self, 'INFO', info)
-        return FuncActivateDeviceOutput(device=device, comments=info, func_success=res)
+        comments = f'Func "activate_device" is accomplished with success: {res}. {comments}'
+        info_msg(self, 'INFO', comments)
+        return FuncActivateDeviceOutput(device=device, comments=comments, func_success=res)
 
     @abstractmethod
     def available_public_functions(self) -> Tuple[CmdStruct]:
@@ -801,6 +802,7 @@ class Service(Device):
     def power(self, func_input: FuncPowerInput) -> FuncPowerOutput:
         # TODO: to be realized in metal someday
         flag = func_input.flag
+        info_msg(self, 'INFO', f'Func "power" is called: {func_input}.')
         if self.ctrl_status.power ^ flag:  # XOR
             if not flag and self.ctrl_status.active:
                 res, comments = False, f'Power is {self.ctrl_status.power}. Cannot switch power off ' \
@@ -823,6 +825,9 @@ class Service(Device):
                     res, comments = True, ''
         else:
             res, comments = True, ''
+        comments = f'Func "power" is accomplished with success: {res}. State of controller is ' \
+                   f'{self.ctrl_status.power}. {comments}'
+        info_msg(self, 'INFO', comments)
         return FuncPowerOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
 
     @abstractmethod
