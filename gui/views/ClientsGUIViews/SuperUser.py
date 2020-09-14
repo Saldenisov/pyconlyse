@@ -80,6 +80,7 @@ class SuperUserView(QMainWindow):
                     text = f'SENDING: {msg.fyi_repr()}.'
                 else:
                     text = f'RECEIVED: {msg.fyi_repr()}.'
+                self.model.superuser._fyi_msg_dict[msg.id] = msg
                 self.ui.lineEdit_msg.setText(text)
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')

@@ -1,10 +1,10 @@
-def a():
-    return 1
+from datetime import datetime
+from time import sleep
 
 
-def b():
-    a()
-    a()
-    print(2)
+a = datetime.timestamp(datetime.now())
+sleep(1)
+b = datetime.timestamp(datetime.now())
 
-b()
+
+print(a-b)

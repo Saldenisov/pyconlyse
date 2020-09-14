@@ -3,6 +3,7 @@ from base64 import b64encode, b64decode
 from copy import deepcopy
 from dataclasses import asdict
 from json import dumps, loads
+from datetime import datetime
 from zlib import compress, decompress
 
 from msgpack import packb, unpackb
@@ -67,6 +68,7 @@ class MessageInt(Message):
     com: str  # command name
     info: dataclass  # DataClass
     sender_id: str
+    time_creation: int
     forwarded_from: str = ''
     forward_to: str = ''
     receiver_id: str = ''
@@ -97,6 +99,9 @@ class MessageInt(Message):
             return '. '.join(t)
         else:
             return self.__repr__()
+
+    def __post_init__(self):
+        self.time_creation = datetime.timestamp(datetime.now())
 
 
 class Coding(Enum):
