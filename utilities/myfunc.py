@@ -48,7 +48,10 @@ def join_smart_comments(comments: AnyStr, com: Any):
     if comments:
         comments = f'{comments}. {com}'
     else:
-        comments = f'{com}.'
+        if com:
+            comments = f'{com}.'
+        else:
+            comments = ''
     return comments
 
 

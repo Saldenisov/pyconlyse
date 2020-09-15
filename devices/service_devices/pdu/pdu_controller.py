@@ -1,3 +1,7 @@
+"""
+01/09/2020 DENISOV Sergey
+
+"""
 import logging
 from abc import abstractmethod
 from os import path

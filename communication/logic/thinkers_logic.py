@@ -241,6 +241,10 @@ class CameraCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 
 
+class DAQmxCtrlServiceCmdLogic(ServiceCmdLogic):
+    pass
+
+
 class StpMtrCtrlServiceCmdLogic(ServiceCmdLogic):
     pass
 

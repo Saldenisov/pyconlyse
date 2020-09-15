@@ -8,6 +8,7 @@ ifaddr
 imutils
 matplotlib
 msgpack
+nidaqmx
 numpy
 opencv-python
 PyQt5
