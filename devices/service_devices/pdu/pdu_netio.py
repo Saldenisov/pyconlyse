@@ -154,7 +154,6 @@ class PDUCtrl_NETIO(PDUController):
                     results.append(True)
         return True, ''
 
-
     def _set_pdu_state(self, func_input: FuncSetPDUStateInput) -> Tuple[bool, str]:
         pdu: PDUNetio = self.pdus[func_input.pdu_id]
         if func_input.pdu_output_id in pdu.outputs:

@@ -83,7 +83,7 @@ class CameraController(Service):
         pass
 
     @abstractmethod
-    def _prepare_camera_reading(self) -> Tuple[bool, str]:
+    def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
         return True, ''
 
     def _register_image_demander(self, image_demand: ImageDemand):
@@ -118,6 +118,7 @@ class CameraController(Service):
             res, comments = self._set_image_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_image_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetImageParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
@@ -132,6 +133,7 @@ class CameraController(Service):
             res, comments = self._set_sync_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_sync_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
@@ -146,6 +148,7 @@ class CameraController(Service):
             res, comments = self._set_transport_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_transport_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod

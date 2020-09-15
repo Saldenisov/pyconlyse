@@ -74,6 +74,7 @@ class PDUController(Service):
             res, comments = self._set_pdu_state(func_input)
         else:
             pdu = None
+        comments = f'Func "set_pdu_state" is accomplished with success: {res}. {comments}'
         return FuncSetPDUStateOutput(func_success=res, comments=comments, pdu=pdu)
 
     @abstractmethod

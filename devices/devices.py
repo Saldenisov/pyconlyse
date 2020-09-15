@@ -387,7 +387,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 forward_to = msg.forwarded_from
             else:
                 forward_to = ''
-            comments=join_smart_comments(comments, str(msg.short()))
+            comments = join_smart_comments(comments, str(msg.short()))
             msg_r = self.generate_msg(msg_com=MsgComExt.ERROR, comments=comments, receiver_id=msg.sender_id,
                                       forward_to=forward_to, reply_to=msg.id)
             error_logger(self, self.execute_com, msg_r)

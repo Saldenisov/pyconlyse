@@ -71,9 +71,9 @@ class CameraReadings:
 
     def __post_init__(self):
         if not self.X:
-            self.X = np.arange(self.data.shape[0])
+            self.X = np.arange(self.data.shape[1])
         if not self.Y:
-            self.Y = np.arange(self.data.shape[1])
+            self.Y = np.arange(self.data.shape[0])
 
 
 

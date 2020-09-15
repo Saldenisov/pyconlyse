@@ -124,9 +124,8 @@ class FuncGetImagesInput(FuncInput):
 
 @dataclass
 class FuncGetImagesPrepared(FuncOutput):
-    camera_id: int
     ready: bool
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'get_images_prepared'
 
 

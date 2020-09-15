@@ -53,11 +53,9 @@ class CamerasView(DeviceControllerView):
         self.ui.pushButton_decrease_X.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.pushButton_decrease_Y.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
-        self.ui.pushButton_GetImage.clicked.connect(self.get_image)
-        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
-        self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_GetImage.clicked.connect(partial(self.get_image, False))
         self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
+        self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_set_parameters.clicked.connect(self.set_parameters)
         self.ui.comboBox_x_stepmotor.activated.connect(partial(self.step_motor_changed, 'X'))
         self.ui.comboBox_y_stepmotor.activated.connect(partial(self.step_motor_changed, 'Y'))
@@ -84,13 +82,17 @@ class CamerasView(DeviceControllerView):
         if action:
             if action == action_full_image:
                 camera_id = self.selected_device_id
-                size_of_matrix = self.device_ctrl_state.cameras[camera_id].matrix_size
+                size_of_matrix = self.device_ctrl_state.devices[camera_id].matrix_size
                 if len(size_of_matrix) != 0:
                     self.ui.spinBox_Xoffset.setValue(0)
                     self.ui.spinBox_Yoffset.setValue(0)
+                    self.set_image_parameters()
+                    sleep(0.2)
                     self.ui.spinBox_Width.setValue(size_of_matrix[0])
                     self.ui.spinBox_Height.setValue(size_of_matrix[1])
+                    sleep(0.2)
                     self.set_image_parameters()
+
 
     def menu_stepmotor(self, axis: str, point):
         menu = QMenu()
@@ -199,22 +201,23 @@ class CamerasView(DeviceControllerView):
                 result: FuncGetImagesOutput = result
                 if self.selected_device_id == result.camera_id:
                     datacanvas: DataCanvasCamera = self.ui.datacanvas
-                    if result.image and self.selected_device_id == result.camera_id:
+                    if result.image:
                         datacanvas.update_data(CameraReadings(data=np.array(result.image),
                                                               time_stamp=result.timestamp,
                                                               description=result.description),
                                                offsets=(self.ui.spinBox_Xoffset.value(),
                                                         self.ui.spinBox_Yoffset.value()))
                     if result.post_treatment_points and self.ui.checkBox_show_history.isChecked():
-                        datacanvas.add_points(result.post_treatment_points)
+                        datacanvas.add_points(result.post_treatment_points, offsets=(self.ui.spinBox_Xoffset.value(),
+                                                        self.ui.spinBox_Yoffset.value()))
             elif info.com == CameraController.GET_IMAGES.name_prepared:
                 result: FuncGetImagesPrepared = result
                 self.controller_cameras = result.camera
                 if result.ready:
-                    comments = f'Camera with id {result.camera_id} is ready to send images. ' \
+                    comments = f'Camera with id {result.camera.device_id_seq} is ready to send images. ' \
                                f'Acquisition is started.'
                 else:
-                    comments = f'Camera {result.camera_id} is not ready to send images.'
+                    comments = f'Camera {result.camera.device_id_seq} is not ready to send images.'
                 result.comments = f'{comments} {result.comments}'
             elif info.com == CameraController.SET_IMAGE_PARAMETERS.name:
                 result: FuncSetImageParametersOutput = result

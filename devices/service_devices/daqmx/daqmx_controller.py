@@ -18,10 +18,17 @@ module_logger = logging.getLogger(__name__)
 
 
 class DAQmxController(Service):
+    READ_CHANNEL = CmdStruct(None, None)
+    WRITE_CHANNEL = CmdStruct(None, None)
+    SET_CHANNEL_TYPE = CmdStruct(None, None)
+
     def __init__(self, **kwargs):
         kwargs['hardware_device_dataclass'] = kwargs['pdu_dataclass']
         super().__init__(**kwargs)
         self._hardware_devices: Dict[int, DAQmxController] = HardwareDeviceDict()
+
+    def available_public_functions(self) -> Tuple[CmdStruct]:
+        pass
 
 
 class DAQmxError(BaseException):

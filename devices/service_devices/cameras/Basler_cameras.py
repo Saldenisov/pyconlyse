@@ -68,6 +68,7 @@ class CameraCtrl_Basler(CameraController):
                 info = ''
                 if camera.status == 2 and force:
                     camera.pylon_camera.StopGrabbing()
+                    sleep(0.2)
                     info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped grabbing. {comments}'
                     camera.status = flag
                     res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}. {info}'
@@ -78,11 +79,14 @@ class CameraCtrl_Basler(CameraController):
                     try:
                         if flag == 2 and camera.status == 1:
                             # TODO: must have some other strategies for future
-                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                            sleep(0.02)
+                            if camera.pylon_camera.IsGrabbing():
+                                camera.pylon_camera.StopGrabbing()
+                                sleep(0.2)
+                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
+                            sleep(0.05)
                         elif flag == 2 and camera.status == 0:
                             return False, f'First activate camera with camera id={camera_id}, ' \
-                                                   f'name={camera.friendly_name}.'
+                                          f'name={camera.friendly_name}.'
                         if flag == 1:
                             camera.pylon_camera.Open()
                         elif flag == 0:
@@ -91,11 +95,11 @@ class CameraCtrl_Basler(CameraController):
                         res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} status is set to ' \
                                               f'{flag}. {info}'
                     except pylon.GenericException as e:
-                        comments = f'Tried to open connection, but failed: {e}'
+                        comments = f'Tried to open connection, but failed: {e}.'
                         error_logger(self, self._change_device_status, comments)
                         return False, comments
             else:
-                res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}'
+                res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}.'
         return res, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
@@ -426,10 +430,13 @@ class CameraCtrl_Basler(CameraController):
         balance_ratio = func_input.balance_ratio
         pixel_format = func_input.pixel_format
         formed_parameters_dict_AOI = OrderedDict()
-        formed_parameters_dict_AOI['OffsetX'] = offset_x
-        formed_parameters_dict_AOI['OffsetY'] = offset_y
+
         formed_parameters_dict_AOI['Width'] = width
         formed_parameters_dict_AOI['Height'] = height
+        formed_parameters_dict_AOI['OffsetX'] = offset_x
+        formed_parameters_dict_AOI['OffsetY'] = offset_y
+
+
         formed_parameters_dict_analog_controls = {'GainAuto': gain_mode, 'GainRaw': gain, 'BlackLevelRaw': blacklevel,
                                                   'BalanceRatioRaw': balance_ratio}
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}

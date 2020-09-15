@@ -36,12 +36,14 @@ class DataCanvasCamera(FigureCanvas):
         from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
         self.toolbar = NavigationToolbar(self, self.parent)
 
-    def add_points(self, points: List[Tuple[int]]):
+    def add_points(self, points: List[Tuple[int]], offsets:Tuple[int] = None):
         circles = []
         c_map = DataCanvasCamera.get_cmap(n=len(points))
         for coordinate, n in zip(points, range(len(points))):
             #x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
-            #coordinate = (x, y)
+            if offsets:
+                coordinate = (coordinate[0] + offsets[0], coordinate[1] + offsets[1])
+            print(coordinate)
             circles.append(Circle(coordinate, radius=1, color=c_map(n), zorder=n+1))
 
         if self.image:
@@ -75,7 +77,8 @@ class DataCanvasCamera(FigureCanvas):
         self.camera_reading = camera_reading
         self.image.set_data(self.camera_reading.data)
         if offsets:
-            extent = [offsets[0], camera_reading.X[-1] + offsets[0], camera_reading.Y[-1],  camera_reading.Y[0] + offsets[1]]
+            extent = [camera_reading.X[0] + offsets[0], camera_reading.X[-1] + offsets[0],
+                      camera_reading.Y[-1] + offsets[1],  camera_reading.Y[0] + offsets[1]]
         else:
             extent = [camera_reading.X[0], camera_reading.X[-1], camera_reading.Y[-1], camera_reading.Y[0]]
         print(f'EXTENT: {extent}. OFFSET: {offsets}')
