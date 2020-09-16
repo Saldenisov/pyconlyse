@@ -66,7 +66,7 @@ class SuperClientGUIcontroller():
             service_id = self.view.ui.lW_devices.currentItem().text()
 
         try:
-            parameters: DeviceInfoExt = self.model.service_parameters[service_id]
+            parameters: ControllerInfoExt = self.model.service_parameters[service_id]
             if 'StpMtr' in parameters.device_description.class_name:
                 view = StepMotorsView
             elif 'ProjectManager' in parameters.device_description.class_name:

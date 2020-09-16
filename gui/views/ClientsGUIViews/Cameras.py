@@ -93,7 +93,6 @@ class CamerasView(DeviceControllerView):
                     sleep(0.2)
                     self.set_image_parameters()
 
-
     def menu_stepmotor(self, axis: str, point):
         menu = QMenu()
         action_get_axes = menu.addAction('Get Axes')
@@ -109,7 +108,7 @@ class CamerasView(DeviceControllerView):
             camera_id = self.selected_device_id
             camera: Camera = self.controller_cameras[camera_id]
             if action == action_get_axes:
-                if camera.stpmtr_ctrl_id and camera.stpmtr_ctrl_id in list(self.model.service_parameters.keys()):
+                if camera.stpmtr_ctrl_id in list(self.model.service_parameters.keys()):
                     param = self.model.service_parameters
                     stpmtr_ctrl_descrip: ServiceDescription = param[camera.stpmtr_ctrl_id].device_description
                     self.ui.comboBox_x_stepmotor.clear()

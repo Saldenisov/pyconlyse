@@ -221,7 +221,7 @@ class DeviceInfoInt:
 
 
 @dataclass(frozen=True, order=True)
-class DeviceInfoExt:
+class ControllerInfoExt:
     #available_public_functions: List[CmdStruct]
     device_id: str
     device_description: Union[ServiceDescription, ClientDescription, ServerDescription]
@@ -328,7 +328,7 @@ class FuncServiceInfoInput(FuncInput):
 @dataclass
 class FuncServiceInfoOutput(FuncOutput):
     device_id: DeviceId
-    service_info: DeviceInfoExt
+    service_info: ControllerInfoExt
     com: str = 'service_info'
 
 

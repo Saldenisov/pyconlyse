@@ -30,8 +30,7 @@ class StepMotorsView(DeviceControllerView):
         return self.controller_devices
 
     @controller_axes.setter
-    def controller_axes(self, value: Union[Dict[int, AxisStpMtrEssentials], Dict[int, AxisStpMtr],
-                                           AxisStpMtr, AxisStpMtrEssentials]):
+    def controller_axes(self, value: Union[Dict[int, AxisStpMtr], AxisStpMtr]):
         self.controller_devices = value
 
     def extra_ui_init(self):
@@ -99,7 +98,11 @@ class StepMotorsView(DeviceControllerView):
     def model_is_changed(self, msg: MessageInt) -> DoneIt:
         def func_local(info: Union[DoneIt]):
             result = info
-            if info.com == StpMtrController.MOVE_AXIS_TO.name:
+            if info.com == StpMtrController.GET_CONTROLLER_STATE.name:
+                if not self.device_ctrl_state.start_stop:
+                    for device in self.device_ctrl_state.devices.values():
+                        self.device_ctrl_state.start_stop[device.device_id_seq] = (0, 0)
+            elif info.com == StpMtrController.MOVE_AXIS_TO.name:
                 result: FuncMoveAxisToOutput = result
                 self.controller_axes = result.axis
                 self._update_progressbar_pos(axis=self.controller_axes[result.axis.device_id_seq], force=True)

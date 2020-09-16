@@ -43,7 +43,6 @@ class DataCanvasCamera(FigureCanvas):
             #x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
             if offsets:
                 coordinate = (coordinate[0] + offsets[0], coordinate[1] + offsets[1])
-            print(coordinate)
             circles.append(Circle(coordinate, radius=1, color=c_map(n), zorder=n+1))
 
         if self.image:
@@ -81,7 +80,6 @@ class DataCanvasCamera(FigureCanvas):
                       camera_reading.Y[-1] + offsets[1],  camera_reading.Y[0] + offsets[1]]
         else:
             extent = [camera_reading.X[0], camera_reading.X[-1], camera_reading.Y[-1], camera_reading.Y[0]]
-        print(f'EXTENT: {extent}. OFFSET: {offsets}')
         self.image.set_extent(extent=extent)
         self.axis.set_title(self.camera_reading.description)
 

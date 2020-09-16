@@ -917,8 +917,8 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-        service_info = DeviceInfoExt(device_id=self.id, device_description=self.description(),
-                                     controller_status=self.ctrl_status)
+        service_info = ControllerInfoExt(device_id=self.id, device_description=self.description(),
+                                         controller_status=self.ctrl_status)
         return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
 
     def _set_number_hardware_devices(self):

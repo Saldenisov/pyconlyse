@@ -30,7 +30,7 @@ class Flags(Enum):
 
 class ProjectManagerView(QtWidgets.QMainWindow):
 
-    def __init__(self, in_controller, in_model, service_parameters: DeviceInfoExt, parent=None):
+    def __init__(self, in_controller, in_model, service_parameters: ControllerInfoExt, parent=None):
         super().__init__(parent)
         self._asked_status = 0
         self.controller = in_controller
@@ -40,7 +40,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
         info_msg(self, 'INITIALIZING')
         self.model = in_model
         self.device: Device = self.model.superuser
-        self.service_parameters: DeviceInfoExt = service_parameters
+        self.service_parameters: ControllerInfoExt = service_parameters
 
         self.ui = Ui_ProjectManager()
         self.ui.setupUi(self)
