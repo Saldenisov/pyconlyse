@@ -14,6 +14,4 @@ class Message(ABC):
     """
     Interface Class for MessageExt and MessageInt
     """
-
     pass
-

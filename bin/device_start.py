@@ -1,18 +1,19 @@
 """
+05/05/2019
 sergey.denisov@u-psud.fr
 LCP/CNRS UMR8000 ELYSE platform
-05/05/2019
 """
 
 import sys
 from pathlib import Path
-app_folder = str(Path(__file__).resolve().parents[1])
-sys.path.append(app_folder)
-
 from devices.devices import DeviceFactory
 from gui.models.ClientGUIModels import SuperUserGUIModel
 from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
+
+app_folder = str(Path(__file__).resolve().parents[1])
+sys.path.append(app_folder)
+
 
 def init(device_id: str, db_name: str):
     service = DeviceFactory.make_device(device_id=device_id,
@@ -59,7 +60,3 @@ if __name__ == "__main__":
             raise Exception('Not enough arguments were passed')
     else:
         raise Exception('Not enough arguments were passed')
-
-
-
-

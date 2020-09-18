@@ -185,7 +185,7 @@ def test_local_port(port):
         return True
 
 
-def get_free_port(scope: Tuple[int, str] = (5000, 6000), exclude: List[int] = []):
+def get_free_port(scope: Tuple[int, str] = (), exclude: List[int] = []):
     if not scope:
         i = 0
         while True:

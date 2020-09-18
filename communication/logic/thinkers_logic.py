@@ -52,7 +52,7 @@ class GeneralCmdLogic(Thinker):
                     self.parent.signal.emit(msg.ext_to_int())
             elif info.com == PDUController.SET_PDU_STATE.name and not isinstance(self, SuperUserClientCmdLogic):
                 # TODO: and not isinstance(self, SuperUserClientCmdLogic) IS STUPID
-                power_settings: PowerSettings = self.parent._power_settings
+                power_settings: PowerSettings = self.parent.power_settings
                 if power_settings.controller_id and power_settings.controller_id != 'manually':
                     result: FuncSetPDUStateOutput = info
                     self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
@@ -133,8 +133,8 @@ class GeneralCmdLogic(Thinker):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                if self.parent.messenger._attempts_to_restart_sub > 0:
-                    self.parent.messenger._attempts_to_restart_sub -= 1
+                if self.parent.messenger.attempts_to_restart_sub > 0:
+                    self.parent.messenger.attempts_to_restart_sub -= 1
                     info_msg(self, 'INFO', 'Server is away...trying to restart sub socket. '
                                            'Attempts left {self.parent.messenger._attempts_to_restart_sub}.')
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
@@ -142,12 +142,12 @@ class GeneralCmdLogic(Thinker):
                     addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
                     self.parent.messenger.restart_socket(SUB_Socket, addr)
                 else:
-                    if not self.parent.messenger._are_you_alive_send:
+                    if not self.parent.messenger.are_you_alive_send:
                         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
                         event.counter_timeout = 0
                         msg_i = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
                                                          func_input=FuncAliveInput())
-                        self.parent.messenger._are_you_alive_send = True
+                        self.parent.messenger.are_you_alive_send = True
                         self.msg_out(msg_i)
                     else:
                         info_msg(self, 'INFO', f'{event.name} timeout is reached. Deleting the event {event.id}.')
@@ -201,14 +201,13 @@ class ServerCmdLogic(GeneralCmdLogic):
         except Exception as e:  # TODO: change Exception to something reasonable
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
-        self.msg_out(msg_r)
+        finally:
+            self.msg_out(msg_r)
 
     def react_forward(self, msg: MessageExt):
         if msg.forward_to in self.parent.connections:
-            #info_msg(self, 'INFO', f'Msg id={msg.id}, com={msg.com} is forwarded to {msg.receiver_id}')
             msg_r = msg.copy(sender_id=self.parent.id, receiver_id=msg.forward_to, forward_to='',
                              forwarded_from=msg.sender_id, id=msg.id)
-            #self.add_to_forwarded(msg_forwarded=msg_r, msg_arrived=msg)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.ERROR,
                                               comments=f'service {msg.forward_to} is not available',

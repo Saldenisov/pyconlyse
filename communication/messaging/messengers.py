@@ -16,7 +16,6 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key, l
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
-from devices.interfaces import DeviceId, DeviceType
 from utilities.datastructures.mes_dependent.dicts import MsgDict
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.errors.messaging_errors import MessengerError, MessageError
@@ -57,8 +56,8 @@ class Messenger(MessengerInter):
         """
 
         super().__init__()
-        self._attempts_to_restart_sub = 10  # restart subscriber
-        self._are_you_alive_send = False
+        self.attempts_to_restart_sub = 10  # restart subscriber
+        self.are_you_alive_send = False
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
@@ -108,7 +107,7 @@ class Messenger(MessengerInter):
     def create_fernet(self, session_key: bytes):
         return Fernet(session_key)
 
-    def decrypt_with_private(self, cipher_text: bytes) -> str:
+    def decrypt_with_private(self, cipher_text: bytes) -> bytes:
         """
         Decrypt the cipher text using private key (RSA)
         :param cipher_text: cipher text in bytes
@@ -118,7 +117,7 @@ class Messenger(MessengerInter):
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> str:
+    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> bytes:
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
             return Fernet(self.parent.connections[device_id].session_key).decrypt(msg_bytes)
@@ -195,7 +194,7 @@ class Messenger(MessengerInter):
                                              format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
     def pause(self):
-        "put executation of thread on pause"
+        # put execution of thread on pause
         self.paused = True
         self.parent.ctrl_status.messaging_paused = self.paused
         self.logger.info(f'{self.name} is paused')
@@ -336,7 +335,7 @@ class ClientMessenger(Messenger):
         except (WrongAddress, zmq.error.ZMQError) as e:
             # TODO: potential recursion depth violation
             error_logger(self, self.connect, f'{e}: {self.addresses[PUB_Socket]}')
-            port = get_free_port(scope=None)
+            port = get_free_port()
             local_ip = get_local_ip()
             self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
             self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
@@ -346,7 +345,7 @@ class ClientMessenger(Messenger):
         for msg, device_id, socket, crypted in msgs:
             try:
                 if int(crypted):
-                    device_id = self.parent.server_id  #  !!! ONLY WHEN CLIET/SERVICE HAS DEALER SOCKET
+                    device_id = self.parent.server_id  # !!! ONLY WHEN CLIENT/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = MessageExt.bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
@@ -409,7 +408,6 @@ class ClientMessenger(Messenger):
 
             if msg.receiver_id:
                 self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
-                #info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.short()} is send to {msg.receiver_id}.')
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
@@ -621,13 +619,10 @@ class ServerMessenger(Messenger):
             msg_bytes = self.encrypt_with_session_key(msg)
             if msg.receiver_id in self._frontendpool:
                 self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                #info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
             elif msg.receiver_id in self._backendpool:
                 self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                #info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
             else:
-                pass
-                #error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
+                error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -652,4 +647,3 @@ class ServerMessenger(Messenger):
             port_n = verify_port(addresses[port], excluded)
             excluded.append(port_n)
             self.addresses[port] = f'tcp://{local_ip}:{port_n}'
-

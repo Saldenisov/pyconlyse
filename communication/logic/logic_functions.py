@@ -100,14 +100,10 @@ def task_in_reaction(event: ThinkerEvent):
     while event.active:
         sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
+            msg: MessageExt = tasks_in.popitem(last=False)[1]
+            thinker.msg_counter += 1
+            react = True
             try:
-                if isinstance(thinker, ServerCmdLogic):
-                    pass
-                    #print(f'{len(tasks_in)}')
-                msg: MessageExt = tasks_in.popitem(last=False)[1]
-
-                thinker.msg_counter += 1
-                react = True
                 if msg.com not in exclude_msgs:
                     if thinker.parent.pyqtsignal_connected:
                         # Convert MessageExt to MessageInt and emit it
