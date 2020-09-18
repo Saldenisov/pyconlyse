@@ -686,12 +686,7 @@ class Service(Device):
         else:
             return False, f'Device id={device_id} is out of range={self._hardware_devices.all_keys()}.'
 
-    @abstractmethod
     def _check_if_active(self) -> Tuple[bool, str]:
-        """
-        In real devices should ask hardware controller
-        :return:
-        """
         return self.ctrl_status.active, ''
 
     def _check_device(self, device_id: int) -> Tuple[bool, str]:
@@ -722,7 +717,6 @@ class Service(Device):
     def _check_status_flag(flag: int):
         pass
 
-    @abstractmethod
     def _check_if_connected(self) -> Tuple[bool, str]:
         """
         In real devices should ask hardware controller
@@ -778,8 +772,8 @@ class Service(Device):
                                             controller_status=self.ctrl_status)
 
     @abstractmethod
-    def _get_number_hardware_devices(self):
-        pass
+    def _get_number_hardware_devices(self) -> int:
+        return self._hardware_devices_number
 
     def _get_number_hardware_devices_db(self):
         try:

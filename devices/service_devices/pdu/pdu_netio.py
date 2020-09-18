@@ -51,9 +51,6 @@ class PDUCtrl_NETIO(PDUController):
 
         return res, comments
 
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()
-
     def _check_if_connected(self) -> Tuple[bool, str]:
         results, comments = [], ''
         for pdu_id, pdu in self.pdus.items():
@@ -70,7 +67,7 @@ class PDUCtrl_NETIO(PDUController):
                 comments = join_smart_comments(comments, com)
         return any(results), comments
 
-    def _get_number_hardware_devices(self):
+    def _get_number_hardware_devices(self) -> int:
         return len(self.pdus)
 
     def _get_pdu_outputs(self, pdu_id: Union[int, str]) -> Tuple[bool, str]:

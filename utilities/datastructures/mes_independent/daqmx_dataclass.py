@@ -1,18 +1,20 @@
 from utilities.datastructures.mes_independent.devices_dataclass import *
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
+from weakref import ref, ReferenceType
 
 
 @dataclass
-class DAQmxChannel:
-    id: Union[int, str]
+class DAQmxTask:
+    channel: str
     name: str
     type: str
 
 
 @dataclass
 class DAQmxCard(HardwareDevice):
-    channels: Dict[Union[int, str], DAQmxChannel] = field(default_factory=dict)
-    authentication: Tuple[str] = field(default_factory=tuple)
+    tasks: Dict[Union[int, str], DAQmxTask] = field(default_factory=dict)
+    channel_settings: Dict[str, List[str]]
+    device_ref: ReferenceType = None
 
     def short(self):
         d = {}
@@ -22,7 +24,12 @@ class DAQmxCard(HardwareDevice):
 
 
 @dataclass
-class DAQmxCardEssentials:
+class NIDAQmxCard(DAQmxCard):
+    pass
+
+
+@dataclass
+class DAQmxCardEssentials(DAQmxTask):
     pass
 
 

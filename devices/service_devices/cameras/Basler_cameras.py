@@ -43,12 +43,6 @@ class CameraCtrl_Basler(CameraController):
         if not res:
             raise CameraError(self, comments)
 
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super(CameraCtrl_Basler, self)._check_if_active()
-
-    def _check_if_connected(self) -> Tuple[bool, str]:
-        pass
-
     @property
     def cameras(self) -> Dict[int, CameraBasler]:
         return self.cameras_no_pylon
@@ -82,7 +76,7 @@ class CameraCtrl_Basler(CameraController):
                             if camera.pylon_camera.IsGrabbing():
                                 camera.pylon_camera.StopGrabbing()
                                 sleep(0.2)
-                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
+                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
                             sleep(0.05)
                         elif flag == 2 and camera.status == 0:
                             return False, f'First activate camera with camera id={camera_id}, ' \

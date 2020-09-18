@@ -27,7 +27,7 @@ class PDUController(Service):
         self._hardware_devices: Dict[int, PDU] = HardwareDeviceDict()
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return [*super().available_public_functions(), PDUController.GET_PDU_STATE, PDUController.SET_PDU_STATE]
+        return (*super().available_public_functions(), PDUController.GET_PDU_STATE, PDUController.SET_PDU_STATE)
 
     def get_pdu_state(self, func_input: FuncGetPDUStateInput) -> FuncGetPDUStateOutput:
         res, comments = self._check_device_range(func_input.pdu_id)

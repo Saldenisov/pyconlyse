@@ -65,9 +65,6 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is already set to {flag}'
         return res, comments
 
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()  # TODO: should be replaced with something reasonable
-
     def _check_if_connected(self) -> Tuple[bool, str]:
         status = status_t()
         if self.axes_stpmtr:
