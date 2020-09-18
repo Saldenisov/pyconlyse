@@ -634,7 +634,7 @@ class Service(Device):
         self.server_id: DeviceId = self.get_settings('General')['server_id']  # must be here
         self._hardware_device_dataclass = kwargs['hardware_device_dataclass']
         self._hardware_devices: Dict[Union[int, str], HardwareDevice] = HardwareDeviceDict()
-        self._power_settings: PowerSettings = PowerSettings()
+        self.power_settings: PowerSettings = PowerSettings()
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -758,7 +758,7 @@ class Service(Device):
         """
         try:
             return ServiceDescription(hardware_devices=self.hardware_devices, info=self.get_parameters['info'],
-                                      GUI_title=self.get_parameters['title'], power_settings=self._power_settings,
+                                      GUI_title=self.get_parameters['title'], power_settings=self.power_settings,
                                       class_name=self.__class__.__name__)
         except (KeyError, DeviceError) as e:
             return DeviceError(self, f'Could not find description of the controller: {e}. Check the DB.')
@@ -804,18 +804,18 @@ class Service(Device):
                 res, comments = False, f'Power is {self.ctrl_status.power}. Cannot switch power off ' \
                                        f'when device is activated.'
             else:
-                if not self._power_settings.controller_id:
+                if not self.power_settings.controller_id:
                     self.ctrl_status.power = flag
                     res, comments = True, f'Power is {self.ctrl_status.power}. Device does not require power.'
-                elif self._power_settings.controller_id == 'manually':
+                elif self.power_settings.controller_id == 'manually':
                     self.ctrl_status.power = flag
                     res, comments = True, f'Power is {self.ctrl_status.power}. But remember, ' \
                                           f'that user must switch power manually...'
                 else:
                     msg = self.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.server_id,
-                                            forward_to=self._power_settings.controller_id,
-                                            func_input=FuncSetPDUStateInput(pdu_id=self._power_settings.pdu_id,
-                                                                            pdu_output_id=self._power_settings.output_id,
+                                            forward_to=self.power_settings.controller_id,
+                                            func_input=FuncSetPDUStateInput(pdu_id=self.power_settings.pdu_id,
+                                                                            pdu_output_id=self.power_settings.output_id,
                                                                             output=int(flag)))
                     self.send_msg_externally(msg)
                     res, comments = True, ''
@@ -901,7 +901,7 @@ class Service(Device):
     def _set_power_settings(self) -> Tuple[bool, str]:
         try:
             power_param = eval(self.get_parameters['power_controller_parameters'])
-            self._power_settings = PowerSettings(*power_param)
+            self.power_settings = PowerSettings(*power_param)
             return True, ''
         except (SyntaxError, ValueError) as e:
             error_logger(self, self._set_power_settings, e)

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import NamedTuple, Set
+from typing import NamedTuple, List
 
 
 class Permission(Enum):
@@ -23,14 +23,11 @@ class MsgType(str, Enum):
 
 
 class MessageInfoInt(NamedTuple):
-    #name: str
     info_class: dataclass  # DataClass
-    #must_have_param: Set[str]  # Set of parameters names must be present in param dict for device.generate_msg()
 
 
 class MessageInfoExt(NamedTuple):
-    #name: str
     type: MsgType
     info_class: dataclass  # DataClass
-    must_have_param: Set[str]  # Set of parameters names must be present in param dict for device.generate_msg()
+    must_have_param: List[str]  # Set of parameters names must be present in param dict for device.generate_msg()
     crypted: bool

@@ -31,7 +31,8 @@ class Thinker(ThinkerInter):
         self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit,
+                                            dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
                                               dict_parent=self)
@@ -99,8 +100,6 @@ class Thinker(ThinkerInter):
         info['events'] = self.events
         info['tasks_in'] = self.tasks_in
         info['tasks_out'] = self.tasks_out
-        info['pending_clients_demands'] = self.clients_demands_pending_answer
-        info['pending_replies'] = self.pending_replies
         return info
 
     def msg_out(self, msg_out: Union[MessageExt, List[MessageExt]]):
@@ -149,7 +148,6 @@ class Thinker(ThinkerInter):
     @property
     def demands_waiting_reply(self) -> MsgDict:
         return self._demands_waiting_reply
-
 
     @abstractmethod
     def react_external(self, msg: MessageExt):

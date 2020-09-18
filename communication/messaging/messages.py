@@ -35,15 +35,15 @@ class MsgComInt(Enum):
 
 
 class MsgComExt(Enum):
-    AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices, set(['available_services']), True)
-    DO_IT = MessageInfoExt(MsgType.DIRECTED, DoIt, set(['receiver_id', 'func_input']), True)
-    DONE_IT = MessageInfoExt(MsgType.DIRECTED, DoneIt, set(['receiver_id', 'reply_to', 'func_output']), True)
-    ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, set(['comments', 'reply_to', 'receiver_id']), False)
-    HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, set(['event']), False)
-    HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, set(['event']), False)
-    SHUTDOWN = MessageInfoExt(MsgType.DIRECTED, ShutDown, set(['reason', 'receiver_id']), True)
-    WELCOME_INFO_DEVICE = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoDevice, set(['receiver_id', 'event']), False)
-    WELCOME_INFO_SERVER = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoServer, set(['reply_to', 'receiver_id']), False)
+    AVAILABLE_SERVICES = MessageInfoExt(MsgType.DIRECTED, AvailableServices, ['available_services'], True)
+    DO_IT = MessageInfoExt(MsgType.DIRECTED, DoIt, ['receiver_id', 'func_input'], True)
+    DONE_IT = MessageInfoExt(MsgType.DIRECTED, DoneIt, ['receiver_id', 'reply_to', 'func_output'], True)
+    ERROR = MessageInfoExt(MsgType.DIRECTED, MsgError, ['comments', 'reply_to', 'receiver_id'], False)
+    HEARTBEAT = MessageInfoExt(MsgType.BROADCASTED, HeartBeat, ['event'], False)
+    HEARTBEAT_FULL = MessageInfoExt(MsgType.BROADCASTED, HeartBeatFull, ['event'], False)
+    SHUTDOWN = MessageInfoExt(MsgType.DIRECTED, ShutDown, ['reason', 'receiver_id'], True)
+    WELCOME_INFO_DEVICE = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoDevice, ['receiver_id', 'event'], False)
+    WELCOME_INFO_SERVER = MessageInfoExt(MsgType.DIRECTED, WelcomeInfoServer, ['reply_to', 'receiver_id'], False)
 
     @property
     def msg_name(self):
@@ -62,13 +62,10 @@ class MsgComExt(Enum):
 
 @dataclass(order=True)
 class MessageInt(Message):
-    """
-    !!! Better not to change order of the parameters  !!!
-    """
     com: str  # command name
     info: dataclass  # DataClass
     sender_id: str
-    time_creation: int = 0
+    time_creation: float = 0
     time_bonus: float = 0.0
     forwarded_from: str = ''
     forward_to: str = ''
@@ -114,9 +111,6 @@ class Coding(Enum):
 
 @dataclass(order=True)
 class MessageExt(Message):
-    """
-    !!! Better not to change order of the parameters  !!!
-    """
     com: str  # command name
     crypted: bool
     info: dataclass  # DataClass
@@ -125,7 +119,6 @@ class MessageExt(Message):
     sender_id: str
     forward_to: str = ''
     forwarded_from: str = ''
-    #type: MsgType  # temporary disabled TODO: to think what to do with it
     id: str = ''
 
     def __post_init__(self):
@@ -140,31 +133,30 @@ class MessageExt(Message):
                 object.__setattr__(msg_copy, key, value)
             except AttributeError:
                 pass
-        #object.__setattr__(msg_copy, 'id', unique_id())
         return msg_copy
 
     def short(self):
         t = str(self.info)
-        l = len(t)
-        if l > 300 and l < 1000:
-            l = int(0.8*l)
-        elif l > 1000:
-            l = 300
+        lenght_message = len(t)
+        if 300 < lenght_message < 1000:
+            lenght_message = int(0.8*lenght_message)
+        elif lenght_message > 1000:
+            lenght_message = 300
         else:
             pass
         if not self.forwarded_from and not self.forward_to:
             return {'path':  f'{self.sender_id}->{self.receiver_id}',
-                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'datastructures': f'{self.com}: {t[0:lenght_message]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
         elif self.forward_to:
             return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARD_TO->{self.forward_to}',
-                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'datastructures': f'{self.com}: {t[0:lenght_message]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
         elif self.forwarded_from:
             return {'path':  f'{self.sender_id}->{self.receiver_id}: FORWARDED_FROM->{self.forwarded_from}',
-                    'datastructures': f'{self.com}: {t[0:l]}...',
+                    'datastructures': f'{self.com}: {t[0:lenght_message]}...',
                     'reply_to': self.reply_to,
                     'id': self.id}
 
@@ -231,7 +223,7 @@ class MessageExt(Message):
                 return b''
 
     @staticmethod
-    def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON) -> Message:
+    def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON):
         if coding is Coding.MSGPACK:  # MSGPACK is not realy working for all type of messages
             try:
                 mes_unpacked = unpackb(mes_bytes)
