@@ -4,17 +4,15 @@ Created on 15.11.2019
 @author: saldenisov
 """
 import logging
-from copy import deepcopy
 from datetime import datetime as dt
 from threading import Thread
 from time import sleep
-from typing import Union
 from PyQt5.QtWidgets import QMainWindow, QListWidgetItem
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from devices.devices import Server, Service, Client
 from gui.views.ui.SuperUser import Ui_SuperUser
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)

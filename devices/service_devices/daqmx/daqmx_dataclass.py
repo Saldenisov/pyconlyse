@@ -1,6 +1,6 @@
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
-from weakref import ref, ReferenceType
+from devices.devices_dataclass import *
+from weakref import ReferenceType
+from nidaqmx.task import Task
 
 
 @dataclass
@@ -11,9 +11,14 @@ class DAQmxTask:
 
 
 @dataclass
+class NIDAQmxTask:
+    task: Task = None
+
+
+@dataclass
 class DAQmxCard(HardwareDevice):
     tasks: Dict[Union[int, str], DAQmxTask] = field(default_factory=dict)
-    channel_settings: Dict[str, List[str]]
+    channel_settings: Dict[str, List[str]] = field(default_factory=dict)
     device_ref: ReferenceType = None
 
     def short(self):

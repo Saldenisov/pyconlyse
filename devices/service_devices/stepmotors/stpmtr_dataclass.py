@@ -1,8 +1,8 @@
-from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Tuple, Union, NewType, Set
-
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from dataclasses import dataclass, field
+from typing import NewType, Union, List, Dict, Tuple, Set
+from devices.devices_dataclass import (HardwareDevice, DeviceControllerState, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 relative = NewType('relative', str)

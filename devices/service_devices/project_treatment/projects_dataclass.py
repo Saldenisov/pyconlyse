@@ -1,8 +1,8 @@
 from dataclasses import dataclass, field
 from typing import List, Union
 
-from utilities.datastructures.mes_independent.devices_dataclass import (DeviceControllerStatus, FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput)
+from devices.devices_dataclass import (DeviceControllerStatus, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 

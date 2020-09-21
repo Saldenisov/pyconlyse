@@ -9,10 +9,10 @@ from _functools import partial
 from PyQt5.QtWidgets import QCheckBox
 
 from communication.messaging.messages import MessageInt, MsgComExt
-from devices.service_devices.pdu import PDUController
+from devices.service_devices.pdu.pdu_controller import PDUController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.ui import Ui_PDUs
-from utilities.datastructures.mes_independent.pdu_dataclass import *
+from devices.service_devices.pdu.pdu_dataclass import *
 
 module_logger = logging.getLogger(__name__)
 

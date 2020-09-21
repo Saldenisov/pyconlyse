@@ -2,16 +2,14 @@
 This controller is dedicated to control OWIS PS90 controller hardware
 On ELYSE there are 3 cards dedicated to delaylines
 """
-
-
 import ctypes
 import logging
 from time import sleep
-from typing import List, Tuple, Union, Dict, Any, Callable
-
-from devices.service_devices.stepmotors import StpMtrController, StpMtrError
+from typing import Dict, Union, Tuple
+from devices.devices_dataclass import HardwareDeviceDict
+from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController, StpMtrError
 from utilities.tools.decorators import development_mode
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
+from devices.service_devices.stepmotors.stpmtr_dataclass import OwisAxisStpMtr
 from utilities.myfunc import join_smart_comments
 
 module_logger = logging.getLogger(__name__)

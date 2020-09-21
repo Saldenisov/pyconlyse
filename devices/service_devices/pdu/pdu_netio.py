@@ -4,10 +4,10 @@ created: 12/08/2020
 """
 
 import requests
-
+from devices.devices_dataclass import HardwareDeviceDict, FuncPowerInput, FuncActivateInput, FuncActivateDeviceInput
 from devices.service_devices.pdu.pdu_controller import PDUController, PDUError
-from utilities.datastructures.mes_independent.pdu_dataclass import *
-from utilities.myfunc import error_logger, info_msg, join_smart_comments
+from devices.service_devices.pdu.pdu_dataclass import *
+from utilities.myfunc import join_smart_comments
 
 
 class PDUCtrl_NETIO(PDUController):

@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key, l
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
 from utilities.datastructures.mes_dependent.dicts import MsgDict
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import *
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import info_msg, error_logger, get_local_ip, get_free_port

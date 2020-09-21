@@ -1,6 +1,6 @@
 from communication.messaging.messages import *
 from devices.devices import Server, Service
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
+from devices.service_devices.stepmotors.stpmtr_dataclass import *
 
 
 def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
@@ -68,7 +68,7 @@ def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
 
 
     try:
-        from utilities.datastructures.mes_independent.stpmtr_dataclass import StpMtrDescription
+        from devices.service_devices.stepmotors.stpmtr_dataclass import StpMtrDescription
         description: StpMtrDescription = stpmtr_a4988_4axes_test.description()
 
 

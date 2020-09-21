@@ -1,9 +1,7 @@
-import pytest
-
 from devices.service_devices.cameras import *
 from tests.fixtures.services import *
-from utilities.datastructures.mes_independent.camera_dataclass import *
-from utilities.datastructures.mes_independent.camera_dataclass import FuncGetImagesInput
+from devices.service_devices.cameras.camera_dataclass import *
+from devices.service_devices.cameras.camera_dataclass import FuncGetImagesInput
 
 one_service = [camera_basler_test_non_fixture()]
 #all_services = []

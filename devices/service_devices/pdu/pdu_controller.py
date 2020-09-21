@@ -4,15 +4,12 @@
 """
 import logging
 from abc import abstractmethod
-from os import path
-from pathlib import Path
-from typing import Any, Callable
-from functools import lru_cache
+from typing import List, Tuple
 from devices.devices import Service
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.pdu_dataclass import *
-from utilities.errors.myexceptions import DeviceError
-from utilities.myfunc import error_logger, info_msg, join_smart_comments
+from devices.devices_dataclass import HardwareDevice, HardwareDeviceEssentials, HardwareDeviceDict
+from devices.service_devices.pdu.pdu_dataclass import *
+from utilities.datastructures.mes_independent.general import CmdStruct
+from utilities.myfunc import join_smart_comments
 
 module_logger = logging.getLogger(__name__)
 

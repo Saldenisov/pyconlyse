@@ -13,7 +13,7 @@ from typing import Union, Tuple
 import numpy as np
 
 from devices.service_devices.project_treatment.openers.Opener import Opener, CriticalInfo
-from utilities.datastructures.mes_independent import Measurement
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)

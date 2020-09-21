@@ -1,9 +1,6 @@
-import pytest
-
 from tests.fixtures.services import *
 from devices.service_devices.stepmotors import *
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
+from devices.service_devices.stepmotors.stpmtr_dataclass import *
 
 one_service = [stpmtr_Standa_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]

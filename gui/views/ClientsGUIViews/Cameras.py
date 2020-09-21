@@ -13,13 +13,13 @@ from PyQt5.QtWidgets import QMenu, QErrorMessage
 from matplotlib.widgets import RectangleSelector
 
 from communication.messaging.messages import MessageInt, MsgComExt
-from devices.service_devices.cameras import CameraController
+from devices.service_devices.cameras.camera_controller import CameraController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.matplotlib_canvas.DataCanvasCamera import DataCanvasCamera
 from gui.views.ui import Ui_CameraGUI
-from utilities.datastructures.mes_independent.camera_dataclass import *
+from devices.service_devices.cameras.camera_dataclass import *
 from utilities.datastructures.mes_independent.measurments_dataclass import CameraReadings
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
+from devices.service_devices.stepmotors.stpmtr_dataclass import *
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)

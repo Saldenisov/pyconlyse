@@ -15,15 +15,14 @@ from PyQt5.QtWidgets import QMainWindow
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComExt, MsgComInt
 from devices.devices import Device, Client, Service
-from utilities.datastructures.mes_independent.devices_dataclass import (ControllerInfoExt, DeviceControllerState,
-                                                                        DoneIt, MsgError,
-                                                                        FuncActivateInput, FuncActivateOutput,
-                                                                        FuncActivateDeviceInput,
-                                                                        FuncActivateDeviceOutput,
-                                                                        FuncGetControllerStateInput,
-                                                                        FuncGetControllerStateOutput,
-                                                                        FuncPowerInput, FuncPowerOutput,
-                                                                        HardwareDevice, HardwareDeviceEssentials)
+from devices.devices_dataclass import (ControllerInfoExt, DeviceControllerState,
+                                       DoneIt, MsgError,
+                                       FuncActivateInput, FuncActivateOutput,
+                                       FuncActivateDeviceInput,
+                                       FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput,
+                                       FuncPowerInput, FuncPowerOutput,
+                                       HardwareDevice)
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)

@@ -1,22 +1,37 @@
 import sqlite3 as sq3
 import sys
+import logging
 from abc import abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from collections import OrderedDict as od
 from inspect import signature, isclass
+from logs_pack import initialize_logger
 from pathlib import Path
 from PyQt5.QtCore import QObject, pyqtSignal
-from time import sleep, time
-from typing import Callable, OrderedDict
-from devices.interfaces import DeviceInter
-from communication.messaging.messages import *
+from time import sleep
+from typing import Any, Callable, Dict, List, OrderedDict, Tuple, Union
+from communication.interfaces import ThinkerInter, MessengerInter
+from devices.interfaces import DeviceInter, DeviceId, DeviceType, ExecutorInter
+from devices.devices_dataclass import (Connection, ControllerInfoExt, DeviceInfoInt, HardwareDevice,
+                                       HardwareDeviceEssentials, HardwareDeviceDict,
+                                       DeviceControllerStatus,
+                                       FuncInput, FuncOutput, FuncAliveInput, FuncAliveOutput, FuncActivateInput,
+                                       FuncAvailableServicesInput, FuncAvailableServicesOutput,
+                                       FuncActivateOutput, FuncPowerInput, FuncActivateDeviceInput,
+                                       FuncActivateDeviceOutput, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput, FuncServiceInfoInput, FuncServiceInfoOutput,
+                                       FuncPowerOutput, ClientDescription,
+                                       ServerDescription, ServiceDescription, PowerSettings,
+                                       AvailableServices, HeartBeat, HeartBeatFull, ShutDown, WelcomeInfoDevice,
+                                       WelcomeInfoServer)
+from communication.messaging.messages import (MessageInt, MessageExt, MsgComInt, MsgError, MsgComExt, MsgType,
+                                              MessageInfoExt)
 from utilities.database.tools import db_create_connection, db_execute_select
+from utilities.datastructures.mes_independent.general import CmdStruct
 from utilities.errors.messaging_errors import MessengerError
 from utilities.errors.myexceptions import DeviceError
 from utilities.configurations import configurationSD
 from utilities.myfunc import info_msg, unique_id, error_logger, join_smart_comments
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDevice, HardwareDeviceDict
-from logs_pack import initialize_logger
 
 
 app_folder = Path(__file__).resolve().parents[1]
@@ -251,7 +266,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             try:
                 if isinstance(msg_com, MsgComExt):
                     message_info: MessageInfoExt = msg_com.value
-                    if not message_info.must_have_param.issubset(set(kwargs.keys())):
+                    if not set(message_info.must_have_param).issubset(set(kwargs.keys())):
                         error_logger(self, self.generate_msg, f'Not all required parameters are given for {msg_com} '
                                                               f'such as {message_info.must_have_param}, but instead '
                                                               f'{kwargs.keys()}')
@@ -812,6 +827,7 @@ class Service(Device):
                     res, comments = True, f'Power is {self.ctrl_status.power}. But remember, ' \
                                           f'that user must switch power manually...'
                 else:
+                    from devices.service_devices.pdu.pdu_dataclass import FuncSetPDUStateInput
                     msg = self.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.server_id,
                                             forward_to=self.power_settings.controller_id,
                                             func_input=FuncSetPDUStateInput(pdu_id=self.power_settings.pdu_id,

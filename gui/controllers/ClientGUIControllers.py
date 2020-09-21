@@ -8,7 +8,7 @@ import logging
 import os
 from pathlib import Path
 
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage, QFileDialog
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from devices.devices import Device
@@ -17,7 +17,7 @@ from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
 from gui.views.ClientsGUIViews.SuperUser import SuperUserView
 from gui.views.ClientsGUIViews.StepMotors import StepMotorsView
 from gui.views.ClientsGUIViews.PDUs import PDUsView
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)

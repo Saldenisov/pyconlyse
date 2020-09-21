@@ -1,7 +1,8 @@
 import logging
 from base64 import b64encode, b64decode
 from copy import deepcopy
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
+from enum import Enum
 from json import dumps, loads
 from datetime import datetime
 from zlib import compress, decompress
@@ -10,7 +11,7 @@ from msgpack import packb, unpackb
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from utilities.datastructures.mes_independent import *
+from devices.datastruct_for_messaging import *
 from utilities.errors.messaging_errors import MessageError
 from utilities.myfunc import unique_id
 

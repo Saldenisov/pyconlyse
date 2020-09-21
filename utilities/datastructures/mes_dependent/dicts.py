@@ -3,7 +3,6 @@ from typing import Dict
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from utilities.datastructures.mes_dependent.general import PendingDemand, PendingReply
-from utilities.datastructures.mes_independent.devices_dataclass import Connection, HardwareDevice
 from utilities.myfunc import info_msg, error_logger
 
 
