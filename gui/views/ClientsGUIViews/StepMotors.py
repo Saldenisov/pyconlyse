@@ -4,16 +4,15 @@ Created on 15.11.2019
 @author: saldenisov
 '''
 import logging
-
+from typing import Dict, List, Union
 from PyQt5.QtWidgets import QErrorMessage
 
 from communication.messaging.messages import MsgComExt, MessageInt
+from devices.datastruct_for_messaging import *
 from devices.devices import Device
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.ui import Ui_StpMtrGUI
-from devices.devices_dataclass import DoneIt
-from devices.service_devices.stepmotors.stpmtr_dataclass import *
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)

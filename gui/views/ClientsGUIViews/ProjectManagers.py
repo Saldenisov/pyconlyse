@@ -113,8 +113,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
                 self.get_operators()
 
             self.view_state.controller_state = new_state
-        else:
-            print('no')
+
 
     def file_tree_double_click(self, index: QtCore.QModelIndex):
         pass

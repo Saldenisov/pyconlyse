@@ -93,4 +93,3 @@ class DataCanvas(MyMplCanvas):
         minv = np.min(self.measurement.data)
         self.image.set_clim(vmin=minv, vmax=maxv)
         self.draw()
-        #print("Datacanvas redrawn")

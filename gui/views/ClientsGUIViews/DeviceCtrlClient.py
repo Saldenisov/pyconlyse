@@ -113,7 +113,6 @@ class DeviceControllerView(QMainWindow):
         while self._state_observing:
             sleep(1)
             self.get_controller_state()
-        print('Done')
         info_msg(self, 'INFO', 'Controller state observation thread Terminated.')
 
     def get_controller_state(self):

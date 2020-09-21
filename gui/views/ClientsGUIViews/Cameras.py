@@ -9,17 +9,17 @@ from time import sleep
 
 import numpy as np
 from PyQt5 import QtCore
+from typing import Dict, Union
 from PyQt5.QtWidgets import QMenu, QErrorMessage
 from matplotlib.widgets import RectangleSelector
 
 from communication.messaging.messages import MessageInt, MsgComExt
+from devices.datastruct_for_messaging import *
 from devices.service_devices.cameras.camera_controller import CameraController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.matplotlib_canvas.DataCanvasCamera import DataCanvasCamera
 from gui.views.ui import Ui_CameraGUI
-from devices.service_devices.cameras.camera_dataclass import *
 from utilities.datastructures.mes_independent.measurments_dataclass import CameraReadings
-from devices.service_devices.stepmotors.stpmtr_dataclass import *
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -426,8 +426,6 @@ class CamerasView(DeviceControllerView):
 
         if pixel_y_start > pixel_y_end:
             pixel_y_start, pixel_y_end = pixel_y_end, pixel_y_start
-
-        print(pixel_x_start, pixel_x_end, pixel_y_start, pixel_y_end)
 
         width_new = pixel_x_end - pixel_x_start
         if width_new % 2 != 0:

@@ -1,6 +1,7 @@
 from communication.messaging.messages import *
 from devices.devices import Server, Service
 from devices.service_devices.stepmotors.stpmtr_dataclass import *
+from communication.messaging.conversion import bytes_to_msg
 
 
 def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
@@ -15,7 +16,7 @@ def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
         for msg, msg_bytes in zip(msgs, msgs_bytes):
             try:
                 if isinstance(msg, MessageExt):
-                    assert msg == MessageExt.bytes_to_msg(msg_bytes)
+                    assert msg == bytes_to_msg(msg_bytes)
             except Exception as e:
                 print(msg)
 
@@ -79,7 +80,7 @@ def test_messages(server: Server, stpmtr_a4988_4axes_test: Service):
                                                                                                   device_id=stpmtr_a4988_4axes_test.id,
                                                                                                   service_info=description))
         bytes = msg_service_info.byte_repr()
-        msg_back = MessageExt.bytes_to_msg(bytes)
+        msg_back = bytes_to_msg(bytes)
     except Exception as e:
         print(e)
     msgs.append(msg_service_info)

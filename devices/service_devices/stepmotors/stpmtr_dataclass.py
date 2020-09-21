@@ -158,16 +158,6 @@ class AxisStpMtrEssentials:
     status: int
 
 
-@dataclass(order=True, frozen=False)
-class StepMotorsControllerState(DeviceControllerState):
-    know_movements: Dict[Union[mm, angle, microstep], bool] = \
-        field(default_factory=lambda: {microstep: False, mm: False, angle: False})
-    start_stop: Dict[int, Tuple[float]] = field(default_factory=dict)
-
-    def __post_init__(self):
-        self.start_stop = {device_id: (0.0, 0.0) for device_id in self.devices.keys()}
-
-
 @dataclass
 class FuncGetStpMtrControllerStateInput(FuncGetControllerStateInput):
     pass
