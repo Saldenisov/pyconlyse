@@ -13,7 +13,7 @@ class DAQmxTask:
 @dataclass
 class DAQmxCard(HardwareDevice):
     tasks: Dict[Union[int, str], DAQmxTask] = field(default_factory=dict)
-    channel_settings: Dict[str, List[str]]
+    channel_settings: Dict[str, List[str]] = field(default_factory=dict)
     device_ref: ReferenceType = None
 
     def short(self):
