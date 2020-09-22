@@ -8,13 +8,13 @@ ELYSE platform
 """
 import sys
 from pathlib import Path
+app_folder = Path(__file__).resolve().parents[1]
+sys.path.append(str(app_folder))
 from PyQt5.QtWidgets import QApplication
 from gui.models.ClientGUIModels import SuperUserGUIModel
 from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
-app_folder = Path(__file__).resolve().parents[1]
-sys.path.append(str(app_folder))
 
 
 def main():

@@ -180,20 +180,30 @@ class CameraCtrl_Basler(CameraController):
             # apply thresholding
             threshold = treatment_param['threshold']
             ret, thresh = cv2.threshold(image, threshold, 255, 0)
-            #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            longest_contour = 0
+            longest_contour_index = 0
+            i = 0
+            for contour in contours:
+                if longest_contour < contour.shape[0]:
+                    longest_contour_index = i
+                    longest_contour = contour.shape[0]
+                i += 1
 
             # edge detection
             # apply Canny edge detection
-            tight = cv2.Canny(thresh, threshold, 255)
+            #tight = cv2.Canny(thresh, threshold, 255)
 
             # calculate the centre of moment
-            M = cv2.moments(tight)
-            if M["m00"] != 0:
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
+            if contours:
+                M = cv2.moments(contours[longest_contour_index])
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
+                else:
+                    cX, cY = 0, 0
             else:
                 cX, cY = 0, 0
-
             return (cX, cY), ''
         except KeyError:
             return False, f'Treatment_param was not passed threshold.'

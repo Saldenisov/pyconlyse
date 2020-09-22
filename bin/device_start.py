@@ -6,13 +6,13 @@ LCP/CNRS UMR8000 ELYSE platform
 
 import sys
 from pathlib import Path
+app_folder = str(Path(__file__).resolve().parents[1])
+sys.path.append(app_folder)
 from devices.devices import DeviceFactory
 from gui.models.ClientGUIModels import SuperUserGUIModel
 from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
-app_folder = str(Path(__file__).resolve().parents[1])
-sys.path.append(app_folder)
 
 
 def init(device_id: str, db_name: str):
