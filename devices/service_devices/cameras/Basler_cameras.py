@@ -3,9 +3,9 @@ Controllers of Basler cameras are described here
 
 created
 """
-import datetime
 from collections import OrderedDict
 from dataclasses import asdict
+from datetime import datetime
 from distutils.util import strtobool
 from time import sleep
 from typing import Union, Dict, Tuple, List

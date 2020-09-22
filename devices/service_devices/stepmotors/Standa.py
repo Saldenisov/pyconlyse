@@ -43,7 +43,6 @@ class StpMtrCtrl_Standa(StpMtrController):
         if not res:
             raise StpMtrError(self, comments)
 
-
     def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)
         if res:
