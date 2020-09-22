@@ -3,16 +3,11 @@
 """
 
 import logging
-from abc import abstractmethod
-from os import path
-from pathlib import Path
-from typing import Any, Callable
-from functools import lru_cache
+from typing import Dict, Tuple
 from devices.devices import Service
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.daqmx_dataclass import *
-from utilities.errors.myexceptions import DeviceError
-from utilities.myfunc import error_logger, info_msg, join_smart_comments
+from devices.service_devices.daqmx.daqmx_dataclass import DAQmxCard
+from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice, HardwareDeviceEssentials
+from utilities.datastructures.mes_independent.general import CmdStruct
 
 module_logger = logging.getLogger(__name__)
 
@@ -26,20 +21,6 @@ class DAQmxController(Service):
         kwargs['hardware_device_dataclass'] = kwargs['pdu_dataclass']
         super().__init__(**kwargs)
         self._hardware_devices: Dict[int, DAQmxCard] = HardwareDeviceDict()
-
-        res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
-                                                                      ('сhannel_settings', 'сhannel_settings', dict)],
-                                                          extra_func=[])
-        # Set parameters from database first and after connection is done; update from hardware controller if possible
-        if not res:
-            raise DAQmxError(self, comments)
-        else:
-            self.power(func_input=FuncPowerInput(flag=True))
-            self.activate(func_input=FuncActivateInput(flag=True))
-            for pdu in self.pdus.values():
-                self.activate_device(func_input=FuncActivateDeviceInput(device_id=pdu.device_id_seq, flag=True))
-            self._register_observation('PDU_outputs_state', self._set_all_pdu_outputs, 2)
-
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
         return (*super().available_public_functions(), DAQmxController.READ_CHANNEL, DAQmxController.SET_CHANNEL_TYPE,

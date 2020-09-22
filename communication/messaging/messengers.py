@@ -2,7 +2,7 @@ import base64
 import logging
 from abc import abstractmethod
 from time import sleep
-from typing import NamedTuple, NewType
+from typing import Dict, List, NamedTuple, NewType
 
 import zmq
 from cryptography.fernet import Fernet
@@ -15,9 +15,11 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
 from communication.messaging.messages import MessageExt, MsgComExt
+from communication.interfaces import MessengerInter
+from communication.messaging.conversion import bytes_to_msg
 from devices.devices import Device
 from utilities.datastructures.mes_dependent.dicts import MsgDict
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import (DeviceId, DeviceType, HeartBeatFull)
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import info_msg, error_logger, get_local_ip, get_free_port
@@ -96,7 +98,6 @@ class Messenger(MessengerInter):
     def add_msg_out_publisher(self, msg: MessageExt):
         try:
             self._msg_out_publisher[msg.id] = msg
-            #print(f'msg_out_publisher len {len(self._msg_out_publisher)}')
         except KeyError as e:
             error_logger(self, self.add_msg_out_publisher, e)
 
@@ -347,7 +348,7 @@ class ClientMessenger(Messenger):
                 if int(crypted):
                     device_id = self.parent.server_id  # !!! ONLY WHEN CLIENT/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.bytes_to_msg(msg)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
@@ -457,7 +458,7 @@ class ClientMessenger(Messenger):
             if self.sockets[SUB_Socket] in sockets:
                 mes, crypted = self.sockets[SUB_Socket].recv_multipart()
                 # TODO: decrypt message safely with try except
-                msg: MessageExt = MessageExt.bytes_to_msg(mes)
+                msg: MessageExt = bytes_to_msg(mes)
                 # TODO: first heartbeat could be received only from server! make it safe
                 if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
                     try:
@@ -544,7 +545,7 @@ class ServerMessenger(Messenger):
             try:
                 if int(crypted):
                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.bytes_to_msg(msg)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)

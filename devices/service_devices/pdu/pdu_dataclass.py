@@ -1,4 +1,6 @@
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from dataclasses import dataclass, field
+from typing import Union, Dict, Tuple
+from devices.devices_dataclass import HardwareDevice, FuncGetControllerStateInput, FuncGetControllerStateOutput
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 

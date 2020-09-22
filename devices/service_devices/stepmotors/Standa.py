@@ -7,14 +7,14 @@ On ELYSE there are 4 motorized mirrors
 import ctypes
 import logging
 from pathlib import Path
-from typing import Callable, List, Tuple, Union, Dict, Any, Set
+from typing import Callable, Tuple, Union, Dict, Set
 from time import sleep
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
-from utilities.datastructures.mes_independent.stpmtr_dataclass import StandaAxisStpMtr
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict, PowerSettings, FuncPowerInput
+from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr
+from devices.devices_dataclass import HardwareDeviceDict
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
@@ -42,7 +42,6 @@ class StpMtrCtrl_Standa(StpMtrController):
                                                                       self._set_power_settings])
         if not res:
             raise StpMtrError(self, comments)
-
 
     def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)

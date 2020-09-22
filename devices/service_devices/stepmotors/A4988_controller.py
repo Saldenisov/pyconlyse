@@ -10,12 +10,11 @@ under windows with no problems
 """
 import logging
 from time import sleep
-from typing import List, Tuple, Union, Callable, Set
 
 from gpiozero import LED
 
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict
+from devices.service_devices.stepmotors.stpmtr_dataclass import *
+from devices.devices_dataclass import HardwareDeviceDict
 from utilities.myfunc import error_logger, info_msg
 from utilities.tools.decorators import development_mode
 from .stpmtr_controller import StpMtrController

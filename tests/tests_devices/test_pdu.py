@@ -1,9 +1,6 @@
-import pytest
-
 from devices.service_devices.pdu import *
 from tests.fixtures.services import *
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.pdu_dataclass import *
+from devices.service_devices.pdu.pdu_dataclass import *
 from time import sleep
 one_service = [pdu_netio_test_non_fixture()]
 #all_services = []

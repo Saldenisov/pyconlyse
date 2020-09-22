@@ -5,14 +5,14 @@ Created on 08.09.2020
 """
 import logging
 from _functools import partial
-
+from typing import Dict, Union
 from PyQt5.QtWidgets import QCheckBox
 
 from communication.messaging.messages import MessageInt, MsgComExt
-from devices.service_devices.pdu import PDUController
+from devices.datastruct_for_messaging import *
+from devices.service_devices.pdu.pdu_controller import PDUController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.ui import Ui_PDUs
-from utilities.datastructures.mes_independent.pdu_dataclass import *
 
 module_logger = logging.getLogger(__name__)
 

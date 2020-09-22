@@ -4,15 +4,16 @@ Created on 15.11.2019
 @author: saldenisov
 """
 import logging
-from enum import auto
-
+from enum import auto, Enum
+from typing import Set
 from PyQt5 import QtCore, QtWidgets, QtGui
 
 from communication.messaging.messages import MessageInt, MsgComInt, MsgComExt
 from devices.devices import Device
-from devices.service_devices.project_treatment import ProjectManager_controller
+from devices.devices_dataclass import ControllerInfoExt, DoneIt
+from devices.service_devices.project_treatment.projects_dataclass import *
+from devices.service_devices.project_treatment.projectmanager_controller import ProjectManager_controller
 from gui.views.ui.ProjectManager import Ui_ProjectManager
-from utilities.datastructures.mes_independent import *
 from utilities.myfunc import info_msg, get_local_ip, paths_to_dict
 
 module_logger = logging.getLogger(__name__)
@@ -112,8 +113,7 @@ class ProjectManagerView(QtWidgets.QMainWindow):
                 self.get_operators()
 
             self.view_state.controller_state = new_state
-        else:
-            print('no')
+
 
     def file_tree_double_click(self, index: QtCore.QModelIndex):
         pass

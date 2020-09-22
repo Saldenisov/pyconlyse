@@ -1,6 +1,6 @@
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
-from weakref import ref, ReferenceType
+from devices.devices_dataclass import *
+from weakref import ReferenceType
+from nidaqmx.task import Task
 
 
 @dataclass
@@ -8,6 +8,11 @@ class DAQmxTask:
     channel: str
     name: str
     type: str
+
+
+@dataclass
+class NIDAQmxTask:
+    task: Task = None
 
 
 @dataclass

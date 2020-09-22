@@ -1,9 +1,10 @@
+from dataclasses import dataclass, field
 from threading import Thread
-from typing import Union
-
 from pypylon import pylon
+from typing import Dict, List, Tuple
 
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import (HardwareDevice, PowerSettings, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 

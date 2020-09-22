@@ -3,17 +3,25 @@ Controllers of Basler cameras are described here
 
 created
 """
-import cv2
 from collections import OrderedDict
-from distutils.util import strtobool
-import numpy
-from pypylon import pylon, genicam
+from dataclasses import asdict
 from datetime import datetime
+from distutils.util import strtobool
 from time import sleep
+from typing import Union, Dict, Tuple, List
 
-from communication.messaging.messages import *
+import cv2
+import numpy as np
+from pypylon import genicam, pylon
+
+from devices.devices_dataclass import HardwareDeviceDict, HardwareDeviceEssentials, DeviceControllerStatus
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
-from utilities.datastructures.mes_independent.camera_dataclass import *
+from devices.service_devices.cameras.camera_dataclass import (CameraBasler, FuncGetImagesOutput,
+                                                              FuncSetImageParametersInput,
+                                                              FuncSetSyncParametersInput,
+                                                              FuncSetTransportParametersInput, ImageDemand,
+                                                              Image_Format_Control, AOI_Controls, Analog_Controls,
+                                                              Acquisition_Controls, Transport_Layer)
 from utilities.myfunc import error_logger, info_msg
 
 
@@ -230,6 +238,7 @@ class CameraCtrl_Basler(CameraController):
                 result = FuncGetImagesOutput(comments=comments, func_success=res, image=image_list,
                                              post_treatment_points=list(post_treatment),
                                              timestamp=datetime.timestamp(datetime.now()), camera_id=camera_id)
+                from communication.messaging.messages import MsgComExt
 
                 msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id,
                                           forward_to=demander_id, func_output=result, reply_to='delayed_response')
@@ -266,7 +275,7 @@ class CameraCtrl_Basler(CameraController):
         else:
             return False, f'Camera {camera_id} has strange status {camera.status}. Internal error.'
 
-    def _read_image(self, camera: CameraBasler) -> numpy.ndarray:
+    def _read_image(self, camera: CameraBasler) -> np.ndarray:
         try:
             if not camera.pylon_camera.IsGrabbing():
                 raise CameraError(self, f"Camera {camera.friendly_name} was stopped during grabbing.")

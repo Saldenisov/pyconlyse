@@ -12,8 +12,8 @@ from typing import Dict
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from utilities.datastructures.mes_independent.devices_dataclass import ControllerInfoExt
-from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType, StepMotorsControllerState
+from devices.devices_dataclass import ControllerInfoExt
+from devices.service_devices.stepmotors.stpmtr_dataclass import AxisStpMtr, MoveType, StepMotorsControllerState
 
 module_logger = logging.getLogger(__name__)
 

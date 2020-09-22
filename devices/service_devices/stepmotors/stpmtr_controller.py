@@ -2,12 +2,14 @@ import logging
 from abc import abstractmethod
 from os import path
 from pathlib import Path
-from typing import Any, Callable
-
+from typing import Dict, List, Set, Tuple, Union
 from devices.devices import Service
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-from utilities.errors.myexceptions import DeviceError
+from devices.devices_dataclass import HardwareDevice, HardwareDeviceEssentials, HardwareDeviceDict
+from devices.service_devices.stepmotors.stpmtr_dataclass import (FuncGetPosInput, FuncGetPosOutput, FuncSetPosInput,
+                                                                 FuncSetPosOutput, FuncStopAxisInput, FuncStopAxisOutput,
+                                                                 MoveType, absolute, relative, AxisStpMtr,
+                                                                 FuncMoveAxisToInput, FuncMoveAxisToOutput)
+from utilities.datastructures.mes_independent.general import CmdStruct
 from utilities.myfunc import error_logger, info_msg
 
 module_logger = logging.getLogger(__name__)

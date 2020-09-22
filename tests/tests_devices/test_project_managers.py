@@ -108,7 +108,4 @@ def test_opener(opener: Opener):
         measurement_counter = 0
         for measurement in opener.give_all_maps(file):
             measurement_counter += 1
-        print(measurement_counter)
-
-
 

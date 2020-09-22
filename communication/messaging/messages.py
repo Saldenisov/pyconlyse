@@ -1,17 +1,18 @@
 import logging
-from base64 import b64encode, b64decode
+from base64 import b64encode
 from copy import deepcopy
-from dataclasses import asdict
-from json import dumps, loads
+from dataclasses import asdict, dataclass
+from enum import Enum
+from json import dumps
 from datetime import datetime
-from zlib import compress, decompress
+from zlib import compress
 
-from msgpack import packb, unpackb
+from msgpack import packb
 
 from communication.interfaces import Message
 from communication.messaging.message_types import MsgType, MessageInfoInt, MessageInfoExt
-from utilities.datastructures.mes_independent import *
-from utilities.errors.messaging_errors import MessageError
+from devices.devices_dataclass import (AvailableServices,DeviceInfoInt, DoIt, DoneIt, FYI, MsgError, HeartBeat,
+                                       HeartBeatFull, ShutDown, WelcomeInfoServer, WelcomeInfoDevice)
 from utilities.myfunc import unique_id
 
 module_logger = logging.getLogger(__name__)
@@ -221,35 +222,3 @@ class MessageExt(Message):
             except Exception as e:  # TODO replace with reasonable
                 module_logger.error(e)
                 return b''
-
-    @staticmethod
-    def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON):
-        if coding is Coding.MSGPACK:  # MSGPACK is not realy working for all type of messages
-            try:
-                mes_unpacked = unpackb(mes_bytes)
-                info_class = eval(mes_unpacked[2])
-                mes_unpacked.pop(2)
-                info = info_class(**mes_unpacked[2])
-                mes_unpacked.pop(2)
-                mes_unpacked.insert(2, info)
-                parameters = {}
-                for param_name, param in zip(MessageExt.__annotations__, mes_unpacked):
-                    parameters[param_name] = param
-                return MessageExt(**parameters)
-            except TypeError as e:
-                raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
-        elif coding is Coding.JSON:
-            try:
-                mes_str = loads(mes_bytes)
-                return eval(mes_str)
-            except Exception as e:
-                print(e, mes_bytes)
-                try:
-                    mes_dc = loads(decompress(b64decode(mes_bytes)))
-                    mes = eval(mes_dc)
-                    return mes
-                except Exception as e:
-                    raise MessageError(f'Error: "{e}" in bytes_to_msg coding {coding}`. Msg={mes_bytes}')
-        else:
-            module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
-            raise MsgError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')

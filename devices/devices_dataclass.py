@@ -4,10 +4,9 @@ from typing import Any, Dict, List, Set, Tuple, Union
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
-from devices.interfaces import DeviceType, DeviceId
-from devices.interfaces import ExecutorInter
+from devices.interfaces import DeviceType, DeviceId, ExecutorInter
 from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
-from utilities.datastructures.mes_independent.general import *
+from utilities.datastructures.mes_independent.general import CmdStruct, FuncInput, FuncOutput
 
 
 @dataclass
