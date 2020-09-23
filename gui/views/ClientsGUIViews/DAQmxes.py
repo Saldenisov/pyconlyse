@@ -17,7 +17,7 @@ from gui.views.ui import Ui_DAQmxs
 module_logger = logging.getLogger(__name__)
 
 
-class PDUsView(DeviceControllerView):
+class DAQmxView(DeviceControllerView):
 
     def __init__(self, **kwargs):
         kwargs['ui_class'] = Ui_DAQmxs

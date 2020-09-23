@@ -41,3 +41,50 @@ class DAQmxCardEssentials(DAQmxTask):
 @dataclass
 class DAQmxCardNIEssentials(DAQmxCardEssentials):
     pass
+
+
+@dataclass
+class FuncReadChannelInput(FuncInput):
+    daqmx_id: int
+    channel_id: int
+    com: str = 'read_channel'
+
+
+@dataclass
+class FuncReadChannelOutput(FuncOutput):
+    daqmx_id: int
+    channel_id: int
+    value: Union[int, float, bool]
+    com: str = 'read_channel'
+
+
+@dataclass
+class FuncWriteChannelInput(FuncInput):
+    daqmx_id: int
+    channel_id: int
+    value: Union[int, float, bool]
+    com: str = 'write_channel'
+
+
+@dataclass
+class FuncWriteChannelOutput(FuncOutput):
+    daqmx_id: int
+    channel_id: int
+    value: Union[int, float, bool]
+    com: str = 'write_channel'
+
+
+@dataclass
+class FuncSetChannelTypeInput(FuncInput):
+    daqmx_id: int
+    channel_id: int
+    channel_type: str
+    com: str = 'set_channel_type'
+
+
+@dataclass
+class FuncSetChannelTypeOutput(FuncOutput):
+    daqmx_id: int
+    channel_id: int
+    channel_type: str
+    com: str = 'set_channel_type'

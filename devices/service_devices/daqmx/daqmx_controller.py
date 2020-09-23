@@ -5,7 +5,9 @@
 import logging
 from typing import Dict, Tuple
 from devices.devices import Service
-from devices.service_devices.daqmx.daqmx_dataclass import DAQmxCard
+from devices.service_devices.daqmx.daqmx_dataclass import (DAQmxCard, FuncReadChannelInput, FuncReadChannelOutput,
+                                                           FuncWriteChannelInput, FuncWriteChannelOutput,
+                                                           FuncSetChannelTypeInput, FuncSetChannelTypeOutput)
 from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice, HardwareDeviceEssentials
 from utilities.datastructures.mes_independent.general import CmdStruct
 
@@ -13,12 +15,12 @@ module_logger = logging.getLogger(__name__)
 
 
 class DAQmxController(Service):
-    READ_CHANNEL = CmdStruct(None, None)
-    WRITE_CHANNEL = CmdStruct(None, None)
-    SET_CHANNEL_TYPE = CmdStruct(None, None)
+    READ_CHANNEL = CmdStruct(FuncReadChannelInput, FuncReadChannelOutput)
+    WRITE_CHANNEL = CmdStruct(FuncWriteChannelInput, FuncWriteChannelOutput)
+    SET_CHANNEL_TYPE = CmdStruct(FuncSetChannelTypeInput, FuncSetChannelTypeOutput)
 
     def __init__(self, **kwargs):
-        kwargs['hardware_device_dataclass'] = kwargs['pdu_dataclass']
+        kwargs['hardware_device_dataclass'] = kwargs['daqmx_dataclass']
         super().__init__(**kwargs)
         self._hardware_devices: Dict[int, DAQmxCard] = HardwareDeviceDict()
 

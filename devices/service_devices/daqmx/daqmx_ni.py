@@ -2,14 +2,16 @@
 14/09/2020 DENISOV Sergey
 """
 import nidaqmx
+from typing import Dict, Tuple, Union
+from devices.devices_dataclass import (HardwareDeviceDict, FuncPowerInput, FuncActivateInput, FuncActivateDeviceInput)
 from devices.service_devices.daqmx.daqmx_controller import DAQmxController, DAQmxError
-from devices.service_devices.pdu.pdu_dataclass import *
+from devices.service_devices.daqmx.daqmx_dataclass import NIDAQmxCard
 from utilities.myfunc import error_logger
 
 
 class DAQmxCtrl_NI(DAQmxController):
     def __init__(self, **kwargs):
-        kwargs['hardware_device_dataclass'] = kwargs['pdu_dataclass']
+        kwargs['daqmx_dataclass'] = NIDAQmxCard
         super().__init__(**kwargs)
         self._hardware_devices: Dict[int, DAQmxCtrl_NI] = HardwareDeviceDict()
         res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),

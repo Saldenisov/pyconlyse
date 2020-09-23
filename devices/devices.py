@@ -758,7 +758,8 @@ class Service(Device):
                     val = eval(exp)
                 except (SyntaxError, NameError, TypeError):
                     val = exp
-                ids.append(val)
+                if val:
+                    ids.append(val)
             if len(ids) != self._hardware_devices_number:
                 raise DeviceError(self, f"Number of devices {len(ids)} is not equal to "
                                         f"'hardware_devices_number={self._hardware_devices_number}'.")
