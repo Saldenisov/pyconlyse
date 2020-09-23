@@ -9,8 +9,6 @@ from pathlib import Path
 app_folder = str(Path(__file__).resolve().parents[1])
 sys.path.append(app_folder)
 from devices.devices import DeviceFactory
-from gui.models.ClientGUIModels import SuperUserGUIModel
-from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
 
@@ -46,7 +44,6 @@ if __name__ == "__main__":
             db = sys.argv[db_idx]
             device_id = device_id
             db = db
-
         except (KeyError, IndexError):
             raise Exception('Not enough arguments were passed')
     elif '-s' in sys.argv:

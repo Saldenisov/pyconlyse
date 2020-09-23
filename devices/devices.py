@@ -675,6 +675,14 @@ class Service(Device):
                    f'{self.ctrl_status.active}. {comments}'
         return FuncActivateOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
 
+    def activation(self):
+        self.power(func_input=FuncPowerInput(flag=True))
+        sleep(0.7)
+        res: FuncActivateOutput = self.activate(func_input=FuncActivateInput(flag=True))
+        if res.func_success:
+            for device in self.hardware_devices.values():
+                self.activate_device(func_input=FuncActivateDeviceInput(device_id=device.device_id_seq, flag=True))
+
     def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
         device_id = func_input.device_id
         flag = func_input.flag

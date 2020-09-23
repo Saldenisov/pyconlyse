@@ -25,10 +25,7 @@ class PDUCtrl_NETIO(PDUController):
         if not res:
             raise PDUError(self, comments)
         else:
-            self.power(func_input=FuncPowerInput(flag=True))
-            self.activate(func_input=FuncActivateInput(flag=True))
-            for pdu in self.pdus.values():
-                self.activate_device(func_input=FuncActivateDeviceInput(device_id=pdu.device_id_seq, flag=True))
+            self.activation()
             self._register_observation('PDU_outputs_state', self._set_all_pdu_outputs, 2)
 
     def _change_device_status(self, pdu_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:

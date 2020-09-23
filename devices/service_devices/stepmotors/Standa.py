@@ -42,6 +42,8 @@ class StpMtrCtrl_Standa(StpMtrController):
                                                                       self._set_power_settings])
         if not res:
             raise StpMtrError(self, comments)
+        else:
+            self.activation()
 
     def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_status_flag(flag)

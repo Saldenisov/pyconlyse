@@ -50,6 +50,8 @@ class CameraCtrl_Basler(CameraController):
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise CameraError(self, comments)
+        else:
+            self.activation()
 
     @property
     def cameras(self) -> Dict[int, CameraBasler]:

@@ -21,10 +21,7 @@ class DAQmxCtrl_NI(DAQmxController):
         if not res:
             raise DAQmxError(self, comments)
         else:
-            self.power(func_input=FuncPowerInput(flag=True))
-            self.activate(func_input=FuncActivateInput(flag=True))
-            for daqmx in self.daqmxes.values():
-                self.activate_device(func_input=FuncActivateDeviceInput(device_id=daqmx.device_id_seq, flag=True))
+            self.activation()
 
     def _get_number_hardware_devices(self):
         return len(self.daqmxes)

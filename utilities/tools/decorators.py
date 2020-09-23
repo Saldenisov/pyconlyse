@@ -1,8 +1,8 @@
-'''
+"""
 Created on 10 Jan 2017
 
 @author: Sergey Denisov
-'''
+"""
 from functools import wraps
 from typing import Any
 
@@ -86,14 +86,3 @@ def turn_off(active=True):
         return inner
 
     return inner_decorator
-
-
-
-def a(e=10):
-    print(e)
-
-@turn_off(active=False)
-def b(*args, **kwargs):
-    return a(**kwargs)
-
-b(e=5)
