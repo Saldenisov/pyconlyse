@@ -25,10 +25,9 @@ class PDUCtrl_NETIO(PDUController):
         if not res:
             raise PDUError(self, comments)
         else:
-            self.activation()
             self._register_observation('PDU_outputs_state', self._set_all_pdu_outputs, 2)
 
-    def _change_device_status(self, pdu_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
+    def change_device_status(self, pdu_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         res, comments = super()._check_device_range(pdu_id)
         if res:
             res, comments = super()._check_status_flag(flag)
@@ -46,6 +45,22 @@ class PDUCtrl_NETIO(PDUController):
                 pdu.status = flag
                 res, comments = True, f'Device {pdu.friendly_name} status is changed to {flag}.'
 
+        return res, comments
+
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        change = False
+        if device.status == 2 and force:
+            change = True
+        elif device.status == 2 and device.status != flag:
+            res, comments = False, f'Cannot set device status to {flag}. Use force option.'
+        else:
+            change = True
+
+        if change:
+            device.status = flag
+            res, comments = True, f'PDU id={device.device_id_seq}, name={device.friendly_name} status is changed to ' \
+                                  f'{flag}.'
         return res, comments
 
     def _check_if_connected(self) -> Tuple[bool, str]:

@@ -60,6 +60,9 @@ class GeneralCmdLogic(Thinker):
                 if power_settings.controller_id and power_settings.controller_id != 'manually':
                     result: FuncSetPDUStateOutput = info
                     self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
+                    if hasattr(self.parent, 'activation'):
+                        self.parent.activation()
+
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
@@ -104,9 +107,11 @@ class GeneralCmdLogic(Thinker):
             server_connection.permission = Permission.GRANTED
             self.parent.send_status_pyqt()
             info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
-            # Turn On Power if option available
+            # power the Service controller
             if hasattr(self.parent, 'power'):
                 self.parent.power(func_input=FuncPowerInput(flag=True))
+                if self.parent.ctrl_status.power:
+                    self.parent.activation()
         except Exception as e:  # TODO: change Exception to something reasonable
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)

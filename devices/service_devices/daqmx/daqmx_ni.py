@@ -20,13 +20,11 @@ class DAQmxCtrl_NI(DAQmxController):
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise DAQmxError(self, comments)
-        else:
-            self.activation()
 
     def _get_number_hardware_devices(self):
         return len(self.daqmxes)
 
-    def _change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
+    def change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
         return False, 'not realized'
 
     def _form_devices_list(self) -> Tuple[bool, str]:

@@ -252,7 +252,7 @@ class StpMtrController(Service):
         if res:
             axis = self.axes_stpmtr[axis_id]
             if axis.status == 2:
-                res, comments = self._change_device_status(axis_id, 1, force=True)
+                res, comments = self.change_device_status(axis_id, 1, force=True)
                 if res:
                     comments = f'Axis id={axis_id}, name={axis.friendly_name} was stopped by user.'
             elif axis.status == 1:

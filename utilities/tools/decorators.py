@@ -14,7 +14,7 @@ def development_mode(dev: bool, with_return: Any):
             if not dev:
                 return func(*args, **kwargs)
             else:
-                if with_return != None:
+                if with_return:
                     return with_return
         return inner
     return decorator_function

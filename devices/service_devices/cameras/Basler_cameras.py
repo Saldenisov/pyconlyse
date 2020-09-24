@@ -14,7 +14,8 @@ import cv2
 import numpy as np
 from pypylon import genicam, pylon
 
-from devices.devices_dataclass import HardwareDeviceDict, HardwareDeviceEssentials, DeviceControllerStatus
+from devices.devices_dataclass import (HardwareDevice, HardwareDeviceDict, HardwareDeviceEssentials,
+                                       DeviceControllerStatus)
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
 from devices.service_devices.cameras.camera_dataclass import (CameraBasler, FuncGetImagesOutput,
                                                               FuncSetImageParametersInput,
@@ -50,8 +51,6 @@ class CameraCtrl_Basler(CameraController):
         # Set parameters from database first and after connection is done; update from hardware controller if possible
         if not res:
             raise CameraError(self, comments)
-        else:
-            self.activation()
 
     @property
     def cameras(self) -> Dict[int, CameraBasler]:
@@ -61,50 +60,44 @@ class CameraCtrl_Basler(CameraController):
     def cameras_no_pylon(self) -> Dict[int, CameraBasler]:
         return {camera.device_id_seq: camera.no_pylon() for camera in self._hardware_devices.values()}
 
-    def _change_device_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        # TODO: this function could be generalized for all types of controllers
-        res, comments = super()._check_device_range(camera_id)
-        if res:
-            res, comments = super()._check_status_flag(flag)
-        if res:
-            camera = self._hardware_devices[camera_id]
-            if camera.status != flag:
-                info = ''
-                if camera.status == 2 and force:
-                    camera.pylon_camera.StopGrabbing()
-                    sleep(0.2)
-                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped grabbing. {comments}'
-                    camera.status = flag
-                    res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}. {info}'
-                elif camera.status == 2 and not force:
-                    res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is grabbing. ' \
-                                           'Force Stop in order to change status.'
-                elif flag in [0, 1, 2]:
-                    try:
-                        if flag == 2 and camera.status == 1:
-                            # TODO: must have some other strategies for future
-                            if camera.pylon_camera.IsGrabbing():
-                                camera.pylon_camera.StopGrabbing()
-                                sleep(0.2)
-                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                            sleep(0.05)
-                        elif flag == 2 and camera.status == 0:
-                            return False, f'First activate camera with camera id={camera_id}, ' \
-                                          f'name={camera.friendly_name}.'
-                        if flag == 1:
-                            camera.pylon_camera.Open()
-                        elif flag == 0:
-                            camera.pylon_camera.Close()
-                        camera.status = flag
-                        res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} status is set to ' \
-                                              f'{flag}. {info}'
-                    except pylon.GenericException as e:
-                        comments = f'Tried to open connection, but failed: {e}.'
-                        error_logger(self, self._change_device_status, comments)
-                        return False, comments
-            else:
-                res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}.'
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        info = ''
+        if device.status == 2 and force:
+            device.pylon_camera.StopGrabbing()
+            sleep(0.2)
+            info = f'Camera id={device.device_id_seq}, name={device.friendly_name} was stopped grabbing. {comments}'
+            device.status = flag
+            res, comments = True, f'Camera id={device.device_id_seq}, name={device.friendly_name} is set to {flag}. ' \
+                                  f'{info}'
+        elif device.status == 2 and not force:
+            res, comments = False, f'Camera id={device.device_id_seq}, name={device.friendly_name} is grabbing. ' \
+                                   'Force Stop in order to change status.'
+        elif flag in [0, 1, 2]:
+            try:
+                if flag == 2 and device.status == 1:
+                    # TODO: must have some other strategies for future
+                    if device.pylon_camera.IsGrabbing():
+                        device.pylon_camera.StopGrabbing()
+                        sleep(0.2)
+                    device.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                    sleep(0.05)
+                elif flag == 2 and device.status == 0:
+                    res, comments = False, f'First activate camera with camera id={device.device_id_seq}, ' \
+                                           f'name={device.friendly_name}.'
+                if flag == 1:
+                    device.pylon_camera.Open()
+                elif flag == 0:
+                    device.pylon_camera.Close()
+                device.status = flag
+                res, comments = True, f'Camera id={device.device_id_seq}, name={device.friendly_name} status is set to ' \
+                                      f'{flag}. {info}'
+            except pylon.GenericException as e:
+                comments = f'Tried to open connection, but failed: {e}.'
+                error_logger(self, self.change_device_status, comments)
+                res, comments = False, comments
         return res, comments
+
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         # Init all camera
@@ -266,7 +259,7 @@ class CameraCtrl_Basler(CameraController):
             del self._images_demanders[demander_id][camera_id]
             if not self._images_demanders[demander_id]:
                 del self._images_demanders[demander_id]
-            self._change_device_status(camera_id, flag=1, force=True)
+            self.change_device_status(camera_id, flag=1, force=True)
 
     @property
     def hardware_devices(self):
@@ -281,7 +274,7 @@ class CameraCtrl_Basler(CameraController):
         if camera.status == 0:
             return False, f'Camera {camera_id} is closed. Activate the camera first to start grabbing.'
         elif camera.status == 1:
-            return self._change_device_status(camera_id, 2)
+            return self.change_device_status(camera_id, 2)
         elif camera.status == 2:
             return True, 'Already grabbing.'
         else:
@@ -561,6 +554,6 @@ class CameraCtrl_Basler(CameraController):
 
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         try:
-            return self._change_device_status(camera_id, 1, True)
+            return self.change_device_status(camera_id, 1, True)
         except pylon.GenericException as e:
             return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'

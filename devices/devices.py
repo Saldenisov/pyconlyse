@@ -676,8 +676,7 @@ class Service(Device):
         return FuncActivateOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
 
     def activation(self):
-        self.power(func_input=FuncPowerInput(flag=True))
-        sleep(0.7)
+        sleep(1)
         res: FuncActivateOutput = self.activate(func_input=FuncActivateInput(flag=True))
         if res.func_success:
             for device in self.hardware_devices.values():
@@ -690,7 +689,7 @@ class Service(Device):
         info_msg(self, 'INFO', f'Func "activate_device" is called: {func_input}.')
         if res:
             device = self.hardware_devices[device_id]
-            res, comments = self._change_device_status(device_id, flag)
+            res, comments = self.change_device_status(device_id, flag)
         comments = f'Func "activate_device" is accomplished with success: {res}. {comments}'
         info_msg(self, 'INFO', comments)
         return FuncActivateDeviceOutput(device=device, comments=comments, func_success=res)
@@ -731,8 +730,20 @@ class Service(Device):
         else:
             return False, f'Controller is not active. Power is {self.ctrl_status.power}.'
 
+    def change_device_status(self, device_id: int, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = self._check_device_range(device_id)
+        if res:
+            res, comments = self._check_status_flag(flag)
+        if res:
+            device = self._hardware_devices[device_id]
+            if device.status != flag:
+                res, comments = self._change_device_status_local(device, flag, force)
+            else:
+                res, comments = True, f'{device.friendly_name} is already set to {flag}.'
+        return res, comments
+
     @abstractmethod
-    def _change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
         return False, ''
 
     @staticmethod

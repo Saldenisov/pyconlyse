@@ -45,7 +45,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                                                                       self._set_move_parameters_axes,
                                                                       self._set_move_parameters_controller])
 
-    def _change_device_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
+    def change_device_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
         def search(axes, status):
             for axis_id, axis in self.axes_stpmtr.items():
                 if axis.status == status:

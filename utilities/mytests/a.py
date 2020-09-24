@@ -1,7 +1,13 @@
-from datetime import datetime
-from time import sleep
+class A:
+    def a(self):
+        pass
+
+    def c(self):
+        pass
+
+class B(A):
+    pass
 
 
-a = datetime.timestamp(datetime.now())
-t = datetime.fromtimestamp(a).time()
-print(t.strftime("%H:%M:%S"))
+a = B()
+print(hasattr(a, 'b'))

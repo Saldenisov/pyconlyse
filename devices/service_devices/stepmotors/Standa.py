@@ -14,7 +14,7 @@ from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, E
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
 from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr
-from devices.devices_dataclass import HardwareDeviceDict
+from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
@@ -42,28 +42,20 @@ class StpMtrCtrl_Standa(StpMtrController):
                                                                       self._set_power_settings])
         if not res:
             raise StpMtrError(self, comments)
-        else:
-            self.activation()
 
-    def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._check_status_flag(flag)
-        if res:
-            axis = self.axes_stpmtr[device_id]
-            if axis.status != flag:
-                info = ''
-                if axis.status == 2 and force:
-                    self._stop_axis(axis.device_id)
-                    info = f' Axis id={device_id}, name={axis.name} was stopped.'
-                    self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
-                elif axis.status == 2 and not force:
-                    res, comments = False, f'Axis id={device_id}, name={axis.friendly_name} is moving. ' \
-                                           'Force Stop in order to change.'
-                else:
-                    self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
-            else:
-                res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is already set to {flag}'
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        if device.status == 2 and force:
+            self._stop_axis(device.device_id)
+            info = f' Axis id={device.device_id_seq}, name={device.name} was stopped.'
+            self.axes_stpmtr[device.device_id_seq].status = flag
+            res, comments = True, f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
+        elif device.status == 2 and not force:
+            res, comments = False, f'Axis id={device.device_id_seq}, name={device.friendly_name} is moving. ' \
+                                   'Force Stop in order to change.'
+        else:
+            self.axes_stpmtr[device.device_id_seq].status = flag
+            res, comments = True, f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
         return res, comments
 
     def _check_if_connected(self) -> Tuple[bool, str]:
@@ -187,7 +179,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             return self._standa_error(result, func=self._get_position_axis)
 
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int]) -> Tuple[bool, str]:
-        res, comments = self._change_device_status(device_id, 2)
+        res, comments = self.change_device_status(device_id, 2)
         interrupted = False
         if res:
             axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
@@ -218,7 +210,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = False, f'Movement of Axis with id={device_id} was interrupted'
 
             _, _ = self._get_position_axis(device_id)
-        self._change_device_status(device_id, 1, True)
+        self.change_device_status(device_id, 1, True)
         return res, comments
 
     def _release_hardware(self) -> Tuple[bool, str]:
@@ -227,7 +219,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 # Sometimes there is a necessity to call stop function
                 # So we do it always for every axes
                 if axis.device_id_internal_seq:
-                    self._change_device_status(axis.device_id, flag=0, force=True)
+                    self.change_device_status(axis.device_id, flag=0, force=True)
                     arg = ctypes.byref(ctypes.cast(axis.device_id_internal_seq, ctypes.POINTER(ctypes.c_int)))
                     result = self.lib.close_device(arg)
             return True, ''
