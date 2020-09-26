@@ -96,7 +96,7 @@ class DeviceControllerView(QMainWindow):
             if isinstance(value, dict):
                 if isinstance(next(iter(value.values())), HardwareDevice):
                     self.device_ctrl_state.devices = value
-                    device_id = self.model.service_parameters.device_id
+                    device_id = self.service_parameters.device_id
                     self.model.service_parameters[device_id].device_description.hardware_devices = value
             elif isinstance(value, HardwareDevice):
                 self.device_ctrl_state.devices[value.device_id_seq] = value
@@ -134,6 +134,7 @@ class DeviceControllerView(QMainWindow):
         try:
             if self.service_parameters.device_id == msg.forwarded_from or \
                     self.service_parameters.device_id == msg.sender_id:
+                print('yes', msg.com)
                 com = msg.com
                 info: Union[DoneIt, MsgError] = msg.info
                 if com == MsgComInt.DONE_IT.msg_name:

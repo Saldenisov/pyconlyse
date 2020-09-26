@@ -62,7 +62,6 @@ class GeneralCmdLogic(Thinker):
                     self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
                     if hasattr(self.parent, 'activation'):
                         self.parent.activation()
-
         elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns

@@ -53,7 +53,7 @@ class DAQmxController(Service):
         return super(DAQmxController, self).hardware_devices_essentials()
 
     def _set_parameters_after_connect(self) -> Tuple[bool, str]:
-        pass
+        return True, ''
 
 
 class DAQmxError(BaseException):

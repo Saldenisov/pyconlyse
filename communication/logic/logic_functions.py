@@ -14,7 +14,7 @@ from utilities.myfunc import error_logger
 from utilities.tools.decorators import turn_off
 
 
-@turn_off(active=True)
+@turn_off(active=False)
 def info_msg(*args, **kwargs):
     return i_msg(*args, **kwargs)
 

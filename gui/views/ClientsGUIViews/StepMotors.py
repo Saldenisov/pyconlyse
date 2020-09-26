@@ -178,7 +178,11 @@ class StepMotorsView(DeviceControllerView):
         unit = self._get_unit()
         axis: AxisStpMtr = self.device_ctrl_state.devices[self.selected_device_id]
         pos = axis.convert_pos_to_unit(unit)
-        self.ui.lcdNumber_position.display(pos)
+        print(pos)
+        if isinstance(pos, int) or isinstance(pos, float):
+            self.ui.lcdNumber_position.display(pos)
+        else:
+            error_logger(self, self._update_lcd_screen, f'Not int or float, but {type(pos)}')
 
     def _update_progressbar_pos(self, axis: AxisStpMtr, force=False):
         try:

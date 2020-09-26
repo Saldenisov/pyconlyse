@@ -670,7 +670,6 @@ class Service(Device):
                 res, comments = self._connect(flag)
                 if res:
                     self.ctrl_status.active = flag
-
         comments = f'Func "activate" is accomplished with success: {res}. State of controller is ' \
                    f'{self.ctrl_status.active}. {comments}'
         return FuncActivateOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)
@@ -680,7 +679,7 @@ class Service(Device):
         res: FuncActivateOutput = self.activate(func_input=FuncActivateInput(flag=True))
         if res.func_success:
             for device in self.hardware_devices.values():
-                self.activate_device(func_input=FuncActivateDeviceInput(device_id=device.device_id_seq, flag=True))
+                self.activate_device(func_input=FuncActivateDeviceInput(device_id=device.device_id_seq, flag=1))
 
     def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
         device_id = func_input.device_id

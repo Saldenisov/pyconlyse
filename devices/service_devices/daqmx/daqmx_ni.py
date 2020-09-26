@@ -3,7 +3,8 @@
 """
 import nidaqmx
 from typing import Dict, Tuple, Union
-from devices.devices_dataclass import (HardwareDeviceDict, FuncPowerInput, FuncActivateInput, FuncActivateDeviceInput)
+from devices.devices_dataclass import (HardwareDeviceDict, FuncPowerInput, FuncActivateInput, FuncActivateDeviceInput,
+                                       HardwareDevice)
 from devices.service_devices.daqmx.daqmx_controller import DAQmxController, DAQmxError
 from devices.service_devices.daqmx.daqmx_dataclass import NIDAQmxCard
 from utilities.myfunc import error_logger
@@ -13,7 +14,7 @@ class DAQmxCtrl_NI(DAQmxController):
     def __init__(self, **kwargs):
         kwargs['daqmx_dataclass'] = NIDAQmxCard
         super().__init__(**kwargs)
-        self._hardware_devices: Dict[int, DAQmxCtrl_NI] = HardwareDeviceDict()
+        self._hardware_devices: Dict[int, NIDAQmxCard] = HardwareDeviceDict()
         res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
                                                                       ('сhannel_settings', 'сhannel_settings', dict)],
                                                           extra_func=[])
@@ -24,8 +25,21 @@ class DAQmxCtrl_NI(DAQmxController):
     def _get_number_hardware_devices(self):
         return len(self.daqmxes)
 
-    def change_device_status(device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
-        return False, 'not realized'
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        change = False
+        if device.status == 2 and force:
+            change = True
+        elif device.status == 2 and device.status != flag:
+            res, comments = False, f'Cannot set device status to {flag}. Use force option.'
+        else:
+            change = True
+
+        if change:
+            device.status = flag
+            res, comments = True, f'DAQmxCard id={device.device_id_seq}, name={device.friendly_name} status is changed ' \
+                                  f'to {flag}.'
+        return res, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
         system = nidaqmx.system.System.local()
@@ -50,3 +64,12 @@ class DAQmxCtrl_NI(DAQmxController):
             comments = f'{e}'
         finally:
             return True, comments
+
+    def _set_parameters_after_connect(self) -> Tuple[bool, str]:
+        results, comments = [], ''
+        
+        return all(results), comments
+
+
+
+
