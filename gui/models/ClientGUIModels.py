@@ -301,6 +301,7 @@ class TreatmentModel(QObject):
                         abs_data = abs_data / info.number_maps
                         base_data = base_data / info.number_maps
                         od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                        od_data = np.log10(od_data)
                     res = True
         elif exp_type is TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
             if TreatmentModel.DataTypes.ABS not in self.paths:
@@ -336,11 +337,11 @@ class TreatmentModel(QObject):
                     #noise_data = data[noise_path]
                     self.noise_averaged_data = noise_data
                     od_data = (base_data - noise_data) / (abs_data - noise_data)
+                    od_data = np.log10(od_data)
                     res = True
 
 
         if res:
-            od_data = np.log10(od_data)
             self.od = Measurement(type='Pump-Probe', comments='', author='SD',
                                   timestamp=datetime.timestamp(datetime.now()), data=od_data,
                                   wavelengths=info.wavelengths, timedelays=info.timedelays,

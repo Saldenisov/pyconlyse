@@ -1,8 +1,8 @@
-'''
+"""
 Created on 17 avr. 2015
 
 @author: saldenisov 
-'''
+"""
 
 import logging
 from abc import abstractmethod
@@ -29,7 +29,6 @@ class CriticalInfo:
     wavelengths_length: int
     timedelays: np.array
     wavelengths: np.array
-
 
 
 class Opener:

@@ -1,9 +1,9 @@
-'''
+"""
 Created on 17 avr. 2015
 "Read the Hamamatsu header,DATA, Time Delays and Wavelenghs for the given __filepath
 
 @author: saldenisov
-'''
+"""
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -56,7 +56,7 @@ class HamamatsuFileOpener(Opener):
                     call_back_func(map_index, info.number_maps)
         return data / info.number_maps
 
-    @lru_cache(maxsize=100)
+    #@lru_cache(maxsize=100)
     def read_critical_info(self, file_path: Path) -> CriticalInfoHamamatsu:
         if file_path.suffix in self.ALLOWED_FILES_TYPES:
             pos = 0

@@ -40,9 +40,9 @@ class TreatmentController:
     def calc_abs(self):
         self.view.ui.progressbar_calc.setValue(0)
         exp = TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
-        if self.view.ui.radiobutton_individual:
+        if self.view.ui.radiobutton_individual.isChecked():
             how = 'individual'
-        elif self.view.ui.radiobutton_averaged:
+        elif self.view.ui.radiobutton_averaged.isChecked():
             how = 'averaged'
 
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
