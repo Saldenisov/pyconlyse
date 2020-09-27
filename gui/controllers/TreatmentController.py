@@ -72,7 +72,7 @@ class TreatmentController:
             self.model.save_folder = folder
             self.view.ui.redraw_file_tree(folder)
 
-    def get_average(self, user_type: str='kinetics'):
+    def get_average(self, user_type='kinetics'):
         error = False
         if user_type == 'kinetics':
             line = self.view.ui.lineedit_kinetics_ranges.text()
