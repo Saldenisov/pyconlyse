@@ -17,6 +17,7 @@ pywin32
 python-socketio
 pypylon
 pyserial
+pyvisa
 requests
 scipy
 sip

@@ -17,6 +17,7 @@ from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
 from gui.views.ClientsGUIViews.SuperUser import SuperUserView
 from gui.views.ClientsGUIViews.StepMotors import StepMotorsView
 from gui.views.ClientsGUIViews.PDUs import PDUsView
+from gui.views.ClientsGUIViews.DAQmxes import DAQmxView
 from devices.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
@@ -75,6 +76,8 @@ class SuperClientGUIcontroller():
                 view = CamerasView
             elif 'PDU' in parameters.device_description.class_name:
                 view = PDUsView
+            elif 'DAQmx' in parameters.device_description.class_name:
+                view = DAQmxView
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)

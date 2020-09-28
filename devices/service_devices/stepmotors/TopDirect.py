@@ -10,14 +10,13 @@ under windows with no problems
 """
 import logging
 from time import sleep
-from typing import Callable
+from typing import Callable, Dict, List, Set, Tuple, Union
 
 import serial
 import serial.tools.list_ports
-
-from utilities.datastructures.mes_independent import *
+from enum import Enum
 from utilities.myfunc import error_logger
-from .stpmtr_controller import StpMtrController
+from .stpmtr_controller import StpMtrController, FuncStopAxisInput, FuncStopAxisOutput
 
 module_logger = logging.getLogger(__name__)
 

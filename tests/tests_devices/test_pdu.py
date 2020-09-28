@@ -1,7 +1,9 @@
-from devices.service_devices.pdu import *
-from tests.fixtures.services import *
-from devices.service_devices.pdu.pdu_dataclass import *
 from time import sleep
+from devices.service_devices.pdu import PDUController
+from devices.datastruct_for_messaging import *
+from devices.service_devices.pdu.datastruct_for_messaging import *
+from tests.fixtures.services import *
+from .general_test import *
 one_service = [pdu_netio_test_non_fixture()]
 #all_services = []
 test_param = one_service
@@ -15,13 +17,8 @@ def test_func_stpmtr(pdu: PDUController):
     ACTIVATE_DEVICE_FOUR = FuncActivateDeviceInput(4, 1)
     GETPDUOUTPUTS = FuncGetPDUStateInput(4)
     DEACTIVATE = FuncActivateInput(flag=False)
-    POWER_ON = FuncPowerInput(flag=True)
-    POWER_OFF = FuncPowerInput(flag=False)
 
-    # Power on
-    res: FuncPowerOutput = pdu.power(POWER_ON)
-    assert res.func_success
-    assert res.controller_status.power
+    power_on(pdu)
     # Activate
     res: FuncActivateOutput = pdu.activate(ACTIVATE)
     assert res.func_success
@@ -57,7 +54,4 @@ def test_func_stpmtr(pdu: PDUController):
     new_state.state = 0
     SETPDUOUTPUTS = FuncSetPDUStateInput(4, 3, new_state)
     res: FuncSetPDUStateOutput = pdu.set_pdu_state(SETPDUOUTPUTS)
-
-
-
     pdu.stop()

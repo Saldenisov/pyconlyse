@@ -1,6 +1,10 @@
+from time import sleep
 from tests.fixtures.services import *
-from devices.service_devices.stepmotors import *
-from devices.service_devices.stepmotors.stpmtr_dataclass import *
+from devices.datastruct_for_messaging import *
+from devices.service_devices.stepmotors.datastruct_for_messaging import *
+from devices.service_devices.stepmotors import StpMtrController
+from utilities.datastructures.mes_independent.general import CmdStruct
+
 
 one_service = [stpmtr_Standa_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
@@ -88,8 +92,8 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     first_axis = list(stpmtr.axes_stpmtr.keys())[0]
     second_axis = list(stpmtr.axes_stpmtr.keys())[1]
 
-    ACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=first_axis, flag=1)
-    DEACTIVATE_AXIS1 = FuncActivateAxisInput(axis_id=first_axis,  flag=0)
+    ACTIVATE_AXIS1 = FuncActivateDeviceInput(axis_id=first_axis, flag=1)
+    DEACTIVATE_AXIS1 = FuncActivateDeviceInput(axis_id=first_axis,  flag=0)
     GET_POS_AXIS1 = FuncGetPosInput(axis_id=first_axis)
     GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
     if isinstance(stpmtr, StpMtrCtrl_Standa):
@@ -130,7 +134,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncPowerOutput = stpmtr.power(POWER_ON)  # power is On
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)  # activate device
     # activate axis 1
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     assert res.func_success
     essentials = stpmtr.axes_stpmtr_essentials
     status = []
@@ -151,7 +155,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert stpmtr.axes_stpmtr[1].position == pos_var
 
     # deactivate axis 1
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
     assert res.func_success
     essentials = stpmtr.axes_stpmtr_essentials
     status = []
@@ -160,18 +164,18 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert f'Axes status: {status}. ' in res.comments
 
     # activate axis 1
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     # deactivate controller
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert stpmtr.axes_stpmtr[first_axis].status == 0
 
     # activate axis 1
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
     assert res.func_success
     # activate controller
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     # activate axis 1
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     # set axis 1 status to 1
     axis_one = stpmtr.axes_stpmtr[first_axis]
     axis_one.status = 1
@@ -182,7 +186,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert not stpmtr.ctrl_status.connected
     # activate controller and activate axis 1, set it status to 2
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
-    res: FuncActivateAxisOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
     stpmtr.axes_stpmtr[first_axis].status = 2
     # deactivate controller when Not all axis are not running
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)

@@ -37,7 +37,7 @@ class DAQmxController(Service):
             return True, ''
 
     @property
-    def daqmxes(self):
+    def daqmxes(self) -> Dict[int, DAQmxCard]:
         return self._hardware_devices
 
     @property

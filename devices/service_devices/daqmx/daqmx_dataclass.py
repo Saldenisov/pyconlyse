@@ -1,3 +1,4 @@
+from copy import deepcopy
 from devices.devices_dataclass import *
 from weakref import ReferenceType
 from nidaqmx.task import Task
@@ -7,12 +8,13 @@ from nidaqmx.task import Task
 class DAQmxTask:
     channel: str
     name: str
-    type: str
+    task_type: str
+    value: Any = None
 
 
 @dataclass
-class NIDAQmxTask:
-    task: Task = None
+class DAQmxTask_NI(DAQmxTask):
+    task_ni: Task = None
 
 
 @dataclass
@@ -29,8 +31,24 @@ class DAQmxCard(HardwareDevice):
 
 
 @dataclass
-class NIDAQmxCard(DAQmxCard):
-    pass
+class DAQmxCard_NI(DAQmxCard):
+
+    def no_tasks(self):
+        ignore = ['tasks']
+        d = {}
+        for key in DAQmxCard_NI.__dataclass_fields__.keys():
+            if key not in ignore:
+                d[key] = getattr(self, key)
+            elif key == 'tasks':
+                tasks = {}
+                for task_id, task_NI in self.tasks.items():
+                    c = {}
+                    for key_in_task in DAQmxTask_NI.__dataclass_fields__.keys():
+                        if key_in_task != 'task_ni':
+                            c[key_in_task] = getattr(task_NI, key_in_task)
+                    tasks[task_id] = DAQmxTask_NI(**c)
+                d[key] = tasks
+        return DAQmxCard_NI(**d)
 
 
 @dataclass

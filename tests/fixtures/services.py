@@ -4,9 +4,11 @@ import pytest
 
 from devices.devices import DeviceFactory
 from devices.service_devices.project_treatment import ProjectManager_controller
-from devices.service_devices.stepmotors import StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis
+from devices.service_devices.stepmotors import (StpMtrCtrl_emulate, StpMtrCtrl_a4988_4axes, StpMtrCtrl_TopDirect_1axis,
+                                                StpMtrCtrl_Standa)
 from devices.service_devices.cameras import CameraCtrl_Basler
 from devices.service_devices.pdu import PDUCtrl_NETIO
+from devices.service_devices.daqmx import DAQmxCtrl_NI
 
 app_folder = str(Path(__file__).resolve().parents[2])
 
@@ -80,6 +82,13 @@ def camera_basler_test_non_fixture(device_id='CameraCtrl_Basler:042c2cfbadef3d2e
 
 #PDUs
 def pdu_netio_test_non_fixture(device_id='PDUCtrl_NETIO:deeb24a77539736744b550885fb6ba4f',
+                               db_name='Devices.db') -> PDUCtrl_NETIO:
+    return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
+                                                                       db_name), test=True)
+
+
+#DAQmx
+def daqmx_ni_test_non_fixture(device_id='DAQmxCtrl_NI:0801d25ef5783deff0cf99d321674115',
                                db_name='Devices.db') -> PDUCtrl_NETIO:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
                                                                        db_name), test=True)

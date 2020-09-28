@@ -269,6 +269,7 @@ class TreatmentModel(QObject):
                         if not res:
                             self.show_error(self.calc_abs, comments)
                     if how == 'individual':
+                        treated_maps = 0
                         for measurements in opener.give_pair_maps(data_path):
                             map_index += 1
                             if first_map_with_electrons:
@@ -280,10 +281,12 @@ class TreatmentModel(QObject):
                             try:
                                 transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
                                 od_data += np.log10(transmission)
+                                treated_maps += 1
                             except (RuntimeError, RuntimeWarning):
                                 pass
                             self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                        od_data = od_data / info.number_maps
+                        od_data = od_data / treated_maps
+                        self.notify_ui_observers({'progressbar_calc': (treated_maps, treated_maps)})
                     elif how == 'averaged':
                         abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
                         base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
