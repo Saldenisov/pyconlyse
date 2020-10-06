@@ -2,11 +2,11 @@ from time import sleep
 from tests.fixtures.services import *
 from devices.datastruct_for_messaging import *
 from devices.service_devices.stepmotors.datastruct_for_messaging import *
-from devices.service_devices.stepmotors import StpMtrController
+from devices.service_devices.stepmotors import StpMtrController, StpMtrCtrl_TopDirect_1axis
 from utilities.datastructures.mes_independent.general import CmdStruct
 
 
-one_service = [stpmtr_Standa_test_non_fixture()]
+one_service = [stpmtr_TopDirect_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
@@ -14,57 +14,8 @@ test_param = one_service
 @pytest.mark.parametrize('stpmtr', test_param)
 def test_func_stpmtr(stpmtr: StpMtrController):
     stpmtr.start()
-    test_comm_arduino = False
-    if isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis) and test_comm_arduino:
-        stpmtr: StpMtrCtrl_TopDirect_1axis = stpmtr
-        stpmtr.ctrl_status.power = True
-        # checking messaging with Arduino
-        res, comments = stpmtr._connect(True)
-        if res:
-            get = stpmtr._get_reply_from_arduino()
-            assert get == None
-            stpmtr._send_to_arduino(cmd='GET STATE')
-            get = stpmtr._get_reply_from_arduino(True)
-            assert get[0] == 'NOT_ACTIVE'
-            assert get[1] == 0
-
-            stpmtr._send_to_arduino(cmd='SET STATE 1')
-            get = stpmtr._get_reply_from_arduino()
-            assert get == 0
-
-            stpmtr._send_to_arduino(cmd='GET STATE')
-            get = stpmtr._get_reply_from_arduino(True)
-            assert get[0] == 'READY'
-            assert get[1] == 0
-
-            stpmtr._send_to_arduino(cmd='GET S')
-            get = stpmtr._get_reply_from_arduino(True)
-            assert get[0] == -2
-
-            stpmtr._send_to_arduino(cmd='MOVE ABS 205')
-            get = stpmtr._get_reply_from_arduino()
-            assert get == -1
-
-            stpmtr._send_to_arduino(cmd='MOVE ABS 10')
-            get = stpmtr._get_reply_from_arduino()
-            assert get == 'STARTED'
-            get = stpmtr._get_reply_from_arduino()
-            assert get == None
-            sleep(3)
-            get = stpmtr._get_reply_from_arduino()
-            assert get == 0
-
-            stpmtr._send_to_arduino(cmd='GET POS')
-            get = stpmtr._get_reply_from_arduino(True)
-            assert get[0] == 10.0
-            assert get[1] == 0
-
-            stpmtr._send_to_arduino(cmd='MOVE ABS 0')
-            sleep(5)
-            stpmtr._connect(False)
-
-    available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_axis', 'get_pos_axis', 'move_axis_to',
-                                 'stop_axis', 'service_info', 'set_pos_axis']
+    available_functions_names = ['activate', 'power', 'get_controller_state', 'activate_device', 'get_pos_axis',
+                                 'move_axis_to', 'stop_axis', 'service_info', 'set_pos_axis']
     ACTIVATE = FuncActivateInput(flag=True)
     DEACTIVATE = FuncActivateInput(flag=False)
     POWER_ON = FuncPowerInput(flag=True)
@@ -90,10 +41,9 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert res.controller_status.active
 
     first_axis = list(stpmtr.axes_stpmtr.keys())[0]
-    second_axis = list(stpmtr.axes_stpmtr.keys())[1]
 
-    ACTIVATE_AXIS1 = FuncActivateDeviceInput(axis_id=first_axis, flag=1)
-    DEACTIVATE_AXIS1 = FuncActivateDeviceInput(axis_id=first_axis,  flag=0)
+    ACTIVATE_AXIS1 = FuncActivateDeviceInput(device_id=first_axis, flag=1)
+    DEACTIVATE_AXIS1 = FuncActivateDeviceInput(device_id=first_axis,  flag=0)
     GET_POS_AXIS1 = FuncGetPosInput(axis_id=first_axis)
     GET_CONTOLLER_STATE = FuncGetStpMtrControllerStateInput()
     if isinstance(stpmtr, StpMtrCtrl_Standa):
@@ -119,7 +69,6 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert not res.controller_status.active
     # deactivate for a second time
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
-    assert not res.func_success
     assert not res.controller_status.active
     # power off
     res: FuncPowerOutput = stpmtr.power(POWER_OFF)
@@ -134,14 +83,10 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncPowerOutput = stpmtr.power(POWER_ON)  # power is On
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)  # activate device
     # activate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
     assert res.func_success
-    essentials = stpmtr.axes_stpmtr_essentials
-    status = []
-    for key, axis in essentials.items():
-        status.append(essentials[key].status)
-    assert f'Axes status: {status}. ' in res.comments
     assert stpmtr.axes_stpmtr[first_axis].status == 1
+    assert not res.func_success
 
     # Test set_pos_axis
     pos_var = stpmtr.axes_stpmtr[1].position
@@ -150,32 +95,28 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert res.func_success
     res: FuncGetPosOutput = stpmtr.get_pos_axis(GET_POS_AXIS1)
     assert res.func_success
-    assert res.axis.position == 100.5
-    res: FuncSetPosOutput = stpmtr.set_pos_axis(FuncSetPosInput(1, pos_var, MoveType.step))
+    pos = res.axis.convert_pos_to_unit(MoveType.step)
+    assert pos / 100.5 < 1.01
+    res: FuncSetPosOutput = stpmtr.set_pos_axis(FuncSetPosInput(1, pos_var, stpmtr.axes_stpmtr[1].basic_unit))
     assert stpmtr.axes_stpmtr[1].position == pos_var
 
     # deactivate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(DEACTIVATE_AXIS1)
     assert res.func_success
-    essentials = stpmtr.axes_stpmtr_essentials
-    status = []
-    for key, axis in essentials.items():
-        status.append(essentials[key].status)
-    assert f'Axes status: {status}. ' in res.comments
 
     # activate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
     # deactivate controller
     res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
     assert stpmtr.axes_stpmtr[first_axis].status == 0
 
     # activate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(DEACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(DEACTIVATE_AXIS1)
     assert res.func_success
     # activate controller
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     # activate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
     # set axis 1 status to 1
     axis_one = stpmtr.axes_stpmtr[first_axis]
     axis_one.status = 1
@@ -186,14 +127,9 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     assert not stpmtr.ctrl_status.connected
     # activate controller and activate axis 1, set it status to 2
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
-    res: FuncActivateDeviceOutput = stpmtr.activate_axis(ACTIVATE_AXIS1)
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
     stpmtr.axes_stpmtr[first_axis].status = 2
-    # deactivate controller when Not all axis are not running
-    res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
-    assert not res.func_success
-    assert stpmtr.ctrl_status.active
-    assert stpmtr.ctrl_status.connected
-    assert stpmtr.ctrl_status.power
+
 
     # Test StopAxis function
     # axis 1 status has been set to 2 already.
@@ -275,3 +211,72 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 
     # stop stpmtr_emulate device
     stpmtr.stop()
+
+
+@pytest.mark.parametrize('stpmtr', test_param)
+def test_short_func_stpmtr(stpmtr: StpMtrController):
+    stpmtr.start()
+    first_axis = list(stpmtr.axes_stpmtr.keys())[0]
+    ACTIVATE = FuncActivateInput(flag=True)
+    ACTIVATE_AXIS1 = FuncActivateDeviceInput(device_id=first_axis, flag=1)
+    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=10, how=absolute.__name__)
+    POWER_ON = FuncPowerInput(flag=True)
+
+    res: FuncPowerOutput = stpmtr.power(POWER_ON)
+    assert res.controller_status.power
+    res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
+    assert res.func_success
+
+    # activate axis 1
+    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
+    assert res.func_success
+    assert stpmtr.axes_stpmtr[first_axis].status == 1
+
+    top_direct_test_arduino_communication(stpmtr)
+
+    stpmtr.stop()
+
+
+def top_direct_test_arduino_communication(stpmtr: StpMtrCtrl_TopDirect_1axis):
+    # checking messaging with Arduino
+    first_axis = list(stpmtr.axes_stpmtr.keys())[0]
+    get = stpmtr._get_reply_from_arduino(device_id=first_axis)
+    assert get == None
+    stpmtr._send_to_arduino(first_axis, cmd='GET STATE')
+    get = stpmtr._get_reply_from_arduino(first_axis, True)
+    assert get[0] == 'READY'
+    assert get[1] == 0
+
+    stpmtr._send_to_arduino(first_axis, cmd='SET STATE 1')
+    get = stpmtr._get_reply_from_arduino(first_axis)
+    assert get == 0
+
+    stpmtr._send_to_arduino(first_axis, cmd='GET STATE')
+    get = stpmtr._get_reply_from_arduino(first_axis, True)
+    assert get[0] == 'READY'
+    assert get[1] == 0
+
+    stpmtr._send_to_arduino(first_axis, cmd='GET S')
+    get = stpmtr._get_reply_from_arduino(first_axis, True)
+    assert get[0] == -2
+
+    stpmtr._send_to_arduino(first_axis, cmd='MOVE ABS 205')
+    get = stpmtr._get_reply_from_arduino(first_axis)
+    assert get == -1
+
+    stpmtr._send_to_arduino(first_axis, cmd='MOVE ABS 10')
+    get = stpmtr._get_reply_from_arduino(first_axis)
+    assert get == 'STARTED'
+    get = stpmtr._get_reply_from_arduino(first_axis)
+    assert get == None
+    sleep(3)
+    get = stpmtr._get_reply_from_arduino(first_axis)
+    assert get == 0
+
+    stpmtr._send_to_arduino(first_axis, cmd='GET POS')
+    get = stpmtr._get_reply_from_arduino(first_axis, True)
+    assert get[0] == 10.0
+    assert get[1] == 0
+
+    stpmtr._send_to_arduino(first_axis, cmd='MOVE ABS 0')
+    sleep(1)

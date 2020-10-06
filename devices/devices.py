@@ -132,14 +132,14 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
         info_msg(self, 'CREATED')
 
-    def _register_observation(self, name: str, func: Callable, every_n_sec=1):
+    def register_observation(self, name: str, func: Callable, every_n_sec=1):
         def register(self: Device, name: str, func: Callable, every_n_sec=1):
             if callable(func):
                 self._observing_locked = True
                 self._observing_func[name] = [func, int(every_n_sec)]
                 self._observing_locked = False
             else:
-                error_logger(self, self._register_observation, f'Func object {func} is not callable.')
+                error_logger(self, self.register_observation, f'Func object {func} is not callable.')
 
         if not self._observing_locked:
             register(self, name, func, every_n_sec)
@@ -151,7 +151,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     register(self, name, func, every_n_sec)
                     break
                 if i == 500:
-                    error_logger(self, self._register_observation, f'Observing function was always locked, try again.')
+                    error_logger(self, self.register_observation, f'Observing function was always locked, try again.')
+
+    def unregister_observation(self, name: str):
+        if name in self._observing_func:
+            self._observing_locked = True
+            self._observing_FLAG = False
+            sleep(0.2)
+            self._observing_locked = True
+            del self._observing_func[name]
 
     def _observing(self):
         info_msg(self, 'INFO', f'Observing thread started.')
@@ -763,7 +771,8 @@ class Service(Device):
                 res, comments = self._form_devices_list()
             else:
                 res, comments = self._release_hardware()
-            self.ctrl_status.connected = flag
+            if res:
+                self.ctrl_status.connected = flag
         else:
             res, comments = False, f'Power is off, cannot not call "connect(flag={flag})" controller.'
         return res, comments
@@ -820,9 +829,11 @@ class Service(Device):
                                          f"'number = value' must be present")
 
     @property
-    @abstractmethod
     def hardware_devices(self) -> Dict[int, HardwareDevice]:
-        return self._hardware_devices
+        devices = HardwareDeviceDict()
+        for device_id, device in self._hardware_devices.items():
+            devices[device_id] = device.out()
+        return devices
 
     @property
     @abstractmethod
@@ -887,11 +898,10 @@ class Service(Device):
                     r, com = func()
                     res.append(r)
                     comments = join_smart_comments(comments, com)
-
             res = all(res)
         except (DeviceError, Exception) as e:
-            error_logger(self, self._set_parameters, e)
             res, comments = False, str(e)
+            error_logger(self, self._set_parameters_main_devices, e)
         finally:
             if self.ctrl_status.connected and res:
                 self._parameters_set_hardware = True

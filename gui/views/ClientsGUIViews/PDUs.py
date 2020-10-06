@@ -6,7 +6,7 @@ Created on 08.09.2020
 import logging
 from _functools import partial
 from typing import Dict, Union
-from PyQt5.QtWidgets import QCheckBox
+from PyQt5.QtWidgets import QCheckBox, QLayout
 
 from communication.messaging.messages import MessageInt, MsgComExt
 from devices.datastruct_for_messaging import *
@@ -65,6 +65,20 @@ class PDUsView(DeviceControllerView):
     def update_state(self, force_device=False, force_ctrl=False):
 
         def update_func_local(self, force_device=False, force_ctrl=False):
+
+            def set_new_checkboxes(layout: QLayout, pdu_outputs: Dict[Union[int, str], PDUOutput],
+                                   output_checkboxes: Dict[int, QCheckBox]):
+                for output_id, output in pdu_outputs.items():
+                    checkbox = QCheckBox(text=output.name)
+                    checkbox.setChecked(bool(output.state))
+                    checkbox.clicked.connect(partial(self.set_output, output_id))
+                    ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
+                    output_checkboxes[output_id] = checkbox
+
+            def set_checkboxes(pdu_outputs: Dict[Union[int, str], PDUOutput], checkboxes: Dict[int, QCheckBox]):
+                for output_id, output in pdu_outputs.items():
+                    checkboxes[output_id].setChecked(bool(output.state))
+
             cs = self.device_ctrl_state
             ui = self.ui
             pdu: PDU = cs.devices[self.selected_device_id]
@@ -73,15 +87,15 @@ class PDUsView(DeviceControllerView):
                 pass
 
             if cs.devices != cs.devices_previous or force_device:
-                for i in reversed(range(ui.horizontalLayout_pdu_outputs.count())):
-                    ui.horizontalLayout_pdu_outputs.itemAt(i).widget().deleteLater()
-
-                for output_id, output in pdu.outputs.items():
-                    checkbox = QCheckBox(text=output.name)
-                    checkbox.setChecked(bool(output.state))
-                    checkbox.clicked.connect(partial(self.set_output, output_id))
-                    ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
-                    self.output_checkboxes[output_id] = checkbox
+                if force_device:
+                    self.clean_layout(ui.horizontalLayout_pdu_outputs)
+                    set_new_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
+                else:
+                    if not (set(pdu.outputs.keys()) - set(self.output_checkboxes.keys())):
+                        set_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
+                    else:
+                        self.clean_layout(ui.horizontalLayout_pdu_outputs)
+                        set_new_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
 
         pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl, func=update_func_local)
 

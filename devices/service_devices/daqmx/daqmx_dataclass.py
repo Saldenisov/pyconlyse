@@ -50,6 +50,9 @@ class DAQmxCard_NI(DAQmxCard):
                 d[key] = tasks
         return DAQmxCard_NI(**d)
 
+    def out(self):
+        return self.no_tasks()
+
 
 @dataclass
 class DAQmxCardEssentials(DAQmxTask):

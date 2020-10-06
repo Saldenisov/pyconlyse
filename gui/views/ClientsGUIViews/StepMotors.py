@@ -85,8 +85,8 @@ class StepMotorsView(DeviceControllerView):
             self.device_ctrl_state.start_stop[axis_id] = [self.device_ctrl_state.devices[axis_id].position, pos]
             self.device_ctrl_state.devices[axis_id].status = 2
             self.ui.progressBar_movement.setValue(0)
-            client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=25,
-                                   specific={'axis_id': axis_id, 'with_return': True})
+            #client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=3,
+             #                      specific={'axis_id': axis_id, 'with_return': True})
             self._asked_status = 0
         except (ValueError, TypeError) as e:
             comments = f'Pos "{pos}" has wrong format: {e}.'
@@ -178,7 +178,6 @@ class StepMotorsView(DeviceControllerView):
         unit = self._get_unit()
         axis: AxisStpMtr = self.device_ctrl_state.devices[self.selected_device_id]
         pos = axis.convert_pos_to_unit(unit)
-        print(pos)
         if isinstance(pos, int) or isinstance(pos, float):
             self.ui.lcdNumber_position.display(pos)
         else:

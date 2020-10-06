@@ -1,3 +1,4 @@
+from abc import abstractmethod
 from dataclasses import dataclass, field
 from threading import Thread
 from pypylon import pylon
@@ -65,7 +66,6 @@ class Camera(HardwareDevice):
                 d[key] = None
         return CameraEssentials(**d)
 
-
 @dataclass(frozen=False)
 class CameraBasler(Camera):
     pylon_camera: pylon.InstantCamera = None
@@ -77,6 +77,9 @@ class CameraBasler(Camera):
             if key not in ['pylon_camera', 'converter']:
                 d[key] = getattr(self, key)
         return CameraBasler(**d)
+
+    def out(self):
+        return self.no_pylon()
 
 
 @dataclass(order=True, frozen=False)

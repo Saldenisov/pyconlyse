@@ -4,6 +4,7 @@
 
 import logging
 from typing import Dict, Tuple
+from threading import Thread
 from devices.devices import Service
 from devices.service_devices.daqmx.daqmx_dataclass import (DAQmxCard, FuncReadChannelInput, FuncReadChannelOutput,
                                                            FuncWriteChannelInput, FuncWriteChannelOutput,

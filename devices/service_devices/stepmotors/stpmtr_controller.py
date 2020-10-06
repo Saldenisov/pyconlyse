@@ -80,7 +80,7 @@ class StpMtrController(Service):
         else:
             axis = None
             axis_id = None
-        return FuncGetPosOutput(axis=axis, comments=comments, func_success=res)
+        return FuncGetPosOutput(axis=axis.out(), comments=comments, func_success=res)
 
     @abstractmethod
     def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
@@ -119,7 +119,6 @@ class StpMtrController(Service):
         move_type = func_input.move_type
         if not move_type:
             move_type = self.axes_stpmtr[axis_id].basic_unit
-
         res, comments = self._check_device(axis_id)
         if res:
             res, comments = self._check_move_type(axis_id, move_type)
@@ -132,7 +131,7 @@ class StpMtrController(Service):
                 pos = self.axes_stpmtr[axis_id].convert_to_basic_unit(move_type, pos)
                 if isinstance(pos, tuple):
                     res, comments = pos
-                    return FuncMoveAxisToOutput(axes=self.axes_stpmtr_essentials, comments=comments, func_success=res)
+                    return FuncMoveAxisToOutput(axis=axis.out(), comments=comments, func_success=res)
             if how == 'relative':
                 pos = axis.position + pos
             res, comments = self._is_within_limits(axis_id, pos)  # if not relative just set pos
@@ -142,16 +141,12 @@ class StpMtrController(Service):
             elif axis.status == 2:
                 res, comments = False, f'Axis id={axis_id}, name={axis.name} is running. Please, stop it before ' \
                                        f'new request.'
-        return FuncMoveAxisToOutput(axis=axis, comments=comments, func_success=res)
+        return FuncMoveAxisToOutput(axis=axis.out(), comments=comments, func_success=res)
 
     @abstractmethod
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int],
                       how: Union[absolute, relative]) -> Tuple[bool, str]:
         pass
-
-    @property
-    def hardware_devices(self):
-        return self.axes_stpmtr
 
     @property
     def hardware_devices_essentials(self) -> Dict[int, HardwareDeviceEssentials]:
@@ -193,34 +188,34 @@ class StpMtrController(Service):
                             raise StpMtrError(self,
                                               text=f'Not all must have parameters "{must_have_param}" for device_id '
                                                    f'{device_id} are present in DB.')
-                        if 'microsteps' not in value and MoveType.microstep in self.axes_stpmtr[device_id].type_move:
+                        axis = self.axes_stpmtr[device_id]
+                        if 'microsteps' not in value and MoveType.microstep in axis.type_move:
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.microstep)
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.step)
-                        if 'conversion_step_mm' not in value and MoveType.mm in self.axes_stpmtr[device_id].type_move:
+                        if 'conversion_step_mm' not in value and MoveType.mm in axis.type_move:
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.mm)
-                        if 'conversion_step_angle' not in value and MoveType.angle in self.axes_stpmtr[device_id].type_move:
-                            self.axes_stpmtr[device_id].type_move.remove(MoveType.angle)
-                        if not self.axes_stpmtr[device_id].type_move:
+                        if 'conversion_step_angle' not in value and MoveType.angle in axis.type_move:
+                            axis.type_move.remove(MoveType.angle)
+                        if not axis.type_move:
                             raise StpMtrError(self,
                                               text=f'move_parameters must have "microsteps" or  "conversion_step_mm" or'
                                                    f'"conversion_step_angle" for axis_id {device_id}.')
-                        if MoveType.mm in self.axes_stpmtr[device_id].type_move and MoveType.angle in self.axes_stpmtr[
-                            device_id].type_move:
+                        if MoveType.mm in axis.type_move and MoveType.angle in axis.type_move:
                             raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
                                                          f'"conversion_step_angle", not both for axis_id {device_id}')
                         try:
                             basic_unit = MoveType(move_parameters[device_id]['basic_unit'])
                             if basic_unit in [MoveType.step, MoveType.microstep]:
-                                self.axes_stpmtr[device_id].basic_unit = MoveType.step
-                                if MoveType.microstep not in self.axes_stpmtr[device_id].type_move:
+                                axis.basic_unit = MoveType.step
+                                if MoveType.microstep not in axis.type_move:
                                     raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
                                                                  f'axis_id={device_id} does not have "microstep" parameter.')
-                            self.axes_stpmtr[device_id].basic_unit = basic_unit
+                            axis.basic_unit = basic_unit
                         except (KeyError, ValueError) as e:
                             raise StpMtrError(self,
                                               text=f'Cannot set "basic_unit" for axis axis_id={device_id}. Error = {e}')
                         finally:
-                            self.axes_stpmtr[device_id].move_parameters = value
+                            axis.move_parameters = value
             return True, ''
         except KeyError:
             raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
@@ -240,7 +235,7 @@ class StpMtrController(Service):
             res, comments = self._set_pos_axis(func_input.axis_id, pos)
             if res:
                 self._write_positions_to_file(self._form_axes_positions())
-        return FuncSetPosOutput(comments=comments, func_success=res, axis=axis)
+        return FuncSetPosOutput(comments=comments, func_success=res, axis=axis.out())
 
     @abstractmethod
     def _set_pos_axis(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
@@ -261,7 +256,7 @@ class StpMtrController(Service):
                 comments = f'Axis id={axis_id}, name={axis.friendly_name} is not even active.'
         else:
             axis = None
-        return FuncStopAxisOutput(axis=axis, comments=comments, func_success=res)
+        return FuncStopAxisOutput(axis=axis.out(), comments=comments, func_success=res)
 
     def _write_positions_to_file(self, positions: Dict[Union[int, str], float]):
         with open(self._file_pos, 'w') as opened_file:

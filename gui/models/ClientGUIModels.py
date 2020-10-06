@@ -286,6 +286,7 @@ class TreatmentModel(QObject):
                                 pass
                             self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
                         od_data = od_data / treated_maps
+                        print(f'Treated maps {treated_maps}')
                         self.notify_ui_observers({'progressbar_calc': (treated_maps, treated_maps)})
                     elif how == 'averaged':
                         abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
@@ -301,8 +302,9 @@ class TreatmentModel(QObject):
                             abs_data += abs
                             base_data += base
                             self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                        abs_data = abs_data / info.number_maps
-                        base_data = base_data / info.number_maps
+                        abs_data = abs_data / map_index
+                        base_data = base_data / map_index
+                        print(f'Treated maps {map_index}')
                         od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
                         od_data = np.log10(od_data)
                     res = True

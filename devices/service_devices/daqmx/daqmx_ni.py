@@ -4,6 +4,7 @@
 import nidaqmx
 from copy import deepcopy
 from typing import Dict, Tuple, Union
+
 from devices.devices_dataclass import (HardwareDeviceDict, FuncPowerInput, FuncActivateInput, FuncActivateDeviceInput,
                                        HardwareDevice)
 from devices.service_devices.daqmx.daqmx_controller import DAQmxController, DAQmxError
@@ -57,7 +58,9 @@ class DAQmxCtrl_NI(DAQmxController):
                 del self._hardware_devices[device.name]
 
         if self.daqmxes:
-            return self._create_tasks()
+            res, comments = self._create_tasks()
+            self.register_observation('daqmx_channels_observation', self._read_channels)
+            return res, comments
         else:
             return False, f'None of NI-DAQmx cards listed in DB are detected on the system.'
 
@@ -91,7 +94,6 @@ class DAQmxCtrl_NI(DAQmxController):
                                                                  name_to_assign_to_channel=param[0])
                         task.ci_channels[0].ci_count_edges_term = f'/{device.device_id}/{physical_address}'
                         task.start()
-
                     else:
                         task = None
                         del device.channel_settings[physical_address]
@@ -103,26 +105,30 @@ class DAQmxCtrl_NI(DAQmxController):
                 device.tasks = task_dict
         return res, comments
 
+    def _read_channels(self):
+        for device in self._hardware_devices.values():
+            device: DAQmxCard_NI = device
+            for task in device.tasks.values():
+                task_ni: DAQmxTask_NI = task.task_ni
+                task.value = task_ni.read()
+
     def _release_hardware(self) -> Tuple[bool, str]:
         res, comments = True, ''
-        try:
-            for daqmx in self._hardware_devices.values():
+        for daqmx in self._hardware_devices.values():
+            try:
                 for task in daqmx.tasks.values():
                     if task:
-                        task.task.close()
+                        task.task_ni.close()
                         task = None
-        except nidaqmx.DaqError as e:
-            error_logger(self, self._release_hardware, e)
-            comments = f'{e}'
-        finally:
-            daqmx.tasks = {}
+            except nidaqmx.DaqError as e:
+                error_logger(self, self._release_hardware, e)
+                comments = f'{e}'
+            finally:
+                self.unregister_observation('daqmx_channels_observation')
+                daqmx.tasks = {}
             return True, comments
 
     def _set_parameters_after_connect(self) -> Tuple[bool, str]:
         results, comments = [], ''
         
         return all(results), comments
-
-
-
-

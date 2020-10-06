@@ -66,7 +66,7 @@ class HamamatsuFileOpener(Opener):
                 comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
                 # TODO: need to find where ends real header with text
                 # TODO: need to understand what are the comments, how do they relate to datastructures
-                header = file.read(4610)#.decode(encoding='utf-8')
+                header = file.read(comments_length)#.decode(encoding='utf-8')
                 header = header.decode(encoding='UTF-8', errors='ignore')
                 pos += comments_length
             file_type = self.get_img_type(header)
@@ -181,12 +181,15 @@ class HamamatsuFileOpener(Opener):
         return wavelengths
 
     def get_img_type(self, header) -> str:
-        type_ = 'Other'
-        xscaling_file = header.split("ScalingXScalingFile=")[1][1:6]
-        if xscaling_file != 'Other':
+        try:
+            xscaling_file = header.split("ScalingXScalingFile=")[1][1:6]
+            if xscaling_file != 'Other':
+                return 'Normal'
+            else:
+                return 'Other'
+        except Exception as e:
+            self.logger.error(f'get_image_type func: {e}')
             return 'Normal'
-        else:
-            return 'Other'
 
     def give_all_maps(self, file_path) -> Union[Measurement, Tuple[bool, str]]:
         res = True

@@ -46,10 +46,15 @@ class StpMtrCtrl_Standa(StpMtrController):
     def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
         res, comments = False, 'Did not work.'
         if device.status == 2 and force:
-            self._stop_axis(device.device_id)
-            info = f' Axis id={device.device_id_seq}, name={device.name} was stopped.'
-            self.axes_stpmtr[device.device_id_seq].status = flag
-            res, comments = True, f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
+            res_loc, comments_loc = self._stop_axis(device.device_id)
+            if res:
+                info = f'Axis id={device.device_id_seq}, name={device.name} was stopped.'
+                self.axes_stpmtr[device.device_id_seq].status = flag
+                res, comments = True, f'{info} ' \
+                                      f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
+            else:
+                info = f' Axis id={device.device_id_seq}, name={device.name} was not stopped: {comments_loc}.'
+                res, comments = False, info
         elif device.status == 2 and not force:
             res, comments = False, f'Axis id={device.device_id_seq}, name={device.friendly_name} is moving. ' \
                                    'Force Stop in order to change.'

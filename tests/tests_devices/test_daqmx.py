@@ -16,6 +16,8 @@ def test_func_stpmtr(daqmx: DAQmxController):
     power_on(daqmx)
     activate(daqmx)
     power_off(daqmx, success_expected=False)
+    sleep(1)
+    assert daqmx._hardware_devices['TRANCON-DAQ'].tasks[11].value > 0
     deactivate(daqmx)
     power_off(daqmx)
     daqmx.stop()

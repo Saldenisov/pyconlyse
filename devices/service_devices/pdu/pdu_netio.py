@@ -25,7 +25,7 @@ class PDUCtrl_NETIO(PDUController):
         if not res:
             raise PDUError(self, comments)
         else:
-            self._register_observation('PDU_outputs_state', self._set_all_pdu_outputs, 2)
+            self.register_observation('PDU_outputs_state', self._set_all_pdu_outputs, 2)
 
     def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
         res, comments = False, 'Did not work.'

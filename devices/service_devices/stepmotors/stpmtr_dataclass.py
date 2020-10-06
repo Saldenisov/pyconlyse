@@ -1,6 +1,8 @@
+from abc import abstractmethod
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import NewType, Union, List, Dict, Tuple, Set
+from serial import Serial
 from devices.devices_dataclass import (HardwareDevice, DeviceControllerState, FuncGetControllerStateInput,
                                        FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
@@ -134,6 +136,23 @@ class AxisStpMtr(HardwareDevice):
 @dataclass(frozen=False)
 class A4988AxisStpMtr(AxisStpMtr):
     pass
+
+
+@dataclass(frozen=False)
+class TopDirectAxisStpMtr(AxisStpMtr):
+    arduino_port: str = ''
+    arduino_serial: Serial = None
+    baudrate: int = 19200
+
+    def no_serial(self):
+        d = {}
+        for key in TopDirectAxisStpMtr.__dataclass_fields__.keys():
+            if key not in ['arduino_serial']:
+                d[key] = getattr(self, key)
+        return TopDirectAxisStpMtr(**d)
+
+    def out(self):
+        return self.no_serial()
 
 
 @dataclass(frozen=False)

@@ -11,7 +11,7 @@ from time import sleep
 from typing import Callable, Dict, Union
 from threading import Thread
 from PyQt5 import QtCore
-from PyQt5.QtWidgets import QMainWindow
+from PyQt5.QtWidgets import QMainWindow, QLayout
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComExt, MsgComInt
 from devices.devices import Device, Client, Service
@@ -108,6 +108,10 @@ class DeviceControllerView(QMainWindow):
         except Exception as e:
             error_logger(self, self.controller_devices, e)
 
+    def clean_layout(self, layout: QLayout):
+        for i in reversed(range(layout.count())):
+            layout.itemAt(i).widget().deleteLater()
+
     def controller_state_observation(self):
         info_msg(self, 'INFO', 'Starting Controller state observation thread.')
         while self._state_observing:
@@ -134,7 +138,6 @@ class DeviceControllerView(QMainWindow):
         try:
             if self.service_parameters.device_id == msg.forwarded_from or \
                     self.service_parameters.device_id == msg.sender_id:
-                print('yes', msg.com)
                 com = msg.com
                 info: Union[DoneIt, MsgError] = msg.info
                 if com == MsgComInt.DONE_IT.msg_name:
