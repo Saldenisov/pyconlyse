@@ -10,9 +10,13 @@ from distutils.util import strtobool
 from time import sleep
 from typing import Union, Dict, Tuple, List
 
-import cv2
+try:
+    import cv2
+    from pypylon import genicam, pylon
+except ImportError:
+    pass
 import numpy as np
-from pypylon import genicam, pylon
+
 
 from devices.devices_dataclass import (HardwareDevice, HardwareDeviceDict, HardwareDeviceEssentials,
                                        DeviceControllerStatus)

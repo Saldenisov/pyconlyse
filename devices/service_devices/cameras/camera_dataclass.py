@@ -1,7 +1,10 @@
 from abc import abstractmethod
 from dataclasses import dataclass, field
 from threading import Thread
-from pypylon import pylon
+try:
+    from pypylon import pylon
+except ImportError:
+    pylon = None
 from typing import Dict, List, Tuple
 
 from devices.devices_dataclass import (HardwareDevice, PowerSettings, FuncGetControllerStateInput,
