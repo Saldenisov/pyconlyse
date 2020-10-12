@@ -191,33 +191,37 @@ class DeviceControllerView(QMainWindow):
     def update_state(self, force_device=False, force_ctrl=False, func: Callable=None):
         device_state = self.device_ctrl_state
         ui = self.ui
-        device: HardwareDevice = device_state.devices[self.selected_device_id]
-        if device_state.controller_status != device_state.controller_status_previous or force_ctrl:
-            ui.checkBox_power.setChecked(device_state.controller_status.power)
-            ui.checkBox_ctrl_activate.setChecked(device_state.controller_status.active)
-            ui.checkBox_device_activate.setChecked(device.status)
-            self.device_ctrl_state.controller_status_previous = copy.deepcopy(self.device_ctrl_state.controller_status)
+        try:
+            device: HardwareDevice = device_state.devices[self.selected_device_id]
+            if device_state.controller_status != device_state.controller_status_previous or force_ctrl:
+                ui.checkBox_power.setChecked(device_state.controller_status.power)
+                ui.checkBox_ctrl_activate.setChecked(device_state.controller_status.active)
+                ui.checkBox_device_activate.setChecked(device.status)
+                self.device_ctrl_state.controller_status_previous = copy.deepcopy(
+                    self.device_ctrl_state.controller_status)
 
-        if device_state.devices != device_state.devices_previous or force_device:
-            device_id_list = list(device_state.devices.keys())
-            ui.spinBox_device_id.setMinimum(min(device_id_list))
-            ui.spinBox_device_id.setMaximum(max(device_id_list))
-            if self.selected_device_id not in device_id_list:
-                ui.spinBox_device_id.setValue(min(device_id_list))
+            if device_state.devices != device_state.devices_previous or force_device:
+                device_id_list = list(device_state.devices.keys())
+                ui.spinBox_device_id.setMinimum(min(device_id_list))
+                ui.spinBox_device_id.setMaximum(max(device_id_list))
+                if self.selected_device_id not in device_id_list:
+                    ui.spinBox_device_id.setValue(min(device_id_list))
 
-            ui.checkBox_device_activate.setChecked(device.status)
-            _translate = QtCore.QCoreApplication.translate
-            ui.label_device_id.setText('DeviceID')
-            if device.friendly_name:
-                name = device.friendly_name
-            else:
-                name = device.name
+                ui.checkBox_device_activate.setChecked(device.status)
+                _translate = QtCore.QCoreApplication.translate
+                ui.label_device_id.setText('DeviceID')
+                if device.friendly_name:
+                    name = device.friendly_name
+                else:
+                    name = device.name
 
-            ui.label_name.setText(f'Name: {name}')
-            ui.checkBox_device_activate.setChecked(device.status)
+                ui.label_name.setText(f'Name: {name}')
+                ui.checkBox_device_activate.setChecked(device.status)
 
-            if func:
-                func(self, force_device, force_ctrl)
+                if func:
+                    func(self, force_device, force_ctrl)
 
-            self.device_ctrl_state.axes_previous = copy.deepcopy(device_state.devices)
+                self.device_ctrl_state.axes_previous = copy.deepcopy(device_state.devices)
+        except Exception as e:
+            error_logger(self, self.update_state, e)
 

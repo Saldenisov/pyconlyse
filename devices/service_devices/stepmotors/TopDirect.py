@@ -70,6 +70,8 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         for device_id in do_not_keep_device_ids:
             del self._hardware_devices[device_id]
 
+        self._hardware_devices_number = len(self._hardware_devices)
+
         if self._hardware_devices:
             return True, ''
         else:
@@ -204,6 +206,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         else:
             pos = 0
         self._hardware_devices[device_id].position = pos
+        self._write_positions_to_file(positions=self._form_axes_positions())
         return True, ''
 
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int]) -> Tuple[bool, str]:
@@ -255,7 +258,9 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             return res, comments
 
     def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
-        must_have_param = {55838333832351518082: set(['microsteps', 'conversion_step_mm', 'basic_unit'])}
+        must_have_param = {'55838333832351518082': set(['microsteps', 'conversion_step_mm', 'basic_unit']),
+                           '75833353934351B05090': set(['microsteps', 'conversion_step_mm', 'basic_unit'])
+                           }
         return super()._set_move_parameters_axes(must_have_param)
 
     def _send_to_arduino(self, device_id: Union[str, int], cmd: str) -> Tuple[bool, str]:

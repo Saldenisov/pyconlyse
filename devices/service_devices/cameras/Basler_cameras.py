@@ -10,7 +10,10 @@ from distutils.util import strtobool
 from time import sleep
 from typing import Union, Dict, Tuple, List
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    pass
 import numpy as np
 from pypylon import genicam, pylon
 
