@@ -12,10 +12,11 @@ from typing import Union, Dict, Tuple, List
 
 try:
     import cv2
+    from pypylon import genicam, pylon
 except ImportError:
     pass
 import numpy as np
-from pypylon import genicam, pylon
+
 
 from devices.devices_dataclass import (HardwareDevice, HardwareDeviceDict, HardwareDeviceEssentials,
                                        DeviceControllerStatus)
