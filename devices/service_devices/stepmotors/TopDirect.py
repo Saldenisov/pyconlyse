@@ -57,7 +57,6 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             if res:
                 device.arduino_port = res
                 device.arduino_serial = serial.Serial(device.arduino_port, timeout=1, baudrate=device.baudrate)
-
                 sleep(1)
                 get = self._get_reply_from_arduino(device_id=device.device_id)
                 if get != 'INITIALIZED':
@@ -103,7 +102,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
     def _check_arduino_port(self, com_port: serial) -> Tuple[bool, str]:
         try:
             ser = serial.Serial(com_port)
-            sleep(0.1)
+            sleep(0.05)
             ser.close()
             return True, ''
         except serial.SerialException as e:
@@ -163,7 +162,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         return False, f"Could not find an Arduino {serial_number}. Check connection."
 
     def _get_reply_from_arduino(self, device_id: Union[int, str], all_lines=False) -> Union[str, List[str], None]:
-        sleep(0.1)
+        sleep(0.05)
         def convert_str_float_or_int(s: str):
             try:
                 s = int(s)
@@ -218,12 +217,12 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
             rcv = self._get_reply_from_arduino(device_id)
             if rcv == 'STARTED':
                 timeout = True
-                for i in range(30):
+                for i in range(50):
                     rcv = self._get_reply_from_arduino(device_id)
                     if rcv == 0:
                         timeout = False
                         break
-                    sleep(1)
+                    sleep(.5)
                 if timeout:
                     rcv = -4  # timeout
 
@@ -267,7 +266,7 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         if self.ctrl_status.connected:
             device = self.axes_stpmtr[device_id]
             device.arduino_serial.write(cmd.encode('utf-8'))
-            sleep(0.1)
+            sleep(0.05)
 
     def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
         res, comments = False, ''

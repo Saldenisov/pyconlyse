@@ -9,7 +9,7 @@ const int enblPin = 11;
 //4 - 160 (170)
 //2 - 360 (400)
 int microsteps = 128; // in one step
-int delay_time = 1; // between TTL pulses
+int delay_time = 1; // between TTL pulses in us
 //max full steps is 62900
 const long max_full_steps = 62900;
 const float step_mm = 0.003198 ; // 0.00321mm in one step
@@ -53,7 +53,7 @@ void set_state_ctrl(bool state){
     else{
       digitalWrite(enblPin, LOW);
     }
-    delay(100);
+    delay(50);
 
     ctrl_state = state;
   }
@@ -257,7 +257,7 @@ void loop() {
     str_object = Serial.readString();  // read the incoming cmd into String object
     res = execute_cmd(str_object, pos);  // obtain result 0, -1, -2, -3 (see ERRORS)
     Serial.println(res);
-    delay(30);
+    delay(15);
     Serial.flush();  //clean serial before receiving the next command. If user send other commands before the execution of previous. Arduino ctrl will reject them.
   }
 }
