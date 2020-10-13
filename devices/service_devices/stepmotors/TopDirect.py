@@ -176,10 +176,14 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
 
         device = self.axes_stpmtr[device_id]
         arduino_serial = device.arduino_serial
-        if all_lines:
-            res = arduino_serial.readlines()
-        else:
-            res = arduino_serial.readline()
+        try:
+            if all_lines:
+                res = arduino_serial.readlines()
+            else:
+                res = arduino_serial.readline()
+        except Exception as e:
+            error_logger(self, self._get_reply_from_arduino, e)
+            res = None
 
         if res:
             if isinstance(res, list):
@@ -243,7 +247,10 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
         for device in self._hardware_devices.values():
             r, com = self._change_device_status_local(device, 0, True)
             if r:
-                device.arduino_serial.close()
+                try:
+                    device.arduino_serial.close()
+                except Exception as e:
+                    error_logger(self, self._release_hardware, f'{device.device_id}. {e}')
                 device.arduino_serial = None
             res.append(r)
             comments = join_smart_comments(comments, com)
@@ -265,8 +272,13 @@ class StpMtrCtrl_TopDirect_1axis(StpMtrController):
     def _send_to_arduino(self, device_id: Union[str, int], cmd: str) -> Tuple[bool, str]:
         if self.ctrl_status.connected:
             device = self.axes_stpmtr[device_id]
-            device.arduino_serial.write(cmd.encode('utf-8'))
-            sleep(0.05)
+            try:
+                device.arduino_serial.write(cmd.encode('utf-8'))
+                sleep(0.05)
+                return True, ''
+            except Exception as e:
+                error_logger(self, self._send_to_arduino, e)
+                return False, str(e)
 
     def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
         res, comments = False, ''
