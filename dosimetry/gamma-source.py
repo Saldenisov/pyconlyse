@@ -80,6 +80,17 @@ def show_points_graph(exp_points: List[Point], doses: List[float], source_parame
     ax.axhline(source_parameters[1], color='r', linewidth=.2)
     ax.axvline(source_parameters[0], color='r', linewidth=.2)
     ax.axvline(0, color='b',  linestyle='--')
+
+
+    # adding cylinder walls
+    circle = plt.Circle((0, 0), radius=110, fill=False, linewidth=2, color='r')
+    ax.add_artist(circle)
+
+    ax.invert_yaxis()
+    ax.xaxis.tick_top()
+    ax.xaxis.set_label_position('top')
+    ax.set_xlabel('X, mm')
+    ax.set_ylabel('Y, mm')
     plt.show()
 
 def residuals(x, *args, **kwargs):
