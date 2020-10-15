@@ -3,6 +3,7 @@ import logging
 from abc import abstractmethod
 from time import sleep
 from typing import Dict, List, NamedTuple, NewType
+from functools import lru_cache
 
 import zmq
 from cryptography.fernet import Fernet
@@ -105,7 +106,8 @@ class Messenger(MessengerInter):
     def _create_sockets(self):
         pass
 
-    def create_fernet(self, session_key: bytes):
+    @lru_cache(maxsize=100, typed=True)
+    def create_fernet(self, session_key: bytes) -> Fernet:
         return Fernet(session_key)
 
     def decrypt_with_private(self, cipher_text: bytes) -> bytes:
@@ -121,7 +123,8 @@ class Messenger(MessengerInter):
     def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> bytes:
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
-            return Fernet(self.parent.connections[device_id].session_key).decrypt(msg_bytes)
+            fernet = self.create_fernet(self.parent.connections[device_id].session_key)
+            return fernet.decrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
 
@@ -143,7 +146,8 @@ class Messenger(MessengerInter):
                     receiver_id: DeviceId = msg.receiver_id
                 else:
                     receiver_id = self.parent.server_id
-                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr(compression=False))
+                fernet = self.create_fernet(self.parent.connections[receiver_id].session_key)
+                return fernet.encrypt(msg.byte_repr(compression=False))
             except (KeyError, ValueError):
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
         else:
@@ -158,7 +162,8 @@ class Messenger(MessengerInter):
             key_size = 4096
         else:
             key_size = 2048
-        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size, backend=default_backend())
+        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size,
+                                                     backend=default_backend())
         self._public_key = self._private_key.public_key()
 
     @abstractmethod
