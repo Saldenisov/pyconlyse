@@ -53,11 +53,12 @@ if __name__ == "__main__":
         try:
             selections = sys.argv[sys.argv.index('-s') + 1:]
             for device_name in selections:
-                device_id = preselection[device_name][0]
-                db = preselection[device_name][1]
-                init(device_id=device_id, db_name=db, test=test)
+                if device_name != '-test':
+                    device_id = preselection[device_name][0]
+                    db = preselection[device_name][1]
+                    init(device_id=device_id, db_name=db, test=test)
         except (KeyError, IndexError):
-            raise Exception('Not enough arguments were passed')
+            raise Exception(f'Not enough arguments were passed: {sys.argv}')
 
     if '-id' in sys.argv and '-db' in sys.argv:
         test = False
