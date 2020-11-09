@@ -314,9 +314,10 @@ class ClientMessenger(Messenger):
             # SOCKET PUBLISHER
             if self.pub_option:
                 publisher = self.context.socket(zmq.PUB)
-                publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+                publisher.setsockopt_unicode(zmq.IDENTITY, f'{self.id}:{self.addresses[PUB_Socket]}')
                 self.sockets[PUB_Socket] = publisher
                 self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
+
 
             # POLLER
             self.poller = zmq.Poller()
@@ -325,6 +326,8 @@ class ClientMessenger(Messenger):
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
+        finally:
+            info_msg(self, 'INFO', f'Sockets: {self.sockets.keys()}; Public sockets: {self.public_sockets.values()}')
 
     def connect(self):
         try:
@@ -427,6 +430,7 @@ class ClientMessenger(Messenger):
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
             if self.pub_option:
+
                 self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
             else:
                 info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
@@ -473,7 +477,7 @@ class ClientMessenger(Messenger):
                             #TODO: need to check if it true SERVER using password or certificate
                             info_msg(self, 'INFO', f'{msg.short()}')
                             info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
-                            self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
+                            self.addresses[FRONTEND_Server] = sockets[FRONTEND_Server]
                             self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
                             msg_out = msg
                             break
@@ -544,6 +548,8 @@ class ServerMessenger(Messenger):
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
+        finally:
+            info_msg(self, 'INFO', f'Sockets: {self.sockets.keys()}; Public sockets: {self.public_sockets.values()}')
 
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
