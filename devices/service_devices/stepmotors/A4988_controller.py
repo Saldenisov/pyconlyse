@@ -23,7 +23,7 @@ from .stpmtr_controller import StpMtrController, StpMtrError
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = False
+dev_mode = True
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -108,10 +108,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return True, ''
 
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[int, float], how='absolute') -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(device_id, 2)
+        axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
+        res, comments = self._change_device_status_local(axis, 2)
         if res:
             self._set_microsteps_parameters(device_id)  # Different axes could have different microsteps
-            axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
             if go_pos - axis.position > 0:
                 pas = 1
                 self._direction('top')
@@ -139,7 +139,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     break
             axis.position = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             self._disable_controller()
-            _, _ = self._change_axis_status(device_id, 1, force=True)
+            _, _ = self._change_device_status_local(axis, 1, force=True)
             _, _ = self._get_position_axis(device_id)
             if not interrupted:
                 res, comments = True, f'Movement of Axis with id={device_id}, name={axis.friendly_name} ' \
@@ -148,8 +148,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
-            for pin in self._pins:
-                pin.close()
+            for device in self._hardware_devices.values():
+                self._change_device_status_local(device, 0, True)
+            if not dev_mode:
+                for pin in self._pins:
+                    pin.close()
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)
