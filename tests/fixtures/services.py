@@ -53,6 +53,12 @@ def stpmtr_Standa_test_non_fixture(device_id='StpMtrCtrl_Standa:b7257a502aef1d55
                                                                        db_name), test=True)
 
 
+def stpmtr_OWIS_test_non_fixture(device_id='StpMtrCtrl_OWIS:b161e87bee35bc4160f2dfeef63ef058',
+                                   db_name='Devices.db') -> StpMtrCtrl_a4988_4axes:
+    return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /
+                                                                       db_name), test=True)
+
+
 def stpmtr_TopDirect_test_non_fixture(device_id='StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c',
                                       db_name='Devices.db') -> StpMtrCtrl_TopDirect_1axis:
     return DeviceFactory.make_device(device_id=device_id, db_path=Path(Path(app_folder) / 'utilities' / 'database' /

@@ -668,16 +668,11 @@ class Service(Device):
         res, comments = self._check_if_active()
         if res ^ flag:  # res XOR Flag
             info_msg(self, 'INFO', f'Func "activate" is called: {func_input}.')
-            if flag:
-                res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
-                if res:  # parameters should be set from hardware controller if possible
-                    res, comments = self._set_parameters_main_devices(extra_func=[self._set_parameters_after_connect])  # This must be realized for all controllers
-                    if res:
-                        self.ctrl_status.active = True
-            else:
-                res, comments = self._connect(flag)
-                if res:
-                    self.ctrl_status.active = flag
+            res, comments = self._connect(flag)  # guarantees that parameters could be read from controller
+            if flag and res:
+                res, comments = self._set_parameters_main_devices(extra_func=[self._set_parameters_after_connect])  # This must be realized for all controllers
+            if res:
+                self.ctrl_status.active = flag
         comments = f'Func "activate" is accomplished with success: {res}. State of controller is ' \
                    f'{self.ctrl_status.active}. {comments}'
         return FuncActivateOutput(comments=comments, controller_status=self.ctrl_status, func_success=res)

@@ -157,6 +157,7 @@ class TopDirectAxisStpMtr(AxisStpMtr):
 
 @dataclass(frozen=False)
 class OwisAxisStpMtr(AxisStpMtr):
+    device_id_internal_seq: int = None
     gear_ratio: float = 0.0
     pitch: float = 1.0
     revolution: int = 200

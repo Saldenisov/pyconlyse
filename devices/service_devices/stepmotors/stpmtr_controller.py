@@ -1,8 +1,10 @@
 import logging
 from abc import abstractmethod
+from copy import deepcopy
 from os import path
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Union
+from time import sleep
 from devices.devices import Service
 from devices.devices_dataclass import HardwareDevice, HardwareDeviceEssentials, HardwareDeviceDict
 from devices.service_devices.stepmotors.stpmtr_dataclass import (FuncGetPosInput, FuncGetPosOutput, FuncSetPosInput,
@@ -11,6 +13,7 @@ from devices.service_devices.stepmotors.stpmtr_dataclass import (FuncGetPosInput
                                                                  FuncMoveAxisToInput, FuncMoveAxisToOutput)
 from utilities.datastructures.mes_independent.general import CmdStruct
 from utilities.myfunc import error_logger, info_msg
+from utilities.tools.files_work import write_to_file_unique
 
 module_logger = logging.getLogger(__name__)
 
@@ -110,7 +113,10 @@ class StpMtrController(Service):
             return True, ''
 
     def _form_axes_positions(self) -> Dict[Union[int, str], float]:
-        return {axis.device_id: axis.position for axis in self.axes_stpmtr.values()}
+        d = {}
+        for axis in self.axes_stpmtr.values():
+            d[axis.device_id] = axis.position
+        return d
 
     def move_axis_to(self, func_input: FuncMoveAxisToInput) -> FuncMoveAxisToOutput:
         axis_id = func_input.axis_id
@@ -189,10 +195,18 @@ class StpMtrController(Service):
                                               text=f'Not all must have parameters "{must_have_param}" for device_id '
                                                    f'{device_id} are present in DB.')
                         axis = self.axes_stpmtr[device_id]
+
+                        try:
+                            basic_unit = MoveType(move_parameters[device_id]['basic_unit'])
+                        except (KeyError, ValueError) as e:
+                            raise StpMtrError(self,
+                                              text=f'Cannot set "basic_unit" for axis axis_id={device_id}. Error = {e}')
+
                         if 'microsteps' not in value and MoveType.microstep in axis.type_move:
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.microstep)
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.step)
-                        if 'conversion_step_mm' not in value and MoveType.mm in axis.type_move:
+                        if 'conversion_step_mm' not in value and MoveType.mm in axis.type_move and \
+                                basic_unit != MoveType.mm:
                             self.axes_stpmtr[device_id].type_move.remove(MoveType.mm)
                         if 'conversion_step_angle' not in value and MoveType.angle in axis.type_move:
                             axis.type_move.remove(MoveType.angle)
@@ -203,19 +217,15 @@ class StpMtrController(Service):
                         if MoveType.mm in axis.type_move and MoveType.angle in axis.type_move:
                             raise StpMtrError(self, text=f'move parameters could have either "conversion_step_mm" or '
                                                          f'"conversion_step_angle", not both for axis_id {device_id}')
-                        try:
-                            basic_unit = MoveType(move_parameters[device_id]['basic_unit'])
-                            if basic_unit in [MoveType.step, MoveType.microstep]:
-                                axis.basic_unit = MoveType.step
-                                if MoveType.microstep not in axis.type_move:
-                                    raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
+                        if basic_unit in [MoveType.step, MoveType.microstep]:
+                            axis.basic_unit = MoveType.step
+                            if MoveType.microstep not in axis.type_move:
+                                raise StpMtrError(self, text=f'Basic_unit cannot be microstep or step, when Axis '
                                                                  f'axis_id={device_id} does not have "microstep" parameter.')
+                        else:
                             axis.basic_unit = basic_unit
-                        except (KeyError, ValueError) as e:
-                            raise StpMtrError(self,
-                                              text=f'Cannot set "basic_unit" for axis axis_id={device_id}. Error = {e}')
-                        finally:
-                            axis.move_parameters = value
+
+                        axis.move_parameters = value
             return True, ''
         except KeyError:
             raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
@@ -259,8 +269,8 @@ class StpMtrController(Service):
         return FuncStopAxisOutput(axis=axis.out(), comments=comments, func_success=res)
 
     def _write_positions_to_file(self, positions: Dict[Union[int, str], float]):
-        with open(self._file_pos, 'w') as opened_file:
-            opened_file.write(str(positions))
+        sleep(0.01)
+        write_to_file_unique(self._file_pos, positions)
 
 
 class StpMtrError(BaseException):

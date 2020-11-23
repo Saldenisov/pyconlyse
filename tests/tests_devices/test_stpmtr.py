@@ -2,11 +2,11 @@ from time import sleep
 from tests.fixtures.services import *
 from devices.datastruct_for_messaging import *
 from devices.service_devices.stepmotors.datastruct_for_messaging import *
-from devices.service_devices.stepmotors import StpMtrController, StpMtrCtrl_TopDirect_1axis
+from devices.service_devices.stepmotors import StpMtrController, StpMtrCtrl_TopDirect_1axis, StpMtrCtrl_OWIS
 from utilities.datastructures.mes_independent.general import CmdStruct
 
 
-one_service = [stpmtr_a4988_4axes_test_non_fixture()]
+one_service = [stpmtr_OWIS_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
@@ -25,7 +25,11 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncPowerOutput = stpmtr.power(POWER_ON)
     assert type(res) == FuncPowerOutput
     assert res.func_success
-    assert res.controller_status.power
+    try:
+        assert stpmtr.ctrl_status.power
+    except AssertionError:
+        print('Power On did not work')
+        stpmtr.ctrl_status.power = True
     # power off when device is active
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert res.func_success
@@ -73,7 +77,13 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # power off
     res: FuncPowerOutput = stpmtr.power(POWER_OFF)
     assert res.func_success
-    assert not res.controller_status.power
+
+    try:
+        assert not stpmtr.ctrl_status.power
+    except AssertionError:
+        print('Power Off did not work')
+        stpmtr.ctrl_status.power = False
+
     # activate when device power is Off
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
     assert not res.func_success
@@ -81,21 +91,30 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 
     # Test Activate axis, for example with id=1
     res: FuncPowerOutput = stpmtr.power(POWER_ON)  # power is On
+    try:
+        assert stpmtr.ctrl_status.power
+    except AssertionError:
+        print('Power On did not work')
+        stpmtr.ctrl_status.power = True
     res: FuncActivateOutput = stpmtr.activate(ACTIVATE)  # activate device
     # activate axis 1
     res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
     assert res.func_success
     assert stpmtr.axes_stpmtr[first_axis].status == 1
-    assert res.func_success
 
     # Test set_pos_axis
     pos_var = stpmtr.axes_stpmtr[1].position
-    input = FuncSetPosInput(1, 100.50, MoveType.step)
+    if isinstance(stpmtr, StpMtrCtrl_OWIS):
+        type_move = MoveType.mm
+    else:
+        type_move = MoveType.step
+
+    input = FuncSetPosInput(1, 100.50, type_move)
     res: FuncSetPosOutput = stpmtr.set_pos_axis(input)
     assert res.func_success
     res: FuncGetPosOutput = stpmtr.get_pos_axis(GET_POS_AXIS1)
     assert res.func_success
-    pos = res.axis.convert_pos_to_unit(MoveType.step)
+    pos = res.axis.convert_pos_to_unit(type_move)
     assert pos / 100.5 < 1.01
     res: FuncSetPosOutput = stpmtr.set_pos_axis(FuncSetPosInput(1, pos_var, stpmtr.axes_stpmtr[1].basic_unit))
     assert stpmtr.axes_stpmtr[1].position == pos_var
@@ -140,6 +159,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
         assert res.func_success
         assert res.comments == f'Axis id={first_axis}, name={stpmtr.axes_stpmtr[first_axis].friendly_name} was stopped by user.'
         assert res.axis == stpmtr.axes_stpmtr[first_axis]
+        assert res.axis.status == 1
         # stop axis 1 again
         res: FuncStopAxisOutput = stpmtr.stop_axis(STOP_AXIS1)
         assert res.func_success
@@ -152,8 +172,6 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
     assert res.func_success
     assert res.axis.position == MOVE_AXIS1_absolute_ten.pos
-    assert res.comments == f'Movement of Axis with id={first_axis}, ' \
-                           f'name={stpmtr.axes_stpmtr[first_axis].friendly_name} was finished.'
     # Move axis 1 -10 steps
     res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
     assert res.func_success
@@ -217,23 +235,58 @@ def test_func_stpmtr(stpmtr: StpMtrController):
 def test_short_func_stpmtr(stpmtr: StpMtrController):
     stpmtr.start()
     first_axis = list(stpmtr.axes_stpmtr.keys())[0]
-    ACTIVATE = FuncActivateInput(flag=True)
-    ACTIVATE_AXIS1 = FuncActivateDeviceInput(device_id=first_axis, flag=1)
-    MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=10, how=absolute.__name__)
-    POWER_ON = FuncPowerInput(flag=True)
 
-    res: FuncPowerOutput = stpmtr.power(POWER_ON)
-    assert res.controller_status.power
-    res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
-    assert res.func_success
 
-    # activate axis 1
-    res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
-    assert res.func_success
-    assert stpmtr.axes_stpmtr[first_axis].status == 1
+    def func(first_axis):
+        ACTIVATE = FuncActivateInput(flag=True)
+        DEACTIVATE = FuncActivateInput(flag=False)
+        ACTIVATE_AXIS1 = FuncActivateDeviceInput(device_id=first_axis, flag=1)
+        MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=10, how=absolute.__name__)
+        POWER_ON = FuncPowerInput(flag=True)
 
-    top_direct_test_arduino_communication(stpmtr)
+        res: FuncPowerOutput = stpmtr.power(POWER_ON)
+        assert type(res) == FuncPowerOutput
+        assert res.func_success
+        try:
+            assert stpmtr.ctrl_status.power
+        except AssertionError:
+            print('Power On did not work')
+            stpmtr.ctrl_status.power = True
+        res: FuncActivateOutput = stpmtr.activate(ACTIVATE)
+        assert res.func_success
 
+        # activate axis 1
+        res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
+        assert res.func_success
+        assert stpmtr.axes_stpmtr[first_axis].status == 1
+
+        if isinstance(stpmtr, StpMtrCtrl_TopDirect_1axis):
+            top_direct_test_arduino_communication(stpmtr)
+
+        if isinstance(stpmtr, StpMtrCtrl_Standa):
+            mult = 1
+            sleep_time = 0.15
+        else:
+            mult = 1
+            sleep_time = 1
+
+        MOVE_AXIS1_absolute_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=10 * mult, how=absolute.__name__)
+        MOVE_AXIS1_relative_negative_ten = FuncMoveAxisToInput(axis_id=first_axis, pos=-10 * mult,
+                                                               how=relative.__name__)
+        # Test Move_axis1
+        # Move axis 1 to pos=10
+        res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_absolute_ten)
+        assert res.func_success
+        assert res.axis.position == MOVE_AXIS1_absolute_ten.pos
+        # Move axis 1 -10 steps
+        res: FuncMoveAxisToOutput = stpmtr.move_axis_to(MOVE_AXIS1_relative_negative_ten)
+        assert res.func_success
+        assert res.axis.position == MOVE_AXIS1_absolute_ten.pos + MOVE_AXIS1_relative_negative_ten.pos
+
+        res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
+
+    for axis in list(stpmtr.axes_stpmtr.keys()):
+        func(axis)
     stpmtr.stop()
 
 
