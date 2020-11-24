@@ -23,7 +23,7 @@ from .stpmtr_controller import StpMtrController, StpMtrError
 module_logger = logging.getLogger(__name__)
 
 
-dev_mode = True
+dev_mode = False
 
 
 class StpMtrCtrl_a4988_4axes(StpMtrController):
@@ -280,7 +280,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             led.off()
         else:
             res, comments = False, f'func _set_led value {value} is not known.'
-        sleep(0.05)
         return res, comments
 
     def _pins_off(self) -> Tuple[Union[bool, str]]:
@@ -299,10 +298,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _set_microsteps_parameters(self, device_id: Union[int, str]) -> Tuple[bool, str] :
         try:
-            axis = self.axes_stpmtr[device_id]
-            self._set_led(self._ms1, axis.move_parameters['microsteps'][0][0])
-            self._set_led(self._ms2, axis.move_parameters['microsteps'][0][1])
-            self._set_led(self._ms3, axis.move_parameters['microsteps'][0][2])
+            axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
+            microstep_int = axis.move_parameters['microsteps']
+            self._set_led(self._ms1, self._microstep_settings[microstep_int][0][1])
+            self._set_led(self._ms2, self._microstep_settings[microstep_int][0][1])
+            self._set_led(self._ms3, self._microstep_settings[microstep_int][0][2])
             return True, ''
         except KeyError as e:
             error_logger(self, self._set_microsteps_parameters, e)
