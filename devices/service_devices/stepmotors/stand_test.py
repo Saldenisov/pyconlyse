@@ -149,7 +149,7 @@ lib.set_bindy_key(os.path.join(ximc_dir, "win32", "keyfile.sqlite").encode("utf-
 
 # This is device search and enumeration with probing. It gives more information about soft.
 probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-enum_hints = b"addr=10.20.30.201, 10.20.30.202"
+enum_hints = b"addr=10.20.30.204, 10.20.30.202"
 # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
 devenum = lib.enumerate_devices(probe_flags, enum_hints)
 dev_count = lib.get_device_count(devenum)

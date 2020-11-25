@@ -47,7 +47,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         res, comments = False, 'Did not work.'
         if device.status == 2 and force:
             res_loc, comments_loc = self._stop_axis(device.device_id)
-            if res:
+            if res_loc:
                 info = f'Axis id={device.device_id_seq}, name={device.name} was stopped.'
                 self.axes_stpmtr[device.device_id_seq].status = flag
                 res, comments = True, f'{info} ' \
@@ -84,6 +84,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         5) set positions
         :return:
         """
+        sleep(0.1)
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
         self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
         # Enumerate devices
@@ -170,6 +171,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         :param device_id: corresponds to device_id of Standa controller
         :return: Basic_units
         """
+        sleep(0.07)
         pos = get_position_t()
         axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
         device_id_internal_seq = axis.device_id_internal_seq
@@ -212,7 +214,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = True, f'Movement of Axis with id={device_id}, name={axis.friendly_name} ' \
                                       f'was finished.'
             else:
-                res, comments = False, f'Movement of Axis with id={device_id} was interrupted'
+                res, comments = False, f'Movement of Axis with id={device_id} was interrupted.'
 
             _, _ = self._get_position_axis(device_id)
         self.change_device_status(device_id, 1, True)
@@ -227,13 +229,13 @@ class StpMtrCtrl_Standa(StpMtrController):
                     self.change_device_status(axis.device_id, flag=0, force=True)
                     arg = ctypes.byref(ctypes.cast(axis.device_id_internal_seq, ctypes.POINTER(ctypes.c_int)))
                     result = self.lib.close_device(arg)
+                    sleep(0.05)
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
         finally:
-            # Give time to DLL to do its job.
-            sleep(0.2)
+            sleep(1)  # Give time to DLL to do its job.
 
     def _stop_axis(self, device_id: str) -> Tuple[bool, str]:
         result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_internal_seq)
@@ -260,7 +262,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_standa.uPosition = ctypes.c_int(pos_microsteps)
             pos_standa.EncPosition = ctypes.c_longlong(0)
             pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-            device_id_internal_seq = ctypes.c_int(self.axes_stpmtr[device_id].device_id_internal_seq)
+            device_id_internal_seq = axis.device_id_internal_seq
         except Exception as e:
             error_logger(self, self._set_pos, e)
         result = self.lib.set_position(device_id_internal_seq, ctypes.byref(pos_standa))
