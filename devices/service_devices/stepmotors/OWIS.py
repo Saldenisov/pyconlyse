@@ -157,9 +157,14 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
             if res:
                 res, comments = self._go_target_ps90(self.control_unit_id, axis.device_id_seq)
+
+            interrupted = False
             if res:
                 for i in range(1000):
-                    sleep(50. / 1000)
+                    sleep(30. / 1000)
+                    if axis.status != 2:
+                        interrupted = True
+                        break
                     res, com = self._get_pos_ex_ps90(self.control_unit_id, axis.device_id_seq)
                     if not isinstance(res, bool):
                         axis.position = res
@@ -169,6 +174,13 @@ class StpMtrCtrl_OWIS(StpMtrController):
                     else:
                         res, comments = False, join_smart_comments(f'During movement Axis={axis.friendly_name} '
                                                                    f'error has occurred.', com)
+
+                if not interrupted:
+                    res, comments = True, f'Movement of Axis with id={axis.device_id_internal_seq}, name={axis.friendly_name} ' \
+                                          f'was finished.'
+                else:
+                    return False, f'Movement of Axis with id={axis.device_id_internal_seq} was interrupted.'
+
                 if not res:
                     comments =join_smart_comments(comments, com)
 
@@ -239,7 +251,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
         return all(results), comments
 
     def _stop_axis(self, device_id: str) -> Tuple[bool, str]:
-        return self._stop_axis_ps90(self.control_unit_id, self.axes_stpmtr[device_id].device_id_internal_seq)
+        axis = self.axes_stpmtr[device_id]
+        return self._stop_axis_ps90(self.control_unit_id, axis.device_id_internal_seq)
 
     def _release_hardware(self) -> Tuple[bool, str]:
         for axis in self.axes_stpmtr.values():

@@ -6,7 +6,7 @@ from devices.service_devices.stepmotors import StpMtrController, StpMtrCtrl_TopD
 from utilities.datastructures.mes_independent.general import CmdStruct
 
 
-one_service = [stpmtr_Standa_test_non_fixture()]
+one_service = [stpmtr_OWIS_test_non_fixture()]
 #all_services = [stpmtr_a4988_4axes_test_non_fixture(), stpmtr_emulate_test_non_fixture(), stpmtr_Standa_test_non_fixture(), stpmtr_TopDirect_test_non_fixture()]
 test_param = one_service
 
@@ -128,7 +128,7 @@ def test_func_stpmtr(stpmtr: StpMtrController):
     # activate axis 1
     res: FuncActivateDeviceOutput = stpmtr.activate_device(ACTIVATE_AXIS1)
 
-    if not isinstance(stpmtr, StpMtrCtrl_Standa):
+    if not isinstance(stpmtr, StpMtrCtrl_Standa) and not isinstance(stpmtr, StpMtrCtrl_OWIS):
         # deactivate controller
         res: FuncActivateOutput = stpmtr.activate(DEACTIVATE)
         assert stpmtr.axes_stpmtr[first_axis].status == 0
