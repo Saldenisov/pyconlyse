@@ -18,6 +18,7 @@ module_logger = logging.getLogger(__name__)
 
 
 dev_mode = False
+time_ps_delay = 0.12
 
 
 class StpMtrCtrl_OWIS(StpMtrController):
@@ -161,8 +162,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
                 interrupted = False
                 if res:
-                    for i in range(500):
-                        sleep(0.1)
+                    for i in range(300):
                         if axis.status != 2:
                             interrupted = True
                             break
@@ -304,6 +304,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         par6 = ctypes.c_long(par6)
         # res x -1 is according official documentation
         res = self._PS90.PS90_Connect(control_unit, interface, port, baudrate, par3, par4, par5, par6) * -1
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -339,8 +340,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         control_unit = ctypes.c_long(control_unit)
         ser_num = ctypes.c_char_p(ser_num)
-
         res = self._PS90.PS90_SimpleConnect(control_unit, ser_num) * -1  # *-1 is according official documentation
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     def _convert_axis_state_format_ps90(self, axis_state_OWIS: int) -> int:
@@ -374,6 +375,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         """
         control_unit = ctypes.c_long(control_unit)
         res = self._PS90.PS90_Disconnect(control_unit)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -401,6 +403,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_FreeSwitch(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(3, 'DEV MODE'))
@@ -428,6 +431,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_GetAxisState(control_unit, axis)
+        sleep(time_ps_delay)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -459,6 +463,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         pitch = self.axes_stpmtr[axis].pitch
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_GetTargetEx(control_unit, axis) / 10000 * pitch
+        sleep(time_ps_delay)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -486,6 +491,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         pitch = self.axes_stpmtr[axis].pitch
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_GetPosition(control_unit, axis) / 10000 * pitch
+        sleep(time_ps_delay)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -514,6 +520,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_GetTargetMode(control_unit, axis)
+        sleep(time_ps_delay)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -543,13 +550,16 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_GoTarget(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def __get_read_error_ps90(self, control_unit: int) -> int:
         if not isinstance(control_unit, ctypes.c_long):
             control_unit = ctypes.c_long(control_unit)
-        return self._PS90.PS90_GetReadError(control_unit)
+        res = self._PS90.PS90_GetReadError(control_unit)
+        sleep(time_ps_delay)
+        return res
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _motor_init_ps90(self, control_unit: int, axis: int) -> Tuple[Union[bool, str]]:
@@ -571,6 +581,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_MotorInit(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is initialized')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -594,6 +605,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_MotorOn(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is on.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -617,6 +629,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_int(control_unit)
         axis = ctypes.c_int(axis)
         res = self._PS90.PS90_MotorOff(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is off.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -637,6 +650,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         control_unit = ctypes.c_long(control_unit)
         axis = ctypes.c_long(axis)
         res = self._PS90.PS90_Stop(control_unit, axis)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Axis {axis} movement is stopped.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -663,6 +677,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetLimitMinEx(control_unit, axis, value)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -689,6 +704,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetLimitMaxEx(control_unit, axis, value)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -697,6 +713,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         pos = ctypes.c_double(pos)
         res = self._PS90.PS90_SetPositionEx(control_unit, axis, pos)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -717,6 +734,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         res = self._PS90.PS90_SetPosMode(control_unit, axis, mode)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -743,6 +761,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         res = self._PS90.PS90_SetPosFEx(control_unit, axis, value)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -776,6 +795,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         inc_rev = ctypes.c_long(inc_rev)
         gear_ratio = ctypes.c_double(gear_ratio)
         res = self._PS90.PS90_SetStageAttributes(control_unit, axis, pitch, inc_rev, gear_ratio)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -799,6 +819,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         res = self._PS90.PS90_SetTargetMode(control_unit, axis, mode)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -824,6 +845,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_long(value)
         res = self._PS90.PS90_SetTarget(control_unit, axis, value)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -851,6 +873,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value / pitch)
         res = self._PS90.PS90_SetTargetEx(control_unit, axis, value)
+        sleep(time_ps_delay)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     def _error_OWIS_ps90(self, code: int, type: int, user_def='') -> str:
