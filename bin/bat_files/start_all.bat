@@ -1,4 +1,4 @@
-\call start_pdu_netio.bat
+call start_pdu_netio.bat
 ping -n 2 127.0.0.1 >NUL
 call start_server.bat
 ping -n 3 127.0.0.1 >NUL

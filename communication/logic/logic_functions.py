@@ -138,7 +138,7 @@ def task_in_reaction(event: ThinkerEvent):
 
                 if react:
                     thinker.react_external(msg)
-            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
+            except (ThinkerErrorReact, KeyError, RuntimeError, Exception) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
 
 
@@ -193,9 +193,13 @@ def pending_demands(event: ThinkerEvent):
                 for key, item in demands.items():
                     pending: PendingReply = item
                     if (time() - event.time) > event.tick and pending.attempt < 3:
-                        pending.attempt += 1
-                        info_msg(event, 'INFO', f'Msg {pending.message.id}, com {pending.message.com} waits '
-                                                f'{pending.attempt}.')
+                        try:
+                            pending = demands_waiting_reply[key]
+                            pending.attempt += 1
+                            info_msg(event, 'INFO', f'Msg {pending.message.id}, com {pending.message.com} waits '
+                                                    f'{pending.attempt}.')
+                        except Exception:
+                            print("1: HERE")
                     elif (time() - event.time) > event.tick and pending.attempt >= 3:
                         try:
                             msg = pending.message

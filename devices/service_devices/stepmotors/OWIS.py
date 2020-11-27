@@ -129,62 +129,67 @@ class StpMtrCtrl_OWIS(StpMtrController):
         :param how: absolute, relative
         :return: True/False, comments
         """
-        axis: OwisAxisStpMtr = self.axes_stpmtr[axis_id]
-        res, comments = self._change_device_status_local(axis, 2, True)
-        if res:
-            res, comments = self._get_target_mode_ps90(self.control_unit_id, axis.device_id_seq)
-            if isinstance(res, bool):
-                return res, comments
-            else:
-                how_local = 1 if how == 'absolute' else 0
-                if res != how_local:
-                    res, comments = self._set_target_mode_ps90(self.control_unit_id, axis.device_id_seq)
-                else:
-                    res, comments = True, ''
-
+        try:
+            axis: OwisAxisStpMtr = self.axes_stpmtr[axis_id]
+            res, comments = self._change_device_status_local(axis, 2, True)
             if res:
-                res, comments = self._set_target_ex_ps90(self.control_unit_id, axis.device_id_seq, go_pos)
-
-            if res:
-                res, comments = self._get_target_ex_ps90(self.control_unit_id, axis.device_id_seq)
+                res, comments = self._get_target_mode_ps90(self.control_unit_id, axis.device_id_seq)
                 if isinstance(res, bool):
                     return res, comments
                 else:
-                    if res != go_pos:
-                        res, comments = False, 'Target was not set correctly'
+                    how_local = 1 if how == 'absolute' else 0
+                    if res != how_local:
+                        res, comments = self._set_target_mode_ps90(self.control_unit_id, axis.device_id_seq)
                     else:
                         res, comments = True, ''
 
-            if res:
-                res, comments = self._go_target_ps90(self.control_unit_id, axis.device_id_seq)
+                if res:
+                    res, comments = self._set_target_ex_ps90(self.control_unit_id, axis.device_id_seq, go_pos)
 
-            interrupted = False
-            if res:
-                for i in range(1000):
-                    sleep(30. / 1000)
-                    if axis.status != 2:
-                        interrupted = True
-                        break
-                    res, com = self._get_pos_ex_ps90(self.control_unit_id, axis.device_id_seq)
-                    if not isinstance(res, bool):
-                        axis.position = res
-                        if abs(res - go_pos) <= 0.001:
-                            res, comments = True, f'Axis {axis.friendly_name} is stopped. Actual position is {res}'
-                            break
+                if res:
+                    res, comments = self._get_target_ex_ps90(self.control_unit_id, axis.device_id_seq)
+                    if isinstance(res, bool):
+                        return res, comments
                     else:
-                        res, comments = False, join_smart_comments(f'During movement Axis={axis.friendly_name} '
-                                                                   f'error has occurred.', com)
+                        if res != go_pos:
+                            res, comments = False, 'Target was not set correctly'
+                        else:
+                            res, comments = True, ''
 
-                if not interrupted:
-                    res, comments = True, f'Movement of Axis with id={axis.device_id_internal_seq}, name={axis.friendly_name} ' \
-                                          f'was finished.'
-                else:
-                    return False, f'Movement of Axis with id={axis.device_id_internal_seq} was interrupted.'
+                if res:
+                    res, comments = self._go_target_ps90(self.control_unit_id, axis.device_id_seq)
 
-                if not res:
-                    comments =join_smart_comments(comments, com)
+                interrupted = False
+                if res:
+                    for i in range(500):
+                        sleep(0.1)
+                        if axis.status != 2:
+                            interrupted = True
+                            break
+                        res, com = self._get_pos_ex_ps90(self.control_unit_id, axis.device_id_seq)
+                        if not isinstance(res, bool):
+                            axis.position = res
+                            if abs(res - go_pos) <= 0.001:
+                                res, comments = True, f'Axis {axis.friendly_name} is stopped. Actual position is {res}'
+                                break
+                        else:
+                            res, comments = False, join_smart_comments(f'During movement Axis={axis.friendly_name} '
+                                                                       f'error has occurred.', com)
 
-        res, comments = self._change_device_status_local(axis, 1, True)
+                    if not interrupted:
+                        res, comments = True, f'Movement of Axis with id={axis.device_id_internal_seq}, name={axis.friendly_name} ' \
+                                              f'was finished.'
+                    else:
+                        return False, f'Movement of Axis with id={axis.device_id_internal_seq} was interrupted.'
+
+                    if not res:
+                        comments = join_smart_comments(comments, com)
+
+            res, comments = self._change_device_status_local(axis, 1, True)
+        except Exception as e:
+            error_logger(self, self._move_axis_to, e)
+            res, comments = False, f'{e}'
+
         return res, comments
 
     def _set_pos_axis(self, device_id: Union[int, str], pos: float) -> Tuple[bool, str]:
