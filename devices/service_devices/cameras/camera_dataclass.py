@@ -57,6 +57,7 @@ class Transport_Layer(Controls):
 @dataclass(frozen=False)
 class Camera(HardwareDevice):
     matrix_size: Tuple[int] = field(default_factory=tuple)
+    tracking_pos: Tuple[int] = field(default_factory=tuple)
     parameters: Dict[str, Controls] = field(default_factory=dict)
     stpmtr_ctrl_id: str = ''
 

@@ -5,6 +5,7 @@ Created on 10 Jan 2017
 """
 from functools import wraps
 from typing import Any
+from time import sleep
 
 
 def development_mode(dev: bool, with_return: Any):
@@ -18,6 +19,17 @@ def development_mode(dev: bool, with_return: Any):
                     return with_return
         return inner
     return decorator_function
+
+
+def dll_lock_for_class(func):
+    @wraps(func)
+    def inner(self, *args, **kwargs):
+        self._dll_lock = True
+        res = func(self, *args, **kwargs)
+        self._dll_lock = False
+        sleep(0.1)
+        return res
+    return inner
 
 
 def make_loop(func):

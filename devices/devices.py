@@ -29,7 +29,7 @@ from communication.messaging.messages import (MessageInt, MessageExt, MsgComInt,
 from utilities.database.tools import db_create_connection, db_execute_select
 from utilities.datastructures.mes_independent.general import CmdStruct
 from utilities.errors.messaging_errors import MessengerError
-from utilities.errors.myexceptions import DeviceError
+from utilities.errors.myexceptions import DeviceError, DLLIsBlocked
 from utilities.configurations import configurationSD
 from utilities.myfunc import info_msg, unique_id, error_logger, join_smart_comments
 
@@ -370,7 +370,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             return gen_msg(self, msg_com, **kwargs)
 
-    def execute_com(self, msg: MessageExt):
+    def execute_com(self, msg: MessageExt, lock_func: Callable=None):
         error = False
         com: str = msg.info.com
         input: FuncInput = msg.info
@@ -390,6 +390,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             func_input_type = signature(f).parameters['func_input'].annotation
             if func_input_type == type(input):
                 try:
+                    if lock_func:
+                        lock_func(com)
                     result: FuncOutput = f(input)
                     if msg.forwarded_from != '':
                         forward_to = msg.forwarded_from
@@ -397,7 +399,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         forward_to = ''
                     msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=msg.sender_id, func_output=result,
                                               reply_to=msg.id, forward_to=forward_to)
-                except Exception as e:  # TODO: replace Exception
+                except (Exception, DLLIsBlocked) as e:  # TODO: replace Exception
                     error_logger(self, self.execute_com, e)
                     error = True
                     comments = str(e)
@@ -617,9 +619,6 @@ class Client(Device):
 
     def description(self) -> ClientDescription:
         # TODO: add functionality
-        pass
-
-    def execute_com(self, msg: MessageExt):
         pass
 
     def start(self):

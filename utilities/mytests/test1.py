@@ -1,20 +1,28 @@
-from dataclasses import dataclass
+from functools import wraps
 
-@dataclass
+
+def dll_lock(dll_containing_class):
+    def decorator_function(func):
+        @wraps(func)
+        def inner(*args, **kwargs):
+            dll_containing_class.lock = True
+            res = func(*args, **kwargs)
+            dll_containing_class.lock = False
+            return res
+        return inner
+    return decorator_function
+
+
 class A:
-    A: str
+    def __init__(self):
+        self.lock = 10
 
-@dataclass
-class B(A):
+a = A()
 
-    FIELD:str
-
-    def __init__(self, text:str, FIELD: str):
-        self.A = text
-        self.FIELD = FIELD
+@dll_lock(a)
+def f(c):
+    print(c)
 
 
-a = B(text='asdfsdf', FIELD=10)
-print(a)
-
-
+f(10)
+print(a.lock)
