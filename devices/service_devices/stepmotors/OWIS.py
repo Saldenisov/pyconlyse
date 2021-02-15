@@ -22,7 +22,7 @@ module_logger = logging.getLogger(__name__)
 
 
 dev_mode = False
-time_ps_delay = 0.12
+time_ps_delay = 0.05
 
 
 class StpMtrCtrl_OWIS(StpMtrController):
@@ -80,7 +80,6 @@ class StpMtrCtrl_OWIS(StpMtrController):
             res, comments_loc = self._motor_off_ps90(self.control_unit_id, axis.device_id_seq)
         elif flag == 2:
             res, comments_loc = self._motor_on_ps90(self.control_unit_id, axis.device_id_seq)
-
         if not res:
             comments = comments_loc
         return res, comments
@@ -93,10 +92,14 @@ class StpMtrCtrl_OWIS(StpMtrController):
         dll_path = str(Path(self._dirname / param['dll_path']))
         self._PS90 = ctypes.WinDLL(dll_path)
 
+    def destroy_dll_connection(self):
+        self._PS90 = None
+        self._dll_lock = False
+
     @dll_lock_for_class
     def _form_devices_list(self) -> Tuple[bool, str]:
-        self.create_dll_connection()
         param = self.get_parameters
+        self.create_dll_connection()
         res, comments = self._connect_ps90(self.control_unit_id, interface=param['interface'], port=param['com_port'],
                                            baudrate=param['baudrate'])
         if res:
@@ -172,8 +175,9 @@ class StpMtrCtrl_OWIS(StpMtrController):
                     if isinstance(res, bool):
                         return res, comments
                     else:
-                        if res != go_pos:
-                            res, comments = False, 'Target was not set correctly'
+                        if abs(res - go_pos) >= 0.001:
+                            res, comments = False, f'Target was not set correctly: ' \
+                                                   f'abs(res - go_pos)={abs(res - go_pos)}, pos={go_pos}, res={res}'
                         else:
                             res, comments = True, ''
 
@@ -186,7 +190,13 @@ class StpMtrCtrl_OWIS(StpMtrController):
                         if axis.status != 2:
                             interrupted = True
                             break
+                        t = (0.1 * abs(axis.position - go_pos))
+                        print(f'Sleep time 1: {t}')
+                        sleep(t)
                         res, com = self._get_pos_ex_ps90(self.control_unit_id, axis.device_id_seq)
+                        res = go_pos
+                        if com:
+                            comments = join_smart_comments(comments, com)
                         if not isinstance(res, bool):
                             axis.position = res
                             if abs(res - go_pos) <= 0.001:
@@ -195,21 +205,27 @@ class StpMtrCtrl_OWIS(StpMtrController):
                         else:
                             res, comments = False, join_smart_comments(f'During movement Axis={axis.friendly_name} '
                                                                        f'error has occurred.', com)
+                            break
 
+                if res:
                     if not interrupted:
-                        res, comments = True, f'Movement of Axis with id={axis.device_id_internal_seq}, name={axis.friendly_name} ' \
-                                              f'was finished.'
+                        res, comments = True, f'Movement of Axis with id={axis.device_id_internal_seq}, ' \
+                                              f'name={axis.friendly_name} was finished.'
                     else:
                         return False, f'Movement of Axis with id={axis.device_id_internal_seq} was interrupted.'
+            if not res:
+                _, com = self._change_device_status_local(axis, 1, True)
+                comments = join_smart_comments(comments, com)
+                return res, comments
+            else:
+                res, com = self._change_device_status_local(axis, 1, True)
 
-                    if not res:
-                        comments = join_smart_comments(comments, com)
-
-            res, comments = self._change_device_status_local(axis, 1, True)
+            if not res:
+                comments = join_smart_comments(comments, com)
         except Exception as e:
             error_logger(self, self._move_axis_to, e)
             res, comments = False, f'{e}'
-
+        print(res, comments)
         return res, comments
 
     @dll_lock_for_class
@@ -255,7 +271,8 @@ class StpMtrCtrl_OWIS(StpMtrController):
                 axis.revolution = revolution
                 axis.gear_ratio = gear_ratio
 
-                res, com = self._set_stage_attributes_ps90(self.control_unit_id, axis.device_id_seq, pitch/pitch, revolution,
+                res, com = self._set_stage_attributes_ps90(self.control_unit_id, axis.device_id_seq, pitch/pitch,
+                                                           revolution,
                                                            gear_ratio)
                 comments = join_smart_comments(comments, com)
                 if res:
@@ -516,11 +533,18 @@ class StpMtrCtrl_OWIS(StpMtrController):
         pitch = self.axes_stpmtr[axis].pitch
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
+        print('measuring pos....')
         res = self._PS90.PS90_GetPosition(control_unit, axis) / 10000 * pitch
+        print('measured pos....')
+        print('checking error....')
         error = self.__get_read_error_ps90(control_unit)
+        print('checked error....')
         if error != 0:
             res = False
-        return res, self._error_OWIS_ps90(error, 1)
+        print(f'result: {res}')
+        error = self._error_OWIS_ps90(error, 1)
+        print(f'error: {error}')
+        return res, error
 
     @development_mode(dev=dev_mode, with_return=(0.0, 'DEV MODE'))
     def _get_target_mode_ps90(self, control_unit: int, axis: int) -> Tuple[Union[float, bool, str]]:

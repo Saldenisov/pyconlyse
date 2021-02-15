@@ -27,7 +27,7 @@ def dll_lock_for_class(func):
         self._dll_lock = True
         res = func(self, *args, **kwargs)
         self._dll_lock = False
-        sleep(0.1)
+        sleep(0.001)
         return res
     return inner
 
