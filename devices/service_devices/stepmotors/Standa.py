@@ -247,7 +247,9 @@ class StpMtrCtrl_Standa(StpMtrController):
                            '00003D98': set(['microsteps', 'basic_unit']),
                            '00003D8F': set(['microsteps', 'basic_unit']),
                            '00003B1B': set(['microsteps', 'basic_unit']),
-                           '00003B37': set(['microsteps', 'basic_unit'])
+                           '00003B37': set(['microsteps', 'basic_unit']),
+                           '00003B20': set(['microsteps', 'basic_unit']),
+                           '00003B1C': set(['microsteps', 'basic_unit'])
                            }
         return super()._set_move_parameters_axes(must_have_param)
 
