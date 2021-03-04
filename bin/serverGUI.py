@@ -6,8 +6,8 @@ LCP/CNRS UMR8000 ELYSE platform
 import sys
 from pathlib import Path
 from PyQt5.QtWidgets import QApplication
-from gui.models import ServerGUIModel
-from gui.controllers import ServerGUIController
+from gui.models.ServerGUIModel import ServerGUIModel
+from gui.controllers.ServerGUIController import ServerGUIController
 from logs_pack import initialize_logger
 
 app_folder = Path(__file__).resolve().parents[1]
