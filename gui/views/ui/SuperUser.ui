@@ -56,7 +56,11 @@
          <number>10</number>
         </property>
         <item>
-         <widget class="QListWidget" name="lW_devices"/>
+         <widget class="QListWidget" name="lW_devices">
+          <property name="contextMenuPolicy">
+           <enum>Qt::CustomContextMenu</enum>
+          </property>
+         </widget>
         </item>
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout">
@@ -66,13 +70,6 @@
           <property name="bottomMargin">
            <number>10</number>
           </property>
-          <item>
-           <widget class="QPushButton" name="pB_checkServices">
-            <property name="text">
-             <string>Check Services</string>
-            </property>
-           </widget>
-          </item>
           <item>
            <widget class="QRadioButton" name="radioButton_hB">
             <property name="text">
@@ -84,6 +81,16 @@
            <widget class="QRadioButton" name="radioButton_hB2">
             <property name="text">
              <string/>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="comboBox_servers"/>
+          </item>
+          <item>
+           <widget class="QLabel" name="label_HB">
+            <property name="text">
+             <string>wait server reply...</string>
             </property>
            </widget>
           </item>
@@ -113,48 +120,11 @@
          <number>10</number>
         </property>
         <item>
-         <widget class="QPushButton" name="pB_connection">
+         <widget class="QPushButton" name="pB_checkServices">
           <property name="text">
-           <string>Create Connection</string>
+           <string>Check Services</string>
           </property>
          </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="chooseLayout">
-          <property name="sizeConstraint">
-           <enum>QLayout::SetMaximumSize</enum>
-          </property>
-          <property name="bottomMargin">
-           <number>0</number>
-          </property>
-          <item>
-           <widget class="QRadioButton" name="rB_window">
-            <property name="text">
-             <string>Window</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QRadioButton" name="rB_local">
-            <property name="text">
-             <string>Terminal</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <spacer name="horizontalSpacer">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-         </layout>
         </item>
         <item>
          <widget class="QTextEdit" name="tE_info"/>

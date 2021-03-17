@@ -7,9 +7,10 @@ import logging
 from datetime import datetime as dt
 from threading import Thread
 from time import sleep
-from PyQt5.QtWidgets import QMainWindow, QListWidgetItem
+from PyQt5.QtWidgets import QMainWindow, QListWidgetItem, QMenu
 
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
+from communication.messaging.messengers import PUB_Socket_Server
 from devices.devices import Server, Service, Client
 from gui.views.ui.SuperUser import Ui_SuperUser
 from devices.devices_dataclass import *
@@ -31,11 +32,14 @@ class SuperUserView(QMainWindow):
 
         self.ui = Ui_SuperUser()
         self.ui.setupUi(self)
+        for adr in self.controller.device.messenger.addresses[PUB_Socket_Server]:
+            self.ui.comboBox_servers.addItem(f'{adr}')
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
-        self.ui.pB_connection.clicked.connect(self.controller.create_service_gui)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
+        self.ui.lW_devices.customContextMenuRequested.connect(self.menuContextlW_devices)
+        self.ui.comboBox_servers.currentIndexChanged.connect(self.controller.server_update)
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         self.msg_vis_thread = Thread(target=self.update_msg_list)
@@ -46,11 +50,36 @@ class SuperUserView(QMainWindow):
         info_msg(self,'INFO', f'{self.name} is closing.')
         self.controller.quit_clicked(event, total_close=True)
 
+    def menuContextlW_devices(self, point):
+        index = self.ui.lW_devices.indexAt(point)
+        if not index.isValid():
+            return
+        menu = QMenu()
+        action_open_all = menu.addAction('Open All Services')
+        action_nothing = menu.addAction('Do nothing')
+
+        action = menu.exec_(self.ui.lW_devices.mapToGlobal(point))
+
+        if action:
+            if action == action_open_all:
+                for i in range(self.ui.lW_devices.count()):
+                    item = self.ui.lW_devices.item(i)
+                    item.setSelected(True)
+                    self.controller.lW_devices_double_clicked(item)
+                    sleep(0.1)
+            elif action == action_nothing:
+                pass
+
     def model_is_changed(self, msg: Union[MessageInt, MessageExt]):
         com = msg.com
         info = msg.info
         try:
             if com == MsgComInt.HEARTBEAT.msg_name:
+                addr = self.controller.device.connections[msg.sender_id].device_public_sockets[PUB_Socket_Server]
+                server_active_index = self.ui.comboBox_servers.findText(addr)
+                if server_active_index > 0:
+                    self.ui.comboBox_servers.setCurrentIndex(server_active_index)
+                self.ui.label_HB.setText(str(msg.info.event_n))
                 hB1 = self.ui.radioButton_hB
                 hB2 = self.ui.radioButton_hB2
                 hb_s = hB1.isChecked()
@@ -64,13 +93,7 @@ class SuperUserView(QMainWindow):
                     result: FuncAvailableServicesOutput = info
                     widget = self.ui.lW_devices
                     widget.clear()
-                    names = []
-                    for key, item in result.device_available_services.items():
-                        names.append(f'{key}')
-                        client = self.model.superuser
-                        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id, forward_to=key,
-                                                  func_input=FuncServiceInfoInput())
-                        client.send_msg_externally(msg)
+                    names = list(result.device_available_services.keys())
                     widget.addItems(names)
                     self.model.superuser.running_services = result.device_available_services
                 elif info.com == Service.SERVICE_INFO.name:
@@ -100,7 +123,6 @@ class SuperUserView(QMainWindow):
             id_msg_oldest = None
             oldest_time = older
             for msg_id, value in superuser._fyi_msg_dict.items():
-                a = timestamp_now - (value.time_creation - value.time_bonus)
                 if (timestamp_now - (value.time_creation - value.time_bonus)) > oldest_time:
                     id_msg_oldest = msg_id
                     oldest_time = value.time_creation - value.time_bonus

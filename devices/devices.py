@@ -80,10 +80,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
 
-        if 'id' not in kwargs:
-            self.id: DeviceId = f'{name}:{unique_id(name)}'
+        if 'device_id' not in kwargs:
+            self.device_id: DeviceId = f'{name}:{unique_id(name)}'
         else:
-            self.id: DeviceId = kwargs['id']
+            self.device_id: DeviceId = kwargs['device_id']
+
+        if 'id' not in kwargs:
+            raise DeviceError('Fatal error, id of device was not passed.')
+        else:
+            self.id = kwargs['id']
 
         try:
             assert len(self.cls_parts) == 2
@@ -287,11 +292,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     info = kwargs['func_output']
                 elif msg_com is MsgComExt.HEARTBEAT or msg_com is MsgComInt.HEARTBEAT:
                     event = kwargs['event']
-                    info = HeartBeat(device_id=self.id, event_n=event.n, event_id=event.id)
+                    info = HeartBeat(device_id=self.device_id, event_n=event.n, event_id=event.id)
                 elif msg_com is MsgComExt.HEARTBEAT_FULL:
                     event = kwargs['event']
                     info = HeartBeatFull(event_n=event.n, event_name=event.external_name, event_tick=event.tick,
-                                         event_id=event.id, device_id=self.id,
+                                         event_id=event.id, device_id=self.device_id,
                                          device_name=self.name, device_type=self.type,
                                          device_public_key=self.messenger.public_key,
                                          device_public_sockets=self.messenger.public_sockets)
@@ -300,11 +305,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                 elif msg_com is MsgComInt.DEVICE_INFO_INT:
                     info = DeviceInfoInt(active_connections=self.active_connections(),
                                          available_public_functions=self.available_public_functions(),
-                                         device_id=self.id,
-                                         device_status=self.controller_status, device_description=self.description(),
+                                         device_id=self.device_id,
+                                         device_status=self.ctrl_status, device_description=self.description(),
                                          events_running=list(self.thinker.events.name_id.keys()))
                 elif msg_com is MsgComExt.SHUTDOWN:
-                    info = ShutDown(device_id=self.id, reason=kwargs['reason'])
+                    info = ShutDown(device_id=self.device_id, reason=kwargs['reason'])
                 elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
                     try:
                         session_key = self.connections[kwargs['receiver_id']].session_key
@@ -325,12 +330,11 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         device_public_key_crypted = self.messenger.public_key
                     event = kwargs['event']
                     info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
-                                             event_id=event.id, device_id=self.id, device_name=self.name,
+                                             event_id=event.id, device_id=self.device_id, device_name=self.name,
                                              device_type=self.type, device_public_key=device_public_key_crypted,
                                              device_public_sockets=self.messenger.public_sockets)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
-                raise e
             finally:
                 if isinstance(msg_com, MsgComExt):
                     if msg_com.msg_type is MsgType.BROADCASTED:
@@ -381,10 +385,10 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
             do = True
         elif com not in self.available_public_functions_names:
             error = True
-            comments = f'com: {com} is not available for Service {self.id}. See {self.available_public_functions()}.'
+            comments = f'com: {com} is not available for Service {self.device_id}. See {self.available_public_functions()}.'
         elif not self.ctrl_status.active:
             error = True
-            comments = f'{self.id} is not active. Cannot execute command {com}.'
+            comments = f'{self.device_id} is not active. Cannot execute command {com}.'
         if do:
             f = getattr(self, com)
             func_input_type = signature(f).parameters['func_input'].annotation
@@ -405,7 +409,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     comments = str(e)
             else:
                 error = True
-                comments = f'Device {self.id} function: execute_com: Input type: {type(input)} do not match to ' \
+                comments = f'Device {self.device_id} function: execute_com: Input type: {type(input)} do not match to ' \
                            f'func_input type : {func_input_type}'
         if error:
             if msg.forwarded_from != '':
@@ -524,7 +528,7 @@ class Server(Device):
 
     def are_you_alive(self, func_input: FuncAliveInput) -> FuncAliveOutput:
         event = self.thinker.events['heartbeat']
-        return FuncAliveOutput(comments='', func_success=True, device_id=self.id, event_id=event.id, event_n=event.n)
+        return FuncAliveOutput(comments='', func_success=True, device_id=self.device_id, event_id=event.id, event_n=event.n)
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -549,7 +553,7 @@ class Server(Device):
 
     def get_available_services(self, func_input: FuncAvailableServicesInput) -> FuncAvailableServicesOutput:
         """Returns dict of available services {DeviceID: name}"""
-        return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.id,
+        return FuncAvailableServicesOutput(comments='', func_success=True,  device_id=self.device_id,
                                            device_available_services=self.available_services)
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
@@ -595,12 +599,7 @@ class Client(Device):
         kwargs['cls_parts'] = cls_parts
         # initialize_logger(app_folder / 'bin' / 'LOG', file_name=kwargs['name'])
         kwargs['type'] = DeviceType.CLIENT
-        # Every Client gets its parameters from SuperUser at this moment, thus its id changes to unique by adding ::
-        id = kwargs['id']
-        from random import randint
-        kwargs['id'] = f'{id}::{randint(0, 10)}::{randint(0,10)}'
         super().__init__(**kwargs)
-        self.server_id = self.get_settings('General')['server_id']
         self.device_status = DeviceControllerStatus(active=True, power=True)  # Power is always ON for client and it is active
 
     @property
@@ -630,6 +629,14 @@ class Client(Device):
     def set_default(self):
         pass
 
+    @property
+    def server_id(self) -> str:
+        connections = list(self.connections.values())
+        if connections:
+            connection_server = connections[0]
+            return connection_server.device_id
+        else:
+            return ''
 
 class Service(Device):
     ACTIVATE_DEVICE = CmdStruct(FuncActivateDeviceInput, FuncActivateDeviceOutput)
@@ -950,9 +957,9 @@ class Service(Device):
         pass
 
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
-        service_info = ControllerInfoExt(device_id=self.id, device_description=self.description(),
+        service_info = ControllerInfoExt(device_id=self.device_id, device_description=self.description(),
                                          controller_status=self.ctrl_status)
-        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.id, service_info=service_info)
+        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.device_id, service_info=service_info)
 
     def _set_number_hardware_devices(self):
         if self.ctrl_status.connected:
@@ -1021,6 +1028,8 @@ class DeviceFactory:
                 kwargs['thinker_cls'] = thinker_class
                 kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
                 kwargs['id'] = device_id
+                from random import randint
+                kwargs['device_id'] = f'{device_id}:{randint(0,100)}:{randint(0, 100)}'
                 kwargs['type'] = type
                 if issubclass(cls, Device):
                     return cls(**kwargs)

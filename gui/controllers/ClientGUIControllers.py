@@ -7,10 +7,12 @@ Created on 15.11.2019
 import logging
 import os
 from pathlib import Path
-
+from time import sleep
 from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 
 from communication.messaging.messages import MessageExt, MsgComExt
+from communication.messaging.messengers import PUB_Socket_Server
+from utilities.errors.myexceptions import DeviceError
 from devices.devices import Device
 from gui.views.ClientsGUIViews.Cameras import CamerasView
 from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
@@ -86,8 +88,6 @@ class SuperClientGUIcontroller():
         except KeyError as e:
             error_logger(self, self.create_service_gui,
                          f'Parameters for service id={service_id} was not loaded: {e}')
-        except Exception as e:
-            error_logger(self, self.create_service_gui, e)
 
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
@@ -95,7 +95,6 @@ class SuperClientGUIcontroller():
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
         client = self.device
-
         msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
                                   forward_to=service_id,
                                   func_input=FuncServiceInfoInput())
@@ -107,12 +106,31 @@ class SuperClientGUIcontroller():
                                   func_input=FuncAvailableServicesInput())
         client.send_msg_externally(msg)
 
+    def server_update(self):
+        selected_index = self.view.ui.comboBox_servers.currentIndex()
+        selected_addr = self.view.ui.comboBox_servers.itemText(selected_index)
+        connections = list(self.device.connections.values())
+        active_server_pub_addr = ''
+        if connections:
+            connection: Connection = connections[0]
+            active_server_pub_addr = connection.device_public_sockets[PUB_Socket_Server]
+        if selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and \
+                selected_addr != active_server_pub_addr:
+            self.view.ui.label_HB.setText(f'Trying to connect {selected_addr}...wait')
+            self.device.stop()
+            sleep(1)
+            self.model.superuser = None
+            self.model.create_device()
+            self.device = self.model.superuser
+            self.device.messenger.pref_server_pub_addr = selected_addr
+            self.device.start()
+
     def quit_clicked(self, event, total_close=False):
         if total_close:
             try:
                 self.view._state_observing = False
                 self.device.stop()
-            except Exception as e:  # TODO something reasonable
+            except DeviceError as e:
                 error_logger(self, self.quit_clicked, f'{self.name}: {e}')
             info_msg(self, 'INFO', 'SuperClientGUI is closing.')
             QApplication.quit()

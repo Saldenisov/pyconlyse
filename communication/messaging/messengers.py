@@ -64,7 +64,7 @@ class Messenger(MessengerInter):
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
-        self.id: DeviceId = parent.id
+        self.id: DeviceId = parent.device_id
         self.parent: Device = parent
         try:
             self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
@@ -148,8 +148,10 @@ class Messenger(MessengerInter):
                     receiver_id = self.parent.server_id
                 fernet = self.create_fernet(self.parent.connections[receiver_id].session_key)
                 return fernet.encrypt(msg.byte_repr(compression=False))
-            except (KeyError, ValueError):
-                raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
+            except KeyError as e:
+                raise MessengerError(f'DeviceID is not known, cannot encrypt msg: {e}')
+            except ValueError as e:
+                raise MessengerError(f'{e}')
         else:
             return msg.byte_repr(compression=False)
 
@@ -266,13 +268,19 @@ class Messenger(MessengerInter):
         self.parent.ctrl_status.messaging_paused = self.paused
         self._msg_out.clear()
 
-    def subscribe_sub(self, address=None, filter_opt=b""):
+    def subscribe_sub(self, address, filter_opt=b""):
+        """
+        Function that created subscribtion connection to a given tcp_ip address
+        :param address: tcp_ip adress of subscriber socket
+        :param filter_opt: filter phrase
+        :return:
+        """
         try:
             self.sockets[SUB_Socket].connect(address)
             self.sockets[SUB_Socket].setsockopt(zmq.SUBSCRIBE, filter_opt)
             self.sockets[SUB_Socket].setsockopt(zmq.RCVHWM, 3)
             self.logger.info(f'socket sub is connected to {address}')
-        except (zmq.ZMQError, Exception) as e:
+        except zmq.ZMQError as e:
             error_logger(self, self.subscribe_sub, e)
 
     @abstractmethod
@@ -296,6 +304,7 @@ class ClientMessenger(Messenger):
         super().__init__(**kwargs)
         if self.pub_option:
             self.socket_names.add(PUB_Socket)
+        self.pref_server_pub_addr = self.addresses[PUB_Socket_Server][0]
 
     def _create_sockets(self):
         try:
@@ -317,7 +326,6 @@ class ClientMessenger(Messenger):
                 publisher.setsockopt_unicode(zmq.IDENTITY, f'{self.id}:{self.addresses[PUB_Socket]}')
                 self.sockets[PUB_Socket] = publisher
                 self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
-
 
             # POLLER
             self.poller = zmq.Poller()
@@ -457,34 +465,39 @@ class ClientMessenger(Messenger):
             wait = False
         i = 0
         msg_out = None
+        preferential_server_sub = self.pref_server_pub_addr
+        trying_find_preferential = 0
         while wait and self.active:
             if i > 100:
                 info_msg(self, 'INFO', f'{self.name} could not connect to server, no sockets, '
-                                       f'try to restart {self.parent.name}')
+                                       f'try to restart {self.parent.name} OR check Server.')
                 i = 0
             i += 1
             sockets = dict(self.poller.poll(100))
             if self.sockets[SUB_Socket] in sockets:
                 mes, crypted = self.sockets[SUB_Socket].recv_multipart()
-                # TODO: decrypt message safely with try except
-                msg: MessageExt = bytes_to_msg(mes)
-                # TODO: first heartbeat could be received only from server! make it safe
-                if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
-                    try:
+                try:
+                    msg: MessageExt = bytes_to_msg(mes)
+                    if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
                         info: HeartBeatFull = msg.info
                         sockets = info.device_public_sockets
-                        if FRONTEND_Server in sockets and BACKEND_Server in sockets:
-                            #TODO: need to check if it true SERVER using password or certificate
-                            info_msg(self, 'INFO', f'{msg.short()}')
-                            info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
-                            self.addresses[FRONTEND_Server] = sockets[FRONTEND_Server]
-                            self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
-                            msg_out = msg
-                            break
-                        else:
-                            raise MessengerError(f'Not all sockets are sent to {self.name}')
-                    except (AttributeError, MessengerError) as e:  # IN case when short Heartbeat arrived
-                        error_logger(self, self._wait_server_hb, e)
+                        trying_find_preferential += 1
+                        info_msg(self, 'INFO', f'Waiting server {preferential_server_sub}. '
+                                               f'Attempt {trying_find_preferential}')
+                        if preferential_server_sub == sockets[PUB_Socket_Server] or trying_find_preferential > 3:
+
+                            if FRONTEND_Server in sockets and BACKEND_Server in sockets:
+                                # TODO: need to check if it true SERVER using password or certificate
+                                info_msg(self, 'INFO', f'{msg.short()}')
+                                info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
+                                self.addresses[FRONTEND_Server] = sockets[FRONTEND_Server]
+                                self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
+                                msg_out = msg
+                                break
+                            else:
+                                error_logger(self, self._wait_server_hb, f'Not all sockets are sent to {self.name}')
+                except (AttributeError, KeyError, MessengerError, MessageError) as e:
+                    error_logger(self, self._wait_server_hb, e)
         return msg_out
 
 

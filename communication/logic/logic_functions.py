@@ -111,7 +111,7 @@ def task_in_reaction(event: ThinkerEvent):
                         thinker.parent.signal.emit(msg_int)
 
                     info_msg(event, 'INFO', f'Received: {msg.short()}.')
-                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.id \
+                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.device_id \
                             and msg.com != MsgComExt.SHUTDOWN.msg_name:
                         # If message is not a reply or forward, it must be a demand one
                         thinker.add_demand_waiting_reply(msg)

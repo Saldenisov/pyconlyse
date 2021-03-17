@@ -14,10 +14,10 @@ from logs_pack import initialize_logger
 
 
 def init(device_id: str, db_name: str, test=False):
-    service = DeviceFactory.make_device(device_id=device_id,
+    device = DeviceFactory.make_device(device_id=device_id,
                                         db_path=Path(Path(app_folder) / 'utilities' / 'database' / db_name))
 
-    service.start()
+    device.start()
 
 
 if __name__ == "__main__":

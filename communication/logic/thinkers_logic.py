@@ -21,7 +21,7 @@ class GeneralCmdLogic(Thinker):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
         self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
-                            event_id=f'heartbeat:{self.parent.id}')
+                            event_id=f'heartbeat:{self.parent.device_id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
         self.connections = self.parent.connections
 
@@ -81,10 +81,10 @@ class GeneralCmdLogic(Thinker):
         elif msg.forward_to:
             self.react_forward(msg)
         # When the message is dedicated to Device
-        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.id and not msg.forward_to:
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.device_id and not msg.forward_to:
             self.react_directed(msg)
         # For Server
-        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.id:
+        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.device_id:
             self.react_first_welcome(msg)
         else:
             pass  # TODO: that I do not know what it is...add MsgError
@@ -131,7 +131,6 @@ class GeneralCmdLogic(Thinker):
 
         sleep(0.2)  # Give time to start event
 
-        self.parent.server_id = msg.info.device_id
         self.parent.connections[DeviceId(msg.info.device_id)] = Connection(**param)
         event = self.events['heartbeat']
         msg_welcome = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE,
@@ -143,8 +142,8 @@ class GeneralCmdLogic(Thinker):
             if event.counter_timeout > self.timeout:
                 if self.parent.messenger.attempts_to_restart_sub > 0:
                     self.parent.messenger.attempts_to_restart_sub -= 1
-                    info_msg(self, 'INFO', 'Server is away...trying to restart sub socket. '
-                                           'Attempts left {self.parent.messenger._attempts_to_restart_sub}.')
+                    info_msg(self, 'INFO', f'Server is away...trying to restart sub socket. '
+                                           f'Attempts left {self.parent.messenger._attempts_to_restart_sub}.')
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     event.counter_timeout = 0
                     addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
@@ -214,7 +213,7 @@ class ServerCmdLogic(GeneralCmdLogic):
 
     def react_forward(self, msg: MessageExt):
         if msg.forward_to in self.parent.connections:
-            msg_r = msg.copy(sender_id=self.parent.id, receiver_id=msg.forward_to, forward_to='',
+            msg_r = msg.copy(sender_id=self.parent.device_id, receiver_id=msg.forward_to, forward_to='',
                              forwarded_from=msg.sender_id, id=msg.id)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.ERROR,
