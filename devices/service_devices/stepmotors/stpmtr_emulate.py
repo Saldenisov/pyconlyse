@@ -1,9 +1,10 @@
 import logging
 from time import sleep
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Dict, Set
 
+from devices.service_devices.stepmotors.stpmtr_dataclass import EmulateAxisStpMtr, absolute
+from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
-from devices.service_devices.stepmotors.stpmtr_dataclass import absolute
 
 module_logger = logging.getLogger(__name__)
 
@@ -15,24 +16,33 @@ info = 'info'
 class StpMtrCtrl_emulate(StpMtrController):
 
     def __init__(self, **kwargs):
+        kwargs['stpmtr_dataclass'] = EmulateAxisStpMtr
         super().__init__(**kwargs)
+        self._hardware_devices: Dict[int, EmulateAxisStpMtr] = HardwareDeviceDict()
 
     def _connect(self, flag: bool) -> Tuple[bool, str]:
         return super()._connect(flag)
 
-    def _change_axis_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._check_status_flag(flag)
-        if res:
-            if self.axes_stpmtr[axis_id].status != 2 or force:
-                self.axes_stpmtr[axis_id].status = flag
-                res, comments = True, ''
-            else:
-                res, comments = False, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is running, ' \
-                                       f'its status cannot be changed. First stop it.'
-        return res, comments
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        return True, ''
+
+    def _form_devices_list(self) -> Tuple[bool, str]:
+        return True, ''
+
+    def _get_number_hardware_devices(self) -> int:
+        return 4
 
     def _check_if_active(self) -> Tuple[bool, str]:
         return super()._check_if_active()
+
+    def _get_position_axis(self, device_id: Union[int, str]) -> Tuple[bool, str]:
+        return True, ''
+
+    def _set_move_parameters_axes(self, must_have_param: Dict[int, Set[str]] = None):
+        pass
+
+    def _set_pos_axis(self, axis_id: int, pos: Union[int, float]) -> Tuple[bool, str]:
+        pass
 
     def _check_if_connected(self) -> Tuple[bool, str]:
         return super()._check_if_connected()

@@ -66,8 +66,8 @@ def internal_hb_logic(event: ThinkerEvent):
         sleep(0.001)
         if not event.paused:
             event.n += 1
-            if full_heartbeat and event.n % 3:
-                # TODO: every n minutes changes session_key for safety...
+            if full_heartbeat and event.n % 3 and device.type is DeviceType.SERVER:
+                # TODO: every n minutes changes session_key for safety...that is crazy
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
             else:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)

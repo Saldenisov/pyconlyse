@@ -200,6 +200,7 @@ class WelcomeInfoDevice:
     event_id: str
     event_name: str
     event_tick: float
+    certificate: bytes = b''
     password_checksum: bytes = b''
 
 
@@ -212,6 +213,7 @@ class WelcomeInfoServer:
     """
     password_checksum: bytes = b''
     session_key: bytes = b''
+    certificate: bytes = b''
 
 
 @dataclass(frozen=True, order=True)
@@ -350,3 +352,4 @@ class Connection(DataClass_unfrozen):
     session_key: bytes = b''
     permission: Permission = Permission.DENIED
     password_checksum: bytes = b''
+    certificate: bytes = b''

@@ -11,6 +11,7 @@ from devices.devices import Server
 from devices.service_devices.pdu.pdu_controller import PDUController
 from devices.devices_dataclass import Connection
 from utilities.myfunc import info_msg, error_logger
+from utilities.errors.myexceptions import DeviceError
 
 module_logger = logging.getLogger(__name__)
 
@@ -24,16 +25,25 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.device_id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
         self.connections = self.parent.connections
+        self.reacting_heartbeat = False
 
     def react_broadcast(self, msg: MessageExt):
-        if msg.com == MsgComExt.HEARTBEAT.msg_name:
+        if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
             try:
+                t = time()
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = msg.info.event_n
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg.ext_to_int())
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
+            finally:
+                self.parent.active_servers[msg.sender_id] = t
+                for key, value in self.parent.active_servers.items():
+                    if (value - t) > 3:
+                        del self.parent.active_servers[key]
+                print(self.parent.active_servers)
+
 
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
@@ -72,10 +82,10 @@ class GeneralCmdLogic(Thinker):
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if not msg.receiver_id and msg.sender_id in self.connections:
+        if not msg.receiver_id and msg.com != MsgComExt.HEARTBEAT_FULL.msg_name:
             self.react_broadcast(msg)
         # Only works for non-Server devices, since only Server emits MsgComExt.HEARTBEAT_FULL
-        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
+        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and not self.connections:
             self.react_heartbeat_full(msg)
         # Forwarding message. Applicable only for SERVER at this moment
         elif msg.forward_to:
@@ -99,19 +109,28 @@ class GeneralCmdLogic(Thinker):
             info: WelcomeInfoServer = msg.info
             # Decrypt public_key of device crypted on device side with public key of Server
             info.session_key = messenger.decrypt_with_private(info.session_key)
+            info.certificate = messenger.decrypt_with_private(info.certificate)
             server_connection = self.connections[msg.sender_id]
-            # TODO: Actually check AccessLevel and Permission using password checksum
-            server_connection.session_key = info.session_key
-            server_connection.access_level = AccessLevel.FULL
-            server_connection.permission = Permission.GRANTED
-            self.parent.send_status_pyqt()
-            info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
+            certificates_db = self.parent.messenger.get_certificate(self.parent.server_id)
+            if info.certificate in certificates_db:
+                server_connection.session_key = info.session_key
+                server_connection.access_level = AccessLevel.FULL
+                server_connection.permission = Permission.GRANTED
+                self.parent.send_status_pyqt()
+                info_msg(self, 'INFO', f'Handshake with Server is accomplished. Session_key is obtained.')
             # power the Service controller
-            if hasattr(self.parent, 'power'):
-                self.parent.power(func_input=FuncPowerInput(flag=True))
-                if self.parent.ctrl_status.power:
-                    self.parent.activation()
-        except Exception as e:  # TODO: change Exception to something reasonable
+                if hasattr(self.parent, 'power'):
+                    self.parent.power(func_input=FuncPowerInput(flag=True))
+                    if self.parent.ctrl_status.power:
+                        self.parent.activation()
+            else:
+                del self.connections[msg.sender_id]
+                raise DeviceError("Server's certificate error")
+        except DeviceError:
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'Your Certificate is '
+                                                                               f'Wrong Dear Server.',
+                                             receiver_id=msg.sender_id, reply_to=msg.id)
+        except Exception as e:
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
             error_logger(self, self.react_first_welcome, msg_r)
@@ -143,7 +162,7 @@ class GeneralCmdLogic(Thinker):
                 if self.parent.messenger.attempts_to_restart_sub > 0:
                     self.parent.messenger.attempts_to_restart_sub -= 1
                     info_msg(self, 'INFO', f'Server is away...trying to restart sub socket. '
-                                           f'Attempts left {self.parent.messenger._attempts_to_restart_sub}.')
+                                           f'Attempts left {self.parent.messenger.attempts_to_restart_sub}.')
                     info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
                     event.counter_timeout = 0
                     addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
@@ -182,32 +201,40 @@ class ServerCmdLogic(GeneralCmdLogic):
             info: WelcomeInfoDevice = msg.info
             # Decrypt public_key of device crypted on device side with public key of Server
             info.device_public_key = messenger.decrypt_with_private(info.device_public_key)
-            connections = self.parent.connections
-            param = {}
-            for field_name in info.__annotations__:
-                param[field_name] = getattr(info, field_name)
-            # TODO: Actually check AccessLevel and Permission using password checksum
-            param['access_level'] = AccessLevel.FULL
-            param['permission'] = Permission.GRANTED
-            connections[info.device_id] = Connection(**param)
-            connections[info.device_id].device_type = DeviceType(connections[info.device_id].device_type)
+            info.certificate = messenger.decrypt_with_private(info.certificate)
+            connections = self.connections
+            certificate_db = self.parent.messenger.get_certificate(info.device_id)
+            if certificate_db == info.certificate:
+                param = {}
+                for field_name in info.__annotations__:
+                    param[field_name] = getattr(info, field_name)
+                # TODO: Actually check AccessLevel and Permission using password checksum
+                param['access_level'] = AccessLevel.FULL
+                param['permission'] = Permission.GRANTED
+                connections[info.device_id] = Connection(**param)
+                connections[info.device_id].device_type = DeviceType(connections[info.device_id].device_type)
 
-            if PUB_Socket in info.device_public_sockets:
-                from communication.logic.logic_functions import external_hb_logic
-                messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
-                self.register_event(name=f'heartbeat:{info.device_name}:{info.device_id[-10:]}',
-                                    logic_func=external_hb_logic,
-                                    event_id=f'heartbeat:{info.device_id}',
-                                    original_owner=info.device_id,
-                                    start_now=True)
-            session_key = messenger.gen_symmetric_key(info.device_id)
-            self.parent.connections[info.device_id].session_key = session_key
-            msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
-                                             receiver_id=msg.sender_id)
-            self.parent.send_status_pyqt()
-        except Exception as e:  # TODO: change Exception to something reasonable
-            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
+                if PUB_Socket in info.device_public_sockets:
+                    from communication.logic.logic_functions import external_hb_logic
+                    messenger.subscribe_sub(address=info.device_public_sockets[PUB_Socket])
+                    self.register_event(name=f'heartbeat:{info.device_name}:{info.device_id[-10:]}',
+                                        logic_func=external_hb_logic,
+                                        event_id=f'heartbeat:{info.device_id}',
+                                        original_owner=info.device_id,
+                                        start_now=True)
+                session_key = messenger.gen_symmetric_key(info.device_id)
+                self.parent.connections[info.device_id].session_key = session_key
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
+                                                 receiver_id=msg.sender_id)
+                self.parent.send_status_pyqt()
+            else:
+                del self.connections[msg.sender_id]
+                raise DeviceError("Devices's certificate error")
+        except DeviceError:
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'Your Certificate is '
+                                                                               f'Wrong Dear {info.device_id}.',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
+            error_logger(self, self.react_first_welcome, msg_r)
         finally:
             self.msg_out(msg_r)
 

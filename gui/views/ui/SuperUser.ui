@@ -85,7 +85,11 @@
            </widget>
           </item>
           <item>
-           <widget class="QComboBox" name="comboBox_servers"/>
+           <widget class="QComboBox" name="comboBox_servers">
+            <property name="contextMenuPolicy">
+             <enum>Qt::CustomContextMenu</enum>
+            </property>
+           </widget>
           </item>
           <item>
            <widget class="QLabel" name="label_HB">

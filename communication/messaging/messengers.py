@@ -168,6 +168,14 @@ class Messenger(MessengerInter):
                                                      backend=default_backend())
         self._public_key = self._private_key.public_key()
 
+    def get_certificate(self, device_id: str) -> bytes:
+        """
+        Function that gives certificate for authentification of devices from local safe DB.
+        :param device_id: can be anything even self.id
+        :return: certificate in bytes
+        """
+        return b'Elys3!icp'
+
     @abstractmethod
     def info(self):
         from collections import OrderedDict as od
@@ -401,7 +409,7 @@ class ClientMessenger(Messenger):
             msg = self._wait_server_hb()
             if self.active:
                 self.connect()
-                self.parent.thinker.react_heartbeat_full(msg)
+                self.parent.thinker.add_task_in(msg)
                 info_msg(self, 'STARTED')
                 self._receive_msgs()
         except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
@@ -485,7 +493,6 @@ class ClientMessenger(Messenger):
                         info_msg(self, 'INFO', f'Waiting server {preferential_server_sub}. '
                                                f'Attempt {trying_find_preferential}')
                         if preferential_server_sub == sockets[PUB_Socket_Server] or trying_find_preferential > 3:
-
                             if FRONTEND_Server in sockets and BACKEND_Server in sockets:
                                 # TODO: need to check if it true SERVER using password or certificate
                                 info_msg(self, 'INFO', f'{msg.short()}')

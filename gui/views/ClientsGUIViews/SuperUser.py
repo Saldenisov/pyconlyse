@@ -39,7 +39,7 @@ class SuperUserView(QMainWindow):
         self.model.model_changed.connect(self.model_is_changed)
         self.ui.lW_devices.itemDoubleClicked.connect(self.controller.lW_devices_double_clicked)
         self.ui.lW_devices.customContextMenuRequested.connect(self.menuContextlW_devices)
-        self.ui.comboBox_servers.currentIndexChanged.connect(self.controller.server_update)
+        self.ui.comboBox_servers.customContextMenuRequested.connect(self.menuContextServers)
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
         self.msg_vis_thread = Thread(target=self.update_msg_list)
@@ -49,6 +49,22 @@ class SuperUserView(QMainWindow):
     def closeEvent(self, event):
         info_msg(self,'INFO', f'{self.name} is closing.')
         self.controller.quit_clicked(event, total_close=True)
+
+    def menuContextServers(self, point):
+       #index = self.ui.comboBox_servers.indexAt(point)
+        #if not index.isValid():
+            #return
+        menu = QMenu()
+        action_connect = menu.addAction('Connect')
+        action_disconnect= menu.addAction('Disconnect')
+
+        action = menu.exec_(self.ui.comboBox_servers.mapToGlobal(point))
+
+        if action:
+            if action == action_connect:
+                self.controller.server_change(True)
+            elif action == action_disconnect:
+                self.controller.server_change(False)
 
     def menuContextlW_devices(self, point):
         index = self.ui.lW_devices.indexAt(point)
@@ -76,10 +92,7 @@ class SuperUserView(QMainWindow):
         try:
             if com == MsgComInt.HEARTBEAT.msg_name:
                 addr = self.controller.device.connections[msg.sender_id].device_public_sockets[PUB_Socket_Server]
-                server_active_index = self.ui.comboBox_servers.findText(addr)
-                if server_active_index > 0:
-                    self.ui.comboBox_servers.setCurrentIndex(server_active_index)
-                self.ui.label_HB.setText(str(msg.info.event_n))
+                self.ui.label_HB.setText(f'{addr} :: {msg.info.event_n}')
                 hB1 = self.ui.radioButton_hB
                 hB2 = self.ui.radioButton_hB2
                 hb_s = hB1.isChecked()

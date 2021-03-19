@@ -106,7 +106,7 @@ class SuperClientGUIcontroller():
                                   func_input=FuncAvailableServicesInput())
         client.send_msg_externally(msg)
 
-    def server_update(self):
+    def server_change(self, connect=True):
         selected_index = self.view.ui.comboBox_servers.currentIndex()
         selected_addr = self.view.ui.comboBox_servers.itemText(selected_index)
         connections = list(self.device.connections.values())
@@ -114,12 +114,26 @@ class SuperClientGUIcontroller():
         if connections:
             connection: Connection = connections[0]
             active_server_pub_addr = connection.device_public_sockets[PUB_Socket_Server]
-        if selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and \
-                selected_addr != active_server_pub_addr:
-            self.view.ui.label_HB.setText(f'Trying to connect {selected_addr}...wait')
+
+        if not connect and self.device.connections:
+            self.view.ui.label_HB.setText(f'Disconnecting from {selected_addr}...wait')
+            sleep(1)
             self.device.stop()
             sleep(1)
             self.model.superuser = None
+            self.view.ui.label_HB.setText(f'Disconnected from {selected_addr}')
+
+        if selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and \
+                selected_addr != active_server_pub_addr and connect:
+            self.device.stop()
+            self.model.superuser = None
+            self.model.create_device()
+            self.device = self.model.superuser
+            self.device.messenger.pref_server_pub_addr = selected_addr
+            self.device.start()
+
+        elif selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and connect:
+            self.view.ui.label_HB.setText(f'Trying to connect {selected_addr}...wait')
             self.model.create_device()
             self.device = self.model.superuser
             self.device.messenger.pref_server_pub_addr = selected_addr

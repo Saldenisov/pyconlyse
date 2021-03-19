@@ -50,6 +50,7 @@ class Ui_SuperUser(object):
         self.radioButton_hB2.setObjectName("radioButton_hB2")
         self.horizontalLayout.addWidget(self.radioButton_hB2)
         self.comboBox_servers = QtWidgets.QComboBox(self.centralwidget)
+        self.comboBox_servers.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.comboBox_servers.setObjectName("comboBox_servers")
         self.horizontalLayout.addWidget(self.comboBox_servers)
         self.label_HB = QtWidgets.QLabel(self.centralwidget)

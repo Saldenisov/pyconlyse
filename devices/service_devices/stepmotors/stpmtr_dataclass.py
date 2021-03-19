@@ -134,6 +134,11 @@ class AxisStpMtr(HardwareDevice):
 
 
 @dataclass(frozen=False)
+class EmulateAxisStpMtr(AxisStpMtr):
+    pass
+
+
+@dataclass(frozen=False)
 class A4988AxisStpMtr(AxisStpMtr):
     pass
 

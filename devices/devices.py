@@ -80,15 +80,17 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
 
-        if 'device_id' not in kwargs:
-            self.device_id: DeviceId = f'{name}:{unique_id(name)}'
-        else:
-            self.device_id: DeviceId = kwargs['device_id']
-
         if 'id' not in kwargs:
             raise DeviceError('Fatal error, id of device was not passed.')
         else:
             self.id = kwargs['id']
+
+
+        if self.type != Service:
+            from random import randint
+            self.device_id = f'{self.id}:{randint(0, 100)}:{randint(0, 100)}'
+        else:
+            self.device_id: DeviceId = self.id
 
         try:
             assert len(self.cls_parts) == 2
@@ -314,25 +316,36 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     try:
                         session_key = self.connections[kwargs['receiver_id']].session_key
                         device_public_key = self.connections[kwargs['receiver_id']].device_public_key
-                        # Session key Server-Device is crypted with device public key, message is not crypted
+                        # Session key Server-Device and certificate of Server is crypted with device public key,
+                        # message is not crypted
                         session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
-                    except KeyError:
+                        certificate_crypted = self.messenger.encrypt_with_public(self.messenger.get_certificate(
+                            device_id=kwargs['receiver_id']), device_public_key)
+                    except KeyError as e:
+                        error_logger(self, self.generate_msg, f'session_key_crypted cannot be formed: {e}')
                         session_key_crypted = b''
+                        certificate_crypted = b''
                     finally:
-                        info = WelcomeInfoServer(session_key=session_key_crypted)
+                        info = WelcomeInfoServer(session_key=session_key_crypted,
+                                                 certificate=certificate_crypted)
                 elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
                     try:
                         server_public_key = self.connections[self.server_id].device_public_key
                         pub_key = self.messenger.public_key
                         device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
                                                                                        server_public_key)
-                    except KeyError:
+                        certificate_crypted = self.messenger.encrypt_with_public(self.messenger.get_certificate(
+                            device_id=self.server_id), server_public_key)
+                    except KeyError as e:
+                        error_logger(self, self.generate_msg, f'device_public_key_crypted cannot be formed: {e}')
                         device_public_key_crypted = self.messenger.public_key
+                        certificate_crypted = b''
                     event = kwargs['event']
                     info = WelcomeInfoDevice(event_name=event.external_name, event_tick=event.tick,
                                              event_id=event.id, device_id=self.device_id, device_name=self.name,
                                              device_type=self.type, device_public_key=device_public_key_crypted,
-                                             device_public_sockets=self.messenger.public_sockets)
+                                             device_public_sockets=self.messenger.public_sockets,
+                                             certificate=certificate_crypted)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
             finally:
@@ -498,6 +511,15 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     def send_status_pyqt(self):
         pass
 
+    @property
+    def server_id(self) -> str:
+        connections = list(self.connections.values())
+        if connections:
+            connection_server = connections[0]
+            return connection_server.device_id
+        else:
+            return ''
+
     def send_msg_externally(self, msg: MessageExt):
         self.thinker.add_task_out(msg)
 
@@ -580,6 +602,10 @@ class Server(Device):
     def set_default(self):
         pass
 
+    @property
+    def server_id(self) -> str:
+        return self.device_id
+
 
 class Client(Device):
     """
@@ -601,6 +627,7 @@ class Client(Device):
         kwargs['type'] = DeviceType.CLIENT
         super().__init__(**kwargs)
         self.device_status = DeviceControllerStatus(active=True, power=True)  # Power is always ON for client and it is active
+        self.active_servers = {}
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -629,14 +656,6 @@ class Client(Device):
     def set_default(self):
         pass
 
-    @property
-    def server_id(self) -> str:
-        connections = list(self.connections.values())
-        if connections:
-            connection_server = connections[0]
-            return connection_server.device_id
-        else:
-            return ''
 
 class Service(Device):
     ACTIVATE_DEVICE = CmdStruct(FuncActivateDeviceInput, FuncActivateDeviceOutput)
@@ -660,7 +679,6 @@ class Service(Device):
             raise DeviceError(self, 'DB_command is not defined.')
         kwargs['type'] = DeviceType.SERVICE
         super().__init__(**kwargs)
-        self.server_id: DeviceId = self.get_settings('General')['server_id']  # must be here
         self._hardware_device_dataclass = kwargs['hardware_device_dataclass']
         self._hardware_devices: Dict[Union[int, str], HardwareDevice] = HardwareDeviceDict()
         self.power_settings: PowerSettings = PowerSettings()
@@ -1028,8 +1046,6 @@ class DeviceFactory:
                 kwargs['thinker_cls'] = thinker_class
                 kwargs['db_command'] = f'SELECT parameters from DEVICES_settings where device_id = "{device_id}"'
                 kwargs['id'] = device_id
-                from random import randint
-                kwargs['device_id'] = f'{device_id}:{randint(0,100)}:{randint(0, 100)}'
                 kwargs['type'] = type
                 if issubclass(cls, Device):
                     return cls(**kwargs)

@@ -178,7 +178,8 @@ def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind(('', port))  # Try to open com_port
+        ip = get_local_ip()
+        s.bind((f'{ip}', port))  # Try to open com_port
         s.close()
         return False
     except OSError:
@@ -214,7 +215,7 @@ def get_free_port(scope: Tuple[int, str] = (), exclude: List[int] = []):
 def verify_port(port: str, exclude=[]):
     if ':' in port:
         ports = tuple(port.split(':'))
-        return get_free_port(scope=ports,exclude=exclude)
+        return get_free_port(scope=ports, exclude=exclude)
     else:
         port = int(port)
         if test_local_port(port) or port in exclude:

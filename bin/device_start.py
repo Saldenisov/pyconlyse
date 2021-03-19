@@ -29,7 +29,6 @@ if __name__ == "__main__":
                     'server_test': ['Server:Main:sfqvtyjsdf23qa23xcvTEST', 'Devices.db'],
                     'a4988_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
                     'stpmtr_emulate': ['StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', 'Devices.db'],
-                    '∟': ['StpMtrCtrl_OWIS:b161e87bee35bc4160f2dfeef63ef058', 'Devices.db'],
                     'project_default': ['ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada', 'Devices.db'],
                     'stpmtr_standa': ['StpMtrCtrl_Standa:b7257a502aef1d55485fc8ea403ac573', 'Devices.db'],
                     'topdirect': ['StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c', 'Devices.db'],
@@ -57,8 +56,8 @@ if __name__ == "__main__":
                     device_id = preselection[device_name][0]
                     db = preselection[device_name][1]
                     init(device_id=device_id, db_name=db, test=test)
-        except (KeyError, IndexError):
-            raise Exception(f'Not enough arguments were passed: {sys.argv}')
+        except (KeyError, IndexError) as e:
+            raise Exception(f'{e}')
 
     if '-id' in sys.argv and '-db' in sys.argv:
         test = False
