@@ -177,6 +177,7 @@ def get_local_ip() -> str:
 def test_local_port(port):
     # https://docs.python.org/2/library/socket.html#example
     try:
+        sleep(0.05)
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ip = get_local_ip()
         s.bind((f'{ip}', port))  # Try to open com_port

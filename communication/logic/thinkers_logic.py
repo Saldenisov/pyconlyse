@@ -28,9 +28,21 @@ class GeneralCmdLogic(Thinker):
         self.reacting_heartbeat = False
 
     def react_broadcast(self, msg: MessageExt):
+        def process_servers(self, msg):
+            if self.parent.type != DeviceType.SERVER:
+                t = time()
+                self.parent.active_servers[msg.sender_id] = t
+                print(self.parent.active_servers)
+                keys = []
+                for key, value in self.parent.active_servers.items():
+                    if (t - value) > 3:
+                        keys.append(key)
+                if keys:
+                    for key in keys:
+                        del self.parent.active_servers[key]
+
         if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
             try:
-                t = time()
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = msg.info.event_n
                 if self.parent.pyqtsignal_connected:
@@ -38,12 +50,9 @@ class GeneralCmdLogic(Thinker):
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
             finally:
-                self.parent.active_servers[msg.sender_id] = t
-                for key, value in self.parent.active_servers.items():
-                    if (value - t) > 3:
-                        del self.parent.active_servers[key]
-                print(self.parent.active_servers)
-
+                process_servers(self, msg)
+        elif msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id not in self.connections:
+            process_servers(self, msg)
 
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
