@@ -50,7 +50,7 @@ class Thinker(ThinkerInter):
             from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands)
             self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
             self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
-            self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
+            #self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
             info_msg(self, 'CREATED')
         except (ThinkerEventError, ThinkerEventFuncError, TypeError) as e:
             error_logger(self, self.register_event, e)

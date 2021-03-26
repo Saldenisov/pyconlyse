@@ -29,10 +29,9 @@ class GeneralCmdLogic(Thinker):
 
     def react_broadcast(self, msg: MessageExt):
         def process_servers(self, msg):
-            if self.parent.type != DeviceType.SERVER:
+            if self.parent.type == DeviceType.CLIENT:
                 t = time()
                 self.parent.active_servers[msg.sender_id] = t
-                print(self.parent.active_servers)
                 keys = []
                 for key, value in self.parent.active_servers.items():
                     if (t - value) > 3:

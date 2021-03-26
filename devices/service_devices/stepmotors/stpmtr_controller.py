@@ -188,9 +188,11 @@ class StpMtrController(Service):
         try:
             move_parameters = self.get_main_device_parameters['move_parameters']
             move_parameters: dict = eval(move_parameters)
+            for_all = True if 'ALL' in must_have_param else False
             for device_id, value in move_parameters.items():
-                if device_id in self.axes_stpmtr and device_id in must_have_param:
-                        if set(must_have_param[device_id]).intersection(value.keys()) != set(must_have_param[device_id]):
+                if device_id in self.axes_stpmtr and (device_id in must_have_param or for_all):
+                        di = 'ALL' if for_all else device_id
+                        if set(must_have_param[di]).intersection(value.keys()) != set(must_have_param[di]):
                             raise StpMtrError(self,
                                               text=f'Not all must have parameters "{must_have_param}" for device_id '
                                                    f'{device_id} are present in DB.')
@@ -227,7 +229,8 @@ class StpMtrController(Service):
 
                         axis.move_parameters = value
             return True, ''
-        except KeyError:
+        except KeyError as e:
+            error_logger(self, self._set_move_parameters_axes, e)
             raise StpMtrError(self, text=f'move_parameters are absent in DB for {self.name}.')
         except SyntaxError as e:
             raise StpMtrError(self, text=f'move_parameters error during eval: {e}.')

@@ -85,8 +85,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         else:
             self.id = kwargs['id']
 
-
-        if self.type != Service:
+        if self.type != DeviceType.SERVICE:
             from random import randint
             self.device_id = f'{self.id}:{randint(0, 100)}:{randint(0, 100)}'
         else:

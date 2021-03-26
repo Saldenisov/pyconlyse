@@ -102,7 +102,6 @@ def task_in_reaction(event: ThinkerEvent):
         if not event.paused and tasks_in:
             msg: MessageExt = tasks_in.popitem(last=False)[1]
             thinker.msg_counter += 1
-            react = True
             try:
                 if msg.com not in exclude_msgs:
                     if thinker.parent.pyqtsignal_connected:
@@ -111,33 +110,7 @@ def task_in_reaction(event: ThinkerEvent):
                         thinker.parent.signal.emit(msg_int)
 
                     info_msg(event, 'INFO', f'Received: {msg.short()}.')
-                    if (not msg.reply_to and not msg.forward_to) and msg.receiver_id == thinker.parent.device_id \
-                            and msg.com != MsgComExt.SHUTDOWN.msg_name:
-                        # If message is not a reply or forward, it must be a demand one
-                        thinker.add_demand_waiting_reply(msg)
-                        info_msg(event, 'INFO', f'Expect a reply to {msg.id} com={msg.com}. Adding to waiting list.')
-
-                    elif msg.reply_to and not msg.forward_to:
-                        if msg.reply_to in thinker.demands_waiting_reply:
-                            # TODO: should it have else clause or not?
-                            msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
-                            del thinker.demands_waiting_reply[msg.reply_to]
-                            info_msg(event, 'INFO', f'REPLY to Msg {msg.reply_to} {msg_awaited.com} is obtained.')
-                        elif msg.reply_to == 'delayed_response':
-                            pass
-                        else:
-                            react = False
-                            info_msg(event, 'INFO', f'Reply to msg {msg.reply_to} arrived too late.')
-                    elif msg.forward_to:
-                        info_msg(event, 'INFO', f'Message {msg.short()} is forwarded.')
-                    elif msg.com == MsgComExt.SHUTDOWN.msg_name:
-                        pass
-                    else:
-                        react = False
-                        info_msg(event, 'INFO', f'STRANGE Message: {msg}')
-
-                if react:
-                    thinker.react_external(msg)
+                thinker.react_external(msg)
             except (ThinkerErrorReact, KeyError, RuntimeError, Exception) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
 
@@ -154,23 +127,12 @@ def task_out_reaction(event: ThinkerEvent):
             try:
                 if tasks_out:
                     msg: MessageExt = tasks_out.popitem(last=False)[1]
-                    react = True
-                    if msg.receiver_id and not msg.reply_to:
-                        # If msg is not reply, than add to pending demand
-                        info_msg(event, 'INFO', f'Msg id={msg.id}, com {msg.com} is considered to get a reply.')
-                        thinker.add_demand_waiting_reply(msg)
-                    elif msg.reply_to:
-                        if msg.reply_to in demand_waiting_reply:
-                            msg_awaited: MessageExt = thinker.demands_waiting_reply[msg.reply_to].message
-                            del demand_waiting_reply[msg.reply_to]
-                            info_msg(event, 'INFO', f'Msg id={msg.reply_to} {msg_awaited.com} is deleted '
-                                                    f'from demand_waiting_reply.')
-                    if react:
-                        if thinker.parent.pyqtsignal_connected:
-                            # Convert MessageExt to MessageInt and emit it
-                            msg_int = msg.fyi()
-                            thinker.parent.signal.emit(msg_int)
-                        thinker.parent.messenger.add_msg_out(msg)
+
+                    if thinker.parent.pyqtsignal_connected:
+                        # Convert MessageExt to MessageInt and emit it
+                        msg_int = msg.fyi()
+                        thinker.parent.signal.emit(msg_int)
+                    thinker.parent.messenger.add_msg_out(msg)
 
                 if tasks_out_publisher:
                     msg: MessageExt = tasks_out_publisher.popitem(last=False)[1]
