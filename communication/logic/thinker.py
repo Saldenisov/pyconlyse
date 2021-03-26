@@ -29,28 +29,26 @@ class Thinker(ThinkerInter):
         self.events = Events_Dict()
         msg_dict_size_limit = 50
         self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
+        # TODO: do I need this test thing
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit,
                                             dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
-                                              dict_parent=self)
+        self._demands_on_reply = MsgDict(name='demands_on_reply', size_limit=msg_dict_size_limit,
+                                         dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
         try:
             self.timeout = int(self.parent.get_general_settings()['timeout'])
-            pending_demands_tick = float(self.parent.get_general_settings()['pending_demands']) / 1000.
         except KeyError as e:
             error_logger(self, self.__init__, e)
             self.timeout = 10
-            pending_demands_tick = 0.2
         try:
-            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands)
+            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction)
             self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
             self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
-            #self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
             info_msg(self, 'CREATED')
         except (ThinkerEventError, ThinkerEventFuncError, TypeError) as e:
             error_logger(self, self.register_event, e)
@@ -80,11 +78,11 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
 
-    def add_demand_waiting_reply(self, msg: MessageExt):
+    def add_demand_on_reply(self, msg: MessageExt):
         try:
-            self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
+            self._demands_on_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
-            error_logger(self, self.add_demand_waiting_reply, e)
+            error_logger(self, self.add_demand_on_reply, e)
 
     def flush_tasks(self):
         self._tasks_in.clear()
@@ -146,15 +144,20 @@ class Thinker(ThinkerInter):
                 raise ThinkerEventError(e)
 
     @property
-    def demands_waiting_reply(self) -> MsgDict:
-        return self._demands_waiting_reply
+    def demands_on_reply(self) -> MsgDict:
+        return self._demands_on_reply
 
-    @abstractmethod
-    def react_external(self, msg: MessageExt):
-        pass
 
     @abstractmethod
     def react_broadcast(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_denied(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_external(self, msg: MessageExt):
         pass
 
     @abstractmethod
@@ -163,10 +166,6 @@ class Thinker(ThinkerInter):
 
     @abstractmethod
     def react_first_welcome(self, msg: MessageExt):
-        pass
-
-    @abstractmethod
-    def react_heartbeat_full(self, msg: MessageExt):
         pass
 
     @abstractmethod

@@ -7,7 +7,6 @@ from communication.messaging.messages import MessageExt
 @dataclass(order=True)
 class PendingDemand:
     message: MessageExt
-    attempt: int = 0
     time: float = time()
 
 

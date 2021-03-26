@@ -80,21 +80,10 @@ def internal_hb_logic(event: ThinkerEvent):
             sleep(event.tick)
 
 
-def internal_info_logic(event: ThinkerEvent):
-    # TODO: why I need it?
-    thinker: Thinker = event.parent
-    device = thinker.parent
-    info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    while event.active:
-        sleep(0.001)
-        if not event.paused:
-            sleep(event.tick)
-            # TODO': requires update
-
-
 def task_in_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_in: MsgDict = thinker.tasks_in
+    demand_on_reply: MsgDict = thinker.demands_on_reply
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
@@ -108,8 +97,11 @@ def task_in_reaction(event: ThinkerEvent):
                         # Convert MessageExt to MessageInt and emit it
                         msg_int = msg.fyi()
                         thinker.parent.signal.emit(msg_int)
-
-                    info_msg(event, 'INFO', f'Received: {msg.short()}.')
+                    if msg.reply_to in demand_on_reply:
+                        text = 'Received reply'
+                    else:
+                        text = 'Received'
+                    info_msg(event, 'INFO', f'{text}: {msg.short()}')
                 thinker.react_external(msg)
             except (ThinkerErrorReact, KeyError, RuntimeError, Exception) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
@@ -119,7 +111,7 @@ def task_out_reaction(event: ThinkerEvent):
     thinker: Thinker = event.parent
     tasks_out: MsgDict = thinker.tasks_out
     tasks_out_publisher: MsgDict = thinker.tasks_out_publihser
-    demand_waiting_reply: MsgDict = thinker.demands_waiting_reply
+    demand_on_reply: MsgDict = thinker.demands_on_reply
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
     while event.active:
         sleep(0.001)
@@ -127,12 +119,13 @@ def task_out_reaction(event: ThinkerEvent):
             try:
                 if tasks_out:
                     msg: MessageExt = tasks_out.popitem(last=False)[1]
+                    thinker.add_demand_on_reply(msg)
+                    thinker.parent.messenger.add_msg_out(msg)
 
                     if thinker.parent.pyqtsignal_connected:
                         # Convert MessageExt to MessageInt and emit it
                         msg_int = msg.fyi()
                         thinker.parent.signal.emit(msg_int)
-                    thinker.parent.messenger.add_msg_out(msg)
 
                 if tasks_out_publisher:
                     msg: MessageExt = tasks_out_publisher.popitem(last=False)[1]
@@ -140,47 +133,3 @@ def task_out_reaction(event: ThinkerEvent):
 
             except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_out_reaction, f'{e}: {msg.short()}')
-
-
-def pending_demands(event: ThinkerEvent): 
-    thinker: Thinker = event.parent
-    demands_waiting_reply: MsgDict = thinker.demands_waiting_reply
-    info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    while event.active:
-        sleep(0.001)
-        if not event.paused and demands_waiting_reply:
-            try:
-                sleep(event.tick)
-                demands = deepcopy(dict(demands_waiting_reply.items()))
-                for key, item in demands.items():
-                    pending: PendingReply = item
-                    if (time() - event.time) > event.tick and pending.attempt < 3:
-                        try:
-                            pending = demands_waiting_reply[key]
-                            pending.attempt += 1
-                            info_msg(event, 'INFO', f'Msg {pending.message.id}, com {pending.message.com} waits '
-                                                    f'{pending.attempt}.')
-                        except Exception:
-                            print("1: HERE")
-                    elif (time() - event.time) > event.tick and pending.attempt >= 3:
-                        try:
-                            msg = pending.message
-                            del demands_waiting_reply[key]
-                            i_msg(event, 'INFO', f'Reply timeout for msg: {msg.short()}.')
-                            i_msg(event, 'INFO', f'Msg {msg.id} is deleted.')
-                        except KeyError:
-                            error_logger(event, pending_demands, f'Cannot delete Msg {msg.id}, com {msg.com} from '
-                                                                 f'demand_waiting_reply')
-            except (ThinkerErrorReact, RuntimeError) as e:
-                error_logger(event, pending_demands, e)
-
-
-def postponed_reaction(replier: Callable[[MessageExt], None], reaction: MessageExt, t: float=1.0, logger=None):
-    # TODO: why it is needed in the first place?
-    def f():
-        if logger:
-            logger.info(f'Postponed_reaction for {reaction.short()} started')
-        sleep(t)
-        replier(reaction)
-    trd = Thread(target=f)
-    trd.start()

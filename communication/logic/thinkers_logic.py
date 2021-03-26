@@ -1,4 +1,5 @@
 import logging
+from abc import abstractmethod
 from time import time, sleep
 from typing import Union
 from communication.logic.thinker import Thinker, ThinkerEvent
@@ -17,7 +18,7 @@ module_logger = logging.getLogger(__name__)
 
 
 class GeneralCmdLogic(Thinker):
-    
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
@@ -25,21 +26,8 @@ class GeneralCmdLogic(Thinker):
                             event_id=f'heartbeat:{self.parent.device_id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
         self.connections = self.parent.connections
-        self.reacting_heartbeat = False
 
     def react_broadcast(self, msg: MessageExt):
-        def process_servers(self, msg):
-            if self.parent.type == DeviceType.CLIENT:
-                t = time()
-                self.parent.active_servers[msg.sender_id] = t
-                keys = []
-                for key, value in self.parent.active_servers.items():
-                    if (t - value) > 3:
-                        keys.append(key)
-                if keys:
-                    for key in keys:
-                        del self.parent.active_servers[key]
-
         if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
             try:
                 self.events[msg.info.event_id].time = time()
@@ -48,10 +36,17 @@ class GeneralCmdLogic(Thinker):
                     self.parent.signal.emit(msg.ext_to_int())
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
-            finally:
-                process_servers(self, msg)
-        elif msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id not in self.connections:
-            process_servers(self, msg)
+
+    @abstractmethod
+    def react_external(self, msg: MessageExt):
+        # TODO: add decision on permission
+        if not msg.receiver_id and msg.com != MsgComExt.HEARTBEAT_FULL.msg_name:
+            self.react_broadcast(msg)
+        # When the message is dedicated to Device
+        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.device_id and not msg.forward_to:
+            self.react_directed(msg)
+        else:
+            pass  # TODO: that I do not know what it is...add MsgError
 
     def react_directed(self, msg: MessageExt):
         if self.parent.pyqtsignal_connected:
@@ -61,7 +56,7 @@ class GeneralCmdLogic(Thinker):
         msg_r = None
         if msg.com == MsgComExt.DO_IT.msg_name:
             if not self.parent.add_to_executor(self.parent.execute_com, msg=msg):
-                self.logger.error(f'Adding to executor {msg.info} failed')
+                self.logger.error(f'Adding to executor {msg.info} failed.')
         elif msg.com == MsgComExt.DONE_IT.msg_name:
             info: Union[DoneIt, MsgError] = msg.info
             if info.com == Server.ALIVE.name:
@@ -80,32 +75,31 @@ class GeneralCmdLogic(Thinker):
                     self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
                     if hasattr(self.parent, 'activation'):
                         self.parent.activation()
-        elif msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
-            self.react_first_welcome(msg)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
             self.remove_device_from_connections(msg.sender_id)
             self.parent.send_status_pyqt()
         self.msg_out(msg_r)
 
-    def react_external(self, msg: MessageExt):
-        # TODO: add decision on permission
-        # HEARTBEATS and SHUTDOWNS...maybe something else later
-        if not msg.receiver_id and msg.com != MsgComExt.HEARTBEAT_FULL.msg_name:
-            self.react_broadcast(msg)
-        # Only works for non-Server devices, since only Server emits MsgComExt.HEARTBEAT_FULL
-        elif msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and not self.connections:
-            self.react_heartbeat_full(msg)
-        # Forwarding message. Applicable only for SERVER at this moment
-        elif msg.forward_to:
-            self.react_forward(msg)
-        # When the message is dedicated to Device
-        elif msg.sender_id in self.connections and msg.receiver_id == self.parent.device_id and not msg.forward_to:
-            self.react_directed(msg)
-        # For Server
-        elif msg.sender_id not in self.connections and msg.receiver_id == self.parent.device_id:
+
+class GeneralNonServerCmdLogic(GeneralCmdLogic):
+    
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.reacting_heartbeat = False
+
+    def react_denied(self, msg: MessageExt):
+        pass
+
+    def react_directed(self, msg: MessageExt):
+        super().react_directed(msg)
+
+        if msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
-        else:
-            pass  # TODO: that I do not know what it is...add MsgError
+
+    def react_external(self, msg: MessageExt):
+        super().react_external(msg)
+        if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and not self.connections:
+            self.react_heartbeat_full(msg)
 
     def react_forward(self, msg: MessageExt):
         pass
@@ -202,6 +196,14 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_denied(self, msg: MessageExt):
         pass
 
+    def react_external(self, msg: MessageExt):
+        if msg.sender_id not in self.connections and msg.receiver_id == self.parent.device_id:
+            self.react_first_welcome(msg)
+        elif msg.forward_to:
+            self.react_forward(msg)
+
+        super().react_external(msg)
+
     def react_first_welcome(self, msg: MessageExt):
         msg_r = None
         try:
@@ -259,12 +261,31 @@ class ServerCmdLogic(GeneralCmdLogic):
     def react_internal(self, event: ThinkerEvent):
         if 'heartbeat' in event.name:
             if event.counter_timeout > self.timeout:
-                info_msg(self, 'INFO', 'Service was away for too long...deleting info about service')
+                info_msg(self, 'INFO', f'Service {event.original_owner} was away for too long. Deleting it.')
                 self.remove_device_from_connections(event.original_owner)
                 self.parent.send_status_pyqt()
 
 
-class SuperUserClientCmdLogic(GeneralCmdLogic):
+class SuperUserClientCmdLogic(GeneralNonServerCmdLogic):
+
+    def react_broadcast(self, msg: MessageExt):
+        def process_servers(self, msg):
+            t = time()
+            self.parent.active_servers[msg.sender_id] = t
+            keys = []
+            for key, value in self.parent.active_servers.items():
+                if (t - value) > 3:
+                    keys.append(key)
+            if keys:
+                for key in keys:
+                    del self.parent.active_servers[key]
+
+        super().react_broadcast(msg)
+
+        if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
+            process_servers(self, msg)
+        elif msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id not in self.connections:
+            process_servers(self, msg)
 
     def react_first_welcome(self, msg: MessageExt):
         super().react_first_welcome(msg)
@@ -274,7 +295,7 @@ class SuperUserClientCmdLogic(GeneralCmdLogic):
         self.msg_out(msg)
 
 
-class ServiceCmdLogic(GeneralCmdLogic):
+class ServiceCmdLogic(GeneralNonServerCmdLogic):
     pass
 
 
