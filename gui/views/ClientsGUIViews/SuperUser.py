@@ -91,7 +91,8 @@ class SuperUserView(QMainWindow):
         info = msg.info
         try:
             if com == MsgComInt.HEARTBEAT.msg_name:
-                addr = self.controller.device.connections[msg.sender_id].device_public_sockets[PUB_Socket_Server]
+                connections = self.controller.device.messenger.connections
+                addr = connections[msg.sender_id].device_public_sockets[PUB_Socket_Server]
                 self.ui.label_HB.setText(f'{addr} :: {msg.info.event_n}')
                 hB1 = self.ui.radioButton_hB
                 hB2 = self.ui.radioButton_hB2
@@ -103,12 +104,13 @@ class SuperUserView(QMainWindow):
             elif com == MsgComInt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
                 if info.com == Server.GET_AVAILABLE_SERVICES.name:
-                    result: FuncAvailableServicesOutput = info
                     widget = self.ui.lW_devices
                     widget.clear()
-                    names = list(result.device_available_services.keys())
+                    names = []
+                    for services in self.model.superuser.running_services.values():
+                        for service_id in services.keys():
+                            names.append(service_id)
                     widget.addItems(names)
-                    self.model.superuser.running_services = result.device_available_services
                 elif info.com == Service.SERVICE_INFO.name:
                     info: FuncServiceInfoOutput = info
                     self.model.service_parameters[info.device_id] = info.service_info
@@ -123,7 +125,6 @@ class SuperUserView(QMainWindow):
                 priority_dict = {MsgComInt.HEARTBEAT.msg_name: 1, MsgComInt.ERROR.msg_name: 5,
                                  MsgComInt.DONE_IT.msg_name: 3, MsgComInt.DEVICE_INFO_INT.msg_name: 4}
                 superuser._fyi_msg_dict[msg.id] = msg
-
 
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')

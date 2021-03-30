@@ -45,8 +45,9 @@ class StepMotorsView(DeviceControllerView):
         if axis_id is None:
             axis_id = int(self.ui.spinBox_device_id.value())
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id,
                                   func_input=FuncGetPosInput(axis_id))
         self.send_msg(msg)
         if with_return:
@@ -56,8 +57,9 @@ class StepMotorsView(DeviceControllerView):
         try:
             axis_pos = float(self.ui.lineEdit_value.text())
             client = self.superuser
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                      forward_to=self.service_parameters.device_id,
+            service_id = self.service_parameters.device_id
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                      forward_to=service_id,
                                       func_input=FuncSetPosInput(self.selected_device_id, axis_pos, self._get_unit()))
             self.send_msg(msg)
         except (TypeError, ValueError) as e:
@@ -76,8 +78,9 @@ class StepMotorsView(DeviceControllerView):
         try:
             pos = float(self.ui.lineEdit_value.text())
             client = self.superuser
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                      forward_to=self.service_parameters.device_id,
+            service_id = self.service_parameters.device_id
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                      forward_to=service_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id, pos=pos, how=how,
                                                                      move_type=self._get_unit()))
             self.send_msg(msg)
@@ -121,8 +124,9 @@ class StepMotorsView(DeviceControllerView):
 
     def stop_axis(self):
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id,
                                   func_input=FuncStopAxisInput(axis_id=self.selected_device_id))
         self.send_msg(msg)
         self._asked_status = 0

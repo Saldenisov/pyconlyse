@@ -77,7 +77,7 @@ class MsgDict(OrderedDict):
                 element: MessageExt = self.popitem(last=False)[1]  # Remove first element
                 if self.dict_parent:
                     info_msg(self.dict_parent, 'INFO', f'Limit size={self.size_limit} was exceeded for {self.name}, '
-                                                       f'first element {element[1].short()} was removed')
+                                                       f'first element {element.short()} was removed')
 
 
 class OrderedDictMesTypeCounter(OrderedDict):

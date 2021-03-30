@@ -4,6 +4,7 @@ from threading import Thread
 from time import time
 from typing import Callable, List, Union
 
+from devices.devices import DeviceType
 from communication.interfaces import ThinkerInter
 from communication.messaging.messages import MessageExt, MsgComExt
 from utilities.datastructures.mes_dependent.dicts import Events_Dict, MsgDict
@@ -177,14 +178,19 @@ class Thinker(ThinkerInter):
         pass
 
     def remove_device_from_connections(self, device_id):
-        # TODO: the service_info is not deleted from _frontend sockets or backend sockets
-        connections = self.parent.connections
-        if device_id in connections:
+        if device_id in self.connections:
             info_msg(self, 'INFO', f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
-            del self.parent.connections[device_id]
+            del self.connections[device_id]
+
+            if self.parent.type == DeviceType.SERVER:
+                if device_id in self.parent.messenger._frontendpool:
+                    self.parent.messenger._frontendpool.remove(device_id)
+                elif device_id in self.parent.messenger._backendpool:
+                    self.parent.messenger._backendpool.remove(device_id)
+
             info_msg(self, 'INFO', f'Device {device_id} is deleted')
         else:
             error_logger(self, self.remove_device_from_connections,

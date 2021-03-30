@@ -1,28 +1,24 @@
-from functools import wraps
+import zmq
+from time import sleep
+
+context = zmq.Context()
+dealer1 = context.socket(zmq.DEALER)
+dealer1.setsockopt_unicode(zmq.IDENTITY, "dealer")
+dealer1.connect('tcp://129.175.100.70:5556')
+
+dealer2 = context.socket(zmq.DEALER)
+dealer2.setsockopt_unicode(zmq.IDENTITY, "dealer")
+dealer2.connect('tcp://129.175.100.70:5557')
 
 
-def dll_lock(dll_containing_class):
-    def decorator_function(func):
-        @wraps(func)
-        def inner(*args, **kwargs):
-            dll_containing_class.lock = True
-            res = func(*args, **kwargs)
-            dll_containing_class.lock = False
-            return res
-        return inner
-    return decorator_function
+poller = zmq.Poller()
+poller.register(dealer1, zmq.POLLIN)
+poller.register(dealer2, zmq.POLLIN)
 
 
-class A:
-    def __init__(self):
-        self.lock = 10
-
-a = A()
-
-@dll_lock(a)
-def f(c):
-    print(c)
-
-
-f(10)
-print(a.lock)
+i = 0
+while True:
+    sleep(1)
+    i += 1
+    dealer1.send(f'Dealer1:{i}'.encode('utf-8'))
+    dealer2.send(f'XXX2:{i}'.encode('utf-8'))

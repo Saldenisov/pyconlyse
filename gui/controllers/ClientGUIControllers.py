@@ -95,16 +95,16 @@ class SuperClientGUIcontroller():
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=service_id,
-                                  func_input=FuncServiceInfoInput())
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id, func_input=FuncServiceInfoInput())
         client.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  func_input=FuncAvailableServicesInput())
-        client.send_msg_externally(msg)
+        for server_id in client.messenger.connections.keys():
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=server_id,
+                                      func_input=FuncAvailableServicesInput())
+            client.send_msg_externally(msg)
 
     def server_change(self, connect=True):
         selected_index = self.view.ui.comboBox_servers.currentIndex()

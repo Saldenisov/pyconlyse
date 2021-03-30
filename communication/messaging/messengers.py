@@ -19,6 +19,7 @@ from communication.messaging.messages import MessageExt, MsgComExt
 from communication.interfaces import MessengerInter
 from communication.messaging.conversion import bytes_to_msg
 from devices.devices import Device
+from devices.devices_dataclass import Connection
 from utilities.datastructures.mes_dependent.dicts import MsgDict
 from devices.devices_dataclass import (DeviceId, DeviceType, HeartBeatFull)
 from utilities.errors.messaging_errors import MessengerError, MessageError
@@ -61,6 +62,7 @@ class Messenger(MessengerInter):
         super().__init__()
         self.attempts_to_restart_sub = 10  # restart subscriber
         self.are_you_alive_send = False
+        self.connections: Dict[DeviceId, Connection] = {}
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
@@ -123,7 +125,7 @@ class Messenger(MessengerInter):
     def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> bytes:
         # TODO: add functionality to messenger.decrypt() when TLS is realized
         try:
-            fernet = self.create_fernet(self.parent.connections[device_id].session_key)
+            fernet = self.create_fernet(self.connections[device_id].session_key)
             return fernet.decrypt(msg_bytes)
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
@@ -139,14 +141,10 @@ class Messenger(MessengerInter):
         return msg_encrypted
 
     def encrypt_with_session_key(self, msg: MessageExt) -> bytes:
-        # TODO: add functionality to messenger.encrypt() when TLS is realized
         if msg.crypted:
             try:
-                if self.parent.type is DeviceType.SERVER:
-                    receiver_id: DeviceId = msg.receiver_id
-                else:
-                    receiver_id = self.parent.server_id
-                fernet = self.create_fernet(self.parent.connections[receiver_id].session_key)
+                receiver_id: DeviceId = msg.receiver_id
+                fernet = self.create_fernet(self.connections[receiver_id].session_key)
                 return fernet.encrypt(msg.byte_repr(compression=False))
             except KeyError as e:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg: {e}')
@@ -286,7 +284,6 @@ class Messenger(MessengerInter):
         try:
             self.sockets[SUB_Socket].connect(address)
             self.sockets[SUB_Socket].setsockopt(zmq.SUBSCRIBE, filter_opt)
-            self.sockets[SUB_Socket].setsockopt(zmq.RCVHWM, 3)
             self.logger.info(f'socket sub is connected to {address}')
         except zmq.ZMQError as e:
             error_logger(self, self.subscribe_sub, e)
@@ -314,19 +311,33 @@ class ClientMessenger(Messenger):
             self.socket_names.add(PUB_Socket)
         self.pref_server_pub_addr = self.addresses[PUB_Socket_Server][0]
 
+    def add_dealer(self, addr: str, device_id: DeviceId):
+        self.logger.info(f'Adding dealer socket: {addr}')
+        dealer = self.context.socket(zmq.DEALER)
+        dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
+        dealer.setsockopt(zmq.SNDHWM, 10)
+        dealer.setsockopt(zmq.RCVHWM, 10)
+        dealer.connect(addr)
+        self.poller.register(dealer, zmq.POLLIN)
+        self.sockets[DEALER_Socket][device_id] = dealer
+
     def _create_sockets(self):
         try:
             self.context = zmq.Context()
-            # SOCKET DEALER
-            dealer = self.context.socket(zmq.DEALER)
-            dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
-            dealer.setsockopt(zmq.SNDHWM, 10)
-            dealer.setsockopt(zmq.RCVHWM, 10)
+
             # SOCKET SUBSCRIBER
             subscriber = self.context.socket(zmq.SUB)
-            subscriber.setsockopt(zmq.RCVHWM, 10)
 
-            self.sockets = {DEALER_Socket: dealer, SUB_Socket: subscriber}
+            # POLLER
+            self.poller = zmq.Poller()
+            self.poller.register(subscriber, zmq.POLLIN)
+
+            # SOCKET DEALER
+            if FRONTEND_Server in self.addresses:
+                for addr in self.addresses[FRONTEND_Server]:
+                    self.add_dealer(addr)
+
+            self.sockets = {DEALER_Socket: {}, SUB_Socket: subscriber}
 
             # SOCKET PUBLISHER
             if self.pub_option:
@@ -335,29 +346,18 @@ class ClientMessenger(Messenger):
                 self.sockets[PUB_Socket] = publisher
                 self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
 
-            # POLLER
-            self.poller = zmq.Poller()
-            self.poller.register(dealer, zmq.POLLIN)
-            self.poller.register(subscriber, zmq.POLLIN)
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
         finally:
             info_msg(self, 'INFO', f'Sockets: {self.sockets.keys()}; Public sockets: {self.public_sockets.values()}')
 
-    def connect(self):
-        try:
-            self.sockets[DEALER_Socket].connect(self.addresses[FRONTEND_Server])
-            if self.pub_option:
-                self.bind_pub()
-        except (WrongAddress, zmq.error.ZMQBindError) as e:
-            error_logger(self, self.connect, e)
-
     def bind_pub(self):
         try:
-            self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
-            self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
-        except (WrongAddress, zmq.error.ZMQError) as e:
+            if self.pub_option:
+                self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+                self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
+        except (WrongAddress, zmq.error.ZMQBindError) as e:
             # TODO: potential recursion depth violation
             error_logger(self, self.connect, f'{e}: {self.addresses[PUB_Socket]}')
             port = get_free_port()
@@ -370,7 +370,6 @@ class ClientMessenger(Messenger):
         for msg, device_id, socket, crypted in msgs:
             try:
                 if int(crypted):
-                    device_id = self.parent.server_id  # !!! ONLY WHEN CLIENT/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
@@ -388,35 +387,36 @@ class ClientMessenger(Messenger):
         while self.active:
             try:
                 if not self.paused:
-                    sockets = dict(self.poller.poll(1))
-                    if self.sockets[DEALER_Socket] in sockets:
-                        msg, crypted = self.sockets[DEALER_Socket].recv_multipart()
-                        msgs.append(MsgTuple(msg, None, DEALER_Socket, crypted))
-                    if self.sockets[SUB_Socket] in sockets:
+                    sockets_polled = dict(self.poller.poll(5))
+                    for device_id, dealer in self.sockets[DEALER_Socket].items():
+                        if dealer in sockets_polled:
+                            msg, crypted = dealer.recv_multipart()
+                            msgs.append(MsgTuple(msg, device_id, DEALER_Socket, crypted))
+                    if self.sockets[SUB_Socket] in sockets_polled:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
                         self._deal_with_received_msg(msgs)
                         msgs = []
-            except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
-                self.logger.error(e)
+            except ValueError as e:
+                error_logger(self, self._receive_msgs, e)
 
     def run(self):
         super().run()
         try:
             for adr in self.addresses[PUB_Socket_Server]:
                 self.subscribe_sub(address=adr)
-            msg = self._wait_server_hb()
             if self.active:
-                self.connect()
-                self.parent.thinker.add_task_in(msg)
                 info_msg(self, 'STARTED')
+                self.bind_pub()
                 self._receive_msgs()
-        except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
+        except (zmq.error.ZMQError, MessengerError) as e:
             error_logger(self, self.run, e)
             self.stop()
         finally:
-            self.sockets[DEALER_Socket].close()
+            if self.sockets[DEALER_Socket]:
+                for dealer in self.sockets[DEALER_Socket].values():
+                    dealer.close()
             if self.sockets[SUB_Socket]:
                 self.sockets[SUB_Socket].close()
             if self.sockets[PUB_Socket]:
@@ -432,7 +432,7 @@ class ClientMessenger(Messenger):
             msg_bytes = self.encrypt_with_session_key(msg)
 
             if msg.receiver_id:
-                self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
+                self.sockets[DEALER_Socket][msg.receiver_id].send_multipart([msg_bytes, crypted])
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
@@ -446,7 +446,6 @@ class ClientMessenger(Messenger):
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
             if self.pub_option:
-
                 self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
             else:
                 info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
@@ -455,57 +454,16 @@ class ClientMessenger(Messenger):
 
     def _verify_addresses(self, addresses: Dict[str, str]):
         # TODO: replace with UserSocket NewType the ports names.
-        ports = [PUB_Socket, PUB_Socket_Server]
-        for port in ports:
-            if port not in addresses:
-                raise Exception(f'Not enough ports {port} were passed to {self.name}')
+        socket_names = [PUB_Socket, PUB_Socket_Server]
+        for socket_name in socket_names:
+            if socket_name not in addresses:
+                raise Exception(f'Not enough socket_names {socket_name} were passed to {self.name}.')
         from utilities.myfunc import verify_port
         # Check only publisher com_port availability
-        port = verify_port(addresses[PUB_Socket])
+        port_pub = verify_port(addresses[PUB_Socket])
         local_ip = get_local_ip()
-        self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
+        self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port_pub}'
         self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
-
-    def _wait_server_hb(self) -> MessageExt:
-        if FRONTEND_Server not in self.addresses or BACKEND_Server not in self.addresses:
-            wait = True
-        else:
-            wait = False
-        i = 0
-        msg_out = None
-        preferential_server_sub = self.pref_server_pub_addr
-        trying_find_preferential = 0
-        while wait and self.active:
-            if i > 100:
-                info_msg(self, 'INFO', f'{self.name} could not connect to server, no sockets, '
-                                       f'try to restart {self.parent.name} OR check Server.')
-                i = 0
-            i += 1
-            sockets = dict(self.poller.poll(100))
-            if self.sockets[SUB_Socket] in sockets:
-                mes, crypted = self.sockets[SUB_Socket].recv_multipart()
-                try:
-                    msg: MessageExt = bytes_to_msg(mes)
-                    if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
-                        info: HeartBeatFull = msg.info
-                        sockets = info.device_public_sockets
-                        trying_find_preferential += 1
-                        info_msg(self, 'INFO', f'Waiting server {preferential_server_sub}. '
-                                               f'Attempt {trying_find_preferential}')
-                        if preferential_server_sub == sockets[PUB_Socket_Server] or trying_find_preferential > 3:
-                            if FRONTEND_Server in sockets and BACKEND_Server in sockets:
-                                # TODO: need to check if it true SERVER using password or certificate
-                                info_msg(self, 'INFO', f'{msg.short()}')
-                                info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
-                                self.addresses[FRONTEND_Server] = sockets[FRONTEND_Server]
-                                self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
-                                msg_out = msg
-                                break
-                            else:
-                                error_logger(self, self._wait_server_hb, f'Not all sockets are sent to {self.name}')
-                except (AttributeError, KeyError, MessengerError, MessageError) as e:
-                    error_logger(self, self._wait_server_hb, e)
-        return msg_out
 
 
 class ServiceMessenger(ClientMessenger):
@@ -654,7 +612,7 @@ class ServerMessenger(Messenger):
             elif msg.receiver_id in self._backendpool:
                 self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
             else:
-                error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
+                error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pools.')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -667,15 +625,12 @@ class ServerMessenger(Messenger):
             error_logger(self, self.send_msg, e)
 
     def _verify_addresses(self, addresses: Dict[str, str]):
-        if not isinstance(addresses, dict):
-            raise Exception(f'{addresses} are not dict, func: {self._verify_addresses.__name__} of {self.parent.name}')
-
         from utilities.myfunc import verify_port
         excluded = []
         local_ip = get_local_ip()
-        for port in self.sockets_names:
-            if port not in addresses:
-                raise Exception(f'Not enough ports {port} were passed to {self.name}')
-            port_n = verify_port(addresses[port], excluded)
+        for socket_name in self.sockets_names:
+            if socket_name not in addresses:
+                raise Exception(f'Not enough ports {socket_name} were passed to {self.name}')
+            port_n = verify_port(addresses[socket_name], excluded)
             excluded.append(port_n)
-            self.addresses[port] = f'tcp://{local_ip}:{port_n}'
+            self.addresses[socket_name] = f'tcp://{local_ip}:{port_n}'

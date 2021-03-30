@@ -25,7 +25,7 @@ class GeneralCmdLogic(Thinker):
         self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
                             event_id=f'heartbeat:{self.parent.device_id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
-        self.connections = self.parent.connections
+        self.connections = self.parent.messenger.connections
 
     def react_broadcast(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
@@ -37,7 +37,6 @@ class GeneralCmdLogic(Thinker):
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
 
-    @abstractmethod
     def react_external(self, msg: MessageExt):
         # TODO: add decision on permission
         if not msg.receiver_id and msg.com != MsgComExt.HEARTBEAT_FULL.msg_name:
@@ -63,7 +62,7 @@ class GeneralCmdLogic(Thinker):
                 info: FuncAliveOutput = info
                 self.events[msg.info.event_id].time = time()
                 self.events[msg.info.event_id].n = info.event_n
-                msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
+                msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=info.device_id,
                                                  func_input=FuncAliveInput())
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg.ext_to_int())
@@ -113,7 +112,7 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
             info.session_key = messenger.decrypt_with_private(info.session_key)
             info.certificate = messenger.decrypt_with_private(info.certificate)
             server_connection = self.connections[msg.sender_id]
-            certificates_db = self.parent.messenger.get_certificate(self.parent.server_id)
+            certificates_db = self.parent.messenger.get_certificate(info.device_id)
             if info.certificate in certificates_db:
                 server_connection.session_key = info.session_key
                 server_connection.access_level = AccessLevel.FULL
@@ -146,16 +145,29 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
             except AttributeError:
                 pass
 
+        info: HeartBeatFull = msg.info
+        sockets = info.device_public_sockets
+        info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
+        from communication.messaging.messengers import FRONTEND_Server, BACKEND_Server
+        self.parent.messenger.pause()
+        if self.parent.type == DeviceType.CLIENT:
+            addr = sockets[FRONTEND_Server]
+        else:
+            addr = sockets[BACKEND_Server]
+        self.parent.messenger.add_dealer(addr, info.device_id)
+        self.parent.messenger.unpause()
+
+
         from communication.logic.logic_functions import external_hb_logic
         self.register_event(name=msg.info.event_name, event_id=msg.info.event_id, logic_func=external_hb_logic,
                             original_owner=msg.info.device_id, tick=msg.info.event_tick, start_now=True)
 
         sleep(0.2)  # Give time to start event
 
-        self.parent.connections[DeviceId(msg.info.device_id)] = Connection(**param)
+        self.connections[DeviceId(info.device_id)] = Connection(**param)
         event = self.events['heartbeat']
         msg_welcome = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_DEVICE,
-                                               receiver_id=msg.info.device_id, event=event)
+                                               receiver_id=info.device_id, event=event)
         self.msg_out(msg_welcome)
 
     def react_internal(self, event: ThinkerEvent):
@@ -173,7 +185,7 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
                     if not self.parent.messenger.are_you_alive_send:
                         info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
                         event.counter_timeout = 0
-                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.parent.server_id,
+                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=event.original_owner,
                                                          func_input=FuncAliveInput())
                         self.parent.messenger.are_you_alive_send = True
                         self.msg_out(msg_i)
@@ -233,7 +245,7 @@ class ServerCmdLogic(GeneralCmdLogic):
                                         original_owner=info.device_id,
                                         start_now=True)
                 session_key = messenger.gen_symmetric_key(info.device_id)
-                self.parent.connections[info.device_id].session_key = session_key
+                self.connections[info.device_id].session_key = session_key
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.WELCOME_INFO_SERVER, reply_to=msg.id,
                                                  receiver_id=msg.sender_id)
                 self.parent.send_status_pyqt()
@@ -249,7 +261,7 @@ class ServerCmdLogic(GeneralCmdLogic):
             self.msg_out(msg_r)
 
     def react_forward(self, msg: MessageExt):
-        if msg.forward_to in self.parent.connections:
+        if msg.forward_to in self.connections:
             msg_r = msg.copy(sender_id=self.parent.device_id, receiver_id=msg.forward_to, forward_to='',
                              forwarded_from=msg.sender_id, id=msg.id)
         else:
@@ -281,18 +293,22 @@ class SuperUserClientCmdLogic(GeneralNonServerCmdLogic):
                     del self.parent.active_servers[key]
 
         super().react_broadcast(msg)
+        process_servers(self, msg)
 
-        if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
-            process_servers(self, msg)
-        elif msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id not in self.connections:
-            process_servers(self, msg)
+    def react_external(self, msg: MessageExt):
+        super().react_external(msg)
+        if msg.com == MsgComExt.DONE_IT.msg_name:
+            info: Union[DoneIt, MsgError] = msg.info
+            if info.com == Server.GET_AVAILABLE_SERVICES.name:
+                self.parent.running_services[info.device_id] = info.device_available_services
 
     def react_first_welcome(self, msg: MessageExt):
         super().react_first_welcome(msg)
         client = self.parent
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  func_input=FuncAvailableServicesInput())
-        self.msg_out(msg)
+        for device_id in self.connections.keys():
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=device_id,
+                                      func_input=FuncAvailableServicesInput())
+            self.msg_out(msg)
 
 
 class ServiceCmdLogic(GeneralNonServerCmdLogic):

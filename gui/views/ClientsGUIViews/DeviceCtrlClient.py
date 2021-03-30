@@ -67,8 +67,9 @@ class DeviceControllerView(QMainWindow):
 
     def activate_controller(self):
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id,
                                   func_input=FuncActivateInput(flag=self.ui.checkBox_ctrl_activate.isChecked()))
         self.send_msg(msg)
         self._asked_status = 0
@@ -76,8 +77,9 @@ class DeviceControllerView(QMainWindow):
     def activate_device(self):
         flag = 1 if self.ui.checkBox_device_activate.isChecked() else 0
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=self.service_parameters.device_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id,
                                   func_input=FuncActivateDeviceInput(device_id=self.selected_device_id,
                                                                      flag=flag))
         self.send_msg(msg)
@@ -120,8 +122,10 @@ class DeviceControllerView(QMainWindow):
         info_msg(self, 'INFO', 'Controller state observation thread Terminated.')
 
     def get_controller_state(self):
-        msg = self.superuser.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=self.superuser.server_id,
-                                          forward_to=self.service_parameters.device_id,
+        client = self.superuser
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id,
                                           func_input=FuncGetControllerStateInput())
         self.send_msg(msg)
 

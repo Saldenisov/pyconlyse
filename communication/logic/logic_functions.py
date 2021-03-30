@@ -66,11 +66,11 @@ def internal_hb_logic(event: ThinkerEvent):
         sleep(0.001)
         if not event.paused:
             event.n += 1
-            if full_heartbeat and event.n % 3 and device.type is DeviceType.SERVER:
-                # TODO: every n minutes changes session_key for safety...that is crazy
+            if full_heartbeat and not event.n % 3 and device.type is DeviceType.SERVER:
                 msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT_FULL, event=event)
-            else:
-                msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)
+                thinker.add_task_out_publisher(msg_heartbeat)
+
+            msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)
 
             if device.pyqtsignal_connected and device.type is DeviceType.SERVER:
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
@@ -121,6 +121,7 @@ def task_out_reaction(event: ThinkerEvent):
                     msg: MessageExt = tasks_out.popitem(last=False)[1]
                     thinker.add_demand_on_reply(msg)
                     thinker.parent.messenger.add_msg_out(msg)
+                    info_msg(event, 'INFO', extra=f'Sending: {msg.short()}')
 
                     if thinker.parent.pyqtsignal_connected:
                         # Convert MessageExt to MessageInt and emit it

@@ -62,7 +62,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.available_public_functions_names = list(cmd.name for cmd in self.available_public_functions())
         self.always_available_public_functions_names = list(cmd.name for cmd in self.always_available_public_functions())
         self.config = configurationSD(self)
-        self.connections: Dict[DeviceId, Connection] = {}
         self.cls_parts: Dict[str, Union[ThinkerInter, MessengerInter, ExecutorInter]] = cls_parts
         self.ctrl_status: DeviceControllerStatus = DeviceControllerStatus(*[False] * 5)
         self.db_path = db_path
@@ -184,7 +183,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
 
     def active_connections(self) -> List[Tuple[DeviceId, DeviceType]]:
         res = []
-        for device_id, connection in self.connections.items():
+        for device_id, connection in self.messenger.connections.items():
             res.append((device_id, connection.device_name))
         return res
 
@@ -313,8 +312,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                     info = ShutDown(device_id=self.device_id, reason=kwargs['reason'])
                 elif msg_com is MsgComExt.WELCOME_INFO_SERVER:
                     try:
-                        session_key = self.connections[kwargs['receiver_id']].session_key
-                        device_public_key = self.connections[kwargs['receiver_id']].device_public_key
+                        session_key = self.messenger.connections[kwargs['receiver_id']].session_key
+                        device_public_key = self.messenger.connections[kwargs['receiver_id']].device_public_key
                         # Session key Server-Device and certificate of Server is crypted with device public key,
                         # message is not crypted
                         session_key_crypted = self.messenger.encrypt_with_public(session_key, device_public_key)
@@ -326,15 +325,16 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         certificate_crypted = b''
                     finally:
                         info = WelcomeInfoServer(session_key=session_key_crypted,
-                                                 certificate=certificate_crypted)
+                                                 certificate=certificate_crypted, device_id=self.id)
                 elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
                     try:
-                        server_public_key = self.connections[self.server_id].device_public_key
+                        receiver_id = kwargs['receiver_id']
+                        server_public_key = self.messenger.connections[receiver_id].device_public_key
                         pub_key = self.messenger.public_key
                         device_public_key_crypted = self.messenger.encrypt_with_public(pub_key,
                                                                                        server_public_key)
                         certificate_crypted = self.messenger.encrypt_with_public(self.messenger.get_certificate(
-                            device_id=self.server_id), server_public_key)
+                            device_id=receiver_id), server_public_key)
                     except KeyError as e:
                         error_logger(self, self.generate_msg, f'device_public_key_crypted cannot be formed: {e}')
                         device_public_key_crypted = self.messenger.public_key
@@ -484,17 +484,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         """Stop messaging part of Device"""
         info_msg(self, 'STOPPING')
         self.thinker.flush_tasks()
-        for device_id, connection in self.connections.items():
-            if isinstance(self, Server):
-                stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=device_id,
-                                             reason='normal_shutdown')
-            else:
-                if device_id == self.server_id:
-                    stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=device_id,
-                                                 reason='normal_shutdown')
-                else:
-                    stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=self.server_id,
-                                                 forward_to=device_id, reason='normal_shutdown')
+        for device_id in self.messenger.connections.keys():
+            stop_msg = self.generate_msg(msg_com=MsgComExt.SHUTDOWN, receiver_id=device_id, reason='normal_shutdown')
             self.thinker.add_task_out(stop_msg)
         sleep(0.1)
         self.thinker.pause()
@@ -509,15 +500,6 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
     @abstractmethod
     def send_status_pyqt(self):
         pass
-
-    @property
-    def server_id(self) -> str:
-        connections = list(self.connections.values())
-        if connections:
-            connection_server = connections[0]
-            return connection_server.device_id
-        else:
-            return ''
 
     def send_msg_externally(self, msg: MessageExt):
         self.thinker.add_task_out(msg)
@@ -554,7 +536,7 @@ class Server(Device):
     @property
     def available_services(self) -> Dict[DeviceId, str]:
         available_services = {}
-        for device_id, connection in self.connections.items():
+        for device_id, connection in self.messenger.connections.items():
             if connection.device_type is DeviceType.SERVICE:
                 available_services[device_id] = connection.device_name
         return available_services
@@ -563,7 +545,7 @@ class Server(Device):
     def available_clients(self) -> Dict[str, str]:
         """Returns dict of running clients {receiver_id: name}"""
         clients_running = {}
-        for device_id, connection in self.connections.items():
+        for device_id, connection in self.messenger.connections.items():
             if connection.device_type is DeviceType.CLIENT:
                 clients_running[device_id] = connection.device_name
         return clients_running
@@ -627,6 +609,7 @@ class Client(Device):
         super().__init__(**kwargs)
         self.device_status = DeviceControllerStatus(active=True, power=True)  # Power is always ON for client and it is active
         self.active_servers = {}
+        self.running_services = {}
 
     @property
     def available_services(self) -> Dict[DeviceId, str]:
@@ -655,6 +638,13 @@ class Client(Device):
     def set_default(self):
         pass
 
+    def server_id(self, service_id: str) -> str:
+        server_id = ''
+        for s_id, services in self.running_services.items():
+            if service_id in services:
+                server_id = s_id
+                break
+        return server_id
 
 class Service(Device):
     ACTIVATE_DEVICE = CmdStruct(FuncActivateDeviceInput, FuncActivateDeviceOutput)

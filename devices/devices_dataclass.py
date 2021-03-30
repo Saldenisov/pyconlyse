@@ -211,6 +211,7 @@ class WelcomeInfoServer:
     Device side by Device private key, a only after that session_key will be used in communication between
     Server and Device.
     """
+    device_id: DeviceId
     password_checksum: bytes = b''
     session_key: bytes = b''
     certificate: bytes = b''
