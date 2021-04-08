@@ -202,6 +202,7 @@ class WelcomeInfoDevice:
     event_tick: float
     certificate: bytes = b''
     password_checksum: bytes = b''
+    version: str = ''
 
 
 @dataclass(order=True)
@@ -215,6 +216,7 @@ class WelcomeInfoServer:
     password_checksum: bytes = b''
     session_key: bytes = b''
     certificate: bytes = b''
+    version: str = ''
 
 
 @dataclass(frozen=True, order=True)

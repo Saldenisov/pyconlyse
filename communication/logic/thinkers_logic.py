@@ -113,6 +113,10 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
             info.certificate = messenger.decrypt_with_private(info.certificate)
             server_connection = self.connections[msg.sender_id]
             certificates_db = self.parent.messenger.get_certificate(info.device_id)
+            version = info.version
+            if version != self.parent.version:
+                raise DeviceError(f'Server version {version} does not correspond version of '
+                                  f'device {self.parent.version}')
             if info.certificate in certificates_db:
                 server_connection.session_key = info.session_key
                 server_connection.access_level = AccessLevel.FULL
@@ -127,11 +131,7 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
             else:
                 del self.connections[msg.sender_id]
                 raise DeviceError("Server's certificate error")
-        except DeviceError:
-            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'Your Certificate is '
-                                                                               f'Wrong Dear Server.',
-                                             receiver_id=msg.sender_id, reply_to=msg.id)
-        except Exception as e:
+        except (Exception, DeviceError) as e:
             msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
             error_logger(self, self.react_first_welcome, msg_r)
@@ -226,6 +226,10 @@ class ServerCmdLogic(GeneralCmdLogic):
             info.certificate = messenger.decrypt_with_private(info.certificate)
             connections = self.connections
             certificate_db = self.parent.messenger.get_certificate(info.device_id)
+            version = info.version
+            if version != self.parent.version:
+                raise DeviceError(f'Server version {version} does not correspond version of '
+                                  f'device {self.parent.version}')
             if certificate_db == info.certificate:
                 param = {}
                 for field_name in info.__annotations__:
@@ -252,9 +256,8 @@ class ServerCmdLogic(GeneralCmdLogic):
             else:
                 del self.connections[msg.sender_id]
                 raise DeviceError("Devices's certificate error")
-        except DeviceError:
-            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'Your Certificate is '
-                                                                               f'Wrong Dear {info.device_id}.',
+        except (DeviceError, Exception) as e:
+            msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=f'{e}',
                                              receiver_id=msg.sender_id, reply_to=msg.id)
             error_logger(self, self.react_first_welcome, msg_r)
         finally:

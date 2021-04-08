@@ -71,6 +71,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self.parent: QObject = parent
         self.type: DeviceType = type
         self.test = test
+        self.version = "0.2"
 
         if logger_new:
             self.logger = initialize_logger(app_folder / 'LOG', file_name=__name__ + '.' + self.__class__.__name__)
