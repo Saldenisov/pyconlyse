@@ -356,3 +356,4 @@ class Connection(DataClass_unfrozen):
     permission: Permission = Permission.DENIED
     password_checksum: bytes = b''
     certificate: bytes = b''
+    version: str = ''

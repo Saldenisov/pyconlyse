@@ -41,3 +41,21 @@ def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON) -> MessageExt:
     else:
         module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
         raise MessageError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')
+
+
+def bytes_to_info(info_bytes: bytes, coding: Coding = Coding.JSON) -> MessageExt:
+    if coding is Coding.JSON:
+        try:
+            info_str = loads(info_bytes)
+            return eval(info_str)
+        except Exception as e:
+            print(e, info_bytes)
+            try:
+                info_dc = loads(decompress(b64decode(info_bytes)))
+                info = eval(info_dc)
+                return info
+            except Exception as e:
+                raise MessageError(f'Error: "{e}" in bytes_to_info coding {coding}`. Info={info_bytes}')
+    else:
+        module_logger.info(f'{Coding.MSGPACK} is not realy working for all types of messages')
+        raise MessageError(f'Wrong coding type passed {coding}. Choose between {Coding.JSON} and {Coding.MSGPACK}')

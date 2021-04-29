@@ -6,9 +6,10 @@ Created on 15.11.2019
 import logging
 from datetime import datetime as dt
 from threading import Thread
-from time import sleep
+from time import sleep, time
 from PyQt5.QtWidgets import QMainWindow, QListWidgetItem, QMenu
 
+from communication.messaging.messengers import PUB_Socket_Server
 from communication.messaging.messages import MessageInt, MessageExt, MsgComInt, MsgComExt
 from communication.messaging.messengers import PUB_Socket_Server
 from devices.devices import Server, Service, Client
@@ -32,8 +33,6 @@ class SuperUserView(QMainWindow):
 
         self.ui = Ui_SuperUser()
         self.ui.setupUi(self)
-        for adr in self.controller.device.messenger.addresses[PUB_Socket_Server]:
-            self.ui.comboBox_servers.addItem(f'{adr}')
 
         self.model.add_observer(self)
         self.model.model_changed.connect(self.model_is_changed)
@@ -42,8 +41,12 @@ class SuperUserView(QMainWindow):
         self.ui.comboBox_servers.customContextMenuRequested.connect(self.menuContextServers)
         self.ui.pB_checkServices.clicked.connect(self.controller.pB_checkServices_clicked)
         self.ui.closeEvent = self.closeEvent
+
+
         self.msg_vis_thread = Thread(target=self.update_msg_list)
+
         self.msg_vis_thread.start()
+
         info_msg(self, 'INITIALIZED')
 
     def closeEvent(self, event):
@@ -91,16 +94,18 @@ class SuperUserView(QMainWindow):
         info = msg.info
         try:
             if com == MsgComInt.HEARTBEAT.msg_name:
+                superuser: Client = self.model.superuser
                 connections = self.controller.device.messenger.connections
-                addr = connections[msg.sender_id].device_public_sockets[PUB_Socket_Server]
-                self.ui.label_HB.setText(f'{addr} :: {msg.info.event_n}')
-                hB1 = self.ui.radioButton_hB
-                hB2 = self.ui.radioButton_hB2
-                hb_s = hB1.isChecked()
-                if hb_s:
-                   hB2.setChecked(True)
-                else:
-                   hB1.setChecked(True)
+                self.update_connections()
+                t = []
+                for device_id, con in connections.items():
+                    try:
+                        n = superuser.thinker.events[f'heartbeat:{device_id}'].n
+                        t.append(f'{con.device_public_sockets[PUB_Socket_Server][6:20]}_{n}')
+                    except KeyError:
+                        pass
+                self.ui.label_HB.setText(":".join(t))
+
             elif com == MsgComInt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
                 if info.com == Server.GET_AVAILABLE_SERVICES.name:
@@ -125,7 +130,6 @@ class SuperUserView(QMainWindow):
                 priority_dict = {MsgComInt.HEARTBEAT.msg_name: 1, MsgComInt.ERROR.msg_name: 5,
                                  MsgComInt.DONE_IT.msg_name: 3, MsgComInt.DEVICE_INFO_INT.msg_name: 4}
                 superuser._fyi_msg_dict[msg.id] = msg
-
         except Exception as e:
             error_logger(self, self.model_is_changed, f'{self.name}: {e}')
 
@@ -169,3 +173,29 @@ class SuperUserView(QMainWindow):
                 redraw = False
 
             sleep(0.5)
+
+    def update_connections(self):
+        connections = self.controller.device.messenger.connections
+        addr_connections = set()
+        for conn in connections.values():
+            addr_connections.add(conn.device_public_sockets[PUB_Socket_Server])
+
+        combobox_addr = set()
+        for index in range(self.ui.comboBox_servers.count()):
+            item = self.ui.comboBox_servers.itemText(index)
+            combobox_addr.add(item)
+
+        if combobox_addr != addr_connections:
+            if len(addr_connections) > len(combobox_addr):
+                l = 0
+                for item in addr_connections.difference(combobox_addr):
+                    if l < len(item):
+                        l = len(item)
+                        self.ui.comboBox_servers.setFixedWidth(l*10)
+                    self.ui.comboBox_servers.addItem(item)
+            else:
+                self.ui.comboBox_servers.clear()
+                for item in addr_connections:
+                    self.ui.comboBox_servers.addItem(item)
+
+

@@ -23,17 +23,17 @@ def init(device_id: str, db_name: str, test=False):
 if __name__ == "__main__":
     """
     python device_start.py -id StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd -db Devices.db
-    python device_start.py -s newport_4axes stpmtr_emulate
+    python device_start.py -s stpmtr_standa cameras_basler
     """
     preselection = {'server_main': ['Server:Main:sfqvtyjsdf23qa23xcv', 'Devices.db'],
-                    'server_test': ['Server:Main:sfqvtyjsdf23qa23xcvTEST', 'Devices.db'],
-                    'a4988_4axes': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
+                    'server_test': ['ServerTEST:Main:sfqvtyjsdf23qa23xcv', 'Devices.db'],
+                    'stpmtr_a4988': ['StpMtrCtrl_a4988_4axes:2ecfc6712ca714be8b65f13dc490638b', 'Devices.db'],
                     'stpmtr_emulate': ['StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd', 'Devices.db'],
                     'project_default': ['ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada', 'Devices.db'],
                     'stpmtr_standa': ['StpMtrCtrl_Standa:b7257a502aef1d55485fc8ea403ac573', 'Devices.db'],
-                    'topdirect': ['StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c', 'Devices.db'],
-                    'basler_cameras': ['CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02', 'Devices.db'],
-                    'netio_pdus': ['PDUCtrl_NETIO:deeb24a77539736744b550885fb6ba4f', 'Devices.db'],
+                    'stpmtr_topdirect': ['StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c', 'Devices.db'],
+                    'cameras_basler': ['CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02', 'Devices.db'],
+                    'pdus_netio': ['PDUCtrl_NETIO:deeb24a77539736744b550885fb6ba4f', 'Devices.db'],
                     'daqmx_ni': ['DAQmxCtrl_NI:0801d25ef5783deff0cf99d321674115', 'Devices.db']}
 
     def respond_direct_choice(test=False):

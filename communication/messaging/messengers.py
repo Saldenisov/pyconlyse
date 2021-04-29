@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.serialization import load_pem_private_key, l
 
 from communication.messaging.messages import MessageExt, MsgComExt
 from communication.interfaces import MessengerInter
-from communication.messaging.conversion import bytes_to_msg
+from communication.messaging.conversion import bytes_to_msg, bytes_to_info
 from devices.devices import Device
 from devices.devices_dataclass import Connection
 from utilities.datastructures.mes_dependent.dicts import MsgDict
@@ -60,7 +60,7 @@ class Messenger(MessengerInter):
         """
 
         super().__init__()
-        self.attempts_to_restart_sub = 10  # restart subscriber
+        self.attempts_to_restart_sub = 3  # restart subscriber
         self.are_you_alive_send = False
         self.connections: Dict[DeviceId, Connection] = {}
         Messenger.n_instance += 1
@@ -122,13 +122,14 @@ class Messenger(MessengerInter):
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> bytes:
-        # TODO: add functionality to messenger.decrypt() when TLS is realized
+    def decrypt_with_session_key(self, msg: MessageExt) -> bytes:
         try:
-            fernet = self.create_fernet(self.connections[device_id].session_key)
-            return fernet.decrypt(msg_bytes)
+            fernet = self.create_fernet(self.connections[msg.sender_id].session_key)
+            info = fernet.decrypt(msg.info)
+            msg.info = bytes_to_info(msg.info)
+            return fernet.decrypt(msg)
         except KeyError:
-            raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
+            raise MessengerError(f'DeviceID is not known, cannot decrypt msg.')
 
     @abstractmethod
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
@@ -145,7 +146,9 @@ class Messenger(MessengerInter):
             try:
                 receiver_id: DeviceId = msg.receiver_id
                 fernet = self.create_fernet(self.connections[receiver_id].session_key)
-                return fernet.encrypt(msg.byte_repr(compression=False))
+                to_crypt = msg.byte_repr(to_compress=msg.info)
+                msg.info = fernet.encrypt(to_crypt)
+                return msg.byte_repr(compression=False)
             except KeyError as e:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg: {e}')
             except ValueError as e:
@@ -369,9 +372,9 @@ class ClientMessenger(Messenger):
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket, crypted in msgs:
             try:
-                if int(crypted):
-                    msg = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = bytes_to_msg(msg)
+                if int(crypted):
+                    mes = self.decrypt_with_session_key(mes)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
@@ -430,7 +433,6 @@ class ClientMessenger(Messenger):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
-
             if msg.receiver_id:
                 self.sockets[DEALER_Socket][msg.receiver_id].send_multipart([msg_bytes, crypted])
             else:
@@ -532,9 +534,9 @@ class ServerMessenger(Messenger):
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
             try:
-                if int(crypted):
-                    msg: bytes = self.decrypt_with_session_key(msg, device_id)
                 mes: MessageExt = bytes_to_msg(msg)
+                if int(crypted):
+                    mes: bytes = self.decrypt_with_session_key(mes)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)

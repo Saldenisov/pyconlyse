@@ -325,7 +325,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         session_key_crypted = b''
                         certificate_crypted = b''
                     finally:
-                        info = WelcomeInfoServer(session_key=session_key_crypted,
+                        info = WelcomeInfoServer(session_key=session_key_crypted, version=self.version,
                                                  certificate=certificate_crypted, device_id=self.id)
                 elif msg_com is MsgComExt.WELCOME_INFO_DEVICE:
                     try:
@@ -345,7 +345,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                                              event_id=event.id, device_id=self.device_id, device_name=self.name,
                                              device_type=self.type, device_public_key=device_public_key_crypted,
                                              device_public_sockets=self.messenger.public_sockets,
-                                             certificate=certificate_crypted)
+                                             certificate=certificate_crypted, version=self.version)
             except Exception as e:  # TODO: replace Exception, after all it is needed for development
                 error_logger(self, self.generate_msg, f'{msg_com}: {e}')
             finally:

@@ -97,7 +97,7 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
 
     def react_external(self, msg: MessageExt):
         super().react_external(msg)
-        if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and not self.connections:
+        if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name and msg.sender_id not in self.connections:
             self.react_heartbeat_full(msg)
 
     def react_forward(self, msg: MessageExt):
@@ -156,7 +156,6 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
             addr = sockets[BACKEND_Server]
         self.parent.messenger.add_dealer(addr, info.device_id)
         self.parent.messenger.unpause()
-
 
         from communication.logic.logic_functions import external_hb_logic
         self.register_event(name=msg.info.event_name, event_id=msg.info.event_id, logic_func=external_hb_logic,

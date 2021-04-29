@@ -189,11 +189,13 @@ class MessageExt(Message):
                           receiver_id=self.receiver_id, forward_to=self.forward_to,
                           forwarded_from=self.forwarded_from, id=self.id, time_bonus=time_bonus)
 
-    def byte_repr(self, coding: Coding = Coding.JSON, compression=True) -> bytes:
+    def byte_repr(self, coding: Coding = Coding.JSON, compression=True, to_compress=None) -> bytes:
         """
         Considered to by better in performance and size compared to json representation
         :return: string of bytes when success or b'' if error
         """
+        if not to_compress:
+            to_compress = self
         if coding is Coding.MSGPACK:
             try:
                 msg_l = []
@@ -212,7 +214,7 @@ class MessageExt(Message):
                 return b''
         elif coding is Coding.JSON:
             try:
-                json_str = dumps(repr(self)).encode('utf-8')
+                json_str = dumps(repr(to_compress)).encode('utf-8')
                 if compression:
                     json_str_c = compress(json_str)
                     json_str_c = b64encode(json_str_c)
