@@ -41,7 +41,7 @@ def external_hb_logic(event: ThinkerEvent):
             else:
                 event.counter_timeout = 0
 
-            if event.counter_timeout % 3 == 0 and event.counter_timeout != 0:
+            if event.counter_timeout % 4 == 0 and event.counter_timeout != 0:
                 info_msg(event, 'INFO', f'{event.name} timeout {event.counter_timeout}')
 
             counter += 1
@@ -71,13 +71,22 @@ def internal_hb_logic(event: ThinkerEvent):
                 thinker.add_task_out_publisher(msg_heartbeat)
 
             msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event)
+            thinker.add_task_out_publisher(msg_heartbeat)
 
             if device.pyqtsignal_connected and device.type is DeviceType.SERVER:
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
                 device.signal.emit(msg)
 
-            thinker.add_task_out_publisher(msg_heartbeat)
+            if not event.n % 3:
+                for device_id in device.messenger.connections.keys():
+                    msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event,
+                                                        receiver_id=device_id)
+                    thinker.add_task_out(msg_heartbeat)
+
             sleep(event.tick)
+
+
+exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
 
 
 def task_in_reaction(event: ThinkerEvent):
@@ -85,7 +94,6 @@ def task_in_reaction(event: ThinkerEvent):
     tasks_in: MsgDict = thinker.tasks_in
     demand_on_reply: MsgDict = thinker.demands_on_reply
     info_msg(event, 'STARTED', extra=f' of {thinker.name} with tick {event.tick}')
-    exclude_msgs = [MsgComExt.HEARTBEAT.msg_name, MsgComExt.HEARTBEAT_FULL.msg_name]
     while event.active:
         sleep(0.001)  # Any small interruption is necessary not to overuse processor time
         if not event.paused and tasks_in:
@@ -121,7 +129,8 @@ def task_out_reaction(event: ThinkerEvent):
                     msg: MessageExt = tasks_out.popitem(last=False)[1]
                     thinker.add_demand_on_reply(msg)
                     thinker.parent.messenger.add_msg_out(msg)
-                    info_msg(event, 'INFO', extra=f'Sending: {msg.short()}')
+                    if msg.com not in exclude_msgs:
+                        info_msg(event, 'INFO', extra=f'Sending: {msg.short()}')
 
                     if thinker.parent.pyqtsignal_connected:
                         # Convert MessageExt to MessageInt and emit it

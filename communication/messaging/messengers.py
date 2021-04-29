@@ -60,8 +60,6 @@ class Messenger(MessengerInter):
         """
 
         super().__init__()
-        self.attempts_to_restart_sub = 3  # restart subscriber
-        self.are_you_alive_send = False
         self.connections: Dict[DeviceId, Connection] = {}
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
@@ -122,12 +120,11 @@ class Messenger(MessengerInter):
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg: MessageExt) -> bytes:
+    def decrypt_with_session_key(self, msg: bytes, device_id: DeviceId) -> bytes:
         try:
-            fernet = self.create_fernet(self.connections[msg.sender_id].session_key)
-            info = fernet.decrypt(msg.info)
-            msg.info = bytes_to_info(msg.info)
-            return fernet.decrypt(msg)
+            fernet = self.create_fernet(self.connections[device_id].session_key)
+            mes = fernet.decrypt(msg)
+            return mes
         except KeyError:
             raise MessengerError(f'DeviceID is not known, cannot decrypt msg.')
 
@@ -146,13 +143,11 @@ class Messenger(MessengerInter):
             try:
                 receiver_id: DeviceId = msg.receiver_id
                 fernet = self.create_fernet(self.connections[receiver_id].session_key)
-                to_crypt = msg.byte_repr(to_compress=msg.info)
-                msg.info = fernet.encrypt(to_crypt)
-                return msg.byte_repr(compression=False)
+                to_crypt = msg.byte_repr()
+                crypted = fernet.encrypt(to_crypt)
+                return crypted
             except KeyError as e:
                 raise MessengerError(f'DeviceID is not known, cannot encrypt msg: {e}')
-            except ValueError as e:
-                raise MessengerError(f'{e}')
         else:
             return msg.byte_repr(compression=False)
 
@@ -231,23 +226,6 @@ class Messenger(MessengerInter):
     @abstractmethod
     def _receive_msgs(self):
         pass
-
-    def restart_socket(self, socket_name: str, connect_to: str):
-        #TODO: realize other sockets
-        self.logger.info(f'restarting {socket_name} socket')
-        self.pause()
-        sock = self.sockets[socket_name]
-        self.poller.unregister(sock)
-        if socket_name == SUB_Socket:
-            sock = self.context.socket(zmq.SUB)
-            self.poller.register(sock, zmq.POLLIN)
-            self.sockets[SUB_Socket] = sock
-            self.subscribe_sub(connect_to)
-            self.logger.info(f'socket {socket_name} is restarted')
-        else:
-            pass
-
-        self.unpause()
 
     @abstractmethod
     def send_msg(self, msg: MessageExt):
@@ -348,7 +326,6 @@ class ClientMessenger(Messenger):
                 publisher.setsockopt_unicode(zmq.IDENTITY, f'{self.id}:{self.addresses[PUB_Socket]}')
                 self.sockets[PUB_Socket] = publisher
                 self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
-
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
@@ -372,15 +349,18 @@ class ClientMessenger(Messenger):
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket, crypted in msgs:
             try:
-                mes: MessageExt = bytes_to_msg(msg)
                 if int(crypted):
-                    mes = self.decrypt_with_session_key(mes)
+                    msg = self.decrypt_with_session_key(msg, device_id)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=str(e), reply_to='',
                                                  receiver_id=device_id)
                 self.add_msg_out(msg_r)
+                sleep(0.1)
+                if device_id in self.connections:
+                    self.parent.thinker.remove_device_from_connections(DeviceId(device_id))
 
     def info(self):
         return super().info()
@@ -467,6 +447,11 @@ class ClientMessenger(Messenger):
         self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port_pub}'
         self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
 
+    def unregister_dealer(self, device_id: DeviceId):
+        if device_id in self.sockets[DEALER_Socket]:
+            self.poller.unregister(self.sockets[DEALER_Socket][device_id])
+            del self.sockets[DEALER_Socket][device_id]
+
 
 class ServiceMessenger(ClientMessenger):
 
@@ -534,9 +519,9 @@ class ServerMessenger(Messenger):
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
             try:
-                mes: MessageExt = bytes_to_msg(msg)
                 if int(crypted):
-                    mes: bytes = self.decrypt_with_session_key(mes)
+                    msg: bytes = self.decrypt_with_session_key(msg, device_id)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)
@@ -544,6 +529,9 @@ class ServerMessenger(Messenger):
                                                  comments=str(e),
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
+                sleep(0.1)
+                if device_id in self.connections:
+                    self.parent.thinker.remove_device_from_connections(DeviceId(device_id))
 
     def gen_symmetric_key(self, device_id) -> bytes:
         """

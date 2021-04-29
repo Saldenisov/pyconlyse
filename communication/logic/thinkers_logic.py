@@ -30,10 +30,9 @@ class GeneralCmdLogic(Thinker):
     def react_broadcast(self, msg: MessageExt):
         if msg.com == MsgComExt.HEARTBEAT.msg_name and msg.sender_id in self.connections:
             try:
-                self.events[msg.info.event_id].time = time()
-                self.events[msg.info.event_id].n = msg.info.event_n
                 if self.parent.pyqtsignal_connected:
-                    self.parent.signal.emit(msg.ext_to_int())
+                    pass
+                    #self.parent.signal.emit(msg.ext_to_int())
             except (KeyError, TypeError) as e:
                 error_logger(self, self.react_broadcast, e)
 
@@ -64,6 +63,7 @@ class GeneralCmdLogic(Thinker):
                 self.events[msg.info.event_id].n = info.event_n
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=info.device_id,
                                                  func_input=FuncAliveInput())
+
                 if self.parent.pyqtsignal_connected:
                     self.parent.signal.emit(msg.ext_to_int())
             elif info.com == PDUController.SET_PDU_STATE.name and not isinstance(self, SuperUserClientCmdLogic):
@@ -74,10 +74,23 @@ class GeneralCmdLogic(Thinker):
                     self.parent.ctrl_status.power = bool(result.pdu.outputs[power_settings.output_id].state)
                     if hasattr(self.parent, 'activation'):
                         self.parent.activation()
+        elif msg.com == MsgComExt.HEARTBEAT.msg_name:
+            try:
+                self.events[msg.info.event_id].time = time()
+                self.events[msg.info.event_id].n = msg.info.event_n
+            except (KeyError, TypeError) as e:
+                error_logger(self, self.react_directed, e)
         elif msg.com == MsgComExt.SHUTDOWN.msg_name:  # When one of devices shutdowns
             self.remove_device_from_connections(msg.sender_id)
             self.parent.send_status_pyqt()
         self.msg_out(msg_r)
+
+    def react_internal(self, event: ThinkerEvent):
+        if 'heartbeat' in event.name:
+            if event.counter_timeout > self.timeout:
+                info_msg(self, 'INFO', f'Device {event.original_owner} was away for too long...')
+                self.remove_device_from_connections(event.original_owner)
+                self.parent.send_status_pyqt()
 
 
 class GeneralNonServerCmdLogic(GeneralCmdLogic):
@@ -169,31 +182,6 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
                                                receiver_id=info.device_id, event=event)
         self.msg_out(msg_welcome)
 
-    def react_internal(self, event: ThinkerEvent):
-        if 'heartbeat' in event.name:
-            if event.counter_timeout > self.timeout:
-                if self.parent.messenger.attempts_to_restart_sub > 0:
-                    self.parent.messenger.attempts_to_restart_sub -= 1
-                    info_msg(self, 'INFO', f'Server is away...trying to restart sub socket. '
-                                           f'Attempts left {self.parent.messenger.attempts_to_restart_sub}.')
-                    info_msg(self, 'INFO', 'Setting event.counter_timeout to 0')
-                    event.counter_timeout = 0
-                    addr = self.connections[event.original_owner].device_public_sockets[PUB_Socket_Server]
-                    self.parent.messenger.restart_socket(SUB_Socket, addr)
-                else:
-                    if not self.parent.messenger.are_you_alive_send:
-                        info_msg(self, 'INFO', 'restart of sub socket did work, switching to demand pathway')
-                        event.counter_timeout = 0
-                        msg_i = self.parent.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=event.original_owner,
-                                                         func_input=FuncAliveInput())
-                        self.parent.messenger.are_you_alive_send = True
-                        self.msg_out(msg_i)
-                    else:
-                        info_msg(self, 'INFO', f'{event.name} timeout is reached. Deleting the event {event.id}.')
-                        info_msg(self, 'INFO', 'Server was away for too long...deleting service_info about Server')
-                        self.remove_device_from_connections(event.original_owner)
-                        self.parent.send_status_pyqt()
-
 
 class ServerCmdLogic(GeneralCmdLogic):
     """
@@ -271,13 +259,6 @@ class ServerCmdLogic(GeneralCmdLogic):
                                               comments=f'service {msg.forward_to} is not available',
                                               receiver_id=msg.sender_id, reply_to=msg.id)]
         self.msg_out(msg_r)
-
-    def react_internal(self, event: ThinkerEvent):
-        if 'heartbeat' in event.name:
-            if event.counter_timeout > self.timeout:
-                info_msg(self, 'INFO', f'Service {event.original_owner} was away for too long. Deleting it.')
-                self.remove_device_from_connections(event.original_owner)
-                self.parent.send_status_pyqt()
 
 
 class SuperUserClientCmdLogic(GeneralNonServerCmdLogic):

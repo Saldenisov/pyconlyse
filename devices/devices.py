@@ -136,7 +136,7 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
         self._observing_thread = Thread(name='observing_thread', target=self._observing)
         self._observing_thread.start()
 
-        info_msg(self, 'CREATED')
+        self.logger.info(f'Device {self.name} {self.device_id} is CREATED.')
 
     def register_observation(self, name: str, func: Callable, every_n_sec=1):
         def register(self: Device, name: str, func: Callable, every_n_sec=1):
@@ -355,6 +355,8 @@ class Device(QObject, DeviceInter, metaclass=FinalMeta):
                         receiver_id = ''
                         forward_to = ''
                         forwarded_from = ''
+                        if 'receiver_id' in kwargs:
+                            receiver_id = kwargs['receiver_id']
                     elif msg_com.msg_type is MsgType.DIRECTED:
                         try:
                             reply_to = kwargs['reply_to']
@@ -646,6 +648,7 @@ class Client(Device):
                 server_id = s_id
                 break
         return server_id
+
 
 class Service(Device):
     ACTIVATE_DEVICE = CmdStruct(FuncActivateDeviceInput, FuncActivateDeviceOutput)

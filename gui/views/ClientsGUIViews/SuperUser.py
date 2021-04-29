@@ -105,7 +105,6 @@ class SuperUserView(QMainWindow):
                     except KeyError:
                         pass
                 self.ui.label_HB.setText(":".join(t))
-
             elif com == MsgComInt.DONE_IT.msg_name:
                 info: Union[DoneIt, MsgError] = info
                 if info.com == Server.GET_AVAILABLE_SERVICES.name:

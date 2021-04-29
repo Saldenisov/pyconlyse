@@ -1,7 +1,7 @@
 import logging
 from abc import abstractmethod
 from threading import Thread
-from time import time
+from time import time, sleep
 from typing import Callable, List, Union
 
 from devices.devices import DeviceType
@@ -178,20 +178,24 @@ class Thinker(ThinkerInter):
         pass
 
     def remove_device_from_connections(self, device_id):
-        if device_id in self.connections:
+        connections = self.parent.messenger.connections
+        if device_id in connections:
             info_msg(self, 'INFO', f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
-            del self.connections[device_id]
+            del connections[device_id]
 
             if self.parent.type == DeviceType.SERVER:
                 if device_id in self.parent.messenger._frontendpool:
                     self.parent.messenger._frontendpool.remove(device_id)
                 elif device_id in self.parent.messenger._backendpool:
                     self.parent.messenger._backendpool.remove(device_id)
+            else:
+                self.parent.messenger.unregister_dealer(device_id)
 
-            info_msg(self, 'INFO', f'Device {device_id} is deleted')
+            sleep(0.05)
+            info_msg(self, 'INFO', f'Device {device_id} is deleted.')
         else:
             error_logger(self, self.remove_device_from_connections,
                          f'remove_device_from_connections: Wrong device_id {device_id} is passed')

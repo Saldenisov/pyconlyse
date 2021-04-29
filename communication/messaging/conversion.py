@@ -31,7 +31,6 @@ def bytes_to_msg(mes_bytes: bytes, coding: Coding = Coding.JSON) -> MessageExt:
             mes_str = loads(mes_bytes)
             return eval(mes_str)
         except Exception as e:
-            print(e, mes_bytes)
             try:
                 mes_dc = loads(decompress(b64decode(mes_bytes)))
                 mes = eval(mes_dc)
