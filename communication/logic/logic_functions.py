@@ -127,7 +127,6 @@ def task_out_reaction(event: ThinkerEvent):
             try:
                 if tasks_out:
                     msg: MessageExt = tasks_out.popitem(last=False)[1]
-                    thinker.add_demand_on_reply(msg)
                     thinker.parent.messenger.add_msg_out(msg)
                     if msg.com not in exclude_msgs:
                         info_msg(event, 'INFO', extra=f'Sending: {msg.short()}')
