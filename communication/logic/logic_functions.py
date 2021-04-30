@@ -41,7 +41,7 @@ def external_hb_logic(event: ThinkerEvent):
             else:
                 event.counter_timeout = 0
 
-            if event.counter_timeout % 4 == 0 and event.counter_timeout != 0:
+            if event.counter_timeout % 3 == 0 and event.counter_timeout != 0:
                 info_msg(event, 'INFO', f'{event.name} timeout {event.counter_timeout}')
 
             counter += 1
@@ -77,7 +77,7 @@ def internal_hb_logic(event: ThinkerEvent):
                 msg = device.generate_msg(msg_com=MsgComInt.HEARTBEAT, event=event)
                 device.signal.emit(msg)
 
-            if not event.n % 3:
+            if not event.n % 2:
                 for device_id in device.messenger.connections.keys():
                     msg_heartbeat = device.generate_msg(msg_com=MsgComExt.HEARTBEAT, event=event,
                                                         receiver_id=device_id)

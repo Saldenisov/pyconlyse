@@ -22,7 +22,7 @@ class GeneralCmdLogic(Thinker):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         from communication.logic.logic_functions import internal_hb_logic
-        self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.name}',
+        self.register_event('heartbeat', internal_hb_logic, external_name=f'heartbeat:{self.parent.device_id}',
                             event_id=f'heartbeat:{self.parent.device_id}')
         self.timeout = int(self.parent.get_general_settings()['timeout'])
         self.connections = self.parent.messenger.connections
@@ -104,7 +104,6 @@ class GeneralNonServerCmdLogic(GeneralCmdLogic):
 
     def react_directed(self, msg: MessageExt):
         super().react_directed(msg)
-
         if msg.com == MsgComExt.WELCOME_INFO_SERVER.msg_name:
             self.react_first_welcome(msg)
 

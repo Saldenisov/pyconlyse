@@ -300,7 +300,8 @@ class ClientMessenger(Messenger):
         dealer.setsockopt(zmq.RCVHWM, 10)
         dealer.connect(addr)
         self.poller.register(dealer, zmq.POLLIN)
-        self.sockets[DEALER_Socket][device_id] = dealer
+        self.sockets[DEALER_Socket][device_id] = (dealer, addr)
+        a = 0
 
     def _create_sockets(self):
         try:
@@ -371,9 +372,9 @@ class ClientMessenger(Messenger):
             try:
                 if not self.paused:
                     sockets_polled = dict(self.poller.poll(5))
-                    for device_id, dealer in self.sockets[DEALER_Socket].items():
-                        if dealer in sockets_polled:
-                            msg, crypted = dealer.recv_multipart()
+                    for device_id, dealer_info in self.sockets[DEALER_Socket].items():
+                        if dealer_info[0] in sockets_polled:
+                            msg, crypted = dealer_info[0].recv_multipart()
                             msgs.append(MsgTuple(msg, device_id, DEALER_Socket, crypted))
                     if self.sockets[SUB_Socket] in sockets_polled:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
@@ -381,7 +382,7 @@ class ClientMessenger(Messenger):
                     if msgs:
                         self._deal_with_received_msg(msgs)
                         msgs = []
-            except ValueError as e:
+            except (ValueError, Exception) as e:
                 error_logger(self, self._receive_msgs, e)
 
     def run(self):
@@ -398,7 +399,7 @@ class ClientMessenger(Messenger):
             self.stop()
         finally:
             if self.sockets[DEALER_Socket]:
-                for dealer in self.sockets[DEALER_Socket].values():
+                for dealer, addr in self.sockets[DEALER_Socket].values():
                     dealer.close()
             if self.sockets[SUB_Socket]:
                 self.sockets[SUB_Socket].close()
@@ -414,13 +415,13 @@ class ClientMessenger(Messenger):
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
             if msg.receiver_id:
-                self.sockets[DEALER_Socket][msg.receiver_id].send_multipart([msg_bytes, crypted])
+                self.sockets[DEALER_Socket][msg.receiver_id][0].send_multipart([msg_bytes, crypted])
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
                     info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
-        except (zmq.ZMQError, MessengerError) as e:
+        except (zmq.ZMQError, MessengerError, KeyError) as e:
             error_logger(self, self.send_msg, e)
 
     def send_msg_publisher(self, msg: MessageExt):
@@ -449,8 +450,14 @@ class ClientMessenger(Messenger):
 
     def unregister_dealer(self, device_id: DeviceId):
         if device_id in self.sockets[DEALER_Socket]:
-            self.poller.unregister(self.sockets[DEALER_Socket][device_id])
+            self.pause()
+            sleep(0.05)
+            self.poller.unregister(self.sockets[DEALER_Socket][device_id][0])
+            dealer: zmq.Socket = self.sockets[DEALER_Socket][device_id][0]
+            dealer.disconnect(self.sockets[DEALER_Socket][device_id][1])
+            dealer.close()
             del self.sockets[DEALER_Socket][device_id]
+            self.unpause()
 
 
 class ServiceMessenger(ClientMessenger):
