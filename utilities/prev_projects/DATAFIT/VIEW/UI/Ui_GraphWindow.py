@@ -13,8 +13,8 @@ from PyQt5.QtWidgets import (QSizePolicy,
                              QListWidget,
                              QCheckBox)
 from matplotlib.widgets import Cursor, RectangleSelector
-from prev_projects.DATAFIT.VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
-from utilities.prev_projects.DATAFIT.VIEW import RangeSlider
+from VIEW.CANVAS import DataCanvas, KineticsCanvas, SpectrumCanvas
+from VIEW import RangeSlider
 
 
 class Ui_GraphWindow(object):

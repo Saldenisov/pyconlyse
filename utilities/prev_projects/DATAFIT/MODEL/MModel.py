@@ -1,7 +1,7 @@
 import logging
 import os
 
-from CONTROLLER import GraphController
+from CONTROLLER.GraphController import GraphController
 from ERRORS import GraphModelError, ValidationFailed
 from MODEL import GraphModel
 from UTILITY import Configuration

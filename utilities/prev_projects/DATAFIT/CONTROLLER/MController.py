@@ -4,7 +4,7 @@ from os.path import isfile, exists
 from PyQt5.QtWidgets import (QMessageBox,
                              QApplication,
                              QFileDialog)
-from prev_projects.DATAFIT.VIEW import MView
+from VIEW import MView
 
 module_logger = logging.getLogger(__name__)
 
@@ -81,7 +81,9 @@ class MController():
 
     def lfiles_doubleclicked(self):
         if self.model.dev:
-            filepath = self.view.ui.list_Files.item(0).text()
+            list_files = self.view.ui.list_Files
+            first_item = self.view.ui.list_Files.item(0)
+            filepath = first_item.text()
             self.model.dev = False
         else:
             filepath = self.view.ui.list_Files.currentItem().text()

@@ -5,10 +5,10 @@ from PyQt5.QtWidgets import (QListWidgetItem,
                              QApplication,
                              QFileDialog)
 from numpy import searchsorted, transpose, vstack, column_stack, append, savetxt
-from prev_projects.DATAFIT.CONTROLLER import FitController
-from prev_projects.DATAFIT.HELPFUL import ndarray_tostring
-from prev_projects.DATAFIT.MODEL import FitModel
-from prev_projects.DATAFIT.VIEW import GraphView
+from CONTROLLER.FitController import FitController
+from HELPFUL import ndarray_tostring
+from MODEL import FitModel
+from VIEW import GraphView
 
 module_logger = logging.getLogger(__name__)
 

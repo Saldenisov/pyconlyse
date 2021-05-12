@@ -5,17 +5,16 @@ nothing to say
 import sys
 
 from PyQt5.QtWidgets import QApplication
-from prev_projects.DATAFIT.CONTROLLER.MController import MController
-from prev_projects.DATAFIT.LOGGING import initialize_logger
-from prev_projects.DATAFIT.MODEL import MModel
+from CONTROLLER.MController import MController
+from LOGGING import initialize_logger
+from MODEL import MModel
 
-CONFIG = 'C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\Settings\\'
-ROOT = 'C:\\dev\\pyconlyse\\prev_projects\\DATAFIT\\tests_files'
+CONFIG = 'C:\\dev\\pyconlyse\\utilities\\prev_projects\\DATAFIT\\Settings\\'
+ROOT = 'C:\\dev\\pyconlyse\\utilities\\prev_projects\\DATAFIT\\tests_files'
 
 
 def main():
-    initialize_logger(
-        '/utilities/prev_projects\\DATAFIT\\LOG', "MAIN")
+    initialize_logger('C:\\dev\\pyconlyse\\utilities\\prev_projects\\DATAFIT\\LOG', "MAIN")
 
     app = QApplication(sys.argv)
 

@@ -7,8 +7,8 @@ import logging
 import os.path
 
 from configobj import ConfigObj
-from prev_projects.DATAFIT.ERRORS import ValidationFailed
-from prev_projects.DATAFIT.HELPFUL import dict_of_dict_to_array
+from ERRORS import ValidationFailed
+from HELPFUL import dict_of_dict_to_array
 from validate import Validator
 
 module_logger = logging.getLogger(__name__)

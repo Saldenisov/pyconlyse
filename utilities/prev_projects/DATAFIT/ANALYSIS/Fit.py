@@ -6,8 +6,8 @@ Created on 12 aoÃ»t 2015
 import logging
 
 import numpy as np
-from prev_projects.DATAFIT.ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
-from prev_projects.DATAFIT.ERRORS import NoSuchFittingFunction, FittingError
+from ANALYSIS.MyMath import gaussian, exp, exp2, stretch_exp
+from ERRORS import NoSuchFittingFunction, FittingError
 from scipy import integrate
 from scipy.optimize import curve_fit
 from scipy.optimize.optimize import OptimizeWarning
