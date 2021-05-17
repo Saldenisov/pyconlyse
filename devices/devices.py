@@ -812,9 +812,14 @@ class Service(Device):
         :return: ServiceDescription with parameters essential for understanding what this device is used for
         """
         try:
+            try:
+                groups = self.get_main_device_parameters['groups']
+                groups = eval(groups)
+            except (KeyError, SyntaxError):
+                groups = []
             return ServiceDescription(hardware_devices=self.hardware_devices, info=self.get_parameters['info'],
                                       GUI_title=self.get_parameters['title'], power_settings=self.power_settings,
-                                      class_name=self.__class__.__name__)
+                                      class_name=self.__class__.__name__, groups=groups)
         except (KeyError, DeviceError) as e:
             return DeviceError(self, f'Could not find description of the controller: {e}. Check the DB.')
 
@@ -970,7 +975,8 @@ class Service(Device):
     def service_info(self, func_input: FuncServiceInfoInput) -> FuncServiceInfoOutput:
         service_info = ControllerInfoExt(device_id=self.device_id, device_description=self.description(),
                                          controller_status=self.ctrl_status)
-        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.device_id, service_info=service_info)
+        return FuncServiceInfoOutput(comments='', func_success=True, device_id=self.device_id,
+                                     service_info=service_info)
 
     def _set_number_hardware_devices(self):
         if self.ctrl_status.connected:

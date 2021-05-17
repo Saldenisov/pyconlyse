@@ -13,7 +13,7 @@ numpy
 opencv-python
 PyQt5
 pytest-qt
-pywin32
+pywin32; sys_platform == 'win32'
 python-socketio
 pypylon
 pyserial

@@ -119,6 +119,7 @@ class CamerasView(DeviceControllerView):
 
     def menu_actuator(self, button: str, point):
         menu = QMenu()
+        action_displacement_tens = menu.addAction('0.1')
         action_displacement_half = menu.addAction('0.5')
         action_displacement_one = menu.addAction('1')
         action_displacement_two = menu.addAction('2')
@@ -139,7 +140,9 @@ class CamerasView(DeviceControllerView):
         else:
             action = None
 
-        if action == action_displacement_half:
+        if action == action_displacement_tens:
+            self._displacement = 0.1
+        elif action == action_displacement_half:
             self._displacement = 0.5
         elif action == action_displacement_one:
             self._displacement = 1

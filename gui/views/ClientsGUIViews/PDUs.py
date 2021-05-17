@@ -24,7 +24,7 @@ class PDUsView(DeviceControllerView):
         kwargs['ui_class'] = Ui_PDUs
         super().__init__(**kwargs)
 
-    def extra_ui_init(self):
+    def extra_ui_init(self, groups):
         pass
 
     @property
@@ -98,8 +98,3 @@ class PDUsView(DeviceControllerView):
                         set_new_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
 
         pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl, func=update_func_local)
-
-
-
-
-

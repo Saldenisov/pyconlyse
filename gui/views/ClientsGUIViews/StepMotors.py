@@ -4,8 +4,9 @@ Created on 15.11.2019
 @author: saldenisov
 '''
 import logging
+from _functools import partial
 from typing import Dict, List, Union
-from PyQt5.QtWidgets import QErrorMessage
+from PyQt5.QtWidgets import QMenu, QErrorMessage
 
 from communication.messaging.messages import MsgComExt, MessageInt
 from devices.datastruct_for_messaging import *
@@ -25,6 +26,44 @@ class StepMotorsView(DeviceControllerView):
         super().__init__(**kwargs)
         self.device_ctrl_state.start_stop = {}
 
+    def menu_actuator(self, button: str, point):
+        menu = QMenu()
+        action_displacement_tens = menu.addAction('0.1')
+        action_displacement_half = menu.addAction('0.5')
+        action_displacement_one = menu.addAction('1')
+        action_displacement_two = menu.addAction('2')
+        action_displacement_five = menu.addAction('5')
+        action_displacement_ten = menu.addAction('10')
+        action_displacement_twenty = menu.addAction('20')
+        action_displacement_fifty = menu.addAction('50')
+        action_displacement_hundred = menu.addAction('100')
+
+        if button == 'increase':
+            action = menu.exec_(self.ui.pB_increase.mapToGlobal(point))
+        elif button == 'decrease':
+            action = menu.exec_(self.ui.pB_decrease.mapToGlobal(point))
+        else:
+            action = None
+
+        if action == action_displacement_tens:
+            self._increment = 0.1
+        elif action == action_displacement_half:
+            self._increment = 0.5
+        elif action == action_displacement_one:
+            self._increment = 1
+        elif action == action_displacement_two:
+            self._increment = 2
+        elif action == action_displacement_five:
+            self._increment = 5
+        elif action == action_displacement_ten:
+            self._increment = 10
+        elif action == action_displacement_twenty:
+            self._increment = 20
+        elif action == action_displacement_fifty:
+            self._increment = 50
+        elif action == action_displacement_hundred:
+            self._increment = 100
+
     @property
     def controller_axes(self):
         return self.controller_devices
@@ -33,13 +72,19 @@ class StepMotorsView(DeviceControllerView):
     def controller_axes(self, value: Union[Dict[int, AxisStpMtr], AxisStpMtr]):
         self.controller_devices = value
 
-    def extra_ui_init(self):
+    def extra_ui_init(self, groups):
+        self._increment = 1
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
         self.ui.pushButton_set.clicked.connect(self.set_pos_axis)
         self.ui.radioButton_stp.toggled.connect(self._update_lcd_screen)
         self.ui.radioButton_mm.toggled.connect(self._update_lcd_screen)
         self.ui.radioButton_angle.toggled.connect(self._update_lcd_screen)
+        self.ui.pB_increase.clicked.connect(partial(self._incremental_pB_clicked, 1))
+        self.ui.pB_decrease.clicked.connect(partial(self._incremental_pB_clicked, -1))
+
+        self.ui.pB_increase.customContextMenuRequested.connect(partial(self.menu_actuator, 'increase'))
+        self.ui.pB_decrease.customContextMenuRequested.connect(partial(self.menu_actuator, 'decrease'))
 
     def get_pos_axis(self, axis_id=None, with_return=False):
         if axis_id is None:
@@ -89,7 +134,7 @@ class StepMotorsView(DeviceControllerView):
             self.device_ctrl_state.devices[axis_id].status = 2
             self.ui.progressBar_movement.setValue(0)
             #client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_pos_axis, delay=1, n_max=3,
-             #                      specific={'axis_id': axis_id, 'with_return': True})
+            #                      specific={'axis_id': axis_id, 'with_return': True})
             self._asked_status = 0
         except (ValueError, TypeError) as e:
             comments = f'Pos "{pos}" has wrong format: {e}.'
@@ -208,3 +253,9 @@ class StepMotorsView(DeviceControllerView):
                 return unit
         axis = self.device_ctrl_state.devices[self.selected_device_id]
         return axis.basic_unit
+
+    def _incremental_pB_clicked(self, direction: int):
+        self.ui.radioButton_relative.setChecked(True)
+        self.ui.radioButton_stp.setChecked(True)
+        self.ui.lineEdit_value.setText(str(self._increment * direction))
+        self.move_axis()

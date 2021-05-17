@@ -16,7 +16,6 @@ from gui.controllers.ClientGUIControllers import SuperClientGUIcontroller
 from logs_pack import initialize_logger
 
 
-
 def main():
     logger = initialize_logger(app_folder / 'LOG', file_name="SuperUserGUI")
     logger.info('Starting SuperUser GUI')

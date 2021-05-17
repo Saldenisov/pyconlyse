@@ -146,6 +146,7 @@ class FYI:
 class Description:
     info: str
     GUI_title: str
+    groups: List[Tuple[str]]
 
 
 @dataclass(order=True)
