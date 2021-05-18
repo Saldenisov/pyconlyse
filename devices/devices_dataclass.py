@@ -26,7 +26,7 @@ class DeviceParts(DataClass_frozen):
 
 @dataclass
 class HardwareDevice:
-    device_id: int
+    device_id: Union[int, str]
     device_id_seq: int = None
     name: str = ''
     friendly_name: str = ''
@@ -151,7 +151,7 @@ class Description:
 
 @dataclass(order=True)
 class ServiceDescription(Description):
-    hardware_devices: HardwareDevice
+    hardware_devices: Dict[int, HardwareDevice]
     power_settings: PowerSettings
     class_name: str
 

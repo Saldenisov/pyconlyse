@@ -22,7 +22,7 @@ from devices.devices_dataclass import (ControllerInfoExt, DeviceControllerState,
                                        FuncGetControllerStateInput,
                                        FuncGetControllerStateOutput,
                                        FuncPowerInput, FuncPowerOutput,
-                                       HardwareDevice)
+                                       HardwareDevice, HardwareDeviceDict)
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -42,6 +42,10 @@ class DeviceControllerView(QMainWindow):
         self.model = in_model
         self.superuser: Client = self.model.superuser
         self.service_parameters: ControllerInfoExt = service_parameters
+        devices = HardwareDeviceDict()
+        for key_id, device in self.service_parameters.device_description.hardware_devices.items():
+            devices[key_id] = device.out()
+        self.service_parameters.device_description.hardware_devices = devices
 
         self.ui = ui_class()
         self.ui.setupUi(self)

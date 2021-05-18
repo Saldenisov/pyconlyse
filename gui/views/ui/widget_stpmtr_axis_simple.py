@@ -14,7 +14,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_StpMtrGUI(object):
     def setupUi(self, StpMtrGUI):
         StpMtrGUI.setObjectName("StpMtrGUI")
-        StpMtrGUI.resize(529, 414)
+        StpMtrGUI.resize(529, 422)
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
@@ -210,6 +210,9 @@ class Ui_StpMtrGUI(object):
         self.pushButton_set.setObjectName("pushButton_set")
         self.horizontalLayout_4.addWidget(self.pushButton_set)
         self.verticalLayout.addLayout(self.horizontalLayout_4)
+        self.horizontalLayout_groups = QtWidgets.QHBoxLayout()
+        self.horizontalLayout_groups.setObjectName("horizontalLayout_groups")
+        self.verticalLayout.addLayout(self.horizontalLayout_groups)
         self.comments = QtWidgets.QTextEdit(self.centralwidget)
         self.comments.setObjectName("comments")
         self.verticalLayout.addWidget(self.comments)

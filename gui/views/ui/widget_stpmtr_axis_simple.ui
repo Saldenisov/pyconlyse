@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>529</width>
-    <height>414</height>
+    <height>422</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -446,6 +446,9 @@
        </widget>
       </item>
      </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_groups"/>
     </item>
     <item>
      <widget class="QTextEdit" name="comments"/>

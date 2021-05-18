@@ -6,11 +6,11 @@ Created on 15.11.2019
 import logging
 from _functools import partial
 from typing import Dict, List, Union
-from PyQt5.QtWidgets import QMenu, QErrorMessage
-
+from PyQt5.QtWidgets import QMenu, QErrorMessage, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt5 import QtCore, QtWidgets
 from communication.messaging.messages import MsgComExt, MessageInt
 from devices.datastruct_for_messaging import *
-from devices.devices import Device
+from devices.devices import Device, HardwareDeviceDict, HardwareDevice
 from devices.service_devices.stepmotors.stpmtr_controller import StpMtrController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.ui import Ui_StpMtrGUI
@@ -85,6 +85,68 @@ class StepMotorsView(DeviceControllerView):
 
         self.ui.pB_increase.customContextMenuRequested.connect(partial(self.menu_actuator, 'increase'))
         self.ui.pB_decrease.customContextMenuRequested.connect(partial(self.menu_actuator, 'decrease'))
+
+        if groups:
+            hardware_devices: HardwareDeviceDict = self.service_parameters.device_description.hardware_devices
+            for group in groups:
+                group_name = '_'.join(group)
+                vlayout_group = QVBoxLayout()
+                setattr(self.ui, f'vlayout_group_{group_name}', vlayout_group)
+                for device_id in group:
+                    try:
+                        device: HardwareDevice = hardware_devices[device_id]
+
+                        label = QLabel(device.friendly_name)
+                        setattr(self.ui, f'label_{device.device_id}', label)
+
+                        # layout buttons
+                        hlayout_buttons = QHBoxLayout()
+                        setattr(self.ui, f'hlayout_buttons_{device_id}', hlayout_buttons)
+
+                        # pB increase
+                        pB_increase = QPushButton(text='+', parent=self.ui.centralwidget)
+
+                        pB_increase.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+                        sizePolicy.setHorizontalStretch(0)
+                        sizePolicy.setVerticalStretch(0)
+                        sizePolicy.setHeightForWidth(pB_increase.sizePolicy().hasHeightForWidth())
+                        pB_increase.setSizePolicy(sizePolicy)
+                        pB_increase.setMaximumSize(QtCore.QSize(25, 16777215))
+                        pB_increase.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                        object_name = f'pB_increase_{device.device_id}'
+                        pB_increase.setObjectName(object_name)
+                        pB_increase.customContextMenuRequested.connect(partial(self.menu_actuator, 'increase'))
+                        pB_increase.clicked.connect(partial(self._pB_group_clicked, 1, device.device_id_seq))
+                        setattr(self.ui, object_name, pB_increase)
+
+                        # pB decrease
+                        pB_decrease = QPushButton(text='-', parent=self.ui.centralwidget)
+
+                        pB_decrease.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                        sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+                        sizePolicy.setHorizontalStretch(0)
+                        sizePolicy.setVerticalStretch(0)
+                        sizePolicy.setHeightForWidth(pB_decrease.sizePolicy().hasHeightForWidth())
+                        pB_decrease.setSizePolicy(sizePolicy)
+                        pB_decrease.setMaximumSize(QtCore.QSize(25, 16777215))
+                        pB_decrease.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+                        object_name = f'pB_decrease_{device.device_id}'
+                        pB_decrease.setObjectName(object_name)
+                        pB_decrease.customContextMenuRequested.connect(partial(self.menu_actuator, 'decrease'))
+                        pB_decrease.clicked.connect(partial(self._pB_group_clicked, -1, device.device_id_seq))
+                        setattr(self.ui, object_name, pB_decrease)
+
+
+                        hlayout_buttons.addWidget(pB_decrease)
+                        hlayout_buttons.addWidget(pB_increase)
+                        hlayout_buttons.addWidget(label)
+
+                        vlayout_group.addLayout(hlayout_buttons)
+                    except KeyError:
+                        pass
+
+                self.ui.horizontalLayout_groups.addLayout(vlayout_group)
 
     def get_pos_axis(self, axis_id=None, with_return=False):
         if axis_id is None:
@@ -258,4 +320,9 @@ class StepMotorsView(DeviceControllerView):
         self.ui.radioButton_relative.setChecked(True)
         self.ui.radioButton_stp.setChecked(True)
         self.ui.lineEdit_value.setText(str(self._increment * direction))
+        self.move_axis()
+
+    def _pB_group_clicked(self, direction: int, axis_id: int):
+        self.ui.spinBox_device_id.setValue(axis_id)
+        self._incremental_pB_clicked(direction)
         self.move_axis()
