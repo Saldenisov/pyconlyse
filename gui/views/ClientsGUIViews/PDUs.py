@@ -50,11 +50,12 @@ class PDUsView(DeviceControllerView):
 
     def set_output(self, output_id: Union[int, str]):
         from copy import deepcopy
-        client = self.superuser
         state = int(self.output_checkboxes[output_id].isChecked())
+        client = self.superuser
+        service_id = self.service_parameters.device_id
         pdu_output: PDUOutput = deepcopy(self.controller_pdus[self.selected_device_id].outputs[output_id])
         pdu_output.state = state
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetPDUStateInput(pdu_id=self.selected_device_id,
                                                                   pdu_output_id=output_id,

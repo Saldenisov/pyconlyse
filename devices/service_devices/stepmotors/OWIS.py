@@ -240,7 +240,7 @@ class StpMtrCtrl_OWIS(StpMtrController):
 
     @dll_lock_for_class
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
-        must_have_param = {'SSVD2': set(['basic_unit']), 'DLV0': set(['basic_unit']), 'SSV0': set(['basic_unit'])}
+        must_have_param = {'ALL': set(['basic_unit'])}
         return super()._set_move_parameters_axes(must_have_param)
 
     @dll_lock_for_class

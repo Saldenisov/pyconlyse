@@ -991,6 +991,12 @@ class Service(Device):
         self.activate(FuncActivateInput(False))
         super().stop()
 
+    @property
+    def server_id(self):
+        server_id = ''
+        for con in self.messenger.connections.values():
+            server_id = con.device_id
+        return server_id
 
 class DeviceFactory:
     # TODO: do refactoring with DeviceType and DeviceId, etc.

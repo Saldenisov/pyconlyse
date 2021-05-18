@@ -32,6 +32,7 @@ if __name__ == "__main__":
                     'project_default': ['ProjectManager_default:2d23d885d1c63ab03166ffa858b90ada', 'Devices.db'],
                     'stpmtr_standa': ['StpMtrCtrl_Standa:b7257a502aef1d55485fc8ea403ac573', 'Devices.db'],
                     'stpmtr_topdirect': ['StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363b1e79c', 'Devices.db'],
+                    'stpmtr_owis': ['StpMtrCtrl_OWIS:b161e87bee35bc4160f2dfeef63ef058', 'Devices.db'],
                     'cameras_basler': ['CameraCtrl_Basler:042c2cfbadef3d2e2c42e87e3dd32e02', 'Devices.db'],
                     'pdus_netio': ['PDUCtrl_NETIO:deeb24a77539736744b550885fb6ba4f', 'Devices.db'],
                     'daqmx_ni': ['DAQmxCtrl_NI:0801d25ef5783deff0cf99d321674115', 'Devices.db']}
