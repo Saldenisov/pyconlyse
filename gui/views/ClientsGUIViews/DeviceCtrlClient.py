@@ -185,7 +185,8 @@ class DeviceControllerView(QMainWindow):
 
     def power(self):
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncPowerInput(flag=self.ui.checkBox_power.isChecked()))
         client.add_to_executor(Device.exec_mes_every_n_sec, f=self.get_controller_state, delay=1, n_max=1)

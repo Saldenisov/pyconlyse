@@ -4,6 +4,7 @@ Created on 15.11.2019
 @author: saldenisov
 '''
 import logging
+from random import randint
 from _functools import partial
 from typing import Dict, List, Union
 from time import sleep
@@ -95,14 +96,15 @@ class StepMotorsView(DeviceControllerView):
                 setattr(self.ui, f'vlayout_group_{group_name}', vlayout_group)
                 for device_id in group:
                     try:
+                        a, b = randint(0, 100), randint(0, 100)
                         device: HardwareDevice = hardware_devices[device_id]
 
                         label = QLabel(device.friendly_name)
-                        setattr(self.ui, f'label_{device.device_id}', label)
+                        setattr(self.ui, f'label_{device.device_id}_{a}_{b}', label)
 
                         # layout buttons
                         hlayout_buttons = QHBoxLayout()
-                        setattr(self.ui, f'hlayout_buttons_{device_id}', hlayout_buttons)
+                        setattr(self.ui, f'hlayout_buttons_{device_id}_{a}_{b}', hlayout_buttons)
 
                         # pB increase
                         pB_increase = QPushButton(text='+', parent=self.ui.centralwidget)
@@ -115,7 +117,7 @@ class StepMotorsView(DeviceControllerView):
                         pB_increase.setSizePolicy(sizePolicy)
                         pB_increase.setMaximumSize(QtCore.QSize(25, 16777215))
                         pB_increase.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-                        object_name = f'pB_increase_{device.device_id}'
+                        object_name = f'pB_increase_{device.device_id}_{a}_{b}'
                         pB_increase.setObjectName(object_name)
                         pB_increase.customContextMenuRequested.connect(partial(self.menu_actuator, 'increase'))
                         pB_increase.clicked.connect(partial(self._pB_group_clicked, 1, device.device_id_seq))
@@ -132,7 +134,7 @@ class StepMotorsView(DeviceControllerView):
                         pB_decrease.setSizePolicy(sizePolicy)
                         pB_decrease.setMaximumSize(QtCore.QSize(25, 16777215))
                         pB_decrease.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-                        object_name = f'pB_decrease_{device.device_id}'
+                        object_name = f'pB_decrease_{device.device_id}_{a}_{b}'
                         pB_decrease.setObjectName(object_name)
                         pB_decrease.customContextMenuRequested.connect(partial(self.menu_actuator, 'decrease'))
                         pB_decrease.clicked.connect(partial(self._pB_group_clicked, -1, device.device_id_seq))
