@@ -84,7 +84,14 @@ class StpMtrCtrl_Standa(StpMtrController):
         5) set positions
         :return:
         """
-        sleep(0.1)
+        def search_id(self: StpMtrCtrl_Standa, uri: str) -> str:
+            uri = uri.decode('utf-8')
+            for axis_id, axis in self.axes_stpmtr.items():
+                if axis.device_id in uri:
+                    return axis.device_id
+            return None
+
+        sleep(0.05)
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
         self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
         # Enumerate devices
@@ -104,13 +111,6 @@ class StpMtrCtrl_Standa(StpMtrController):
             if device_counts != self._hardware_devices_number:
                 res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                       f'database value {self._hardware_devices_number}. Check cabling or power.'
-
-            def search_id(self: StpMtrCtrl_Standa, uri: str) -> str:
-                uri = uri.decode('utf-8')
-                for axis_id, axis in self.axes_stpmtr.items():
-                    if axis.device_id in uri:
-                        return axis.device_id
-                return None
 
             Oks = []
 
@@ -145,6 +145,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             for axis in self.axes_stpmtr.values():
                 if not axis.device_id_internal_seq:
                     del self.axes_stpmtr[axis.device_id]
+                    self.logger.info(f'Axis {axis.device_id}:{axis.name} is absent. It is removed.')
                 else:
                     cleaned_axes[i] = axis
                     i += 1

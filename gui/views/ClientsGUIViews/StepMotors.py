@@ -6,6 +6,7 @@ Created on 15.11.2019
 import logging
 from _functools import partial
 from typing import Dict, List, Union
+from time import sleep
 from PyQt5.QtWidgets import QMenu, QErrorMessage, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
 from PyQt5 import QtCore, QtWidgets
 from communication.messaging.messages import MsgComExt, MessageInt
@@ -136,7 +137,6 @@ class StepMotorsView(DeviceControllerView):
                         pB_decrease.customContextMenuRequested.connect(partial(self.menu_actuator, 'decrease'))
                         pB_decrease.clicked.connect(partial(self._pB_group_clicked, -1, device.device_id_seq))
                         setattr(self.ui, object_name, pB_decrease)
-
 
                         hlayout_buttons.addWidget(pB_decrease)
                         hlayout_buttons.addWidget(pB_increase)
@@ -324,5 +324,9 @@ class StepMotorsView(DeviceControllerView):
 
     def _pB_group_clicked(self, direction: int, axis_id: int):
         self.ui.spinBox_device_id.setValue(axis_id)
+        if not self.device_ctrl_state.devices[self.selected_device_id].status:
+            self.ui.checkBox_device_activate.setChecked(True)
+            self.activate_device()
+            sleep(0.05)
         self._incremental_pB_clicked(direction)
         self.move_axis()
