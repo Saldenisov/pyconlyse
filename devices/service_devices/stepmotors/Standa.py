@@ -142,7 +142,8 @@ class StpMtrCtrl_Standa(StpMtrController):
 
             cleaned_axes = HardwareDeviceDict()
             i = 1
-            for axis in self.axes_stpmtr.values():
+            axes = list(self.axes_stpmtr.values())
+            for axis in axes:
                 if not axis.device_id_internal_seq:
                     del self.axes_stpmtr[axis.device_id]
                     self.logger.info(f'Axis {axis.device_id}:{axis.name} is absent. It is removed.')
@@ -150,6 +151,7 @@ class StpMtrCtrl_Standa(StpMtrController):
                     cleaned_axes[i] = axis
                     i += 1
             self._hardware_devices = cleaned_axes
+            self._hardware_devices_number = len(cleaned_axes)
 
             if all(Oks):
                 res, comments = True, comments

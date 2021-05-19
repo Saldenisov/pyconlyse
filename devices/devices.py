@@ -916,7 +916,7 @@ class Service(Device):
                     res.append(r)
                     comments = join_smart_comments(comments, com)
             res = all(res)
-        except (DeviceError, Exception) as e:
+        except DeviceError as e:
             res, comments = False, str(e)
             error_logger(self, self._set_parameters_main_devices, e)
         finally:
@@ -997,6 +997,7 @@ class Service(Device):
         for con in self.messenger.connections.values():
             server_id = con.device_id
         return server_id
+
 
 class DeviceFactory:
     # TODO: do refactoring with DeviceType and DeviceId, etc.

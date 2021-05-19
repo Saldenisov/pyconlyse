@@ -53,11 +53,8 @@ class HardwareDeviceDict(dict):
 
     def __setitem__(self, key_id, device: HardwareDevice):
         device_id = device.device_id
-        if device_id not in self.device_id:
-            super().__setitem__(key_id, device)
-            self.device_id[device_id] = key_id
-        else:
-            raise KeyError(f'Hardware Device id: {device_id} already exists in {self.device_id}')
+        super().__setitem__(key_id, device)
+        self.device_id[device_id] = key_id
 
     def __getitem__(self, key):
         try:

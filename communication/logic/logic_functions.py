@@ -111,7 +111,7 @@ def task_in_reaction(event: ThinkerEvent):
                         text = 'Received'
                     info_msg(event, 'INFO', f'{text}: {msg.short()}')
                 thinker.react_external(msg)
-            except (ThinkerErrorReact, KeyError, RuntimeError, Exception) as e:
+            except (ThinkerErrorReact, KeyError, RuntimeError) as e:
                 error_logger(event, task_in_reaction, f'{e}: {msg.short()}')
 
 

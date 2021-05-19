@@ -329,4 +329,3 @@ class StepMotorsView(DeviceControllerView):
             self.activate_device()
             sleep(0.05)
         self._incremental_pB_clicked(direction)
-        self.move_axis()
