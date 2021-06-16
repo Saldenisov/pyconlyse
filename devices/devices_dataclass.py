@@ -144,6 +144,7 @@ class Description:
     info: str
     GUI_title: str
     groups: List[Tuple[str]]
+    sets: Any
 
 
 @dataclass(order=True)

@@ -451,6 +451,9 @@
      <layout class="QHBoxLayout" name="horizontalLayout_groups"/>
     </item>
     <item>
+     <layout class="QHBoxLayout" name="horizontalLayout_sets"/>
+    </item>
+    <item>
      <widget class="QTextEdit" name="comments"/>
     </item>
     <item>

@@ -35,7 +35,7 @@ class SuperClientGUIcontroller():
         self.name = 'SuperClientGUI:controller: ' + get_local_ip()
         self.services_views = {}
         info_msg(self, 'INITIALIZING')
-        self.model= in_model
+        self.model = in_model
         self.device = self.model.superuser
         self.view = SuperUserView(self, in_model=self.model)
         self.view.show()

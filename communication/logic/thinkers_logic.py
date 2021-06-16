@@ -250,12 +250,13 @@ class ServerCmdLogic(GeneralCmdLogic):
             self.msg_out(msg_r)
 
     def react_forward(self, msg: MessageExt):
+        print(msg.forward_to, list(self.connections.keys()))
         if msg.forward_to in self.connections:
             msg_r = msg.copy(sender_id=self.parent.device_id, receiver_id=msg.forward_to, forward_to='',
                              forwarded_from=msg.sender_id, id=msg.id)
         else:
             msg_r = [self.parent.generate_msg(msg_com=MsgComExt.ERROR,
-                                              comments=f'service {msg.forward_to} is not available',
+                                              comments=f'Device {msg.forward_to} is not available',
                                               receiver_id=msg.sender_id, reply_to=msg.id)]
         self.msg_out(msg_r)
 

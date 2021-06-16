@@ -59,7 +59,8 @@ class DeviceControllerView(QMainWindow):
         self.ui.checkBox_device_activate.clicked.connect(self.activate_device)
         self.ui.closeEvent = self.closeEvent
         # Extra ui init
-        self.extra_ui_init(groups=service_parameters.device_description.groups)
+        self.extra_ui_init(groups=service_parameters.device_description.groups,
+                           sets=service_parameters.device_description.sets)
 
         self.update_state(force_device=True, force_ctrl=True)
 
@@ -138,7 +139,7 @@ class DeviceControllerView(QMainWindow):
         return self.ui.spinBox_device_id.value()
 
     @abstractmethod
-    def extra_ui_init(self, groups):
+    def extra_ui_init(self, groups, sets):
         pass
 
     @abstractmethod

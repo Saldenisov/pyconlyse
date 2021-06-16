@@ -103,7 +103,6 @@ class CameraCtrl_Basler(CameraController):
                 res, comments = False, comments
         return res, comments
 
-
     def _form_devices_list(self) -> Tuple[bool, str]:
         # Init all camera
         try:

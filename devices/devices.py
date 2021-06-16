@@ -817,9 +817,14 @@ class Service(Device):
                 groups = eval(groups)
             except (KeyError, SyntaxError):
                 groups = []
+            try:
+                sets = self.get_main_device_parameters['sets']
+                sets = eval(sets)
+            except (KeyError, SyntaxError):
+                sets = {}
             return ServiceDescription(hardware_devices=self.hardware_devices, info=self.get_parameters['info'],
                                       GUI_title=self.get_parameters['title'], power_settings=self.power_settings,
-                                      class_name=self.__class__.__name__, groups=groups)
+                                      class_name=self.__class__.__name__, groups=groups, sets=sets)
         except (KeyError, DeviceError) as e:
             return DeviceError(self, f'Could not find description of the controller: {e}. Check the DB.')
 

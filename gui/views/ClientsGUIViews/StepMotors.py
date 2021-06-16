@@ -8,7 +8,8 @@ from random import randint
 from _functools import partial
 from typing import Dict, List, Union
 from time import sleep
-from PyQt5.QtWidgets import QMenu, QErrorMessage, QLabel, QPushButton, QVBoxLayout, QHBoxLayout
+from PyQt5.QtWidgets import (QMenu, QErrorMessage, QLabel, QPushButton, QVBoxLayout, QHBoxLayout,
+                             QRadioButton, QGroupBox)
 from PyQt5 import QtCore, QtWidgets
 from communication.messaging.messages import MsgComExt, MessageInt
 from devices.datastruct_for_messaging import *
@@ -74,7 +75,7 @@ class StepMotorsView(DeviceControllerView):
     def controller_axes(self, value: Union[Dict[int, AxisStpMtr], AxisStpMtr]):
         self.controller_devices = value
 
-    def extra_ui_init(self, groups):
+    def extra_ui_init(self, groups, sets):
         self._increment = 1
         self.ui.pushButton_move.clicked.connect(self.move_axis)
         self.ui.pushButton_stop.clicked.connect(self.stop_axis)
@@ -149,6 +150,18 @@ class StepMotorsView(DeviceControllerView):
                         pass
 
                 self.ui.horizontalLayout_groups.addLayout(vlayout_group)
+        if sets:
+            group = QGroupBox(title='Sets', parent=self.ui.centralwidget)
+            setattr(self.ui, 'groupbox_sets', group)
+            HL = QHBoxLayout(group)
+            setattr(self.ui, 'HL_sets', HL)
+            for name, set_values in sets.items():
+                widget = QRadioButton(text=name, parent=group)
+                HL.addWidget(widget)
+                setattr(self.ui, f'set_{name}', widget)
+                widget.toggled.connect(partial(self._run_sets_pos, set_values))
+
+            self.ui.horizontalLayout_sets.addWidget(group)
 
     def get_pos_axis(self, axis_id=None, with_return=False):
         if axis_id is None:
@@ -286,6 +299,21 @@ class StepMotorsView(DeviceControllerView):
             self._update_lcd_screen()
 
         super(StepMotorsView, self).update_state(force_device, force_ctrl, update_func_local)
+
+    def _run_sets_pos(self, set_values: Dict[str, float]):
+        if isinstance(set_values, dict):
+            hardware_devices: HardwareDeviceDict = self.service_parameters.device_description.hardware_devices
+            for device_id, pos in set_values.items():
+                self.ui.comments.setText('Moving...')
+                self.ui.radioButton_absolute.setChecked(True)
+                self.ui.lineEdit_value.setText(str(pos))
+                device: HardwareDevice = hardware_devices[device_id]
+                self.ui.spinBox_device_id.setValue(device.device_id_seq)
+                self.move_axis()
+                sleep(0.5)
+
+        else:
+            error_logger(self, self._run_sets_pos, f'set_values are not correctly set: {set_values}.')
 
     def _update_lcd_screen(self):
         unit = self._get_unit()
