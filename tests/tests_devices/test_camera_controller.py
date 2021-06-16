@@ -1,9 +1,9 @@
-import pytest
-
-from devices.service_devices.cameras import *
+from time import sleep
+from devices.datastruct_for_messaging import *
 from tests.fixtures.services import *
-from utilities.datastructures.mes_independent.camera_dataclass import *
-from utilities.datastructures.mes_independent.camera_dataclass import FuncGetImagesInput
+from devices.service_devices.cameras.datastruct_for_messaging import *
+from devices.service_devices.cameras import CameraController
+
 
 one_service = [camera_basler_test_non_fixture()]
 #all_services = []
@@ -18,8 +18,8 @@ def test_func_stpmtr(cameractrl: CameraController):
     DEACTIVATE = FuncActivateInput(flag=False)
     POWER_ON = FuncPowerInput(flag=True)
     POWER_OFF = FuncPowerInput(flag=False)
-    ACTIVATE_CAMERA_ONE = FuncActivateCameraInput(1, 1)
-    DEACTIVATE_CAMERA_ONE = FuncActivateCameraInput(1, 0)
+    ACTIVATE_CAMERA_ONE = FuncActivateDeviceInput(1, 1)
+    DEACTIVATE_CAMERA_ONE = FuncActivateDeviceInput(1, 0)
     SET_TRANSPORT_LAYER = FuncSetTransportParametersInput(1, 1500, 1000)
     SET_SYNC_PARAM = FuncSetSyncParametersInput(1, 9999, False, 189999, 20)
     SET_IMAGE_PARAM = FuncSetImageParametersInput(1, 546, 550, 0, 0, 'Off', 0, -30, 64, 'Mono8')

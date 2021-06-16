@@ -1,7 +1,7 @@
 from PyQt5.Qt import QMainWindow
-from prev_projects.DATAFIT.UTILITY.META import Meta
-from prev_projects.DATAFIT.UTILITY.OBSERVER import GraphObserver
-from prev_projects.DATAFIT.VIEW.UI import Ui_GraphWindow
+from UTILITY.META import Meta
+from UTILITY.OBSERVER import GraphObserver
+from VIEW.UI import Ui_GraphWindow
 
 
 class GraphView(QMainWindow, GraphObserver, metaclass=Meta):

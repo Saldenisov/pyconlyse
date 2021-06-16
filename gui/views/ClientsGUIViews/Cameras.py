@@ -9,17 +9,17 @@ from time import sleep
 
 import numpy as np
 from PyQt5 import QtCore
+from typing import Dict, Union
 from PyQt5.QtWidgets import QMenu, QErrorMessage
 from matplotlib.widgets import RectangleSelector
 
 from communication.messaging.messages import MessageInt, MsgComExt
-from devices.service_devices.cameras import CameraController
+from devices.datastruct_for_messaging import *
+from devices.service_devices.cameras.camera_controller import CameraController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.matplotlib_canvas.DataCanvasCamera import DataCanvasCamera
 from gui.views.ui import Ui_CameraGUI
-from utilities.datastructures.mes_independent.camera_dataclass import *
 from utilities.datastructures.mes_independent.measurments_dataclass import CameraReadings
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
 from utilities.myfunc import error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class CamerasView(DeviceControllerView):
         super().__init__(**kwargs)
         self._displacement = 0.5
 
-    def extra_ui_init(self):
+    def extra_ui_init(self, groups, sets):
         self.ui.datacanvas = DataCanvasCamera(width=9, height=10, dpi=70, canvas_parent=self.ui.verticalWidget_toolbox)
         self.RS = RectangleSelector(self.ui.datacanvas.axis,
                                     self.update_cursors,
@@ -53,11 +53,9 @@ class CamerasView(DeviceControllerView):
         self.ui.pushButton_decrease_X.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self.ui.pushButton_decrease_Y.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
 
-        self.ui.pushButton_GetImage.clicked.connect(self.get_image)
-        self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
-        self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_GetImage.clicked.connect(partial(self.get_image, False))
         self.ui.pushButton_GetImages.clicked.connect(partial(self.get_image, True))
+        self.ui.pushButton_stop.clicked.connect(self.stop_acquisition)
         self.ui.pushButton_set_parameters.clicked.connect(self.set_parameters)
         self.ui.comboBox_x_stepmotor.activated.connect(partial(self.step_motor_changed, 'X'))
         self.ui.comboBox_y_stepmotor.activated.connect(partial(self.step_motor_changed, 'Y'))
@@ -84,12 +82,15 @@ class CamerasView(DeviceControllerView):
         if action:
             if action == action_full_image:
                 camera_id = self.selected_device_id
-                size_of_matrix = self.controller_status.cameras[camera_id].matrix_size
+                size_of_matrix = self.device_ctrl_state.devices[camera_id].matrix_size
                 if len(size_of_matrix) != 0:
                     self.ui.spinBox_Xoffset.setValue(0)
                     self.ui.spinBox_Yoffset.setValue(0)
+                    self.set_image_parameters()
+                    sleep(0.2)
                     self.ui.spinBox_Width.setValue(size_of_matrix[0])
                     self.ui.spinBox_Height.setValue(size_of_matrix[1])
+                    sleep(0.2)
                     self.set_image_parameters()
 
     def menu_stepmotor(self, axis: str, point):
@@ -107,7 +108,7 @@ class CamerasView(DeviceControllerView):
             camera_id = self.selected_device_id
             camera: Camera = self.controller_cameras[camera_id]
             if action == action_get_axes:
-                if camera.stpmtr_ctrl_id and camera.stpmtr_ctrl_id in list(self.model.service_parameters.keys()):
+                if camera.stpmtr_ctrl_id in list(self.model.service_parameters.keys()):
                     param = self.model.service_parameters
                     stpmtr_ctrl_descrip: ServiceDescription = param[camera.stpmtr_ctrl_id].device_description
                     self.ui.comboBox_x_stepmotor.clear()
@@ -118,6 +119,7 @@ class CamerasView(DeviceControllerView):
 
     def menu_actuator(self, button: str, point):
         menu = QMenu()
+        action_displacement_tens = menu.addAction('0.1')
         action_displacement_half = menu.addAction('0.5')
         action_displacement_one = menu.addAction('1')
         action_displacement_two = menu.addAction('2')
@@ -138,7 +140,9 @@ class CamerasView(DeviceControllerView):
         else:
             action = None
 
-        if action == action_displacement_half:
+        if action == action_displacement_tens:
+            self._displacement = 0.1
+        elif action == action_displacement_half:
             self._displacement = 0.5
         elif action == action_displacement_one:
             self._displacement = 1
@@ -179,11 +183,11 @@ class CamerasView(DeviceControllerView):
             cg_points = self.ui.spinBox_cg_points.value()
         else:
             cg_points = 0
-
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncGetImagesInput(camera_id=self.selected_device_id,
-                                                                demander_device_id=client.id,
+                                                                demander_device_id=client.device_id,
                                                                 every_n_sec=every_sec,
                                                                 return_images=self.ui.checkBox_images.isChecked(),
                                                                 post_treatment='cg',
@@ -199,20 +203,23 @@ class CamerasView(DeviceControllerView):
                 result: FuncGetImagesOutput = result
                 if self.selected_device_id == result.camera_id:
                     datacanvas: DataCanvasCamera = self.ui.datacanvas
-                    if result.image and self.selected_device_id == result.camera_id:
+                    if result.image:
                         datacanvas.update_data(CameraReadings(data=np.array(result.image),
                                                               time_stamp=result.timestamp,
-                                                              description=result.description))
+                                                              description=result.description),
+                                               offsets=(self.ui.spinBox_Xoffset.value(),
+                                                        self.ui.spinBox_Yoffset.value()))
                     if result.post_treatment_points and self.ui.checkBox_show_history.isChecked():
-                        datacanvas.add_points(result.post_treatment_points)
+                        datacanvas.add_points(result.post_treatment_points, offsets=(self.ui.spinBox_Xoffset.value(),
+                                                        self.ui.spinBox_Yoffset.value()))
             elif info.com == CameraController.GET_IMAGES.name_prepared:
                 result: FuncGetImagesPrepared = result
                 self.controller_cameras = result.camera
                 if result.ready:
-                    comments = f'Camera with id {result.camera_id} is ready to send images. ' \
+                    comments = f'Camera with id {result.camera.device_id_seq} is ready to send images. ' \
                                f'Acquisition is started.'
                 else:
-                    comments = f'Camera {result.camera_id} is not ready to send images.'
+                    comments = f'Camera {result.camera.device_id_seq} is not ready to send images.'
                 result.comments = f'{comments} {result.comments}'
             elif info.com == CameraController.SET_IMAGE_PARAMETERS.name:
                 result: FuncSetImageParametersOutput = result
@@ -244,12 +251,13 @@ class CamerasView(DeviceControllerView):
             elif 'increase' in button_name:
                 direction = 1
 
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+            service_id = self.service_parameters.device_id
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                       forward_to=camera.stpmtr_ctrl_id,
                                       func_input=FuncActivateDeviceInput(device_id=axis_id, flag=1))
             self.send_msg(msg)
             sleep(0.02)
-            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                       forward_to=camera.stpmtr_ctrl_id,
                                       func_input=FuncMoveAxisToInput(axis_id=axis_id,
                                                                      pos=self._displacement * direction,
@@ -318,7 +326,8 @@ class CamerasView(DeviceControllerView):
         gain_mode = ui.comboBox_gain_mode.currentText()
         balance_ratio = ui.spinBox_balance_ratio.value()
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetImageParametersInput(camera_id=self.selected_device_id, width=width,
                                                                          height=height, offset_x=xoffset,
@@ -339,7 +348,8 @@ class CamerasView(DeviceControllerView):
         fps = ui.spinBox_fps.value()
         trigger_source = ui.comboBox_TrigSource.currentText()
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetSyncParametersInput(camera_id=self.selected_device_id,
                                                                         exposure_time=exposure_time,
@@ -355,7 +365,8 @@ class CamerasView(DeviceControllerView):
         packet_size = ui.spinBox_packetsize.value()
         interpacket_delay = ui.spinBox_interpacket_delay.value()
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetTransportParametersInput(camera_id=self.selected_device_id,
                                                                              packet_size=packet_size,
@@ -368,47 +379,50 @@ class CamerasView(DeviceControllerView):
 
     def stop_acquisition(self):
         client = self.superuser
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        service_id = self.service_parameters.device_id
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncStopAcquisitionInput(camera_id=self.selected_device_id))
         self.send_msg(msg)
         self._asked_status = 0
 
     def update_state(self, force_device=False, force_ctrl=False):
-        camera: Camera = super(CamerasView, self).update_state(force_device, force_ctrl)
+        def update_func_local(self,force_device, force_ctrl):
+            cs = self.device_ctrl_state
+            ui = self.ui
+            camera: Camera = cs.devices[self.selected_device_id]
 
-        cs = self.device_ctrl_state
-        ui = self.ui
+            if cs.devices != cs.devices_previous or force_device:
+                acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
+                analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
+                aoi_ctrls: AOI_Controls = camera.parameters['AOI_Controls']
+                transport_ctrls: Transport_Layer = camera.parameters['Transport_Layer']
 
-        if cs.devices != cs.devices_previous or force_device:
-            acq_ctrls: Acquisition_Controls = camera.parameters['Acquisition_Controls']
-            analog_ctrls: Analog_Controls = camera.parameters['Analog_Controls']
-            aoi_ctrls: AOI_Controls = camera.parameters['AOI_Controls']
-            transport_ctrls: Transport_Layer = camera.parameters['Transport_Layer']
+                # Setting Acquisition_Controls
+                ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
+                ui.spinBox_exposure_time.setValue(acq_ctrls.ExposureTimeAbs)
+                ui.spinBox_trigger_delay.setValue(acq_ctrls.TriggerDelayAbs)
+                # Setting Analog_Controls
+                ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
+                ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
+                ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
+                # Setting AOI_Controls
+                ui.spinBox_Width.setValue(aoi_ctrls.Width)
+                ui.spinBox_Height.setValue(aoi_ctrls.Height)
+                ui.spinBox_Xoffset.setValue(aoi_ctrls.OffsetX)
+                ui.spinBox_Yoffset.setValue(aoi_ctrls.OffsetY)
+                # Setting Transport_Layer
+                ui.spinBox_packetsize.setValue(transport_ctrls.GevSCPSPacketSize)
+                ui.spinBox_interpacket_delay.setValue(transport_ctrls.GevSCPD)
 
-            # Setting Acquisition_Controls
-            ui.spinBox_fps.setValue(acq_ctrls.AcquisitionFrameRateAbs)
-            ui.spinBox_exposure_time.setValue(acq_ctrls.ExposureTimeAbs)
-            ui.spinBox_trigger_delay.setValue(acq_ctrls.TriggerDelayAbs)
-            # Setting Analog_Controls
-            ui.spinBox_gainraw.setValue(analog_ctrls.GainRaw)
-            ui.spinBox_blacklevel.setValue(analog_ctrls.BlackLevelRaw)
-            ui.comboBox_syncmode.setCurrentText(acq_ctrls.TriggerMode)
-            # Setting AOI_Controls
-            ui.spinBox_Width.setValue(aoi_ctrls.Width)
-            ui.spinBox_Height.setValue(aoi_ctrls.Height)
-            ui.spinBox_Xoffset.setValue(aoi_ctrls.OffsetX)
-            ui.spinBox_Yoffset.setValue(aoi_ctrls.OffsetY)
-            # Setting Transport_Layer
-            ui.spinBox_packetsize.setValue(transport_ctrls.GevSCPSPacketSize)
-            ui.spinBox_interpacket_delay.setValue(transport_ctrls.GevSCPD)
+            if force_device:
+                pass
 
-        if force_device:
-            pass
+        super(CamerasView, self).update_state(force_device, force_ctrl, func=update_func_local)
 
     def update_cursors(self, eclick, erelease):
         camera_id = self.selected_device_id
-        size_of_matrix = self.controller_status.devices[camera_id].matrix_size
+        size_of_matrix = self.device_ctrl_state.devices[camera_id].matrix_size
         xoffset_prev = self.ui.spinBox_Xoffset.value()
         yoffset_prev = self.ui.spinBox_Yoffset.value()
 
@@ -429,11 +443,11 @@ class CamerasView(DeviceControllerView):
         if height_new % 2 != 0:
             height_new += 1
 
-        xoffset_new = xoffset_prev + pixel_x_start
+        xoffset_new = pixel_x_start
         if xoffset_new % 2 != 0:
             xoffset_new += 1
 
-        yoffset_new = yoffset_prev + pixel_y_start
+        yoffset_new = pixel_y_start
         if yoffset_new % 2 != 0:
             yoffset_new += 1
 

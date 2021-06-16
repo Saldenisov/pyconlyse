@@ -7,17 +7,20 @@ Created on 15.11.2019
 import logging
 import os
 from pathlib import Path
-
-from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem, QErrorMessage, QFileDialog
+from time import sleep
+from PyQt5.QtWidgets import QMessageBox, QApplication, QListWidgetItem
 
 from communication.messaging.messages import MessageExt, MsgComExt
+from communication.messaging.messengers import PUB_Socket_Server
+from utilities.errors.myexceptions import DeviceError
 from devices.devices import Device
 from gui.views.ClientsGUIViews.Cameras import CamerasView
 from gui.views.ClientsGUIViews.ProjectManagers import ProjectManagerView
 from gui.views.ClientsGUIViews.SuperUser import SuperUserView
 from gui.views.ClientsGUIViews.StepMotors import StepMotorsView
 from gui.views.ClientsGUIViews.PDUs import PDUsView
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from gui.views.ClientsGUIViews.DAQmxes import DAQmxView
+from devices.devices_dataclass import *
 from utilities.myfunc import info_msg, get_local_ip, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -32,7 +35,7 @@ class SuperClientGUIcontroller():
         self.name = 'SuperClientGUI:controller: ' + get_local_ip()
         self.services_views = {}
         info_msg(self, 'INITIALIZING')
-        self.model= in_model
+        self.model = in_model
         self.device = self.model.superuser
         self.view = SuperUserView(self, in_model=self.model)
         self.view.show()
@@ -66,7 +69,7 @@ class SuperClientGUIcontroller():
             service_id = self.view.ui.lW_devices.currentItem().text()
 
         try:
-            parameters: DeviceInfoExt = self.model.service_parameters[service_id]
+            parameters: ControllerInfoExt = self.model.service_parameters[service_id]
             if 'StpMtr' in parameters.device_description.class_name:
                 view = StepMotorsView
             elif 'ProjectManager' in parameters.device_description.class_name:
@@ -75,6 +78,8 @@ class SuperClientGUIcontroller():
                 view = CamerasView
             elif 'PDU' in parameters.device_description.class_name:
                 view = PDUsView
+            elif 'DAQmx' in parameters.device_description.class_name:
+                view = DAQmxView
 
             self.services_views[service_id] = view(in_controller=self, in_model=self.model,
                                                    service_parameters=parameters)
@@ -83,10 +88,6 @@ class SuperClientGUIcontroller():
         except KeyError as e:
             error_logger(self, self.create_service_gui,
                          f'Parameters for service id={service_id} was not loaded: {e}')
-        except Exception as e:
-            error_logger(self, self.create_service_gui, e)
-
-
 
     def send_request_to_server(self, msg: MessageExt):
         self.device.send_msg_externally(msg)
@@ -94,23 +95,56 @@ class SuperClientGUIcontroller():
     def lW_devices_double_clicked(self, item: QListWidgetItem):
         service_id = item.text()
         client = self.device
-
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  forward_to=service_id,
-                                  func_input=FuncServiceInfoInput())
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
+                                  forward_to=service_id, func_input=FuncServiceInfoInput())
         client.send_msg_externally(msg)
 
     def pB_checkServices_clicked(self):
         client = self.device
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
-                                  func_input=FuncAvailableServicesInput())
-        client.send_msg_externally(msg)
+        for server_id in client.messenger.connections.keys():
+            msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=server_id,
+                                      func_input=FuncAvailableServicesInput())
+            client.send_msg_externally(msg)
+
+    def server_change(self, connect=True):
+        selected_index = self.view.ui.comboBox_servers.currentIndex()
+        selected_addr = self.view.ui.comboBox_servers.itemText(selected_index)
+        connections = list(self.device.connections.values())
+        active_server_pub_addr = ''
+        if connections:
+            connection: Connection = connections[0]
+            active_server_pub_addr = connection.device_public_sockets[PUB_Socket_Server]
+
+        if not connect and self.device.connections:
+            self.view.ui.label_HB.setText(f'Disconnecting from {selected_addr}...wait')
+            sleep(1)
+            self.device.stop()
+            sleep(1)
+            self.model.superuser = None
+            self.view.ui.label_HB.setText(f'Disconnected from {selected_addr}')
+
+        if selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and \
+                selected_addr != active_server_pub_addr and connect:
+            self.device.stop()
+            self.model.superuser = None
+            self.model.create_device()
+            self.device = self.model.superuser
+            self.device.messenger.pref_server_pub_addr = selected_addr
+            self.device.start()
+
+        elif selected_addr in self.device.messenger.addresses[PUB_Socket_Server] and connect:
+            self.view.ui.label_HB.setText(f'Trying to connect {selected_addr}...wait')
+            self.model.create_device()
+            self.device = self.model.superuser
+            self.device.messenger.pref_server_pub_addr = selected_addr
+            self.device.start()
 
     def quit_clicked(self, event, total_close=False):
         if total_close:
             try:
+                self.view._state_observing = False
                 self.device.stop()
-            except Exception as e:  # TODO something reasonable
+            except DeviceError as e:
                 error_logger(self, self.quit_clicked, f'{self.name}: {e}')
             info_msg(self, 'INFO', 'SuperClientGUI is closing.')
             QApplication.quit()

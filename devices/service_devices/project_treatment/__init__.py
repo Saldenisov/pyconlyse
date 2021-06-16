@@ -1,2 +1,1 @@
-from .projectmanager_controller import *
-from .projectmanager_default import *
+from .projectmanager_controller import ProjectManager_controller

@@ -5,14 +5,13 @@ Created on 06.08.2019
 """
 import logging
 from _functools import partial
-from typing import Union
 
 from PyQt5 import QtCore
 from PyQt5.QtWidgets import (QMainWindow)
 
 from communication.messaging.messages import MsgComInt, MessageInt, MessageExt
 from gui.views.ui.ServerGUI_ui import Ui_ServerGUI
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import *
 from utilities.myfunc import info_msg, list_to_str_repr, get_local_ip
 
 module_logger = logging.getLogger(__name__)
@@ -39,11 +38,7 @@ class ServerGUIView(QMainWindow):
         self.ui.pB_pause.clicked.connect(self.controller.pause_server)
         self.ui.pB_execute.clicked.connect(partial(self.controller.exec_user_com, widget=self.ui.lE_execute))
         self.ui.pB_status.clicked.connect(self.controller.check_status)
-<<<<<<< HEAD:views/ServerGUIView.py
         self.ui.lE_execute.setText('-start_service StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd Devices.db')  # ; -start StepMotorsGUI.py')
-=======
-        self.ui.lE_execute.setText('-start_service -id StpMtrCtrl_emulate:b8b10026214c373bffe2b2847a9538dd -db Devices.db')  # ; -start StepMotorsGUI.py')
->>>>>>> develop:views/ServerGUIViews/Server.py
         self.ui.closeEvent = self.closeEvent
         info_msg(self, 'INITIALIZED')
 
@@ -91,7 +86,7 @@ class ServerGUIView(QMainWindow):
             self.ui.tE_queue_in.setText(list_to_str_repr(list(info.queue_in_keys)))
             self.ui.tE_queue_out.setText(list_to_str_repr(list(info.queue_out_keys)))
             self.ui.tE_queue_in_pending.setText(list_to_str_repr(list(info.queue_in_pending_keys)))
-        elif com == MsgComInt.HEARTBEAT.msg_name and msg.sender_id == self.model.server.selected_device_id:
+        elif com == MsgComInt.HEARTBEAT.msg_name and msg.sender_id == self.model.server.id:
             widget = self.ui.rB_hb
             before = widget.isChecked()
             widget.setChecked(not before)

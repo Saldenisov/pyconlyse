@@ -1,10 +1,19 @@
 import logging
 from abc import abstractmethod
 from functools import lru_cache
+from typing import Dict, List, Tuple
+from threading import Thread
 from devices.devices import Service
-from utilities.datastructures.mes_independent.camera_dataclass import *
-from utilities.datastructures.mes_independent.general import *
-from utilities.myfunc import error_logger, info_msg
+from devices.devices_dataclass import HardwareDeviceDict
+from devices.service_devices.cameras.camera_dataclass import (Camera, FuncGetImagesInput, FuncGetImagesOutput,
+                                                              FuncGetImagesPrepared, FuncSetImageParametersInput,
+                                                              FuncSetImageParametersOutput,
+                                                              FuncSetSyncParametersInput, FuncSetSyncParametersOutput,
+                                                              FuncSetTransportParametersInput, ImageDemand,
+                                                              FuncSetTransportParametersOutput, FuncStartTrackingInput,
+                                                              FuncStartTrackingOutput, FuncStartTrackingPrepared,
+                                                              FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
+from utilities.datastructures.mes_independent.general import CmdStruct
 
 module_logger = logging.getLogger(__name__)
 
@@ -12,7 +21,7 @@ module_logger = logging.getLogger(__name__)
 class CameraController(Service):
     GET_IMAGES = CmdStruct(FuncGetImagesInput, FuncGetImagesOutput, FuncGetImagesPrepared)
     SET_IMAGE_PARAMETERS = CmdStruct(FuncSetImageParametersInput, FuncSetImageParametersOutput)
-    SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetImageParametersOutput)
+    SET_SYNC_PARAMETERS = CmdStruct(FuncSetSyncParametersInput, FuncSetSyncParametersOutput)
     SET_TRANSPORT_PARAMETERS = CmdStruct(FuncSetTransportParametersInput, FuncSetTransportParametersOutput)
     START_TRACKING = CmdStruct(FuncStartTrackingInput, FuncStartTrackingOutput, FuncStartTrackingPrepared)
     STOP_ACQUISITION = CmdStruct(FuncStopAcquisitionInput, FuncStopAcquisitionOutput)
@@ -83,7 +92,7 @@ class CameraController(Service):
         pass
 
     @abstractmethod
-    def _prepare_camera_reading(self) -> Tuple[bool, str]:
+    def _prepare_camera_reading(self, camera_id: int) -> Tuple[bool, str]:
         return True, ''
 
     def _register_image_demander(self, image_demand: ImageDemand):
@@ -118,6 +127,7 @@ class CameraController(Service):
             res, comments = self._set_image_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_image_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetImageParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
@@ -132,6 +142,7 @@ class CameraController(Service):
             res, comments = self._set_sync_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_sync_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetSyncParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod
@@ -146,6 +157,7 @@ class CameraController(Service):
             res, comments = self._set_transport_parameters_device(func_input)
         else:
             camera = None
+        comments = f'Func "set_transport_parameters" is accomplished with success: {res}. {comments}'
         return FuncSetTransportParametersOutput(comments=comments, func_success=res, camera=camera)
 
     @abstractmethod

@@ -1,9 +1,9 @@
-'''
+"""
 Created on 17 avr. 2015
 "Read the Hamamatsu header,DATA, Time Delays and Wavelenghs for the given __filepath
 
 @author: saldenisov
-'''
+"""
 
 from dataclasses import dataclass
 from functools import lru_cache
@@ -47,14 +47,14 @@ class HamamatsuFileOpener(Opener):
         data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
         map_index = 0
         for map in self.give_all_maps(file_path):
-            if isinstance(map, tuple):  # Means there was an error
-                return map
+            if isinstance(map, bool):  # Means there was an error
+                pass
             else:
                 data += map.data
                 map_index += 1
                 if call_back_func:
                     call_back_func(map_index, info.number_maps)
-        return data / info.number_maps
+        return data / map_index + 1
 
     @lru_cache(maxsize=100)
     def read_critical_info(self, file_path: Path) -> CriticalInfoHamamatsu:
@@ -66,7 +66,8 @@ class HamamatsuFileOpener(Opener):
                 comments_length = int.from_bytes(head_64_bytes[2:4], byteorder='little')
                 # TODO: need to find where ends real header with text
                 # TODO: need to understand what are the comments, how do they relate to datastructures
-                header = file.read(4610).decode(encoding='utf-8')
+                header = file.read(comments_length)#.decode(encoding='utf-8')
+                header = header.decode(encoding='UTF-8', errors='ignore')
                 pos += comments_length
             file_type = self.get_img_type(header)
             # Set scales parameters
@@ -105,7 +106,7 @@ class HamamatsuFileOpener(Opener):
         else:
             raise NoSuchFileType(file_path.suffix)
 
-    @lru_cache(maxsize=200)
+    #@lru_cache(maxsize=200)
     def read_map(self, file_path: Path, map_index=0) -> Union[Tuple[Hamamatsu, str], Tuple[bool, str]]:
         if file_path not in self.paths:
             res, comments = self.fill_critical_info(file_path)
@@ -135,9 +136,13 @@ class HamamatsuFileOpener(Opener):
                 e = Exception(f'func: read_map Wrong bytes_per_point {info.bytes_per_point}')
                 self.logger.error(e)
                 raise e
-            data_array = np.frombuffer(data_bytearray, dtype=number_type)
+            try:
+                data_array = np.frombuffer(data_bytearray, dtype=number_type)
+            except Exception as e:
+                return False, str(e)
             data = data_array.reshape(info.timedelays_length, info.wavelengths_length)
-            return Hamamatsu(type=file_path.suffix, comments=info.header, author='', timestamp=file_path.stat().st_mtime,
+            return Hamamatsu(type=file_path.suffix, comments=info.header, author='',
+                             timestamp=file_path.stat().st_mtime,
                              data=data, wavelengths=info.wavelengths, timedelays=info.timedelays,
                              time_scale=info.scaling_yunit), ''
         else:
@@ -176,12 +181,15 @@ class HamamatsuFileOpener(Opener):
         return wavelengths
 
     def get_img_type(self, header) -> str:
-        type_ = 'Other'
-        xscaling_file = header.split("ScalingXScalingFile=")[1][1:6]
-        if xscaling_file != 'Other':
+        try:
+            xscaling_file = header.split("ScalingXScalingFile=")[1][1:6]
+            if xscaling_file != 'Other':
+                return 'Normal'
+            else:
+                return 'Other'
+        except Exception as e:
+            self.logger.error(f'get_image_type func: {e}')
             return 'Normal'
-        else:
-            return 'Other'
 
     def give_all_maps(self, file_path) -> Union[Measurement, Tuple[bool, str]]:
         res = True

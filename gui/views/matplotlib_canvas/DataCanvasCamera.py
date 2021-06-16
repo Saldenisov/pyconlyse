@@ -36,13 +36,14 @@ class DataCanvasCamera(FigureCanvas):
         from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
         self.toolbar = NavigationToolbar(self, self.parent)
 
-    def add_points(self, points: List[Tuple[int]]):
+    def add_points(self, points: List[Tuple[int]], offsets:Tuple[int] = None):
         circles = []
         c_map = DataCanvasCamera.get_cmap(n=len(points))
         for coordinate, n in zip(points, range(len(points))):
             #x, y = np.random.randint(200, 300, 1), np.random.randint(200, 300, 1)
-            #coordinate = (x, y)
-            circles.append(Circle(coordinate, radius=10, color=c_map(n), zorder=n+1))
+            if offsets:
+                coordinate = (coordinate[0] + offsets[0], coordinate[1] + offsets[1])
+            circles.append(Circle(coordinate, radius=1, color=c_map(n), zorder=n+1))
 
         if self.image:
             [p.remove() for p in reversed(self.axis.patches)]
@@ -52,10 +53,10 @@ class DataCanvasCamera(FigureCanvas):
 
     def compute_figure(self, figure_name=''):
         self.image: AxesImage = self.axis.imshow(self.camera_reading.data,
-                                                 extent=[self.camera_reading.X[0],
-                                                         self.camera_reading.X[-1],
+                                                 extent=[self.camera_reading.Y[0],
                                                          self.camera_reading.Y[-1],
-                                                         self.camera_reading.Y[0]],
+                                                         self.camera_reading.X[-1],
+                                                         self.camera_reading.X[0]],
                                                  aspect='auto',
                                                  vmin=np.min(self.camera_reading.data),
                                                  vmax=np.max(self.camera_reading.data),
@@ -71,11 +72,15 @@ class DataCanvasCamera(FigureCanvas):
         RGB color; the keyword argument name must be a standard mpl colormap name.'''
         return plt.cm.get_cmap(name, n)
 
-    def update_data(self, camera_readings: CameraReadings = None):
-        self.camera_reading = camera_readings
+    def update_data(self, camera_reading: CameraReadings = None, offsets:Tuple[int] = None):
+        self.camera_reading = camera_reading
         self.image.set_data(self.camera_reading.data)
-        self.image.set_extent(extent=[self.camera_reading.Y[0], self.camera_reading.Y[-1],
-                                      self.camera_reading.X[-1], self.camera_reading.X[0]])
+        if offsets:
+            extent = [camera_reading.X[0] + offsets[0], camera_reading.X[-1] + offsets[0],
+                      camera_reading.Y[-1] + offsets[1],  camera_reading.Y[0] + offsets[1]]
+        else:
+            extent = [camera_reading.X[0], camera_reading.X[-1], camera_reading.Y[-1], camera_reading.Y[0]]
+        self.image.set_extent(extent=extent)
         self.axis.set_title(self.camera_reading.description)
 
         self.update_limits()

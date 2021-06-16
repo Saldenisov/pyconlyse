@@ -1,9 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Tuple, Union, NewType, Set
-from pypylon import pylon
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from typing import Union, Dict, Tuple
+from devices.devices_dataclass import HardwareDevice, FuncGetControllerStateInput, FuncGetControllerStateOutput
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 

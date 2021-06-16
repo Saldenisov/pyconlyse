@@ -1,6 +1,5 @@
 """
 Created on 06.08.2019
-
 @author: saldenisov
 """
 import logging
@@ -38,11 +37,15 @@ class ServerGUIModel(QObject):
     def remove_observer(self, inObserver):
         self.observers.remove(inObserver)
 
-    def start_server(self):
+    def start_server(self, test=True):
         if not self.server:
             try:
                 from devices.devices import DeviceFactory, Server
-                self.server = DeviceFactory.make_device(device_id="Server:Main:sfqvtyjsdf23qa23xcv",
+                if test:
+                    device_id = "Server:Main:sfqvtyjsdf23qa23xcvTEST"
+                else:
+                    device_id = "Server:Main:sfqvtyjsdf23qa23xcv"
+                self.server = DeviceFactory.make_device(device_id=device_id,
                                                         db_path=self.db_path, pyqtslot=self.treat_pyqtsignals,
                                                         logger_new=False)
                 self.server.start()

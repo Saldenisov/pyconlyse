@@ -1,7 +1,7 @@
 from PyQt5.Qt import QMainWindow, QWidget
-from prev_projects.DATAFIT.UTILITY.META import Meta
-from prev_projects.DATAFIT.UTILITY.OBSERVER import FitObserver
-from prev_projects.DATAFIT.VIEW.UI import Ui_FitWindow
+from UTILITY.META import Meta
+from UTILITY.OBSERVER import FitObserver
+from VIEW.UI import Ui_FitWindow
 
 
 class FitView(QMainWindow, FitObserver, metaclass=Meta):

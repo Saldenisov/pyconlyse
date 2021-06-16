@@ -53,8 +53,8 @@ def init(camera_id, camera, devices):
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource = "Line1"
     camera.TriggerMode.SetValue("On")
-    camera.TriggerDelayAbs.SetValue(190000)
-    camera.ExposureTimeAbs.SetValue(10000.0)
+    camera.TriggerDelayAbs.SetValue(185000)
+    camera.ExposureTimeAbs.SetValue(15000.0)
     camera.BalanceRatioRaw.SetValue(64)
     camera.AcquisitionFrameRateEnable.SetValue(False)
     camera.AcquisitionFrameRateAbs.SetValue(5)
@@ -92,19 +92,28 @@ def image_treat(image):
     return img
 
 
-def calc(img, threshold=80):
+def calc(img, threshold=50):
     # apply thresholding
 
     ret, thresh = cv2.threshold(img, threshold, 255, 0)
     contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
+    longest_contour = 0
+    longest_contour_index = 0
+    i = 0
+    for contour in contours:
+        if longest_contour < contour.shape[0]:
+            longest_contour_index = i
+            longest_contour = contour.shape[0]
+        i += 1
+    #plt.figure()
+    #plt.imshow(img)
     # edge detection
     # apply Canny edge detection
-    tight = cv2.Canny(thresh, threshold, 255)
+    #tight = cv2.Canny(thresh, threshold, 255)
 
     # calculate the centre of moment
-    M = cv2.moments(tight)
-    h, w = tight.shape[:2]
+    #cv2.drawContours(img, contours[longest_contour_index], -1, (0, 255, 0), 3)
+    M = cv2.moments(contours[longest_contour_index])
     if M["m00"] != 0:
         cX = int(M["m10"] / M["m00"])
         cY = int(M["m01"] / M["m00"])
@@ -161,8 +170,8 @@ positionsY2 = deque([], maxlen=120)
 
 im1_1 = ax_im1.imshow(calc(img1)[0], cmap='gray', vmin=0, vmax=255)
 im1_2 = ax_im1.imshow(img1, cmap='gray', vmin=0, vmax=255, alpha=0.6)
-im2_1 = ax_im2.imshow(img1, cmap='gray', vmin=0, vmax=255)
-im2_2 = ax_im2.imshow(img1, cmap='gray', vmin=0, vmax=255, alpha=0.6)
+im2_1 = ax_im2.imshow(calc(img1)[0], cmap='gray', vmin=0, vmax=255)
+im2_2 = ax_im2.imshow(img2, cmap='gray', vmin=0, vmax=255, alpha=0.6)
 Xpos1, = ax1_x.plot([1], [1], marker='o', markersize=2, color='b', linestyle= '')
 Xpos2, = ax2_x.plot([1], [1], marker='o', markersize=2, color='b', linestyle= '')
 Ypos1, = ax1_y.plot([1], [1], marker='o', markersize=2, color='b', linestyle= '')

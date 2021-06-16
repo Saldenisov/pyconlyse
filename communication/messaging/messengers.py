@@ -2,7 +2,8 @@ import base64
 import logging
 from abc import abstractmethod
 from time import sleep
-from typing import NamedTuple, NewType
+from typing import Dict, List, NamedTuple, NewType
+from functools import lru_cache
 
 import zmq
 from cryptography.fernet import Fernet
@@ -15,10 +16,12 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
 from communication.messaging.messages import MessageExt, MsgComExt
+from communication.interfaces import MessengerInter
+from communication.messaging.conversion import bytes_to_msg, bytes_to_info
 from devices.devices import Device
-from devices.interfaces import DeviceId, DeviceType
+from devices.devices_dataclass import Connection
 from utilities.datastructures.mes_dependent.dicts import MsgDict
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import (DeviceId, DeviceType, HeartBeatFull)
 from utilities.errors.messaging_errors import MessengerError, MessageError
 from utilities.errors.myexceptions import WrongAddress, ThinkerError
 from utilities.myfunc import info_msg, error_logger, get_local_ip, get_free_port
@@ -57,12 +60,11 @@ class Messenger(MessengerInter):
         """
 
         super().__init__()
-        self._attempts_to_restart_sub = 10  # restart subscriber
-        self._are_you_alive_send = False
+        self.connections: Dict[DeviceId, Connection] = {}
         Messenger.n_instance += 1
         self.logger = logging.getLogger(f'{__name__}.{self.__class__.__name__}')
         self.name = f'{self.__class__.__name__}:{Messenger.n_instance}:{name}:{get_local_ip()}'
-        self.id: DeviceId = parent.id
+        self.id: DeviceId = parent.device_id
         self.parent: Device = parent
         try:
             self._polling_time = int(self.parent.get_general_settings()['polling']) / 1000.
@@ -78,7 +80,6 @@ class Messenger(MessengerInter):
         self.addresses = {}
         self.pub_option = pub_option
         self._gen_rsa_keys()
-
 
         try:
             info_msg(self, 'INITIALIZING')
@@ -98,7 +99,6 @@ class Messenger(MessengerInter):
     def add_msg_out_publisher(self, msg: MessageExt):
         try:
             self._msg_out_publisher[msg.id] = msg
-            #print(f'msg_out_publisher len {len(self._msg_out_publisher)}')
         except KeyError as e:
             error_logger(self, self.add_msg_out_publisher, e)
 
@@ -106,10 +106,11 @@ class Messenger(MessengerInter):
     def _create_sockets(self):
         pass
 
-    def create_fernet(self, session_key: bytes):
+    @lru_cache(maxsize=100, typed=True)
+    def create_fernet(self, session_key: bytes) -> Fernet:
         return Fernet(session_key)
 
-    def decrypt_with_private(self, cipher_text: bytes) -> str:
+    def decrypt_with_private(self, cipher_text: bytes) -> bytes:
         """
         Decrypt the cipher text using private key (RSA)
         :param cipher_text: cipher text in bytes
@@ -119,12 +120,13 @@ class Messenger(MessengerInter):
                                                                         algorithm=hashes.SHA1(), label=None))
         return plaintext
 
-    def decrypt_with_session_key(self, msg_bytes: bytes, device_id: DeviceId = None) -> str:
-        # TODO: add functionality to messenger.decrypt() when TLS is realized
+    def decrypt_with_session_key(self, msg: bytes, device_id: DeviceId) -> bytes:
         try:
-            return Fernet(self.parent.connections[device_id].session_key).decrypt(msg_bytes)
+            fernet = self.create_fernet(self.connections[device_id].session_key)
+            mes = fernet.decrypt(msg)
+            return mes
         except KeyError:
-            raise MessengerError(f'DeviceID is not known, cannot decrypt msg')
+            raise MessengerError(f'DeviceID is not known, cannot decrypt msg.')
 
     @abstractmethod
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
@@ -137,16 +139,15 @@ class Messenger(MessengerInter):
         return msg_encrypted
 
     def encrypt_with_session_key(self, msg: MessageExt) -> bytes:
-        # TODO: add functionality to messenger.encrypt() when TLS is realized
         if msg.crypted:
             try:
-                if self.parent.type is DeviceType.SERVER:
-                    receiver_id: DeviceId = msg.receiver_id
-                else:
-                    receiver_id = self.parent.server_id
-                return Fernet(self.parent.connections[receiver_id].session_key).encrypt(msg.byte_repr(compression=False))
-            except (KeyError, ValueError):
-                raise MessengerError(f'DeviceID is not known, cannot encrypt msg')
+                receiver_id: DeviceId = msg.receiver_id
+                fernet = self.create_fernet(self.connections[receiver_id].session_key)
+                to_crypt = msg.byte_repr()
+                crypted = fernet.encrypt(to_crypt)
+                return crypted
+            except KeyError as e:
+                raise MessengerError(f'DeviceID is not known, cannot encrypt msg: {e}')
         else:
             return msg.byte_repr(compression=False)
 
@@ -159,8 +160,17 @@ class Messenger(MessengerInter):
             key_size = 4096
         else:
             key_size = 2048
-        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size, backend=default_backend())
+        self._private_key = rsa.generate_private_key(public_exponent=65537, key_size=key_size,
+                                                     backend=default_backend())
         self._public_key = self._private_key.public_key()
+
+    def get_certificate(self, device_id: str) -> bytes:
+        """
+        Function that gives certificate for authentification of devices from local safe DB.
+        :param device_id: can be anything even self.id
+        :return: certificate in bytes
+        """
+        return b'Elys3!icp'
 
     @abstractmethod
     def info(self):
@@ -196,7 +206,7 @@ class Messenger(MessengerInter):
                                              format=serialization.PublicFormat.SubjectPublicKeyInfo)
 
     def pause(self):
-        "put executation of thread on pause"
+        # put execution of thread on pause
         self.paused = True
         self.parent.ctrl_status.messaging_paused = self.paused
         self.logger.info(f'{self.name} is paused')
@@ -224,23 +234,6 @@ class Messenger(MessengerInter):
     @abstractmethod
     def _receive_msgs(self):
         pass
-
-    def restart_socket(self, socket_name: str, connect_to: str):
-        #TODO: realize other sockets
-        self.logger.info(f'restarting {socket_name} socket')
-        self.pause()
-        sock = self.sockets[socket_name]
-        self.poller.unregister(sock)
-        if socket_name == SUB_Socket:
-            sock = self.context.socket(zmq.SUB)
-            self.poller.register(sock, zmq.POLLIN)
-            self.sockets[SUB_Socket] = sock
-            self.subscribe_sub(connect_to)
-            self.logger.info(f'socket {socket_name} is restarted')
-        else:
-            pass
-
-        self.unpause()
 
     @abstractmethod
     def send_msg(self, msg: MessageExt):
@@ -270,13 +263,18 @@ class Messenger(MessengerInter):
         self.parent.ctrl_status.messaging_paused = self.paused
         self._msg_out.clear()
 
-    def subscribe_sub(self, address=None, filter_opt=b""):
+    def subscribe_sub(self, address, filter_opt=b""):
+        """
+        Function that created subscribtion connection to a given tcp_ip address
+        :param address: tcp_ip adress of subscriber socket
+        :param filter_opt: filter phrase
+        :return:
+        """
         try:
             self.sockets[SUB_Socket].connect(address)
             self.sockets[SUB_Socket].setsockopt(zmq.SUBSCRIBE, filter_opt)
-            self.sockets[SUB_Socket].setsockopt(zmq.RCVHWM, 3)
             self.logger.info(f'socket sub is connected to {address}')
-        except (zmq.ZMQError, Exception) as e:
+        except zmq.ZMQError as e:
             error_logger(self, self.subscribe_sub, e)
 
     @abstractmethod
@@ -300,52 +298,58 @@ class ClientMessenger(Messenger):
         super().__init__(**kwargs)
         if self.pub_option:
             self.socket_names.add(PUB_Socket)
+        self.pref_server_pub_addr = self.addresses[PUB_Socket_Server][0]
+
+    def add_dealer(self, addr: str, device_id: DeviceId):
+        self.logger.info(f'Adding dealer socket: {addr}')
+        dealer = self.context.socket(zmq.DEALER)
+        dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
+        dealer.setsockopt(zmq.SNDHWM, 10)
+        dealer.setsockopt(zmq.RCVHWM, 10)
+        dealer.connect(addr)
+        self.poller.register(dealer, zmq.POLLIN)
+        self.sockets[DEALER_Socket][device_id] = (dealer, addr)
+        a = 0
 
     def _create_sockets(self):
         try:
             self.context = zmq.Context()
-            # SOCKET DEALER
-            dealer = self.context.socket(zmq.DEALER)
-            dealer.setsockopt_unicode(zmq.IDENTITY, self.id)
-            dealer.setsockopt(zmq.SNDHWM, 10)
-            dealer.setsockopt(zmq.RCVHWM, 10)
+
             # SOCKET SUBSCRIBER
             subscriber = self.context.socket(zmq.SUB)
-            subscriber.setsockopt(zmq.RCVHWM, 10)
 
-            self.sockets = {DEALER_Socket: dealer, SUB_Socket: subscriber}
+            # POLLER
+            self.poller = zmq.Poller()
+            self.poller.register(subscriber, zmq.POLLIN)
+
+            # SOCKET DEALER
+            if FRONTEND_Server in self.addresses:
+                for addr in self.addresses[FRONTEND_Server]:
+                    self.add_dealer(addr)
+
+            self.sockets = {DEALER_Socket: {}, SUB_Socket: subscriber}
 
             # SOCKET PUBLISHER
             if self.pub_option:
                 publisher = self.context.socket(zmq.PUB)
-                publisher.setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+                publisher.setsockopt_unicode(zmq.IDENTITY, f'{self.id}:{self.addresses[PUB_Socket]}')
                 self.sockets[PUB_Socket] = publisher
                 self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
-
-            # POLLER
-            self.poller = zmq.Poller()
-            self.poller.register(dealer, zmq.POLLIN)
-            self.poller.register(subscriber, zmq.POLLIN)
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
-
-    def connect(self):
-        try:
-            self.sockets[DEALER_Socket].connect(self.addresses[FRONTEND_Server])
-            if self.pub_option:
-                self.bind_pub()
-        except (WrongAddress, zmq.error.ZMQBindError) as e:
-            error_logger(self, self.connect, e)
+        finally:
+            info_msg(self, 'INFO', f'Sockets: {self.sockets.keys()}; Public sockets: {self.public_sockets.values()}')
 
     def bind_pub(self):
         try:
-            self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
-            self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
-        except (WrongAddress, zmq.error.ZMQError) as e:
+            if self.pub_option:
+                self.sockets[PUB_Socket].setsockopt_unicode(zmq.IDENTITY, self.addresses[PUB_Socket])
+                self.sockets[PUB_Socket].bind(self.addresses[PUB_Socket])
+        except (WrongAddress, zmq.error.ZMQBindError) as e:
             # TODO: potential recursion depth violation
             error_logger(self, self.connect, f'{e}: {self.addresses[PUB_Socket]}')
-            port = get_free_port(scope=None)
+            port = get_free_port()
             local_ip = get_local_ip()
             self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
             self.public_sockets = {PUB_Socket: self.addresses[PUB_Socket]}
@@ -355,15 +359,17 @@ class ClientMessenger(Messenger):
         for msg, device_id, socket, crypted in msgs:
             try:
                 if int(crypted):
-                    device_id = self.parent.server_id  #  !!! ONLY WHEN CLIET/SERVICE HAS DEALER SOCKET
                     msg = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.bytes_to_msg(msg)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError) as e:
                 error_logger(self, self.run, e)
                 msg_r = self.parent.generate_msg(msg_com=MsgComExt.ERROR, comments=str(e), reply_to='',
                                                  receiver_id=device_id)
                 self.add_msg_out(msg_r)
+                sleep(0.1)
+                if device_id in self.connections:
+                    self.parent.thinker.remove_device_from_connections(DeviceId(device_id))
 
     def info(self):
         return super().info()
@@ -373,35 +379,36 @@ class ClientMessenger(Messenger):
         while self.active:
             try:
                 if not self.paused:
-                    sockets = dict(self.poller.poll(1))
-                    if self.sockets[DEALER_Socket] in sockets:
-                        msg, crypted = self.sockets[DEALER_Socket].recv_multipart()
-                        msgs.append(MsgTuple(msg, None, DEALER_Socket, crypted))
-                    if self.sockets[SUB_Socket] in sockets:
+                    sockets_polled = dict(self.poller.poll(5))
+                    for device_id, dealer_info in self.sockets[DEALER_Socket].items():
+                        if dealer_info[0] in sockets_polled:
+                            msg, crypted = dealer_info[0].recv_multipart()
+                            msgs.append(MsgTuple(msg, device_id, DEALER_Socket, crypted))
+                    if self.sockets[SUB_Socket] in sockets_polled:
                         msg, crypted = self.sockets[SUB_Socket].recv_multipart()
                         msgs.append(MsgTuple(msg, None, SUB_Socket, crypted))
                     if msgs:
                         self._deal_with_received_msg(msgs)
                         msgs = []
-            except ValueError as e:  # TODO when recv_multipart works wrong! what will happen?
-                self.logger.error(e)
+            except (ValueError, Exception) as e:
+                error_logger(self, self._receive_msgs, e)
 
     def run(self):
         super().run()
         try:
             for adr in self.addresses[PUB_Socket_Server]:
                 self.subscribe_sub(address=adr)
-            msg = self._wait_server_hb()
             if self.active:
-                self.connect()
-                self.parent.thinker.react_heartbeat_full(msg)
                 info_msg(self, 'STARTED')
+                self.bind_pub()
                 self._receive_msgs()
-        except (zmq.error.ZMQError, MessengerError) as e:  # Bad type of error
+        except (zmq.error.ZMQError, MessengerError) as e:
             error_logger(self, self.run, e)
             self.stop()
         finally:
-            self.sockets[DEALER_Socket].close()
+            if self.sockets[DEALER_Socket]:
+                for dealer, addr in self.sockets[DEALER_Socket].values():
+                    dealer.close()
             if self.sockets[SUB_Socket]:
                 self.sockets[SUB_Socket].close()
             if self.sockets[PUB_Socket]:
@@ -415,16 +422,14 @@ class ClientMessenger(Messenger):
         try:
             crypted = str(int(msg.crypted)).encode('utf-8')
             msg_bytes = self.encrypt_with_session_key(msg)
-
             if msg.receiver_id:
-                self.sockets[DEALER_Socket].send_multipart([msg_bytes, crypted])
-                info_msg(self, 'INFO', f'Msg {msg.id}, msg_com {msg.com} is send to {msg.receiver_id}.')
+                self.sockets[DEALER_Socket][msg.receiver_id][0].send_multipart([msg_bytes, crypted])
             else:
                 if self.pub_option:
                     self.sockets[PUB_Socket].send_multipart([msg_bytes, crypted])
                 else:
                     info_msg(self, 'INFO', f'Publisher socket is not available for {self.name}.')
-        except (zmq.ZMQError, MessengerError) as e:
+        except (zmq.ZMQError, MessengerError, KeyError) as e:
             error_logger(self, self.send_msg, e)
 
     def send_msg_publisher(self, msg: MessageExt):
@@ -440,53 +445,27 @@ class ClientMessenger(Messenger):
 
     def _verify_addresses(self, addresses: Dict[str, str]):
         # TODO: replace with UserSocket NewType the ports names.
-        ports = [PUB_Socket, PUB_Socket_Server]
-        for port in ports:
-            if port not in addresses:
-                raise Exception(f'Not enough ports {port} were passed to {self.name}')
+        socket_names = [PUB_Socket, PUB_Socket_Server]
+        for socket_name in socket_names:
+            if socket_name not in addresses:
+                raise Exception(f'Not enough socket_names {socket_name} were passed to {self.name}.')
         from utilities.myfunc import verify_port
         # Check only publisher com_port availability
-        port = verify_port(addresses[PUB_Socket])
+        port_pub = verify_port(addresses[PUB_Socket])
         local_ip = get_local_ip()
-        self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port}'
+        self.addresses[PUB_Socket] = f'tcp://{local_ip}:{port_pub}'
         self.addresses[PUB_Socket_Server] = addresses[PUB_Socket_Server].replace(" ", "").split(',')
 
-    def _wait_server_hb(self) -> MessageExt:
-        if FRONTEND_Server not in self.addresses or BACKEND_Server not in self.addresses:
-            wait = True
-        else:
-            wait = False
-        i = 0
-        msg_out = None
-        while wait and self.active:
-            if i > 100:
-                info_msg(self, 'INFO', f'{self.name} could not connect to server, no sockets, '
-                                       f'try to restart {self.parent.name}')
-                i = 0
-            i += 1
-            sockets = dict(self.poller.poll(100))
-            if self.sockets[SUB_Socket] in sockets:
-                mes, crypted = self.sockets[SUB_Socket].recv_multipart()
-                # TODO: decrypt message safely with try except
-                msg: MessageExt = MessageExt.bytes_to_msg(mes)
-                # TODO: first heartbeat could be received only from server! make it safe
-                if msg.com == MsgComExt.HEARTBEAT_FULL.msg_name:
-                    try:
-                        info: HeartBeatFull = msg.info
-                        sockets = info.device_public_sockets
-                        if FRONTEND_Server in sockets and BACKEND_Server in sockets:
-                            #TODO: need to check if it true SERVER using password or certificate
-                            info_msg(self, 'INFO', f'{msg.short()}')
-                            info_msg(self, 'INFO', f'Info from Server is obtained for messenger operation.')
-                            self.addresses[FRONTEND_Server] = sockets[BACKEND_Server]
-                            self.addresses[BACKEND_Server] = sockets[BACKEND_Server]
-                            msg_out = msg
-                            break
-                        else:
-                            raise MessengerError(f'Not all sockets are sent to {self.name}')
-                    except (AttributeError, MessengerError) as e:  # IN case when short Heartbeat arrived
-                        error_logger(self, self._wait_server_hb, e)
-        return msg_out
+    def unregister_dealer(self, device_id: DeviceId):
+        if device_id in self.sockets[DEALER_Socket]:
+            self.pause()
+            sleep(0.05)
+            self.poller.unregister(self.sockets[DEALER_Socket][device_id][0])
+            dealer: zmq.Socket = self.sockets[DEALER_Socket][device_id][0]
+            dealer.disconnect(self.sockets[DEALER_Socket][device_id][1])
+            dealer.close()
+            del self.sockets[DEALER_Socket][device_id]
+            self.unpause()
 
 
 class ServiceMessenger(ClientMessenger):
@@ -549,13 +528,15 @@ class ServerMessenger(Messenger):
         except (WrongAddress, KeyError, zmq.ZMQError) as e:
             error_logger(self, self._create_sockets, e)
             raise e
+        finally:
+            info_msg(self, 'INFO', f'Sockets: {self.sockets.keys()}; Public sockets: {self.public_sockets.values()}')
 
     def _deal_with_received_msg(self, msgs: List[MsgTuple]):
         for msg, device_id, socket_name, crypted in msgs:
             try:
                 if int(crypted):
                     msg: bytes = self.decrypt_with_session_key(msg, device_id)
-                mes: MessageExt = MessageExt.bytes_to_msg(msg)
+                mes: MessageExt = bytes_to_msg(msg)
                 self.parent.thinker.add_task_in(mes)
             except (MessengerError, MessageError, ThinkerError, Exception) as e:
                 error_logger(self, self.run, e)
@@ -563,6 +544,9 @@ class ServerMessenger(Messenger):
                                                  comments=str(e),
                                                  reply_to='', receiver_id=device_id)
                 self.add_msg_out(msg_r)
+                sleep(0.1)
+                if device_id in self.connections:
+                    self.parent.thinker.remove_device_from_connections(DeviceId(device_id))
 
     def gen_symmetric_key(self, device_id) -> bytes:
         """
@@ -630,13 +614,10 @@ class ServerMessenger(Messenger):
             msg_bytes = self.encrypt_with_session_key(msg)
             if msg.receiver_id in self._frontendpool:
                 self.sockets[FRONTEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from frontend to {msg.receiver_id}.')
             elif msg.receiver_id in self._backendpool:
                 self.sockets[BACKEND_Server].send_multipart([msg.receiver_id.encode('utf-8'), msg_bytes, crypted])
-                info_msg(self, 'INFO', f'Msg {msg.id}, com {msg.com} is send from backend to {msg.receiver_id}.')
             else:
-                pass
-                #error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pool.')
+                error_logger(self, self.send_msg, f'ReceiverID {msg.receiver_id} is not present in Server pools.')
         except zmq.ZMQError as e:
             error_logger(self, self.send_msg, e)
 
@@ -649,16 +630,12 @@ class ServerMessenger(Messenger):
             error_logger(self, self.send_msg, e)
 
     def _verify_addresses(self, addresses: Dict[str, str]):
-        if not isinstance(addresses, dict):
-            raise Exception(f'{addresses} are not dict, func: {self._verify_addresses.__name__} of {self.parent.name}')
-
         from utilities.myfunc import verify_port
         excluded = []
         local_ip = get_local_ip()
-        for port in self.sockets_names:
-            if port not in addresses:
-                raise Exception(f'Not enough ports {port} were passed to {self.name}')
-            port_n = verify_port(addresses[port], excluded)
+        for socket_name in self.sockets_names:
+            if socket_name not in addresses:
+                raise Exception(f'Not enough ports {socket_name} were passed to {self.name}')
+            port_n = verify_port(addresses[socket_name], excluded)
             excluded.append(port_n)
-            self.addresses[port] = f'tcp://{local_ip}:{port_n}'
-
+            self.addresses[socket_name] = f'tcp://{local_ip}:{port_n}'

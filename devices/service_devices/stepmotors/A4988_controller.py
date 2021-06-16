@@ -10,15 +10,15 @@ under windows with no problems
 """
 import logging
 from time import sleep
-from typing import List, Tuple, Union, Callable, Set
 
 from gpiozero import LED
 
-from utilities.datastructures.mes_independent.stpmtr_dataclass import *
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict
+from devices.devices_dataclass import FuncActivateDeviceInput, FuncActivateDeviceOutput
+from devices.service_devices.stepmotors.stpmtr_dataclass import *
+from devices.devices_dataclass import HardwareDeviceDict
 from utilities.myfunc import error_logger, info_msg
 from utilities.tools.decorators import development_mode
-from .stpmtr_controller import StpMtrController
+from .stpmtr_controller import StpMtrController, StpMtrError
 
 module_logger = logging.getLogger(__name__)
 
@@ -45,44 +45,52 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                                                           extra_func=[self._get_positions_file,
                                                                       self._set_move_parameters_axes,
                                                                       self._set_move_parameters_controller])
+        if not res:
+            raise StpMtrError(self, comments)
 
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()
+    def activate_device(self, func_input: FuncActivateDeviceInput) -> FuncActivateDeviceOutput:
+        device_id = func_input.device_id
+        flag = func_input.flag
+        res, comments = self._check_device_range(device_id)
+        info_msg(self, 'INFO', f'Func "activate_device" is called: {func_input}.')
+        if res:
+            device = self.hardware_devices[device_id]
+            res, comments = self.change_device_status(device_id, flag)
+        comments = f'Func "activate_device" is accomplished with success: {res}. {comments}'
+        info_msg(self, 'INFO', comments)
+        return FuncActivateDeviceOutput(device=self.axes_stpmtr, comments=comments, func_success=res)
 
-    def _check_if_connected(self) -> Tuple[bool, str]:
-        return super()._check_if_connected()
-
-    def _change_device_status(self, axis_id: int, flag: int, force=False) -> Tuple[bool, str]:
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
         def search(axes, status):
-            for axis_id, axis in self.axes_stpmtr.items():
+            for axis_id_local, axis in axes.items():
                 if axis.status == status:
-                    return axis_id
+                    return axis_id_local
             return None
 
-        res, comments = super()._check_status_flag(flag)
-        if res:
-            if self.axes_stpmtr[axis_id].status != flag:
-                info = ''
-                idx = search(self.axes_stpmtr, 1)
-                if not idx:
-                    idx = search(self.axes_stpmtr, 2)
-                    if force and idx:
-                        self.axes_stpmtr[idx].status = 1
-                        info = f' Axis id={idx}, name={self.axes_stpmtr[idx].name} was stopped.'
-                    elif idx:
-                        return False, f'Stop axis id={idx} to be able activate axis id={axis_id}. ' \
-                                      f'Use force, or wait movement to complete.'
-                if idx != axis_id and idx:
-                    self.axes_stpmtr[idx].status = 0
-                    self._change_relay_state(idx, 0)
-                    info = f'Axis id={idx}, name={self.axes_stpmtr[idx].name} is set 0.'
+        res, comments = False, 'Did not work.'
+        axis_id = device.device_id_seq
+        if self.axes_stpmtr[axis_id].status != flag:
+            info = ''
+            idx = search(self.axes_stpmtr, 1)
+            if not idx:
+                idx = search(self.axes_stpmtr, 2)
+                if force and idx:
+                    self.axes_stpmtr[idx].status = 1
+                    info = f' Axis id={idx}, name={self.axes_stpmtr[idx].name} was stopped.'
+                elif idx:
+                    res, comments = False, f'Stop axis id={idx} to be able activate axis id={axis_id}. ' \
+                                           f'Use force, or wait movement to complete.'
+            if idx != axis_id and idx:
+                self.axes_stpmtr[idx].status = 0
+                self._change_relay_state(idx, 0)
+                info = f'Axis id={idx}, name={self.axes_stpmtr[idx].name} is set 0.'
 
-                if not (self.axes_stpmtr[axis_id].status > 0 and flag > 0):  #only works for 0->1, 1->0, 2->0
-                    self._change_relay_state(axis_id, flag)
-                self.axes_stpmtr[axis_id].status = flag
-                res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is set to {flag}.' + info
-            else:
-                res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is already set to {flag}'
+            if not (self.axes_stpmtr[axis_id].status > 0 and flag > 0):  # only works for 0->1, 1->0, 2->0
+                self._change_relay_state(axis_id, flag)
+            self.axes_stpmtr[axis_id].status = flag
+            res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is set to {flag}.' + info
+        else:
+            res, comments = True, f'Axis id={axis_id}, name={self.axes_stpmtr[axis_id].name} is already set to {flag}'
         return res, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
@@ -100,10 +108,10 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
         return True, ''
 
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[int, float], how='absolute') -> Tuple[bool, str]:
-        res, comments = self._change_axis_status(device_id, 2)
+        axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
+        res, comments = self._change_device_status_local(axis, 2)
         if res:
             self._set_microsteps_parameters(device_id)  # Different axes could have different microsteps
-            axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
             if go_pos - axis.position > 0:
                 pas = 1
                 self._direction('top')
@@ -131,7 +139,7 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
                     break
             axis.position = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
             self._disable_controller()
-            _, _ = self._change_axis_status(device_id, 1, force=True)
+            _, _ = self._change_device_status_local(axis, 1, force=True)
             _, _ = self._get_position_axis(device_id)
             if not interrupted:
                 res, comments = True, f'Movement of Axis with id={device_id}, name={axis.friendly_name} ' \
@@ -140,8 +148,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
 
     def _release_hardware(self) -> Tuple[bool, str]:
         try:
-            for pin in self._pins:
-                pin.close()
+            for device in self._hardware_devices.values():
+                self._change_device_status_local(device, 0, True)
+            if not dev_mode:
+                for pin in self._pins:
+                    pin.close()
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)
@@ -269,7 +280,6 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
             led.off()
         else:
             res, comments = False, f'func _set_led value {value} is not known.'
-        sleep(0.05)
         return res, comments
 
     def _pins_off(self) -> Tuple[Union[bool, str]]:
@@ -288,10 +298,11 @@ class StpMtrCtrl_a4988_4axes(StpMtrController):
     @development_mode(dev=dev_mode, with_return=(True, ''))
     def _set_microsteps_parameters(self, device_id: Union[int, str]) -> Tuple[bool, str] :
         try:
-            axis = self.axes_stpmtr[device_id]
-            self._set_led(self._ms1, axis.move_parameters['microsteps'][0][0])
-            self._set_led(self._ms2, axis.move_parameters['microsteps'][0][1])
-            self._set_led(self._ms3, axis.move_parameters['microsteps'][0][2])
+            axis: A4988AxisStpMtr = self.axes_stpmtr[device_id]
+            microstep_int = axis.move_parameters['microsteps']
+            self._set_led(self._ms1, self._microstep_settings[microstep_int][0][1])
+            self._set_led(self._ms2, self._microstep_settings[microstep_int][0][1])
+            self._set_led(self._ms3, self._microstep_settings[microstep_int][0][2])
             return True, ''
         except KeyError as e:
             error_logger(self, self._set_microsteps_parameters, e)

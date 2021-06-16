@@ -3,17 +3,30 @@ Controllers of Basler cameras are described here
 
 created
 """
-import cv2
 from collections import OrderedDict
-from distutils.util import strtobool
-import numpy
-from pypylon import pylon, genicam
+from dataclasses import asdict
 from datetime import datetime
+from distutils.util import strtobool
 from time import sleep
+from typing import Union, Dict, Tuple, List
 
-from communication.messaging.messages import *
+try:
+    import cv2
+    from pypylon import genicam, pylon
+except ImportError:
+    pass
+import numpy as np
+
+
+from devices.devices_dataclass import (HardwareDevice, HardwareDeviceDict, HardwareDeviceEssentials,
+                                       DeviceControllerStatus)
 from devices.service_devices.cameras.camera_controller import CameraController, CameraError
-from utilities.datastructures.mes_independent.camera_dataclass import *
+from devices.service_devices.cameras.camera_dataclass import (CameraBasler, FuncGetImagesOutput,
+                                                              FuncSetImageParametersInput,
+                                                              FuncSetSyncParametersInput,
+                                                              FuncSetTransportParametersInput, ImageDemand,
+                                                              Image_Format_Control, AOI_Controls, Analog_Controls,
+                                                              Acquisition_Controls, Transport_Layer)
 from utilities.myfunc import error_logger, info_msg
 
 
@@ -32,7 +45,8 @@ class CameraCtrl_Basler(CameraController):
         res, comments = self._set_parameters_main_devices(parameters=[('name', 'names', str),
                                                                       ('friendly_name', 'friendly_names', str),
                                                                       ('stpmtr_ctrl_id', 'stepmotor_controllers', str),
-                                                                      ('matrix_size', 'size_of_matrix', tuple)],
+                                                                      ('matrix_size', 'matrix_size', tuple),
+                                                                      ('tracking_pos', 'tracking_pos', tuple)],
                                                           extra_func=[self._set_transport_layer_db,
                                                                       self._set_analog_controls_db,
                                                                       self._set_aoi_controls_db,
@@ -43,12 +57,6 @@ class CameraCtrl_Basler(CameraController):
         if not res:
             raise CameraError(self, comments)
 
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super(CameraCtrl_Basler, self)._check_if_active()
-
-    def _check_if_connected(self) -> Tuple[bool, str]:
-        pass
-
     @property
     def cameras(self) -> Dict[int, CameraBasler]:
         return self.cameras_no_pylon
@@ -57,45 +65,42 @@ class CameraCtrl_Basler(CameraController):
     def cameras_no_pylon(self) -> Dict[int, CameraBasler]:
         return {camera.device_id_seq: camera.no_pylon() for camera in self._hardware_devices.values()}
 
-    def _change_device_status(self, camera_id: int, flag: int, force=False) -> Tuple[bool, str]:
-        # TODO: this function could be generalized for all types of controllers
-        res, comments = super()._check_device_range(camera_id)
-        if res:
-            res, comments = super()._check_status_flag(flag)
-        if res:
-            camera = self._hardware_devices[camera_id]
-            if camera.status != flag:
-                info = ''
-                if camera.status == 2 and force:
-                    camera.pylon_camera.StopGrabbing()
-                    info = f'Camera id={camera_id}, name={camera.friendly_name} was stopped grabbing. {comments}'
-                    camera.status = flag
-                    res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is set to {flag}. {info}'
-                elif camera.status == 2 and not force:
-                    res, comments = False, f'Camera id={camera_id}, name={camera.friendly_name} is grabbing. ' \
-                                           'Force Stop in order to change status.'
-                elif flag in [0, 1, 2]:
-                    try:
-                        if flag == 2 and camera.status == 1:
-                            # TODO: must have some other strategies for future
-                            camera.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                            sleep(0.02)
-                        elif flag == 2 and camera.status == 0:
-                            return False, f'First activate camera with camera id={camera_id}, ' \
-                                                   f'name={camera.friendly_name}.'
-                        if flag == 1:
-                            camera.pylon_camera.Open()
-                        elif flag == 0:
-                            camera.pylon_camera.Close()
-                        camera.status = flag
-                        res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} status is set to ' \
-                                              f'{flag}. {info}'
-                    except pylon.GenericException as e:
-                        comments = f'Tried to open connection, but failed: {e}'
-                        error_logger(self, self._change_device_status, comments)
-                        return False, comments
-            else:
-                res, comments = True, f'Camera id={camera_id}, name={camera.friendly_name} is already set to {flag}'
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        info = ''
+        if device.status == 2 and force:
+            device.pylon_camera.StopGrabbing()
+            sleep(0.2)
+            info = f'Camera id={device.device_id_seq}, name={device.friendly_name} was stopped grabbing. {comments}'
+            device.status = flag
+            res, comments = True, f'Camera id={device.device_id_seq}, name={device.friendly_name} is set to {flag}. ' \
+                                  f'{info}'
+        elif device.status == 2 and not force:
+            res, comments = False, f'Camera id={device.device_id_seq}, name={device.friendly_name} is grabbing. ' \
+                                   'Force Stop in order to change status.'
+        elif flag in [0, 1, 2]:
+            try:
+                if flag == 2 and device.status == 1:
+                    # TODO: must have some other strategies for future
+                    if device.pylon_camera.IsGrabbing():
+                        device.pylon_camera.StopGrabbing()
+                        sleep(0.2)
+                    device.pylon_camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                    sleep(0.05)
+                elif flag == 2 and device.status == 0:
+                    res, comments = False, f'First activate camera with camera id={device.device_id_seq}, ' \
+                                           f'name={device.friendly_name}.'
+                if flag == 1:
+                    device.pylon_camera.Open()
+                elif flag == 0:
+                    device.pylon_camera.Close()
+                device.status = flag
+                res, comments = True, f'Camera id={device.device_id_seq}, name={device.friendly_name} status is set to ' \
+                                      f'{flag}. {info}'
+            except pylon.GenericException as e:
+                comments = f'Tried to open connection, but failed: {e}.'
+                error_logger(self, self.change_device_status, comments)
+                res, comments = False, comments
         return res, comments
 
     def _form_devices_list(self) -> Tuple[bool, str]:
@@ -174,20 +179,30 @@ class CameraCtrl_Basler(CameraController):
             # apply thresholding
             threshold = treatment_param['threshold']
             ret, thresh = cv2.threshold(image, threshold, 255, 0)
-            #contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            longest_contour = 0
+            longest_contour_index = 0
+            i = 0
+            for contour in contours:
+                if longest_contour < contour.shape[0]:
+                    longest_contour_index = i
+                    longest_contour = contour.shape[0]
+                i += 1
 
             # edge detection
             # apply Canny edge detection
-            tight = cv2.Canny(thresh, threshold, 255)
+            #tight = cv2.Canny(thresh, threshold, 255)
 
             # calculate the centre of moment
-            M = cv2.moments(tight)
-            if M["m00"] != 0:
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
+            if contours:
+                M = cv2.moments(contours[longest_contour_index])
+                if M["m00"] != 0:
+                    cX = int(M["m10"] / M["m00"])
+                    cY = int(M["m01"] / M["m00"])
+                else:
+                    cX, cY = 0, 0
             else:
                 cX, cY = 0, 0
-
             return (cX, cY), ''
         except KeyError:
             return False, f'Treatment_param was not passed threshold.'
@@ -232,6 +247,7 @@ class CameraCtrl_Basler(CameraController):
                 result = FuncGetImagesOutput(comments=comments, func_success=res, image=image_list,
                                              post_treatment_points=list(post_treatment),
                                              timestamp=datetime.timestamp(datetime.now()), camera_id=camera_id)
+                from communication.messaging.messages import MsgComExt
 
                 msg_r = self.generate_msg(msg_com=MsgComExt.DONE_IT, receiver_id=self.server_id,
                                           forward_to=demander_id, func_output=result, reply_to='delayed_response')
@@ -247,7 +263,7 @@ class CameraCtrl_Basler(CameraController):
             del self._images_demanders[demander_id][camera_id]
             if not self._images_demanders[demander_id]:
                 del self._images_demanders[demander_id]
-            self._change_device_status(camera_id, flag=1, force=True)
+            self.change_device_status(camera_id, flag=1, force=True)
 
     @property
     def hardware_devices(self):
@@ -262,13 +278,13 @@ class CameraCtrl_Basler(CameraController):
         if camera.status == 0:
             return False, f'Camera {camera_id} is closed. Activate the camera first to start grabbing.'
         elif camera.status == 1:
-            return self._change_device_status(camera_id, 2)
+            return self.change_device_status(camera_id, 2)
         elif camera.status == 2:
             return True, 'Already grabbing.'
         else:
             return False, f'Camera {camera_id} has strange status {camera.status}. Internal error.'
 
-    def _read_image(self, camera: CameraBasler) -> numpy.ndarray:
+    def _read_image(self, camera: CameraBasler) -> np.ndarray:
         try:
             if not camera.pylon_camera.IsGrabbing():
                 raise CameraError(self, f"Camera {camera.friendly_name} was stopped during grabbing.")
@@ -426,10 +442,13 @@ class CameraCtrl_Basler(CameraController):
         balance_ratio = func_input.balance_ratio
         pixel_format = func_input.pixel_format
         formed_parameters_dict_AOI = OrderedDict()
-        formed_parameters_dict_AOI['OffsetX'] = offset_x
-        formed_parameters_dict_AOI['OffsetY'] = offset_y
+
         formed_parameters_dict_AOI['Width'] = width
         formed_parameters_dict_AOI['Height'] = height
+        formed_parameters_dict_AOI['OffsetX'] = offset_x
+        formed_parameters_dict_AOI['OffsetY'] = offset_y
+
+
         formed_parameters_dict_analog_controls = {'GainAuto': gain_mode, 'GainRaw': gain, 'BlackLevelRaw': blacklevel,
                                                   'BalanceRatioRaw': balance_ratio}
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
@@ -539,6 +558,6 @@ class CameraCtrl_Basler(CameraController):
 
     def _stop_acquisition(self, camera_id: int) -> Tuple[bool, str]:
         try:
-            return self._change_device_status(camera_id, 1, True)
+            return self.change_device_status(camera_id, 1, True)
         except pylon.GenericException as e:
             return False, f'While stopping Grabbing of camera {camera_id} error occurred: {e}'

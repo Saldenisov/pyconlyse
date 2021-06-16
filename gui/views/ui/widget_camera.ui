@@ -465,6 +465,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QLabel" name="label_average_coordinate">
+            <property name="text">
+             <string>(0, 0)</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
         <item row="0" column="2">

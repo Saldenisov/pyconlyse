@@ -12,14 +12,14 @@ from typing import Dict
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 
-from utilities.datastructures.mes_independent.devices_dataclass import DeviceInfoExt
-from utilities.datastructures.mes_independent.stpmtr_dataclass import AxisStpMtr, MoveType, StepMotorsControllerState
+from devices.devices_dataclass import ControllerInfoExt
+from devices.service_devices.stepmotors.stpmtr_dataclass import AxisStpMtr, MoveType, StepMotorsControllerState
 
 module_logger = logging.getLogger(__name__)
 
 class Ui_StpMtrGUI(object):
 
-    def setupUi(self, StpMtrGUI, parameters: DeviceInfoExt = {}):
+    def setupUi(self, StpMtrGUI, parameters: ControllerInfoExt = {}):
         self.parameters = parameters
         StpMtrGUI.setObjectName("StpMtrGUI")
         StpMtrGUI.resize(529, 282)

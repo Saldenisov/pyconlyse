@@ -1,13 +1,13 @@
+from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple, Union
 
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
-from devices.interfaces import DeviceType, DeviceId
-from devices.interfaces import ExecutorInter
+from devices.interfaces import DeviceType, DeviceId, ExecutorInter
 from utilities.datastructures import DataClass_frozen, DataClass_unfrozen
-from utilities.datastructures.mes_independent.general import *
+from utilities.datastructures.mes_independent.general import CmdStruct, FuncInput, FuncOutput
 
 
 @dataclass
@@ -26,7 +26,7 @@ class DeviceParts(DataClass_frozen):
 
 @dataclass
 class HardwareDevice:
-    device_id: int
+    device_id: Union[int, str]
     device_id_seq: int = None
     name: str = ''
     friendly_name: str = ''
@@ -34,6 +34,10 @@ class HardwareDevice:
 
     def short(self):
         pass
+
+    @abstractmethod
+    def out(self):
+        return self
 
 
 @dataclass
@@ -49,11 +53,8 @@ class HardwareDeviceDict(dict):
 
     def __setitem__(self, key_id, device: HardwareDevice):
         device_id = device.device_id
-        if device_id not in self.device_id:
-            super().__setitem__(key_id, device)
-            self.device_id[device_id] = key_id
-        else:
-            raise KeyError(f'Hardware Device id: {device_id} already exists in {self.device_id}')
+        super().__setitem__(key_id, device)
+        self.device_id[device_id] = key_id
 
     def __getitem__(self, key):
         try:
@@ -130,15 +131,25 @@ class DoneIt:
     result: FuncOutput
 
 
+@dataclass
+class FYI:
+    func_name: str
+    func_success: bool = None
+    comments: bool = ''
+    com = 'for_your_info'
+
+
 @dataclass(order=True)
 class Description:
     info: str
     GUI_title: str
+    groups: List[Tuple[str]]
+    sets: Any
 
 
 @dataclass(order=True)
 class ServiceDescription(Description):
-    hardware_devices: HardwareDevice
+    hardware_devices: Dict[int, HardwareDevice]
     power_settings: PowerSettings
     class_name: str
 
@@ -188,7 +199,9 @@ class WelcomeInfoDevice:
     event_id: str
     event_name: str
     event_tick: float
+    certificate: bytes = b''
     password_checksum: bytes = b''
+    version: str = ''
 
 
 @dataclass(order=True)
@@ -198,8 +211,11 @@ class WelcomeInfoServer:
     Device side by Device private key, a only after that session_key will be used in communication between
     Server and Device.
     """
+    device_id: DeviceId
     password_checksum: bytes = b''
     session_key: bytes = b''
+    certificate: bytes = b''
+    version: str = ''
 
 
 @dataclass(frozen=True, order=True)
@@ -213,7 +229,7 @@ class DeviceInfoInt:
 
 
 @dataclass(frozen=True, order=True)
-class DeviceInfoExt:
+class ControllerInfoExt:
     #available_public_functions: List[CmdStruct]
     device_id: str
     device_description: Union[ServiceDescription, ClientDescription, ServerDescription]
@@ -320,7 +336,7 @@ class FuncServiceInfoInput(FuncInput):
 @dataclass
 class FuncServiceInfoOutput(FuncOutput):
     device_id: DeviceId
-    service_info: DeviceInfoExt
+    service_info: ControllerInfoExt
     com: str = 'service_info'
 
 
@@ -338,3 +354,5 @@ class Connection(DataClass_unfrozen):
     session_key: bytes = b''
     permission: Permission = Permission.DENIED
     password_checksum: bytes = b''
+    certificate: bytes = b''
+    version: str = ''

@@ -12,7 +12,7 @@ from PyQt5.QtCore import QModelIndex
 from PyQt5.QtWidgets import QErrorMessage, QFileDialog
 
 from gui.models.ClientGUIModels import TreatmentModel
-from gui.views.ClientsGUIViews import TreatmentView
+from gui.views.ClientsGUIViews.VD2Treatment import TreatmentView
 from utilities.myfunc import info_msg, error_logger
 
 module_logger = logging.getLogger(__name__)
@@ -40,9 +40,9 @@ class TreatmentController:
     def calc_abs(self):
         self.view.ui.progressbar_calc.setValue(0)
         exp = TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
-        if self.view.ui.radiobutton_individual:
+        if self.view.ui.radiobutton_individual.isChecked():
             how = 'individual'
-        elif self.view.ui.radiobutton_averaged:
+        elif self.view.ui.radiobutton_averaged.isChecked():
             how = 'averaged'
 
         first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
@@ -72,7 +72,7 @@ class TreatmentController:
             self.model.save_folder = folder
             self.view.ui.redraw_file_tree(folder)
 
-    def get_average(self, user_type: str='kinetics'):
+    def get_average(self, user_type='kinetics'):
         error = False
         if user_type == 'kinetics':
             line = self.view.ui.lineedit_kinetics_ranges.text()

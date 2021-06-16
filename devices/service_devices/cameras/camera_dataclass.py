@@ -1,9 +1,14 @@
+from abc import abstractmethod
+from dataclasses import dataclass, field
 from threading import Thread
-from typing import Union
+try:
+    from pypylon import pylon
+except ImportError:
+    pylon = None
+from typing import Dict, List, Tuple
 
-from pypylon import pylon
-
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from devices.devices_dataclass import (HardwareDevice, PowerSettings, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 
@@ -52,6 +57,7 @@ class Transport_Layer(Controls):
 @dataclass(frozen=False)
 class Camera(HardwareDevice):
     matrix_size: Tuple[int] = field(default_factory=tuple)
+    tracking_pos: Tuple[int] = field(default_factory=tuple)
     parameters: Dict[str, Controls] = field(default_factory=dict)
     stpmtr_ctrl_id: str = ''
 
@@ -64,7 +70,6 @@ class Camera(HardwareDevice):
                 d[key] = None
         return CameraEssentials(**d)
 
-
 @dataclass(frozen=False)
 class CameraBasler(Camera):
     pylon_camera: pylon.InstantCamera = None
@@ -76,6 +81,9 @@ class CameraBasler(Camera):
             if key not in ['pylon_camera', 'converter']:
                 d[key] = getattr(self, key)
         return CameraBasler(**d)
+
+    def out(self):
+        return self.no_pylon()
 
 
 @dataclass(order=True, frozen=False)
@@ -124,9 +132,8 @@ class FuncGetImagesInput(FuncInput):
 
 @dataclass
 class FuncGetImagesPrepared(FuncOutput):
-    camera_id: int
     ready: bool
-    camera: CameraEssentials
+    camera: Camera
     com: str = 'get_images_prepared'
 
 

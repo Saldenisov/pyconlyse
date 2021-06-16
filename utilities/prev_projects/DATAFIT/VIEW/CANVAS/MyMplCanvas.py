@@ -18,8 +18,7 @@ from PyQt5.QtWidgets import QSizePolicy
 class MyMplCanvas(FigureCanvas):
     """Ultimately, this is a QWidget (as well as a FigureCanvasAgg, etc.)."""
 
-    def __init__(self, parent=None, width=4, height=4, dpi=100, LP=None,
-                 **kwargs):
+    def __init__(self, parent=None, width=4, height=4, dpi=100, LP=None, **kwargs):
         self.Fig = Figure(figsize=(width, height), dpi=dpi)
         #
         FigureCanvas.__init__(self, self.Fig)

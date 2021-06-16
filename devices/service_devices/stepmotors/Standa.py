@@ -7,14 +7,14 @@ On ELYSE there are 4 motorized mirrors
 import ctypes
 import logging
 from pathlib import Path
-from typing import Callable, List, Tuple, Union, Dict, Any, Set
+from typing import Callable, Tuple, Union, Dict, Set
 from time import sleep
 
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
-from utilities.datastructures.mes_independent.stpmtr_dataclass import StandaAxisStpMtr
-from utilities.datastructures.mes_independent.devices_dataclass import HardwareDeviceDict, PowerSettings, FuncPowerInput
+from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr
+from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice
 from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
 
 module_logger = logging.getLogger(__name__)
@@ -43,30 +43,25 @@ class StpMtrCtrl_Standa(StpMtrController):
         if not res:
             raise StpMtrError(self, comments)
 
-
-    def _change_device_status(self, device_id: Union[int, str], flag: int, force=False) -> Tuple[bool, str]:
-        res, comments = super()._check_status_flag(flag)
-        if res:
-            axis = self.axes_stpmtr[device_id]
-            if axis.status != flag:
-                info = ''
-                if axis.status == 2 and force:
-                    self._stop_axis(axis.device_id)
-                    info = f' Axis id={device_id}, name={axis.name} was stopped.'
-                    self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
-                elif axis.status == 2 and not force:
-                    res, comments = False, f'Axis id={device_id}, name={axis.friendly_name} is moving. ' \
-                                           'Force Stop in order to change.'
-                else:
-                    self.axes_stpmtr[device_id].status = flag
-                    res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is set to {flag}.' + info
+    def _change_device_status_local(self, device: HardwareDevice, flag: int, force=False) -> Tuple[bool, str]:
+        res, comments = False, 'Did not work.'
+        if device.status == 2 and force:
+            res_loc, comments_loc = self._stop_axis(device.device_id)
+            if res_loc:
+                info = f'Axis id={device.device_id_seq}, name={device.name} was stopped.'
+                self.axes_stpmtr[device.device_id_seq].status = flag
+                res, comments = True, f'{info} ' \
+                                      f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
             else:
-                res, comments = True, f'Axis id={device_id}, name={axis.friendly_name} is already set to {flag}'
+                info = f' Axis id={device.device_id_seq}, name={device.name} was not stopped: {comments_loc}.'
+                res, comments = False, info
+        elif device.status == 2 and not force:
+            res, comments = False, f'Axis id={device.device_id_seq}, name={device.friendly_name} is moving. ' \
+                                   'Force Stop in order to change.'
+        else:
+            self.axes_stpmtr[device.device_id_seq].status = flag
+            res, comments = True, f'Axis id={device.device_id_seq}, name={device.friendly_name} is set to {flag}.'
         return res, comments
-
-    def _check_if_active(self) -> Tuple[bool, str]:
-        return super()._check_if_active()  # TODO: should be replaced with something reasonable
 
     def _check_if_connected(self) -> Tuple[bool, str]:
         status = status_t()
@@ -89,6 +84,14 @@ class StpMtrCtrl_Standa(StpMtrController):
         5) set positions
         :return:
         """
+        def search_id(self: StpMtrCtrl_Standa, uri: str) -> str:
+            uri = uri.decode('utf-8')
+            for axis_id, axis in self.axes_stpmtr.items():
+                if axis.device_id in uri:
+                    return axis.device_id
+            return None
+
+        sleep(0.05)
         # Set bindy (network) keyfile. Must be called before any call to "enumerate_devices" or "open_device"
         self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
         # Enumerate devices
@@ -108,13 +111,6 @@ class StpMtrCtrl_Standa(StpMtrController):
             if device_counts != self._hardware_devices_number:
                 res, comments = True, f'Number of available axes {device_counts} does not correspond to ' \
                                       f'database value {self._hardware_devices_number}. Check cabling or power.'
-
-            def search_id(self: StpMtrCtrl_Standa, uri: str) -> str:
-                uri = uri.decode('utf-8')
-                for axis_id, axis in self.axes_stpmtr.items():
-                    if axis.device_id in uri:
-                        return axis.device_id
-                return None
 
             Oks = []
 
@@ -146,13 +142,16 @@ class StpMtrCtrl_Standa(StpMtrController):
 
             cleaned_axes = HardwareDeviceDict()
             i = 1
-            for axis in self.axes_stpmtr.values():
+            axes = list(self.axes_stpmtr.values())
+            for axis in axes:
                 if not axis.device_id_internal_seq:
                     del self.axes_stpmtr[axis.device_id]
+                    self.logger.info(f'Axis {axis.device_id}:{axis.name} is absent. It is removed.')
                 else:
                     cleaned_axes[i] = axis
                     i += 1
             self._hardware_devices = cleaned_axes
+            self._hardware_devices_number = len(cleaned_axes)
 
             if all(Oks):
                 res, comments = True, comments
@@ -175,6 +174,7 @@ class StpMtrCtrl_Standa(StpMtrController):
         :param device_id: corresponds to device_id of Standa controller
         :return: Basic_units
         """
+        sleep(0.07)
         pos = get_position_t()
         axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
         device_id_internal_seq = axis.device_id_internal_seq
@@ -189,7 +189,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             return self._standa_error(result, func=self._get_position_axis)
 
     def _move_axis_to(self, device_id: Union[int, str], go_pos: Union[float, int]) -> Tuple[bool, str]:
-        res, comments = self._change_device_status(device_id, 2)
+        res, comments = self.change_device_status(device_id, 2)
         interrupted = False
         if res:
             axis: StandaAxisStpMtr = self.axes_stpmtr[device_id]
@@ -217,10 +217,10 @@ class StpMtrCtrl_Standa(StpMtrController):
                 res, comments = True, f'Movement of Axis with id={device_id}, name={axis.friendly_name} ' \
                                       f'was finished.'
             else:
-                res, comments = False, f'Movement of Axis with id={device_id} was interrupted'
+                res, comments = False, f'Movement of Axis with id={device_id} was interrupted.'
 
             _, _ = self._get_position_axis(device_id)
-        self._change_device_status(device_id, 1, True)
+        self.change_device_status(device_id, 1, True)
         return res, comments
 
     def _release_hardware(self) -> Tuple[bool, str]:
@@ -229,29 +229,23 @@ class StpMtrCtrl_Standa(StpMtrController):
                 # Sometimes there is a necessity to call stop function
                 # So we do it always for every axes
                 if axis.device_id_internal_seq:
-                    self._change_device_status(axis.device_id, flag=0, force=True)
+                    self.change_device_status(axis.device_id, flag=0, force=True)
                     arg = ctypes.byref(ctypes.cast(axis.device_id_internal_seq, ctypes.POINTER(ctypes.c_int)))
                     result = self.lib.close_device(arg)
+                    sleep(0.05)
             return True, ''
         except Exception as e:
             error_logger(self, self._release_hardware, e)
             return False, f'{e}'
         finally:
-            # Give time to DLL to do its job.
-            sleep(0.2)
+            sleep(1)  # Give time to DLL to do its job.
 
     def _stop_axis(self, device_id: str) -> Tuple[bool, str]:
         result = self.lib.command_stop(self.axes_stpmtr[device_id].device_id_internal_seq)
         return self._standa_error(result)
 
     def _set_move_parameters_axes(self, must_have_param: Set[str] = None):
-        must_have_param = {'00003D73': set(['microsteps', 'basic_unit']),
-                           '00003D6A': set(['microsteps', 'basic_unit']),
-                           '00003D98': set(['microsteps', 'basic_unit']),
-                           '00003D8F': set(['microsteps', 'basic_unit']),
-                           '00003B1B': set(['microsteps', 'basic_unit']),
-                           '00003B37': set(['microsteps', 'basic_unit'])
-                           }
+        must_have_param = {'ALL': set(['microsteps', 'basic_unit'])}
         return super()._set_move_parameters_axes(must_have_param)
 
     def _set_pos_axis(self, device_id: Union[int, str], pos: Union[int, float]) -> Tuple[bool, str]:
@@ -265,7 +259,7 @@ class StpMtrCtrl_Standa(StpMtrController):
             pos_standa.uPosition = ctypes.c_int(pos_microsteps)
             pos_standa.EncPosition = ctypes.c_longlong(0)
             pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-            device_id_internal_seq = ctypes.c_int(self.axes_stpmtr[device_id].device_id_internal_seq)
+            device_id_internal_seq = axis.device_id_internal_seq
         except Exception as e:
             error_logger(self, self._set_pos, e)
         result = self.lib.set_position(device_id_internal_seq, ctypes.byref(pos_standa))

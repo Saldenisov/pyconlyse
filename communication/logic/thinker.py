@@ -1,9 +1,10 @@
 import logging
 from abc import abstractmethod
 from threading import Thread
-from time import time
+from time import time, sleep
 from typing import Callable, List, Union
 
+from devices.devices import DeviceType
 from communication.interfaces import ThinkerInter
 from communication.messaging.messages import MessageExt, MsgComExt
 from utilities.datastructures.mes_dependent.dicts import Events_Dict, MsgDict
@@ -29,27 +30,26 @@ class Thinker(ThinkerInter):
         self.events = Events_Dict()
         msg_dict_size_limit = 50
         self._tasks_in = MsgDict(name='tasks_in', size_limit=msg_dict_size_limit, dict_parent=self)
+        # TODO: do I need this test thing
         self.tasks_in_test = MsgDict(name='tasks_in_test', size_limit=msg_dict_size_limit, dict_parent=self)
         self._tasks_out = MsgDict(name='tasks_out', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit, dict_parent=self)
+        self._tasks_out_publisher = MsgDict(name='tasks_out_publisher', size_limit=msg_dict_size_limit,
+                                            dict_parent=self)
         self.tasks_out_test = MsgDict(name='tasks_out_test', size_limit=msg_dict_size_limit, dict_parent=self)
-        self._demands_waiting_reply = MsgDict(name='demands_waiting_reply', size_limit=msg_dict_size_limit,
-                                              dict_parent=self)
+        self._demands_on_reply = MsgDict(name='demands_on_reply', size_limit=msg_dict_size_limit,
+                                         dict_parent=self)
         self.paused = False
 
         info_msg(self, 'CREATING')
         try:
             self.timeout = int(self.parent.get_general_settings()['timeout'])
-            pending_demands_tick = float(self.parent.get_general_settings()['pending_demands']) / 1000.
         except KeyError as e:
             error_logger(self, self.__init__, e)
             self.timeout = 10
-            pending_demands_tick = 0.2
         try:
-            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction, pending_demands)
+            from communication.logic.logic_functions import (task_in_reaction, task_out_reaction)
             self.register_event(name='task_in_reaction', logic_func=task_in_reaction, tick=None)
             self.register_event(name='task_out_reaction', logic_func=task_out_reaction, tick=None)
-            self.register_event(name='demands_waiting_reply', logic_func=pending_demands, tick=pending_demands_tick)
             info_msg(self, 'CREATED')
         except (ThinkerEventError, ThinkerEventFuncError, TypeError) as e:
             error_logger(self, self.register_event, e)
@@ -79,11 +79,11 @@ class Thinker(ThinkerInter):
         except KeyError as e:
             error_logger(self, self.add_task_out, e)
 
-    def add_demand_waiting_reply(self, msg: MessageExt):
+    def add_demand_on_reply(self, msg: MessageExt):
         try:
-            self._demands_waiting_reply[msg.id] = PendingDemand(message=msg)
+            self._demands_on_reply[msg.id] = PendingDemand(message=msg)
         except KeyError as e:
-            error_logger(self, self.add_demand_waiting_reply, e)
+            error_logger(self, self.add_demand_on_reply, e)
 
     def flush_tasks(self):
         self._tasks_in.clear()
@@ -99,8 +99,6 @@ class Thinker(ThinkerInter):
         info['events'] = self.events
         info['tasks_in'] = self.tasks_in
         info['tasks_out'] = self.tasks_out
-        info['pending_clients_demands'] = self.clients_demands_pending_answer
-        info['pending_replies'] = self.pending_replies
         return info
 
     def msg_out(self, msg_out: Union[MessageExt, List[MessageExt]]):
@@ -109,7 +107,6 @@ class Thinker(ThinkerInter):
                 for msg in msg_out:
                     self.msg_out(msg)
             elif isinstance(msg_out, MessageExt):
-                #info_msg(self, 'INFO', msg_out. short())
                 self.add_task_out(msg_out)
             else:
                 error_logger(self, self.msg_out, f'Union[MessageExt, List[MessageExt]] was not passed to msg_out, but'
@@ -148,16 +145,20 @@ class Thinker(ThinkerInter):
                 raise ThinkerEventError(e)
 
     @property
-    def demands_waiting_reply(self) -> MsgDict:
-        return self._demands_waiting_reply
+    def demands_on_reply(self) -> MsgDict:
+        return self._demands_on_reply
 
-
-    @abstractmethod
-    def react_external(self, msg: MessageExt):
-        pass
 
     @abstractmethod
     def react_broadcast(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_denied(self, msg: MessageExt):
+        pass
+
+    @abstractmethod
+    def react_external(self, msg: MessageExt):
         pass
 
     @abstractmethod
@@ -169,10 +170,6 @@ class Thinker(ThinkerInter):
         pass
 
     @abstractmethod
-    def react_heartbeat_full(self, msg: MessageExt):
-        pass
-
-    @abstractmethod
     def react_directed(self, msg: MessageExt):
         pass
 
@@ -181,15 +178,24 @@ class Thinker(ThinkerInter):
         pass
 
     def remove_device_from_connections(self, device_id):
-        # TODO: the service_info is not deleted from _frontend sockets or backend sockets
-        connections = self.parent.connections
+        connections = self.parent.messenger.connections
         if device_id in connections:
             info_msg(self, 'INFO', f'Procedure to delete {device_id} is started')
             for key, event in list(self.events.items()):
                 if event.original_owner == device_id:
                     self.unregister_event(key)
-            del self.parent.connections[device_id]
-            info_msg(self, 'INFO', f'Device {device_id} is deleted')
+            del connections[device_id]
+
+            if self.parent.type == DeviceType.SERVER:
+                if device_id in self.parent.messenger._frontendpool:
+                    self.parent.messenger._frontendpool.remove(device_id)
+                elif device_id in self.parent.messenger._backendpool:
+                    self.parent.messenger._backendpool.remove(device_id)
+            else:
+                self.parent.messenger.unregister_dealer(device_id)
+
+            sleep(0.05)
+            info_msg(self, 'INFO', f'Device {device_id} is deleted.')
         else:
             error_logger(self, self.remove_device_from_connections,
                          f'remove_device_from_connections: Wrong device_id {device_id} is passed')

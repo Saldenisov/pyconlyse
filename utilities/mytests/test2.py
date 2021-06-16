@@ -1,22 +1,23 @@
-#!/usr/bin/env python3
-import asyncio
-import os
+import zmq
 
-async def func_normal():
-    print('A')
-    await asyncio.sleep(5)
-    print('B')
-    return 'saad'
 
-async def func_infinite():
-    for i in range(10):
-        print("--%d" % i)
-    return 'saad2'
+context = zmq.Context()
+router1 = context.socket(zmq.ROUTER)
+router2 = context.socket(zmq.ROUTER)
+router1.bind('tcp://129.175.100.70:5556')
+router2.bind('tcp://129.175.100.70:5557')
 
-loop = asyncio.get_event_loop()
-tasks = func_normal(), func_infinite()
-a, b = loop.run_until_complete(asyncio.gather(*tasks))
-print(a, b)
-loop.close()
+poller = zmq.Poller()
+poller.register(router1, zmq.POLLIN)
+poller.register(router2, zmq.POLLIN)
 
-print(os.path.dirname(__file__))
+i = 0
+while True:
+    sockets = dict(poller.poll(1000))
+    if router1 in sockets:
+        print(router1.recv_multipart())
+    if router2 in sockets:
+        print(router2.recv_multipart())
+
+
+

@@ -1,8 +1,8 @@
-'''
+"""
 Created on 14 May 2017
 
 @author: Sergey Denisov
-'''
+"""
 
 
 class MyException(Exception):
@@ -53,6 +53,7 @@ class WrongServiceGiven(Exception):
 class ThinkerError(MyException):
     def __init__(self, text):
         super().__init__(f'{text}')
+
 
 class ThinkerErrorReact(MyException):
     def __init__(self, text):
@@ -128,3 +129,8 @@ class OpenerError(MyException):
 class NoSuchFittingFunction(MyException):
     def __init__(self):
         super().__init__("No such fitting function")
+
+
+class DLLIsBlocked(MyException):
+    def __init__(self):
+        super().__init__("DLL is blocked")

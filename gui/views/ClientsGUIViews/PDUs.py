@@ -5,14 +5,14 @@ Created on 08.09.2020
 """
 import logging
 from _functools import partial
-
-from PyQt5.QtWidgets import QCheckBox
+from typing import Dict, Union
+from PyQt5.QtWidgets import QCheckBox, QLayout
 
 from communication.messaging.messages import MessageInt, MsgComExt
-from devices.service_devices.pdu import PDUController
+from devices.datastruct_for_messaging import *
+from devices.service_devices.pdu.pdu_controller import PDUController
 from gui.views.ClientsGUIViews.DeviceCtrlClient import DeviceControllerView
 from gui.views.ui import Ui_PDUs
-from utilities.datastructures.mes_independent.pdu_dataclass import *
 
 module_logger = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ class PDUsView(DeviceControllerView):
         kwargs['ui_class'] = Ui_PDUs
         super().__init__(**kwargs)
 
-    def extra_ui_init(self):
+    def extra_ui_init(self, groups, sets):
         pass
 
     @property
@@ -50,11 +50,12 @@ class PDUsView(DeviceControllerView):
 
     def set_output(self, output_id: Union[int, str]):
         from copy import deepcopy
-        client = self.superuser
         state = int(self.output_checkboxes[output_id].isChecked())
+        client = self.superuser
+        service_id = self.service_parameters.device_id
         pdu_output: PDUOutput = deepcopy(self.controller_pdus[self.selected_device_id].outputs[output_id])
         pdu_output.state = state
-        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id,
+        msg = client.generate_msg(msg_com=MsgComExt.DO_IT, receiver_id=client.server_id(service_id),
                                   forward_to=self.service_parameters.device_id,
                                   func_input=FuncSetPDUStateInput(pdu_id=self.selected_device_id,
                                                                   pdu_output_id=output_id,
@@ -63,26 +64,38 @@ class PDUsView(DeviceControllerView):
         self._asked_status = 0
 
     def update_state(self, force_device=False, force_ctrl=False):
-        pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl)
 
-        cs = self.device_ctrl_state
-        ui = self.ui
+        def update_func_local(self, force_device=False, force_ctrl=False):
 
-        if force_device:
-            pass
+            def set_new_checkboxes(layout: QLayout, pdu_outputs: Dict[Union[int, str], PDUOutput],
+                                   output_checkboxes: Dict[int, QCheckBox]):
+                for output_id, output in pdu_outputs.items():
+                    checkbox = QCheckBox(text=output.name)
+                    checkbox.setChecked(bool(output.state))
+                    checkbox.clicked.connect(partial(self.set_output, output_id))
+                    ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
+                    output_checkboxes[output_id] = checkbox
 
-        if cs.devices != cs.devices_previous or force_device:
-            for i in reversed(range(ui.horizontalLayout_pdu_outputs.count())):
-                ui.horizontalLayout_pdu_outputs.itemAt(i).widget().deleteLater()
+            def set_checkboxes(pdu_outputs: Dict[Union[int, str], PDUOutput], checkboxes: Dict[int, QCheckBox]):
+                for output_id, output in pdu_outputs.items():
+                    checkboxes[output_id].setChecked(bool(output.state))
 
-            for output_id, output in pdu.outputs.items():
-                checkbox = QCheckBox(text=output.name)
-                checkbox.setChecked(bool(output.state))
-                checkbox.clicked.connect(partial(self.set_output, output_id))
-                ui.horizontalLayout_pdu_outputs.addWidget(checkbox)
-                self.output_checkboxes[output_id] = checkbox
+            cs = self.device_ctrl_state
+            ui = self.ui
+            pdu: PDU = cs.devices[self.selected_device_id]
 
+            if force_device:
+                pass
 
+            if cs.devices != cs.devices_previous or force_device:
+                if force_device:
+                    self.clean_layout(ui.horizontalLayout_pdu_outputs)
+                    set_new_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
+                else:
+                    if not (set(pdu.outputs.keys()) - set(self.output_checkboxes.keys())):
+                        set_checkboxes(pdu.outputs, self.output_checkboxes)
+                    else:
+                        self.clean_layout(ui.horizontalLayout_pdu_outputs)
+                        set_new_checkboxes(ui.horizontalLayout_pdu_outputs, pdu.outputs, self.output_checkboxes)
 
-
-
+        pdu: PDU = super(PDUsView, self).update_state(force_device, force_ctrl, func=update_func_local)

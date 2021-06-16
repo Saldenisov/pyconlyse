@@ -1,14 +1,15 @@
+"""
+01/09/2020 DENISOV Sergey
+
+"""
 import logging
 from abc import abstractmethod
-from os import path
-from pathlib import Path
-from typing import Any, Callable
-from functools import lru_cache
+from typing import List, Tuple
 from devices.devices import Service
-from utilities.datastructures.mes_independent.devices_dataclass import *
-from utilities.datastructures.mes_independent.pdu_dataclass import *
-from utilities.errors.myexceptions import DeviceError
-from utilities.myfunc import error_logger, info_msg, join_smart_comments
+from devices.devices_dataclass import HardwareDevice, HardwareDeviceEssentials, HardwareDeviceDict
+from devices.service_devices.pdu.pdu_dataclass import *
+from utilities.datastructures.mes_independent.general import CmdStruct
+from utilities.myfunc import join_smart_comments
 
 module_logger = logging.getLogger(__name__)
 
@@ -23,7 +24,7 @@ class PDUController(Service):
         self._hardware_devices: Dict[int, PDU] = HardwareDeviceDict()
 
     def available_public_functions(self) -> Tuple[CmdStruct]:
-        return [*super().available_public_functions(), PDUController.GET_PDU_STATE, PDUController.SET_PDU_STATE]
+        return (*super().available_public_functions(), PDUController.GET_PDU_STATE, PDUController.SET_PDU_STATE)
 
     def get_pdu_state(self, func_input: FuncGetPDUStateInput) -> FuncGetPDUStateOutput:
         res, comments = self._check_device_range(func_input.pdu_id)
@@ -70,6 +71,7 @@ class PDUController(Service):
             res, comments = self._set_pdu_state(func_input)
         else:
             pdu = None
+        comments = f'Func "set_pdu_state" is accomplished with success: {res}. {comments}'
         return FuncSetPDUStateOutput(func_success=res, comments=comments, pdu=pdu)
 
     @abstractmethod

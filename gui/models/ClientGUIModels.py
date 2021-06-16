@@ -4,14 +4,14 @@ Created on 17.11.2019
 @author: saldenisov
 """
 import logging
+import sys
 from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Any, Dict, List, Union, Tuple
 
-import sys
-from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import numpy as np
@@ -19,7 +19,7 @@ from PyQt5.QtCore import QObject, pyqtSignal
 from PyQt5.QtWidgets import QErrorMessage
 
 from communication.messaging.messages import MessageInt, MessageExt
-from devices.devices import DeviceFactory
+from devices.devices import DeviceFactory, Client
 from devices.service_devices.project_treatment.openers import (ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
                                                                Opener, OpenersTypes, OPENER_ACCRODANCE, CriticalInfo)
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Hamamatsu, Cursors2D
@@ -41,16 +41,19 @@ class SuperUserGUIModel(QObject):
         self.logger = module_logger
         self.db_path = Path(app_folder / 'utilities' / 'database' / 'Devices.db')
         info_msg(self, 'INITIALIZING')
-        self.superuser = DeviceFactory.make_device(device_id="SuperUser:37cc841a6f8f907deaa49f117aa1a2f9",
-                                                   db_path=self.db_path,
-                                                   pyqtslot=self.treat_pyqtsignals,
-                                                   logger_new=False)
+        self.superuser = None
+        self.create_device()
         self.superuser.start()
         self.service_parameters = {}
         info_msg(self, 'INITIALIZED')
 
     def add_observer(self, inObserver):
         self.observers.append(inObserver)
+
+    def create_device(self):
+        self.superuser = DeviceFactory.make_device(device_id="SuperUser:37cc841a6f8f907deaa49f117aa1a2f9",
+                                                   db_path=self.db_path, pyqtslot=self.treat_pyqtsignals,
+                                                   logger_new=False)
 
     def remove_observer(self, inObserver):
         self.observers.remove(inObserver)
@@ -269,6 +272,7 @@ class TreatmentModel(QObject):
                         if not res:
                             self.show_error(self.calc_abs, comments)
                     if how == 'individual':
+                        treated_maps = 0
                         for measurements in opener.give_pair_maps(data_path):
                             map_index += 1
                             if first_map_with_electrons:
@@ -280,10 +284,13 @@ class TreatmentModel(QObject):
                             try:
                                 transmission = (base - self.noise_averaged_data) / (abs - self.noise_averaged_data)
                                 od_data += np.log10(transmission)
+                                treated_maps += 1
                             except (RuntimeError, RuntimeWarning):
                                 pass
                             self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                        od_data = od_data / info.number_maps
+                        od_data = od_data / treated_maps
+                        print(f'Treated maps {treated_maps}')
+                        self.notify_ui_observers({'progressbar_calc': (treated_maps, treated_maps)})
                     elif how == 'averaged':
                         abs_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
                         base_data = np.zeros(shape=(info.timedelays_length, info.wavelengths_length))
@@ -298,9 +305,11 @@ class TreatmentModel(QObject):
                             abs_data += abs
                             base_data += base
                             self.notify_ui_observers({'progressbar_calc': (map_index, info.number_maps / 2)})
-                        abs_data = abs_data / info.number_maps
-                        base_data = base_data / info.number_maps
+                        abs_data = abs_data / map_index
+                        base_data = base_data / map_index
+                        print(f'Treated maps {map_index}')
                         od_data = (base_data - self.noise_averaged_data) / (abs_data - self.noise_averaged_data)
+                        od_data = np.log10(od_data)
                     res = True
         elif exp_type is TreatmentModel.ExpDataStruct.ABS_BASE_NOISE:
             if TreatmentModel.DataTypes.ABS not in self.paths:
@@ -336,11 +345,11 @@ class TreatmentModel(QObject):
                     #noise_data = data[noise_path]
                     self.noise_averaged_data = noise_data
                     od_data = (base_data - noise_data) / (abs_data - noise_data)
+                    od_data = np.log10(od_data)
                     res = True
 
 
         if res:
-            od_data = np.log10(od_data)
             self.od = Measurement(type='Pump-Probe', comments='', author='SD',
                                   timestamp=datetime.timestamp(datetime.now()), data=od_data,
                                   wavelengths=info.wavelengths, timedelays=info.timedelays,

@@ -1,10 +1,11 @@
-'''
+"""
 Created on 10 Jan 2017
 
 @author: Sergey Denisov
-'''
+"""
 from functools import wraps
 from typing import Any
+from time import sleep
 
 
 def development_mode(dev: bool, with_return: Any):
@@ -14,10 +15,21 @@ def development_mode(dev: bool, with_return: Any):
             if not dev:
                 return func(*args, **kwargs)
             else:
-                if with_return != None:
+                if with_return:
                     return with_return
         return inner
     return decorator_function
+
+
+def dll_lock_for_class(func):
+    @wraps(func)
+    def inner(self, *args, **kwargs):
+        self._dll_lock = True
+        res = func(self, *args, **kwargs)
+        self._dll_lock = False
+        sleep(0.001)
+        return res
+    return inner
 
 
 def make_loop(func):
@@ -79,21 +91,10 @@ def turn_off(active=True):
     def inner_decorator(f):
         @wraps(f)
         def inner(*args, **kwargs):
-            if not active:
+            if active:
                 pass
             else:
                 return f(*args, **kwargs)
         return inner
 
     return inner_decorator
-
-
-
-def a(e=10):
-    print(e)
-
-@turn_off(active=False)
-def b(*args, **kwargs):
-    return a(**kwargs)
-
-b(e=5)

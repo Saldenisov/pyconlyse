@@ -1,8 +1,10 @@
-from dataclasses import dataclass, field
+from abc import abstractmethod
 from enum import Enum
-from typing import Dict, List, Tuple, Union, NewType, Set
-
-from utilities.datastructures.mes_independent.devices_dataclass import *
+from dataclasses import dataclass, field
+from typing import NewType, Union, List, Dict, Tuple, Set
+from serial import Serial
+from devices.devices_dataclass import (HardwareDevice, DeviceControllerState, FuncGetControllerStateInput,
+                                       FuncGetControllerStateOutput)
 from utilities.datastructures.mes_independent.general import FuncInput, FuncOutput
 
 relative = NewType('relative', str)
@@ -132,12 +134,35 @@ class AxisStpMtr(HardwareDevice):
 
 
 @dataclass(frozen=False)
+class EmulateAxisStpMtr(AxisStpMtr):
+    pass
+
+
+@dataclass(frozen=False)
 class A4988AxisStpMtr(AxisStpMtr):
     pass
 
 
 @dataclass(frozen=False)
+class TopDirectAxisStpMtr(AxisStpMtr):
+    arduino_port: str = ''
+    arduino_serial: Serial = None
+    baudrate: int = 19200
+
+    def no_serial(self):
+        d = {}
+        for key in TopDirectAxisStpMtr.__dataclass_fields__.keys():
+            if key not in ['arduino_serial']:
+                d[key] = getattr(self, key)
+        return TopDirectAxisStpMtr(**d)
+
+    def out(self):
+        return self.no_serial()
+
+
+@dataclass(frozen=False)
 class OwisAxisStpMtr(AxisStpMtr):
+    device_id_internal_seq: int = None
     gear_ratio: float = 0.0
     pitch: float = 1.0
     revolution: int = 200
@@ -156,16 +181,6 @@ class AxisStpMtrEssentials:
     position: Union[mm, angle, microstep]
     unit: MoveType
     status: int
-
-
-@dataclass(order=True, frozen=False)
-class StepMotorsControllerState(DeviceControllerState):
-    know_movements: Dict[Union[mm, angle, microstep], bool] = \
-        field(default_factory=lambda: {microstep: False, mm: False, angle: False})
-    start_stop: Dict[int, Tuple[float]] = field(default_factory=dict)
-
-    def __post_init__(self):
-        self.start_stop = {device_id: (0.0, 0.0) for device_id in self.devices.keys()}
 
 
 @dataclass

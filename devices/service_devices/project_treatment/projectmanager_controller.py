@@ -9,12 +9,13 @@ from datetime import datetime
 from itertools import chain, tee
 from pathlib import Path
 from time import time_ns
-from typing import Any, Iterable, Generator
+from typing import Any, Iterable, Generator, Tuple
 
 from devices.devices import Service
+from devices.service_devices.project_treatment.projects_dataclass import *
 from utilities.database import db_create_connection, db_execute_select, db_execute_insert
-from utilities.datastructures.mes_independent import *
-from utilities.errors.myexceptions import DeviceError
+from utilities.datastructures.mes_independent.general import CmdStruct
+from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
 from utilities.myfunc import file_md5
 
 module_logger = logging.getLogger(__name__)
@@ -33,20 +34,14 @@ class ProjectManager_controller(Service):
         super().__init__(**kwargs)
         self.data_path: Path = Path(self.get_settings('Parameters')['data_folder'])
         self.database_path: Path = Path(self.get_settings('Parameters')['database'])
-        self.power(FuncPowerInput(True))  # ProjectManager is always on
-        self.activate(FuncActivateInput(True))  # ProjectManager is always active
+        #self.power(FuncPowerInput(True))  # ProjectManager is always on
+        #self.activate(FuncActivateInput(True))  # ProjectManager is always active
         res, comments = self._scan_files()
         if not res:
             raise ProjectManagerError(self, f'During __init__: comments={comments}')
         self.state = self.get_state()
 
-    def activate(self, func_input: FuncActivateInput) -> FuncActivateOutput:
-        flag = func_input.flag
-        self.ctrl_status.active = flag
-        return FuncActivateOutput(comments=f'{self.name} active state is set to {flag}',
-                                  func_success=True, device_status=self.ctrl_status)
-
-    def available_public_functions(self) -> Dict[str, Dict[str, Union[Any]]]:
+    def available_public_functions(self) -> Tuple[CmdStruct]:
         return (*super().available_public_functions(), ProjectManager_controller.GET_FILES,
                                                        ProjectManager_controller.GET_PROJECTS,
                                                        ProjectManager_controller.GET_OPERATORS,

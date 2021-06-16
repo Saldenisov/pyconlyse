@@ -2,17 +2,20 @@ const String ID = "ARDUINO:StpMtrCtrl_TopDirect_1axis:c1371a888f2e7490fd3ec04363
 const int pulPin = 13;
 const int dirPin = 12;
 const int enblPin = 11;
-//310 turns in delay line in the long one
+//310 turns in delay line in the long 200mm one
 // 128 - 1 (better 2)
 // 16 - 40 (50)
 //8 - 80 (90)
 //4 - 160 (170)
 //2 - 360 (400)
-int microsteps = 128; // in one step
-int delay_time = 1; // between TTL pulses
-//max full steps is 62900
-const long max_full_steps = 62900;
-const float step_mm = 0.003198 ; // 0.00321mm in one step
+int microsteps = 16; // in one step
+int delay_time = 50; // between TTL pulses in us
+//max full microsteps is 62900 (128) for 200mm DL
+//3930 for (16 microsteps) for 100mm DL
+const long max_full_steps = 3930;
+// 0.003198 in one microstep for 128microsteps
+// 0.025584 in one microstep for 16microsteps
+const float step_mm = 0.02545;
 
 //MOVING  RELATED VARIABLES
 float go_pos = 0; // in mm
@@ -53,7 +56,7 @@ void set_state_ctrl(bool state){
     else{
       digitalWrite(enblPin, LOW);
     }
-    delay(100);
+    delay(50);
 
     ctrl_state = state;
   }
@@ -257,7 +260,7 @@ void loop() {
     str_object = Serial.readString();  // read the incoming cmd into String object
     res = execute_cmd(str_object, pos);  // obtain result 0, -1, -2, -3 (see ERRORS)
     Serial.println(res);
-    delay(30);
+    delay(15);
     Serial.flush();  //clean serial before receiving the next command. If user send other commands before the execution of previous. Arduino ctrl will reject them.
   }
 }
