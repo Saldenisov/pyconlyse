@@ -172,6 +172,7 @@ class OwisAxisStpMtr(AxisStpMtr):
 @dataclass(frozen=False)
 class StandaAxisStpMtr(AxisStpMtr):
     device_id_internal_seq: int = None
+    ip_address: str = ''
 
 
 @dataclass(order=True, frozen=False)

@@ -62,12 +62,11 @@ class GeneralCmdLogic(Thinker):
                 connection.device_info = data.info
                 session_key = self.parent.messenger.decrypt_with_private(data.info.session_key)
                 self.parent.messenger.fernet = self.parent.messenger.create_fernet(session_key)
-<<<<<<< HEAD
-=======
+
         elif data.com == MsgGenerator.ARE_YOU_ALIVE_REPLY.mes_name:
             self.events['server_heartbeat'].time = time()
             self.parent.messenger._are_you_alive_send = False
->>>>>>> develop
+
 
     def react_demand(self, msg: Message):
         info_msg(self, 'REQUEST', extra=str(msg.short()))
@@ -179,11 +178,9 @@ class ServerCmdLogic(Thinker):
                 # Server here always replied the same way to all services
                 comments = """"I always say, that power is ON, I hope the user have turned on power already"""
                 msg_i = MsgGenerator.power_on_reply(self.parent, msg_i=msg, flag=True, comments=comments)
-<<<<<<< HEAD
-=======
             elif cmd == MsgGenerator.ARE_YOU_ALIVE_DEMAND.mes_name:
                 msg_i = MsgGenerator.are_you_alive_reply(device=self.parent, msg_i=msg)
->>>>>>> develop
+
             else:
                 msg_i = MsgGenerator.error(device=self.parent, msg_i=msg,
                                            comments=f'Unknown Message com: {msg.data.com}')
