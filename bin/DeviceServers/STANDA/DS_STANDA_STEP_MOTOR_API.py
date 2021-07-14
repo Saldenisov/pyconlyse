@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""Demo power supply tango device server"""
 
 import time
 import numpy
@@ -18,7 +17,11 @@ from typing import Dict, Tuple
 from pathlib import Path
 from time import sleep
 
+
 class DS_STANDA_STEP_MOTOR(Device):
+    """"
+    Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
+    """
     POWER_STATES = {0: 'PWR_UNKNOWN', 1: 'PWR_OFF', 3: 'PWR_NORM', 4: 'PWR_REDUCED',5: 'PWR_MAX'}
 
     position = attribute(label="Position", dtype=float,
@@ -262,7 +265,6 @@ class DS_STANDA_STEP_MOTOR(Device):
 
     @command(polling_period=100)
     def get_controller_status(self):
-        pass
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok:
             x_status = status_t()

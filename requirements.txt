@@ -30,5 +30,6 @@ requests
 scipy
 sip
 tables
+taurus
 vitables
 zmq
