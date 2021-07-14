@@ -1,57 +1,47 @@
-from ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
-                  controller_name_t, status_t, set_position_t, PositionFlags)
-from typing import Dict
-from pathlib import Path
-from time import sleep
-#----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.additionnal_import
+from time import time
+from numpy.random import random_sample
 
-# Device States Description
-# ON : 
-# OFF : 
-# MOVING : 
-import ctypes
+from tango import AttrQuality, AttrWriteType, DispLevel
+from tango.server import Device, attribute, command
+from tango.server import class_property, device_property
 
-class test_DS_STANDA_STEP_MOTOR():
+class PowerSupply(Device):
 
-    def __init__(self):
-        self.device_property_list = {}
-        self.device_property_list['ip_address'] = '10.20.30.204'
-        self.device_property_list["device_id"] = "000043CA"
-        self.lib = lib
-        self.device_id_internal_seq = -1
+    voltage = attribute()
 
-    def init_device(self):
-        def find_device() -> int:
-            self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
-            # Enumerate devices
-            probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-            enum_hints = f"addr={self.device_property_list['ip_address']}".encode('utf-8')
-            # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
-            devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
-            device_counts = self.lib.get_device_count(devenum)
-            sleep(0.05)
-            argreturn = -1
-            if device_counts > 0:
-                for device_id_internal_seq in range(device_counts):
-                    uri = self.lib.get_device_name(devenum, device_id_internal_seq)
-                    sleep(0.01)
-                    if self.device_property_list['device_id'] in uri.decode('utf-8'):
-                        return device_id_internal_seq
-                return argreturn
-            else:
-                return argreturn
+    current = attribute(label="Current", dtype=float,
+                        display_level=DispLevel.EXPERT,
+                        access=AttrWriteType.READ_WRITE,
+                        unit="A", format="8.4f",
+                        min_value=0.0, max_value=8.5,
+                        min_alarm=0.1, max_alarm=8.4,
+                        min_warning=0.5, max_warning=8.0,
+                        fget="get_current", fset="set_current",
+                        doc="the power supply current")
 
-        self.attr_device_id_internal_read = find_device()
+    noise = attribute(label="Noise", dtype=((float,),),
+                      max_dim_x=1024, max_dim_y=1024,
+                      fget="get_noise")
 
+    host = device_property(dtype=str)
+    port = class_property(dtype=int, default_value=9788)
 
-    def Off(self):
+    def read_voltage(self):
+        self.info_stream("get voltage(%s, %d)" % (self.host, self.port))
+        return 10.0
 
-        arg = ctypes.byref(ctypes.cast(self.attr_device_id_internal_read, ctypes.POINTER(ctypes.c_int)))
-        result = self.lib.close_device(arg)
+    def get_current(self):
+        return 2.3456, time(), AttrQuality.ATTR_WARNING
 
-        return result
+    def set_current(self, current):
+        print("Current set to %f" % current)
 
-a = test_DS_STANDA_STEP_MOTOR()
-a.init_device()
-print(a.attr_device_id_internal_read)
-print(a.Off())
+    def get_noise(self):
+        return random_sample((1024, 1024))
+
+    @command(dtype_in=float)
+    def ramp(self, value):
+        print("Ramping up...")
+
+if __name__ == "__main__":
+    PowerSupply.run_server()

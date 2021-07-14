@@ -2,7 +2,7 @@ from abc import abstractmethod
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Set, Tuple, Union
-
+import PyTango
 from communication.interfaces import MessengerInter, ThinkerInter
 from communication.messaging.message_types import AccessLevel, Permission
 from devices.interfaces import DeviceType, DeviceId, ExecutorInter
@@ -30,7 +30,7 @@ class HardwareDevice:
     device_id_seq: int = None
     name: str = ''
     friendly_name: str = ''
-    status: int = 0  # 0, 1, 2
+    status: PyTango.DevState = PyTango.DevState.UNKNOWN
 
     def short(self):
         pass

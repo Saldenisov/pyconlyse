@@ -13,9 +13,9 @@ from time import sleep
 from devices.service_devices.stepmotors.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                                                      controller_name_t, status_t, set_position_t, PositionFlags)
 from utilities.myfunc import info_msg, error_logger
-from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr
+from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr, MoveType
 from devices.devices_dataclass import HardwareDeviceDict, HardwareDevice
-from .stpmtr_controller import StpMtrController, StpMtrError, MoveType
+from .stpmtr_controller import StpMtrController, StpMtrError
 
 module_logger = logging.getLogger(__name__)
 

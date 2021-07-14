@@ -1,7 +1,10 @@
 import platform
 from ctypes import *
 
-from bin.DeviceServers.STANDA.ximc import path_dll
+try:
+	from bin.DeviceServers.STANDA.ximc import path_dll
+except ModuleNotFoundError:
+	from ximc import path_dll
 
 path_dll = str(path_dll)
 # Load library

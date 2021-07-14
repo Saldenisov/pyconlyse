@@ -18,5 +18,7 @@ elif platform.system() == "Linux":
 else:
     raise Exception('Only Windows/Linux is available at this moment')
 
-
-from bin.DeviceServers.STANDA.ximc.myximc import *
+try:
+    from bin.DeviceServers.STANDA.ximc.myximc import *
+except ModuleNotFoundError:
+    from ximc.myximc import *

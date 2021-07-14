@@ -25,7 +25,8 @@
 			<li> <a href="FullDocument.html#attributes">   Attributes   </a>
 			<ul>
 				<li> <a href="FullDocument.html#attrposition"> position </a>
-				<li> <a href="FullDocument.html#attrfriendly_name"> friendly_name </a>
+				<li> <a href="FullDocument.html#attrdevice_id_internal"> device_id_internal </a>
+				<li> <a href="FullDocument.html#attruri"> uri </a>
 			</ul>
 			<li> <a href="FullDocument.html#states">       States       </a>
 		</ul>
@@ -130,6 +131,34 @@
 		<td> device_id </td>
 		<td>  </td>
 		<td> String </td>
+		<td> none </td>
+	</tr>
+	<tr>
+		<td> wait_movement </td>
+		<td> Parameter that sets waiting time for axis to finish movement. </td>
+		<td> short </td>
+		<td> 3 <br> </td>
+	</tr>
+	<tr>
+		<td> basis_unit </td>
+		<td> class MoveType(Enum):<Br>
+			    angle = `angle`<Br>
+			    mm = `mm`<Br>
+			    microstep = `microstep`<Br>
+			    step = `step` </td>
+		<td> String </td>
+		<td> microstep <br> </td>
+	</tr>
+	<tr>
+		<td> limits </td>
+		<td> limits of axis in basic units </td>
+		<td> float[] </td>
+		<td> none </td>
+	</tr>
+	<tr>
+		<td> preset_values </td>
+		<td>  </td>
+		<td> float[] </td>
 		<td> none </td>
 	</tr>
 </table>
@@ -566,11 +595,21 @@
 		<td>  </td>
 	</tr>
 	<tr>
-		<td> <a href="Attrfriendly_name.html"> friendly_name </a> </td>
+		<td> <a href="Attrdevice_id_internal.html"> device_id_internal </a> </td>
 		<td> false </td>
 		<td> false </td>
 		<td> Scalar </td>
-		<td> READ_WRITE </td>
+		<td> READ </td>
+		<td> Tango::DEV_USHORT </td>
+		<td> EXPERT </td>
+		<td> The STANDA dll enumerates the devices, so it is important to know the device`s number, that dll has given to it. </td>
+	</tr>
+	<tr>
+		<td> <a href="Attruri.html"> uri </a> </td>
+		<td> false </td>
+		<td> false </td>
+		<td> Scalar </td>
+		<td> READ </td>
 		<td> Tango::DEV_STRING </td>
 		<td> OPERATOR </td>
 		<td>  </td>
@@ -744,9 +783,172 @@
 </table>
 <br><br>
 <hr>
-<a name="attrfriendly_name"> </a>
+<a name="attrdevice_id_internal"> </a>
 <br><br><br>
-<font size="+1"><u><b> Attribute friendly_name : </b></u></font>
+<font size="+1"><u><b> Attribute device_id_internal : </b></u></font>
+<ul>
+	The STANDA dll enumerates the devices, so it is important to know the device`s number, that dll has given to it.
+</ul>
+<br><br><br>
+<Table Border=0 Cellpadding=0 CELLSPACING=20>
+	<TR>
+		<TD ALIGN="left" VALIGN=top>
+			<Table Border=2 Cellpadding=3 CELLSPACING=0>
+				<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+				<td colspan=0> <font size=+1> <center><b> Attribute Definition </b></font></center></td>
+				</tr>
+				<tr>
+					<td> Attribute Type </td>
+					<td> Scalar </td>
+				</tr>
+				<tr>
+					<td> R/W Type </td>
+					<td> READ </td>
+				</tr>
+				<tr>
+					<td> Data Type </td>
+					<td> Tango::DEV_USHORT </td>
+				</tr>
+				<tr>
+					<td> Display Level </td>
+					<td> EXPERT </td>
+				</tr>
+				<tr>
+					<td> Inherited </td>
+					<td> false </td>
+				</tr>
+				<tr>
+					<td> Abstract </td>
+					<td> false </td>
+				</tr>
+				<tr>
+					<td> Polling Period </td>
+					<td> Not polled </td>
+				</tr>
+				<tr>
+					<td> Memorized </td>
+					<td> Not set </td>
+				</tr>
+			<Tr BGCOLOR="#CCCCFF"><Td><Hr></Td><Td><Hr></Td></Tr>
+				<tr>
+					<td> Read allowed for </td>
+					<td> All states </td>
+				</tr>
+			</table>
+		</td>
+		<TD ALIGN="Center" VALIGN=top>
+			<Table Border=2 Cellpadding=3 CELLSPACING=0>
+				<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+				<td colspan=0> <font size=+1> <center><b> Attribute Properties </b></font></center></td>
+				</tr>
+				<tr>
+					<td> label </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> unit </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> standard unit </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> display unit </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> format </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> max_value </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> min_value </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> max_alarm </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> min_alarm </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> max_warning </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> min_warning </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> delta_time </td>
+					<td>  </td>
+				</tr>
+				<tr>
+					<td> delta_val </td>
+					<td>  </td>
+				</tr>
+			</table>
+		</td>
+		<TD ALIGN="Right" VALIGN=top>
+			<Table Border=2 Cellpadding=3 CELLSPACING=0>
+				<tr bgcolor="#CCCCFF" class="TableHeadingColor">
+				<td colspan=0> <font size=+1> <center><b> Attribute Event Criteria </b></font></center></td>
+				</tr>
+				<tr>
+					<td> Periodic </td>
+					<td> Not set </td>
+				</tr>
+				<tr>
+					<td> Relative Change </td>
+					<td> Not set </td>
+				</tr>
+				<tr>
+					<td> Absolute Change </td>
+					<td> Not set </td>
+				</tr>
+			<Tr BGCOLOR="#CCCCFF"><Td><Hr></Td><Td><Hr></Td></Tr>
+				<tr>
+					<td> Archive Periodic </td>
+					<td> Not set </td>
+				</tr>
+				<tr>
+					<td> Archive Relative Change </td>
+					<td> Not set </td>
+				</tr>
+				<tr>
+					<td> Archive Absolute Change </td>
+					<td> Not set </td>
+				</tr>
+			<Tr BGCOLOR="#CCCCFF"><Td><Hr></Td><Td><Hr></Td></Tr>
+				<tr>
+					<td> Push Change event by user code </td>
+					<td> false </td>
+				</tr>
+			<Tr BGCOLOR="#CCCCFF"><Td> </Td><Td> </Td></Tr>
+				<tr>
+					<td> Push Archive event by user code </td>
+					<td> false </td>
+				</tr>
+			<Tr BGCOLOR="#CCCCFF"><Td> </Td><Td> </Td></Tr>
+				<tr>
+					<td> Push DataReady event by user code </td>
+					<td> false </td>
+				</tr>
+			</table>
+		</td>
+	</TR>
+</table>
+<br><br>
+<hr>
+<a name="attruri"> </a>
+<br><br><br>
+<font size="+1"><u><b> Attribute uri : </b></u></font>
 <ul>
 </ul>
 <br><br><br>
@@ -763,7 +965,7 @@
 				</tr>
 				<tr>
 					<td> R/W Type </td>
-					<td> READ_WRITE </td>
+					<td> READ </td>
 				</tr>
 				<tr>
 					<td> Data Type </td>
@@ -787,19 +989,11 @@
 				</tr>
 				<tr>
 					<td> Memorized </td>
-					<td> true </td>
-				</tr>
-				<tr>
-					<td> Write hardware at init. </td>
-					<td> true </td>
+					<td> Not set </td>
 				</tr>
 			<Tr BGCOLOR="#CCCCFF"><Td><Hr></Td><Td><Hr></Td></Tr>
 				<tr>
 					<td> Read allowed for </td>
-					<td> All states </td>
-				</tr>
-				<tr>
-					<td> Write allowed for </td>
 					<td> All states </td>
 				</tr>
 			</table>

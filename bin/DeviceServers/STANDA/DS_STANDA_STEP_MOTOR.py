@@ -52,7 +52,7 @@ from ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Resu
 from typing import Dict
 from pathlib import Path
 from time import sleep
-from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr
+from devices.service_devices.stepmotors.stpmtr_dataclass import StandaAxisStpMtr, MoveType
 #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.additionnal_import
 
 # Device States Description
@@ -104,7 +104,7 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
         #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.init_device) ENABLED START -----#
         self.lib = lib
         self.axis = StandaAxisStpMtr(device_id=self.device_property_list['device_id'][2],
-                                     friendly_name=self.device_property_list['friendly_name'][2] ,
+                                     friendly_name=self.device_property_list['friendly_name'][2],
                                      ip_address=self.device_property_list['ip_address'][2])
 
         def find_device() -> int:
@@ -112,7 +112,7 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
             self.lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
             # Enumerate devices
             probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-            enum_hints = f"addr={self.ip_address}".encode('utf-8')
+            enum_hints = f"addr={self.axis.ip_address}".encode('utf-8')
             # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
             self.devenum = self.lib.enumerate_devices(probe_flags, enum_hints)
             device_counts = self.lib.get_device_count(self.devenum)
@@ -122,8 +122,9 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
                 for device_id_internal_seq in range(device_counts):
                     uri = self.lib.get_device_name(self.devenum, device_id_internal_seq)
                     sleep(0.01)
-                    if self.device_id in uri.decode('utf-8'):
+                    if self.axis.device_id in uri.decode('utf-8'):
                         self.attr_uri_read = uri
+                        self.axis.uri = uri
                         return device_id_internal_seq
                 return argreturn
             else:
@@ -134,6 +135,7 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
             self.info_stream(f"STANDA Device with ID {self.device_id} was NOT found.")
         else:
             self.info_stream(f"STANDA Device with ID {self.device_id} was found.")
+            self.On()
 
         #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.init_device
 
@@ -150,17 +152,20 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
     def read_position(self, attr):
         self.debug_stream("In read_position()")
         #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.position_read) ENABLED START -----#
-        pos = get_position_t()
-        result = self.lib.get_position(self.attr_device_id_internal_read, ctypes.byref(pos))
-        if result == Result.Ok:
-            pos_microsteps = pos.Position * 256 + pos.uPosition
-            pos_basic_units = axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
-            axis.position = pos_basic_units
-            attr.set_value(self.attr_position_read)
-        else:
-            self.error_stream(f'Could not measure the positions of ')
-
+        self.read_position_standa()
+        attr.set_value(self.attr_position_read)
         #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.position_read
+        
+    def is_position_allowed(self, attr):
+        self.debug_stream("In is_position_allowed()")
+        if attr==PyTango.AttReqType.READ_REQ:
+            state_ok = not(self.get_state() in [PyTango.DevState.OFF])
+        else:
+            state_ok = not(self.get_state() in [])
+        #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.is_position_allowed) ENABLED START -----#
+        
+        #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.is_position_allowed
+        return state_ok
         
     def read_device_id_internal(self, attr):
         self.debug_stream("In read_device_id_internal()")
@@ -172,6 +177,7 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
     def read_uri(self, attr):
         self.debug_stream("In read_uri()")
         #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.uri_read) ENABLED START -----#
+        self.attr_uri_read = self.axis.uri
         attr.set_value(self.attr_uri_read)
         
         #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.uri_read
@@ -197,11 +203,15 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
         self.debug_stream("In On()")
         argout = False
         #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.On) ENABLED START -----#
-        if self.lib.open_device(self.attr_uri_read) >= 0:
+        if self.lib.open_device(self.axis.uri) >= 0:
+            print('On going...')
             argout = True
             self.set_state(PyTango.DevState.ON)
+            self.read_position_standa()
         else:
             self.set_state(PyTango.DevState.FAULT)
+            self.error_stream("Could not turn On device.")
+
         #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.On
         return argout
         
@@ -304,7 +314,17 @@ class DS_STANDA_STEP_MOTOR (PyTango.Device_4Impl):
         
 
     #----- PROTECTED REGION ID(DS_STANDA_STEP_MOTOR.programmer_methods) ENABLED START -----#
-    
+    def read_position_standa(self):
+        pos = get_position_t()
+        result = self.lib.get_position(self.attr_device_id_internal_read, ctypes.byref(pos))
+        if result == Result.Ok:
+            pos_microsteps = pos.Position * 256 + pos.uPosition
+            pos_basic_units = self.axis.convert_to_basic_unit(MoveType.microstep, pos_microsteps)
+            self.axis.position = pos_basic_units
+            self.attr_position_read = pos_basic_units
+        else:
+            self.attr_position_read = 0
+            self.error_stream(f'Could not measure the positions of axis: {self.axis.friendly_name}.')
     #----- PROTECTED REGION END -----#	//	DS_STANDA_STEP_MOTOR.programmer_methods
 
 class DS_STANDA_STEP_MOTORClass(PyTango.DeviceClass):
