@@ -1,13 +1,10 @@
-class A:
-    def __init__(self):
-        self.a = 10
-
-    def b(self):
-
-        def c():
-            self.a = 20
-        c()
-
-a = A()
-a.b()
-print(a.a)
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QHBoxLayout
+app = QApplication([])
+window = QWidget()
+layout = QHBoxLayout()
+layout.addWidget(QPushButton('Top'))
+layout.addWidget(QPushButton('Bottom'))
+window.setLayout(layout)
+window.setWindowTitle('sdf')
+window.show()
+app.exec()
