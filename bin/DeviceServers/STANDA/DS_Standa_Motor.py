@@ -29,7 +29,7 @@ class DS_Standa_Motor(DS_MOTORIZED):
     """"
     Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
     """
-    _version_ = '0.1'
+    _version_ = '0.3'
     _model_ = 'STANDA step motor'
 
     ip_address = device_property(dtype=str, default_value='10.20.30.204')
@@ -67,7 +67,7 @@ class DS_Standa_Motor(DS_MOTORIZED):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
-            self.info_stream(f"Searching for STANDA device {self.device_id}")
+            self.info(f"Searching for STANDA device {self.device_id}", True)
             lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
             # Enumerate devices
             probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
@@ -83,7 +83,7 @@ class DS_Standa_Motor(DS_MOTORIZED):
                     if self.device_id in uri.decode('utf-8'):
                         argreturn = device_id_internal_seq, uri
                         break
-        print(f'Device is found {argreturn}')
+        print(f'Result: {argreturn}')
         return argreturn
 
     def read_position_local(self) -> Union[int, str]:
@@ -93,7 +93,6 @@ class DS_Standa_Motor(DS_MOTORIZED):
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
             self._position = pos_basic_units
-            self.debug_stream(f'Reading position of {self.device_name()}. It is = {self._position}.')
             return 0
         else:
             return f'Could not read position of {self.device_name()}: {result}.'
@@ -130,7 +129,7 @@ class DS_Standa_Motor(DS_MOTORIZED):
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
-            print(f'Searching for device: {self.device_id}')
+            self.info(f'Searching for device: {self.device_id}', True)
             self._device_id_internal, self._uri = self.find_device()
 
         if self._device_id_internal == -1:
@@ -141,6 +140,8 @@ class DS_Standa_Motor(DS_MOTORIZED):
         if res >= 0:
             self._device_id_internal = res
             self.set_state(DevState.ON)
+            self.stop_movement_local()
+            self.read_position_local()
             return 0
         else:
             self.set_state(DevState.FAULT)
@@ -157,7 +158,7 @@ class DS_Standa_Motor(DS_MOTORIZED):
             return 0
         else:
             self.set_state(DevState.FAULT)
-            return self.error_stream(f'Could not turn off device {self.device_name()}: {result}.')
+            return self.error(f'Could not turn off device {self.device_name()}: {result}.')
 
     def move_axis_local(self, pos) -> Union[int, str]:
         microsteps = int(pos % 1 * 256)
@@ -173,16 +174,17 @@ class DS_Standa_Motor(DS_MOTORIZED):
             return f'{self.device_name()} did NOT stop moving yet: {result}.'
         else:
             self.set_state(DevState.ON)
+            self.stop_movement_local()
             return 0
 
     def stop_movement_local(self) -> Union[int, str]:
         result = lib.command_stop(self._device_id_internal)
         if result == 0:
             self.state = DevState.ON
-            self.info_stream(f"Axis movement of device {self.device_name()} was stopped by user.")
+            self.info(f"Axis movement of device {self.device_name()} was stopped by user.")
             return 0
         else:
-            return f"Axis movement of device {self.device_name()} was NOT stopped by user."
+            return f"Axis movement of device {self.device_name()} WAS NOT stopped by user."
 
     def get_controller_status_local(self) -> Union[int, str]:
         x_status = status_t()
@@ -192,13 +194,18 @@ class DS_Standa_Motor(DS_MOTORIZED):
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
-            return 0
+
+            if self._status_check_fault > 0:
+                self._status_check_fault = 0
+
+            return super().get_controller_status_local()
+
         else:
+            self._status_check_fault += 1
+            if self._status_check_fault > 10:
+                self.set_state(DevState.FAULT)
             return f'Could not get controller status of {self.device_name()}: {result}.'
         # TODO: add check status if connected or not
-
-    def _set_device_param(self):
-        pass
 
 
 if __name__ == "__main__":

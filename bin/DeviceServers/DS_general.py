@@ -4,6 +4,9 @@ import numpy
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
 from tango.server import Device, attribute, command, pipe, device_property
 from typing import Tuple, Union
+from threading import Thread
+from time import sleep
+
 
 class DS_General(Device):
     device_id = device_property(dtype=str)
@@ -18,18 +21,155 @@ class DS_General(Device):
     def _model_(self):
         raise NotImplementedError
 
-    info = pipe()
-
-    #@pipe(label="DS_Info", doc="General info about DS.")
-    def read_info(self):
-        return ('info', dict(manufacturer=f'{self.__class__.__name__}',
+    @pipe(label="DS_Info", doc="General info about DS.")
+    def read_info_ds(self):
+        return ('info_ds', dict(manufacturer=f'{self.__class__.__name__}',
                             model=self._model_,
                             version_number=self._version_,
                             device_id=self.device_id))
 
+    @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+               doc="Last essential comment.", polling_period=250)
+    def last_comments(self):
+        return self._comments
+
+    @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+               doc="Last error.", polling_period=250)
+    def last_error(self):
+        return self._error
+
+    @attribute(label="URI", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+               doc="The URI of device.")
+    def uri(self):
+        return self._uri
+
+    def error(self, error_in):
+        self.error_stream(error_in)
+        self._error = error_in
+        self._n = 0
+        print(error_in)
+
+    def info(self, info_in, printing=False):
+        self.info_stream(info_in)
+        self._comments = info_in
+        if printing:
+            print(info_in)
+
     @abstractmethod
     def init_device(self):
+        self._comments = '...'
+        self._error = '...'
+        self._n = 0
+        internal_time = Thread(target=self.int_time)
+        internal_time.start()
         Device.init_device(self)
+
+    @abstractmethod
+    def find_device(self) -> Tuple[int, str]:
+        """
+        returns device_id_internal and uri if applicable
+        """
+        pass
+
+    def check_func_allowance(self, func) -> int:
+        state_ok = -1
+        if func.__name__ in self.RULES:
+            rules_for_func = self.RULES[func.__name__]
+            if self.get_state() in rules_for_func:
+                state_ok = 1
+        else:
+            self.error(f'Function {func} is not in RULES: {self.RULES}.')
+        return state_ok
+
+    def int_time(self):
+        while 1:
+            sleep(0.5)
+            self._n += 1
+            if self._n > 10:
+                self._error = ''
+                self._n = 0
+
+    def device_name(self) -> str:
+        return f'Device {self.device_id} {self.friendly_name}'
+
+    @command(polling_period=250)
+    def get_controller_status(self):
+        state_ok = self.check_func_allowance(self.get_controller_status)
+        if state_ok == 1:
+            res = self.get_controller_status_local()
+            if res != 0:
+                self.error(f'Could not get controller status of {self.device_name()}.')
+
+    @abstractmethod
+    def get_controller_status_local(self) -> Union[int, str]:
+        return 0
+
+    def turn_on_main(self):
+        self.info(f"Turning on device {self.device_name()}.", True)
+        state_ok = self.check_func_allowance(self.turn_on)
+        if state_ok == 1:
+            res = self.turn_on_local()
+            if res != 0:
+                self.error(f"{res}")
+            else:
+                self.info(f"Device {self.device_name()} WAS turned ON.", True)
+
+    @abstractmethod
+    def turn_on_local(self) -> Union[int, str]:
+        pass
+
+    def turn_off_main(self):
+        self.debug_stream(f"Turning off device {self.device_name()}.")
+        print(f"Turning off device {self.device_name()}.")
+        state_ok = self.check_func_allowance(self.turn_off)
+        if state_ok == 1:
+            res = self.turn_off_local()
+            if res != 0:
+                self.error_stream(f"{res}")
+
+            else:
+                print(f"Device {self.device_name()} is turned OFF.")
+
+    @abstractmethod
+    def turn_off_local(self) -> Union[int, str]:
+        pass
+
+
+class DS_PDU(DS_General):
+    RULES = {'turn_on': [DevState.OFF, DevState.FAULT], 'turn_off': [DevState.ON, DevState.STANDBY],
+             'set_channel_state': [DevState.ON, DevState.STANDBY],
+             'get_channels_state': [DevState.ON, DevState.STANDBY],
+             'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
+             'get_controller_status': [DevState.ON, DevState.STANDBY]}
+    ip_address = device_property(dtype=str)
+    authentication_name = device_property(dtype=str)
+    authentication_password = device_property(dtype=str)
+
+    def init_device(self):
+        super().init_device()
+        self._device_id_internal = -1
+        self._outputs = {}
+        self._device_id_internal, self._uri = self.find_device()
+        if self._device_id_internal >= 0:
+            self.info(f"Device {self.device_name()} was found.", True)
+            self.set_state(DevState.OFF)
+        else:
+            self.info(f"Device {self.device_name()} was NOT found.", True)
+            self.set_state(DevState.FAULT)
+
+    # @command(doc_in="Reads PDU channels state.", polling_period=500, dtype_out=)
+    # def get_channels_state(self):
+    #     self.debug_stream(f'Getting PDU channels states of {self.device_name()}.')
+    #     state_ok = self.check_func_allowance(self.get_channels_state())
+    #     if state_ok == 1:
+    #         res = self.get_channels_state_local()
+    #         if res != 0:
+    #             self.error(f'{res}')
+    #     return self._outputs
+
+    @abstractmethod
+    def get_channels_state_local(self) -> Union[int, str]:
+        pass
 
 
 class DS_MOTORIZED(DS_General):
@@ -63,11 +203,6 @@ class DS_MOTORIZED(DS_General):
     def device_id_internal(self):
         return self._device_id_internal
 
-    @attribute(label="URI", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="the URI of device.")
-    def uri(self):
-        return self._uri
-
     @attribute(label="Power Status", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="the human readable power status.")
     def power_status(self):
@@ -85,31 +220,22 @@ class DS_MOTORIZED(DS_General):
         device_id_internal, uri = self.find_device()
         self._uri = uri
         self._device_id_internal = device_id_internal
+        self._status_check_fault = 0
 
         if self._device_id_internal >= 0:
-            self.info_stream(f"Device with ID {self.device_id} was found.")
+            self.info(f"Device with ID {self.device_id} was found.", True)
             self.set_state(DevState.OFF)
         else:
-            self.info_stream(f"Device {self.device_name()} was NOT found.")
+            self.info(f"Device {self.device_name()} was NOT found.", True)
             self.set_state(DevState.FAULT)
-
-    def check_func_allowance(self, func) -> int:
-        state_ok = -1
-        if func.__name__ in self.RULES:
-            rules_for_func = self.RULES[func.__name__]
-            if self.get_state() in rules_for_func:
-                state_ok = 1
-        return state_ok
-
-    def device_name(self) -> str:
-        return f'Device {self.device_id} {self.friendly_name}'
 
     def read_position(self):
         state_ok = self.check_func_allowance(self.read_position)
         if state_ok == 1:
             res = self.read_position_local()
             if res != 0:
-                self.error_stream(f'Could not read position of {self.device_name()}: {res}')
+                self.error(f'Could not read position of {self.device_name()}: {res}')
+
         return self._position
 
     @abstractmethod
@@ -129,22 +255,15 @@ class DS_MOTORIZED(DS_General):
                 res = self.write_position_local(pos)
                 self._prev_pos = self._position
                 if res != 0:
-                    self.error_stream(f'Could not write position of {self.device_name()}: {res}')
+                    self.error(f'Could not write position of {self.device_name()}: {res}')
             else:
-                self.error_stream(f'Could not write position of {self.device_name()}: position out of limit:'
+                self.error(f'Could not write position of {self.device_name()}: position out of limit:'
                                   f'({self.limit_min}:{self.limit_max})')
 
     @abstractmethod
     def write_position_local(self, pos) -> Union[int, str]:
         """
         Returns 0 if success, if not error as a str
-        """
-        pass
-
-    @abstractmethod
-    def find_device(self) -> Tuple[int, str]:
-        """
-        returns device_id_internal and uri if applicable
         """
         pass
 
@@ -155,52 +274,13 @@ class DS_MOTORIZED(DS_General):
         if state_ok == 1:
             res = self.define_position_local(position)
             if res != 0:
-                self.error_stream(f'res')
+                self.error(f'{res}')
             else:
                 self.debug_stream(f'Position for {self.device_name()} is redefined to {position}.')
             self.read_position()
 
     @abstractmethod
     def define_position_local(self, position) -> Union[int, str]:
-        pass
-
-    @command
-    def turn_on(self):
-        self.info_stream(f"Turning on device {self.device_name()}.")
-        print(f"Turning on device {self.device_name()}.")
-        state_ok = self.check_func_allowance(self.turn_on)
-        if state_ok == 1:
-            res = self.turn_on_local()
-            if res != 0:
-                self.error_stream(f"{res}")
-                print(f"{res}")
-            else:
-                self.info_stream(f"Device {self.device_name()} WAS turned on.")
-                print(f"Device {self.device_name()} WAS turned on.")
-                self.read_position()
-                self._set_device_param()
-
-    @abstractmethod
-    def turn_on_local(self):
-        pass
-
-    @command
-    def turn_off(self):
-        self.debug_stream(f"Turning off device {self.device_name()}.")
-        print(f"Turning off device {self.device_name()}.")
-        state_ok = self.check_func_allowance(self.turn_off)
-        if state_ok == 1:
-            res = self.turn_off_local()
-            if res != 0:
-                self.error_stream(f"{res}")
-                print(f"{res}")
-
-            else:
-                print(f"Device {self.device_name()} is turnned off.")
-
-
-    @abstractmethod
-    def turn_off_local(self):
         pass
 
     @command(dtype_in=float, doc_in="Takes pos of axis in float.")
@@ -213,19 +293,18 @@ class DS_MOTORIZED(DS_General):
 
     def move_axis(self, pos):
         pos = float(pos)
-        self.debug_stream(f"Moving axis of device {self.device_name()}.")
+        self.info(f"Moving axis of device {self.device_name()} to {pos}.")
         state_ok = self.check_func_allowance(self.move_axis)
         asked_pos = pos
         if state_ok == 1:
             res = self.move_axis_local(pos)
             if res != 0:
-                self.error_stream(f'Moving to {pos} was NOT accomplished with success: {res}')
-
+                self.error(f'Moving to {pos} was NOT accomplished with success: {res}')
             self.read_position()
             if asked_pos == self._position:
                 self.info_stream(f'Moving to {pos} was accomplished with success.')
             else:
-                self.error_stream(f'Moving to {pos} was NOT accomplished with success. Actual pos is {self._position}')
+                self.error(f'Moving to {pos} was NOT accomplished with success. Actual pos is {self._position}')
 
     @abstractmethod
     def move_axis_local(self, pos) -> Union[int, str]:
@@ -233,7 +312,7 @@ class DS_MOTORIZED(DS_General):
 
     @command
     def stop_movement(self):
-        self.debug_stream(f"Stoping axis movement of device {self.device_name()}.")
+        self.info(f"Stopping axis movement of device {self.device_name()}.")
         state_ok = self.check_func_allowance(self.move_axis_abs)
         if state_ok == 1:
             self.stop_movement_local()
@@ -243,20 +322,17 @@ class DS_MOTORIZED(DS_General):
     def stop_movement_local(self) -> Union[int, str]:
         pass
 
-    @command(polling_period=500)
-    def get_controller_status(self):
-        state_ok = self.check_func_allowance(self.get_controller_status)
-        if state_ok == 1:
-            res = self.get_controller_status_local()
-            if res != 0:
-                self.error_stream(f'Could not get controller status of {self.device_name()}.')
-            if self.get_state == DevState.MOVING and self._prev_pos == self._position:
-                self.set_state(DevState.ON)
-
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
-        pass
+        super().get_controller_status_local()
+        if self.get_state == DevState.MOVING and self._prev_pos == self._position:
+            self.set_state(DevState.ON)
+        return 0
 
-    @abstractmethod
-    def _set_device_param(self):
-        pass
+    @command
+    def turn_on(self):
+        super().turn_on_main()
+
+    @command
+    def turn_off(self):
+        super().turn_off_main()
