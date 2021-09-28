@@ -453,6 +453,8 @@ def main_():
                     width = int(sys.argv[2])
                 except ValueError:
                     width = 2
+            elif len(sys.argv) == 2:
+                width = 2
             panel = QtWidgets.QWidget()
             panel.setWindowTitle('STANDA')
 
@@ -487,19 +489,6 @@ def main_():
             sys.exit(app.exec_())
         except KeyError:
             print(f'Arg {sys.argv[1]} does not present in {layouts.keys()}')
-
-
-
-    app = TaurusApplication(sys.argv, cmd_line_parser=None, )
-    s1 = Standa_motor('elyse/motorized_devices/mm1_x')
-    s2 = Standa_motor('elyse/motorized_devices/mm1_y')
-
-    layout = QtWidgets.QHBoxLayout()
-    layout.addWidget(s1)
-    layout.addWidget(s2)
-    panel.setLayout(layout)
-    panel.show()
-    sys.exit(app.exec_())
 
 
 if __name__ == '__main__':

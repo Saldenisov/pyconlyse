@@ -3,7 +3,7 @@ from abc import abstractmethod
 import numpy
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
 from tango.server import Device, attribute, command, pipe, device_property
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 from threading import Thread
 from time import sleep
 
@@ -62,6 +62,7 @@ class DS_General(Device):
         self._n = 0
         internal_time = Thread(target=self.int_time)
         internal_time.start()
+        self._status_check_fault = 0
         Device.init_device(self)
 
     @abstractmethod
@@ -98,13 +99,14 @@ class DS_General(Device):
         if state_ok == 1:
             res = self.get_controller_status_local()
             if res != 0:
-                self.error(f'Could not get controller status of {self.device_name()}.')
+                self.error(f'{res}')
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
 
-    def turn_on_main(self):
+    @command
+    def turn_on(self):
         self.info(f"Turning on device {self.device_name()}.", True)
         state_ok = self.check_func_allowance(self.turn_on)
         if state_ok == 1:
@@ -118,7 +120,8 @@ class DS_General(Device):
     def turn_on_local(self) -> Union[int, str]:
         pass
 
-    def turn_off_main(self):
+    @command
+    def turn_off(self):
         self.debug_stream(f"Turning off device {self.device_name()}.")
         print(f"Turning off device {self.device_name()}.")
         state_ok = self.check_func_allowance(self.turn_off)
@@ -126,7 +129,6 @@ class DS_General(Device):
             res = self.turn_off_local()
             if res != 0:
                 self.error_stream(f"{res}")
-
             else:
                 print(f"Device {self.device_name()} is turned OFF.")
 
@@ -137,13 +139,14 @@ class DS_General(Device):
 
 class DS_PDU(DS_General):
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT], 'turn_off': [DevState.ON, DevState.STANDBY],
-             'set_channel_state': [DevState.ON, DevState.STANDBY],
-             'get_channels_state': [DevState.ON, DevState.STANDBY],
+             'set_channels_states': [DevState.ON, DevState.STANDBY],
+             'get_channels_states': [DevState.ON, DevState.STANDBY],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
              'get_controller_status': [DevState.ON, DevState.STANDBY]}
     ip_address = device_property(dtype=str)
     authentication_name = device_property(dtype=str)
     authentication_password = device_property(dtype=str)
+    number_outputs = device_property(dtype=str)
 
     def init_device(self):
         super().init_device()
@@ -158,7 +161,7 @@ class DS_PDU(DS_General):
             self.set_state(DevState.FAULT)
 
     # @command(doc_in="Reads PDU channels state.", polling_period=500, dtype_out=)
-    # def get_channels_state(self):
+    # def get_channels_states(self):
     #     self.debug_stream(f'Getting PDU channels states of {self.device_name()}.')
     #     state_ok = self.check_func_allowance(self.get_channels_state())
     #     if state_ok == 1:
@@ -169,6 +172,21 @@ class DS_PDU(DS_General):
 
     @abstractmethod
     def get_channels_state_local(self) -> Union[int, str]:
+        pass
+
+    @command(dtype_in=[int], doc_in='Function that changes state of outputs of the PDU.',
+             display_level=DispLevel.OPERATOR)
+    def set_channels_states(self, outputs: List[int]):
+        self.info(f"Setting output channels of device {self.device_name()} to {outputs}.")
+        state_ok = self.check_func_allowance(self.set_channels_states)
+        if state_ok == 1:
+            res = self.set_channels_states_local(outputs)
+            if res != 0:
+                self.error(f'Setting output channels of device {self.device_name()} was NOT '
+                           f'accomplished with success: {res}')
+
+    @abstractmethod
+    def set_channels_states_local(self, outputs: List[int]) -> Union[int, str]:
         pass
 
 
@@ -220,7 +238,7 @@ class DS_MOTORIZED(DS_General):
         device_id_internal, uri = self.find_device()
         self._uri = uri
         self._device_id_internal = device_id_internal
-        self._status_check_fault = 0
+
 
         if self._device_id_internal >= 0:
             self.info(f"Device with ID {self.device_id} was found.", True)
@@ -235,7 +253,6 @@ class DS_MOTORIZED(DS_General):
             res = self.read_position_local()
             if res != 0:
                 self.error(f'Could not read position of {self.device_name()}: {res}')
-
         return self._position
 
     @abstractmethod
@@ -328,11 +345,3 @@ class DS_MOTORIZED(DS_General):
         if self.get_state == DevState.MOVING and self._prev_pos == self._position:
             self.set_state(DevState.ON)
         return 0
-
-    @command
-    def turn_on(self):
-        super().turn_on_main()
-
-    @command
-    def turn_off(self):
-        super().turn_off_main()

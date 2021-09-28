@@ -5,7 +5,7 @@
 import sys
 import ctypes
 
-from typing import Tuple, Union, Dict
+from typing import Tuple, Union, Dict, List
 from pathlib import Path
 from time import sleep
 import requests
@@ -31,29 +31,29 @@ class DS_Netio_pdu(DS_PDU):
     _model_ = 'NETIO PDU'
 
 
-    @attribute(label="Outputs names", dtype=[str], display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+    @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Gives list of outputs names.", polling_period=250)
     def names(self):
         return self._names
 
-    @attribute(label="Outputs ids", dtype=[str], display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+    @attribute(label="Outputs ids", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Gives list of outputs ids.", polling_period=250)
     def ids(self):
         return self._ids
 
-    @attribute(label="Outputs states", dtype=[int], display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Gives list of outputs states.", polling_period=250)
-    def ids(self):
+    @attribute(label="Outputs states", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+               doc="Gives list of outputs states.", polling_period=250, abs_change='1')
+    def states(self):
         return self._states
 
-    @attribute(label="Outputs actions", dtype=[int], display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
+    @attribute(label="Outputs actions", dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
                doc="Gives list of outputs actions.", polling_period=250)
-    def ids(self):
+    def actions(self):
         return self._actions
 
-    @attribute(label="Outputs delays", dtype=[int], display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
+    @attribute(label="Outputs delays",dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
                doc="Gives list of outputs delays.", polling_period=250)
-    def ids(self):
+    def delays(self):
         return self._delays
 
     def init_device(self):
@@ -63,6 +63,7 @@ class DS_Netio_pdu(DS_PDU):
         self._actions = []
         self._delays = []
         super().init_device()
+        self.turn_on()
 
     def _addr(self):
         return f'http://{self.ip_address}/netio.json'
@@ -122,21 +123,35 @@ class DS_Netio_pdu(DS_PDU):
             res = False
         return res
 
-    def _send_request(self, j_string) -> Union[requests.Response, bool]:
+    def set_channels_states_local(self, outputs: List[int]) -> Union[int, str]:
         """
                { "Outputs": [{ "ID": 1,  "Action": 1 }]}
         """
+        json_dict = {}
+        outputs_list = list([{'ID': int(id), 'Action': int(action)} for id, action in zip(self._ids, outputs)])
+        json_dict["Outputs"] = list(outputs_list)
+        res = self._send_request(json_dict)
+        if isinstance(res, requests.Response):
+            if res.status_code == 200:
+                outputs_list = res.json()['Outputs']
+                return self.__set_attributes_netio(outputs_list)
+            else:
+                return res
+        else:
+            return 'Unknown error during setting channels'
+
+    def _send_request(self, j_string) -> Union[requests.Response, bool]:
         try:
             res = requests.post(self._addr(), json=j_string, auth=self._authentication())
         except (requests.ConnectionError, requests.RequestException) as e:
             res = False
-        return res
+        finally:
+            return res
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
             self._device_id_internal, self._uri = self.find_device()
-
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
             return f'Could NOT turn on {self.device_name()}: Device could not be found.'
@@ -147,6 +162,31 @@ class DS_Netio_pdu(DS_PDU):
     def turn_off_local(self) -> Union[int, str]:
         self.set_state(DevState.OFF)
         return 0
+
+    def get_controller_status_local(self) -> Union[int, str]:
+        def error(self):
+            self._status_check_fault += 1
+            if self._status_check_fault > 10:
+                self.set_state(DevState.FAULT)
+
+        res = self._get_request()
+        if isinstance(res, requests.Response):
+            if res.status_code == 200:
+                res = self.__set_attributes_netio(res.json()['Outputs'])
+                if res == 0:
+                    if self._status_check_fault > 0:
+                        self._status_check_fault = 0
+                    return 0
+                else:
+                    return f'Could not get controller status of {self.device_name()}: {res}.'
+            else:
+                error(self)
+                return f'Could not get controller status of {self.device_name()}: {res}.'
+
+            return super().get_controller_status_local()
+        else:
+            error(self)
+            return f'Could not get controller status of {self.device_name()}: {res}.'
 
 
 if __name__ == "__main__":

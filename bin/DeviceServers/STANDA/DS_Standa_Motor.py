@@ -194,7 +194,6 @@ class DS_Standa_Motor(DS_MOTORIZED):
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
-
             if self._status_check_fault > 0:
                 self._status_check_fault = 0
 
