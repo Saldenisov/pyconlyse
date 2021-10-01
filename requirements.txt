@@ -46,3 +46,5 @@ PythonQwt>=0.5 # (pure Python reimplementation of Qwt6 C++ library)
 guidata>=1.7
 SciPy
 Pillow
+#conda install -c conda-forge -c esrf-bcu -c tango-controls lima-camera-basler-tango
+#for LIMA

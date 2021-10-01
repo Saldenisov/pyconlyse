@@ -1,57 +1,28 @@
-from PyQt5.QtWidgets import *
+from pathlib import Path
+import ctypes
+
+app_folder = Path('C:\dev\pyconlyse\\bin\DeviceServers\OWIS')
+
+dll_path = str(app_folder / 'ps90.dll')
+print(dll_path)
+
+lib = ctypes.WinDLL(dll_path)
+
+control_unit = ctypes.c_long(1)
+ser_num = ctypes.c_char_p(b"")
+res = lib.PS90_SimpleConnect(control_unit, ser_num) * -1  # *-1 is according official documentation
+print(f'Connection {res}')
+# res = lib.PS90_Disconnect(control_unit)
+# print(f'Disconnect {res}')
 
 
-class Widget1(QWidget):
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent=parent)
-        lay = QVBoxLayout(self)
-        for i in range(4):
-            lay.addWidget(QPushButton("{}".format(i)))
+szString = ctypes.c_char_p()
+buf = ctypes.create_string_buffer(500)
 
-class Widget2(QWidget):
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent=parent)
-        lay = QVBoxLayout(self)
-        for i in range(4):
-            lay.addWidget(QLineEdit("{}".format(i)))
+print(buf.value.decode("utf-8"))
+res = lib.PS90_GetSerNumber(1, buf, 25)
+# res = lib.PS90_GetConnectInfo(1, buf, 500)
 
-class Widget3(QWidget):
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent=parent)
-        lay = QVBoxLayout(self)
-        for i in range(4):
-            lay.addWidget(QRadioButton("{}".format(i)))
-
-class stackedExample(QWidget):
-    def __init__(self, parent=None):
-        QWidget.__init__(self, parent=parent)
-        lay = QVBoxLayout(self)
-        self.Stack = QStackedWidget()
-        self.Stack.addWidget(Widget1())
-        self.Stack.addWidget(Widget2())
-        self.Stack.addWidget(Widget3())
-
-        btnNext = QPushButton("Next")
-        btnNext.clicked.connect(self.onNext)
-        btnPrevious = QPushButton("Previous")
-        btnPrevious.clicked.connect(self.onPrevious)
-        btnLayout = QHBoxLayout()
-        btnLayout.addWidget(btnPrevious)
-        btnLayout.addWidget(btnNext)
-
-        lay.addWidget(self.Stack)
-        lay.addLayout(btnLayout)
-
-    def onNext(self):
-        self.Stack.setCurrentIndex((self.Stack.currentIndex()+1) % 3)
-
-    def onPrevious(self):
-        self.Stack.setCurrentIndex((self.Stack.currentIndex()-1) % 3)
+print(buf.value.decode('utf-8'))
 
 
-if __name__ == '__main__':
-    import sys
-    app = QApplication(sys.argv)
-    w = stackedExample()
-    w.show()
-    sys.exit(app.exec_())

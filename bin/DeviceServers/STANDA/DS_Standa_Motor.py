@@ -21,11 +21,12 @@ from ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Resu
                   string_at)
 
 try:
-    from DS_general import DS_MOTORIZED
+    from DS_general import DS_MOTORIZED_MONO_AXIS
 except ModuleNotFoundError:
-    from bin.DeviceServers.DS_general import DS_MOTORIZED
+    from bin.DeviceServers.DS_general import DS_MOTORIZED_MONO_AXIS
 
-class DS_Standa_Motor(DS_MOTORIZED):
+
+class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """"
     Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
     """

@@ -148,8 +148,6 @@ class Netio_pdu(Qt.QWidget):
             cb.setChecked(bool(state))
             cb.setText(f'{name}:id:{id}')
 
-
-
 layouts = {'V0': ['manip/V0/PDU_VO', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2'],
            'VD2': ['manip/VD2/PDU_VD2', 'manip/SD2/PDU_SD2'],
            'all': ['manip/V0/PDU_VO', 'manip/VD2/PDU_VD2', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2']
@@ -196,7 +194,6 @@ def main():
             print(f'Arg {sys.argv[1]} does not present in {layouts.keys()}')
         except Exception as e:
             print(e)
-
 
 
 if __name__ == '__main__':

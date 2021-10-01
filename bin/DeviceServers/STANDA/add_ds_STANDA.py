@@ -38,6 +38,6 @@ for dev_id, val in names.items():
     db.add_device(dev_info)
     db.put_device_property(dev_name, {'ip_address': '10.20.30.204', 'device_id': dev_id, 'friendly_name': val[1],
                                       'wait_time': 5, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
-                                      'limit_max': val[4][1]} )
+                                      'limit_max': val[4][1], 'real_pos': 0.0})
 
     i += 1
