@@ -3,19 +3,18 @@ from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusVa
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device, Attribute
-import taurus
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QIcon
 import tango
 
-from typing import List
 from _functools import partial
 
 
 class Netio_pdu(Qt.QWidget):
 
-    def __init__(self, device_name: str,  parent=None):
+    def __init__(self, device_name: str, parent=None):
         """
         width: number of devices in a row
         """
@@ -148,12 +147,14 @@ class Netio_pdu(Qt.QWidget):
             cb.setChecked(bool(state))
             cb.setText(f'{name}:id:{id}')
 
+
 layouts = {'V0': ['manip/V0/PDU_VO', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2'],
            'VD2': ['manip/VD2/PDU_VD2', 'manip/SD2/PDU_SD2'],
            'all': ['manip/V0/PDU_VO', 'manip/VD2/PDU_VD2', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2']
           }
 
 
+from taurus.external.qt import Qt
 def main():
     if len(sys.argv) >= 2:
         try:
@@ -162,6 +163,7 @@ def main():
             width = 1
             panel = QtWidgets.QWidget()
             panel.setWindowTitle('NETIO')
+            panel.setWindowIcon(QIcon('icons//NETIO.ico'))
 
             layout_main = Qt.QVBoxLayout()
             setattr(panel, f'layout_main', layout_main)
@@ -192,8 +194,6 @@ def main():
             sys.exit(app.exec_())
         except KeyError:
             print(f'Arg {sys.argv[1]} does not present in {layouts.keys()}')
-        except Exception as e:
-            print(e)
 
 
 if __name__ == '__main__':

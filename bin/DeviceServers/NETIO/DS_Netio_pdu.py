@@ -3,18 +3,15 @@
 
 
 import sys
-import ctypes
-
-from typing import Tuple, Union, Dict, List
-from pathlib import Path
-from time import sleep
 import requests
+
+from typing import Tuple, Union,  List
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 
 from tango import AttrWriteType, DispLevel, DevState
-from tango.server import attribute, command, device_property
+from tango.server import attribute
 
 
 try:
@@ -24,14 +21,15 @@ except ModuleNotFoundError:
 
 
 class DS_Netio_pdu(DS_PDU):
-    """"
+    """
     Device Server (Tango) which controls the NETIO pdu using JSON API.
     """
     _version_ = '0.1'
     _model_ = 'NETIO PDU'
 
 
-    @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
+    @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ,
                doc="Gives list of outputs names.", polling_period=250)
     def names(self):
         return self._names

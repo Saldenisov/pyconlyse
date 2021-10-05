@@ -144,6 +144,9 @@ class DS_General(Device):
 
 
 class DS_PDU(DS_General):
+    """
+    bla-bla
+    """
     RULES = {'set_channels_states': [DevState.ON, DevState.STANDBY],
              'get_channels_states': [DevState.ON, DevState.STANDBY], **DS_General.RULES
              }

@@ -7,6 +7,7 @@ from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QIcon
 
 from typing import List
 from _functools import partial
@@ -457,7 +458,7 @@ def main_():
                 width = 2
             panel = QtWidgets.QWidget()
             panel.setWindowTitle('STANDA')
-
+            panel.setWindowIcon(QIcon('icons//STANDA.svg'))
 
             layout_main = Qt.QVBoxLayout()
             setattr(panel, f'layout_main', layout_main)
@@ -483,7 +484,6 @@ def main_():
                     lo.addWidget(Standa_motor(dev_name))
                 i += 1
 
-
             panel.setLayout(layout_main)
             panel.show()
             sys.exit(app.exec_())
@@ -493,6 +493,3 @@ def main_():
 
 if __name__ == '__main__':
     main_()
-
-
-
