@@ -7,6 +7,9 @@ from threading import Thread
 from time import sleep
 
 
+standard_str_output = 'str: 0 if success, else error.'
+
+
 class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
@@ -32,12 +35,12 @@ class DS_General(Device):
                             device_id=self.device_id))
 
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Last essential comment.", polling_period=250)
+               doc="Last essential comment.", polling_period=500)
     def last_comments(self):
         return self._comments
 
     @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Last error.", polling_period=250)
+               doc="Last error.", polling_period=500)
     def last_error(self):
         return self._error
 
@@ -98,7 +101,7 @@ class DS_General(Device):
     def device_name(self) -> str:
         return f'Device {self.device_id} {self.friendly_name}'
 
-    @command(polling_period=250)
+    @command(polling_period=500)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok == 1:

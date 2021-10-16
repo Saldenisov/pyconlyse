@@ -152,12 +152,12 @@ class Standa_panel(Qt.QWidget):
         inf4.model = f'{dev_name}/power_status'
 
         # ERRORS and INFO
-        error = TaurusLabel()
-        comments = TaurusLabel()
-        error.model = f'{dev_name}/last_error'
-        comments.model = f'{dev_name}/last_comments'
-        lo_error_info.addWidget(error)
-        lo_error_info.addWidget(comments)
+        # error = TaurusLabel()
+        # comments = TaurusLabel()
+        # error.model = f'{dev_name}/last_error'
+        # comments.model = f'{dev_name}/last_comments'
+        # lo_error_info.addWidget(error)
+        # lo_error_info.addWidget(comments)
 
         # Buttons and commands
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
@@ -295,7 +295,9 @@ class Standa_motor(Qt.QWidget):
 
         p3.setMinValue(l_min)
         p3.setMaxValue(l_max)
-        p3._setDigits(3)
+        limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
+        n_digits = len(str(int(limit)))
+        p3._setDigits(n_digits)
 
         lo_pos.addWidget(p1)
         lo_pos.addWidget(p2)
@@ -334,20 +336,20 @@ class Standa_motor(Qt.QWidget):
         lo_info.addWidget(inf1)
         lo_info.addWidget(inf2)
         lo_info.addWidget(inf3)
-        lo_info.addWidget(inf4)
+        # lo_info.addWidget(inf4)
 
         inf1.model = f'{dev_name}/temperature'
         inf2.model = f'{dev_name}/power_current'
         inf3.model = f'{dev_name}/power_voltage'
-        inf4.model = f'{dev_name}/power_status'
+        # inf4.model = f'{dev_name}/power_status'
 
-        # ERRORS and INFO
-        error = TaurusLabel()
-        comments = TaurusLabel()
-        error.model = f'{dev_name}/last_error'
-        comments.model = f'{dev_name}/last_comments'
-        lo_error_info.addWidget(error)
-        lo_error_info.addWidget(comments)
+        # # ERRORS and INFO
+        # error = TaurusLabel()
+        # comments = TaurusLabel()
+        # error.model = f'{dev_name}/last_error'
+        # comments.model = f'{dev_name}/last_comments'
+        # lo_error_info.addWidget(error)
+        # lo_error_info.addWidget(comments)
 
         # Buttons and commands
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
@@ -412,7 +414,7 @@ layouts = {'elyse': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2
                          'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                          'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y'
                          ],
-               'v0': ['manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
+               'V0': ['manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
                       'manip/V0/dv01', 'manip/V0/dv02', 'manip/V0/dv03', 'manip/V0/dv04',
                       'manip/V0/s1', 'manip/V0/s2', 'manip/V0/s3', 'manip/V0/L-2_1',
                       'manip/V0/opa_x', 'manip/V0/opa_y', None, None
@@ -422,7 +424,7 @@ layouts = {'elyse': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2
                             'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                             'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y',
                             'manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
-                            'manip/V0/s1', 'manip/V0/s2', None, None
+                            'manip/V0/s1', 'manip/V0/s2', 'manip/V0/L-2_1', 'manip/V0/dv03'
                ],
                'test': ['elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y']}
 

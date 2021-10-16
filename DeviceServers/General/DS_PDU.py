@@ -1,7 +1,7 @@
 from abc import abstractmethod
 
 from tango import DispLevel, DevState
-from tango.server import command, device_property
+from tango.server import attribute, command, device_property, AttrWriteType
 from typing import Union, List
 
 from DeviceServers.General.DS_general import DS_General
@@ -19,7 +19,28 @@ class DS_PDU(DS_General):
     authentication_password = device_property(dtype=str)
     number_outputs = device_property(dtype=str)
 
+    @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ,
+               doc="Gives list of outputs names.", polling_period=250)
+    def names(self):
+        return self._names
+
+    @attribute(label="Outputs ids", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ,
+               doc="Gives list of outputs ids.", polling_period=250)
+    def ids(self):
+        return self._ids
+
+    @attribute(label="Outputs states", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ,
+               doc="Gives list of outputs states.", polling_period=250, abs_change='1')
+    def states(self):
+        return self._states
+
     def init_device(self):
+        self._names = []
+        self._ids = []
+        self._states = []
         super().init_device()
         self._device_id_internal = -1
         self._outputs = {}

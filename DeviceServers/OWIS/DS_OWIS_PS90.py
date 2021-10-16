@@ -3,6 +3,7 @@
 
 
 import sys
+import os
 
 from pathlib import Path
 import os
@@ -10,10 +11,9 @@ p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
 
-app_folder1 = Path(p).resolve().parents[1]
+app_folder1 = Path(p).resolve().parents[2]
 sys.path.append(str(app_folder1))
-app_folder2 = Path(p).resolve().parents[3]
-sys.path.append(str(app_folder2))
+
 
 from tango import DevState
 from tango.server import command, device_property
@@ -31,48 +31,29 @@ dll_path = str(app_folder / 'ps90.dll')
 lib = ctypes.WinDLL(dll_path)
 
 try:
-    from DeviceServers.General.DS_general import DS_General
+    from DeviceServers.General.DS_Motor import DS_MOTORIZED_MULTI_AXES
 except ModuleNotFoundError:
-    from .General.DS_general import DS_General
+    from General.DS_motor import DS_MOTORIZED_MULTI_AXES
 
 
-
-class DS_OWIS_PS90(DS_General):
+class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     """"
     Device Server (Tango) which controls the OWIS delay lines using ps90.dll
     """
 
-    RULES = {'read_position_axis': [DevState.ON],
-             'define_position_axis': [DevState.ON],
-             'stop_axis': [DevState.ON],
-             'set_param_axis': [DevState.ON],
-             'move_axis': [DevState.ON],
-             'init_axis': [DevState.ON],
-             'turn_on_axis': [DevState.ON],
-             'turn_off_axis': [DevState.ON],
-             'get_status_axis': [DevState.ON], **DS_General.RULES}
+    RULES = {**DS_MOTORIZED_MULTI_AXES.RULES}
 
     baudrate = device_property(dtype=int, default_value=9600)
-    com_port = device_property(dtype=int, default_value=5)
+    com_port = device_property(dtype=int, default_value=4)
     interface = device_property(dtype=int, default_value=0)
     control_unit_id = device_property(dtype=int, default_value=1)
     serial_number = device_property(dtype=int)
 
-    _version_ = '0.1'
-    _model_ = 'OWIS controller PS90'
+    _version_ = '0.2'
+    _model_ = 'OWIS controller PS90 multi-axes'
 
     def init_device(self):
         super().init_device()
-        self._device_id_internal = -1
-        device_id_internal, uri = self.find_device()
-        self._uri = uri
-        self._device_id_internal = device_id_internal
-
-        if self._device_id_internal >= 0:
-            self.info(f"{self.device_name()} was found.", True)
-        else:
-            self.info(f"{self.device_name()} was NOT found.", True)
-            self.set_state(DevState.FAULT)
         self.turn_on()
 
     def find_device(self) -> Tuple[int, str]:
@@ -85,7 +66,7 @@ class DS_OWIS_PS90(DS_General):
                                                baudrate=self.baudrate)
             if res:
                 self.set_state(DevState.ON)
-                argreturn = self.control_unit_id, f'{self.device_name()}'.encode('utf-8')
+                argreturn = self.control_unit_id, f'{self.serial_number}'.encode('utf-8')
             else:
                 self.set_state(DevState.FAULT)
         return argreturn
@@ -94,12 +75,13 @@ class DS_OWIS_PS90(DS_General):
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
             self._device_id_internal, self._uri = self.find_device()
-
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
             return f'Could NOT turn on {self.device_name()}: Device could not be found.'
         else:
             self.set_state(DevState.ON)
+            for axis in self._delay_lines_parameters.keys():
+                self.init_axis(axis)
             return 0
 
     def turn_off_local(self) -> Union[int, str]:
@@ -113,72 +95,63 @@ class DS_OWIS_PS90(DS_General):
             return comments
 
     def get_controller_status_local(self) -> Union[int, str]:
+        for axis in self._delay_lines_parameters.keys():
+            self.get_status_axis_local(axis)
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if self.serial_number != ser_num:
             return f'Connection with PS90 is lost'
         else:
-            return 0
+             return 0
 
-
-    @command(dtype_in=int, doc_in='Input is axis id: int', dtype_out=str, doc_out='Return results as a str '
-                                                                                  'if success "DevSTATE", '
-                                                                                  'if not "ERROR:.."')
-    def init_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.init_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._motor_init_ps90(self.control_unit_id, axis)
+    def init_axis_local(self, axis: int) -> Union[int, str]:
+        res, comments = self._motor_init_ps90(self.control_unit_id, axis)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} motor_init for axis {axis} func did NOT work {comments}.'
+            self.error(result)
+            self._delay_lines_parameters[axis]['state'] = DevState.FAULT
+        else:
+            res, comments = self._set_target_mode_ps90(self.control_unit_id, axis, 1)
             if not res:
-                result = f'ERROR: Device {self.device_name()} motor_init for axis {axis} func did NOT work {comments}.'
+                result = f'ERROR: Device {self.device_name()} set_target_mode to ABS for axis {axis} ' \
+                         f'did NOT work {comments}.'
                 self.error(result)
             else:
-                res, comments = self._set_target_mode_ps90(self.control_unit_id, axis, 1)
-                if not res:
-                    result = f'ERROR: Device {self.device_name()} set_target_mode to ABS for axis {axis} ' \
-                             f'did NOT work {comments}.'
-                    self.error(result)
+                self._delay_lines_parameters[axis]['state'] = DevState.INIT
+                res = self.set_param_axis(axis)
+                if res == '0':
+                    result = 0
                 else:
-                    result = DevState.ON
-        return str(result)
+                    result = res
+        return result
 
-    @command(dtype_in=int, doc_in='Input is axis id: int', dtype_out=str, doc_out='Provides state of the axis '
-                                                                                  'as a str.')
-    def get_status_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.get_status_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._get_axis_state_ps90(self.control_unit_id, axis)
-            if res == 0:
-                result = DevState.OFF
-            elif res == 1:
-                result = DevState.STANDBY
-            elif res == 2:
-                result = DevState.INIT
-            elif res == 3:
-                result = DevState.ON
-            else:
-                result = f'ERROR: {comments}'
-                self.error(result)
-        return str(result)
+    def get_status_axis_local(self, axis: int) -> Union[int, str]:
+        res, comments = self._get_axis_state_ps90(self.control_unit_id, axis)
+        if res == 0:
+            result = DevState.OFF
+        elif res == 1:
+            result = DevState.STANDBY
+        elif res == 2:
+            result = DevState.INIT
+        elif res == 3:
+            result = DevState.ON
+        else:
+            error = f'ERROR: {comments}'
+            self.error(error)
+            result = DevState.FAULT
+        self._delay_lines_parameters[axis]['state'] = result
+        return 0
 
-    @command(dtype_in=int, doc_in='Input is axis_id: int', dtype_out=str, doc_out='if success Return axis position '
-                                                                                  'as a str, if not "ERROR:.."')
-    def read_position_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.read_position_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
-            if not com:
-                result = res
-            else:
-                result = f'Device {self.device_name()} reading position of axis {axis} was not successful.'
-                self.error(result)
-        return str(result)
+    def read_position_axis_local(self, axis: int) -> Union[int, str]:
+        res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
+        if not com:
+            self._delay_lines_parameters[axis]['position'] = res
+            result = 0
+        else:
+            result = f'Device {self.device_name()} reading position of axis {axis} was not successful.'
+            self.error(result)
+        return result
 
-    @command(dtype_in=[float], doc_in='Args: axis (0), pitch (1), revolution (2), gear_ratio (3), '
-                                      'speed (4), limit_min (5), limit_max (6)',
-             dtype_out=str, doc_out='if success Return "" if not "ERROR:.."')
-    def set_param_axis(self, args):
+    def set_param_axis_local(self, args) -> Union[int, str]:
         axis = int(args[0])
         pitch = args[1]
         revolution = args[2]
@@ -187,87 +160,64 @@ class DS_OWIS_PS90(DS_General):
         limit_min = args[5]
         limit_max = args[6]
 
-        state_ok = self.check_func_allowance(self.set_param_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res1, com1 = self._set_stage_attributes_ps90(self.control_unit_id, axis, pitch, revolution, gear_ratio)
-            res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
-            res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
-            res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
+        res1, com1 = self._set_stage_attributes_ps90(self.control_unit_id, axis, pitch, revolution, gear_ratio)
+        res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
+        res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
+        res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
 
-            if all([res1, res2, res3, res4]):
-                result = ''
-            else:
-                result = f'ERROR: {com1}:{com2}:{com3}:{com4}'
-                self.error(result)
-        return str(result)
+        if all([res1, res2, res3, res4]):
+            result = 0
+        else:
+            result = f'ERROR: {com1}:{com2}:{com3}:{com4}'
+            self.error(result)
+        return result
 
-    @command(dtype_in=int, doc_in='Input is axis_id: int', dtype_out=str, doc_out='if success Return DevState as a str,'
-                                                                                  'if not "ERROR:.."')
-    def turn_on_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.turn_on_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._motor_on_ps90(self.control_unit_id, axis)
-            if not res:
-                result = f'ERROR: Device {self.device_name()} turn_on_axis for axis {axis} func did NOT work {comments}.'
-                self.error(result)
-            else:
-                result = DevState.ON
-        return str(result)
+    def turn_on_axis_local(self, axis: int) -> Union[int, str]:
+        res, comments = self._motor_on_ps90(self.control_unit_id, axis)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} turn_on_axis for axis {axis} func did NOT work {comments}.'
+            self.error(result)
+        else:
+            self._delay_lines_parameters[axis]['state'] = DevState.ON
+            result = 0
+        return result
 
-    @command(dtype_in=int, doc_in='Input is axis_id: int', dtype_out=str, doc_out='if success Return DevState as a str,'
-                                                                                  'if not "ERROR:.."')
-    def turn_off_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.turn_off_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._motor_off_ps90(self.control_unit_id, axis)
-            if not res:
-                result = f'ERROR: Device {self.device_name()} turn_off_axis for axis {axis} func did NOT work {comments}.'
-                self.error(result)
-            else:
-                result = DevState.INIT
-        return str(result)
+    def turn_off_axis_local(self, axis: int) -> Union[int, str]:
+        res, comments = self._motor_off_ps90(self.control_unit_id, axis)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} turn_off_axis for axis {axis} func did NOT work {comments}.'
+            self.error(result)
+        else:
+            self._delay_lines_parameters[axis]['state'] = DevState.OFF
+            result = 0
+        return result
 
-    @command(dtype_in=[float], doc_in='Input is axis_id: int', dtype_out=str, doc_out='if success Return "",'
-                                                                                  'if not "ERROR:.."')
-    def move_axis(self, args):
+    def move_axis_local(self, args) -> Union[int, str]:
         axis = int(args[0])
         pos: float = args[1]
-        state_ok = self.check_func_allowance(self.move_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
-            if not res:
-                result = f'ERROR: Device {self.device_name()} set_target_ex to {pos} for axis {axis} ' \
-                         f'did NOT work {comments}.'
-                self.error(result)
+        res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} set_target_ex to {pos} for axis {axis} ' \
+                     f'did NOT work {comments}.'
+            self.error(result)
+        else:
+            res, comments = self._go_target_ps90(self.control_unit_id, axis)
+            if res:
+                result = f'Device {self.device_name()} axis {axis} started moving.'
             else:
-
-                res, comments = self._go_target_ps90(self.control_unit_id, axis)
-
-                if res:
-                    result = f'Device {self.device_name()} axis {axis} started moving.'
-                else:
-                    result = f'ERROR: Device {self.device_name()} axis {axis} did NOT started moving {comments}.'
-                    self.error(result)
-        return str(result)
-
-    @command(dtype_in=int, doc_in='Input is axis_id: int', dtype_out=str, doc_out='if success Return "",'
-                                                                                  'if not "ERROR:.."')
-    def stop_axis(self, axis: int):
-        state_ok = self.check_func_allowance(self.stop_axis)
-        result = f'ERROR: {self.device_name()} state is {self.get_state()}.'
-        if state_ok == 1:
-            res, comments = self._stop_axis_ps90(self.control_unit_id, axis)
-            if not res:
-                result = f'ERROR: Device {self.device_name()} stop_axis axis {axis} ' \
-                         f'did NOT work {comments}.'
+                result = f'ERROR: Device {self.device_name()} axis {axis} did NOT started moving {comments}.'
                 self.error(result)
-            else:
-                result = ''
-        return str(result)
+        return result
+
+    def stop_axis_local(self, axis: int) -> Union[int, str]:
+        res, comments = self._stop_axis_ps90(self.control_unit_id, axis)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} stop_axis axis {axis} ' \
+                     f'did NOT work {comments}.'
+            self.error(result)
+        else:
+            result = 0
+        return result
 
     # @command
     # def define_position_axis(self, axis:int, pos: float):

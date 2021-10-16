@@ -1,3 +1,0 @@
-
-
-C:\dev\python_env\py38\Scripts\pyuic5.exe C:\dev\pyconlyse\gui\views\ui\widget_stpmtr_axis_simple.ui -o C:\dev\pyconlyse\gui\views\ui\widget_stpmtr_axis_simple.py

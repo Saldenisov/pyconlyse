@@ -33,7 +33,7 @@ class Netio_pdu(Qt.QWidget):
 
         cb = tango.utils.EventCallback()
         ds: Device = getattr(self, f'ds_{device_name}')
-        id = ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.state_listener)
+        ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.state_listener)
 
 
     def register_DS(self, dev_name, group_number=1):

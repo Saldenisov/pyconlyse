@@ -1,12 +1,13 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+
 import sys
 import requests
 
 from typing import Tuple, Union,  List
 from pathlib import Path
-app_folder = Path(__file__).resolve().parents[1]
+app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
 from tango import AttrWriteType, DispLevel, DevState
@@ -16,7 +17,7 @@ from tango.server import attribute
 try:
     from DeviceServers.General.DS_PDU import DS_PDU
 except ModuleNotFoundError:
-    from .General.DS_PDU import DS_PDU
+    from General.DS_PDU import DS_PDU
 
 
 class DS_Netio_pdu(DS_PDU):
@@ -27,36 +28,19 @@ class DS_Netio_pdu(DS_PDU):
     _model_ = 'NETIO PDU'
 
 
-    @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR,
+    @attribute(label="Outputs actions", dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs names.", polling_period=250)
-    def names(self):
-        return self._names
-
-    @attribute(label="Outputs ids", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Gives list of outputs ids.", polling_period=250)
-    def ids(self):
-        return self._ids
-
-    @attribute(label="Outputs states", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Gives list of outputs states.", polling_period=250, abs_change='1')
-    def states(self):
-        return self._states
-
-    @attribute(label="Outputs actions", dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
                doc="Gives list of outputs actions.", polling_period=250)
     def actions(self):
         return self._actions
 
-    @attribute(label="Outputs delays",dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT, access=AttrWriteType.READ,
+    @attribute(label="Outputs delays",dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT,
+               access=AttrWriteType.READ,
                doc="Gives list of outputs delays.", polling_period=250)
     def delays(self):
         return self._delays
 
     def init_device(self):
-        self._names = []
-        self._ids = []
-        self._states = []
         self._actions = []
         self._delays = []
         super().init_device()
