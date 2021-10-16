@@ -21,19 +21,19 @@ class DS_PDU(DS_General):
 
     @attribute(label="Outputs names", dtype=[str,], max_dim_x=10, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs names.", polling_period=250)
+               doc="Gives list of outputs names.", polling_period=1000)
     def names(self):
         return self._names
 
     @attribute(label="Outputs ids", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs ids.", polling_period=250)
+               doc="Gives list of outputs ids.", polling_period=1000)
     def ids(self):
         return self._ids
 
     @attribute(label="Outputs states", dtype=[int,], max_dim_x=10, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs states.", polling_period=250, abs_change='1')
+               doc="Gives list of outputs states.", polling_period=500, abs_change='1')
     def states(self):
         return self._states
 

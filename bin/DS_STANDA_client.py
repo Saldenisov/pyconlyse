@@ -419,7 +419,7 @@ layouts = {'elyse': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2
                       'manip/V0/s1', 'manip/V0/s2', 'manip/V0/s3', 'manip/V0/L-2_1',
                       'manip/V0/opa_x', 'manip/V0/opa_y', None, None
                       ],
-               'alignment':['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
+               'alignment': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
                             'manip/V0/dv01', 'manip/V0/dv02',
                             'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                             'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y',

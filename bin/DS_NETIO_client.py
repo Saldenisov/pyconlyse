@@ -93,13 +93,13 @@ class Netio_pdu(Qt.QWidget):
             cb.stateChanged.connect(partial(self.cb_clicked, dev_name))
         group.setLayout(lo_state)
 
-        # ERRORS and INFO
-        error = TaurusLabel()
-        comments = TaurusLabel()
-        error.model = f'{dev_name}/last_error'
-        comments.model = f'{dev_name}/last_comments'
-        lo_error_info.addWidget(error)
-        lo_error_info.addWidget(comments)
+        # # ERRORS and INFO
+        # error = TaurusLabel()
+        # comments = TaurusLabel()
+        # error.model = f'{dev_name}/last_error'
+        # comments.model = f'{dev_name}/last_comments'
+        # lo_error_info.addWidget(error)
+        # lo_error_info.addWidget(comments)
 
         # Buttons and commands
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
@@ -150,7 +150,8 @@ class Netio_pdu(Qt.QWidget):
 
 layouts = {'V0': ['manip/V0/PDU_VO', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2'],
            'VD2': ['manip/VD2/PDU_VD2', 'manip/SD2/PDU_SD2'],
-           'all': ['manip/V0/PDU_VO', 'manip/VD2/PDU_VD2', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2']
+           'all': ['manip/V0/PDU_VO', 'manip/VD2/PDU_VD2', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2',
+                   'manip/ELYSE/PDU_ELYSE']
           }
 
 

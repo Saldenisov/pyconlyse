@@ -156,7 +156,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
     """"
     Device Server (Tango) which controls the OWIS delay lines using ps90.dll
     """
-
+    polling = 1500
     RULES = {'read_position_axis': [DevState.ON],
              'define_position_axis': [DevState.ON],
              'stop_axis': [DevState.ON],
@@ -171,7 +171,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
 
     @attribute(label="Axes states", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of axes states as str of python dict{id: state}", polling_period=250, abs_change='')
+               doc="Gives list of axes states as str of python dict{id: state}", polling_period=polling, abs_change='')
     def states(self):
         states = {}
         for axis_id, axis_param in self._delay_lines_parameters.items():
@@ -180,7 +180,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
 
     @attribute(label="Axes positions", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of axes positions as str of python dict{id: state}", polling_period=250, abs_change='')
+               doc="Gives list of axes positions as str of python dict{id: state}", polling_period=polling, abs_change='')
     def positions(self):
         position = {}
         for axis_id, axis_param in self._delay_lines_parameters.items():

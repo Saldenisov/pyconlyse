@@ -26,17 +26,17 @@ class DS_Netio_pdu(DS_PDU):
     """
     _version_ = '0.1'
     _model_ = 'NETIO PDU'
-
+    polling = 500
 
     @attribute(label="Outputs actions", dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs actions.", polling_period=250)
+               doc="Gives list of outputs actions.", polling_period=polling)
     def actions(self):
         return self._actions
 
     @attribute(label="Outputs delays",dtype=[int,], max_dim_x=10, display_level=DispLevel.EXPERT,
                access=AttrWriteType.READ,
-               doc="Gives list of outputs delays.", polling_period=250)
+               doc="Gives list of outputs delays.", polling_period=polling)
     def delays(self):
         return self._delays
 

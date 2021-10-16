@@ -14,7 +14,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
-
+    polling_main = 2000
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY], 'turn_off': [DevState.ON, DevState.STANDBY],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
              'get_controller_status': [DevState.ON, DevState.MOVING]}
@@ -35,12 +35,12 @@ class DS_General(Device):
                             device_id=self.device_id))
 
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Last essential comment.", polling_period=500)
+               doc="Last essential comment.", polling_period=polling_main)
     def last_comments(self):
         return self._comments
 
     @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
-               doc="Last error.", polling_period=500)
+               doc="Last error.", polling_period=polling_main)
     def last_error(self):
         return self._error
 
@@ -101,7 +101,7 @@ class DS_General(Device):
     def device_name(self) -> str:
         return f'Device {self.device_id} {self.friendly_name}'
 
-    @command(polling_period=500)
+    @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok == 1:

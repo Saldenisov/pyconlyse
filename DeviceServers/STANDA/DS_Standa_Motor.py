@@ -32,31 +32,32 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """
     _version_ = '0.3'
     _model_ = 'STANDA step motor'
+    polling_local = 1500
 
     ip_address = device_property(dtype=str, default_value='10.20.30.204')
 
     # if it is done so leave it like this
     position = attribute(label="Position", dtype=float, display_level=DispLevel.OPERATOR,
                          access=AttrWriteType.READ_WRITE, unit="step", format="8.4f",
-                         doc="the position of axis", polling_period=500)
+                         doc="the position of axis", polling_period=polling_local)
 
     @attribute(label='Temperature', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='deg',
-               polling_period=500, doc="Temperature in tenths of degrees C.")
+               polling_period=polling_local, doc="Temperature in tenths of degrees C.")
     def temperature(self):
         return self._temperature
 
     @attribute(label='Power current', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='mA',
-               polling_period=500)
+               polling_period=polling_local)
     def power_current(self):
         return self._power_current
 
     @attribute(label='Power voltage', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='V',
-               polling_period=500)
+               polling_period=polling_local)
     def power_voltage(self):
         return self._power_voltage
 
     @attribute(label='Power status', access=AttrWriteType.READ, dtype=str, display_level=DispLevel.OPERATOR,
-               polling_period=500)
+               polling_period=polling_local)
     def power_status(self):
         return self._power_status
 
@@ -201,15 +202,13 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._power_status = self.POWER_STATES[x_status.PWRSts]
             if self._status_check_fault > 0:
                 self._status_check_fault = 0
-
             return super().get_controller_status_local()
-
         else:
             self._status_check_fault += 1
-            # if self._status_check_fault > 10:
-            #     self.set_state(DevState.FAULT)
+            if self._status_check_fault > 10:
+                self.set_state(DevState.FAULT)
+                self.init_device()
             return f'Could not get controller status of {self.device_name()}: {result}: N {self._status_check_fault}.'
-        # TODO: add check status if connected or not
 
 
 if __name__ == "__main__":
