@@ -192,6 +192,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
     def get_controller_status_local(self) -> Union[int, str]:
         x_status = status_t()
+        # Different STANDA controllers call xilib at different times
         wait = random.randint(10, 50)
         sleep(wait / 1000.)
         result = lib.get_status(self._device_id_internal, ctypes.byref(x_status))
@@ -207,6 +208,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._status_check_fault += 1
             if self._status_check_fault > 10:
                 self.set_state(DevState.FAULT)
+                self._status_check_fault = 0
                 self.init_device()
             return f'Could not get controller status of {self.device_name()}: {result}: N {self._status_check_fault}.'
 

@@ -14,7 +14,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
-    polling_main = 2000
+    polling_main = 700
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY], 'turn_off': [DevState.ON, DevState.STANDBY],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
              'get_controller_status': [DevState.ON, DevState.MOVING]}

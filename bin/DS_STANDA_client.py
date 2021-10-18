@@ -366,6 +366,10 @@ class Standa_motor(Qt.QWidget):
 
         setattr(self, f'button_set_{dev_name}', QtWidgets.QPushButton('Set'))
         button_set: TaurusCommandButton = getattr(self, f'button_set_{dev_name}')
+
+        setattr(self, f'button_init_{dev_name}', QtWidgets.QPushButton('init_device'))
+        button_init: TaurusCommandButton = getattr(self, f'button_init_{dev_name}')
+
         # button_set.setModel(dev_name)
         # button_set.setParameters([0])
         button_set.clicked.connect(partial(self.set_clicked, dev_name))
@@ -374,6 +378,7 @@ class Standa_motor(Qt.QWidget):
         lo_buttons.addWidget(button_off)
         lo_buttons.addWidget(button_stop)
         lo_buttons.addWidget(button_set)
+        lo_buttons.addWidget(button_init)
 
         separator = Qt.QFrame()
         separator.setFrameShape(Qt.QFrame.VLine)
