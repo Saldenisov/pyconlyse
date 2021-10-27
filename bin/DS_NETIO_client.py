@@ -35,7 +35,6 @@ class Netio_pdu(Qt.QWidget):
         ds: Device = getattr(self, f'ds_{device_name}')
         ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.state_listener)
 
-
     def register_DS(self, dev_name, group_number=1):
         ds: Device = getattr(self, f'ds_{dev_name}')
         # Logging level
@@ -155,7 +154,6 @@ layouts = {'V0': ['manip/V0/PDU_VO', 'manip/SD1/PDU_SD1', 'manip/SD2/PDU_SD2'],
           }
 
 
-from taurus.external.qt import Qt
 def main():
     if len(sys.argv) >= 2:
         try:

@@ -414,24 +414,24 @@ class Standa_motor(Qt.QWidget):
         ds.move_axis_abs(pos)
 
 
-layouts = {'elyse': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
+layouts = {'ELYSE': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
                          'elyse/motorized_devices/mme_x', 'elyse/motorized_devices/mme_y',
                          'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                          'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y'
                          ],
-               'V0': ['manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
+           'V0': ['manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
                       'manip/V0/dv01', 'manip/V0/dv02', 'manip/V0/dv03', 'manip/V0/dv04',
                       'manip/V0/s1', 'manip/V0/s2', 'manip/V0/s3', 'manip/V0/L-2_1',
                       'manip/V0/opa_x', 'manip/V0/opa_y', None, None
                       ],
-               'alignment': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
+           'alignment': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
                             'manip/V0/dv01', 'manip/V0/dv02',
                             'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                             'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y',
                             'manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
                             'manip/V0/s1', 'manip/V0/s2', 'manip/V0/L-2_1', 'manip/V0/dv03'
                ],
-               'test': ['elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y']}
+           'test': ['elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y']}
 
 
 def main():
@@ -462,7 +462,7 @@ def main_():
                 except ValueError:
                     width = 2
             elif len(sys.argv) == 2:
-                width = 2
+                width = 4
             panel = QtWidgets.QWidget()
             panel.setWindowTitle('STANDA')
             panel.setWindowIcon(QIcon('icons//STANDA.svg'))

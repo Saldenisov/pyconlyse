@@ -32,19 +32,21 @@ names = {'00003D73': ['ELYSE/motorized_devices', 'StandaI_X', 'MM1_X', [-10, 0, 
 
 def main():
     i = 1
+    a = []
     for dev_id, val in names.items():
         dev_info = DbDevInfo()
         dev_name = f'{val[0]}/{val[2]}'
         dev_info.name = dev_name
         dev_info._class = 'DS_Standa_Motor'
         dev_info.server = f'DS_Standa_Motor/{i}_{val[2]}'
+        a.append(f'{i}_{val[2]}')
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'ip_address': '10.20.30.204', 'device_id': dev_id, 'friendly_name': val[1],
                                           'wait_time': 5, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
                                           'limit_max': val[4][1], 'real_pos': 0.0})
 
         i += 1
-
+    print(a)
 
 if __name__ == '__main__':
     main()
