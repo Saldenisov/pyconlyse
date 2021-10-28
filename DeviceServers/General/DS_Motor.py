@@ -162,9 +162,9 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
              'stop_axis': [DevState.ON],
              'set_param_axis': [DevState.ON],
              'move_axis': [DevState.ON],
-             'init_axis': [DevState.ON],
-             'turn_on_axis': [DevState.ON],
-             'turn_off_axis': [DevState.ON],
+             'init_axis': [DevState.INIT, DevState.STANDBY, DevState.OFF],
+             'turn_on_axis': [DevState.ON, DevState.OFF, DevState.STANDBY, DevState.INIT],
+             'turn_off_axis': [DevState.ON, DevState.STANDBY, DevState.INIT],
              'get_status_axis': [DevState.ON], **DS_General.RULES}
 
     delay_lines_parameters = device_property(dtype=str)  # Specific for Controller: see, e.g., DS_OWIS_PS90
@@ -180,7 +180,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
 
     @attribute(label="Axes positions", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
-               doc="Gives list of axes positions as str of python dict{id: state}", polling_period=polling, abs_change='')
+               doc="Gives list of axes positions as str of python dict{id: state}", polling_period=polling,
+               abs_change='')
     def positions(self):
         position = {}
         for axis_id, axis_param in self._delay_lines_parameters.items():
@@ -250,6 +251,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.init_axis_local(axis)
             if res != 0:
                 self.error(f'Could not initialize axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.init_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod
@@ -266,6 +269,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.get_status_axis_local(axis)
             if res != 0:
                 self.error(f'Could not get status for axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.get_status_axis} did not work. Check {self.RULES}.'
         return self._delay_lines_parameters[axis]['state']
 
     @abstractmethod
@@ -287,6 +292,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                 except IndexError:
                     axis = None
                 self.error(f'Could not define position for axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.define_position_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod
@@ -303,6 +310,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.read_position_axis_local(axis)
             if res != 0:
                 self.error(f'Could not read position for axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.read_position_axis} did not work. Check {self.RULES}.'
         return self._delay_lines_parameters[axis]['position']
 
     @abstractmethod
@@ -331,6 +340,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                 except IndexError:
                     axis = None
                 self.error(f'Could not set parameters for axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.set_param_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod
@@ -347,6 +358,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.turn_on_axis_local(axis)
             if res != 0:
                 self.error(f'Could not turn on axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.turn_on_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod
@@ -363,6 +376,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.turn_off_axis_local(axis)
             if res != 0:
                 self.error(f'Could not turn off axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.turn_off_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod
@@ -402,6 +417,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.stop_axis_local(axis)
             if res != 0:
                 self.error(f'Could not stop axis {axis} of {self.device_name()}: {res}')
+        else:
+            res = f'check_func_allowance of {self.stop_axis} did not work. Check {self.RULES}.'
         return str(res)
 
     @abstractmethod

@@ -360,6 +360,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         """
 
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_FreeSwitch(control_unit, axis)
@@ -448,6 +449,7 @@ long error = PS90_GetReadError(1);
                         3     axis is active and initialized and switched on
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_GetAxisState(control_unit, axis)
@@ -479,6 +481,7 @@ long error = PS90_GetReadError(1);
         if not control_unit:
             control_unit = self.control_unit_id
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         res = lib.PS90_GetTargetEx(control_unit, axis) / 10000
         sleep(time_ps_delay)
@@ -506,6 +509,7 @@ long error = PS90_GetReadError(1);
         if not control_unit:
             control_unit = self.control_unit_id
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_GetPosition(control_unit, axis) / 10000
@@ -536,6 +540,7 @@ long error = PS90_GetReadError(1);
         if not control_unit:
             control_unit = self.control_unit_id
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_GetTargetMode(control_unit, axis)
@@ -566,6 +571,7 @@ long error = PS90_GetReadError(1);
                 -4 – axis in wrong state
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_GoTarget(control_unit, axis)
@@ -585,7 +591,9 @@ long error = PS90_GetReadError(1);
         long PS90_MotorInit (long Index, long AxisId)
         Description
         initialize an axis and switch on.
-        With this function the axis is completely initialized and afterwards is with a current and with active positioning regulator. It must be executed after the turning on of the control unit, so that the axis can be moved afterwards with the commands REF, PGO, VGO etc. Before the following parameters must have been set: limit switch mask and polarity, start regulator parameters.
+        With this function the axis is completely initialized and afterwards is with a current and with active positioning regulator.
+        It must be executed after the turning on of the control unit, so that the axis can be moved afterwards with the commands REF, PGO, VGO etc.
+        Before the following parameters must have been set: limit switch mask and polarity, start regulator parameters.
         Example
         Initialize an axis of the control unit (Index=1, Axis=1) and switch on:
         long error = PS90_MotorInit(1,1);
@@ -597,6 +605,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_MotorInit(control_unit, axis)
@@ -621,6 +630,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_MotorOn(control_unit, axis)
@@ -645,6 +655,7 @@ long error = PS90_GetReadError(1);
 
         """
         control_unit = ctypes.c_int(control_unit)
+        axis = int(axis)
         axis = ctypes.c_int(axis)
         sleep(time_ps_delay)
         res = lib.PS90_MotorOff(control_unit, axis)
@@ -666,6 +677,7 @@ long error = PS90_GetReadError(1);
 
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
         res = lib.PS90_Stop(control_unit, axis)
@@ -692,6 +704,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
@@ -719,6 +732,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
@@ -728,6 +742,7 @@ long error = PS90_GetReadError(1);
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
     def _set_position_ex_ps90(self, control_unit: int, axis: int, pos: float) -> Tuple[Union[bool, str]]:
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         pos = ctypes.c_double(pos)
         sleep(time_ps_delay)
@@ -749,6 +764,7 @@ long error = PS90_GetReadError(1);
         :return: 0 – function was successful -1 – function error -2 – communication error -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         sleep(time_ps_delay)
@@ -776,6 +792,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
@@ -808,9 +825,10 @@ long error = PS90_GetReadError(1);
                 -1 – function error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         pitch = ctypes.c_double(pitch)
-        inc_rev = ctypes.c_long(inc_rev)
+        inc_rev = ctypes.c_long(int(inc_rev))
         gear_ratio = ctypes.c_double(gear_ratio)
         sleep(time_ps_delay)
         res = lib.PS90_SetStageAttributes(control_unit, axis, pitch, inc_rev, gear_ratio)
@@ -834,6 +852,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         sleep(time_ps_delay)
@@ -860,6 +879,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         value = ctypes.c_long(value)
         sleep(time_ps_delay)
@@ -887,6 +907,7 @@ long error = PS90_GetReadError(1);
                 -3 – syntax error
         """
         control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)

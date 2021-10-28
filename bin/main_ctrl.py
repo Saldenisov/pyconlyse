@@ -9,6 +9,7 @@ from taurus.qt.qtgui.application import TaurusApplication
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from _functools import partial
+import subprocess
 
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
@@ -17,7 +18,7 @@ def start_cmd(call: str, cbox: TaurusValueComboBox):
         c_idx = cbox.currentIndex()
         arg = cbox.itemText(c_idx)
     print(f'Calling {call} {arg}')
-    os.system(f'{call} {arg}')
+    subprocess.call(f'{call} {arg}')
 
 
 
@@ -40,7 +41,7 @@ def main():
     cbox_NETIO = TaurusValueComboBox(parent=panel)
     cbox_NETIO.addItems(['all', 'V0', 'VD2'])
     cbox_OWIS = TaurusValueComboBox(parent=panel)
-    cbox_OWIS.addItems(['V0', 'VD2'])
+    cbox_OWIS.addItems(['V0', 'VD2', 'all'])
     cbox_STANDA = TaurusValueComboBox(parent=panel)
     cbox_STANDA.addItems(['alignment', 'V0', 'ELYSE'])
 
@@ -57,7 +58,7 @@ def main():
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
-    button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', None))
+    button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
 
 
 
@@ -65,10 +66,6 @@ def main():
     panel.setLayout(layout_main)
     panel.show()
     sys.exit(app.exec_())
-
-
-
-
 
 
 if __name__ == '__main__':

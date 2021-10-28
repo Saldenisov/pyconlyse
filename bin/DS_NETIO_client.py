@@ -89,7 +89,7 @@ class Netio_pdu(Qt.QWidget):
             cb.setChecked(bool(state))
             cb.setText(f'{name}:id:{id}')
             lo_state.addWidget(cb)
-            cb.stateChanged.connect(partial(self.cb_clicked, dev_name))
+            cb.clicked.connect(partial(self.cb_clicked, dev_name))
         group.setLayout(lo_state)
 
         # # ERRORS and INFO
