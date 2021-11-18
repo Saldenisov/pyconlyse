@@ -162,9 +162,9 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
              'stop_axis': [DevState.ON],
              'set_param_axis': [DevState.ON],
              'move_axis': [DevState.ON],
-             'init_axis': [DevState.INIT, DevState.STANDBY, DevState.OFF],
-             'turn_on_axis': [DevState.ON, DevState.OFF, DevState.STANDBY, DevState.INIT],
-             'turn_off_axis': [DevState.ON, DevState.STANDBY, DevState.INIT],
+             'init_axis': [DevState.ON],
+             'turn_on_axis': [DevState.ON],
+             'turn_off_axis': [DevState.ON],
              'get_status_axis': [DevState.ON], **DS_General.RULES}
 
     delay_lines_parameters = device_property(dtype=str)  # Specific for Controller: see, e.g., DS_OWIS_PS90

@@ -97,16 +97,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def get_controller_status_local(self) -> Union[int, str]:
         for axis in self._delay_lines_parameters.keys():
             self.get_status_axis_local(axis)
+            self.read_position_axis_local(axis)
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if self.serial_number != ser_num:
             return f'Connection with PS90 is lost'
         else:
-             return 0
+            return 0
 
     def init_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_init_ps90(self.control_unit_id, axis)
         if not res:
-            result = f'ERROR: Device {self.device_name()} motor_init for axis {axis} func did NOT work {comments}.'
+            result = f'ERROR: Device {self.device_name()} motor_init for axis {axis} func did NOT work: {comments}.'
             self.error(result)
             self._delay_lines_parameters[axis]['state'] = DevState.FAULT
         else:
@@ -205,7 +206,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             if res:
                 result = f'Device {self.device_name()} axis {axis} started moving.'
             else:
-                result = f'ERROR: Device {self.device_name()} axis {axis} did NOT started moving {comments}.'
+                result = f'ERROR: Device {self.device_name()} axis {axis} did NOT start moving: {comments}.'
                 self.error(result)
         return result
 

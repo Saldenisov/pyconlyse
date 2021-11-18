@@ -1,7 +1,11 @@
 class A:
-    pass
+    a = 0
 
 
 a = A()
+print(a.b)
+setattr(a, 'b', 10)
 
-getattr(a, 'a')
+
+print(a.a)
+print(a.b)

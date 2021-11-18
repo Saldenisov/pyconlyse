@@ -1,26 +1,29 @@
-import base64
-import os
+"""
+Created on 10 Jan 2017
 
-from cryptography.fernet import Fernet
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+@author: Sergey Denisov
+"""
+from functools import wraps
+from typing import Any
+from time import sleep
 
-password = b"password"
-salt = os.urandom(16)
-kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=100000, backend=default_backend())
-key = base64.urlsafe_b64encode(kdf.derive(password))
 
-f = Fernet(key)
-token = f.encrypt(b"Secret message!")
-mes = f.decrypt(token)
+def once(func):
+    @wraps(func)
+    def inner(*args, **kwargs):
+        if inner.called:
+            print(func.__name__ + ' already done')
+            return None
+        if not inner.called:
+            inner.called = True
+            return func(*args, **kwargs)
+    inner.called = False
+    return inner
 
-print(key)
-kdf = PBKDF2HMAC(
-    algorithm=hashes.SHA256(),
-    length=32,
-    salt=salt,
-    iterations=100000,
-    backend=default_backend()
-)
-print(base64.urlsafe_b64encode(kdf.derive(password)))
+
+@once
+def a():
+    print('Privet')
+
+a()
+a()

@@ -14,12 +14,10 @@ import subprocess
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
     arg = ''
-    if cbox:
-        c_idx = cbox.currentIndex()
-        arg = cbox.itemText(c_idx)
+    c_idx = cbox.currentIndex()
+    arg = cbox.itemText(c_idx)
     print(f'Calling {call} {arg}')
     subprocess.call(f'{call} {arg}')
-
 
 
 def main():
@@ -43,7 +41,7 @@ def main():
     cbox_OWIS = TaurusValueComboBox(parent=panel)
     cbox_OWIS.addItems(['V0', 'VD2', 'all'])
     cbox_STANDA = TaurusValueComboBox(parent=panel)
-    cbox_STANDA.addItems(['alignment', 'V0', 'ELYSE'])
+    cbox_STANDA.addItems(['alignment', 'V0',  'V0_short', 'ELYSE'])
 
     lo_NETIO.addWidget(button_NETIO)
     lo_NETIO.addWidget(cbox_NETIO)
@@ -59,7 +57,6 @@ def main():
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
-
 
 
     panel.setMinimumWidth(300)
