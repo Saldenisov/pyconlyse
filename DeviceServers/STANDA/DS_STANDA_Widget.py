@@ -74,13 +74,11 @@ class Standa_motor(DS_General_Widget):
             i += 1
         p1 = getattr(self, f'p1_{dev_name}')
         p2 = getattr(self, f'p2_{dev_name}')
-        p3: TaurusWheelEdit() = getattr(self, f'p3_{dev_name}')
+        p3: TaurusWheelEdit = getattr(self, f'p3_{dev_name}')
         p4: TaurusValueLineEdit = getattr(self, f'p{4}_{dev_name}')
-        p3.setMinValue(l_min)
-        p3.setMaxValue(l_max)
+
         limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
         n_digits = len(str(int(limit)))
-        p3._setDigits(n_digits)
 
         lo_pos.addWidget(p1)
         lo_pos.addWidget(p2)
@@ -89,7 +87,13 @@ class Standa_motor(DS_General_Widget):
 
         p1.model, p1.bgRole = f'{dev_name}/position#label', ''
         p2.model = f'{dev_name}/position'
+        p2.setFixedWidth(60)
         p3.model = f'{dev_name}/position'
+
+        p3.setMinValue(l_min)
+        p3.setMaxValue(l_max)
+        p3.setDigitCount(n_digits, 3)
+
         p4.setText('0')
         p4.setFixedWidth(50)
 

@@ -27,7 +27,6 @@ class Netio_pdu(DS_General_Widget):
         ds.subscribe_event("names", tango.EventType.CHANGE_EVENT, self.state_listener)
         ds.subscribe_event("ids", tango.EventType.CHANGE_EVENT, self.state_listener)
 
-
     def register_DS(self, dev_name, group_number=1):
         super().register_DS(dev_name, group_number=1)
 

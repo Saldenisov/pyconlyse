@@ -1,29 +1,21 @@
-"""
-Created on 10 Jan 2017
-
-@author: Sergey Denisov
-"""
-from functools import wraps
-from typing import Any
+from threading import Thread
 from time import sleep
 
+f = {}
 
-def once(func):
-    @wraps(func)
-    def inner(*args, **kwargs):
-        if inner.called:
-            print(func.__name__ + ' already done')
-            return None
-        if not inner.called:
-            inner.called = True
-            return func(*args, **kwargs)
-    inner.called = False
-    return inner
+def a(t,c,f, r):
+    i = 0
+    while i< 5:
+        print(c)
+        sleep(t)
+        i += 1
+    del f[r]
 
+z = Thread(target=a, args=(.1,'Slava', f, 1))
 
-@once
-def a():
-    print('Privet')
+f[1] = z
+f[1].start()
 
-a()
-a()
+sleep(1)
+print(f)
+

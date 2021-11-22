@@ -159,7 +159,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
     polling = 1500
     RULES = {'read_position_axis': [DevState.ON],
              'define_position_axis': [DevState.ON],
-             'stop_axis': [DevState.ON],
+             'stop_axis': [DevState.ON, DevState.STANDBY, DevState.MOVING, DevState.OFF],
              'set_param_axis': [DevState.ON],
              'move_axis': [DevState.ON],
              'init_axis': [DevState.ON],
@@ -327,18 +327,9 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
     def set_param_axis(self, axis):
         state_ok = self.check_func_allowance(self.set_param_axis)
         if state_ok == 1:
-            args = [axis, self._delay_lines_parameters[axis]['pitch'],
-                    self._delay_lines_parameters[axis]['revolution'],
-                    self._delay_lines_parameters[axis]['gear_ratio'],
-                    self._delay_lines_parameters[axis]['speed'],
-                    self._delay_lines_parameters[axis]['limit_min'],
-                    self._delay_lines_parameters[axis]['limit_max']]
-            res = self.set_param_axis_local(args)
+            axis
+            res = self.set_param_axis_local(axis)
             if res != 0:
-                try:
-                    axis = args[0]
-                except IndexError:
-                    axis = None
                 self.error(f'Could not set parameters for axis {axis} of {self.device_name()}: {res}')
         else:
             res = f'check_func_allowance of {self.set_param_axis} did not work. Check {self.RULES}.'
@@ -394,13 +385,6 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.move_axis_local(args)
             if res != 0:
                 self.error(f'Could not move axis {args[0]} of {self.device_name()}: {res}')
-            else:
-                self.read_position_axis(args[0])
-                if args[1] == self._delay_lines_parameters[args[0]]['position']:
-                    self.info_stream(f'Moving axis {args[0]} to {args[1]} was accomplished with success.')
-                else:
-                    self.error(f'Moving axis {args[0]} to {args[1]} was NOT accomplished with success. '
-                               f'Actual pos is {self._delay_lines_parameters[args[0]]["position"]}')
         return str(res)
 
     @abstractmethod
@@ -417,6 +401,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             res = self.stop_axis_local(axis)
             if res != 0:
                 self.error(f'Could not stop axis {axis} of {self.device_name()}: {res}')
+            else:
+                self.info(f'Axis {axis} was stopped by user.', True)
         else:
             res = f'check_func_allowance of {self.stop_axis} did not work. Check {self.RULES}.'
         return str(res)

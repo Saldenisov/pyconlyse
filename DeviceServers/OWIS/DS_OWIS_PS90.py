@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 
+import os
 import sys
-import os
-
 from pathlib import Path
-import os
+
 p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
@@ -14,9 +13,9 @@ app_folder = Path(p).resolve().parents[0]
 app_folder1 = Path(p).resolve().parents[2]
 sys.path.append(str(app_folder1))
 
-
+from threading import Thread
 from tango import DevState
-from tango.server import command, device_property
+from tango.server import device_property
 
 import ctypes
 
@@ -54,6 +53,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     def init_device(self):
         super().init_device()
+        self.follow = {}
         self.turn_on()
 
     def find_device(self) -> Tuple[int, str]:
@@ -65,7 +65,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                                                port=self.com_port,
                                                baudrate=self.baudrate)
             if res:
-                self.set_state(DevState.ON)
+                self.set_state(DevState.STANDBY)
                 argreturn = self.control_unit_id, f'{self.serial_number}'.encode('utf-8')
             else:
                 self.set_state(DevState.FAULT)
@@ -75,14 +75,16 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
             self._device_id_internal, self._uri = self.find_device()
+
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
             return f'Could NOT turn on {self.device_name()}: Device could not be found.'
-        else:
-            self.set_state(DevState.ON)
-            for axis in self._delay_lines_parameters.keys():
-                self.init_axis(axis)
-            return 0
+
+        self.set_state(DevState.ON)
+
+        for axis in self._delay_lines_parameters.keys():
+            self.init_axis(axis)
+        return 0
 
     def turn_off_local(self) -> Union[int, str]:
         self._device_id_internal = -1
@@ -100,6 +102,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.read_position_axis_local(axis)
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if self.serial_number != ser_num:
+            self.set_state(DevState.FAULT)
             return f'Connection with PS90 is lost'
         else:
             return 0
@@ -123,6 +126,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                     result = 0
                 else:
                     result = res
+            self._motor_off_ps90(self.control_unit_id, axis)
         return result
 
     def get_status_axis_local(self, axis: int) -> Union[int, str]:
@@ -152,14 +156,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.error(result)
         return result
 
-    def set_param_axis_local(self, args) -> Union[int, str]:
-        axis = int(args[0])
-        pitch = args[1]
-        revolution = args[2]
-        gear_ratio = args[3]
-        speed = args[4]
-        limit_min = args[5]
-        limit_max = args[6]
+    def set_param_axis_local(self, axis: int) -> Union[int, str]:
+        param = self._delay_lines_parameters[axis]
+        pitch = param['pitch']
+        revolution = param['revolution']
+        gear_ratio = param['gear_ratio']
+        speed = param['speed']
+        limit_min = param['limit_min']
+        limit_max = param['limit_max']
 
         res1, com1 = self._set_stage_attributes_ps90(self.control_unit_id, axis, pitch, revolution, gear_ratio)
         res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
@@ -196,6 +200,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def move_axis_local(self, args) -> Union[int, str]:
         axis = int(args[0])
         pos: float = args[1]
+
+        if self._delay_lines_parameters[axis]['state'] != DevState.ON:
+            self.turn_on_axis(axis)
+            sleep(0.05)
+
         res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
         if not res:
             result = f'ERROR: Device {self.device_name()} set_target_ex to {pos} for axis {axis} ' \
@@ -203,12 +212,30 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.error(result)
         else:
             res, comments = self._go_target_ps90(self.control_unit_id, axis)
+
             if res:
-                result = f'Device {self.device_name()} axis {axis} started moving.'
+                self.info(f'Device {self.device_name()} axis {axis} started moving to {pos}.', True)
+                if axis not in self.follow:
+                    self.follow[axis] = Thread(target=self.follow_after_moving, args=(axis,))
+                    self.follow[axis].start()
+                result = 0
             else:
+                self.turn_off_axis(axis)
                 result = f'ERROR: Device {self.device_name()} axis {axis} did NOT start moving: {comments}.'
                 self.error(result)
         return result
+
+    def follow_after_moving(self, axis, wait=2):
+        i = 0
+        while True:
+            pos_prev = self._delay_lines_parameters[axis]['position']
+            sleep(wait)
+            if self._delay_lines_parameters[axis]['position'] == pos_prev:
+                i += 1
+                if i == 5:
+                    self.turn_off_axis(axis)
+                    break
+        del self.follow[axis]
 
     def stop_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._stop_axis_ps90(self.control_unit_id, axis)
@@ -680,7 +707,6 @@ long error = PS90_GetReadError(1);
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
         axis = ctypes.c_long(axis)
-        sleep(time_ps_delay)
         res = lib.PS90_Stop(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Axis {axis} movement is stopped.')
 
