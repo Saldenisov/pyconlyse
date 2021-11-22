@@ -25,7 +25,7 @@ from time import sleep
 from utilities.tools.decorators import development_mode
 dev_mode = False
 # Strange delay for ps90.dll
-time_ps_delay = 0.05
+time_ps_delay = 0.005
 dll_path = str(app_folder / 'ps90.dll')
 lib = ctypes.WinDLL(dll_path)
 
@@ -247,9 +247,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             result = 0
         return result
 
-    # @command
-    # def define_position_axis(self, axis:int, pos: float):
-    #     pass
+    def define_position_axis_local(self, args) -> Union[int, str]:
+        axis = int(args[0])
+        pos = float(args[1])
+        res, comments = self._set_position_ex_ps90(self.control_unit_id, axis, pos)
+        if not res:
+            result = f'ERROR: Device {self.device_name()} define_pos axis {axis} ' \
+                     f'did NOT work {comments}.'
+            self.error(result)
+        else:
+            result = 0
+        return result
 
     # Hardware controller functions
     # Be aware that OWIS PS90 counts axis from 1, not from 0!!!
@@ -538,9 +546,10 @@ long error = PS90_GetReadError(1);
             control_unit = self.control_unit_id
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
+        pitch = self._delay_lines_parameters[axis]['pitch']
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_GetPosition(control_unit, axis) / 10000
+        res = lib.PS90_GetPosition(control_unit, axis) / 10000 * pitch
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -772,7 +781,6 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         pos = ctypes.c_double(pos)
-        sleep(time_ps_delay)
         res = lib.PS90_SetPositionEx(control_unit, axis, pos)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 

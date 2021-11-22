@@ -15,7 +15,8 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                       'limit_max': 160.0,
                       'real_pos': 30.0,
                       'wait_time': 5,
-                      'preset_positions': [0, 12.9, 24.8, 38.7, 51.6, 80]}
+                      'preset_positions': [0, 12.9, 24.8, 38.7, 51.6, 80],
+                      'relative_shift': 1.0}
                      ,
                2: {'device_name': 'manip/V0/DLl1_V0',
                      'friendly_name': 'Delay line for SC',
@@ -28,7 +29,8 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                      'limit_max': 100.0,
                      'real_pos': -100.0,
                      'wait_time': 5,
-                     'preset_positions': [0.0, 75.0, -800.0]}
+                     'preset_positions': [0.0, 75.0, -800.0],
+                   'relative_shift': 1.0}
                      ,
                3: {'device_name': 'manip/V0/DLs_V0',
                      'friendly_name': 'Sample holder V0',
@@ -41,7 +43,8 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                       'limit_max': 150.0,
                       'real_pos': 30.0,
                       'wait_time': 5,
-                      'preset_positions': [155.0, 125.1, 101.8, 70.5, 46.8, 23.3, 0.0, 90.0]}
+                      'preset_positions': [155.0, 125.1, 101.8, 70.5, 46.8, 23.3, 0.0, 90.0],
+                   'relative_shift': 1.0}
                      ,
                4: {'device_name': 'manip/V0/DLl2_V0',
                      'friendly_name': 'Delay line for OPA',
@@ -54,7 +57,8 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                       'limit_max': 100.0,
                       'real_pos': -100.0,
                       'wait_time': 5,
-                      'preset_positions': [0, 75.0, -800.0]}
+                      'preset_positions': [0, 75.0, -800.0],
+                   'relative_shift': 1.0}
                }
 names_param = {'1': ['manip/general/DS_OWIS_PS90',
                      {'baudrate': 9600,

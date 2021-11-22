@@ -4,7 +4,8 @@ from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device
 from taurus.external.qt import Qt
 from PyQt5.QtWidgets import QCheckBox, QVBoxLayout, QHBoxLayout
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtGui, QtCore
+import PyQt5
 from PyQt5.QtGui import QMouseEvent
 import tango
 
@@ -14,11 +15,20 @@ from _functools import partial
 from DeviceServers.DS_Widget import DS_General_Widget
 
 
+class MyQLabel(QtWidgets.QLabel):
+    clicked = QtCore.pyqtSignal()
+
+    def mousePressEvent(self, ev):
+        self.clicked.emit()
+
+
 class OWIS_motor(DS_General_Widget):
 
     def __init__(self, device_name: str, axes, parent=None):
         super().__init__(device_name, parent)
         self.register_DS(device_name, axes)
+        self.axis_selected = None
+        self.axes = axes
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -126,7 +136,22 @@ class OWIS_motor(DS_General_Widget):
             button_set.clicked.connect(partial(self.set_clicked, axis))
             button_stop.clicked.connect(partial(self.stop_clicked, axis))
 
-            lab_name = TaurusLabel(f'Axis: {names[axis]}')
+            lab_name = MyQLabel(f'Axis: {names[axis]}')
+            setattr(self, f'label_name_{axis}_{dev_name}', lab_name)
+            lab_name.clicked.connect(partial(self.label_name_clicked, axis))
+
+
+            setattr(self, f'radio_button_group_{axis}_{dev_name}', Qt.QGroupBox('Preset Positions'))
+            group_rb: Qt.QGroupBox = getattr(self, f'radio_button_group_{axis}_{dev_name}')
+            lo_rb_preset = QVBoxLayout()
+            for rb in [Qt.QRadioButton(text=str(pos)) for pos in self.delay_lines_parameters[axis]['preset_positions']]:
+                setattr(self, f'rb{i}_{axis}_{dev_name}', rb)
+                lo_rb_preset.addWidget(rb)
+                rb.toggled.connect(partial(self.rb_clicked, float(rb.text()), axis))
+            spacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+            lo_rb_preset.addItem(spacer)
+            group_rb.setLayout(lo_rb_preset)
+
 
             lo_v_pos.addWidget(lab_name)
             lo_h_pos_lab.addWidget(pos_lab_name)
@@ -136,6 +161,7 @@ class OWIS_motor(DS_General_Widget):
             lo_v_pos.addLayout(lo_h_pos_lab)
             lo_v_pos.addWidget(button_stop)
             lo_v_pos.addLayout(lo_h_move_set)
+            lo_v_pos.addWidget(group_rb)
 
             separator = QtWidgets.QFrame()
             separator.setFrameShape(QtWidgets.QFrame.VLine)
@@ -145,7 +171,6 @@ class OWIS_motor(DS_General_Widget):
             lo_h_pos.addLayout(lo_v_pos)
             lo_h_pos.addWidget(separator)
             lo_pos.addLayout(lo_h_pos)
-
 
         self.checkbox_group_positions.setLayout(lo_pos)
         lo_device.addWidget(self.checkbox_group_positions)
@@ -164,12 +189,38 @@ class OWIS_motor(DS_General_Widget):
 
         self.layout_main.addLayout(lo_device)
 
-    def rb_clicked(self, value: str, dev_name: str):
-        pos = float(value)
-        ds: Device = getattr(self, f'ds_{dev_name}')
-        p3: TaurusWheelEdit = getattr(self, f'p3_{dev_name}')
-        p3.setValue(pos)
-        ds.move_axis_abs(pos)
+    def label_name_clicked(self, axis):
+        self.axis_selected = axis
+        for ax in self.axes:
+            lab_name: TaurusLabel = getattr(self, f'label_name_{ax}_{self.dev_name}')
+            if ax == axis:
+                lab_name.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
+            else:
+                lab_name.setStyleSheet("background-color: white;")
+
+    def keyPressEvent(self, event: QtGui.QKeyEvent):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        from PyQt5.QtCore import Qt
+        if event.key() in [Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up] and \
+                self.axis_selected:
+            positions = eval(ds.positions)
+            pos_axis = positions[self.axis_selected]
+            try:
+                move = self.delay_lines_parameters[self.axis_selected]['relative_shift']
+            except KeyError:
+                move = 1.0
+                self.delay_lines_parameters[self.axis_selected]['relative_shift'] = move
+
+            if event.key() in [Qt.Key_Left, Qt.Key_Down]:
+                pos = pos_axis - move
+            elif event.key() in [Qt.Key_Right, Qt.Key_Up]:
+                pos = pos_axis + move
+
+            ds.move_axis([int(self.axis_selected), pos])
+
+    def rb_clicked(self, pos: float, axis: int):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        ds.move_axis([axis, pos])
 
     def cb_clicked(self, axis):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
@@ -182,6 +233,12 @@ class OWIS_motor(DS_General_Widget):
 
     def set_clicked(self, axis):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
+        lineedit: TaurusValueLineEdit = getattr(self, f'pos_lineedit{axis}_{self.dev_name}')
+        try:
+            pos = float(lineedit.text())
+            ds.define_position_axis([int(axis), pos])
+        except ValueError:
+            pass
 
     def stop_clicked(self, axis):
         print('STOP CLICKED')
