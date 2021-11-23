@@ -87,6 +87,8 @@ class OWIS_Panel(General_Panel):
             raise Exception(f'Wrong widget class {widget_class} is passed.')
         super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width)
         self.move_step = 1
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.context_menu)
 
     def widget_creation(self, choice, widget_class):
         i = 0
@@ -99,7 +101,8 @@ class OWIS_Panel(General_Panel):
                 lo.addWidget(s_m)
             i += 1
 
-
+    def context_menu(self):
+        pass
 class Netio_Panel(General_Panel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):

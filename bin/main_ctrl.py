@@ -2,8 +2,6 @@ import sys
 import os
 from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusValueCheckBox, TaurusValueComboBox
 from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus import Device, Attribute
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from PyQt5 import QtWidgets

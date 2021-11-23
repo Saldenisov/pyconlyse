@@ -137,9 +137,14 @@ class OWIS_motor(DS_General_Widget):
             button_stop.clicked.connect(partial(self.stop_clicked, axis))
 
             lab_name = MyQLabel(f'Axis: {names[axis]}')
+            lab_name.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+            lab_name.customContextMenuRequested.connect(partial(self.context_menu_label, axis))
             setattr(self, f'label_name_{axis}_{dev_name}', lab_name)
             lab_name.clicked.connect(partial(self.label_name_clicked, axis))
 
+
+            lab_name_relative_shift = MyQLabel(f'Relative shift: {self.delay_lines_parameters[axis]["relative_shift"]}')
+            setattr(self, f'lab_name_relative_shift_{axis}_{dev_name}', lab_name_relative_shift)
 
             setattr(self, f'radio_button_group_{axis}_{dev_name}', Qt.QGroupBox('Preset Positions'))
             group_rb: Qt.QGroupBox = getattr(self, f'radio_button_group_{axis}_{dev_name}')
@@ -159,6 +164,7 @@ class OWIS_motor(DS_General_Widget):
             lo_h_move_set.addWidget(lineedit)
             lo_h_move_set.addWidget(button_set)
             lo_v_pos.addLayout(lo_h_pos_lab)
+            lo_v_pos.addWidget(lab_name_relative_shift)
             lo_v_pos.addWidget(button_stop)
             lo_v_pos.addLayout(lo_h_move_set)
             lo_v_pos.addWidget(group_rb)
@@ -188,6 +194,41 @@ class OWIS_motor(DS_General_Widget):
         lo_device.addLayout(lo_buttons)
 
         self.layout_main.addLayout(lo_device)
+
+    def context_menu_label(self, axis, point):
+        menu = QtWidgets.QMenu()
+        tens = menu.addAction('0.1')
+        half = menu.addAction('0.5')
+        one = menu.addAction('1')
+        five = menu.addAction('5')
+        ten = menu.addAction('10')
+        fifty = menu.addAction('50')
+        hundred = menu.addAction('100')
+
+        label = getattr(self, f'label_name_{axis}_{self.dev_name}')
+
+        action = menu.exec_(label.mapToGlobal(point))
+
+        if action and self.axis_selected:
+            move = 1
+            if action == tens:
+                move = 0.1
+            elif action == half:
+                move = 0.5
+            elif action == one:
+                move = 1
+            elif action == five:
+                move = 5
+            elif action == ten:
+                move = 10
+            elif action == fifty:
+                move = 50
+            elif action == hundred:
+                move = 100
+            self.delay_lines_parameters[self.axis_selected]['relative_shift'] = move
+            label_shift: MyQLabel = getattr(self, f'lab_name_relative_shift_{self.axis_selected}_{self.dev_name}')
+            label_shift.setText(f"Relative shift: {self.delay_lines_parameters[self.axis_selected]['relative_shift']}")
+
 
     def label_name_clicked(self, axis):
         self.axis_selected = axis
