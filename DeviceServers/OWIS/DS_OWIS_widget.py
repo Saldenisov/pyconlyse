@@ -13,14 +13,7 @@ from typing import List, Dict
 from _functools import partial
 
 from DeviceServers.DS_Widget import DS_General_Widget
-
-
-class MyQLabel(QtWidgets.QLabel):
-    clicked = QtCore.pyqtSignal()
-
-    def mousePressEvent(self, ev):
-        self.clicked.emit()
-
+from gui.MyWidgets import MyQLabel
 
 class OWIS_motor(DS_General_Widget):
 
@@ -157,7 +150,6 @@ class OWIS_motor(DS_General_Widget):
             lo_rb_preset.addItem(spacer)
             group_rb.setLayout(lo_rb_preset)
 
-
             lo_v_pos.addWidget(lab_name)
             lo_h_pos_lab.addWidget(pos_lab_name)
             lo_h_pos_lab.addWidget(wheel)
@@ -228,7 +220,6 @@ class OWIS_motor(DS_General_Widget):
             self.delay_lines_parameters[self.axis_selected]['relative_shift'] = move
             label_shift: MyQLabel = getattr(self, f'lab_name_relative_shift_{self.axis_selected}_{self.dev_name}')
             label_shift.setText(f"Relative shift: {self.delay_lines_parameters[self.axis_selected]['relative_shift']}")
-
 
     def label_name_clicked(self, axis):
         self.axis_selected = axis

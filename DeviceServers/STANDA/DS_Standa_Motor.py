@@ -62,6 +62,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         return self._power_status
 
     def init_device(self):
+        self._power_status = self.POWER_STATES[0]
+        self._temperature = None
+        self._power_current = 0
+        self._power_voltage = 0
         super().init_device()
         self.turn_on()
 
@@ -85,7 +89,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                     if self.device_id in uri.decode('utf-8'):
                         argreturn = device_id_internal_seq, uri
                         break
-        print(f'Result: {argreturn}')
+        self.info(f'Result: {argreturn}', True)
         return argreturn
 
     def read_position_local(self) -> Union[int, str]:
@@ -99,7 +103,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._position = pos_basic_units
             return 0
         else:
-            return f'Could not read position of {self.device_name()}: {result}.'
+            return f'Could not read position of {self.device_name}: {result}.'
 
     def write_position_local(self, pos) -> Union[int, str]:
         self.move_axis(pos)
@@ -129,7 +133,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         if result == Result.Ok:
             return 0
         else:
-            return f'Could not define position of {self.device_name()}: {result}.'
+            return f'Could not define position of {self.device_name}: {result}.'
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
@@ -137,7 +141,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._device_id_internal, self._uri = self.find_device()
 
         if self._device_id_internal == -1:
-            return f'Could NOT turn on {self.device_name()}: Device could not be found.'
+            return f'Could NOT turn on {self.device_name}: Device could not be found.'
 
         res = lib.open_device(self._uri)
 
@@ -149,7 +153,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             return 0
         else:
             self.set_state(DevState.FAULT)
-            return f'Could NOT turn on {self.device_name()}: {res}.'
+            return f'Could NOT turn on {self.device_name}: {res}.'
 
     def turn_off_local(self) -> Union[int, str]:
         arg = ctypes.cast(self._device_id_internal, ctypes.POINTER(ctypes.c_int))
@@ -162,7 +166,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             return 0
         else:
             self.set_state(DevState.FAULT)
-            return self.error(f'Could not turn off device {self.device_name()}: {result}.')
+            return self.error(f'Could not turn off device {self.device_name}: {result}.')
 
     def move_axis_local(self, pos) -> Union[int, str]:
         microsteps = int(pos % 1 * 256)
@@ -172,10 +176,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         if result == Result.Ok:
             result = lib.command_wait_for_stop(self._device_id_internal, self.wait_time)
         else:
-            return f'Move command for {self.device_name()} did NOT work: {result}.'
+            return f'Move command for {self.device_name} did NOT work: {result}.'
 
         if result != Result.Ok:
-            return f'{self.device_name()} did NOT stop moving yet: {result}.'
+            return f'{self.device_name} did NOT stop moving yet: {result}.'
         else:
             self.set_state(DevState.ON)
             self.stop_movement_local()
@@ -185,10 +189,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         result = lib.command_stop(self._device_id_internal)
         if result == 0:
             self.state = DevState.ON
-            self.info(f"Axis movement of device {self.device_name()} was stopped by user.")
+            self.info(f"Axis movement of device {self.device_name} was stopped by user.")
             return 0
         else:
-            return f"Axis movement of device {self.device_name()} WAS NOT stopped by user."
+            return f"Axis movement of device {self.device_name} WAS NOT stopped by user."
 
     def get_controller_status_local(self) -> Union[int, str]:
         x_status = status_t()
@@ -210,7 +214,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                 self.set_state(DevState.FAULT)
                 self._status_check_fault = 0
                 self.init_device()
-            return f'Could not get controller status of {self.device_name()}: {result}: N {self._status_check_fault}.'
+            return f'Could not get controller status of {self.device_name}: {result}: N {self._status_check_fault}.'
 
 
 if __name__ == "__main__":

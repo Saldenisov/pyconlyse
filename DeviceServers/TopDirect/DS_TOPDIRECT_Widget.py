@@ -3,8 +3,7 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device
 from taurus.external.qt import Qt
-from PyQt5 import QtWidgets, QtGui, QtCore
-
+from PyQt5 import QtWidgets
 from PyQt5.QtGui import QMouseEvent
 
 from typing import List
@@ -14,15 +13,15 @@ from DeviceServers.DS_Widget import DS_General_Widget
 from gui.MyWidgets import MyQLabel
 
 
-class Standa_motor(DS_General_Widget):
+class TopDirect_Motor(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None):
         super().__init__(device_name, parent)
-        self.relative_shift = 1
+        self.relative_shift = 0
         self.register_DS(device_name)
 
     def register_DS(self, dev_name, group_number=1):
-        super(Standa_motor, self).register_DS(dev_name, group_number=1)
+        super(TopDirect_Motor, self).register_DS(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -69,8 +68,7 @@ class Standa_motor(DS_General_Widget):
         lo_status.addWidget(s3)
 
         # Position controls
-        widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), TaurusValueLineEdit(),
-                   MyQLabel(f'Relative shift: {self.relative_shift}')]
+        widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), TaurusValueLineEdit()]
         i = 1
         for p in widgets:
             name = f'p{i}_{dev_name}'
@@ -80,10 +78,6 @@ class Standa_motor(DS_General_Widget):
         p2 = getattr(self, f'p2_{dev_name}')
         p3: TaurusWheelEdit = getattr(self, f'p3_{dev_name}')
         p4: TaurusValueLineEdit = getattr(self, f'p{4}_{dev_name}')
-        p5: MyQLabel = getattr(self, f'p{5}_{dev_name}')
-
-        p5.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-        p5.customContextMenuRequested.connect(partial(self.context_menu))
 
         limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
         n_digits = len(str(int(limit)))
@@ -92,7 +86,6 @@ class Standa_motor(DS_General_Widget):
         lo_pos.addWidget(p2)
         lo_pos.addWidget(p3)
         lo_pos.addWidget(p4)
-        lo_pos.addWidget(p5)
 
         p1.model, p1.bgRole = f'{dev_name}/position#label', ''
         p2.model = f'{dev_name}/position'
@@ -118,36 +111,6 @@ class Standa_motor(DS_General_Widget):
             lo_preset.addWidget(rb)
             rb.toggled.connect(partial(self.rb_clicked, rb.text(), dev_name))
         group.setLayout(lo_preset)
-
-        # Info
-        widgets = [TaurusLabel(), TaurusLabel(), TaurusLabel(), TaurusLabel()]
-        i = 1
-        for inf in widgets:
-            name = f'inf{i}_{dev_name}'
-            setattr(self, f'{name}', inf)
-            i += 1
-        inf1 = getattr(self, f'inf1_{dev_name}')
-        inf2 = getattr(self, f'inf2_{dev_name}')
-        inf3 = getattr(self, f'inf3_{dev_name}')
-        inf4 = getattr(self, f'inf4_{dev_name}')
-
-        lo_info.addWidget(inf1)
-        lo_info.addWidget(inf2)
-        lo_info.addWidget(inf3)
-        # lo_info.addWidget(inf4)
-
-        inf1.model = f'{dev_name}/temperature'
-        inf2.model = f'{dev_name}/power_current'
-        inf3.model = f'{dev_name}/power_voltage'
-        # inf4.model = f'{dev_name}/power_status'
-
-        # # ERRORS and INFO
-        # error = TaurusLabel()
-        # comments = TaurusLabel()
-        # error.model = f'{dev_name}/last_error'
-        # comments.model = f'{dev_name}/last_comments'
-        # lo_error_info.addWidget(error)
-        # lo_error_info.addWidget(comments)
 
         # Buttons and commands
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
@@ -217,7 +180,7 @@ class Standa_motor(DS_General_Widget):
         self.panel_parent.active_widget = self.dev_name
         self.panel_parent.update_background_widgets()
 
-    def context_menu(self, point):
+    def context_menu_label(self,  point):
         menu = QtWidgets.QMenu()
         tens = menu.addAction('0.1')
         half = menu.addAction('0.5')
@@ -227,9 +190,9 @@ class Standa_motor(DS_General_Widget):
         fifty = menu.addAction('50')
         hundred = menu.addAction('100')
 
-        label_shift: MyQLabel = getattr(self, f'p{5}_{self.dev_name}')
+        label = getattr(self, f'label_name_{self.dev_name}')
 
-        action = menu.exec_(label_shift.mapToGlobal(point))
+        action = menu.exec_(label.mapToGlobal(point))
 
         if action:
             move = 1
@@ -250,4 +213,5 @@ class Standa_motor(DS_General_Widget):
 
             self.relative_shift = move
 
+            label_shift: MyQLabel = getattr(self, f'lab_name_relative_shift_{self.axis_selected}_{self.dev_name}')
             label_shift.setText(f"Relative shift: {move}")

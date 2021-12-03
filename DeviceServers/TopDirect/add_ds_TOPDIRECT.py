@@ -2,8 +2,10 @@ from tango import DbDevInfo, Database
 
 db = Database()
 
-names = {'75833353934351B05090': ['ELYSE/motorized_devices', 'TopDirect_Lense', 'Lense260', [-10, -5, -2, 0, 2, 5, 10], [-20.0, 20.0]],
-         '55838333832351518082': ['manip/V0', 'TopDirect_SC', 'DL_SC1', [-2, -1, -.5, 0, 0.5, 1, 2, 3], [-5.0, 5.0]],
+names = {'75833353934351B05090': ['ELYSE/motorized_devices', 'TopDirect_Lense', 'Lense260', [-10, -5, -2, 0, 2, 5, 10], [-20.0, 20.0],
+                                  115200, 0.1],
+         '55838333832351518082': ['manip/V0', 'TopDirect_SC', 'DL_SC1', [-2, -1, -.5, 0, 0.5, 1, 2, 3], [-5.0, 5.0],
+                                  115200, 0.1],
 }
 
 
@@ -20,7 +22,8 @@ def main():
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1],
                                           'wait_time': 10, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
-                                          'limit_max': val[4][1], 'real_pos': 0.0})
+                                          'limit_max': val[4][1], 'real_pos': 0.0, 'baudrate': val[5],
+                                          'timeout': val[6]})
 
         i += 1
 

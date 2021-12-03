@@ -54,7 +54,7 @@ class DS_Netio_pdu(DS_PDU):
 
     def find_device(self) -> Tuple[int, str]:
         arg_return = -1, ''
-        self.info(f"Searching for NETIO PDU device {self.device_name()}", True)
+        self.info(f"Searching for NETIO PDU device {self.device_name}", True)
         res = self._get_request()
         if isinstance(res, requests.Response):
             if res.status_code == 200:
@@ -70,7 +70,7 @@ class DS_Netio_pdu(DS_PDU):
             if res.status_code == 200:
                 outputs_list = res.json()['Outputs']
                 return self.__set_attributes_netio(outputs_list)
-        return f'Could not get channels states for {self.device_name()}. Res {res}'
+        return f'Could not get channels states for {self.device_name}. Res {res}'
 
     def __set_attributes_netio(self, outputs_list) -> Union[int, str]:
         try:
@@ -135,7 +135,7 @@ class DS_Netio_pdu(DS_PDU):
             self._device_id_internal, self._uri = self.find_device()
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
-            return f'Could NOT turn on {self.device_name()}: Device could not be found.'
+            return f'Could NOT turn on {self.device_name}: Device could not be found.'
         else:
             self.set_state(DevState.ON)
             return 0
@@ -159,15 +159,15 @@ class DS_Netio_pdu(DS_PDU):
                         self._status_check_fault = 0
                     return 0
                 else:
-                    return f'Could not get controller status of {self.device_name()}: {res}.'
+                    return f'Could not get controller status of {self.device_name}: {res}.'
             else:
                 error(self)
-                return f'Could not get controller status of {self.device_name()}: {res}.'
+                return f'Could not get controller status of {self.device_name}: {res}.'
 
             return super().get_controller_status_local()
         else:
             error(self)
-            return f'Could not get controller status of {self.device_name()}: {res}.'
+            return f'Could not get controller status of {self.device_name}: {res}.'
 
 
 if __name__ == "__main__":

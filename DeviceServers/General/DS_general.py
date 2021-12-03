@@ -14,7 +14,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
-    polling_main = 700
+    polling_main = 500
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY], 'turn_off': [DevState.ON, DevState.STANDBY],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
              'get_controller_status': [DevState.ON, DevState.MOVING]}
@@ -69,8 +69,18 @@ class DS_General(Device):
         internal_time = Thread(target=self.int_time)
         internal_time.start()
         self._status_check_fault = 0
-        self.set_state(DevState.FAULT)
         Device.init_device(self)
+        self.set_state(DevState.OFF)
+        self._device_id_internal = -1
+        device_id_internal, uri = self.find_device()
+        self._uri = uri
+        self._device_id_internal = device_id_internal
+
+        if self._device_id_internal >= 0:
+            self.info(f"{self.device_name} was found.", True)
+        else:
+            self.info(f"{self.device_name} was NOT found.", True)
+            self.set_state(DevState.FAULT)
 
     @abstractmethod
     def find_device(self) -> Tuple[int, str]:
@@ -98,6 +108,7 @@ class DS_General(Device):
                 self._error = ''
                 self._n = 0
 
+    @property
     def device_name(self) -> str:
         return f'Device {self.device_id} {self.friendly_name}'
 
@@ -115,14 +126,17 @@ class DS_General(Device):
 
     @command
     def turn_on(self):
-        self.info(f"Turning ON {self.device_name()}.", True)
         state_ok = self.check_func_allowance(self.turn_on)
         if state_ok == 1:
+            self.info(f"Turning ON {self.device_name}.", True)
             res = self.turn_on_local()
             if res != 0:
                 self.error(f"{res}")
             else:
-                self.info(f"Device {self.device_name()} WAS turned ON.", True)
+                self.info(f"Device {self.device_name} WAS turned ON.", True)
+        else:
+            self.error(f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}.")
+
 
     @abstractmethod
     def turn_on_local(self) -> Union[int, str]:
@@ -130,15 +144,17 @@ class DS_General(Device):
 
     @command
     def turn_off(self):
-        self.debug_stream(f"Turning off {self.device_name()}.")
-        print(f"Turning off device {self.device_name()}.")
         state_ok = self.check_func_allowance(self.turn_off)
         if state_ok == 1:
+            self.info(f"Turning off device {self.device_name}.", True)
             res = self.turn_off_local()
             if res != 0:
                 self.error_stream(f"{res}")
             else:
-                print(f"Device {self.device_name()} is turned OFF.")
+                self.info(f"Device {self.device_name} is turned OFF.", True)
+        else:
+            self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
+
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:

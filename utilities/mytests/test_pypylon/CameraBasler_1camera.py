@@ -52,7 +52,7 @@ def init(camera_id, camera, devices):
     camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource = "Line1"
-    camera.TriggerMode.SetValue("On")
+    camera.trigger_mode.SetValue("On")
     camera.TriggerDelayAbs.SetValue(185000)
     camera.ExposureTimeAbs.SetValue(15000.0)
     camera.BalanceRatioRaw.SetValue(64)

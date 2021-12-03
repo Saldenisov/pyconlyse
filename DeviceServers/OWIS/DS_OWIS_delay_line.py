@@ -63,7 +63,7 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
     def define_position_local(self, position):
         res, comments = self._set_position_ex_ps90(self.control_unit_id, self._device_id_internal, position)
         if not res:
-            self.error_stream(f'Device {self.device_name()} _set_position func did NOT work {comments}.')
+            self.error_stream(f'Device {self.device_name} _set_position func did NOT work {comments}.')
 
     def find_device(self) -> Tuple[int, str]:
         res, comments = self._connect_ps90(self.control_unit_id,
@@ -76,7 +76,7 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
 
         if res:
             self._device_id_internal = int(self.device_id)
-            return self._device_id_internal, f'{self.device_name()}'.encode('utf-8')
+            return self._device_id_internal, f'{self.device_name}'.encode('utf-8')
         else:
             return -1, b''
 
@@ -84,10 +84,10 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
         res, comments = self._get_axis_state_ps90(self.control_unit_id, self._device_id_internal)
         if res == 0:
             self.set_state(DevState.FAULT)
-            self.error_stream(f'Device {self.device_name()} is not active.')
+            self.error_stream(f'Device {self.device_name} is not active.')
         elif res == 1:
             self.set_state(DevState.FAULT)
-            self.error_stream(f'Device {self.device_name()} is not initialized.')
+            self.error_stream(f'Device {self.device_name} is not initialized.')
         elif res == 2:
             self.set_state(DevState.STANDBY)
         elif res == 3:
@@ -105,7 +105,7 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
         if not com:
             self._position = res
         else:
-            self.error_stream(f'Device {self.device_name()} reading position was not succeful.')
+            self.error_stream(f'Device {self.device_name} reading position was not succeful.')
 
     def _set_device_param(self):
         res1, com1 = self._set_stage_attributes_ps90(self.control_unit_id,
@@ -122,13 +122,13 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
     def turn_on_local(self):
         res, comments = self._motor_init_ps90(self.control_unit_id, self._device_id_internal)
         if not res:
-            self.error_stream(f'Device {self.device_name()} motor_init func did NOT work {comments}.')
+            self.error_stream(f'Device {self.device_name} motor_init func did NOT work {comments}.')
             self.set_state(DevState.FAULT)
         else:
             self.set_state(DevState.ON)
             res, comments = self._set_target_mode_ps90(self.control_unit_id, self._device_id_internal, 1)
             if not res:
-                self.error_stream(f'Device {self.device_name()} set_target_mode to ABS did NOT work {comments}.')
+                self.error_stream(f'Device {self.device_name} set_target_mode to ABS did NOT work {comments}.')
                 self.set_state(DevState.FAULT)
             if not self.keep_on:
                 self.on_off_motor(self.keep_on)
@@ -137,14 +137,14 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
         if on:
             res, comments = self._motor_on_ps90(self.control_unit_id, self._device_id_internal)
             if not res:
-                self.error_stream(f'Device {self.device_name()} motor_on func did NOT work {comments}.')
+                self.error_stream(f'Device {self.device_name} motor_on func did NOT work {comments}.')
                 self.set_state(DevState.STANDBY)
             else:
                 self.set_state(DevState.ON)
         else:
             res, comments = self._motor_off_ps90(self.control_unit_id, self._device_id_internal)
             if not res:
-                self.error_stream(f'Device {self.device_name()} motor_off func did NOT work {comments}.')
+                self.error_stream(f'Device {self.device_name} motor_off func did NOT work {comments}.')
             else:
                 self.set_state(DevState.STANDBY)
 
@@ -156,7 +156,7 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
     def move_axis_local(self, pos):
         res, comments = self._set_target_ex_ps90(self.control_unit_id, self._device_id_internal, pos)
         if not res:
-            self.error_stream(f'Device {self.device_name()} set_target_ex to {pos} did NOT work {comments}.')
+            self.error_stream(f'Device {self.device_name} set_target_ex to {pos} did NOT work {comments}.')
         else:
             if self.get_state() == DevState.STANDBY:
                 self.on_off_motor(True)
@@ -164,10 +164,10 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
             res, comments = self._go_target_ps90(self.control_unit_id, self._device_id_internal)
 
             if res:
-                self.info_stream(f'Device {self.device_name()} started moving.')
+                self.info_stream(f'Device {self.device_name} started moving.')
             else:
                 self.set_state(DevState.MOVING)
-                self.error_stream(f'Device {self.device_name()} did NOT started moving {comments}.')
+                self.error_stream(f'Device {self.device_name} did NOT started moving {comments}.')
 
     def stop_movement_local(self):
         res, comments = self._stop_axis_ps90(self.control_unit_id, self._device_id_internal)
@@ -176,9 +176,9 @@ class DS_Owis_delay_line(DS_MOTORIZED_MONO_AXIS):
             if not self.keep_on:
                 res, comments = self._motor_off_ps90(self.control_unit_id, self._device_id_internal)
                 if not res:
-                    self.error_stream(f'Device {self.device_name()} motor_off func did NOT work {comments}.')
+                    self.error_stream(f'Device {self.device_name} motor_off func did NOT work {comments}.')
         else:
-            self.error_stream(f'Device {self.device_name()} could not stop it {comments}.')
+            self.error_stream(f'Device {self.device_name} could not stop it {comments}.')
 
     def write_position_local(self, pos) -> Union[int, str]:
         self.move_axis(pos)

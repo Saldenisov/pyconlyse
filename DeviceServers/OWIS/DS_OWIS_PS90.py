@@ -78,7 +78,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
-            return f'Could NOT turn on {self.device_name()}: Device could not be found.'
+            return f'Could NOT turn on {self.device_name}: Device could not be found.'
 
         self.set_state(DevState.ON)
 
@@ -110,13 +110,13 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def init_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_init_ps90(self.control_unit_id, axis)
         if not res:
-            result = f'ERROR: Device {self.device_name()} motor_init for axis {axis} func did NOT work: {comments}.'
+            result = f'ERROR: Device {self.device_name} motor_init for axis {axis} func did NOT work: {comments}.'
             self.error(result)
             self._delay_lines_parameters[axis]['state'] = DevState.FAULT
         else:
             res, comments = self._set_target_mode_ps90(self.control_unit_id, axis, 1)
             if not res:
-                result = f'ERROR: Device {self.device_name()} set_target_mode to ABS for axis {axis} ' \
+                result = f'ERROR: Device {self.device_name} set_target_mode to ABS for axis {axis} ' \
                          f'did NOT work {comments}.'
                 self.error(result)
             else:
@@ -152,7 +152,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self._delay_lines_parameters[axis]['position'] = res
             result = 0
         else:
-            result = f'Device {self.device_name()} reading position of axis {axis} was not successful.'
+            result = f'Device {self.device_name} reading position of axis {axis} was not successful.'
             self.error(result)
         return result
 
@@ -180,7 +180,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def turn_on_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_on_ps90(self.control_unit_id, axis)
         if not res:
-            result = f'ERROR: Device {self.device_name()} turn_on_axis for axis {axis} func did NOT work {comments}.'
+            result = f'ERROR: Device {self.device_name} turn_on_axis for axis {axis} func did NOT work {comments}.'
             self.error(result)
         else:
             self._delay_lines_parameters[axis]['state'] = DevState.ON
@@ -190,7 +190,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def turn_off_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_off_ps90(self.control_unit_id, axis)
         if not res:
-            result = f'ERROR: Device {self.device_name()} turn_off_axis for axis {axis} func did NOT work {comments}.'
+            result = f'ERROR: Device {self.device_name} turn_off_axis for axis {axis} func did NOT work {comments}.'
             self.error(result)
         else:
             self._delay_lines_parameters[axis]['state'] = DevState.OFF
@@ -207,21 +207,21 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
         res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
         if not res:
-            result = f'ERROR: Device {self.device_name()} set_target_ex to {pos} for axis {axis} ' \
+            result = f'ERROR: Device {self.device_name} set_target_ex to {pos} for axis {axis} ' \
                      f'did NOT work {comments}.'
             self.error(result)
         else:
             res, comments = self._go_target_ps90(self.control_unit_id, axis)
 
             if res:
-                self.info(f'Device {self.device_name()} axis {axis} started moving to {pos}.', True)
+                self.info(f'Device {self.device_name} axis {axis} started moving to {pos}.', True)
                 if axis not in self.follow:
                     self.follow[axis] = Thread(target=self.follow_after_moving, args=(axis,))
                     self.follow[axis].start()
                 result = 0
             else:
                 self.turn_off_axis(axis)
-                result = f'ERROR: Device {self.device_name()} axis {axis} did NOT start moving: {comments}.'
+                result = f'ERROR: Device {self.device_name} axis {axis} did NOT start moving: {comments}.'
                 self.error(result)
         return result
 
@@ -240,7 +240,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def stop_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._stop_axis_ps90(self.control_unit_id, axis)
         if not res:
-            result = f'ERROR: Device {self.device_name()} stop_axis axis {axis} ' \
+            result = f'ERROR: Device {self.device_name} stop_axis axis {axis} ' \
                      f'did NOT work {comments}.'
             self.error(result)
         else:
@@ -252,7 +252,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         pos = float(args[1])
         res, comments = self._set_position_ex_ps90(self.control_unit_id, axis, pos)
         if not res:
-            result = f'ERROR: Device {self.device_name()} define_pos axis {axis} ' \
+            result = f'ERROR: Device {self.device_name} define_pos axis {axis} ' \
                      f'did NOT work {comments}.'
             self.error(result)
         else:

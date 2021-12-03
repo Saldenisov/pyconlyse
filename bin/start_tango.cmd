@@ -4,6 +4,7 @@ timeout 10
 start cmd /c %PYCONLYSE%\bin\start_all_NETIO.cmd
 start cmd /c %PYCONLYSE%\bin\start_all_OWIS.cmd
 start cmd /c %PYCONLYSE%\bin\start_all_STANDA.cmd
+start cmd /c %PYCONLYSE%\bin\start_all_TOPDIRECT.cmd
 timeout 7
 start cmd /c %TANGO_ROOT%\bin\Starter.exe everest
 timeout 1

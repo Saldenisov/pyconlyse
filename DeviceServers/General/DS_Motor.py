@@ -40,31 +40,16 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
         return self._power_status
 
     def init_device(self):
-        super().init_device()
         self._prev_pos = 0.0
         self._position = 0.0
-        self._device_id_internal = -1
-        self._temperature = None
-        self._power_current = 0
-        self._power_voltage = 0
-        self._power_status = self.POWER_STATES[0]
-        device_id_internal, uri = self.find_device()
-        self._uri = uri
-        self._device_id_internal = device_id_internal
-
-        if self._device_id_internal >= 0:
-            self.info(f"Device {self.device_name()} was found.", True)
-            self.set_state(DevState.OFF)
-        else:
-            self.info(f"Device {self.device_name()} was NOT found.", True)
-            self.set_state(DevState.FAULT)
+        super().init_device()
 
     def read_position(self):
         state_ok = self.check_func_allowance(self.read_position)
         if state_ok == 1:
             res = self.read_position_local()
             if res != 0:
-                self.error(f'Could not read position of {self.device_name()}: {res}')
+                self.error(f'Could not read position of {self.device_name}: {res}')
         return self._position
 
     @abstractmethod
@@ -75,7 +60,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
         pass
 
     def write_position(self, pos):
-        self.debug_stream(f'Setting position {pos} of {self.device_name()}.')
+        self.debug_stream(f'Setting position {pos} of {self.device_name}.')
         state_ok = self.check_func_allowance(self.write_position)
         if state_ok == 1:
             pos = float(pos)
@@ -84,9 +69,9 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
                 res = self.write_position_local(pos)
                 self._prev_pos = self._position
                 if res != 0:
-                    self.error(f'Could not write position of {self.device_name()}: {res}')
+                    self.error(f'Could not write position of {self.device_name}: {res}')
             else:
-                self.error(f'Could not write position of {self.device_name()}: position out of limit:'
+                self.error(f'Could not write position of {self.device_name}: position out of limit:'
                                   f'({self.limit_min}:{self.limit_max})')
 
     @abstractmethod
@@ -98,14 +83,14 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
 
     @command(dtype_in=float, doc_in="Redefines position of axis.")
     def define_position(self, position):
-        self.debug_stream(f'Setting position {position} of {self.device_name()}.')
+        self.debug_stream(f'Setting position {position} of {self.device_name}.')
         state_ok = self.check_func_allowance(self.define_position)
         if state_ok == 1:
             res = self.define_position_local(position)
             if res != 0:
                 self.error(f'{res}')
             else:
-                self.debug_stream(f'Position for {self.device_name()} is redefined to {position}.')
+                self.debug_stream(f'Position for {self.device_name} is redefined to {position}.')
             self.read_position()
 
     @abstractmethod
@@ -122,7 +107,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
 
     def move_axis(self, pos):
         pos = float(pos)
-        self.info(f"Moving axis of device {self.device_name()} to {pos}.")
+        self.info(f"Moving axis of device {self.device_name} to {pos}.")
         state_ok = self.check_func_allowance(self.move_axis)
         asked_pos = pos
         if state_ok == 1:
@@ -141,7 +126,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
 
     @command
     def stop_movement(self):
-        self.info(f"Stopping axis movement of device {self.device_name()}.")
+        self.info(f"Stopping axis movement of device {self.device_name}.")
         state_ok = self.check_func_allowance(self.move_axis_abs)
         if state_ok == 1:
             self.stop_movement_local()
@@ -206,16 +191,6 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
 
     def init_device(self):
         super().init_device()
-        self._device_id_internal = -1
-        device_id_internal, uri = self.find_device()
-        self._uri = uri
-        self._device_id_internal = device_id_internal
-
-        if self._device_id_internal >= 0:
-            self.info(f"{self.device_name()} was found.", True)
-        else:
-            self.info(f"{self.device_name()} was NOT found.", True)
-            self.set_state(DevState.FAULT)
 
         try:
             must_have = {'wait_time': int, 'limit_min': float, 'limit_max': float, 'real_pos': float,
@@ -235,7 +210,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
 
         except SyntaxError:
             self.set_state(DevState.FAULT)
-            self.error(f"{self.device_name()} could not eval delay_lines_parameters from DB: "
+            self.error(f"{self.device_name} could not eval delay_lines_parameters from DB: "
                        f"{self.delay_lines_parameters}")
         except KeyError as e:
             self.set_state(DevState.FAULT)
@@ -250,7 +225,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.init_axis_local(axis)
             if res != 0:
-                self.error(f'Could not initialize axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not initialize axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.init_axis} did not work. Check {self.RULES}.'
         return str(res)
@@ -268,7 +243,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.get_status_axis_local(axis)
             if res != 0:
-                self.error(f'Could not get status for axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not get status for axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.get_status_axis} did not work. Check {self.RULES}.'
         return self._delay_lines_parameters[axis]['state']
@@ -291,7 +266,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                     axis = args[0]
                 except IndexError:
                     axis = None
-                self.error(f'Could not define position for axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not define position for axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.define_position_axis} did not work. Check {self.RULES}.'
         return str(res)
@@ -309,7 +284,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.read_position_axis_local(axis)
             if res != 0:
-                self.error(f'Could not read position for axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not read position for axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.read_position_axis} did not work. Check {self.RULES}.'
         return self._delay_lines_parameters[axis]['position']
@@ -330,7 +305,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             axis
             res = self.set_param_axis_local(axis)
             if res != 0:
-                self.error(f'Could not set parameters for axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not set parameters for axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.set_param_axis} did not work. Check {self.RULES}.'
         return str(res)
@@ -348,7 +323,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.turn_on_axis_local(axis)
             if res != 0:
-                self.error(f'Could not turn on axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not turn on axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.turn_on_axis} did not work. Check {self.RULES}.'
         return str(res)
@@ -366,7 +341,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.turn_off_axis_local(axis)
             if res != 0:
-                self.error(f'Could not turn off axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not turn off axis {axis} of {self.device_name}: {res}')
         else:
             res = f'check_func_allowance of {self.turn_off_axis} did not work. Check {self.RULES}.'
         return str(res)
@@ -384,7 +359,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.move_axis_local(args)
             if res != 0:
-                self.error(f'Could not move axis {args[0]} of {self.device_name()}: {res}')
+                self.error(f'Could not move axis {args[0]} of {self.device_name}: {res}')
         return str(res)
 
     @abstractmethod
@@ -400,7 +375,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         if state_ok == 1:
             res = self.stop_axis_local(axis)
             if res != 0:
-                self.error(f'Could not stop axis {axis} of {self.device_name()}: {res}')
+                self.error(f'Could not stop axis {axis} of {self.device_name}: {res}')
             else:
                 self.info(f'Axis {axis} was stopped by user.', True)
         else:

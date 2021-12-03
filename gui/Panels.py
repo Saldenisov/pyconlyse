@@ -5,6 +5,7 @@ from abc import abstractmethod
 from DeviceServers.STANDA.DS_STANDA_Widget import Standa_motor
 from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
+from DeviceServers.TopDirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.DS_Widget import DS_General_Widget
 
 
@@ -12,7 +13,7 @@ class General_Panel(QtWidgets.QWidget):
 
     def __init__(self, choice, widget_class: DS_General_Widget, title='', icon: QIcon = None, width=2, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
+        self.widgets = {}
         if title:
             self.setWindowTitle(title)
         if icon:
@@ -20,14 +21,14 @@ class General_Panel(QtWidgets.QWidget):
 
         self.width = width
         self.number_ds = len(choice)
-        self.active_ds = ''
+        self.active_widget = ''
 
         self.layout_main = QtWidgets.QVBoxLayout()
         number_lo = 1 if self.number_ds // self.width == 0 else self.number_ds // width
 
         for lo_i in range(number_lo):
-            setattr(self, f'lo_DS_{lo_i}', QtWidgets.QHBoxLayout())
-            lo: QtWidgets.QLayout = getattr(self, f'lo_DS_{lo_i}')
+            setattr(self, f'lo_DS_widget_{lo_i}', QtWidgets.QHBoxLayout())
+            lo: QtWidgets.QLayout = getattr(self, f'lo_DS_widget_{lo_i}')
             self.layout_main.addLayout(lo)
             separator = QtWidgets.QFrame()
             separator.setFrameShape(QtWidgets.QFrame.HLine)
@@ -39,14 +40,18 @@ class General_Panel(QtWidgets.QWidget):
 
         self.setLayout(self.layout_main)
 
+    def add_widget(self, name, widget):
+        self.widgets[name] = widget
+
     def widget_creation(self, choice, widget_class):
         i = 0
         for dev_name in choice:
             group_number = i // self.width
             if dev_name:
-                lo: Qt.QLayout = getattr(self, f'lo_DS_{group_number}')
-                setattr(self, f'DS_{dev_name}', widget_class(dev_name, self))
-                s_m = getattr(self, f'DS_{dev_name}')
+                lo: Qt.QLayout = getattr(self, f'lo_DS_widget_{group_number}')
+                setattr(self, f'{dev_name}', widget_class(dev_name, self))
+                s_m = getattr(self, f'{dev_name}')
+                self.add_widget(f'{dev_name}', s_m)
                 lo.addWidget(s_m)
             i += 1
 
@@ -61,20 +66,50 @@ class Standa_Panel(General_Panel):
         self.move_step = 1
 
     def keyPressEvent(self, event: QKeyEvent):
-        if self.active_ds:
-            ds = getattr(self, f'DS_{self.active_ds}')
-            pos = ds.pos_widget.value
+        if self.active_widget:
+            ds_widget = self.widgets[self.active_widget]
+            pos = float(ds_widget.pos_widget.text())
+            if event.key() in [Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up]:
+                move_step = self.widgets[self.active_widget].relative_shift
+                if event.key() in [Qt.Key_Left, Qt.Key_Down]:
+                    pos = pos - move_step
+                elif event.key() in [Qt.Key_Right, Qt.Key_Up]:
+                    pos = pos + move_step
+                ds_widget.wheel.setValue(pos)
+                ds_real = getattr(ds_widget, f'ds_{self.active_widget}')
+                ds_real.move_axis_abs(pos)
+
+    def update_background_widgets(self):
+        for w_name, widget in self.widgets.items():
+            if w_name != self.active_widget:
+                widget.setStyleSheet("")
+
+
+class TopDirect_Panel(General_Panel):
+
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2):
+        if widget_class != TopDirect_Motor:
+            raise Exception(f'Wrong widget class {widget_class} is passed.')
+        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width)
+        self.move_step = 1
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if self.active_widget:
+            ds_widget = self.widgets[self.active_widget]
+            pos = float(ds_widget.pos_widget.text())
             if event.key() in [Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up]:
                 if event.key() in [Qt.Key_Left, Qt.Key_Down]:
                     pos = pos - self.move_step
                 elif event.key() in [Qt.Key_Right, Qt.Key_Up]:
                     pos = pos + self.move_step
-
-                ds.pos_widget.setValue(pos)
-
-                ds_real = getattr(ds, f'ds_{self.active_ds}')
-                
+                ds_widget.wheel.setValue(pos)
+                ds_real = getattr(ds_widget, f'ds_{self.active_widget}')
                 ds_real.move_axis_abs(pos)
+
+    def update_background_widgets(self):
+        for w_name, widget in self.widgets.items():
+            if w_name != self.active_widget:
+                widget.setStyleSheet("")
 
 
 class OWIS_Panel(General_Panel):
@@ -95,14 +130,17 @@ class OWIS_Panel(General_Panel):
         for dev_name, axes in choice:
             group_number = i // self.width
             if dev_name:
-                lo: Qt.QLayout = getattr(self, f'lo_DS_{group_number}')
-                setattr(self, f'DS_{dev_name}', widget_class(dev_name, axes, self))
-                s_m = getattr(self, f'DS_{dev_name}')
+                lo: Qt.QLayout = getattr(self, f'lo_DS_widget_{group_number}')
+                setattr(self, f'{dev_name}', widget_class(dev_name, axes, self))
+                s_m = getattr(self, f'{dev_name}')
+                self.add_widget(f'{dev_name}', s_m)
                 lo.addWidget(s_m)
             i += 1
 
     def context_menu(self):
         pass
+
+
 class Netio_Panel(General_Panel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):

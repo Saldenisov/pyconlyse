@@ -4,7 +4,7 @@
 
 import sys
 
-from typing import Tuple, Union
+from typing import Tuple, Union, List
 import random
 from time import sleep
 import serial
@@ -24,88 +24,95 @@ except ModuleNotFoundError:
 
 
 class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
+    RULES = {'set_state_arduino': [DevState.ON, DevState.INIT], **DS_MOTORIZED_MONO_AXIS.RULES}
     """"
-    Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
+    Device Server (Tango) which controls the TOP_DIRECT motorized equipment using home-written Arduino based controller
     """
     _version_ = '0.1'
     _model_ = 'TopDirect step motor under arduino control'
-    polling_local = 1500
-
+    polling_local = 3500
+    _local_sleep = 0.15
+    baudrate = device_property(dtype=int, default_value=115200)
+    timeout = device_property(dtype=float, default_value=0.5)
 
     # if it is done so leave it like this
     position = attribute(label="Position", dtype=float, display_level=DispLevel.OPERATOR,
-                         access=AttrWriteType.READ_WRITE, unit="step", format="8.4f",
-                         doc="the position of axis", polling_period=polling_local)
+                         access=AttrWriteType.READ_WRITE, unit="mm", format="8.4f",
+                         doc="the position of axis")
+
+    # @attribute(label="Arduino state", dtype=str, display_level=DispLevel.OPERATOR,
+    #            access=AttrWriteType.READ,
+    #            doc="Give state of Arduino.",
+    #            abs_change='')
+    # def arduino_state(self):
+    #     self._send_to_arduino('GET STATE')
+    #     result = self._get_reply_from_arduino()
+    #     self._arduino_state = result
+    #     return str(self._arduino_state)
 
     def init_device(self):
+        self._arduino_lock = False
+        self._arduino_state = 'NOT_ACTIVE'
+        self.arduino_serial = None
         super().init_device()
         self.turn_on()
+
+    def _check_arduino_port(self, com_port: serial) -> Tuple[bool, str]:
+        try:
+            ser = serial.Serial(com_port)
+            ser.close()
+            return True, ''
+        except serial.SerialException as e:
+            return False, str(e)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
-            self.info(f"Searching for STANDA device {self.device_id}", True)
-            lib.set_bindy_key(str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8"))
-            # Enumerate devices
-            probe_flags = EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
-            enum_hints = f"addr={self.ip_address}".encode('utf-8')
-            # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
-            devenum = lib.enumerate_devices(probe_flags, enum_hints)
-            device_counts = lib.get_device_count(devenum)
-            sleep(0.05)
-            if device_counts > 0:
-                for device_id_internal_seq in range(device_counts):
-                    uri = lib.get_device_name(devenum, device_id_internal_seq)
-                    sleep(0.01)
-                    if self.device_id in uri.decode('utf-8'):
-                        argreturn = device_id_internal_seq, uri
-                        break
+            serial_number = str(self.device_id)
+            self.info(f"Searching for TOP_DIRECT device {self.device_id}", True)
+            for pinfo in serial.tools.list_ports.comports():
+                if pinfo.serial_number == serial_number:
+                    res, comments = self._check_arduino_port(pinfo.device)
+                    if res:
+                        argreturn = pinfo.device, serial_number.encode('utf-8')
+                    else:
+                       self.error(f'Arduino with {serial_number} was found, but port check was not passed: {comments}.')
+                    break
         print(f'Result: {argreturn}')
         return argreturn
 
     def read_position_local(self) -> Union[int, str]:
-        pos = get_position_t()
-        wait = random.randint(1, 10)
-        sleep(wait / 1000.)
-        result = lib.get_position(self._device_id_internal, ctypes.byref(pos))
-        if result == Result.Ok:
-            pos_microsteps = pos.Position * 256 + pos.uPosition
-            pos_basic_units = pos_microsteps / 256
-            self._position = pos_basic_units
+        self._send_to_arduino('GET POS')
+        reply = self._get_reply_from_arduino(True)
+        if reply:
+            self._position = reply[0]
             return 0
         else:
-            return f'Could not read position of {self.device_name()}: {result}.'
+            return f'Could not read position of {self.device_name}: {reply}.'
 
     def write_position_local(self, pos) -> Union[int, str]:
         self.move_axis(pos)
         return 0
 
     def _topdirect_error(self, error: int) -> Tuple[bool, str]:
-        # TODO: finish filling different errors values
         if error == 0:
             res, comments = True, ''
         elif error == -1:
-            res, comments = False, 'Standa: generic error.'
+            res, comments = False, 'Out of range'
+        elif error == -1:
+            res, comments = False, 'Wrong cmd structure'
         else:
-            res, comments = False, 'Standa: unknown error.'
-
+            res, comments = False, 'Unknown error'
         return res, comments
 
-    #Commands
     def define_position_local(self, position) -> Union[str, int]:
-        pos_steps = int(position // 1)
-        pos_microsteps = int(position % 1 * 256)
-        pos_standa = set_position_t()
-        pos_standa.Position = ctypes.c_int(pos_steps)
-        pos_standa.uPosition = ctypes.c_int(pos_microsteps)
-        pos_standa.EncPosition = ctypes.c_longlong(0)
-        pos_standa.PosFlags = ctypes.c_uint(PositionFlags.SETPOS_IGNORE_ENCODER)
-        result = lib.set_position(self._device_id_internal, ctypes.byref(pos_standa))
-        if result == Result.Ok:
+        self._send_to_arduino(f'SET POS {position}')
+        result = self._get_reply_from_arduino()
+        if result == 0:
             return 0
         else:
-            return f'Could not define position of {self.device_name()}: {result}.'
+            return f'Could not define position of {self.device_name}: {result}.'
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
@@ -113,64 +120,129 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
             self._device_id_internal, self._uri = self.find_device()
 
         if self._device_id_internal == -1:
-            return f'Could NOT turn on {self.device_name()}: Device could not be found.'
+            return f'Could NOT turn on {self.device_name}: Device could not be found.'
 
-        res = lib.open_device(self._uri)
+        try:
+            self.arduino_serial = serial.Serial(self._device_id_internal, timeout=self.timeout, baudrate=self.baudrate)
+            sleep(2)
+            self._send_to_arduino('GET STATE')
+            reply = self._get_reply_from_arduino(all_lines=True)
+            print(reply)
+            if 'INITIALIZED' in reply or 'NOT_ACTIVE' in reply or 'READY' in reply:
+                res = True
+            else:
+                res = False
+        except Exception:
+            res = False
 
-        if res >= 0:
-            self._device_id_internal = res
+        if res:
             self.set_state(DevState.ON)
-            self.stop_movement_local()
-            self.read_position_local()
+            self.read_position()
             return 0
         else:
             self.set_state(DevState.FAULT)
-            return f'Could NOT turn on {self.device_name()}: {res}.'
+            return f'Could NOT turn on {self.device_name}: {res}.'
 
     def turn_off_local(self) -> Union[int, str]:
-        arg = ctypes.cast(self._device_id_internal, ctypes.POINTER(ctypes.c_int))
-        result = lib.close_device(ctypes.byref(arg))
-        sleep(0.05)
+        result = False
         if result == 0:
             self.set_state(DevState.OFF)
             self._device_id_internal = -1
             self._uri = ''
+            if self.arduino_serial:
+                self.arduino_serial.close()
+                self.arduino_serial = None
             return 0
         else:
             self.set_state(DevState.FAULT)
-            return self.error(f'Could not turn off device {self.device_name()}: {result}.')
+            return self.error(f'Could not turn off device {self.device_name}: {result}.')
+
+    def _wait_unlock_arduino(self):
+        i = 0
+        while self._arduino_lock:
+            sleep(0.01)
+            if not self._arduino_lock or i > 200:
+                break
+            i += 1
+
+    def _get_reply_from_arduino(self, all_lines=False) -> Union[str, List[str], None]:
+
+        def convert_str_float_or_int(s: str):
+            try:
+                s = int(s)
+            except ValueError:
+                try:
+                    s = float(s)
+                except ValueError:
+                    pass
+            finally:
+                return s
+
+        self._wait_unlock_arduino()
+
+        if self.arduino_serial and not self._arduino_lock:
+            sleep(self._local_sleep)
+            self._arduino_lock = True
+            self.info('Locking Arduino')
+            arduino_serial = self.arduino_serial
+            try:
+                if all_lines:
+                    res = arduino_serial.readlines()
+                else:
+                    res = arduino_serial.readline()
+                self.info(f'Received from Arduino: {res}', True)
+
+            except Exception as e:
+                self.info(f'{e}', True)
+                res = None
+            self._arduino_lock = False
+            self.info('Unlocking Arduino')
+
+            if res:
+                if isinstance(res, list):
+                    res_s = []
+                    for line in res:
+                        line = convert_str_float_or_int(line.decode().rstrip())
+                        res_s.append(line)
+                    return res_s
+                else:
+                    res = convert_str_float_or_int(res.decode().rstrip())
+                    return res
+            else:
+                return None
+        else:
+            return None
+
+    def _send_to_arduino(self, cmd: str) -> Union[int, str]:
+        if self.arduino_serial:
+            try:
+                sleep(self._local_sleep)
+                self._wait_unlock_arduino()
+                self.info(f'Sending to Arduino: {cmd}', True)
+                self.arduino_serial.write(cmd.encode('utf-8'))
+                sleep(self._local_sleep)
+                return True, ''
+            except Exception as e:
+                return False, str(e)
 
     def move_axis_local(self, pos) -> Union[int, str]:
-        microsteps = int(pos % 1 * 256)
-        steps = int(pos // 1)
-        result = lib.command_move(self._device_id_internal, steps, microsteps)
-        self.set_state(DevState.MOVING)
-        if result == Result.Ok:
-            result = lib.command_wait_for_stop(self._device_id_internal, self.wait_time)
-        else:
-            return f'Move command for {self.device_name()} did NOT work: {result}.'
-
-        if result != Result.Ok:
-            return f'{self.device_name()} did NOT stop moving yet: {result}.'
-        else:
-            self.set_state(DevState.ON)
-            self.stop_movement_local()
+        if self._arduino_state != 1:
+            self.set_state_arduino(1)
+        self._send_to_arduino(f'MOVE ABS {pos}')
+        sleep(2)
+        result = self._get_reply_from_arduino(True)
+        print(result)
+        if result[0] == 'STARTED':
             return 0
+        else:
+            return f'Move command for {self.device_name} did NOT work: {result}.'
 
     def stop_movement_local(self) -> Union[int, str]:
         return 'Cannot be stopped by user. Code on Arduino is wrong.'
 
     def get_controller_status_local(self) -> Union[int, str]:
-        x_status = status_t()
-        # Different STANDA controllers call xilib at different times
-        wait = random.randint(10, 50)
-        sleep(wait / 1000.)
-        result = lib.get_status(self._device_id_internal, ctypes.byref(x_status))
-        if result == Result.Ok:
-            self._temperature = x_status.CurT / 10.0
-            self._power_current = x_status.Ipwr
-            self._power_voltage = x_status.Upwr / 100.0
-            self._power_status = self.POWER_STATES[x_status.PWRSts]
+        if self.arduino_serial.is_open:
+            self.set_state(DevState.ON)
             if self._status_check_fault > 0:
                 self._status_check_fault = 0
             return super().get_controller_status_local()
@@ -180,8 +252,21 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
                 self.set_state(DevState.FAULT)
                 self._status_check_fault = 0
                 self.init_device()
-            return f'Could not get controller status of {self.device_name()}: {result}: N {self._status_check_fault}.'
+            return f'Could not get controller status of {self.device_name}: N {self._status_check_fault}.'
 
+    @command(dtype_in=int, doc_in="Takes state of arduino as int.")
+    def set_state_arduino(self, state: int):
+        self.debug_stream(f"Setting state of Arduino {self.device_name}.")
+        state_ok = self.check_func_allowance(self.turn_off)
+        if state_ok == 1:
+            self._send_to_arduino(f'SET STATE {state}')
+            res = self._get_reply_from_arduino()
+            if res != 0:
+                self.error_stream(f"{res}")
+                self.info(f'Could not set state of Arduino to {state}.')
+            else:
+                self._arduino_state = state
+                self.info(f"Arduino state was set to {state}.", True)
 
 if __name__ == "__main__":
     DS_TopDirect_Motor.run_server()
