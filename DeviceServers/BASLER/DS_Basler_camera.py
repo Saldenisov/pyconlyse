@@ -7,7 +7,8 @@ from tango.server import Device, attribute, command, device_property
 from numpy import array
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
-
+from collections import OrderedDict
+from distutils.util import strtobool
 # -----------------------------
 
 import random
@@ -185,14 +186,65 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                                                                                           f'because it does not exist.'
 
     def set_param_after_init_local(self) -> Union[int, str]:
-        pass
+        functions = [self.set_transport_layer, self.set_analog_controls, self.set_aio_controls,
+                     self.set_acquisition_controls, self.set_image_format]
+        results = []
+        for func in functions:
+            results.append(func())
+        results_s = ''
+        for res in results:
+            if res != 0:
+                results_s = results_s + res
+        return results_s if results_s else 0
 
-    def _set_transport_layer_param(self) -> Union[int, str]:
-        packet_size = self.parameters['Transport_Layer']['Packet_size']
-        inter_packet_delay = self.parameters['Transport_Layer']['Inter-Packet_Delay']
+    def set_acquisition_controls(self):
+        exposure_time = self.parameters['Acquisition_Controls']['ExposureTimeAbs']
+        trigger_mode = self.parameters['Acquisition_Controls']['TriggerMode']
+        trigger_delay = self.parameters['Acquisition_Controls']['TriggerDelayAbs']
+        frame_rate = self.parameters['Acquisition_Controls']['AcquisitionFrameRateAbs']
+        trigger_source = self.parameters['Acquisition_Controls']['TriggerSource']
+        formed_parameters_dict = {'TriggerSource': trigger_source, 'TriggerMode': trigger_mode,
+                                  'TriggerDelayAbs': trigger_delay, 'ExposureTimeAbs': exposure_time,
+                                  'AcquisitionFrameRateAbs': frame_rate, 'AcquisitionFrameRateEnable': True}
+        return self._set_parameters(formed_parameters_dict)
 
+
+    def set_transport_layer(self) -> Union[int, str]:
+        packet_size = self.parameters['Transport_layer']['Packet_size']
+        inter_packet_delay = self.parameters['Transport_layer']['Inter-Packet_Delay']
         formed_parameters_dict = {'GevSCPSPacketSize': packet_size, 'GevSCPD': inter_packet_delay}
-        if self.camera.IsOpen() and not self.grabbing:
+        return self._set_parameters(formed_parameters_dict)
+
+    def set_analog_controls(self):
+        gain_mode = self.parameters['Analog_Controls']['GainAuto']
+        gain = self.parameters['Analog_Controls']['GainRaw']
+        blacklevel = self.parameters['Analog_Controls']['BlackLevelRaw']
+        balance_ratio = self.parameters['Analog_Controls']['BalanceRatioRaw']
+        formed_parameters_dict_analog_controls = {'GainAuto': gain_mode, 'GainRaw': gain, 'BlackLevelRaw': blacklevel,
+                                                  'BalanceRatioRaw': balance_ratio}
+        return self._set_parameters(formed_parameters_dict_analog_controls)
+
+    def set_aio_controls(self):
+        width = self.parameters['AOI_Controls']['Width']
+        height = self.parameters['AOI_Controls']['Height']
+        offset_x = self.parameters['AOI_Controls']['OffsetX']
+        offset_y = self.parameters['AOI_Controls']['OffsetY']
+        formed_parameters_dict_AOI = OrderedDict()
+        formed_parameters_dict_AOI['Width'] = width
+        formed_parameters_dict_AOI['Height'] = height
+        formed_parameters_dict_AOI['OffsetX'] = offset_x
+        formed_parameters_dict_AOI['OffsetY'] = offset_y
+        return self._set_parameters(formed_parameters_dict_AOI)
+
+    def set_image_format(self):
+        pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
+        formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
+        return self._set_parameters(formed_parameters_dict_image_format)
+
+    def _set_parameters(self, formed_parameters_dict):
+        if self.camera.IsOpen():
+            if self.grabbing:
+                self.stop_grabbing()
             try:
                 for param_name, param_value in formed_parameters_dict.items():
                     setattr(self.camera, param_name, param_value)
@@ -201,10 +253,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 return f'Error appeared: {e} when setting parameter "{param_name}" for camera {self.device_name}.'
         else:
             return f'Basler_Camera {self.device_name} connected states {self.camera.IsOpen()} ' \
-                   f'Camera grabbing status is {self.grabbing}'
-
-    def _set_transport_layer(self):
-        pass
+                   f'Camera grabbing status is {self.grabbing}.'
 
     def _get_camera_device(self):
         for device in pylon.TlFactory.GetInstance().EnumerateDevices():

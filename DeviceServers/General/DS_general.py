@@ -149,7 +149,7 @@ class DS_General(Device):
             self.info(f"Turning off device {self.device_name}.", True)
             res = self.turn_off_local()
             if res != 0:
-                self.error_stream(f"{res}")
+                self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
         else:

@@ -292,10 +292,10 @@ class DS_CAMERA_CCD(DS_General):
     def set_param_after_init(self):
         state_ok = self.check_func_allowance(self.set_param_after_init)
         if state_ok == 1:
-            self.info(f"Setting parameters device {self.device_name}.", True)
+            self.info(f"Setting parameters for {self.device_name}.", True)
             res = self.set_param_after_init_local()
             if res != 0:
-                self.error_stream(f"{res}")
+                self.error(f"{res}")
             else:
                 self.info(f"Parameters for device {self.device_name} was set.", True)
         else:

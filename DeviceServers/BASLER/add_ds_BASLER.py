@@ -4,7 +4,7 @@ db = Database()
 
 
 names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22929018,
-                    {'Tranposort_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
+                    {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
                      'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
@@ -13,7 +13,7 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                      'Image_Format_Control': {'PixelFormat': 'Mono8'}}
                     ],
          22805482: ['manip/V0', 'Camera2_Pointing', 'Cam2_V0', '10.20.30.32', 22805482,
-                    {'Tranposort_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
+                    {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
                      'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
@@ -22,7 +22,7 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                      'Image_Format_Control': {'PixelFormat': 'Mono8'}}
                     ],
          22827199: ['manip/V0', 'Camera3_Pointing', 'Cam3_V0', '10.20.30.33', 22827199,
-                    {'Tranposort_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
+                    {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
                      'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
