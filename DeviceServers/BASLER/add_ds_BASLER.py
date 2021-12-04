@@ -7,8 +7,8 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                     {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
-                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
-                                              'ExposureTimeAbs': 15000, 'AcquisitionFrameRateAbs': 5,
+                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'Off', 'TriggerDelayAbs': 350000,
+                                              'ExposureTimeAbs': 50000, 'AcquisitionFrameRateAbs': 5,
                                               'AcquisitionFrameRateEnable': True},
                      'Image_Format_Control': {'PixelFormat': 'Mono8'}}
                     ],
@@ -16,8 +16,8 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                     {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
-                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
-                                              'ExposureTimeAbs': 15000, 'AcquisitionFrameRateAbs': 5,
+                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'Off', 'TriggerDelayAbs': 350000,
+                                              'ExposureTimeAbs': 50000, 'AcquisitionFrameRateAbs': 5,
                                               'AcquisitionFrameRateEnable': True},
                      'Image_Format_Control': {'PixelFormat': 'Mono8'}}
                     ],
@@ -26,7 +26,7 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
                      'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
                      'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 350000,
-                                              'ExposureTimeAbs': 15000, 'AcquisitionFrameRateAbs': 5,
+                                              'ExposureTimeAbs': 50000, 'AcquisitionFrameRateAbs': 5,
                                               'AcquisitionFrameRateEnable': True},
                      'Image_Format_Control': {'PixelFormat': 'Mono8'}}
                     ]}

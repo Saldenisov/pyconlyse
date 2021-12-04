@@ -162,6 +162,9 @@ class DS_CAMERA_CCD(DS_General):
     def get_height(self) -> int:
         pass
 
+    def turn_on_local(self) -> Union[int, str]:
+        pass
+
     @attribute(label='height min', dtype=int, access=AttrWriteType.READ)
     def height_min(self):
         return self.get_height_min()
@@ -269,12 +272,16 @@ class DS_CAMERA_CCD(DS_General):
     def get_sensor_readout_mode(self) -> str:
         pass
 
+    @attribute(label='Camera is grabbing?', dtype=bool, access=AttrWriteType.READ,
+               polling_period=DS_General.polling_main)
+    def grabbing(self):
+        return self.camera.IsGrabbing()
+
     @attribute(label='image', max_dim_x=4096, max_dim_y=4096, dtype=((DevFloat,),), access=AttrWriteType.READ)
     def image(self):
-        self.debug_stream("Trying to get the image")
+        self.info("Trying to get the image")
         self.get_image()
-        self.debug_stream("Acquired")
-        self.last_image = array(self.imagee)
+        self.info("Acquired")
         return self.last_image
 
     @abstractmethod
@@ -282,8 +289,10 @@ class DS_CAMERA_CCD(DS_General):
         pass
 
     def init_device(self):
+        self.latestimage = True
         self.last_image: array = None
         self.camera = None
+        self.trigger_software = False
         super().init_device()
         self.parameters = eval(self.parameters)
         self.turn_on()
@@ -306,5 +315,12 @@ class DS_CAMERA_CCD(DS_General):
     def set_param_after_init_local(self) -> Union[int, str]:
         pass
 
+    @command
+    def LatestImageOnly(self):
+        self.info("Switching to grab mode Latest Image Only", True)
+        self.latestimage = True
 
-
+    @command
+    def OneByOne(self):
+        self.info("Switching to grab mode One By One", True)
+        self.latestimage = False

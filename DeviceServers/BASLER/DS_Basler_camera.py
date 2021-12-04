@@ -2,6 +2,8 @@
 # -*- coding: utf-8 -*-
 from typing import Tuple, Union
 import os
+
+import numpy as np
 from tango import AttrWriteType, DevState, DevFloat, EncodedAttribute
 from tango.server import Device, attribute, command, device_property
 from numpy import array
@@ -144,6 +146,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def init_device(self):
         self.camera: pylon.InstantCamera = None
+        self.converter: pylon.ImageFormatConverter = None
         self.device = None
         super().init_device()
 
@@ -167,6 +170,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def turn_on_local(self) -> Union[int, str]:
         if self.camera and not self.camera.IsOpen():
             self.camera.Open()
+            self.converter = pylon.ImageFormatConverter()
             self.set_state(DevState.ON)
             self.get_camera_friendly_name()
             self.info(f"{self.device_name} was Opened.", True)
@@ -177,13 +181,15 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def turn_off_local(self) -> Union[int, str]:
         if self.camera and self.camera.IsOpen():
+            if self.grabbing:
+                self.stop_grabbing
             self.camera.Close()
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
             return 0
         else:
-            return f'Could not turn off camera it is closed already.' if self.camera else f'Could not turn on camera, ' \
-                                                                                          f'because it does not exist.'
+            return f'Could not turn off camera it is closed already.' if not self.camera.IsOpen() \
+                else f'Could not turn on camera, because it does not exist.'
 
     def set_param_after_init_local(self) -> Union[int, str]:
         functions = [self.set_transport_layer, self.set_analog_controls, self.set_aio_controls,
@@ -206,8 +212,9 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         formed_parameters_dict = {'TriggerSource': trigger_source, 'TriggerMode': trigger_mode,
                                   'TriggerDelayAbs': trigger_delay, 'ExposureTimeAbs': exposure_time,
                                   'AcquisitionFrameRateAbs': frame_rate, 'AcquisitionFrameRateEnable': True}
+        if trigger_mode == 'Trigger Software':
+            self.trigger_software = True
         return self._set_parameters(formed_parameters_dict)
-
 
     def set_transport_layer(self) -> Union[int, str]:
         packet_size = self.parameters['Transport_layer']['Packet_size']
@@ -239,6 +246,9 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def set_image_format(self):
         pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
+        # to change, what if someone wants color converter
+        self.converter.OutputPixelFormat = pylon.PixelType_Mono8
+        self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
         return self._set_parameters(formed_parameters_dict_image_format)
 
     def _set_parameters(self, formed_parameters_dict):
@@ -263,41 +273,31 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def get_image(self):
         self.trigger()
-        return self.wait(self.timeoutt)
+        self.last_image = self.wait(self.timeoutt)
 
     def trigger(self):
         if self.trigger_software:
             self.camera.TriggerSoftware()
             self.info("the camera is successfully triggered")
         else:
-            print('hardware trigger enabled')
+            self.info('Hardware trigger enabled.')
 
     def wait(self, timeout):
         if not self.grabbing:
             self.start_grabbing()
-
-        # maybe we could also set autoexposure
-        if self.latestimage:
-            self.info("Wait in Grab LatestImageOnly strategy")
-            grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_Return)
-            if grabResult.IsValid():
-                self.debug_stream("we could grab result")
-                self.imagee = grabResult.Array
-                return True
+        try:
+            grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
+            if grabResult.GrabSucceeded():
+                # Access the image data
+                image = self.converter.Convert(grabResult)
+                grabResult.Release()
+                arr = image.GetArray()
+                return arr
             else:
-                print("Could not grab result")
-                return False  # print("could not grab latest")
-
-        else:
-            self.info("Wait in Grab OneByOne strategy")
-            grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_Return)
-            if grabResult.IsValid():
-                image = grabResult.Array
-                self.imagee = array(image)
-                self.debug_stream("here is the image")
-                return True
-            else:
-                return False
+                raise pylon.GenericException
+        except (pylon.GenericException, pylon.TimeoutException) as e:
+            self.error(str(e))
+            return np.arange(10000).reshape(100, 100)
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0
@@ -315,25 +315,16 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     @command
     def start_grabbing(self):
         if self.latestimage:
-            self.info("Grabbing LatestImageOnly")
+            self.info("Grabbing LatestImageOnly", True)
             self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
         else:
-            self.info("Grabbing OneByOne")
+            self.info("Grabbing OneByOne", True)
             self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
 
     @command
     def stop_grabbing(self):
         self.info('Stopping Grabbing', True)
         self.camera.StopGrabbing()
-
-    @command
-    def delete_device(self):
-        try:
-            self.info(f'Close connection to camera with serial: {self.device.GetSerialNumber()}', True)
-            self.stop_grabbing()
-            self.camera.Close()
-        except:
-            self.error('closing camera failed!')
 
     @property
     def grabbing(self):
@@ -352,31 +343,17 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         Line4: If available, the trigger selected can be triggered by applying
         an electrical signal to I/O line 1, 2, 3, or 4.
         """
-        self.info('Enabling hardware trigger')
+        self.info('Enabling hardware trigger', True)
         self.stop_grabbing()
         state = 'On' if state else 'Off'
         self.camera.TriggerMode = 'On'
         # now the only possible type of triggering is software triggering
-        self.camera.TriggerSource = 'Software'
-        self.trigger_software = True
+        self.camera.TriggerSource = trigger_source
+        if trigger_source == 'Trigger Software':
+            self.trigger_software = True
         self.start_grabbing()
 
         # The trigger selected can be triggered by executing a TriggerSoftware command.
-
-
-    @command
-    def SensorReadoutModeFast(self):
-        self.camera.SensorReadoutMode.SetValue(self.SensorReadoutMode_Fast)
-
-    @command
-    def LatestImageOnly(self):
-        self.info("Switching to grab mode Latest Image Only", True)
-        self.latestimage = True
-
-    @command
-    def OneByOne(self):
-        self.info("Switching to grab mode One By One", True)
-        self.latestimage = False
 
 
 if __name__ == "__main__":
