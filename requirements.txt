@@ -8,6 +8,7 @@ PyQt5
 aiohttp
 atomicwrites
 configobj
+colorcet
 cryptography
 cython
 fandango
@@ -21,7 +22,10 @@ msgpack
 #mysqlclient
 nidaqmx
 numpy
+numba
 opencv-python
+pyqtgraph
+PyOpenGL
 PyTangoArchiving
 PyQt5
 pyepics  # for taurus

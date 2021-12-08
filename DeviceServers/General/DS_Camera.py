@@ -10,7 +10,9 @@ from DeviceServers.General.DS_general import DS_General, standard_str_output
 
 
 class DS_CAMERA_CCD(DS_General):
-    RULES = {'set_param_after_init': [DevState.ON], **DS_General.RULES}
+    RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
+             'stop_grabbing': [DevState.ON],
+             **DS_General.RULES}
 
     serial_number = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
@@ -21,7 +23,7 @@ class DS_CAMERA_CCD(DS_General):
     def camera_friendly_name(self):
         val = self.get_camera_friendly_name()
         self.friendly_name = val
-        self.info(f'Friendly name of camera is read: {val}', True)
+        self.info(f'Friendly name of camera is read: {val}')
         return self.friendly_name
 
     def write_camera_friendly_name(self, value):
@@ -186,7 +188,7 @@ class DS_CAMERA_CCD(DS_General):
         return self.get_offsetX()
 
     def write_offsetX(self, value):
-        self.set_offsetX()
+        self.set_offsetX(value)
 
     @abstractmethod
     def get_offsetX(self) -> int:
@@ -198,10 +200,10 @@ class DS_CAMERA_CCD(DS_General):
 
     @attribute(label='offset y axis', dtype=int, access=AttrWriteType.READ_WRITE)
     def offsetY(self):
-        return self.camera.OffsetY()
+        return self.get_offsetY()
 
     def write_offsetY(self, value):
-        self.camera.OffsetY = value
+        self.set_offsetY(value)
 
     @abstractmethod
     def get_offsetY(self) -> int:
@@ -274,14 +276,13 @@ class DS_CAMERA_CCD(DS_General):
 
     @attribute(label='Camera is grabbing?', dtype=bool, access=AttrWriteType.READ,
                polling_period=DS_General.polling_main)
-    def grabbing(self):
-        return self.camera.IsGrabbing()
+    def isgrabbing(self):
+        return self.grabbing
 
     @attribute(label='image', max_dim_x=4096, max_dim_y=4096, dtype=((DevFloat,),), access=AttrWriteType.READ)
     def image(self):
-        self.info("Trying to get the image")
         self.get_image()
-        self.info("Acquired")
+        self.info("Acquired", True)
         return self.last_image
 
     @abstractmethod
@@ -324,3 +325,48 @@ class DS_CAMERA_CCD(DS_General):
     def OneByOne(self):
         self.info("Switching to grab mode One By One", True)
         self.latestimage = False
+
+    @command
+    def start_grabbing(self):
+        state_ok = self.check_func_allowance(self.start_grabbing)
+        if state_ok == 1:
+            self.info(f"Starting grabbing for {self.device_name}.", True)
+            res = self.start_grabbing_local()
+            if res != 0:
+                self.error(f"{res}")
+            else:
+                self.info(f"Grabbing is started for device {self.device_name}.", True)
+        else:
+            self.error(f"Starting grabbing for {self.device_name} did not work, "
+                       f"check state of the device {self.get_state()}.")
+
+
+    @abstractmethod
+    def start_grabbing_local(self):
+        pass
+
+    @command
+    def stop_grabbing(self):
+        state_ok = self.check_func_allowance(self.start_grabbing)
+        if state_ok == 1:
+            self.info(f"Stopping grabbing for {self.device_name}.", True)
+            res = self.stop_grabbing_local()
+            if res != 0:
+                self.error(f"{res}")
+            else:
+                self.info(f"Grabbing is stopped for device {self.device_name}.", True)
+        else:
+            self.error(f"Stopping grabbing for {self.device_name} did not work, "
+                       f"check state of the device {self.get_state()}.")
+
+    @abstractmethod
+    def stop_grabbing_local(self):
+        pass
+
+    @property
+    def grabbing(self):
+        return self.grabbing_local()
+
+    @abstractmethod
+    def grabbing_local(self):
+        pass

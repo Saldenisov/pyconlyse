@@ -29,7 +29,7 @@ def main():
             elif len(sys.argv) == 2:
                 width = len(choice)
             panel = Basler_Panel(choice=choice, widget_class=Basler_camera, title='Basler',
-                                    icon=QIcon('icons//basler.svg'), width=width)
+                                 icon=QIcon('icons//basler.svg'), width=width)
             panel.show()
             sys.exit(app.exec_())
         except KeyError:

@@ -1,13 +1,11 @@
-from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusValueCheckBox
-from PyQt5.QtWidgets import QCheckBox
+import pyqtgraph as pg
+import numpy as np
+from taurus import Device
+from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus import Device
-from taurus.external.qt import Qt
-from _functools import partial
-import tango
-
-
+from taurus.qt.qtgui.input import TaurusValueSpinBox
+import taurus_pyqtgraph as tpg
 from DeviceServers.DS_Widget import DS_General_Widget
 
 
@@ -15,11 +13,13 @@ class Basler_camera(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None):
         super().__init__(device_name, parent)
-        #self.register_DS(device_name)
-
+        self.register_DS(device_name)
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
-
+        # ds.subscribe_event("image", tango.EventType.CHANGE_EVENT, self.image_listener)
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.image_listener)
+        self.grabbing = False
 
     def register_DS(self, dev_name, group_number=1):
         super().register_DS(dev_name, group_number=1)
@@ -32,19 +32,21 @@ class Basler_camera(DS_General_Widget):
         except Exception as e:
             print(e)
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
-        setattr(self, f'name_{dev_name}', ds.get_property('friendly_name')['friendly_name'][0])
-        name = getattr(self, f'name_{dev_name}')
 
         setattr(self, f'layout_main_{dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_status_{dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_state_{dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_error_info_{dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_parameters_{dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_image_{dev_name}', Qt.QHBoxLayout())
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
         lo_state: Qt.QLayout = getattr(self, f'layout_state_{dev_name}')
         lo_error_info: Qt.QLayout = getattr(self, f'layout_error_info_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
+        lo_parameters: Qt.QLayout = getattr(self, f'layout_parameters_{dev_name}')
+        lo_image: Qt.QLayout = getattr(self, f'layout_image_{dev_name}')
 
         # State and status
         widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
@@ -56,39 +58,40 @@ class Basler_camera(DS_General_Widget):
         s2 = getattr(self, f's2_{dev_name}')
         s3 = getattr(self, f's3_{dev_name}')
 
-        s1.setText(name)
+        s1.model = f'{dev_name}/camera_friendly_name'
         s2.model = f'{dev_name}/state'
         s3.model = f'{dev_name}/status'
         lo_status.addWidget(s1)
         lo_status.addWidget(s2)
         lo_status.addWidget(s3)
 
-        # state positions
-        number_outputs = int(ds.get_property('number_outputs')['number_outputs'][0])
-        names = list(ds.names)
-        ids = list(ds.ids)
-        states = list(ds.states)
-        widgets = [QCheckBox(f'{name}:id:{id}') for _, t, id in zip(range(number_outputs), names, ids)]
-        setattr(self, f'checkbox_group_{dev_name}', Qt.QGroupBox('Channels states'))
-        group: Qt.QGroupBox = getattr(self, f'checkbox_group_{dev_name}')
-        for cb, state, name, id in zip(widgets, states, names, ids):
-            setattr(self, f'cb{id}_{dev_name}', cb)
-            cb: QCheckBox = getattr(self, f'cb{id}_{dev_name}')
-            cb.setChecked(bool(state))
-            cb.setText(f'{name}:id:{id}')
-            lo_state.addWidget(cb)
-            cb.clicked.connect(partial(self.cb_clicked, dev_name))
-        group.setLayout(lo_state)
+        self.view = pg.ImageView()
+        self.view.setImage(np.transpose(ds.image))
+        self.view.autoRange()
+        self.view.setMinimumSize(450, 450)
+        lo_image.addWidget(self.view)
 
-        # # ERRORS and INFO
-        # error = TaurusLabel()
-        # comments = TaurusLabel()
-        # error.model = f'{dev_name}/last_error'
-        # comments.model = f'{dev_name}/last_comments'
-        # lo_error_info.addWidget(error)
-        # lo_error_info.addWidget(comments)
+        ## Set a custom color map
+        colors = [
+            (0, 0, 0),
+            (45, 5, 61),
+            (84, 42, 55),
+            (150, 87, 60),
+            (208, 171, 141),
+            (255, 255, 255)
+        ]
+        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
+        self.view.setColorMap(cmap)
+
+
 
         # Buttons and commands
+        grabbing_led = TaurusLed()
+        grabbing_led.model = f'{dev_name}/isgrabbing'
+        setattr(self, f'button_start_grabbing_{dev_name}', TaurusCommandButton(text='Grab'))
+        button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{dev_name}')
+        button_start_grabbing.clicked.connect(self.grab_clicked)
+
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
         button_on: TaurusCommandButton = getattr(self, f'button_on_{dev_name}')
         button_on.setModel(dev_name)
@@ -97,12 +100,64 @@ class Basler_camera(DS_General_Widget):
         button_off: TaurusCommandButton = getattr(self, f'button_off_{dev_name}')
         button_off.setModel(dev_name)
 
+        lo_buttons.addWidget(grabbing_led)
+        lo_buttons.addWidget(button_start_grabbing)
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
 
-        lo_device.addLayout(lo_status)
-        lo_device.addWidget(group)
-        lo_device.addLayout(lo_error_info)
-        lo_device.addLayout(lo_buttons)
 
+        # Camera parameters
+        self.width = TaurusValueSpinBox()
+        self.width.model = f'{dev_name}/width'
+        self.width.setValue(ds.width)
+
+        self.height = TaurusValueSpinBox()
+        self.height.model = f'{dev_name}/height'
+        self.height.setValue(ds.height)
+
+        self.offsetX = TaurusValueSpinBox()
+        self.offsetX.model = f'{dev_name}/offsetX'
+        self.offsetX.setValue(ds.offsetX)
+
+        self.offsetY = TaurusValueSpinBox()
+        self.offsetY.model = f'{dev_name}/offsetY'
+        self.offsetY.setValue(ds.offsetY)
+
+        lo_parameters.addWidget(TaurusLabel('Width'))
+        lo_parameters.addWidget(self.width)
+        lo_parameters.addWidget(TaurusLabel('Height'))
+        lo_parameters.addWidget(self.height)
+        lo_parameters.addWidget(TaurusLabel('offsetX'))
+        lo_parameters.addWidget(self.offsetX)
+        lo_parameters.addWidget(TaurusLabel('offsetY'))
+        lo_parameters.addWidget(self.offsetY)
+
+        lo_device.addLayout(lo_status)
+        lo_device.addLayout(lo_image)
+        lo_device.addLayout(lo_buttons)
+        lo_device.addLayout(lo_parameters)
         lo_group.addLayout(lo_device)
+
+    def width_change(self):
+        print(self.width.getValue())
+
+    def grab_clicked(self):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+
+        button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{self.dev_name}')
+        if self.grabbing:
+            self.timer.stop()
+            ds.stop_grabbing()
+            self.grabbing = False
+            button_start_grabbing.setText('Grab')
+        else:
+            ds.start_grabbing()
+            self.timer.start(250)
+            self.grabbing = True
+            button_start_grabbing.setText('Grabbing')
+
+    def image_listener(self):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        image = np.transpose(ds.image)
+        # self.image.setImage(image)
+        self.view.setImage(image)

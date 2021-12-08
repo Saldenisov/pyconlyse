@@ -3,15 +3,14 @@
 
 
 import sys
-
-from typing import Tuple, Union, List
-import random
-from time import sleep
-import serial
-import serial.tools.list_ports
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
+from typing import Tuple, Union, List
+from time import sleep
+import serial
+import serial.tools.list_ports
+
 
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
@@ -267,6 +266,7 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
             else:
                 self._arduino_state = state
                 self.info(f"Arduino state was set to {state}.", True)
+
 
 if __name__ == "__main__":
     DS_TopDirect_Motor.run_server()

@@ -1,24 +1,23 @@
 #!/usr/bin/python3 -u
 # -*- coding: utf-8 -*-
-from typing import Tuple, Union
 import os
+import sys
+from pathlib import Path
+app_folder = Path(__file__).resolve().parents[2]
+sys.path.append(str(app_folder))
+
+from typing import Tuple, Union
+
 
 import numpy as np
-from tango import AttrWriteType, DevState, DevFloat, EncodedAttribute
-from tango.server import Device, attribute, command, device_property
-from numpy import array
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
 from collections import OrderedDict
-from distutils.util import strtobool
 # -----------------------------
 
-import random
-
-from tango.server import Device, attribute, device_property, DeviceMeta, command, run
-from tango import DebugIt, DispLevel, AttrWriteType, DevState
+from tango.server import device_property, command
+from tango import DevState
 from pypylon import pylon, genicam
-
 
 
 class DS_Basler_camera(DS_CAMERA_CCD):
@@ -88,7 +87,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.Width()
 
     def set_width(self, value: int):
-        self.camera.Width = value
+        was_grabbing = False
+        if self.grabbing:
+            was_grabbing = True
+            self.stop_grabbing
+        self.camera.Width.SetValue(value)
+        if was_grabbing:
+            self.start_grabbing
+
 
     def get_width_min(self):
         return self.camera.Width.Min
@@ -97,7 +103,13 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.Width.Max
 
     def set_height(self, value: int):
-        self.camera.Height = value
+        was_grabbing = False
+        if self.grabbing:
+            was_grabbing = True
+            self.stop_grabbing
+        self.camera.Height.SetValue(value)
+        if was_grabbing:
+            self.start_grabbing
 
     def get_height(self) -> int:
         return self.camera.Height()
@@ -182,7 +194,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def turn_off_local(self) -> Union[int, str]:
         if self.camera and self.camera.IsOpen():
             if self.grabbing:
-                self.stop_grabbing
+                self.stop_grabbing()
             self.camera.Close()
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
@@ -292,6 +304,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 image = self.converter.Convert(grabResult)
                 grabResult.Release()
                 arr = image.GetArray()
+                self.info('Image is received...')
                 return arr
             else:
                 raise pylon.GenericException
@@ -312,22 +325,31 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 r = f'{self.ip_address} is not reachable.'
         return r
 
-    @command
-    def start_grabbing(self):
+    def start_grabbing_local(self):
         if self.latestimage:
-            self.info("Grabbing LatestImageOnly", True)
-            self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+            try:
+                self.info("Grabbing LatestImageOnly", True)
+                self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                return 0
+            except Exception as e:
+                return str(e)
         else:
-            self.info("Grabbing OneByOne", True)
-            self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
+            try:
+                self.info("Grabbing OneByOne", True)
+                self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
+                return 0
+            except Exception as e:
+                return str(e)
 
-    @command
-    def stop_grabbing(self):
-        self.info('Stopping Grabbing', True)
-        self.camera.StopGrabbing()
+    def stop_grabbing_local(self):
+        try:
+            self.camera.StopGrabbing()
+            return 0
+        except Exception as e:
+            return str(e)
 
-    @property
-    def grabbing(self):
+
+    def grabbing_local(self):
         return self.camera.IsGrabbing()
 
     @command(dtype_in=[float], doc_in='Input is axis_id: int', dtype_out=str, doc_out=standard_str_output)
