@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from tango import AttrWriteType, DevState, DevFloat, EncodedAttribute
 from tango.server import Device, attribute, command, device_property
-from numpy import array
+import numpy as np
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
 from typing import Union, Tuple, Dict, Any
@@ -282,7 +282,7 @@ class DS_CAMERA_CCD(DS_General):
     @attribute(label='image', max_dim_x=4096, max_dim_y=4096, dtype=((DevFloat,),), access=AttrWriteType.READ)
     def image(self):
         self.get_image()
-        self.info("Acquired", True)
+        self.info("Acquired")
         return self.last_image
 
     @abstractmethod
@@ -291,7 +291,7 @@ class DS_CAMERA_CCD(DS_General):
 
     def init_device(self):
         self.latestimage = True
-        self.last_image: array = None
+        self.last_image: np.array = None
         self.camera = None
         self.trigger_software = False
         super().init_device()

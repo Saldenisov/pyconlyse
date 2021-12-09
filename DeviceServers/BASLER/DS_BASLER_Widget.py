@@ -4,7 +4,7 @@ from taurus import Device
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus.qt.qtgui.input import TaurusValueSpinBox
+from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
 import taurus_pyqtgraph as tpg
 from DeviceServers.DS_Widget import DS_General_Widget
 
@@ -39,6 +39,7 @@ class Basler_camera(DS_General_Widget):
         setattr(self, f'layout_error_info_{dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_parameters_{dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_parameters2_{dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_image_{dev_name}', Qt.QHBoxLayout())
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
@@ -46,6 +47,7 @@ class Basler_camera(DS_General_Widget):
         lo_error_info: Qt.QLayout = getattr(self, f'layout_error_info_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
         lo_parameters: Qt.QLayout = getattr(self, f'layout_parameters_{dev_name}')
+        lo_parameters2: Qt.QLayout = getattr(self, f'layout_parameters2_{dev_name}')
         lo_image: Qt.QLayout = getattr(self, f'layout_image_{dev_name}')
 
         # State and status
@@ -66,7 +68,8 @@ class Basler_camera(DS_General_Widget):
         lo_status.addWidget(s3)
 
         self.view = pg.ImageView()
-        self.view.setImage(np.transpose(ds.image))
+        image = ds.image
+        self.view.setImage(self.convert_image(image))
         self.view.autoRange()
         self.view.setMinimumSize(450, 450)
         lo_image.addWidget(self.view)
@@ -107,6 +110,10 @@ class Basler_camera(DS_General_Widget):
 
 
         # Camera parameters
+        self.pixel = TaurusValueComboBox()
+        self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12packed'])
+        self.pixel.model = f'{dev_name}/format_pixel'
+
         self.width = TaurusValueSpinBox()
         self.width.model = f'{dev_name}/width'
         self.width.setValue(ds.width)
@@ -123,6 +130,7 @@ class Basler_camera(DS_General_Widget):
         self.offsetY.model = f'{dev_name}/offsetY'
         self.offsetY.setValue(ds.offsetY)
 
+
         lo_parameters.addWidget(TaurusLabel('Width'))
         lo_parameters.addWidget(self.width)
         lo_parameters.addWidget(TaurusLabel('Height'))
@@ -132,10 +140,14 @@ class Basler_camera(DS_General_Widget):
         lo_parameters.addWidget(TaurusLabel('offsetY'))
         lo_parameters.addWidget(self.offsetY)
 
+        lo_parameters2.addWidget(TaurusLabel('Format'))
+        lo_parameters2.addWidget(self.pixel)
+
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
         lo_device.addLayout(lo_buttons)
         lo_device.addLayout(lo_parameters)
+        lo_device.addLayout(lo_parameters2)
         lo_group.addLayout(lo_device)
 
     def width_change(self):
@@ -158,6 +170,10 @@ class Basler_camera(DS_General_Widget):
 
     def image_listener(self):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
-        image = np.transpose(ds.image)
-        # self.image.setImage(image)
-        self.view.setImage(image)
+        self.view.setImage(self.convert_image(ds.image))
+
+    def convert_image(self, image):
+        image2D = image
+        shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)
+        image3D = image2D.reshape(np.roll(shp, 1)).transpose(1, 2, 0)
+        return np.transpose(image3D)

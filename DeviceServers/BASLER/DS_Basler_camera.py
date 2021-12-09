@@ -95,7 +95,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         if was_grabbing:
             self.start_grabbing
 
-
     def get_width_min(self):
         return self.camera.Width.Min
 
@@ -133,7 +132,13 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.camera.OffsetY = value
 
     def set_format_pixel(self, value: str):
+        was_grabbing = False
+        if self.grabbing:
+            was_grabbing = True
+            self.stop_grabbing()
         self.camera.PixelFormat = value
+        if was_grabbing:
+            self.start_grabbing()
 
     def get_format_pixel(self) -> str:
         return self.camera.PixelFormat()
@@ -157,6 +162,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.SensorReadoutMode.GetValue()
 
     def init_device(self):
+        self.pixel_format = None
         self.camera: pylon.InstantCamera = None
         self.converter: pylon.ImageFormatConverter = None
         self.device = None
@@ -259,7 +265,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
         # to change, what if someone wants color converter
-        self.converter.OutputPixelFormat = pylon.PixelType_Mono8
+        self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
         self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
         return self._set_parameters(formed_parameters_dict_image_format)
 
@@ -300,17 +306,20 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         try:
             grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
             if grabResult.GrabSucceeded():
-                # Access the image data
                 image = self.converter.Convert(grabResult)
                 grabResult.Release()
-                arr = image.GetArray()
+                image = np.ndarray(buffer=image.GetBuffer(),
+                                   shape=(image.GetHeight(), image.GetWidth(), 3),
+                                   dtype=np.uint16)
+                # Convert 3D array to 2D for Tango to transfer it
+                image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                 self.info('Image is received...')
-                return arr
+                return image2D
             else:
                 raise pylon.GenericException
         except (pylon.GenericException, pylon.TimeoutException) as e:
             self.error(str(e))
-            return np.arange(10000).reshape(100, 100)
+            return np.arange(300).reshape(10, 10, 3)
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0

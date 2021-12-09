@@ -22,12 +22,12 @@ msgpack
 #mysqlclient
 nidaqmx
 numpy
-numba
 opencv-python
 pyqtgraph
 PyOpenGL
 PyTangoArchiving
-PyQt5
+PyQt5<5.13
+PyQt5-sip
 pyepics  # for taurus
 pytest-qt
 pywin32; sys_platform == 'win32'
@@ -42,6 +42,7 @@ sip
 spyder # taurus
 tables
 taurus
+taurus_pyqtgraph
 vitables
 zmq
 # For guiqwt
