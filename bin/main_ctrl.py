@@ -70,7 +70,7 @@ def main():
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
     button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
-    button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_OWIS))
+    button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_Basler))
 
 
     panel.setMinimumWidth(300)

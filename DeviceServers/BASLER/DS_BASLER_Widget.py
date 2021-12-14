@@ -71,7 +71,7 @@ class Basler_camera(DS_General_Widget):
         image = ds.image
         self.view.setImage(self.convert_image(image))
         self.view.autoRange()
-        self.view.setMinimumSize(450, 450)
+        self.view.setMinimumSize(500, 500)
         lo_image.addWidget(self.view)
 
         ## Set a custom color map
@@ -83,7 +83,9 @@ class Basler_camera(DS_General_Widget):
             (208, 171, 141),
             (255, 255, 255)
         ]
-        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
+        # cmap = pg.colormap.get('rainbow')
+        cmap = pg.colormap.get('CET-L9')
+        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
         self.view.setColorMap(cmap)
 
 
@@ -110,10 +112,6 @@ class Basler_camera(DS_General_Widget):
 
 
         # Camera parameters
-        self.pixel = TaurusValueComboBox()
-        self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12packed'])
-        self.pixel.model = f'{dev_name}/format_pixel'
-
         self.width = TaurusValueSpinBox()
         self.width.model = f'{dev_name}/width'
         self.width.setValue(ds.width)
@@ -140,8 +138,25 @@ class Basler_camera(DS_General_Widget):
         lo_parameters.addWidget(TaurusLabel('offsetY'))
         lo_parameters.addWidget(self.offsetY)
 
+        self.pixel = TaurusValueComboBox()
+        self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12p'])
+        self.pixel.model = f'{dev_name}/format_pixel'
+
+        self.trigger_delay = TaurusValueSpinBox()
+        self.trigger_delay.model = f'{dev_name}/trigger_delay'
+        self.trigger_delay.setValue(ds.trigger_delay)
+
+        self.exposure_time = TaurusValueSpinBox()
+        self.exposure_time.model = f'{dev_name}/exposure_time'
+        self.exposure_time.setValue(ds.exposure_time)
+
+
         lo_parameters2.addWidget(TaurusLabel('Format'))
         lo_parameters2.addWidget(self.pixel)
+        lo_parameters2.addWidget(TaurusLabel('Trigger Delay'))
+        lo_parameters2.addWidget(self.trigger_delay)
+        lo_parameters2.addWidget(TaurusLabel('Exposure Time'))
+        lo_parameters2.addWidget(self.exposure_time)
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)

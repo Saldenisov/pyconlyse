@@ -213,6 +213,22 @@ class DS_CAMERA_CCD(DS_General):
     def set_offsetY(self, value: int):
         pass
 
+    @attribute(label='trigger delay', dtype=float, access=AttrWriteType.READ_WRITE)
+    def trigger_delay(self):
+        return self.get_trigger_delay()
+
+    def write_trigger_delay(self, value):
+        self.set_trigger_delay(value)
+
+    @abstractmethod
+    def set_trigger_delay(self, value: str):
+        pass
+
+    @abstractmethod
+    def get_trigger_delay(self) -> str:
+        pass
+
+
     @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)
     def format_pixel(self):
         return self.get_format_pixel()

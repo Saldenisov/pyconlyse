@@ -65,6 +65,12 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def set_exposure_time(self, value: float):
         self.camera.ExposureTimeAbs.SetValue(value)
 
+    def set_trigger_delay(self, value: str):
+        self.camera.TriggerDelayAbs.SetValue(value)
+
+    def get_trigger_delay(self) -> str:
+        return self.camera.TriggerDelayAbs()
+
     def get_exposure_min(self):
         return self.camera.ExposureTimeAbs.Min
 
@@ -357,9 +363,11 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         except Exception as e:
             return str(e)
 
-
     def grabbing_local(self):
-        return self.camera.IsGrabbing()
+        if self.camera:
+            return self.camera.IsGrabbing()
+        else:
+            return False
 
     @command(dtype_in=[float], doc_in='Input is axis_id: int', dtype_out=str, doc_out=standard_str_output)
     def trigger_mode(self, state, trigger_source):
