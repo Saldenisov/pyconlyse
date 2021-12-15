@@ -86,7 +86,6 @@ def test_serial_number(lib, device_id):
     if result == Result.Ok:
         print("Serial: " + repr(x_serial.value))
 
-
 def test_get_speed(lib, device_id):
     print("\nGet speed")
     # Create move settings structure
@@ -166,6 +165,8 @@ for i in range(dev_count):
     friendly_name = controller_name_t()
     result = lib.get_controller_name(name, byref(friendly_name))
     friendly_name = friendly_name.ControllerName
+    x_serial = c_uint()
+    result = lib.get_serial_number(device_id, byref(x_serial))
 
 
 

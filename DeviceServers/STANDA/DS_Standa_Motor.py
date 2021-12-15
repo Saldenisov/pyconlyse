@@ -18,7 +18,7 @@ from tango.server import attribute, command, device_property
 
 from ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
                   controller_name_t, status_t, set_position_t, PositionFlags, status_t, device_information_t,
-                  string_at)
+                  string_at, serial_number_t)
 
 try:
     from DeviceServers.General.DS_Motor import DS_MOTORIZED_MONO_AXIS
@@ -81,13 +81,17 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             # enum_hints = b"addr=" # Use this hint string for broadcast enumerate
             devenum = lib.enumerate_devices(probe_flags, enum_hints)
             device_counts = lib.get_device_count(devenum)
-            sleep(0.05)
             if device_counts > 0:
                 for device_id_internal_seq in range(device_counts):
                     uri = lib.get_device_name(devenum, device_id_internal_seq)
-                    sleep(0.01)
-                    if self.device_id in uri.decode('utf-8'):
-                        argreturn = device_id_internal_seq, uri
+                    device_id = lib.open_device(uri)
+                    x_serial = ctypes.c_uint()
+                    result = lib.get_serial_number(device_id, ctypes.byref(x_serial))
+                    self._device_id_internal = device_id
+                    self.turn_off_local()
+                    serial = int(x_serial.value)
+                    if int(self.device_id) == int(x_serial.value):
+                        argreturn = device_id, uri
                         break
         self.info(f'Result: {argreturn}', True)
         return argreturn
@@ -219,11 +223,3 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
 if __name__ == "__main__":
     DS_Standa_Motor.run_server()
-    # a = Standa_minimum()
-    # a.turn_on()
-    # a.test_info()
-    # a.state = DevState.ON
-    # a.write_position(0)
-    # a.move_axis(10.12)
-    # a.move_axis(0)
-    # a.turn_off()
