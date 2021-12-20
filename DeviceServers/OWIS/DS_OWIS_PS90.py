@@ -15,7 +15,8 @@ sys.path.append(str(app_folder1))
 
 from threading import Thread
 from tango import DevState
-from tango.server import device_property
+from tango.server import attribute, device_property
+from tango import AttrWriteType, DispLevel, DevState
 
 import ctypes
 
@@ -48,8 +49,44 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     control_unit_id = device_property(dtype=int, default_value=1)
     serial_number = device_property(dtype=int)
 
-    _version_ = '0.2'
-    _model_ = 'OWIS controller PS90 multi-axes'
+    _version_ = '0.3'
+    _model_ = 'OWIS controller PS90 multi-axes 4 axes'
+
+    @attribute(label="Axis 1 pos", dtype=float, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ_WRITE,
+               polling_period=DS_MOTORIZED_MULTI_AXES.polling)
+    def pos1(self):
+        return self._delay_lines_parameters[1]['position']
+
+    def write_pos1(self, pos):
+        self.move_axis([1, pos])
+
+    @attribute(label="Axis 2 pos", dtype=float, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ_WRITE,
+               polling_period=DS_MOTORIZED_MULTI_AXES.polling)
+    def pos2(self):
+        return self._delay_lines_parameters[2]['position']
+
+    def write_pos2(self, pos):
+        self.move_axis([2, pos])
+
+    @attribute(label="Axis 3 pos", dtype=float, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ_WRITE,
+               polling_period=DS_MOTORIZED_MULTI_AXES.polling)
+    def pos3(self):
+        return self._delay_lines_parameters[3]['position']
+
+    def write_pos3(self, pos):
+        self.move_axis([3, pos])
+
+    @attribute(label="Axis 4 pos", dtype=float, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ_WRITE,
+               polling_period=DS_MOTORIZED_MULTI_AXES.polling)
+    def pos4(self):
+        return self._delay_lines_parameters[4]['position']
+
+    def write_pos4(self, pos):
+        self.move_axis([4, pos])
 
     def init_device(self):
         super().init_device()
@@ -97,14 +134,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             return comments
 
     def get_controller_status_local(self) -> Union[int, str]:
-        for axis in self._delay_lines_parameters.keys():
-            self.get_status_axis_local(axis)
-            self.read_position_axis_local(axis)
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if self.serial_number != ser_num:
             self.set_state(DevState.FAULT)
             return f'Connection with PS90 is lost'
         else:
+            for axis in self._delay_lines_parameters.keys():
+                self.get_status_axis_local(axis)
+                self.read_position_axis_local(axis)
             return 0
 
     def init_axis_local(self, axis: int) -> Union[int, str]:
@@ -150,6 +187,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
         if not com:
             self._delay_lines_parameters[axis]['position'] = res
+            self.info(f"Reading position localy for axis {axis}: {res}", False)
             result = 0
         else:
             result = f'Device {self.device_name} reading position of axis {axis} was not successful.'

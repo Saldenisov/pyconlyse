@@ -15,6 +15,7 @@ from _functools import partial
 from DeviceServers.DS_Widget import DS_General_Widget
 from gui.MyWidgets import MyQLabel
 
+
 class OWIS_motor(DS_General_Widget):
 
     def __init__(self, device_name: str, axes, parent=None):
@@ -125,7 +126,8 @@ class OWIS_motor(DS_General_Widget):
             limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
             n_digits = len(str(int(limit)))
             wheel.setDigitCount(n_digits, 3)
-            wheel.returnPressed.connect(partial(self.wheel_value_change, axis))
+            #wheel.returnPressed.connect(partial(self.wheel_value_change, axis))
+            wheel.model = f'{dev_name}/pos{axis}'
             button_set.clicked.connect(partial(self.set_clicked, axis))
             button_stop.clicked.connect(partial(self.stop_clicked, axis))
 
@@ -296,7 +298,6 @@ class OWIS_motor(DS_General_Widget):
             if self.positions[axis_id] != positions[axis_id]:
                 self.positions[axis_id] = positions[axis_id]
                 label: QCheckBox = getattr(self, f'pos_lab_name{axis_id}_{self.dev_name}')
-                wheel: TaurusWheelEdit = getattr(self, f'pos_wheel{axis_id}_{self.dev_name}')
                 label.setText(str(self.positions[axis_id]))
 
     def wheel_value_change(self, axis):

@@ -141,7 +141,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
     """"
     Device Server (Tango) which controls the OWIS delay lines using ps90.dll
     """
-    polling = 1500
+    polling = 500
     RULES = {'read_position_axis': [DevState.ON],
              'define_position_axis': [DevState.ON],
              'stop_axis': [DevState.ON, DevState.STANDBY, DevState.MOVING, DevState.OFF],

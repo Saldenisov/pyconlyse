@@ -3,7 +3,8 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device
 from taurus.external.qt import Qt
-from PyQt5 import QtWidgets, QtGui, QtCore
+from PyQt5 import QtWidgets, QtCore
+import tango
 
 from PyQt5.QtGui import QMouseEvent
 
@@ -20,6 +21,13 @@ class Standa_motor(DS_General_Widget):
         super().__init__(device_name, parent)
         self.relative_shift = 1
         self.register_DS(device_name)
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
+
+    def position_listener(self):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
+        p2.setText(str(ds.position))
 
     def register_DS(self, dev_name, group_number=1):
         super(Standa_motor, self).register_DS(dev_name, group_number=1)
