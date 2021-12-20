@@ -4,7 +4,7 @@ timeout 10
 start cmd /c %PYCONLYSE%\bin\start_all_OWIS.cmd
 start cmd /c %PYCONLYSE%\bin\start_all_BASLER.cmd
 timeout 7
-start cmd /c %TANGO_ROOT%\bin\Starter.exe witchi
+start cmd /c %TANGO_ROOT%\bin\Starter.exe everest
 timeout 1
 start /min cmd /c %TANGO_ROOT%\bin\start-jive.bat
 timeout 1

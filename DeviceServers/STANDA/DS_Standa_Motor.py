@@ -30,7 +30,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """"
     Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
     """
-    _version_ = '0.3'
+    _version_ = '0.4'
     _model_ = 'STANDA step motor'
     polling_local = 600
 
