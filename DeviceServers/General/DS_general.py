@@ -15,9 +15,10 @@ class DS_General(Device):
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
     polling_main = 500
-    RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY], 'turn_off': [DevState.ON, DevState.STANDBY],
-             'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY],
-             'get_controller_status': [DevState.ON, DevState.MOVING]}
+    RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
+             'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT],
+             'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
+             'get_controller_status': [DevState.ON, DevState.MOVING, DevState.INIT]}
 
     @property
     def _version_(self):

@@ -24,7 +24,7 @@ class Standa_motor(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
 
-    def position_listener(self):
+    def position_listener(self, event):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
         p2.setText(str(ds.position))
