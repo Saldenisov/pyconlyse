@@ -36,6 +36,7 @@ class Standa_motor(DS_General_Widget):
 
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
+        unit = ds.get_property('unit')['unit'][0]
         setattr(self, f'l_min_{dev_name}', float(ds.get_property('limit_min')['limit_min'][0]))
         setattr(self, f'l_max_{dev_name}', float(ds.get_property('limit_max')['limit_max'][0]))
         setattr(self, f'name_{dev_name}', ds.get_property('friendly_name')['friendly_name'][0])
@@ -84,8 +85,8 @@ class Standa_motor(DS_General_Widget):
             name = f'p{i}_{dev_name}'
             setattr(self, f'{name}', p)
             i += 1
-        p1 = getattr(self, f'p1_{dev_name}')
-        p2 = getattr(self, f'p2_{dev_name}')
+        p1: TaurusLabel = getattr(self, f'p1_{dev_name}')
+        p2: TaurusLabel = getattr(self, f'p2_{dev_name}')
         p3: TaurusWheelEdit = getattr(self, f'p3_{dev_name}')
         p4: TaurusValueLineEdit = getattr(self, f'p{4}_{dev_name}')
         p5: MyQLabel = getattr(self, f'p{5}_{dev_name}')
@@ -102,9 +103,9 @@ class Standa_motor(DS_General_Widget):
         lo_pos.addWidget(p4)
         lo_pos.addWidget(p5)
 
-        p1.model, p1.bgRole = f'{dev_name}/position#label', ''
+        p1.setText(unit)
         p2.model = f'{dev_name}/position'
-        p2.setFixedWidth(60)
+        p2.setFixedWidth(100)
         p3.model = f'{dev_name}/position'
 
         p3.setMinValue(l_min)
