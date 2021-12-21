@@ -32,14 +32,14 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """
     _version_ = '0.4'
     _model_ = 'STANDA step motor'
-    polling_local = 600
+    polling_local = 1500
 
     ip_address = device_property(dtype=str, default_value='10.20.30.204')
 
     # if it is done so leave it like this
     position = attribute(label="Position", dtype=float, display_level=DispLevel.OPERATOR,
                          access=AttrWriteType.READ_WRITE, unit="step", format="8.4f",
-                         doc="the position of axis", polling_period=polling_local, abs_change='')
+                         doc="the position of axis", polling_period=polling_local, abs_change=0.001)
 
     @attribute(label='Temperature', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='deg',
                polling_period=polling_local, doc="Temperature in tenths of degrees C.")
