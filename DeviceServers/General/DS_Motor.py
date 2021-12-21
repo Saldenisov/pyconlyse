@@ -43,6 +43,10 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
         self._prev_pos = 0.0
         self._position = 0.0
         super().init_device()
+        attr_prop = self.position.get_properties()
+        attr_prop.min_value = self.limit_min
+        attr_prop.max_value = self.limit_max
+        self.position.set_properties(attr_prop)
 
     def read_position(self):
         state_ok = self.check_func_allowance(self.read_position)
