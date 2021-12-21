@@ -109,7 +109,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         if result == Result.Ok:
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
-            self._position = pos_basic_units
+            self._position = round(pos_basic_units / self.conversion, 3)
             return 0
         else:
             return f'Could not read position of {self.device_name}: {result}.'
