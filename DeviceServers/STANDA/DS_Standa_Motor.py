@@ -32,8 +32,13 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """
     _version_ = '0.4'
     _model_ = 'STANDA step motor'
+<<<<<<< HEAD
     polling_local = 1500
 
+=======
+    polling_local = 600
+    unit_conversion = device_property(dtype=str, default_value="['', 1.0]")
+>>>>>>> 457f90c60e1d4e8f28efc3bc395bb12d054d5782
     ip_address = device_property(dtype=str, default_value='10.20.30.204')
 
     # if it is done so leave it like this
@@ -67,6 +72,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._power_current = 0
         self._power_voltage = 0
         super().init_device()
+        self.unit_conversion = eval(self.unit_conversion)
+        attr_prop = self.position.get_properties()
+        attr_prop.unit = self.unit_conversion[0]
+        self.position.set_properties(attr_prop)
         self.turn_on()
 
     def find_device(self):
@@ -173,6 +182,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             return self.error(f'Could not turn off device {self.device_name}: {result}.')
 
     def move_axis_local(self, pos) -> Union[int, str]:
+        pos = pos * self.unit_conversion[1]
         microsteps = int(pos % 1 * 256)
         steps = int(pos // 1)
         result = lib.command_move(self._device_id_internal, steps, microsteps)
