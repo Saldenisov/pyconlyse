@@ -8,18 +8,28 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from _functools import partial
 import subprocess
+from DeviceServers.DS_Widget import VisType
+
+
+type_vis = VisType.FULL
 
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
-    arg = ''
     c_idx = cbox.currentIndex()
     arg = cbox.itemText(c_idx)
-    print(f'Calling {call} {arg}')
-    subprocess.call(f'{call} {arg}')
+    global type_vis
+    calling = f'{call} {arg} {type_vis.value}'
+    print(f'Calling {calling}')
+    subprocess.call([call, arg, type_vis.value])
+
+
+def rb_clicked(value: str):
+    global type_vis
+    type_vis = VisType(value)
 
 
 def main():
-    app = TaurusApplication(sys.argv, cmd_line_parser=None, )
+    app = TaurusApplication(sys.argv, cmd_line_parser=None)
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
     panel.setWindowIcon(QIcon('icons//main_icon.png'))
@@ -27,11 +37,13 @@ def main():
     layout_main = Qt.QVBoxLayout()
     setattr(panel, f'layout_main', layout_main)
 
+    lo_type= Qt.QHBoxLayout()
     lo_NETIO = Qt.QHBoxLayout()
     lo_STANDA= Qt.QHBoxLayout()
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
+
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
     button_STANDA = TaurusCommandButton(text='STANDA', parent=panel, icon=QIcon('icons//STANDA.svg'))
     button_OWIS = TaurusCommandButton(text='OWIS', parent=panel, icon=QIcon('icons//OWIS.png'))
@@ -46,8 +58,18 @@ def main():
     cbox_STANDA.addItems(['alignment', 'V0',  'V0_short', 'ELYSE'])
     cbox_TOPDIRECT = TaurusValueComboBox(parent=panel)
     cbox_TOPDIRECT.addItems(['all'])
-    cbox_Basler = TaurusValueComboBox(parent=panel)
-    cbox_Basler.addItems(['V0', 'test'])
+    cbox_BASLER = TaurusValueComboBox(parent=panel)
+    cbox_BASLER.addItems(['V0', 'test'])
+
+    group_visualization = QtWidgets.QGroupBox('Type')
+    group_layout = Qt.QHBoxLayout()
+    for typ in VisType:
+        rb = QtWidgets.QRadioButton(text=f'{typ.value}')
+        group_layout.addWidget(rb)
+        rb.toggled.connect(partial(rb_clicked, rb.text()))
+    rb.setChecked(True)
+    group_visualization.setLayout(group_layout)
+    lo_type.addWidget(group_visualization)
 
     lo_NETIO.addWidget(button_NETIO)
     lo_NETIO.addWidget(cbox_NETIO)
@@ -58,8 +80,9 @@ def main():
     lo_TOPDIRECT.addWidget(button_TopDirect)
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
-    lo_Basler.addWidget(cbox_Basler)
+    lo_Basler.addWidget(cbox_BASLER)
 
+    layout_main.addLayout(lo_type)
     layout_main.addLayout(lo_NETIO)
     layout_main.addLayout(lo_OWIS)
     layout_main.addLayout(lo_STANDA)
@@ -70,8 +93,7 @@ def main():
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
     button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
-    button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_Basler))
-
+    button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)

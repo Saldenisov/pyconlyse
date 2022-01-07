@@ -11,29 +11,27 @@ from PyQt5.QtGui import QMouseEvent
 from typing import List
 from _functools import partial
 
-from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 from gui.MyWidgets import MyQLabel
 
 
 class Standa_motor(DS_General_Widget):
 
-    def __init__(self, device_name: str, parent=None):
-        super().__init__(device_name, parent)
+    def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.relative_shift = 1
-        self.register_DS(device_name)
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
-        ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
+        super().__init__(device_name, parent, vis_type)
+        self.ds: Device = getattr(self, f'ds_{self.dev_name}')
+        self.ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
 
     def position_listener(self, event):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
         p2.setText(str(ds.position))
 
-    def register_DS(self, dev_name, group_number=1):
-        super(Standa_motor, self).register_DS(dev_name, group_number=1)
+    def register_DS_full(self, dev_name, group_number=1):
+        super(Standa_motor, self).register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
-
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
         unit = ds.get_property('unit')['unit'][0]
@@ -117,6 +115,7 @@ class Standa_motor(DS_General_Widget):
 
         self.pos_widget = p2
         self.wheel = p3
+
         # preset positions
         preset_positions: List[float] = getattr(self, f'preset_pos_{dev_name}')
         i = 1
@@ -202,6 +201,130 @@ class Standa_motor(DS_General_Widget):
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
 
+    def register_DS_min(self, dev_name, group_number=1):
+        super(Standa_motor, self).register_DS_min(dev_name, group_number=1)
+
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+
+        lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
+        unit = ds.get_property('unit')['unit'][0]
+        setattr(self, f'l_min_{dev_name}', float(ds.get_property('limit_min')['limit_min'][0]))
+        setattr(self, f'l_max_{dev_name}', float(ds.get_property('limit_max')['limit_max'][0]))
+        setattr(self, f'name_{dev_name}', ds.get_property('friendly_name')['friendly_name'][0])
+        setattr(self, f'preset_pos_{dev_name}',
+                list([float(pos) for pos in ds.get_property('preset_pos')['preset_pos']]))
+        l_min, l_max = getattr(self, f'l_min_{dev_name}'), getattr(self, f'l_max_{dev_name}')
+        name = getattr(self, f'name_{dev_name}')
+
+        setattr(self, f'layout_main_{dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_min_{dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
+        lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
+        lo_min: Qt.QLayout = getattr(self, f'layout_min_{dev_name}')
+        lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
+
+        # State and status
+        widgets = [TaurusLabel(), TaurusLed()]
+        i = 1
+        for s in widgets:
+            setattr(self, f's{i}_{dev_name}', s)
+            i += 1
+        s1: TaurusLabel = getattr(self, f's1_{dev_name}')
+        s2 = getattr(self, f's2_{dev_name}')
+
+        s1.setText(name)
+        s2.model = f'{dev_name}/state'
+        lo_min.addWidget(s1)
+        lo_min.addWidget(s2)
+
+        # Position controls
+        widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), MyQLabel(f'Relative shift: {self.relative_shift}')]
+        i = 1
+        for p in widgets:
+            name = f'p{i}_{dev_name}'
+            setattr(self, f'{name}', p)
+            i += 1
+        p1: TaurusLabel = getattr(self, f'p1_{dev_name}')
+        p2: TaurusLabel = getattr(self, f'p2_{dev_name}')
+        p3: TaurusWheelEdit = getattr(self, f'p3_{dev_name}')
+        p4: MyQLabel = getattr(self, f'p{4}_{dev_name}')
+
+        p4.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        p4.customContextMenuRequested.connect(partial(self.context_menu))
+
+        limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
+        n_digits = len(str(int(limit)))
+
+        lo_min.addWidget(p1)
+        lo_min.addWidget(p2)
+        lo_min.addWidget(p3)
+
+        p1.setText(unit)
+        p2.model = f'{dev_name}/position'
+        p2.setFixedWidth(100)
+        p3.model = f'{dev_name}/position'
+
+        p3.setMinValue(l_min)
+        p3.setMaxValue(l_max)
+        p3.setDigitCount(n_digits, 3)
+
+        self.pos_widget = p2
+        self.wheel = p3
+
+        # preset positions
+        preset_positions: List[float] = getattr(self, f'preset_pos_{dev_name}')
+        preset_positions_cb = QtWidgets.QComboBox()
+        setattr(self, f'combobox_prepos_{dev_name}', preset_positions_cb)
+        for pr_pos in preset_positions:
+            preset_positions_cb.addItem(str(pr_pos))
+
+        preset_positions_cb.currentIndexChanged.connect(self.combobox_selected)
+
+        lo_min.addWidget(preset_positions_cb)
+        # Buttons and commands
+        setattr(self, f'button_left_{dev_name}', QtWidgets.QPushButton('<<'))
+        button_left: TaurusCommandButton = getattr(self, f'button_left_{dev_name}')
+
+        setattr(self, f'button_right_{dev_name}', QtWidgets.QPushButton('>>'))
+        button_right: TaurusCommandButton = getattr(self, f'button_right_{dev_name}')
+
+        button_left.clicked.connect(partial(self.move_button_clicked, -1))
+        button_right.clicked.connect(partial(self.move_button_clicked, 1))
+
+        setattr(self, f'p{5}_{dev_name}', MyQLabel(f'Relative shift: {self.relative_shift}'))
+        p5: MyQLabel = getattr(self, f'p{5}_{dev_name}')
+
+        p5.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        p5.customContextMenuRequested.connect(partial(self.context_menu))
+
+        lo_buttons.addWidget(button_left)
+        lo_buttons.addWidget(p5)
+        lo_buttons.addWidget(button_right)
+
+        separator = Qt.QFrame()
+        separator.setFrameShape(Qt.QFrame.VLine)
+        separator.setSizePolicy(Qt.QSizePolicy.Minimum, Qt.QSizePolicy.Expanding)
+        separator.setLineWidth(2)
+
+        lo_device.addLayout(lo_min)
+        lo_device.addLayout(lo_buttons)
+
+        lo_group.addLayout(lo_device)
+        lo_group.addWidget(separator)
+
+    def combobox_selected(self):
+        cb: QtWidgets.QComboBox = getattr(self, f'combobox_prepos_{self.dev_name}')
+        pos = float(cb.currentText())
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        p3: TaurusWheelEdit = getattr(self, f'p3_{self.dev_name}')
+        p3.setValue(pos)
+        ds.move_axis_abs(pos)
+
+    def move_button_clicked(self, direction: int):
+        relative_move = self.relative_shift * direction
+        pos = self.ds.position + relative_move
+        self.ds.move_axis_abs(pos)
+
     def set_clicked(self, dev_name):
         p: TaurusValueLineEdit = getattr(self, f'p4_{dev_name}')
         try:
@@ -210,8 +333,7 @@ class Standa_motor(DS_General_Widget):
         except (ValueError, TypeError):
             val = 0
             p.setText('0')
-        device: Device = getattr(self, f'ds_{dev_name}')
-        device.define_position(val)
+        self.ds.define_position(val)
 
     def rb_clicked(self, value: str, dev_name: str):
         pos = float(value)

@@ -9,19 +9,19 @@ from PyQt5.QtGui import QMouseEvent
 from typing import List
 from _functools import partial
 
-from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 from gui.MyWidgets import MyQLabel
 
 
 class TopDirect_Motor(DS_General_Widget):
 
-    def __init__(self, device_name: str, parent=None):
-        super().__init__(device_name, parent)
-        self.relative_shift = 0
-        self.register_DS(device_name)
+    def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        self.relative_shift = 1
+        super().__init__(device_name, parent, vis_type)
 
-    def register_DS(self, dev_name, group_number=1):
-        super(TopDirect_Motor, self).register_DS(dev_name, group_number=1)
+
+    def register_DS_full(self, dev_name, group_number=1):
+        super(TopDirect_Motor, self).register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -155,6 +155,9 @@ class TopDirect_Motor(DS_General_Widget):
 
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
+
+    def register_DS_min(self, dev_name, group_number=1):
+        pass
 
     def set_clicked(self, dev_name):
         p: TaurusValueLineEdit = getattr(self, f'p4_{dev_name}')

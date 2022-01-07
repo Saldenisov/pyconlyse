@@ -12,17 +12,17 @@ import tango
 from typing import List, Dict
 from _functools import partial
 
-from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 from gui.MyWidgets import MyQLabel
 
 
 class OWIS_motor(DS_General_Widget):
 
-    def __init__(self, device_name: str, axes, parent=None):
-        super().__init__(device_name, parent)
-        self.register_DS(device_name, axes)
+    def __init__(self, device_name: str, axes, parent=None, vis_type=VisType.FULL):
         self.axis_selected = None
         self.axes = axes
+        super().__init__(device_name, parent, vis_type)
+
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -32,7 +32,7 @@ class OWIS_motor(DS_General_Widget):
         ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.states_listener)
         ds.subscribe_event("positions", tango.EventType.CHANGE_EVENT, self.positions_listener)
 
-    def register_DS(self, dev_name, axes, group_number=1):
+    def register_DS_full(self, dev_name, group_number=1):
         ds: Device = getattr(self, f'ds_{dev_name}')
 
         delay_lines_parameters = ds.get_property('delay_lines_parameters')['delay_lines_parameters'][0]
@@ -71,10 +71,10 @@ class OWIS_motor(DS_General_Widget):
         # States of axes
         names = eval(ds.friendly_names)
         states = eval(ds.states)
-        widgets = [(QCheckBox(f'{names[axis]}:id:{axis}'), TaurusLabel()) for axis in axes]
+        widgets = [(QCheckBox(f'{names[axis]}:id:{axis}'), TaurusLabel()) for axis in self.axes]
         self.checkbox_group_axes = Qt.QGroupBox('Axes states')
 
-        for axis, wheel in zip(axes, widgets):
+        for axis, wheel in zip(self.axes, widgets):
             cb, lab = wheel
             setattr(self, f'cb{axis}_{dev_name}', cb)
             setattr(self, f'lab{axis}_{dev_name}', lab)
@@ -101,9 +101,9 @@ class OWIS_motor(DS_General_Widget):
         positions = eval(ds.positions)
 
         widgets = [(TaurusLabel(), TaurusWheelEdit(), TaurusValueLineEdit(),
-                    TaurusCommandButton(text='Set'), TaurusCommandButton(text='STOP')) for axis in axes]
+                    TaurusCommandButton(text='Set'), TaurusCommandButton(text='STOP')) for axis in self.axes]
         self.checkbox_group_positions = Qt.QGroupBox('Axes positions')
-        for axis, widget in zip(axes, widgets):
+        for axis, widget in zip(self.axes, widgets):
             lo_h_pos = QHBoxLayout()
             lo_v_pos = QVBoxLayout()
             lo_h_pos_lab = QHBoxLayout()
@@ -188,6 +188,9 @@ class OWIS_motor(DS_General_Widget):
         lo_device.addLayout(lo_buttons)
 
         self.layout_main.addLayout(lo_device)
+
+    def register_DS_min(self, dev_name, group_number=1):
+        pass
 
     def context_menu_label(self, axis, point):
         menu = QtWidgets.QMenu()

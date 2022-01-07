@@ -6,23 +6,19 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
 import taurus_pyqtgraph as tpg
-from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
 class Basler_camera(DS_General_Widget):
 
-    def __init__(self, device_name: str, parent=None):
-        super().__init__(device_name, parent)
-        self.register_DS(device_name)
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
-
-        # ds.subscribe_event("image", tango.EventType.CHANGE_EVENT, self.image_listener)
+    def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        self.grabbing = False
+        super().__init__(device_name, parent, vis_type)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.image_listener)
-        self.grabbing = False
 
-    def register_DS(self, dev_name, group_number=1):
-        super().register_DS(dev_name, group_number=1)
+    def register_DS_full(self, dev_name, group_number=1):
+        super().register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         # Logging level
@@ -164,6 +160,9 @@ class Basler_camera(DS_General_Widget):
         lo_device.addLayout(lo_parameters)
         lo_device.addLayout(lo_parameters2)
         lo_group.addLayout(lo_device)
+
+    def register_DS_min(self, dev_name, group_number=1):
+        pass
 
     def width_change(self):
         print(self.width.getValue())

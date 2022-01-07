@@ -8,12 +8,15 @@ from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
 from DeviceServers.TopDirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import VisType
 
 
 class General_Panel(QtWidgets.QWidget):
 
-    def __init__(self, choice, widget_class: DS_General_Widget, title='', icon: QIcon = None, width=2, *args, **kwargs):
+    def __init__(self, choice, widget_class: DS_General_Widget, title='', icon: QIcon = None, width=2,
+                 vis_type=VisType.FULL, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.vis_type = vis_type
         self.widgets = {}
         if title:
             self.setWindowTitle(title)
@@ -50,7 +53,7 @@ class General_Panel(QtWidgets.QWidget):
             group_number = i // self.width
             if dev_name:
                 lo: Qt.QLayout = getattr(self, f'lo_DS_widget_{group_number}')
-                setattr(self, f'{dev_name}', widget_class(dev_name, self))
+                setattr(self, f'{dev_name}', widget_class(dev_name, self, self.vis_type))
                 s_m = getattr(self, f'{dev_name}')
                 self.add_widget(f'{dev_name}', s_m)
                 lo.addWidget(s_m)
@@ -59,11 +62,11 @@ class General_Panel(QtWidgets.QWidget):
 
 class Standa_Panel(General_Panel):
 
-    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2):
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != Standa_motor:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
 
-        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width)
+        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width, *args, **kwargs)
         self.move_step = 1
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -88,10 +91,10 @@ class Standa_Panel(General_Panel):
 
 class TopDirect_Panel(General_Panel):
 
-    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2):
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != TopDirect_Motor:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
-        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width)
+        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width, *args, **kwargs)
         self.move_step = 1
 
     def keyPressEvent(self, event: QKeyEvent):
@@ -118,10 +121,10 @@ class OWIS_Panel(General_Panel):
     This class determines the panel for OWIS PS90 multi-axes controller.
     """
 
-    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=1):
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=1, *args, **kwargs):
         if widget_class != OWIS_motor:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
-        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width)
+        super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width, *args, **kwargs)
         self.move_step = 1
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self.context_menu)

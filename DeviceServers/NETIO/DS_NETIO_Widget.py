@@ -8,14 +8,13 @@ from _functools import partial
 import tango
 
 
-from DeviceServers.DS_Widget import DS_General_Widget
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
 class Netio_pdu(DS_General_Widget):
 
-    def __init__(self, device_name: str, parent=None):
-        super().__init__(device_name, parent)
-        self.register_DS(device_name)
+    def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        super().__init__(device_name, parent, vis_type)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -27,8 +26,8 @@ class Netio_pdu(DS_General_Widget):
         ds.subscribe_event("names", tango.EventType.CHANGE_EVENT, self.state_listener)
         ds.subscribe_event("ids", tango.EventType.CHANGE_EVENT, self.state_listener)
 
-    def register_DS(self, dev_name, group_number=1):
-        super().register_DS(dev_name, group_number=1)
+    def register_DS_full(self, dev_name, group_number=1):
+        super().register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         # Logging level
@@ -112,6 +111,9 @@ class Netio_pdu(DS_General_Widget):
         lo_device.addLayout(lo_buttons)
 
         lo_group.addLayout(lo_device)
+
+    def register_DS_min(self, dev_name, group_number=1):
+        pass
 
     def cb_clicked(self, dev_name: str):
         ds: Device = getattr(self, f'ds_{dev_name}')
