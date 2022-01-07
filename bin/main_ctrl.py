@@ -8,6 +8,10 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from _functools import partial
 import subprocess
+
+from pathlib import Path
+app_folder = Path(__file__).resolve().parents[1]
+sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
 
 
