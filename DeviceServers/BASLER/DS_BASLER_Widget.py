@@ -21,26 +21,10 @@ class Basler_camera(DS_General_Widget):
         super().register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
-        # Logging level
-        try:
-            pass
-            #ds.set_logging_level(3)
-        except Exception as e:
-            print(e)
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
 
-        setattr(self, f'layout_main_{dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_status_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_state_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_error_info_{dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_parameters_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_parameters2_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_image_{dev_name}', Qt.QHBoxLayout())
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
-        lo_state: Qt.QLayout = getattr(self, f'layout_state_{dev_name}')
-        lo_error_info: Qt.QLayout = getattr(self, f'layout_error_info_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
         lo_parameters: Qt.QLayout = getattr(self, f'layout_parameters_{dev_name}')
         lo_parameters2: Qt.QLayout = getattr(self, f'layout_parameters2_{dev_name}')
@@ -64,8 +48,9 @@ class Basler_camera(DS_General_Widget):
         lo_status.addWidget(s3)
 
         self.view = pg.ImageView()
-        image = ds.image
-        self.view.setImage(self.convert_image(image))
+        image = np.ones(shape=(512, 512))
+        #self.view.setImage(self.convert_image(image))
+        self.view.setImage(image)
         self.view.autoRange()
         self.view.setMinimumSize(500, 500)
         lo_image.addWidget(self.view)
@@ -83,8 +68,6 @@ class Basler_camera(DS_General_Widget):
         cmap = pg.colormap.get('CET-L9')
         # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
         self.view.setColorMap(cmap)
-
-
 
         # Buttons and commands
         grabbing_led = TaurusLed()
@@ -106,7 +89,6 @@ class Basler_camera(DS_General_Widget):
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
 
-
         # Camera parameters
         self.width = TaurusValueSpinBox()
         self.width.model = f'{dev_name}/width'
@@ -124,7 +106,6 @@ class Basler_camera(DS_General_Widget):
         self.offsetY.model = f'{dev_name}/offsetY'
         self.offsetY.setValue(ds.offsetY)
 
-
         lo_parameters.addWidget(TaurusLabel('Width'))
         lo_parameters.addWidget(self.width)
         lo_parameters.addWidget(TaurusLabel('Height'))
@@ -138,6 +119,10 @@ class Basler_camera(DS_General_Widget):
         self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12p'])
         self.pixel.model = f'{dev_name}/format_pixel'
 
+        self.trigger_mode = TaurusValueComboBox()
+        self.trigger_mode.addItems(['On', 'Off'])
+        self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
+
         self.trigger_delay = TaurusValueSpinBox()
         self.trigger_delay.model = f'{dev_name}/trigger_delay'
         self.trigger_delay.setValue(ds.trigger_delay)
@@ -146,7 +131,8 @@ class Basler_camera(DS_General_Widget):
         self.exposure_time.model = f'{dev_name}/exposure_time'
         self.exposure_time.setValue(ds.exposure_time)
 
-
+        lo_parameters2.addWidget(TaurusLabel('Trigger'))
+        lo_parameters2.addWidget(self.trigger_mode)
         lo_parameters2.addWidget(TaurusLabel('Format'))
         lo_parameters2.addWidget(self.pixel)
         lo_parameters2.addWidget(TaurusLabel('Trigger Delay'))
@@ -163,6 +149,19 @@ class Basler_camera(DS_General_Widget):
 
     def register_DS_min(self, dev_name, group_number=1):
         pass
+
+    def register_full_layouts(self):
+        super(Basler_camera, self).register_full_layouts()
+        setattr(self, f'layout_parameters_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_parameters2_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
+
+    def register_min_layouts(self):
+        super(Basler_camera, self).register_min_layouts()
+
+    def trigger_mode_changed(self):
+        state = self.trigger_mode.currentText()
+        self.ds.set_trigger_mode(1 if state == 'On' else 0)
 
     def width_change(self):
         print(self.width.getValue())

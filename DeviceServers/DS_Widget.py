@@ -75,3 +75,8 @@ class DS_General_Widget(Qt.QWidget):
     @abstractmethod
     def register_min_layouts(self):
         pass
+
+    @property
+    def ds(self):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        return ds
