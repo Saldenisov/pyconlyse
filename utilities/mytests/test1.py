@@ -1,24 +1,23 @@
-import zmq
+from threading import Thread
 from time import sleep
 
-context = zmq.Context()
-dealer1 = context.socket(zmq.DEALER)
-dealer1.setsockopt_unicode(zmq.IDENTITY, "dealer")
-dealer1.connect('tcp://129.175.100.70:5556')
 
-dealer2 = context.socket(zmq.DEALER)
-dealer2.setsockopt_unicode(zmq.IDENTITY, "dealer")
-dealer2.connect('tcp://129.175.100.70:5557')
+def test1():
+    while True:
+        i = 10
+        sleep(1)
+        print(i)
 
 
-poller = zmq.Poller()
-poller.register(dealer1, zmq.POLLIN)
-poller.register(dealer2, zmq.POLLIN)
+def test2():
+    while True:
+        i = 20
+        sleep(0.25)
+        print(i)
 
 
-i = 0
-while True:
-    sleep(1)
-    i += 1
-    dealer1.send(f'Dealer1:{i}'.encode('utf-8'))
-    dealer2.send(f'XXX2:{i}'.encode('utf-8'))
+a = Thread(target=test1)
+b = Thread(target=test2)
+
+a.start()
+b.start()
