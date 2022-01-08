@@ -28,7 +28,20 @@ class Standa_motor(DS_General_Widget):
         p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
         p2.setText(str(ds.position))
 
+    def register_full_layouts(self):
+        super(Standa_motor, self).register_full_layouts()
+        setattr(self, f'layout_pos_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_preset_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_info_{self.dev_name}', Qt.QHBoxLayout())
+
+    def register_min_layouts(self):
+        super(Standa_motor, self).register_min_layouts()
+        setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_min_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
+
     def register_DS_full(self, dev_name, group_number=1):
+        dev_name = self.dev_name
         super(Standa_motor, self).register_DS_full(dev_name, group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
@@ -43,13 +56,6 @@ class Standa_motor(DS_General_Widget):
         l_min, l_max = getattr(self, f'l_min_{dev_name}'), getattr(self, f'l_max_{dev_name}')
         name = getattr(self, f'name_{dev_name}')
 
-        setattr(self, f'layout_main_{dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_status_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_pos_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_preset_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_info_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_error_info_{dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
         lo_pos: Qt.QLayout = getattr(self, f'layout_pos_{dev_name}')
@@ -59,21 +65,7 @@ class Standa_motor(DS_General_Widget):
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
 
         # State and status
-        widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
-        i = 1
-        for s in widgets:
-            setattr(self, f's{i}_{dev_name}', s)
-            i += 1
-        s1: TaurusLabel = getattr(self, f's1_{dev_name}')
-        s2 = getattr(self, f's2_{dev_name}')
-        s3 = getattr(self, f's3_{dev_name}')
-
-        s1.setText(name)
-        s2.model = f'{dev_name}/state'
-        s3.model = f'{dev_name}/status'
-        lo_status.addWidget(s1)
-        lo_status.addWidget(s2)
-        lo_status.addWidget(s3)
+        self.set_state_status(name)
 
         # Position controls
         widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), TaurusValueLineEdit(),
@@ -216,9 +208,6 @@ class Standa_motor(DS_General_Widget):
         l_min, l_max = getattr(self, f'l_min_{dev_name}'), getattr(self, f'l_max_{dev_name}')
         name = getattr(self, f'name_{dev_name}')
 
-        setattr(self, f'layout_main_{dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_min_{dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_buttons_{dev_name}', Qt.QHBoxLayout())
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_min: Qt.QLayout = getattr(self, f'layout_min_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')

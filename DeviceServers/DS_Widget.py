@@ -39,8 +39,39 @@ class DS_General_Widget(Qt.QWidget):
 
     @abstractmethod
     def register_DS_full(self, dev_name, group_number=1):
-        pass
+        self.register_full_layouts()
 
     @abstractmethod
     def register_DS_min(self, dev_name, group_number=1):
+        self.register_min_layouts()
+
+    def set_state_status(self, name_db):
+        dev_name = self.dev_name
+        lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
+        widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
+        i = 1
+        for s in widgets:
+            setattr(self, f's{i}_{dev_name}', s)
+            i += 1
+        s1: TaurusLabel = getattr(self, f's1_{dev_name}')
+        s2 = getattr(self, f's2_{dev_name}')
+        s3 = getattr(self, f's3_{dev_name}')
+
+        s1.setText(name_db)
+        s2.model = f'{dev_name}/state'
+        s3.model = f'{dev_name}/status'
+        lo_status.addWidget(s1)
+        lo_status.addWidget(s2)
+        lo_status.addWidget(s3)
+
+    @abstractmethod
+    def register_full_layouts(self):
+        setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_status_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_info_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_error_info_{self.dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
+
+    @abstractmethod
+    def register_min_layouts(self):
         pass
