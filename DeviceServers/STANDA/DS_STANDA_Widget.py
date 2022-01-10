@@ -20,7 +20,6 @@ class Standa_motor(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.relative_shift = 1
         super().__init__(device_name, parent, vis_type)
-        self.ds: Device = getattr(self, f'ds_{self.dev_name}')
         self.ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
 
     def position_listener(self, event):
@@ -65,7 +64,7 @@ class Standa_motor(DS_General_Widget):
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
 
         # State and status
-        self.set_state_status(name)
+        self.set_state_status(False)
 
         # Position controls
         widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), TaurusValueLineEdit(),
@@ -213,18 +212,7 @@ class Standa_motor(DS_General_Widget):
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
 
         # State and status
-        widgets = [TaurusLabel(), TaurusLed()]
-        i = 1
-        for s in widgets:
-            setattr(self, f's{i}_{dev_name}', s)
-            i += 1
-        s1: TaurusLabel = getattr(self, f's1_{dev_name}')
-        s2 = getattr(self, f's2_{dev_name}')
-
-        s1.setText(name)
-        s2.model = f'{dev_name}/state'
-        lo_min.addWidget(s1)
-        lo_min.addWidget(s2)
+        self.set_state_status()
 
         # Position controls
         widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), MyQLabel(f'Relative shift: {self.relative_shift}')]

@@ -43,6 +43,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                          access=AttrWriteType.READ_WRITE, format="8.4f", doc="the position of axis",
                          polling_period=polling_local, abs_change=0.001)
 
+
     @attribute(label='Temperature', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='deg',
                polling_period=polling_local, doc="Temperature in tenths of degrees C.")
     def temperature(self):

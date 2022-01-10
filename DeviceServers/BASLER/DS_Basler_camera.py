@@ -296,15 +296,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return None
 
     def get_image(self):
-        self.trigger()
         self.last_image = self.wait(self.timeoutt)
-
-    def trigger(self):
-        if self.trigger_software:
-            self.camera.TriggerSoftware()
-            self.info("the camera is successfully triggered")
-        else:
-            self.info('Hardware trigger enabled.')
 
     def wait(self, timeout):
         if not self.grabbing:
@@ -369,30 +361,23 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         else:
             return False
 
-    @command(dtype_in=[float], doc_in='Input is axis_id: int', dtype_out=str, doc_out=standard_str_output)
-    def trigger_mode(self, state, trigger_source):
-        """"
-        https://docs.baslerweb.com/trigger-source#setting-a-software-trigger-source
-
-        There are many different types of triggering (software and hardware for example)
-        What Tobias set was to be able to select Line1 and Software triggering but
-        now Line1 is not working:
-
-        (set the triggersource to any of this values: Line1, Line2, Line3,
-        Line4: If available, the trigger selected can be triggered by applying
-        an electrical signal to I/O line 1, 2, 3, or 4.
-        """
-        self.info('Enabling hardware trigger', True)
-        self.stop_grabbing()
+    @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
+    def set_trigger_mode(self, state):
         state = 'On' if state else 'Off'
-        self.camera.TriggerMode = 'On'
-        # now the only possible type of triggering is software triggering
-        self.camera.TriggerSource = trigger_source
-        if trigger_source == 'Trigger Software':
-            self.trigger_software = True
-        self.start_grabbing()
-
-        # The trigger selected can be triggered by executing a TriggerSoftware command.
+        self.info(f'Enabling hardware trigger: {state}', True)
+        restart = False
+        if self.grabbing:
+            self.stop_grabbing()
+            restart = True
+        try:
+            print(self.camera)
+            self.camera.TriggerMode = state
+        except Exception as e:
+            self.error(e)
+            return str(e)
+        if restart:
+            self.start_grabbing()
+        return str(0)
 
 
 if __name__ == "__main__":

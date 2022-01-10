@@ -20,7 +20,7 @@ class DS_CAMERA_CCD(DS_General):
 
     # Cameras' attributes
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
-    def camera_friendly_name(self):
+    def device_friendly_name(self):
         val = self.get_camera_friendly_name()
         self.friendly_name = val
         self.info(f'Friendly name of camera is read: {val}')
