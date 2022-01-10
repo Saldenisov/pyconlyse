@@ -36,7 +36,7 @@ class Standa_motor(DS_General_Widget):
     def register_min_layouts(self):
         super(Standa_motor, self).register_min_layouts()
         setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_min_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_pos_{self.dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
 
     def register_DS_full(self, dev_name, group_number=1):
@@ -140,14 +140,6 @@ class Standa_motor(DS_General_Widget):
         inf3.model = f'{dev_name}/power_voltage'
         # inf4.model = f'{dev_name}/power_status'
 
-        # # ERRORS and INFO
-        # error = TaurusLabel()
-        # comments = TaurusLabel()
-        # error.model = f'{dev_name}/last_error'
-        # comments.model = f'{dev_name}/last_comments'
-        # lo_error_info.addWidget(error)
-        # lo_error_info.addWidget(comments)
-
         # Buttons and commands
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
         button_on: TaurusCommandButton = getattr(self, f'button_on_{dev_name}')
@@ -208,7 +200,8 @@ class Standa_motor(DS_General_Widget):
         name = getattr(self, f'name_{dev_name}')
 
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
-        lo_min: Qt.QLayout = getattr(self, f'layout_min_{dev_name}')
+        lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
+        lo_pos: Qt.QLayout = getattr(self, f'layout_pos_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
 
         # State and status
@@ -232,13 +225,13 @@ class Standa_motor(DS_General_Widget):
         limit = abs(l_min) if abs(l_min) >= abs(l_max) else abs(l_max)
         n_digits = len(str(int(limit)))
 
-        lo_min.addWidget(p1)
-        lo_min.addWidget(p2)
-        lo_min.addWidget(p3)
+        lo_pos.addWidget(p1)
+        lo_pos.addWidget(p2)
+        lo_pos.addWidget(p3)
 
         p1.setText(unit)
         p2.model = f'{dev_name}/position'
-        p2.setFixedWidth(100)
+        p2.setFixedWidth(60)
         p3.model = f'{dev_name}/position'
 
         p3.setMinValue(l_min)
@@ -256,8 +249,8 @@ class Standa_motor(DS_General_Widget):
             preset_positions_cb.addItem(str(pr_pos))
 
         preset_positions_cb.currentIndexChanged.connect(self.combobox_selected)
+        lo_pos.addWidget(preset_positions_cb)
 
-        lo_min.addWidget(preset_positions_cb)
         # Buttons and commands
         setattr(self, f'button_left_{dev_name}', QtWidgets.QPushButton('<<'))
         button_left: TaurusCommandButton = getattr(self, f'button_left_{dev_name}')
@@ -283,7 +276,8 @@ class Standa_motor(DS_General_Widget):
         separator.setSizePolicy(Qt.QSizePolicy.Minimum, Qt.QSizePolicy.Expanding)
         separator.setLineWidth(2)
 
-        lo_device.addLayout(lo_min)
+        lo_device.addLayout(lo_status)
+        lo_device.addLayout(lo_pos)
         lo_device.addLayout(lo_buttons)
 
         lo_group.addLayout(lo_device)
