@@ -35,6 +35,13 @@ class DS_General(Device):
                             version_number=self._version_,
                             device_id=self.device_id))
 
+    @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
+    def device_friendly_name(self):
+        return self.friendly_name
+
+    def write_device_friendly_name(self, friendly_name):
+        self.friendly_name = friendly_name
+
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last essential comment.", polling_period=polling_main)
     def last_comments(self):

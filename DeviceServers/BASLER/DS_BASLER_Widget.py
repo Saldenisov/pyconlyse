@@ -31,43 +31,10 @@ class Basler_camera(DS_General_Widget):
         lo_image: Qt.QLayout = getattr(self, f'layout_image_{dev_name}')
 
         # State and status
-        widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
-        i = 1
-        for s in widgets:
-            setattr(self, f's{i}_{dev_name}', s)
-            i += 1
-        s1: TaurusLabel = getattr(self, f's1_{dev_name}')
-        s2 = getattr(self, f's2_{dev_name}')
-        s3 = getattr(self, f's3_{dev_name}')
+        self.set_state_status(False)
 
-        s1.model = f'{dev_name}/camera_friendly_name'
-        s2.model = f'{dev_name}/state'
-        s3.model = f'{dev_name}/status'
-        lo_status.addWidget(s1)
-        lo_status.addWidget(s2)
-        lo_status.addWidget(s3)
-
-        self.view = pg.ImageView()
-        image = np.ones(shape=(512, 512))
-        #self.view.setImage(self.convert_image(image))
-        self.view.setImage(image)
-        self.view.autoRange()
-        self.view.setMinimumSize(500, 500)
-        lo_image.addWidget(self.view)
-
-        ## Set a custom color map
-        colors = [
-            (0, 0, 0),
-            (45, 5, 61),
-            (84, 42, 55),
-            (150, 87, 60),
-            (208, 171, 141),
-            (255, 255, 255)
-        ]
-        # cmap = pg.colormap.get('rainbow')
-        cmap = pg.colormap.get('CET-L9')
-        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
-        self.view.setColorMap(cmap)
+        # Image
+        self.set_image(lo_image)
 
         # Buttons and commands
         grabbing_led = TaurusLed()
@@ -148,7 +115,56 @@ class Basler_camera(DS_General_Widget):
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, dev_name, group_number=1):
-        pass
+        super(Basler_camera, self).register_DS_min(dev_name)
+
+        lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
+
+        lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
+        lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
+        lo_image: Qt.QLayout = getattr(self, f'layout_image_{dev_name}')
+
+        # State and status
+        self.set_state_status(False)
+
+        # Image
+        self.set_image(lo_image)
+
+        # Button
+        grabbing_led = TaurusLed()
+        grabbing_led.model = f'{dev_name}/isgrabbing'
+        setattr(self, f'button_start_grabbing_{dev_name}', TaurusCommandButton(text='Grab'))
+        button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{dev_name}')
+        button_start_grabbing.clicked.connect(self.grab_clicked)
+
+        lo_status.addWidget(grabbing_led)
+        lo_status.addWidget(button_start_grabbing)
+
+        lo_device.addLayout(lo_status)
+        lo_device.addLayout(lo_image)
+        lo_group.addLayout(lo_device)
+
+    def set_image(self, lo_image):
+        self.view = pg.ImageView()
+        image = np.ones(shape=(512, 512))
+        #self.view.setImage(self.convert_image(image))
+        self.view.setImage(image)
+        self.view.autoRange()
+        self.view.setMinimumSize(500, 500)
+        lo_image.addWidget(self.view)
+
+        ## Set a custom color map
+        colors = [
+            (0, 0, 0),
+            (45, 5, 61),
+            (84, 42, 55),
+            (150, 87, 60),
+            (208, 171, 141),
+            (255, 255, 255)
+        ]
+        # cmap = pg.colormap.get('rainbow')
+        cmap = pg.colormap.get('CET-L9')
+        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
+        self.view.setColorMap(cmap)
 
     def register_full_layouts(self):
         super(Basler_camera, self).register_full_layouts()
@@ -158,6 +174,7 @@ class Basler_camera(DS_General_Widget):
 
     def register_min_layouts(self):
         super(Basler_camera, self).register_min_layouts()
+        setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()

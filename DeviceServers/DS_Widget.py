@@ -45,7 +45,7 @@ class DS_General_Widget(Qt.QWidget):
     def register_DS_min(self, dev_name, group_number=1):
         self.register_min_layouts()
 
-    def set_state_status(self, name_db):
+    def set_state_status(self, short=True):
         dev_name = self.dev_name
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
         widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
@@ -57,12 +57,13 @@ class DS_General_Widget(Qt.QWidget):
         s2 = getattr(self, f's2_{dev_name}')
         s3 = getattr(self, f's3_{dev_name}')
 
-        s1.setText(name_db)
+        s1.model = f'{dev_name}/device_friendly_name'
         s2.model = f'{dev_name}/state'
-        s3.model = f'{dev_name}/status'
         lo_status.addWidget(s1)
         lo_status.addWidget(s2)
-        lo_status.addWidget(s3)
+        if not short:
+            s3.model = f'{dev_name}/status'
+            lo_status.addWidget(s3)
 
     @abstractmethod
     def register_full_layouts(self):
@@ -74,9 +75,11 @@ class DS_General_Widget(Qt.QWidget):
 
     @abstractmethod
     def register_min_layouts(self):
-        pass
+        setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_status_{self.dev_name}', Qt.QHBoxLayout())
 
     @property
     def ds(self):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         return ds
+
