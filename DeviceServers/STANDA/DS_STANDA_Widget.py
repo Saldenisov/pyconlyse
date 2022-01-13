@@ -39,9 +39,9 @@ class Standa_motor(DS_General_Widget):
         setattr(self, f'layout_min_{self.dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
 
-    def register_DS_full(self, dev_name, group_number=1):
+    def register_DS_full(self, group_number=1):
         dev_name = self.dev_name
-        super(Standa_motor, self).register_DS_full(dev_name, group_number=1)
+        super(Standa_motor, self).register_DS_full(group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -192,8 +192,10 @@ class Standa_motor(DS_General_Widget):
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
 
-    def register_DS_min(self, dev_name, group_number=1):
-        super(Standa_motor, self).register_DS_min(dev_name, group_number=1)
+    def register_DS_min(self, group_number=1):
+        dev_name = self.dev_name
+
+        super(Standa_motor, self).register_DS_min(group_number=1)
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
