@@ -47,12 +47,14 @@ def main():
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
+    lo_laser_pointing = Qt.QHBoxLayout()
 
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
     button_STANDA = TaurusCommandButton(text='STANDA', parent=panel, icon=QIcon('icons//STANDA.svg'))
     button_OWIS = TaurusCommandButton(text='OWIS', parent=panel, icon=QIcon('icons//OWIS.png'))
     button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
+    button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
 
     cbox_NETIO = TaurusValueComboBox(parent=panel)
     cbox_NETIO.addItems(['all', 'V0', 'VD2'])
@@ -64,7 +66,10 @@ def main():
     cbox_TOPDIRECT.addItems(['all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
     cbox_BASLER.addItems(['V0', 'test'])
+    cbox_laser_pointing = TaurusValueComboBox(parent=panel)
+    cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
 
+    # Type of vizualization
     group_visualization = QtWidgets.QGroupBox('Type')
     group_layout = Qt.QHBoxLayout()
     for typ in VisType:
@@ -85,6 +90,8 @@ def main():
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
     lo_Basler.addWidget(cbox_BASLER)
+    lo_laser_pointing.addWidget(button_laser_pointing)
+    lo_laser_pointing.addWidget(cbox_laser_pointing)
 
     layout_main.addLayout(lo_type)
     layout_main.addLayout(lo_NETIO)
@@ -93,11 +100,20 @@ def main():
     layout_main.addLayout(lo_TOPDIRECT)
     layout_main.addLayout(lo_Basler)
 
+    separator_devices = QtWidgets.QFrame()
+    separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
+    separator_devices.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+    separator_devices.setLineWidth(2)
+
+    layout_main.addWidget(separator_devices)
+    layout_main.addLayout(lo_laser_pointing)
+
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
     button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
+    button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)

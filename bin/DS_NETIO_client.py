@@ -3,7 +3,7 @@ from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from bin.DS_General_Client import main
-from gui.Panels import Netio_Panel
+from gui.Panels import NetioPanel
 from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 
 
@@ -15,4 +15,4 @@ layouts = {'V0': {'selection': ['manip/V0/PDU_VO', 'manip/SD1/PDU_SD1', 'manip/S
 
 
 if __name__ == '__main__':
-    main(Netio_Panel, 'NETIO', Netio_pdu, 'icons//NETIO.ico', layouts)
+    main(NetioPanel, 'NETIO', Netio_pdu, 'icons//NETIO.ico', layouts)

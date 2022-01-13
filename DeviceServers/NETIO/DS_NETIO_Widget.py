@@ -26,8 +26,9 @@ class Netio_pdu(DS_General_Widget):
         ds.subscribe_event("names", tango.EventType.CHANGE_EVENT, self.state_listener)
         ds.subscribe_event("ids", tango.EventType.CHANGE_EVENT, self.state_listener)
 
-    def register_DS_full(self, dev_name, group_number=1):
-        super().register_DS_full(dev_name, group_number=1)
+    def register_DS_full(self, group_number=1):
+        super(Netio_pdu, self).register_DS_full()
+        dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
@@ -58,8 +59,9 @@ class Netio_pdu(DS_General_Widget):
 
         lo_group.addLayout(lo_device)
 
-    def register_DS_min(self, dev_name, group_number=1):
-        super(Netio_pdu, self).register_DS_min(dev_name)
+    def register_DS_min(self, group_number=1):
+        super(Netio_pdu, self).register_DS_min()
+        dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')

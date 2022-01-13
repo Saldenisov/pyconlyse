@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
-from gui.Panels import Standa_Panel
+from gui.Panels import StandaPanel
 from DeviceServers.STANDA.DS_STANDA_Widget import Standa_motor
 from bin.DS_General_Client import main
 
@@ -27,4 +27,4 @@ layouts = {'ELYSE': {'selection': ['elyse/motorized_devices/de1', 'elyse/motoriz
 
 
 if __name__ == '__main__':
-    main(Standa_Panel, 'STANDA', Standa_motor, 'icons//STANDA.svg', layouts)
+    main(StandaPanel, 'STANDA', Standa_motor, 'icons//STANDA.svg', layouts)

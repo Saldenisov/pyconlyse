@@ -2,7 +2,7 @@ import platform
 from ctypes import *
 
 try:
-	from bin.DeviceServers.STANDA.ximc import path_dll
+	from DeviceServers.STANDA.ximc import path_dll
 except ModuleNotFoundError:
 	from ximc import path_dll
 

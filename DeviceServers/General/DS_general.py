@@ -167,5 +167,3 @@ class DS_General(Device):
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:
         pass
-
-

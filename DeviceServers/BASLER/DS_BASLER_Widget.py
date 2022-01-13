@@ -17,10 +17,11 @@ class Basler_camera(DS_General_Widget):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.image_listener)
 
-    def register_DS_full(self, dev_name, group_number=1):
-        super().register_DS_full(dev_name, group_number=1)
+    def register_DS_full(self, group_number=1):
+        super(Basler_camera, self).register_DS_full()
+        dev_name = self.dev_name
 
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        ds: Device = getattr(self, f'ds_{dev_name}')
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
 
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
@@ -114,8 +115,9 @@ class Basler_camera(DS_General_Widget):
         lo_device.addLayout(lo_parameters2)
         lo_group.addLayout(lo_device)
 
-    def register_DS_min(self, dev_name, group_number=1):
-        super(Basler_camera, self).register_DS_min(dev_name)
+    def register_DS_min(self, group_number=1):
+        super(Basler_camera, self).register_DS_min()
+        dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
 

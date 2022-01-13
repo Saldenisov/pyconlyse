@@ -21,4 +21,4 @@ else:
 try:
     from DeviceServers.STANDA.ximc.myximc import *
 except ModuleNotFoundError:
-    from ximc.myximc import *
+    from myximc import *
