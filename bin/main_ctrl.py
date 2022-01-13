@@ -49,6 +49,7 @@ def main():
     lo_Basler = Qt.QHBoxLayout()
     lo_laser_pointing = Qt.QHBoxLayout()
 
+    # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
     button_STANDA = TaurusCommandButton(text='STANDA', parent=panel, icon=QIcon('icons//STANDA.svg'))
     button_OWIS = TaurusCommandButton(text='OWIS', parent=panel, icon=QIcon('icons//OWIS.png'))
@@ -56,6 +57,7 @@ def main():
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
 
+    # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
     cbox_NETIO.addItems(['all', 'V0', 'VD2'])
     cbox_OWIS = TaurusValueComboBox(parent=panel)
