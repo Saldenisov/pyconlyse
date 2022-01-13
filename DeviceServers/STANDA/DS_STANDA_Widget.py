@@ -23,10 +23,10 @@ class Standa_motor(DS_General_Widget):
         self.ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
 
     def register_DS_full(self, group_number=1):
+        super(Standa_motor, self).register_DS_full()
         dev_name = self.dev_name
-        super(Standa_motor, self).register_DS_full(group_number=1)
 
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        ds: Device = getattr(self, f'ds_{dev_name}')
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
         unit = ds.get_property('unit')['unit'][0]
@@ -77,7 +77,7 @@ class Standa_motor(DS_General_Widget):
 
         p1.setText(unit)
         p2.model = f'{dev_name}/position'
-        p2.setFixedWidth(100)
+        p2.setFixedWidth(50)
         p3.model = f'{dev_name}/position'
 
         p3.setMinValue(l_min)
@@ -176,9 +176,8 @@ class Standa_motor(DS_General_Widget):
         lo_group.addWidget(separator)
 
     def register_DS_min(self, group_number=1):
-        dev_name = self.dev_name
-
         super(Standa_motor, self).register_DS_min(group_number=1)
+        dev_name = self.dev_name
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
@@ -194,6 +193,8 @@ class Standa_motor(DS_General_Widget):
 
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_min: Qt.QLayout = getattr(self, f'layout_min_{dev_name}')
+        lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
+
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
 
         # State and status
@@ -223,7 +224,7 @@ class Standa_motor(DS_General_Widget):
 
         p1.setText(unit)
         p2.model = f'{dev_name}/position'
-        p2.setFixedWidth(100)
+        p2.setFixedWidth(50)
         p3.model = f'{dev_name}/position'
 
         p3.setMinValue(l_min)
@@ -268,9 +269,9 @@ class Standa_motor(DS_General_Widget):
         separator.setSizePolicy(Qt.QSizePolicy.Minimum, Qt.QSizePolicy.Expanding)
         separator.setLineWidth(2)
 
+        lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_min)
         lo_device.addLayout(lo_buttons)
-
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
 
@@ -324,8 +325,8 @@ class Standa_motor(DS_General_Widget):
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         print(f'{self.dev_name} is selected.')
         self.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
-        self.panel_parent.active_widget = self.dev_name
-        self.panel_parent.update_background_widgets()
+        self.parent.active_widget = self.dev_name
+        self.parent.update_background_widgets()
 
     def context_menu(self, point):
         menu = QtWidgets.QMenu()
@@ -334,6 +335,7 @@ class Standa_motor(DS_General_Widget):
         one = menu.addAction('1')
         five = menu.addAction('5')
         ten = menu.addAction('10')
+        twenty = menu.addAction('20')
         fifty = menu.addAction('50')
         hundred = menu.addAction('100')
 
@@ -353,6 +355,8 @@ class Standa_motor(DS_General_Widget):
                 move = 5
             elif action == ten:
                 move = 10
+            elif action == twenty:
+                move = 20
             elif action == fifty:
                 move = 50
             elif action == hundred:
