@@ -1,0 +1,308 @@
+const String ID = "55838333832351518082";
+const int pulPin = 13;
+const int dirPin = 12;
+const int enblPin = 11;
+//310 turns in delay line in the long 200mm one
+// 128 - 1 (better 2)
+// 16 - 40 (50)
+//8 - 80 (90)
+//4 - 160 (170)
+//2 - 360 (400)
+int microsteps = 128; // in one step
+int delay_time = 2; // between TTL pulses in us
+//max full microsteps is 62900 (128) for 200mm DL
+//3930 for (16 microsteps) for 100mm DL
+const long max_full_steps = 3930;
+// 0.003198 in one microstep for 128microsteps
+// 0.025584 in one microstep for 16microsteps
+const float step_mm = 0.003198;
+
+float lim_min = -10.0; // in mm
+float lim_max = 10.0; // in mm
+
+//MOVING  RELATED VARIABLES
+float go_pos = 0; // in mm
+long pos = 0; // in microsteps
+float pos_mm = pos * step_mm; // in microsteps
+bool ready_to_work = false;
+bool ctrl_state = false;
+bool moving = false;
+bool move_type = false; // false corrsponds to ABS, True to RELATIVE
+
+
+//CMD RELATED VAIABLES
+const int max_size_cmd = 32;
+char buf[max_size_cmd];
+String str_object = "";
+int res = 0;
+
+//errors
+// 0 - no error
+// -1 - out of range
+// -2 - wrong cmd structure
+// -3 - cmd not known
+
+
+// example cmd
+// MOVE ABS 100.0 in mm
+// MOVE REL -50 in mm
+// POS - get positions of controller
+// SET POS XXX - set position of contoller to a new value
+
+
+void set_state_ctrl(bool state){
+  if (state != ctrl_state){
+    if (!state)
+    {
+      digitalWrite(enblPin, HIGH);
+    }
+    else{
+      digitalWrite(enblPin, LOW);
+    }
+    delay(50);
+
+    ctrl_state = state;
+  }
+  if (!state){
+    moving = false;
+  }
+}
+
+
+void set_dir(int dir){
+  if (dir == 1){
+    digitalWrite(dirPin, LOW);
+  }
+  else if (dir == -1){
+    digitalWrite(dirPin, HIGH);
+  }
+}
+
+
+void make_TTL(){
+    digitalWrite(pulPin, HIGH);
+    digitalWrite(pulPin, LOW);
+    delayMicroseconds(delay_time);
+}
+
+
+long calc_pos_microsteps(float &go_pos){
+    return long(go_pos / step_mm * microsteps);
+}
+
+float calc_pos_mm(long &pos){
+    return float(pos / microsteps * step_mm);
+}
+
+
+int runit(float go_pos, bool move_type, long &pos){
+  long delta;
+  int dir;
+  long go_pos_microsteps = calc_pos_microsteps(go_pos);
+  if (move_type){ // If RELATIVE
+    go_pos_microsteps += pos;
+  }
+
+  delta = go_pos_microsteps - pos;
+
+  if (delta != 0 & go_pos <= lim_max & go_pos >= lim_min & ctrl_state){
+    Serial.println("STARTED");
+    delay(10);
+    if (delta < 0){
+      dir = -1;
+    }
+    else{
+      dir = 1;
+    }
+
+  set_dir(dir);  //setting direction of rotation
+  long n_of_microsteps = abs(delta);
+  long pas = 0;
+  moving = true;
+  while (pas < n_of_microsteps & ctrl_state){
+    make_TTL();
+    pos += dir;
+    pas++;
+  }
+  moving = false;
+  pos_mm = float(pos / microsteps * step_mm);
+  return 0;
+  }
+  else if (delta ==0){
+    Serial.println("STARTED");
+    return 0;
+  }
+  else{
+    return -1;
+  }
+
+}
+
+
+int treat_move(char *p){
+      str_object = String(strtok(p, " "));
+      if (str_object == "ABS"){
+        move_type = false;
+      }
+      else if (str_object == "REL"){
+        move_type = true;
+      }
+      else {
+        res = -2;
+      }
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        go_pos = str_object.toFloat();
+        res = runit(go_pos, move_type, pos);
+      }
+      else{
+        res = -2;
+      }
+       return res;
+}
+
+
+int treat_get(char* p){
+    str_object = String(strtok(p, " "));
+
+    if (str_object == "POS"){
+      Serial.println(pos_mm);
+      return 0;
+    }
+    else if (str_object == "ID"){
+      Serial.println(ID);
+      return 0;
+    }
+    else if (str_object == "LIM_MIN"){
+      Serial.println(lim_min);
+      return 0;
+    }
+    else if (str_object == "LIM_MAX"){
+      Serial.println(lim_max);
+      return 0;
+    }
+    else if (str_object == "STATE"){
+      if (!ctrl_state){
+        Serial.println("NOT_ACTIVE");
+        return 0;
+      }
+      else if (moving){
+        Serial.println("MOVING");
+        return 0;
+      }
+      else{
+        Serial.println("READY");
+        return 0;
+      }
+    }
+    else{
+      return -2;
+    }
+}
+
+
+
+int treat_set(char *p){
+    str_object = String(strtok(p, " "));
+    if (str_object == "POS"){
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        float x = str_object.toFloat();
+        pos = calc_pos_microsteps(x);
+        pos_mm = calc_pos_mm(pos);
+      }
+      else{
+        return -2;
+      }
+    }
+    else if (str_object == "STATE"){
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        bool state = static_cast<bool>(str_object.toInt()) ;
+        set_state_ctrl(state);
+      }
+      else{
+        return -2;
+      }
+    }
+    else if (str_object == "LIM_MIN"){
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        float x = str_object.toFloat();
+        lim_min = x;
+      }
+      else{
+        return -2;
+      }
+    }
+    else if (str_object == "LIM_MAX"){
+      str_object = String(strtok(p, " "));
+      if (str_object != NULL){
+        float x = str_object.toFloat();
+        lim_max = x;
+      }
+      else{
+        return -2;
+      }
+    }
+    return 0;
+}
+
+
+int execute_cmd(String &cmd, long &pos)
+{
+  cmd.toCharArray(buf, sizeof(buf));
+  char *str;
+  char *p = buf;
+  str_object = String(strtok(p, " "));
+  p = NULL;
+  if (str_object == "MOVE"){
+        return treat_move(p);
+     }
+  else if (str_object == "GET"){
+      return treat_get(p);
+    }
+  else if (str_object == "SET"){
+    return treat_set(p);
+  }
+  else{
+    return -3;
+  }
+}
+  unsigned long start_;
+  unsigned long end_;
+  unsigned long delta;
+
+void setup() {
+  // put your setup code here, to run once:
+  pinMode(pulPin, OUTPUT);
+  pinMode(dirPin, OUTPUT);
+  pinMode(enblPin, OUTPUT);
+
+  digitalWrite(pulPin, LOW);
+  digitalWrite(enblPin, LOW);
+  digitalWrite(dirPin, LOW);
+
+  set_state_ctrl(true);
+  set_state_ctrl(false);
+
+  Serial.begin(115200);
+  Serial.setTimeout(2);
+  Serial.println("INITIALIZED");
+
+}
+
+
+void loop() {
+  if (Serial.available() >= 7) {
+    //start_ = micros();
+    str_object = Serial.readString();  // read the incoming cmd into String object
+    //Serial.println(str_object);
+    res = execute_cmd(str_object, pos);  // obtain result 0, -1, -2, -3 (see ERRORS)
+    //end_ = micros();
+    //delta =  end_ - start_;
+    //Serial.println(delta);
+    Serial.println(res);
+    Serial.flush();  //clean serial before receiving the next command. If user send other commands before the execution of previous. Arduino ctrl will reject them.
+  }
+}

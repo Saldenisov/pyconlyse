@@ -1,13 +1,23 @@
-class A:
-    def __init__(self):
-        self.a = 10
+from threading import Thread
+from time import sleep
 
-    def b(self):
 
-        def c():
-            self.a = 20
-        c()
+def test1():
+    while True:
+        i = 10
+        sleep(1)
+        print(i)
 
-a = A()
-a.b()
-print(a.a)
+
+def test2():
+    while True:
+        i = 20
+        sleep(0.25)
+        print(i)
+
+
+a = Thread(target=test1)
+b = Thread(target=test2)
+
+a.start()
+b.start()

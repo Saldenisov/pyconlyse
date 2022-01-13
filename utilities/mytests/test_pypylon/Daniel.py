@@ -1,6 +1,7 @@
 import cv2
 import matplotlib.pyplot as plt
 from pypylon import pylon
+import numpy as np
 
 figure = plt.figure()
 
@@ -8,10 +9,10 @@ def init():
     # conecting to the first available camera
     camera = pylon.InstantCamera(pylon.TlFactory.GetInstance().CreateFirstDevice())
     camera.Open()
-    camera.Width = 550
-    camera.Height = 550
-    camera.OffsetX = 310
-    camera.OffsetY = 290
+    camera.Width = 512
+    camera.Height = 512
+    camera.OffsetX = 0
+    camera.OffsetY = 0
     camera.GainRaw.SetValue(0)
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource.SetValue("Line1")
@@ -21,8 +22,10 @@ def init():
     camera.BalanceRatioRaw.SetValue(64)
     camera.AcquisitionFrameRateEnable.SetValue(False)
     camera.AcquisitionFrameRateAbs.SetValue(5)
-    camera.PixelFormat.SetValue("Mono8")
+    camera.PixelFormat.SetValue("BayerRG8")
     converter = pylon.ImageFormatConverter()
+    converter.OutputPixelFormat = pylon.PixelType_RGB16packed
+    converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 
     # Transport layer
     # Packet Size
@@ -31,8 +34,7 @@ def init():
     camera.GevSCPD.SetValue(1000)
 
     # converting to opencv bgr format
-    converter.OutputPixelFormat = pylon.PixelType_Mono8
-    converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
+
 
     return camera, converter
 
@@ -46,38 +48,14 @@ while camera.IsGrabbing():
     if grabResult.GrabSucceeded():
         # Access the image data
         image = converter.Convert(grabResult)
-        #img = imutils.resize(image.GetArray(), width=300, height=300)
-        img = cv2.GaussianBlur(image.GetArray(), (3, 3), 0)
+        image = np.ndarray(buffer=image.GetBuffer(), shape=(image.GetHeight(), image.GetWidth(), 3), dtype=np.uint16)
+        image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
+        shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)
+        image3D = image2D.reshape(np.roll(shp, 1)).transpose(1, 2, 0)
 
-        # apply thresholding
 
-        ret, thresh = cv2.threshold(img, 80, 255, 0)
-        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-        # edge detection
-        # apply Canny edge detection
-        tight = cv2.Canny(thresh, 60, 255)
-
-        # calculate the centre of moment
-        M = cv2.moments(tight)
-        h, w = tight.shape[:2]
-        if M["m00"] != 0:
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-        else:
-            cX, cY = 0, 0
-
-        # put text and highlight the center
-        # Draw full segment lines
-        cv2.line(img, (cX, 0), (cX, w), (150, 0, 0), 1)
-        cv2.line(img, (0, cY), (h, cY), (150, 0, 0), 1)
-        cv2.circle(img, (cX, cY), 5, (255, 255, 255), -1)
-        cv2.putText(img, "centroid", (cX - 25, cY - 35), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.putText(img, f"X={cX}", (cX+10, cY-70), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.putText(img, f"Y={cY}", (cX+70, cY+15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.drawContours(img, contours, -1, (0, 255, 0), 1)
-
-        cv2.imshow('Raw image', img)
+        cv2.imshow('Raw image', image3D)
 
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
