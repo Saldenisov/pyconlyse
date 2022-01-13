@@ -19,12 +19,11 @@ class TopDirect_Motor(DS_General_Widget):
         self.relative_shift = 1
         super().__init__(device_name, parent, vis_type)
 
-
-    def register_DS_full(self, dev_name, group_number=1):
-        super(TopDirect_Motor, self).register_DS_full(dev_name, group_number=1)
+    def register_DS_full(self, group_number=1):
+        super(TopDirect_Motor, self).register_DS_full()
+        dev_name = self.dev_name
 
         ds: Device = getattr(self, f'ds_{self.dev_name}')
-
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
         setattr(self, f'l_min_{dev_name}', float(ds.get_property('limit_min')['limit_min'][0]))
@@ -156,8 +155,8 @@ class TopDirect_Motor(DS_General_Widget):
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
 
-    def register_DS_min(self, dev_name, group_number=1):
-        pass
+    def register_DS_min(self, group_number=1):
+        super(TopDirect_Motor, self).register_DS_min()
 
     def set_clicked(self, dev_name):
         p: TaurusValueLineEdit = getattr(self, f'p4_{dev_name}')
@@ -180,8 +179,8 @@ class TopDirect_Motor(DS_General_Widget):
     def mouseDoubleClickEvent(self, event: QMouseEvent):
         print(f'{self.dev_name} is selected.')
         self.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
-        self.panel_parent.active_widget = self.dev_name
-        self.panel_parent.update_background_widgets()
+        self.parent.active_widget = self.dev_name
+        self.parent.update_background_widgets()
 
     def context_menu_label(self,  point):
         menu = QtWidgets.QMenu()

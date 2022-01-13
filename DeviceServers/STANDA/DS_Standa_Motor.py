@@ -16,15 +16,15 @@ from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
 
 
-from ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
-                  controller_name_t, status_t, set_position_t, PositionFlags, status_t, device_information_t,
-                  string_at, serial_number_t)
-
 try:
     from DeviceServers.General.DS_Motor import DS_MOTORIZED_MONO_AXIS
 except ModuleNotFoundError:
     from General.DS_Motor import DS_MOTORIZED_MONO_AXIS
 
+
+from DeviceServers.STANDA.ximc import (lib, arch_type, ximc_dir, EnumerateFlags, get_position_t, Result,
+                                       controller_name_t, status_t, set_position_t, PositionFlags, status_t,
+                                       device_information_t, string_at, serial_number_t)
 
 class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """"

@@ -7,27 +7,30 @@ from DeviceServers.BASLER.DS_BASLER_Widget import Basler_camera
 from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
 from DeviceServers.TopDirect.DS_TOPDIRECT_Widget import TopDirect_Motor
+from DeviceServers.LaserPointing.DS_LaserPointing_Widget import LaserPointing
 from DeviceServers.DS_Widget import DS_General_Widget
 from DeviceServers.DS_Widget import VisType
 
 
-class General_Panel(QtWidgets.QWidget):
+class GeneralPanel(QtWidgets.QWidget):
 
     def __init__(self, choice, widget_class: DS_General_Widget, title='', icon: QIcon = None, width=2,
                  vis_type=VisType.FULL, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.vis_type = vis_type
         self.widgets = {}
+
         if title:
             self.setWindowTitle(title)
         if icon:
             self.setWindowIcon(icon)
 
+        self.layout_main = QtWidgets.QVBoxLayout()
+
         self.width = width
         self.number_ds = len(choice)
         self.active_widget = ''
 
-        self.layout_main = QtWidgets.QVBoxLayout()
         number_lo = 1 if self.number_ds // self.width == 0 else self.number_ds // width
 
         for lo_i in range(number_lo):
@@ -56,11 +59,13 @@ class General_Panel(QtWidgets.QWidget):
                 setattr(self, f'{dev_name}', widget_class(dev_name, self, self.vis_type))
                 s_m = getattr(self, f'{dev_name}')
                 self.add_widget(f'{dev_name}', s_m)
+                hspacer = QtWidgets.QSpacerItem(20, 40, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum)
                 lo.addWidget(s_m)
+                lo.addSpacerItem(hspacer)
             i += 1
 
 
-class Standa_Panel(General_Panel):
+class StandaPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != Standa_motor:
@@ -89,7 +94,7 @@ class Standa_Panel(General_Panel):
                 widget.setStyleSheet("")
 
 
-class TopDirect_Panel(General_Panel):
+class TopDirectPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != TopDirect_Motor:
@@ -116,7 +121,7 @@ class TopDirect_Panel(General_Panel):
                 widget.setStyleSheet("")
 
 
-class OWIS_Panel(General_Panel):
+class OWISPanel(GeneralPanel):
     """
     This class determines the panel for OWIS PS90 multi-axes controller.
     """
@@ -135,7 +140,7 @@ class OWIS_Panel(General_Panel):
             group_number = i // self.width
             if dev_name:
                 lo: Qt.QLayout = getattr(self, f'lo_DS_widget_{group_number}')
-                setattr(self, f'{dev_name}', widget_class(dev_name, axes, self))
+                setattr(self, f'{dev_name}', widget_class(dev_name, axes, self, self.vis_type))
                 s_m = getattr(self, f'{dev_name}')
                 self.add_widget(f'{dev_name}', s_m)
                 lo.addWidget(s_m)
@@ -145,7 +150,7 @@ class OWIS_Panel(General_Panel):
         pass
 
 
-class Netio_Panel(General_Panel):
+class NetioPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != Netio_pdu:
@@ -153,9 +158,17 @@ class Netio_Panel(General_Panel):
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
 
 
-class Basler_Panel(General_Panel):
+class BaslerPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != Basler_camera:
+            raise Exception(f'Wrong widget class {widget_class} is passed.')
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class LaserPointingPanel(GeneralPanel):
+
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
+        if widget_class != LaserPointing:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)

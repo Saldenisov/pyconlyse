@@ -22,8 +22,6 @@ class OWIS_motor(DS_General_Widget):
         self.axis_selected = None
         self.axes = axes
         super().__init__(device_name, parent, vis_type)
-
-
         ds: Device = getattr(self, f'ds_{self.dev_name}')
 
         self.states: Dict[int, tango.DevState] = eval(ds.states)
@@ -32,7 +30,9 @@ class OWIS_motor(DS_General_Widget):
         ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.states_listener)
         ds.subscribe_event("positions", tango.EventType.CHANGE_EVENT, self.positions_listener)
 
-    def register_DS_full(self, dev_name, group_number=1):
+    def register_DS_full(self, group_number=1):
+        super(OWIS_motor, self).register_DS_full()
+        dev_name = self.dev_name
         ds: Device = getattr(self, f'ds_{dev_name}')
 
         delay_lines_parameters = ds.get_property('delay_lines_parameters')['delay_lines_parameters'][0]
@@ -189,8 +189,8 @@ class OWIS_motor(DS_General_Widget):
 
         self.layout_main.addLayout(lo_device)
 
-    def register_DS_min(self, dev_name, group_number=1):
-        pass
+    def register_DS_min(self, group_number=1):
+        self.register_DS_full(group_number)
 
     def context_menu_label(self, axis, point):
         menu = QtWidgets.QMenu()

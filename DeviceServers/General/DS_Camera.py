@@ -228,7 +228,6 @@ class DS_CAMERA_CCD(DS_General):
     def get_trigger_delay(self) -> str:
         pass
 
-
     @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)
     def format_pixel(self):
         return self.get_format_pixel()
