@@ -1,0 +1,13 @@
+*.log
+
+/.mypy_cache
+
+*.pyc
+
+*.json
+
+*.xml
+
+*.stpmtr·
+
+.idea/pyconlyse.iml

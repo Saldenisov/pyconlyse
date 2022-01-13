@@ -1,0 +1,1 @@
+pyuic5 Server_main.ui -o Server_main.py
