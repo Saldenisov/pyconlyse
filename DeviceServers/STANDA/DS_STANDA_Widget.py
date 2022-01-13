@@ -22,23 +22,6 @@ class Standa_motor(DS_General_Widget):
         super().__init__(device_name, parent, vis_type)
         self.ds.subscribe_event("position", tango.EventType.CHANGE_EVENT, self.position_listener)
 
-    def position_listener(self, event):
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
-        p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
-        p2.setText(str(ds.position))
-
-    def register_full_layouts(self):
-        super(Standa_motor, self).register_full_layouts()
-        setattr(self, f'layout_pos_{self.dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_preset_{self.dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_info_{self.dev_name}', Qt.QHBoxLayout())
-
-    def register_min_layouts(self):
-        super(Standa_motor, self).register_min_layouts()
-        setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
-        setattr(self, f'layout_min_{self.dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
-
     def register_DS_full(self, group_number=1):
         super(Standa_motor, self).register_DS_full()
         dev_name = self.dev_name
@@ -291,6 +274,23 @@ class Standa_motor(DS_General_Widget):
         lo_device.addLayout(lo_buttons)
         lo_group.addLayout(lo_device)
         lo_group.addWidget(separator)
+
+    def position_listener(self, event):
+        ds: Device = getattr(self, f'ds_{self.dev_name}')
+        p2: TaurusLabel = getattr(self, f'p2_{self.dev_name}')
+        p2.setText(str(ds.position))
+
+    def register_full_layouts(self):
+        super(Standa_motor, self).register_full_layouts()
+        setattr(self, f'layout_pos_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_preset_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_info_{self.dev_name}', Qt.QHBoxLayout())
+
+    def register_min_layouts(self):
+        super(Standa_motor, self).register_min_layouts()
+        setattr(self, f'layout_main_{self.dev_name}', Qt.QVBoxLayout())
+        setattr(self, f'layout_min_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_buttons_{self.dev_name}', Qt.QHBoxLayout())
 
     def combobox_selected(self):
         cb: QtWidgets.QComboBox = getattr(self, f'combobox_prepos_{self.dev_name}')
