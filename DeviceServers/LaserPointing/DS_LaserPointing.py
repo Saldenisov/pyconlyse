@@ -17,6 +17,9 @@ except ModuleNotFoundError:
 
 
 class DS_LaserPointing(DS_ControlPosition):
+    RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
+             'stop_grabbing': [DevState.ON],
+             **DS_ControlPosition.RULES}
     """
     Device Server (Tango) which controls laser pointing.
     """

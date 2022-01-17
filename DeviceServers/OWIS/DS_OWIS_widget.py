@@ -137,7 +137,6 @@ class OWIS_motor(DS_General_Widget):
             setattr(self, f'label_name_{axis}_{dev_name}', lab_name)
             lab_name.clicked.connect(partial(self.label_name_clicked, axis))
 
-
             lab_name_relative_shift = MyQLabel(f'Relative shift: {self.delay_lines_parameters[axis]["relative_shift"]}')
             setattr(self, f'lab_name_relative_shift_{axis}_{dev_name}', lab_name_relative_shift)
 
@@ -308,3 +307,16 @@ class OWIS_motor(DS_General_Widget):
         pos = float(wheel.getValue())
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         ds.move_axis([axis, pos])
+
+    def set_the_control_value(self, value):
+        try:
+            axis = value[0]
+            pos = value[1]
+            wheel: TaurusWheelEdit = getattr(self, f'pos_wheel{axis}_{self.dev_name}')
+            wheel.setValue(pos)
+            ds: Device = getattr(self, f'ds_{self.dev_name}')
+            ds.move_axis([axis, pos])
+        except Exception as e:
+            print(e)
+
+

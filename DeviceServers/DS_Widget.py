@@ -90,3 +90,7 @@ class DS_General_Widget(Qt.QWidget):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         return ds
 
+    @abstractmethod
+    def set_the_control_value(self, value):
+        pass
+

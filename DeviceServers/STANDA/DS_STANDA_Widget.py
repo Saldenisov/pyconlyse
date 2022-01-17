@@ -365,3 +365,13 @@ class Standa_motor(DS_General_Widget):
             self.relative_shift = move
 
             label_shift.setText(f"Relative shift: {move}")
+
+    def set_the_control_value(self, value):
+        try:
+            p3: TaurusWheelEdit = getattr(self, f'p3_{self.dev_name}')
+            p3.setValue(float(value))
+            self.ds.move_axis_abs(float(value))
+        except Exception as e:
+            print(e)
+
+

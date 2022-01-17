@@ -12,6 +12,7 @@ from DeviceServers.DS_Widget import DS_General_Widget, VisType
 from collections import OrderedDict
 from typing import Dict
 from PyQt5 import QtWidgets
+from _functools import partial
 
 
 from DeviceServers import *
@@ -34,6 +35,7 @@ class LaserPointing(DS_General_Widget):
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
+        lo_states: Qt.QLayout = getattr(self, f'layout_states_{dev_name}')
         lo_controls: Qt.QLayout = getattr(self, f'layout_controls_{dev_name}')
         lo_image: Qt.QLayout = getattr(self, f'layout_image_{dev_name}')
         lo_total: Qt.QLayout = getattr(self, f'layout_total_{dev_name}')
@@ -54,9 +56,15 @@ class LaserPointing(DS_General_Widget):
                         ds_widget = ds_class_widget(device_name, self, VisType.MIN)
 
                     self.widgets[device_role] = ds_widget
+                    self.device_servers[device_role] = ds
 
             self.groups: OrderedDict = eval(ds.get_groups)
             self.ds_dict: Dict = eval(ds.get_ds_dict)
+            self.rules: Dict = eval(ds.get_rules)
+
+            # States
+            group = self.set_states()
+            lo_states.addWidget(group)
             # self.groups: OrderedDict = OrderedDict({'Translation stages': ('TranslationStage1')})
             # self.ds_dict: Dict = {'TranslationStage1': ('manip/general/DS_OWIS_PS90', [2])}
 
@@ -79,7 +87,6 @@ class LaserPointing(DS_General_Widget):
 
                     group_box.setLayout(lo_group_loc)
                     lo_controls.addWidget(group_box)
-
             except Exception as e:
                 print(e)
                 raise e
@@ -107,9 +114,12 @@ class LaserPointing(DS_General_Widget):
         # State and status
         self.set_state_status(False)
 
+
+
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
+        lo_device.addLayout(lo_states)
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, group_number=1):
@@ -120,11 +130,33 @@ class LaserPointing(DS_General_Widget):
         setattr(self, f'layout_controls_{self.dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_image_{self.dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_total_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_states_{self.dev_name}', Qt.QHBoxLayout())
 
     def register_min_layouts(self):
         super(LaserPointing, self).register_min_layouts()
         setattr(self, f'layout_controls_{self.dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_image_{self.dev_name}', Qt.QVBoxLayout())
         setattr(self, f'layout_total_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_states_{self.dev_name}', Qt.QHBoxLayout())
 
+    def set_states(self):
+        dev_name = self.dev_name
+        ds: Device = getattr(self, f'ds_{dev_name}')
 
+        lo_states = Qt.QHBoxLayout()
+        self.rules: OrderedDict = eval(ds.get_rules)
+        group = QtWidgets.QGroupBox('States')
+        for state, param in self.rules.items():
+            rb = Qt.QRadioButton(text=str(state))
+            lo_states.addWidget(rb)
+            rb.toggled.connect(partial(self.rb_clicked, param))
+        group.setLayout(lo_states)
+        return group
+
+    def rb_clicked(self, parameters: OrderedDict):
+        for ds_role, state in parameters.items():
+            ds_widget: DS_General_Widget = self.widgets[ds_role]
+            ds_widget.set_the_control_value(state)
+
+    def set_the_control_value(self, value):
+        pass

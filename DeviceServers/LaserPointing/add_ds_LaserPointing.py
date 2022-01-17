@@ -20,8 +20,19 @@ names = {'LaserPointingV0_Cam1': ['manip/V0', 'LaserPointing-Cam1', 'Cam1',
                                       'Actuators 1': ('ActuatorX1', 'ActuatorY1'),
                                       'Actuators 2': ('ActuatorX2', 'ActuatorY2')}
                                      ),
-                                  {'starting_point': {'MainLaserDiaphragm': 9.2, 'Shutter1': -1,
-                                                      'CrimpingDiaphragm': 20}}
+                                  od({'point1': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 40, 'CrimpingDiaphragm2': 60, 'HalfWavePlate1': 50},
+                                      'point2': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 20, 'CrimpingDiaphragm2': 60, 'HalfWavePlate1': 50},
+                                   'point3': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 10, 'CrimpingDiaphragm2': 60, 'HalfWavePlate1': 50},
+                                   'point4': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 60, 'CrimpingDiaphragm2': 40, 'HalfWavePlate1': 50},
+                                   'point5': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 60, 'CrimpingDiaphragm2': 20, 'HalfWavePlate1': 50},
+                                   'point6': {'MainLaserDiaphragm1': 9.2, 'Shutter1': -1,
+                                              'CrimpingDiaphragm1': 60, 'CrimpingDiaphragm2': 10, 'HalfWavePlate1': 50}
+                                   })
                                   ],
          'LaserPointingV0_Cam2': ['manip/V0', 'LaserPointing-Cam2', 'Cam2',
                                   {'Camera': 'manip/V0/Cam2_V0',
@@ -44,8 +55,35 @@ names = {'LaserPointingV0_Cam1': ['manip/V0', 'LaserPointing-Cam1', 'Cam1',
                                       'Actuators 1': ('ActuatorX3', 'ActuatorY3'),
                                       'Actuators 2': ('ActuatorX4', 'ActuatorY4'),
                                       'Translation stages': ('TranslationStage1')}),
-                                  {'starting_point': {'MainLaserDiaphragm': 9.2, 'Shutter1': -1,
-                                                      'CrimpingDiaphragm': 20}}
+                                  od({'point1': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                                 'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                                 'TranslationStage1': (2, 0),
+                                                 'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 40},
+                                   'point2': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                              'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                              'TranslationStage1': (2, 0),
+                                              'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 20},
+                                   'point3': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                              'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                              'TranslationStage1': (2, 0),
+                                              'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 10},
+                                   'point4': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                              'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                              'TranslationStage1': (2, -700),
+                                              'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 40},
+                                   'point5': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                              'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                              'TranslationStage1': (2, -700),
+                                              'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 20},
+                                   'point6': {'MainLaserDiaphragm1': 9.2, 'Shutter1': 1, 'Shutter2': -1,
+                                              'MainLaserDiaphragm2': 80, 'HalfWavePlate1': 40,
+                                              'TranslationStage1': (2, -700),
+                                              'CrimpingDiaphragm1': 30, 'CrimpingDiaphragm2': 10},
+                                   'working': {'MainLaserDiaphragm1': 100, 'Shutter1': 1, 'Shutter2': -1,
+                                               'MainLaserDiaphragm2': 100, 'HalfWavePlate1': 14.5,
+                                               'TranslationStage1': (2, 0),
+                                               'CrimpingDiaphragm1': 100, 'CrimpingDiaphragm2': 100}
+                                   })
                                   ],
 'LaserPointingV0_Cam3': ['manip/V0', 'LaserPointing-Cam3', 'Cam3',
                                   {'Camera': 'manip/V0/Cam3_V0',
@@ -68,8 +106,8 @@ names = {'LaserPointingV0_Cam1': ['manip/V0', 'LaserPointing-Cam1', 'Cam1',
                                       'Actuators 1': ('ActuatorX3', 'ActuatorY3'),
                                       'Actuators 2': ('ActuatorX4', 'ActuatorY4'),
                                       'Translation stages': ('TranslationStage1')}),
-                                  {'starting_point': {'MainLaserDiaphragm': 9.2, 'Shutter1': -1,
-                                                      'CrimpingDiaphragm': 20}}
+                                  od({'starting_point': {'MainLaserDiaphragm': 9.2, 'Shutter1': -1,
+                                                      'CrimpingDiaphragm': 20}})
                                   ]
          }
 
@@ -84,7 +122,7 @@ def main():
         dev_info.server = f'DS_LaserPointing/{i}_{val[2]}'
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1], 'server_id': i,
-                                          'ds_dict': str(val[3]), 'groups': str(val[4]), 'rules': str(val[5])})
+                                          'ds_dict': str(val[3]), 'groups': str(val[4]), 'controller_rules': str(val[5])})
         i += 1
 
 

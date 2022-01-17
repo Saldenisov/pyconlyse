@@ -131,3 +131,6 @@ class Netio_pdu(DS_General_Widget):
 
         self.names = names_new
         self.states = states_new
+
+    def set_the_control_value(self, value):
+        pass
