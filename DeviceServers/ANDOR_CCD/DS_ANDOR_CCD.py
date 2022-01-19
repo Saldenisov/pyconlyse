@@ -9,7 +9,7 @@ import taurus_pyqtgraph as tpg
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
-class Basler_camera(DS_General_Widget):
+class ANDOR_CCD(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.grabbing = False
@@ -18,7 +18,7 @@ class Basler_camera(DS_General_Widget):
         self.timer.timeout.connect(self.image_listener)
 
     def register_DS_full(self, group_number=1):
-        super(Basler_camera, self).register_DS_full()
+        super(ANDOR_CCD, self).register_DS_full()
         dev_name = self.dev_name
 
         ds: Device = getattr(self, f'ds_{dev_name}')
@@ -116,7 +116,7 @@ class Basler_camera(DS_General_Widget):
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, group_number=1):
-        super(Basler_camera, self).register_DS_min()
+        super(ANDOR_CCD, self).register_DS_min()
         dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
@@ -169,13 +169,13 @@ class Basler_camera(DS_General_Widget):
         self.view.setColorMap(cmap)
 
     def register_full_layouts(self):
-        super(Basler_camera, self).register_full_layouts()
+        super(ANDOR_CCD, self).register_full_layouts()
         setattr(self, f'layout_parameters_{self.dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_parameters2_{self.dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
 
     def register_min_layouts(self):
-        super(Basler_camera, self).register_min_layouts()
+        super(ANDOR_CCD, self).register_min_layouts()
         setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
 
     def trigger_mode_changed(self):

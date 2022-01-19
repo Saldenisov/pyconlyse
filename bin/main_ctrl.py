@@ -47,14 +47,16 @@ def main():
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
+    lo_Andor_CCD = Qt.QHBoxLayout()
     lo_laser_pointing = Qt.QHBoxLayout()
 
     # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
     button_STANDA = TaurusCommandButton(text='STANDA', parent=panel, icon=QIcon('icons//STANDA.svg'))
     button_OWIS = TaurusCommandButton(text='OWIS', parent=panel, icon=QIcon('icons//OWIS.png'))
-    button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
+    button_TopDirect = TaurusCommandButton(text='TopDIRECT', parent=panel, icon=QIcon('icons//TopDirect.svg'))
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
+    button_Andor_CCD = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
 
     # Cboxes
@@ -68,6 +70,8 @@ def main():
     cbox_TOPDIRECT.addItems(['all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
     cbox_BASLER.addItems(['V0', 'test'])
+    cbox_ANDOR_CCD = TaurusValueComboBox(parent=panel)
+    cbox_ANDOR_CCD.addItems(['V0'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
     cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
 
@@ -92,6 +96,8 @@ def main():
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
     lo_Basler.addWidget(cbox_BASLER)
+    lo_Andor_CCD.addWidget(button_Andor_CCD)
+    lo_Andor_CCD.addWidget(cbox_ANDOR_CCD)
     lo_laser_pointing.addWidget(button_laser_pointing)
     lo_laser_pointing.addWidget(cbox_laser_pointing)
 
@@ -101,6 +107,7 @@ def main():
     layout_main.addLayout(lo_STANDA)
     layout_main.addLayout(lo_TOPDIRECT)
     layout_main.addLayout(lo_Basler)
+    layout_main.addLayout(lo_Andor_CCD)
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
@@ -115,6 +122,7 @@ def main():
     button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
+    button_Andor_CCD.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_ANDOR_CCD))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
 
     panel.setMinimumWidth(300)
