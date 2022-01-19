@@ -16,6 +16,7 @@ from _functools import partial
 
 
 from DeviceServers import *
+from PyQt5.QtGui import QMouseEvent
 
 
 class LaserPointing(DS_General_Widget):
@@ -57,6 +58,8 @@ class LaserPointing(DS_General_Widget):
 
                     self.widgets[device_role] = ds_widget
                     self.device_servers[device_role] = ds
+                else:
+                    print(f'Device {device_name} is not ready. Restart TANGO if NOTHING HELPS!')
 
             self.groups: OrderedDict = eval(ds.get_groups)
             self.ds_dict: Dict = eval(ds.get_ds_dict)
@@ -72,14 +75,21 @@ class LaserPointing(DS_General_Widget):
                 for device_role, device_name in self.ds_dict.items():
                     register_ds(device_role, device_name)
 
+                def add_widget_loc(lo_group_loc, group_devices):
+                    try:
+                        if isinstance(group_devices, str):
+                            lo_group_loc.addWidget(self.widgets[group_devices])
+                        if isinstance(group_devices, tuple):
+                            for device_role in group_devices:
+                                lo_group_loc.addWidget(self.widgets[device_role])
+                    except KeyError:
+                        pass
+
                 for group_name, group_devices in self.groups.items():
                     group_box = Qt.QGroupBox(group_name)
+                    setattr(self,f'groupbox_{group_name}_{self.dev_name}', group_box)
                     lo_group_loc = Qt.QHBoxLayout()
-                    if isinstance(group_devices, str):
-                        lo_group_loc.addWidget(self.widgets[group_devices])
-                    if isinstance(group_devices, tuple):
-                        for device_role in group_devices:
-                            lo_group_loc.addWidget(self.widgets[device_role])
+                    add_widget_loc(lo_group_loc, group_devices)
 
                     hspacer = QtWidgets.QSpacerItem(0, 40, QtWidgets.QSizePolicy.Expanding,
                                                     QtWidgets.QSizePolicy.Minimum)
@@ -89,7 +99,6 @@ class LaserPointing(DS_General_Widget):
                     lo_controls.addWidget(group_box)
             except Exception as e:
                 print(e)
-                raise e
             lo_image.addWidget(self.widgets['Camera'])
             vspacer = QtWidgets.QSpacerItem(20, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
             lo_image.addSpacerItem(vspacer)
@@ -113,8 +122,6 @@ class LaserPointing(DS_General_Widget):
 
         # State and status
         self.set_state_status(False)
-
-
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
@@ -160,3 +167,7 @@ class LaserPointing(DS_General_Widget):
 
     def set_the_control_value(self, value):
         pass
+
+    def mouseDoubleClickEvent(self, event: QMouseEvent):
+        self.parent.active_widget = self.dev_name
+        self.parent.update_active_widget()

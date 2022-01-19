@@ -271,8 +271,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
         # to change, what if someone wants color converter
-        # self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
-        self.converter.OutputPixelFormat = pylon.PixelType_Mono8
+        self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
+        # self.converter.OutputPixelFormat = pylon.PixelType_Mono8
         self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
         return self._set_parameters(formed_parameters_dict_image_format)
 

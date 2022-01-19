@@ -90,21 +90,25 @@ class Netio_pdu(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{dev_name}')
 
         lo_state: Qt.QLayout = getattr(self, f'layout_state_{dev_name}')
-
-        number_outputs = int(ds.get_property('number_outputs')['number_outputs'][0])
-        names = list(ds.names)
-        ids = list(ds.ids)
-        states = list(ds.states)
-        widgets = [QCheckBox(f'{dev_name}:id:{id}') for _, t, id in zip(range(number_outputs), names, ids)]
         setattr(self, f'checkbox_group_{dev_name}', Qt.QGroupBox('Channels states'))
         group: Qt.QGroupBox = getattr(self, f'checkbox_group_{dev_name}')
-        for cb, state, name, id in zip(widgets, states, names, ids):
-            setattr(self, f'cb{id}_{dev_name}', cb)
-            cb: QCheckBox = getattr(self, f'cb{id}_{dev_name}')
-            cb.setChecked(bool(state))
-            cb.setText(f'{name}:id:{id}')
-            lo_state.addWidget(cb)
-            cb.clicked.connect(partial(self.cb_clicked, dev_name))
+
+        try:
+            number_outputs = int(ds.get_property('number_outputs')['number_outputs'][0])
+            names = list(ds.names)
+            ids = list(ds.ids)
+            states = list(ds.states)
+            widgets = [QCheckBox(f'{dev_name}:id:{id}') for _, t, id in zip(range(number_outputs), names, ids)]
+            for cb, state, name, id in zip(widgets, states, names, ids):
+                setattr(self, f'cb{id}_{dev_name}', cb)
+                cb: QCheckBox = getattr(self, f'cb{id}_{dev_name}')
+                cb.setChecked(bool(state))
+                cb.setText(f'{name}:id:{id}')
+                lo_state.addWidget(cb)
+                cb.clicked.connect(partial(self.cb_clicked, dev_name))
+        except Exception as e:
+            print(e)
+
         group.setLayout(lo_state)
         return group
 

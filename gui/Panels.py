@@ -44,7 +44,8 @@ class GeneralPanel(QtWidgets.QWidget):
             self.layout_main.addWidget(separator)
 
         self.widget_creation(choice, widget_class)
-
+        self.label_active_widget = QtWidgets.QLabel(f'Active widget: {self.active_widget}') 
+        self.layout_main.addWidget(self.label_active_widget)
         self.setLayout(self.layout_main)
 
     def add_widget(self, name, widget):
@@ -64,6 +65,9 @@ class GeneralPanel(QtWidgets.QWidget):
                 lo.addSpacerItem(hspacer)
             i += 1
 
+    def update_active_widget(self):
+        self.label_active_widget.setText(self.active_widget)
+
 
 class StandaPanel(GeneralPanel):
 
@@ -74,24 +78,14 @@ class StandaPanel(GeneralPanel):
         super().__init__(choice=choice, widget_class=widget_class, title=title, icon=icon, width=width, *args, **kwargs)
         self.move_step = 1
 
-    def keyPressEvent(self, event: QKeyEvent):
-        if self.active_widget:
-            ds_widget = self.widgets[self.active_widget]
-            pos = float(ds_widget.pos_widget.text())
-            if event.key() in [Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up]:
-                move_step = self.widgets[self.active_widget].relative_shift
-                if event.key() in [Qt.Key_Left, Qt.Key_Down]:
-                    pos = pos - move_step
-                elif event.key() in [Qt.Key_Right, Qt.Key_Up]:
-                    pos = pos + move_step
-                ds_widget.wheel.setValue(pos)
-                ds_real = getattr(ds_widget, f'ds_{self.active_widget}')
-                ds_real.move_axis_abs(pos)
-
-    def update_background_widgets(self):
+    def update_active_widget(self):
+        super(StandaPanel, self).update_active_widget()
         for w_name, widget in self.widgets.items():
             if w_name != self.active_widget:
                 widget.setStyleSheet("")
+                widget.widget_active = False
+            else:
+                widget.widget_active = True
 
 
 class TopDirectPanel(GeneralPanel):

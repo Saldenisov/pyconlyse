@@ -9,7 +9,7 @@ from enum import Enum
 from typing import List
 from abc import abstractmethod
 from _functools import partial
-
+from PyQt5.QtGui import QIcon, QMouseEvent, QKeyEvent
 
 class VisType(Enum):
     MIN = 'min'
@@ -32,6 +32,7 @@ class DS_General_Widget(Qt.QWidget):
         setattr(self, f'lo_group_{1}', Qt.QHBoxLayout())
         self.layout_main.addLayout(getattr(self, f'lo_group_{1}'))
         self.setLayout(self.layout_main)
+        self.widget_active = False
 
         if self.vis_type == VisType.FULL:
             self.register_DS_full()

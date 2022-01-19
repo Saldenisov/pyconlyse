@@ -9,7 +9,7 @@ countOfImagesToGrab = 1
 maxCamerasToUse = 1
 
 DEVICE = None
-SERIAL_NUMBER = '24058647'
+SERIAL_NUMBER = '22805482'
 # Init all camera
 try:
     # Get the transport layer factory.
@@ -32,7 +32,7 @@ except genicam.GenericException as e:
     print("An exception occurred. {}".format(e))
     exitCode = 1
 
-OffSet = {'X': 500, 'Y': 250}
+OffSet = {'X': 300, 'Y': 380}
 
 test = {}
 
@@ -45,20 +45,17 @@ def init(device):
     a = camera.GetDeviceInfo().GetModelName()
     b = camera.GetDeviceInfo().GetSerialNumber()
     c = camera.GetDeviceInfo().GetIpAddress()
-    camera.GetDeviceInfo().SetFriendlyName('Camera4'.format('utf-8'))
-    d = camera.GetDeviceInfo().GetFriendlyName()
-    camera.Width = 550
-    e = getattr(camera, 'Width').GetValue()
-    camera.Height = 550
+    camera.Width = 370
+    camera.Height = 370
     camera.OffsetX.SetValue(OffSet['X'])
     camera.OffsetY = OffSet['Y']
     camera.GainAuto = 'Off'
     camera.GainRaw = 0
     camera.BlackLevelRaw.SetValue(-30)
     camera.TriggerSource = "Line1"
-    camera.TriggerMode.SetValue("Off")
-    camera.TriggerDelayAbs.SetValue(185000)
-    camera.ExposureTimeAbs.SetValue(15000.0)
+    camera.TriggerMode.SetValue("On")
+    camera.TriggerDelayAbs.SetValue(150000)
+    camera.ExposureTimeAbs.SetValue(50000.0)
     camera.BalanceRatioRaw.SetValue(64)
     camera.AcquisitionFrameRateEnable.SetValue(False)
     camera.AcquisitionFrameRateAbs.SetValue(5)
@@ -115,17 +112,17 @@ def calc(img, threshold=50):
         if M["m00"] != 0:
             cX = int(M["m10"] / M["m00"])
             cY = int(M["m01"] / M["m00"])
-    #plt.figure()
-    #plt.imshow(img)
-    # edge detection
+    # plt.figure()
+    # plt.imshow(img)
+    # # edge detection
     # apply Canny edge detection
     #tight = cv2.Canny(thresh, threshold, 255)
 
     # calculate the centre of moment
-    #cv2.drawContours(img, contours[longest_contour_index], -1, (0, 255, 0), 3)
+    # cv2.drawContours(img, contours[longest_contour_index], -1, (0, 255, 0), 3)
 
 
-    return thresh, cX, cY
+    return thresh, contours, cX, cY, longest_contour_index
 
 
 converters = []
@@ -141,11 +138,11 @@ fig = plt.figure(figsize=(8.5, 5.5))
 ax_im1 = fig.add_subplot(3, 2, 1)
 
 ax1_x = fig.add_subplot(3, 2, 3)
-ax1_x.set_ylim(275, 300)
+ax1_x.set_ylim(250, 275)
 ax1_x.set_ylabel('X1 position')
 
 ax1_y = fig.add_subplot(3, 2, 5)
-ax1_y.set_ylim(260, 285)
+ax1_y.set_ylim(100, 125)
 ax1_y.set_ylabel('Y1 position')
 
 
@@ -167,11 +164,12 @@ while camera.IsGrabbing():
     [p.remove() for p in reversed(ax_im1.patches)]
     img1 = read(camera, converter)
     img1 = image_treat(img1)
-    thresh1, cX1, cY1 = calc(img1)
+    thresh1, contours, cX1, cY1, index = calc(img1)
     positionsX1.append(cX1)
     positionsY1.append(cY1)
     im1.set_data(thresh1)
     im1.set_data(img1)
+
 
     circle1 = Circle((cX1, cY1), radius=10, color='black', zorder=10)
     ax_im1.add_patch(circle1)

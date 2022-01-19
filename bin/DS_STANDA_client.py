@@ -14,7 +14,7 @@ layouts = {'ELYSE': {'selection': ['elyse/motorized_devices/de1', 'elyse/motoriz
            'V0': {'selection': ['manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
                       'manip/V0/dv01', 'manip/V0/dv02', 'manip/V0/dv03', 'manip/V0/dv04',
                       'manip/V0/s1', 'manip/V0/s2', 'manip/V0/s3', 'manip/V0/L-2_1',
-                      'manip/V0/opa_x', 'manip/V0/opa_y', None, None], 'width': 4},
+                      'manip/V0/opa_x', 'manip/V0/opa_y', 'manip/v0/ts_sc_m', 'manip/v0/ts_opa_m'], 'width': 4},
            'V0_short': {'selection': ['manip/V0/dv04', 'manip/V0/L-2_1'], 'width': 2},
            'alignment': {'selection': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
                             'manip/V0/dv01', 'manip/V0/dv02',

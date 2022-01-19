@@ -5,8 +5,7 @@ from taurus import Device
 from taurus.external.qt import Qt
 from PyQt5 import QtWidgets, QtCore
 import tango
-
-from PyQt5.QtGui import QMouseEvent
+from PyQt5.QtGui import QMouseEvent, QKeyEvent
 
 from typing import List
 from _functools import partial
@@ -323,16 +322,18 @@ class Standa_motor(DS_General_Widget):
         ds.move_axis_abs(pos)
 
     def mouseDoubleClickEvent(self, event: QMouseEvent):
-        print(f'{self.dev_name} is selected.')
-        self.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
-        self.parent.active_widget = self.dev_name
-        self.parent.update_background_widgets()
+        if self.parent:
+            print(f'{self.dev_name} is selected.')
+            self.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
+            self.parent.active_widget = self.dev_name
+            self.parent.update_active_widget()
 
     def context_menu(self, point):
         menu = QtWidgets.QMenu()
         tens = menu.addAction('0.1')
         half = menu.addAction('0.5')
         one = menu.addAction('1')
+        two = menu.addAction('2')
         five = menu.addAction('5')
         ten = menu.addAction('10')
         twenty = menu.addAction('20')
@@ -349,6 +350,8 @@ class Standa_motor(DS_General_Widget):
                 move = 0.1
             elif action == half:
                 move = 0.5
+            elif action == two:
+                move = 2
             elif action == one:
                 move = 1
             elif action == five:
@@ -374,4 +377,15 @@ class Standa_motor(DS_General_Widget):
         except Exception as e:
             print(e)
 
-
+    def keyPressEvent(self, event: QKeyEvent):
+        from PyQt5.QtCore import Qt
+        if self.widget_active:
+            ds_widget = self
+            pos = self.ds.position
+            if event.key() in [Qt.Key_Left, Qt.Key_Down, Qt.Key_Right, Qt.Key_Up]:
+                move_step = self.relative_shift
+                if event.key() in [Qt.Key_Left, Qt.Key_Down]:
+                    pos = pos - move_step
+                elif event.key() in [Qt.Key_Right, Qt.Key_Up]:
+                    pos = pos + move_step
+                self.ds.move_axis_abs(pos)
