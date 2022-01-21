@@ -1,6 +1,7 @@
 import pyqtgraph as pg
 import numpy as np
 from taurus import Device
+from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
@@ -58,55 +59,7 @@ class Basler_camera(DS_General_Widget):
         lo_buttons.addWidget(button_off)
 
         # Camera parameters
-        self.width = TaurusValueSpinBox()
-        self.width.model = f'{dev_name}/width'
-        self.width.setValue(ds.width)
-
-        self.height = TaurusValueSpinBox()
-        self.height.model = f'{dev_name}/height'
-        self.height.setValue(ds.height)
-
-        self.offsetX = TaurusValueSpinBox()
-        self.offsetX.model = f'{dev_name}/offsetX'
-        self.offsetX.setValue(ds.offsetX)
-
-        self.offsetY = TaurusValueSpinBox()
-        self.offsetY.model = f'{dev_name}/offsetY'
-        self.offsetY.setValue(ds.offsetY)
-
-        lo_parameters.addWidget(TaurusLabel('Width'))
-        lo_parameters.addWidget(self.width)
-        lo_parameters.addWidget(TaurusLabel('Height'))
-        lo_parameters.addWidget(self.height)
-        lo_parameters.addWidget(TaurusLabel('offsetX'))
-        lo_parameters.addWidget(self.offsetX)
-        lo_parameters.addWidget(TaurusLabel('offsetY'))
-        lo_parameters.addWidget(self.offsetY)
-
-        self.pixel = TaurusValueComboBox()
-        self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12p'])
-        self.pixel.model = f'{dev_name}/format_pixel'
-
-        self.trigger_mode = TaurusValueComboBox()
-        self.trigger_mode.addItems(['On', 'Off'])
-        self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
-
-        self.trigger_delay = TaurusValueSpinBox()
-        self.trigger_delay.model = f'{dev_name}/trigger_delay'
-        self.trigger_delay.setValue(ds.trigger_delay)
-
-        self.exposure_time = TaurusValueSpinBox()
-        self.exposure_time.model = f'{dev_name}/exposure_time'
-        self.exposure_time.setValue(ds.exposure_time)
-
-        lo_parameters2.addWidget(TaurusLabel('Trigger'))
-        lo_parameters2.addWidget(self.trigger_mode)
-        lo_parameters2.addWidget(TaurusLabel('Format'))
-        lo_parameters2.addWidget(self.pixel)
-        lo_parameters2.addWidget(TaurusLabel('Trigger Delay'))
-        lo_parameters2.addWidget(self.trigger_delay)
-        lo_parameters2.addWidget(TaurusLabel('Exposure Time'))
-        lo_parameters2.addWidget(self.exposure_time)
+        self.set_camera_parameters()
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
@@ -144,6 +97,64 @@ class Basler_camera(DS_General_Widget):
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
+
+    def set_camera_parameters(self):
+        dev_name = self.dev_name
+        ds = self.ds
+        self.width = TaurusValueSpinBox()
+        self.width.model = f'{dev_name}/width'
+
+        self.height = TaurusValueSpinBox()
+        self.height.model = f'{dev_name}/height'
+
+        self.offsetX = TaurusValueSpinBox()
+        self.offsetX.model = f'{dev_name}/offsetX'
+
+        self.offsetY = TaurusValueSpinBox()
+        self.offsetY.model = f'{dev_name}/offsetY'
+
+        lo_parameters: Qt.QLayout = getattr(self, f'layout_parameters_{dev_name}')
+        lo_parameters2: Qt.QLayout = getattr(self, f'layout_parameters2_{dev_name}')
+
+        lo_parameters.addWidget(TaurusLabel('Width'))
+        lo_parameters.addWidget(self.width)
+        lo_parameters.addWidget(TaurusLabel('Height'))
+        lo_parameters.addWidget(self.height)
+        lo_parameters.addWidget(TaurusLabel('offsetX'))
+        lo_parameters.addWidget(self.offsetX)
+        lo_parameters.addWidget(TaurusLabel('offsetY'))
+        lo_parameters.addWidget(self.offsetY)
+
+        self.pixel = TaurusValueComboBox()
+        self.pixel.addItems(['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12p'])
+        self.pixel.model = f'{dev_name}/format_pixel'
+
+        self.trigger_mode = TaurusValueComboBox()
+        self.trigger_mode.addItems(['On', 'Off'])
+        self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
+
+        self.trigger_delay = TaurusValueSpinBox()
+        self.trigger_delay.model = f'{dev_name}/trigger_delay'
+
+        self.exposure_time = TaurusValueSpinBox()
+        self.exposure_time.model = f'{dev_name}/exposure_time'
+
+        if ds.state == TaurusDevState.Ready:
+            self.width.setValue(ds.width)
+            self.height.setValue(ds.height)
+            self.offsetX.setValue(ds.offsetX)
+            self.offsetY.setValue(ds.offsetY)
+            self.trigger_delay.setValue(ds.trigger_delay)
+            self.exposure_time.setValue(ds.exposure_time)
+
+        lo_parameters2.addWidget(TaurusLabel('Trigger'))
+        lo_parameters2.addWidget(self.trigger_mode)
+        lo_parameters2.addWidget(TaurusLabel('Format'))
+        lo_parameters2.addWidget(self.pixel)
+        lo_parameters2.addWidget(TaurusLabel('Trigger Delay'))
+        lo_parameters2.addWidget(self.trigger_delay)
+        lo_parameters2.addWidget(TaurusLabel('Exposure Time'))
+        lo_parameters2.addWidget(self.exposure_time)
 
     def set_image(self, lo_image):
         self.view = pg.ImageView()

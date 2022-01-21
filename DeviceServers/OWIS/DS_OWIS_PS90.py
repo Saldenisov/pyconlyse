@@ -9,12 +9,10 @@ from pathlib import Path
 p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
-
 app_folder1 = Path(p).resolve().parents[2]
 sys.path.append(str(app_folder1))
 
 from threading import Thread
-from tango import DevState
 from tango.server import attribute, device_property
 from tango import AttrWriteType, DispLevel, DevState
 

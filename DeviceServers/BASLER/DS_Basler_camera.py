@@ -21,7 +21,7 @@ from pypylon import pylon, genicam
 
 
 class DS_Basler_camera(DS_CAMERA_CCD):
-    '''
+    """
     Basler
     This controls the connection to Basler Cameras. One can also see many of
     the properties form the camera as well as the image observed by it.
@@ -39,7 +39,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     Sensor readout mode: normal (the readout time for each row of pixels
     remains unchanged), fast (the readout time for each row of pixels is
                               reduced, compared to normal readout. )
-    '''
+    """
+
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000

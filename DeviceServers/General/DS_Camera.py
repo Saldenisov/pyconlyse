@@ -8,6 +8,8 @@ from typing import Union, Tuple, Dict, Any
 
 from DeviceServers.General.DS_general import DS_General, standard_str_output
 
+polling_infinite = 10000
+
 
 class DS_CAMERA_CCD(DS_General):
     RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
@@ -55,7 +57,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_camera_model_name(self) -> str:
         pass
 
-    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE)
+    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def exposure_time(self):
         return self.get_exposure_time()
 
@@ -70,7 +72,7 @@ class DS_CAMERA_CCD(DS_General):
     def set_exposure_time(self, value: float):
         pass
 
-    @attribute(label='exposure time min', dtype=float, access=AttrWriteType.READ)
+    @attribute(label='exposure time min', dtype=float, access=AttrWriteType.READ, polling_period=polling_infinite)
     def exposure_min(self):
         return self.get_exposure_min()
 
@@ -78,7 +80,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_exposure_min(self):
         pass
 
-    @attribute(label='exposure time max', dtype=float, access=AttrWriteType.READ)
+    @attribute(label='exposure time max', dtype=float, access=AttrWriteType.READ, polling_period=polling_infinite)
     def exposure_max(self):
         return self.get_exposure_max()
 
@@ -86,7 +88,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_exposure_max(self):
         pass
 
-    @attribute(label='gain', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='gain', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def gain(self):
         self.ggain = self.get_gain()
         return self.ggain
@@ -102,7 +104,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_gain(self) -> int:
         pass
 
-    @attribute(label='gain min', dtype=int, access=AttrWriteType.READ)
+    @attribute(label='gain min', dtype=int, access=AttrWriteType.READ, polling_period=polling_infinite)
     def gain_min(self):
         return self.get_gain_min()
 
@@ -110,7 +112,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_gain_min(self) -> int:
         pass
 
-    @attribute(label='gain max', dtype=int, access=AttrWriteType.READ)
+    @attribute(label='gain max', dtype=int, access=AttrWriteType.READ, polling_period=polling_infinite)
     def gain_max(self):
         return self.get_gain_max()
 
@@ -118,7 +120,8 @@ class DS_CAMERA_CCD(DS_General):
     def get_gain_max(self) -> int:
         pass
 
-    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE,
+               polling_period=polling_infinite)
     def width(self):
         return self.get_width()
 
@@ -149,7 +152,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_width_max(self):
         pass
 
-    @attribute(label='height of the image', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='height of the image', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def height(self):
         return self.get_height()
 
@@ -167,7 +170,7 @@ class DS_CAMERA_CCD(DS_General):
     def turn_on_local(self) -> Union[int, str]:
         pass
 
-    @attribute(label='height min', dtype=int, access=AttrWriteType.READ)
+    @attribute(label='height min', dtype=int, access=AttrWriteType.READ, polling_period=polling_infinite)
     def height_min(self):
         return self.get_height_min()
 
@@ -175,7 +178,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_height_min(self) -> int:
         pass
 
-    @attribute(label='height max', dtype=int, access=AttrWriteType.READ)
+    @attribute(label='height max', dtype=int, access=AttrWriteType.READ, polling_period=polling_infinite)
     def height_max(self):
         return self.get_height_max()
 
@@ -183,7 +186,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_height_max(self) -> int:
         pass
 
-    @attribute(label='offset x axis', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='offset x axis', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def offsetX(self):
         return self.get_offsetX()
 
@@ -198,7 +201,7 @@ class DS_CAMERA_CCD(DS_General):
     def set_offsetX(self, value: int):
         pass
 
-    @attribute(label='offset y axis', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='offset y axis', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def offsetY(self):
         return self.get_offsetY()
 
@@ -213,7 +216,7 @@ class DS_CAMERA_CCD(DS_General):
     def set_offsetY(self, value: int):
         pass
 
-    @attribute(label='trigger delay', dtype=float, access=AttrWriteType.READ_WRITE)
+    @attribute(label='trigger delay', dtype=float, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def trigger_delay(self):
         return self.get_trigger_delay()
 
@@ -228,7 +231,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_trigger_delay(self) -> str:
         pass
 
-    @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)
+    @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def format_pixel(self):
         return self.get_format_pixel()
 
@@ -243,7 +246,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_format_pixel(self) -> str:
         pass
 
-    @attribute(label='actual framerate', dtype=float, access=AttrWriteType.READ)
+    @attribute(label='actual framerate', dtype=float, access=AttrWriteType.READ, polling_period=polling_infinite)
     def framerate(self):
         return self.get_framerate()
 
@@ -251,7 +254,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_framerate(self):
         pass
 
-    @attribute(label='binning_horizontal', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='binning_horizontal', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def binning_horizontal(self):
         return self.get_binning_horizontal()
 
@@ -266,7 +269,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_binning_horizontal(self) -> int:
         pass
 
-    @attribute(label='binning_vertical', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='binning_vertical', dtype=int, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def binning_vertical(self):
         return self.get_binning_vertical()
 
@@ -281,7 +284,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_binning_vertical(self) -> int:
         pass
 
-    @attribute(label='sensor readout mode', dtype=str, access=AttrWriteType.READ)
+    @attribute(label='sensor readout mode', dtype=str, access=AttrWriteType.READ, polling_period=polling_infinite)
     def sensor_readout_mode(self):
         return self.get_sensor_readout_mode()
 
@@ -354,7 +357,6 @@ class DS_CAMERA_CCD(DS_General):
         else:
             self.error(f"Starting grabbing for {self.device_name} did not work, "
                        f"check state of the device {self.get_state()}.")
-
 
     @abstractmethod
     def start_grabbing_local(self):

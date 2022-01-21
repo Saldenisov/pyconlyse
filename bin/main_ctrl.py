@@ -69,7 +69,7 @@ def main():
     cbox_TOPDIRECT = TaurusValueComboBox(parent=panel)
     cbox_TOPDIRECT.addItems(['all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
-    cbox_BASLER.addItems(['V0', 'test'])
+    cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2'])
     cbox_ANDOR_CCD = TaurusValueComboBox(parent=panel)
     cbox_ANDOR_CCD.addItems(['V0'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
