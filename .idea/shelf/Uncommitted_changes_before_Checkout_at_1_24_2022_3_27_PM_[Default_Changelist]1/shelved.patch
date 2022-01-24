@@ -1,0 +1,19 @@
+Index: DeviceServers/ANDOR_CCD/add_ds_ANDOR_CCD.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>from tango import DbDevInfo, Database\r\n\r\ndb = Database()\r\n\r\nnames = {7428: ['manip/CR', 'ANDOR_CCD_V0', 'ANDOR_CCD1', 7428,\r\n                {'Acquisition_Controls': {'SetAcquisitionMode': 3, 'SetTriggerMode': 1, 'SetFastExtTrigger': False,\r\n                                              'SetReadMode': 1, 'SetMultiTrack': (2, 128, 0), 'SetExposureTime': 0.0001,\r\n                                              'SetHSSpeed': 1, 'SetVSSpeed': 1, 'SetADChannel': 1, 'SetPreAmpGain': 0,\r\n                                              'SetBaselineClamp': True, 'SetTemperature': -80, 'CoolerON': True\r\n                                              }}\r\n                ]\r\n         }\r\n\r\n\r\n\r\ndef main():\r\n    i = 1\r\n    for dev_id, val in names.items():\r\n        dev_info = DbDevInfo()\r\n        dev_name = f'{val[0]}/{val[2]}'\r\n        dev_info.name = dev_name\r\n        dev_info._class = 'DS_ANDOR_CCD'\r\n        dev_info.server = f'DS_ANDOR_CCD/{i}_{val[2]}'\r\n        db.add_device(dev_info)\r\n        db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1], 'server_id': i,\r\n                                          'serial_number': val[3], 'parameters': str(val[4])})\r\n        i += 1\r\n\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/DeviceServers/ANDOR_CCD/add_ds_ANDOR_CCD.py b/DeviceServers/ANDOR_CCD/add_ds_ANDOR_CCD.py
+--- a/DeviceServers/ANDOR_CCD/add_ds_ANDOR_CCD.py	
++++ b/DeviceServers/ANDOR_CCD/add_ds_ANDOR_CCD.py	
+@@ -5,7 +5,7 @@
+ names = {7428: ['manip/CR', 'ANDOR_CCD_V0', 'ANDOR_CCD1', 7428,
+                 {'Acquisition_Controls': {'SetAcquisitionMode': 3, 'SetTriggerMode': 1, 'SetFastExtTrigger': False,
+                                               'SetReadMode': 1, 'SetMultiTrack': (2, 128, 0), 'SetExposureTime': 0.0001,
+-                                              'SetHSSpeed': 1, 'SetVSSpeed': 1, 'SetADChannel': 1, 'SetPreAmpGain': 0,
++                                              'SetHSSpeed': (0, 1), 'SetVSSpeed': 1, 'SetADChannel': 1, 'SetPreAmpGain': 0,
+                                               'SetBaselineClamp': True, 'SetTemperature': -80, 'CoolerON': True
+                                               }}
+                 ]
