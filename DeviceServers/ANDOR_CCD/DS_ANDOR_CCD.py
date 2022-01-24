@@ -445,7 +445,67 @@ class Andor_test():
         res = self.dll.SetHSSpeed(typ, index)
         return True if res == 20002 else self._error(res)
 
+    def _SetVSSpeed(self, index: int) -> Tuple[int, bool, str]
+        index = ctypes.c_int(index)
+        res = self.dll.SetVSSpeed(index)
+        return True if res == 20002 else self._error(res)
+
+    def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
+        channel = ctypes.byref(ctypes.c_int(channel))
+        res = self.dll.SetADChannel(int)
+        return True if res == 20002 else self._error(res)
+
+    def _SetPreAmpGain(self, index: int) -> Tuple[int, bool, str]
+        index = ctypes.c_int(index)
+        res = self.dll.SetVSSpeed(index)
+        return True if res == 20002 else self._error(res)
+
+    def _SetTriggerMode(self, mode: int) -> Tuple[int, bool, str]:
+
+        MODES = {0: 'Internal', 1: 'External', 6: 'External Start', 7: 'External Exposure (Bulb)', 9: 'External FVB EM (only valid for EM Newton models in FVB mode', 10: 'Software Trigger', 12: 'External Charge Shifting'}
+        if mode not in MODES:
+            return self._error(-1, user_def=f'Wrong mode {mode} for SetTriggerMode. MODES: {MODES}')
+        mode = ctypes.c_int(mode)
+        res = self.dll.SetTriggerMode(mode)
+        return True if res == 20002 else self._error(res)
+
+    def _SetFastExtTrigger(self, mode: int) -> Tuple[int, bool, str]:
+
+        MODES = {0: 'Disabled', 1: 'Enabled'}
+        if mode not in MODES:
+            return self._error(-1, user_def=f'Wrong mode {mode} for SetFastExtTrigger. MODES: {MODES}')
+        mode = ctypes.c_int(mode)
+        res = self.dll.SetFastExtTrigger(mode)
+        return True if res == 20002 else self._error(res)
+
+    def _SetReadMode(self, mode: int) -> Tuple[int, bool, str]:
+
+        MODES = {0: 'Full Vertical Binning', 1: 'Multi-Track', 2: 'Random-Track', 3: 'Single-Track', 4: 'Image'}
+        if mode not in MODES:
+            return self._error(-1, user_def=f'Wrong mode {mode} for SetReadMode. MODES: {MODES}')
+        mode = ctypes.c_int(mode)
+        res = self.dll.SetReadMode(mode)
+        return True if res == 20002 else self._error(res)
+
     def _SetMultiTrack(self, typ: int, index: int, offset: int, bottom=0, gap=0) -> Tuple[int, bool, str]:
+        """
+        Description This function will set the multi-Track parameters. The tracks are automatically spread
+        evenly over the detector. Validation of the parameters is carried out in the following
+        order:
+         Number of tracks,
+ Track height
+ Offset.
+The first pixels row of the first track is returned via ‘bottom’.
+The number of rows between each track is returned via ‘gap’.
+Parameters int number: number tracks
+Valid values 1 to number of vertical pixels
+int height: height of each track
+Valid values >0 (maximum depends on number of tracks)
+int offset: vertical displacement of tracks
+Valid values depend on number of tracks and track height
+int* bottom: first pixels row of the first track
+int* gap: number of rows between each track (could be 0)
+        """
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
         offset = ctypes.c_int(offset)
@@ -453,6 +513,7 @@ class Andor_test():
         gap = ctypes.byref(ctypes.c_int(gap))
         res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
         return True if res == 20002 else self._error(res)
+
 
     def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
         state = ctypes.c_int(state)
