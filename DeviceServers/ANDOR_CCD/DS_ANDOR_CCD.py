@@ -447,6 +447,30 @@ class Andor_test():
         res = self.dll.SetHSSpeed(typ, index)
         return True if res == 20002 else self._error(res)
 
+    def _SetMultiTrack(self, typ: int, index: int, offset: int, bottom: int, gap: int) -> Tuple[int, bool, str]:
+        typ = ctypes.c_int(typ)
+        index = ctypes.c_int(index)
+        offset = ctypes.c_int(offset)
+        bottom = ctypes.c_int(bottom)
+        gap = ctypes.c_int(gap)
+        res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
+        return True if res == 20002 else self._error(res)
+
+    def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
+        state = ctypes.c_int(state)
+        res = self.dll.SetBaselineClamp(state)
+        return True if res == 20002 else self._error(res)
+
+    def _SetTemperature(self, temperature: int) -> Tuple[int, bool, str]:
+        temperature = ctypes.c_int(temperature)
+        res = self.dll.SetTemperature(temperature)
+        return True if res == 20002 else self._error(res)
+
+    def _CoolerON(self, void: int) -> Tuple[int, bool, str]:
+        void = ctypes.c_int(void)
+        res = self.dll.CoolerON(void)
+        return True if res == 20002 else self._error(res)
+
     def _error(self, code: int, user_def='') -> str:
         """
         :param code: <=0
@@ -490,6 +514,7 @@ class Andor_test():
                 return errors[code]
             else:
                 return user_def
+
 
 if __name__ == "__main__":
     # DS_ANDOR_CCD.run_server()
