@@ -61,8 +61,7 @@ class DS_Netio_pdu(DS_PDU):
                 arg_return = 1, res.json()['Agent']['SerialNumber']
                 outputs_list = res.json()['Outputs']
                 self.__set_attributes_netio(outputs_list)
-        print(arg_return)
-        return arg_return
+        self._device_id_internal, self._uri = arg_return
 
     def get_channels_state_local(self) -> Union[int, str]:
         res = self._get_request()

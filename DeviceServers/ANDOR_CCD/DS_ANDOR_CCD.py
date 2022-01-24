@@ -173,6 +173,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                     self.error(f'Could not open camera. {e}')
             else:
                 self.error(f'Could not find camera.')
+            self._device_id_internal, self._uri = argreturn
             return argreturn
 
     def turn_on_local(self) -> Union[int, str]:
@@ -375,7 +376,17 @@ class Andor_test():
         self.dll = self.load_dll()
 
         self._Initialize()
-        self._GetCameraSerialNumber()
+        func = [self._GetCameraSerialNumber(), self._SetAcquisitionMode(3), self._SetExposureTime(0.0001)]
+
+        results = []
+
+        for f in func:
+            results.append(f)
+
+        print(results)
+
+
+
 
     """
     1) uint32_t Initialize(const CStr directory); DONE
@@ -401,13 +412,13 @@ class Andor_test():
     def _Initialize(self, dir="") -> Tuple[bool, str]:
         dir_char = ctypes.c_char_p(dir.encode('utf-8'))
         res = self.dll.Initialize(dir_char)
-        return True if res == 20002 else False, self._error(res)
+        return True if res == 20002 else self._error(res)
 
     def _GetCameraSerialNumber(self) -> Tuple[int, bool, str]:
         serial_number = ctypes.c_int(0)
         res = self.dll.GetCameraSerialNumber(ctypes.byref(serial_number))
         serial_number = serial_number.value
-        return serial_number if res == 20002 else False, self._error(res)
+        return serial_number if res == 20002 else self._error(res)
 
     def _SetAcquisitionMode(self, mode: int) -> Tuple[int, bool, str]:
         """
@@ -418,23 +429,23 @@ class Andor_test():
             4 Fast Kinetics
             5 Run till abort
         """
-        MODES = []
+        MODES = {1: 'Single Scan', 2: 'Accumulate', 3: 'Kinetics', 4: 'Fast Kinetics', 5: 'Run Till abort'}
         if mode not in MODES:
-            return False, self._error(-1, user_def=f'Wrong mode {mode} for SetAcquisitionMode. MODES: {MODES}')
+            return self._error(-1, user_def=f'Wrong mode {mode} for SetAcquisitionMode. MODES: {MODES}')
         mode = ctypes.c_int(mode)
         res = self.dll.SetAcquisitionMode(mode)
-        return True if res == 20002 else False, self._error(res)
+        return True if res == 20002 else self._error(res)
 
     def _SetExposureTime(self, exp_time: float) -> Tuple[bool, str]:
         exp_time = ctypes.c_float(exp_time)
         res = self.dll.SetExposureTime(exp_time)
-        return True if res == 20002 else False, self._error(res)
+        return True if res == 20002 else self._error(res)
 
     def _SetHSSpeed(self, typ: int, index: int) -> Tuple[bool, str]:
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
         res = self.dll.SetHSSpeed(typ, index)
-        return True if res == 20002 else False, self._error(res)
+        return True if res == 20002 else self._error(res)
 
     def _error(self, code: int, user_def='') -> str:
         """
@@ -482,4 +493,4 @@ class Andor_test():
 
 if __name__ == "__main__":
     # DS_ANDOR_CCD.run_server()
-    Andor_test()
+    a = Andor_test()

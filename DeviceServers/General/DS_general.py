@@ -80,9 +80,8 @@ class DS_General(Device):
         Device.init_device(self)
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
-        device_id_internal, uri = self.find_device()
-        self._uri = uri
-        self._device_id_internal = device_id_internal
+        self._uri = b''
+        self.find_device()
 
         if self._device_id_internal >= 0:
             self.info(f"{self.device_name} was found.", True)
@@ -91,9 +90,9 @@ class DS_General(Device):
             self.set_state(DevState.FAULT)
 
     @abstractmethod
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         """
-        returns device_id_internal and uri if applicable
+        sets device_id_internal and uri if applicable
         """
         pass
 

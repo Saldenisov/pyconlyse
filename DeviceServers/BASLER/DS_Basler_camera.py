@@ -175,7 +175,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.device = None
         super().init_device()
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
@@ -190,7 +190,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.error(f'Could not open camera. {e}')
             else:
                 self.error(f'Could not find camera.')
-            return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self.camera and not self.camera.IsOpen():

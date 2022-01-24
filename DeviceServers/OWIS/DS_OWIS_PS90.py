@@ -91,7 +91,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self.follow = {}
         self.turn_on()
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
@@ -104,7 +104,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 argreturn = self.control_unit_id, f'{self.serial_number}'.encode('utf-8')
             else:
                 self.set_state(DevState.FAULT)
-        return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
