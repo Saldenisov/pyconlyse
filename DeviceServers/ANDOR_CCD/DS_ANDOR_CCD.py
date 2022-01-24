@@ -395,6 +395,7 @@ class Andor_test():
 
 
     """
+    INIT
     1) uint32_t Initialize(const CStr directory); DONE
     2) uint32_t SetAcquisitionMode(int32_t mode); DONE
     3) uint32_t SetExposureTime(float time); DONE
@@ -409,6 +410,13 @@ class Andor_test():
     12) uint32_t SetBaselineClamp(int32_t state); True
     13) uint32_t SetTemperature(int32_t temperature); -50
     14) uint32_t CoolerON(void );
+    
+    READ RAW
+    1) uint32_t SetNumberKinetics(int32_t number);
+    2) uint32_t PrepareAcquisition(void );
+    3) uint32_t StartAcquisition(void );
+    4) uint32_t GetStatus(int32_t *status);
+    5) uint32_t GetAcquiredData(int32_t *array, uint32_t size);
     """
 
     def load_dll(self):
@@ -540,6 +548,10 @@ class Andor_test():
 
     def _CoolerON(self) -> Tuple[bool, str]:
         res = self.dll.CoolerON()
+        return True if res == 20002 else self._error(res)
+
+    def _CoolerOff(self) -> Tuple[bool, str]:
+        res = self.dll.CoolerOff()
         return True if res == 20002 else self._error(res)
 
     def _ShutDown(self):
