@@ -8,7 +8,7 @@ sys.path.append(str(app_folder))
 
 from typing import Tuple, Union
 import ctypes
-
+import inspect
 
 import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
@@ -371,12 +371,20 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 class Andor_test():
 
     def __init__(self):
+        self.n_ad_channels = None
+        self.serial_number_real = None
+
         from pathlib import Path
         self.dll_path = Path('C:/dev/pyconlyse/DeviceServers/ANDOR_CCD/atmcd32d.dll')
         self.dll = self.load_dll()
 
         self._Initialize()
-        func = [self._GetCameraSerialNumber(), self._SetAcquisitionMode(3), self._SetExposureTime(0.0001)]
+        func = [self._GetCameraSerialNumber(), self._GetNumberADChannels(), self._SetAcquisitionMode(3),
+                self._SetExposureTime(0.0001),
+                self._SetHSSpeed(0, 1), self._SetVSSpeed(1), self._SetADChannel(1), self._SetPreAmpGain(0),
+                self._SetTriggerMode(1), self._SetFastExtTrigger(0), self._SetReadMode(1),
+                self._SetMultiTrack(2, 128, 0), self._SetBaselineClamp(1), self._SetTemperature(-80), self._CoolerON(),
+                self._ShutDown()]
 
         results = []
 
@@ -390,16 +398,16 @@ class Andor_test():
     1) uint32_t Initialize(const CStr directory); DONE
     2) uint32_t SetAcquisitionMode(int32_t mode); DONE
     3) uint32_t SetExposureTime(float time); DONE
-    4) uint32_t SetHSSpeed(int32_t type, int32_t index); EM AMP 1
-    5) uint32_t SetVSSpeed(int32_t index); 1
-    6) uint32_t SetADChannel(int32_t channel); 1
-    7) uint32_t SetPreAmpGain(int32_t index); 0
-    8) uint32_t SetTriggerMode(int32_t mode); External
-    9) uint32_t SetFastExtTrigger(int32_t mode); False
-    10) uint32_t SetReadMode(int32_t mode); Multi-Track
-    11) uint32_t SetMultiTrack(int32_t number, int32_t height, int32_t offset, int32_t *bottom, int32_t *gap); 2 128, 
+    4) uint32_t SetHSSpeed(int32_t type, int32_t index); DONE
+    5) uint32_t SetVSSpeed(int32_t index); DONE
+    6) uint32_t SetADChannel(int32_t channel); DONE
+    7) uint32_t SetPreAmpGain(int32_t index); DONE
+    8) uint32_t SetTriggerMode(int32_t mode); DONE
+    9) uint32_t SetFastExtTrigger(int32_t mode); DONE
+    10) uint32_t SetReadMode(int32_t mode); DONE
+    11) uint32_t SetMultiTrack(int32_t number, int32_t height, int32_t offset, int32_t *bottom, int32_t *gap); DONE 
     12) uint32_t SetBaselineClamp(int32_t state); True
-    13) uint32_t SetTemperature(int32_t temperature); -80
+    13) uint32_t SetTemperature(int32_t temperature); -50
     14) uint32_t CoolerON(void );
     """
 
@@ -412,13 +420,19 @@ class Andor_test():
         res = self.dll.Initialize(dir_char)
         return True if res == 20002 else self._error(res)
 
-    def _GetCameraSerialNumber(self) -> Tuple[int, bool, str]:
+    def _GetCameraSerialNumber(self) -> Tuple[bool, str]:
         serial_number = ctypes.c_int(0)
         res = self.dll.GetCameraSerialNumber(ctypes.byref(serial_number))
-        serial_number = serial_number.value
-        return serial_number if res == 20002 else self._error(res)
+        self.serial_number_real = serial_number.value
+        return True if res == 20002 else self._error(res)
 
-    def _SetAcquisitionMode(self, mode: int) -> Tuple[int, bool, str]:
+    def _GetNumberADChannels(self):
+        n_ad_channels = ctypes.c_int(0)
+        res = self.dll.GetNumberADChannels(ctypes.byref(n_ad_channels))
+        self.n_ad_channels = n_ad_channels.value
+        return True if res == 20002 else self._error(res)
+
+    def _SetAcquisitionMode(self, mode: int) -> Tuple[bool, str]:
         """
         mode:
             1 Single Scan
@@ -445,17 +459,17 @@ class Andor_test():
         res = self.dll.SetHSSpeed(typ, index)
         return True if res == 20002 else self._error(res)
 
-    def _SetVSSpeed(self, index: int) -> Tuple[int, bool, str]
+    def _SetVSSpeed(self, index: int) -> Tuple[bool, str]:
         index = ctypes.c_int(index)
         res = self.dll.SetVSSpeed(index)
         return True if res == 20002 else self._error(res)
 
     def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
-        channel = ctypes.byref(ctypes.c_int(channel))
-        res = self.dll.SetADChannel(int)
+        channel = ctypes.c_int(channel)
+        res = self.dll.SetADChannel(channel)
         return True if res == 20002 else self._error(res)
 
-    def _SetPreAmpGain(self, index: int) -> Tuple[int, bool, str]
+    def _SetPreAmpGain(self, index: int) -> Tuple[int, bool, str]:
         index = ctypes.c_int(index)
         res = self.dll.SetVSSpeed(index)
         return True if res == 20002 else self._error(res)
@@ -492,19 +506,19 @@ class Andor_test():
         Description This function will set the multi-Track parameters. The tracks are automatically spread
         evenly over the detector. Validation of the parameters is carried out in the following
         order:
-         Number of tracks,
- Track height
- Offset.
-The first pixels row of the first track is returned via ‘bottom’.
-The number of rows between each track is returned via ‘gap’.
-Parameters int number: number tracks
-Valid values 1 to number of vertical pixels
-int height: height of each track
-Valid values >0 (maximum depends on number of tracks)
-int offset: vertical displacement of tracks
-Valid values depend on number of tracks and track height
-int* bottom: first pixels row of the first track
-int* gap: number of rows between each track (could be 0)
+        - Number of tracks,
+        - Track height
+        - Offset.
+        The first pixels row of the first track is returned via ‘bottom’.
+        The number of rows between each track is returned via ‘gap’.
+        Parameters int number: number tracks
+        Valid values 1 to number of vertical pixels
+        int height: height of each track
+        Valid values >0 (maximum depends on number of tracks)
+        int offset: vertical displacement of tracks
+        Valid values depend on number of tracks and track height
+        int* bottom: first pixels row of the first track
+        int* gap: number of rows between each track (could be 0)
         """
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
@@ -514,10 +528,9 @@ int* gap: number of rows between each track (could be 0)
         res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
         return True if res == 20002 else self._error(res)
 
-
     def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
         state = ctypes.c_int(state)
-        res = self.dll.SetBaselineClamp(ctypes.byref(state))
+        res = self.dll.SetBaselineClamp(state)
         return True if res == 20002 else self._error(res)
 
     def _SetTemperature(self, temperature: int) -> Tuple[bool, str]:
@@ -527,6 +540,10 @@ int* gap: number of rows between each track (could be 0)
 
     def _CoolerON(self) -> Tuple[bool, str]:
         res = self.dll.CoolerON()
+        return True if res == 20002 else self._error(res)
+
+    def _ShutDown(self):
+        res = self.dll.ShutDown()
         return True if res == 20002 else self._error(res)
 
     def _error(self, code: int, user_def='') -> str:
@@ -563,15 +580,19 @@ int* gap: number of rows between each track (could be 0)
                   20119: 'DRV_ERROR_BUFFSIZE', 20121: 'DRV_ERROR_NOHANDLE', 20130: 'DRV_GATING_NOT_AVAILABLE',
                   20131: 'DRV_FPGA_VOLTAGE_ERROR', 20099: 'DRV_BINNING_ERROR', 20100: 'DRV_INVALID_AMPLIFIER',
                   20101: 'DRV_INVALID_COUNTCONVERT_MODE'}
+        res = ''
         if code not in errors and user_def == '':
-            return f"Wrong code number {code}"
+            res = f"Wrong code number {code}"
         elif user_def != '':
-            return user_def
+            res = user_def
         else:
             if code != 0:
-                return errors[code]
+                res = errors[code]
             else:
-                return user_def
+                res = user_def
+        print(f'Error: {res}, Caller: {inspect.stack()[1].function}')
+        return user_def
+
 
 
 if __name__ == "__main__":
