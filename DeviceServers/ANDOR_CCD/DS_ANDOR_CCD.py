@@ -408,11 +408,37 @@ class Andor_test():
         return dll
 
     def _Initialize(self, dir="") -> Tuple[bool, str]:
+        """
+        Description     This function will initialize the Andor SDK System. As part of the initialization procedure on
+                        some cameras (i.e. Classic, iStar and earlier iXion) the DLL will need access to a
+                        DETECTOR.INI which contains information relating to the detector head, number pixels,
+                        readout speeds etc. If your system has multiple cameras then see the section Controlling
+                        multiple cameras
+        Parameters      char* dir: Path to the directory containing the files
+        Return          unsigned int
+                        DRV_SUCCESS                 Initialisation successful.
+                        DRV_VXDNOTINSTALLED         VxD not loaded.
+                        DRV_INIERROR                Unable to load “DETECTOR.INI”.
+                        DRV_COFERROR                Unable to load “*.COF”.
+                        DRV_FLEXERROR               Unable to load “*.RBF”.
+                        DRV_ERROR_ACK               Unable to communicate with card.
+                        DRV_ERROR_FILELOAD          Unable to load “*.COF” or “*.RBF” files.
+                        DRV_ERROR_PAGELOCK          Unable to acquire lock on requested memory.
+                        DRV_USBERROR                Unable to detect USB device or not USB2.0.
+                        DRV_ERROR_NOCAMERA          No camera found
+        """
         dir_char = ctypes.c_char_p(dir.encode('utf-8'))
         res = self.dll.Initialize(dir_char)
         return True if res == 20002 else self._error(res)
 
     def _GetCameraSerialNumber(self) -> Tuple[int, bool, str]:
+        """
+        Description         This function will retrieve camera’s serial number.
+        Parameters          int *number: Serial Number.
+        Return              unsigned int
+                            DRV_SUCCESS             Serial Number returned.
+                            DRV_NOT_INITIALIZED     System not initialized.
+        """
         serial_number = ctypes.c_int(0)
         res = self.dll.GetCameraSerialNumber(ctypes.byref(serial_number))
         serial_number = serial_number.value
@@ -420,12 +446,21 @@ class Andor_test():
 
     def _SetAcquisitionMode(self, mode: int) -> Tuple[int, bool, str]:
         """
-        mode:
-            1 Single Scan
-            2 Accumulate
-            3 Kinetics
-            4 Fast Kinetics
-            5 Run till abort
+        Description         This function will set the acquisition mode to be used on the next StartAcquisition.
+        Parameters          int mode: the acquisition mode.
+
+                            Valid values:
+                            1 Single Scan
+                            2 Accumulate
+                            3 Kinetics
+                            4 Fast Kinetics
+                            5 Run till abort
+
+        Return              unsigned int
+                            DRV_SUCCESS             Acquisition mode set.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_P1INVALID           Acquisition Mode invalid.
         """
         MODES = {1: 'Single Scan', 2: 'Accumulate', 3: 'Kinetics', 4: 'Fast Kinetics', 5: 'Run Till abort'}
         if mode not in MODES:
@@ -435,32 +470,112 @@ class Andor_test():
         return True if res == 20002 else self._error(res)
 
     def _SetExposureTime(self, exp_time: float) -> Tuple[bool, str]:
+        """
+        Description         This function will set the exposure time to the nearest valid value not less than the given
+                            value. The actual exposure time used is obtained by GetAcquisitionTimings. . Please
+                            refer to SECTION 5 – ACQUISITION MODES for further information.
+        Parameters          float time: the exposure time in seconds.
+        Return              unsigned int
+                            DRV_SUCCESS             Exposure time accepted.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_P1INVALID           Exposure Time invalid.
+        """
         exp_time = ctypes.c_float(exp_time)
         res = self.dll.SetExposureTime(exp_time)
         return True if res == 20002 else self._error(res)
 
     def _SetHSSpeed(self, typ: int, index: int) -> Tuple[bool, str]:
+        """
+        Description         This function will set the speed at which the pixels are shifted into the output node during
+                            the readout phase of an acquisition. Typically your camera will be capable of operating at
+                            several horizontal shift speeds. To get the actual speed that an index corresponds to use
+                            the GetHSSpeed function.
+        Parameters          int typ: output amplification.
+                            Valid values:   0 electron multiplication/Conventional(clara).
+                                            1 conventional/Extended NIR mode(clara).
+        int index: the horizontal speed to be used
+        Valid values        0 to GetNumberHSSpeeds()-1
+        Return              unsigned int
+                            DRV_SUCCESS             Horizontal speed set.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_P1INVALID           Mode is invalid.
+                            DRV_P2INVALID           Index is out off range.
+        """
+
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
         res = self.dll.SetHSSpeed(typ, index)
         return True if res == 20002 else self._error(res)
 
     def _SetVSSpeed(self, index: int) -> Tuple[int, bool, str]
+    """
+    Description         This function will set the vertical speed to be used for subsequent acquisitions
+    Parameters          int index: index into the vertical speed table
+    Valid values        0 to GetNumberVSSpeeds-1
+    Return              unsigned int
+                        DRV_SUCCESS             Vertical speed set.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_P1INVALID           Index out of range.
+    """
         index = ctypes.c_int(index)
         res = self.dll.SetVSSpeed(index)
         return True if res == 20002 else self._error(res)
 
     def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
+        """
+    Description         This function will set the AD channel to one of the possible A-Ds of the system. This AD
+                        channel will be used for all subsequent operations performed by the system.
+    Parameters          int index: the channel to be used
+    Valid values:       0 to GetNumberADChannels-1
+    Return              unsigned int
+                        DRV_SUCCESS     AD channel set.
+                        DRV_P1INVALID   Index is out off range.
+        """
         channel = ctypes.byref(ctypes.c_int(channel))
         res = self.dll.SetADChannel(int)
         return True if res == 20002 else self._error(res)
 
     def _SetPreAmpGain(self, index: int) -> Tuple[int, bool, str]
+    """
+    Description         This function will set the pre amp gain to be used for subsequent acquisitions. The actual
+                        gain factor that will be applied can be found through a call to the GetPreAmpGain
+                        function.
+                        The number of Pre Amp Gains available is found by calling the GetNumberPreAmpGains
+                        function.
+    Parameters          int index: index pre amp gain table
+    Valid values        0 to GetNumberPreAmpGains-1
+    Return              unsigned int
+    DRV_SUCCESS             Pre amp gain set.
+    DRV_NOT_INITIALIZED     System not initialized.
+    DRV_ACQUIRING           Acquisition in progress.
+    DRV_P1INVALID           Index out of range
+    """
         index = ctypes.c_int(index)
         res = self.dll.SetVSSpeed(index)
         return True if res == 20002 else self._error(res)
 
     def _SetTriggerMode(self, mode: int) -> Tuple[int, bool, str]:
+        """
+        Description         This function will set the trigger mode that the camera will operate in.
+        Parameters          int mode: trigger mode
+        Valid values:
+                            0. Internal
+                            1. External
+                            6. External Start
+                            7. External Exposure (Bulb)
+                            9. External FVB EM (only valid for EM Newton models in FVB mode)
+                            10. Software Trigger
+                            12. External Charge Shifting
+
+        Return              unsigned int
+                            DRV_SUCCESS             Trigger mode set.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_P1INVALID           Trigger mode invalid.
+        """
 
         MODES = {0: 'Internal', 1: 'External', 6: 'External Start', 7: 'External Exposure (Bulb)', 9: 'External FVB EM (only valid for EM Newton models in FVB mode', 10: 'Software Trigger', 12: 'External Charge Shifting'}
         if mode not in MODES:
@@ -470,6 +585,17 @@ class Andor_test():
         return True if res == 20002 else self._error(res)
 
     def _SetFastExtTrigger(self, mode: int) -> Tuple[int, bool, str]:
+        """
+        Description         This function will enable fast external triggering. When fast external triggering is enabled
+                            the system will NOT wait until a “Keep Clean” cycle has been completed before
+                            accepting the next trigger. This setting will only have an effect if the trigger mode has
+                            been set to External via SetTriggerMode.
+        Parameters          int mode:
+                            0 Disabled
+                            1 Enabled
+        Return              unsigned int
+        DRV_SUCCESS         Parameters accepted.
+        """
 
         MODES = {0: 'Disabled', 1: 'Enabled'}
         if mode not in MODES:
@@ -479,6 +605,21 @@ class Andor_test():
         return True if res == 20002 else self._error(res)
 
     def _SetReadMode(self, mode: int) -> Tuple[int, bool, str]:
+        """
+        Description         This function will set the readout mode to be used on the subsequent acquisitions.
+        Parameters          int mode: readout mode
+        Valid values:
+                            0 Full Vertical Binning
+                            1 Multi-Track
+                            2 Random-Track
+                            3 Single-Track
+                            4 Image
+        Return              unsigned int
+                            DRV_SUCCESS             Readout mode set.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_P1INVALID           Invalid readout mode passed.
+        """
 
         MODES = {0: 'Full Vertical Binning', 1: 'Multi-Track', 2: 'Random-Track', 3: 'Single-Track', 4: 'Image'}
         if mode not in MODES:
@@ -489,22 +630,29 @@ class Andor_test():
 
     def _SetMultiTrack(self, typ: int, index: int, offset: int, bottom=0, gap=0) -> Tuple[int, bool, str]:
         """
-        Description This function will set the multi-Track parameters. The tracks are automatically spread
-        evenly over the detector. Validation of the parameters is carried out in the following
-        order:
-         Number of tracks,
- Track height
- Offset.
-The first pixels row of the first track is returned via ‘bottom’.
-The number of rows between each track is returned via ‘gap’.
-Parameters int number: number tracks
-Valid values 1 to number of vertical pixels
-int height: height of each track
-Valid values >0 (maximum depends on number of tracks)
-int offset: vertical displacement of tracks
-Valid values depend on number of tracks and track height
-int* bottom: first pixels row of the first track
-int* gap: number of rows between each track (could be 0)
+        Description     This function will set the multi-Track parameters. The tracks are automatically spread
+                        evenly over the detector. Validation of the parameters is carried out in the following
+                        order:
+                         Number of tracks,
+                         Track height
+                         Offset.
+                        The first pixels row of the first track is returned via ‘bottom’.
+                        The number of rows between each track is returned via ‘gap’.
+        Parameters      int number: number tracks
+                                Valid values 1 to number of vertical pixels
+                        int height: height of each track
+                                Valid values >0 (maximum depends on number of tracks)
+                        int offset: vertical displacement of tracks
+                                Valid values depend on number of tracks and track height
+                        int* bottom: first pixels row of the first track
+                        int* gap: number of rows between each track (could be 0)
+        Return          unsigned int
+                        DRV_SUCCESS             Parameters set.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_P1INVALID           Number of tracks invalid.
+                        DRV_P2INVALID           Track height invalid.
+                        DRV_P3INVALID           Offset invalid.
         """
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
@@ -516,16 +664,54 @@ int* gap: number of rows between each track (could be 0)
 
 
     def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
+        """
+        Description         This function turns on and off the baseline clamp functionality. With this feature enabled
+                            the baseline level of each scan in a kinetic series will be more consistent across the
+                            sequence.
+        Parameters          int state: Enables/Disables Baseline clamp functionality
+                                1 – Enable Baseline Clamp
+                                0 – Disable Baseline Clamp
+        Return              unsigned int
+                            DRV_SUCCESS             Parameters set.
+                            DRV_NOT_INITIALIZED     System not initialized.
+                            DRV_ACQUIRING           Acquisition in progress.
+                            DRV_NOT_SUPPORTED       Baseline Clamp not supported on this camera
+                            DRV_P1INVALID           State parameter was not zero or one.
+        """
         state = ctypes.c_int(state)
         res = self.dll.SetBaselineClamp(ctypes.byref(state))
         return True if res == 20002 else self._error(res)
 
     def _SetTemperature(self, temperature: int) -> Tuple[bool, str]:
+        """
+    Description         This function will set the desired temperature of the detector. To turn the cooling ON and
+                        OFF use the CoolerON and CoolerOFF function respectively.
+    Parameters          int temperature: the temperature in Centigrade.
+                        Valid range is given by GetTemperatureRange
+    Return              unsigned int
+                        DRV_SUCCESS             Temperature set.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_ERROR_ACK           Unable to communicate with card.
+                        DRV_P1INVALID           Temperature invalid.
+                        DRV_NOT_SUPPORTED       The camera does not support setting the temperature.
+        """
         temperature = ctypes.c_int(temperature)
         res = self.dll.SetTemperature(temperature)
         return True if res == 20002 else self._error(res)
 
     def _CoolerON(self) -> Tuple[bool, str]:
+        """
+    Description         Switches ON the cooling. On some systems the rate of temperature change is controlled
+                        until the temperature is within 3º of the set value. Control is returned immediately to the
+                        calling application.
+    Parameters          NONE
+    Return              unsigned int
+                        DRV_SUCCESS             Temperature controller switched ON.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_ERROR_ACK           Unable to communicate with card.
+        """
         res = self.dll.CoolerON()
         return True if res == 20002 else self._error(res)
 
