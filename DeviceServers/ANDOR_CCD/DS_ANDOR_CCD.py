@@ -558,6 +558,124 @@ class Andor_test():
         res = self.dll.ShutDown()
         return True if res == 20002 else self._error(res)
 
+    def _SetNumberKinetics(self, number: int) -> Tuple[int, bool, str]:
+        """
+    Description         This function will set the number of scans (possibly accumulated scans) to be taken
+                        during a single acquisition sequence. This will only take effect if the acquisition mode is
+                        Kinetic Series.
+    Parameters          int number: number of scans to store
+    Return              unsigned int
+                        DRV_SUCCESS             Series length set.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_P1INVALID           Number in series invalid
+        """
+        number = ctypes.c_int(number)
+        res = self.dll.SetNumberKinetics(number)
+        return True if res == 20002 else self._error(res)
+
+    def _PrepareAcquisition(self) -> Tuple[bool, str]:
+        """
+    Description     This function reads the current acquisition setup and allocates and configures any
+                    memory that will be used during the acquisition. The function call is not required as it will
+                    be called automatically by the StartAcquisition function if it has not already been called
+                    externally.
+                    However for long kinetic series acquisitions the time to allocate and configure any
+                    memory can be quite long which can result in a long delay between calling
+                    StartAcquisition and the acquisition actually commencing. For iDus, there is an additional
+                    delay caused by the camera being set-up with any new acquisition parameters. Calling
+                    PrepareAcquisition first will reduce this delay in the StartAcquisition call.
+    Parameters      NONE
+    Return          unsigned int
+                    DRV_SUCCESS             Acquisition prepared.
+                    DRV_NOT_INITIALIZED     System not initialized.
+                    DRV_ACQUIRING           Acquisition in progress.
+                    DRV_VXDNOTINSTALLED     VxD not loaded.
+                    DRV_ERROR_ACK           Unable to communicate with card.
+                    DRV_INIERROR            Error reading “DETECTOR.INI”.
+                    DRV_ACQERROR            Acquisition settings invalid.
+                    DRV_ERROR_PAGELOCK      Unable to allocate memory.
+                    DRV_INVALID_FILTER      Filter not available for current acquisition.
+                    DRV_IOCERROR            Integrate On Chip setup error.
+                    DRV_BINNING_ERROR       Range not multiple of horizontal binning.
+                    DRV_SPOOLSETUPERROR     Error with spool settings.
+        """
+        res = self.dll.PrepareAcquisition()
+        return True if res == 20002 else self._error(res)
+
+    def _StartAcquisition(self) -> Tuple[bool, str]:
+        """
+    Description         This function starts an acquisition. The status of the acquisition can be monitored via
+                        GetStatus().
+    Parameters          NONE
+    Return              unsigned int
+                        DRV_SUCCESS             Acquisition started.
+                        DRV_NOT_INITIALIZED     System not initialized.
+                        DRV_ACQUIRING           Acquisition in progress.
+                        DRV_VXDNOTINSTALLED     VxD not loaded.
+                        DRV_ERROR_ACK           Unable to communicate with card.
+                        DRV_INIERROR            Error reading “DETECTOR.INI”.
+                        DRV_ACQERROR            Acquisition settings invalid.
+                        DRV_ERROR_PAGELOCK      Unable to allocate memory.
+                        DRV_INVALID_FILTER      Filter not available for current acquisition.
+                        DRV_BINNING_ERROR       Range not multiple of horizontal binning.
+                        DRV_SPOOLSETUPERROR     Error with spool settings.
+        """
+        res = self.dll.StartAcquisition()
+        return True if res == 20002 else self._error(res)
+
+    def _GetStatus(self, status: int) -> Tuple[bool, str]:
+    """
+    Description         This function will return the current status of the Andor SDK system. This function should
+                        be called before an acquisition is started to ensure that it is IDLE and during an acquisition
+                        to monitor the process.
+    Parameters          int* status: current status
+                        DRV_IDLE                    IDLE waiting on instructions.
+                        DRV_TEMPCYCLE               Executing temperature cycle.
+                        DRV_ACQUIRING               Acquisition in progress.
+                        DRV_ACCUM_TIME_NOT_MET      Unable to meet Accumulate cycle time.
+                        DRV_KINETIC_TIME_NOT_MET    Unable to meet Kinetic cycle time.
+                        DRV_ERROR_ACK               Unable to communicate with card.
+                        DRV_ACQ_BUFFER              Computer unable to read the data via the ISA slot
+                                                    at the required rate.
+                        DRV_ACQ_DOWNFIFO_FULL       Computer unable to read data fast enough to stop
+                                                    camera memory going full.
+                        DRV_SPOOLERROR              Overflow of the spool buffer.
+    Return              unsigned int
+                        DRV_SUCCESS                 Status returned
+                        DRV_NOT_INITIALIZED         System not initialized
+    """
+    serial_number = ctypes.c_int(0)
+    res = self.dll.GetStatus(ctypes.byref(status))
+    self.status_real = status.value
+    return True if res == 20002 else self._error(res)
+
+    def _GetAcquiredData(self, array: int, size: int) -> Tuple[bool, str]:
+
+        """
+            Description         This function will return the data from the last acquisition. The data are returned as long
+                                integers (32-bit signed integers). The “array” must be large enough to hold the complete
+                                data set.
+            Parameters          at_32* arr: pointer to data storage allocated by the user.
+                                unsigned long size: total number of pixels.
+            Return              unsigned int
+                                DRV_SUCCESS             Data copied.
+                                DRV_NOT_INITIALIZED     System not initialized.
+                                DRV_ACQUIRING           Acquisition in progress.
+                                DRV_ERROR_ACK           Unable to communicate with card.
+                                DRV_P1INVALID           Invalid pointer (i.e. NULL).
+                                DRV_P2INVALID           Array size is incorrect.
+                                DRV_NO_NEW_DATA         No acquisition has taken place
+        """
+    serial_number = ctypes.c_int(0)
+    res = self.dll.GetAcquiredData(ctypes.byref(array))
+    self.array_real = array.value
+    res = self.dll.GetAcquiredData(ctypes.byref(size))
+    self.size_real = size.value
+    return True if res == 20002 else self._error(res)
+
+
+
     def _error(self, code: int, user_def='') -> str:
         """
         :param code: <=0
