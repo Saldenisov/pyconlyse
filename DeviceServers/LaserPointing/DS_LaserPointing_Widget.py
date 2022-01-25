@@ -7,13 +7,13 @@ from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
-import taurus_pyqtgraph as tpg
+import pyqtgraph as pg
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 from collections import OrderedDict
 from typing import Dict
 from PyQt5 import QtWidgets
 from _functools import partial
-
+from collections import deque
 
 from DeviceServers import *
 from PyQt5.QtGui import QMouseEvent
@@ -25,6 +25,7 @@ class LaserPointing(DS_General_Widget):
         self.widgets = {}
         self.device_servers = {}
         self.db = Database()
+        self.positions = deque([], maxlen=120)
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -102,6 +103,15 @@ class LaserPointing(DS_General_Widget):
             except Exception as e:
                 print(e)
             lo_image.addWidget(self.widgets['Camera'])
+
+            # Enable antialiasing for prettier plots
+            pg.setConfigOptions(antialias=True)
+            win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
+            p1 = win.addPlot(title="Basic array plotting", y=self.positions)
+            p1.setLabel('left', "Y Axis", units='pixel')
+            p1.setLabel('bottom', "N of measurement", units='')
+
+            lo_image.addWidget(win)
             vspacer = QtWidgets.QSpacerItem(20, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
             lo_image.addSpacerItem(vspacer)
 
