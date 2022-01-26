@@ -1,6 +1,7 @@
 from collections import deque
 
 import cv2
+import  numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 from pypylon import pylon, genicam
@@ -9,7 +10,7 @@ countOfImagesToGrab = 1
 maxCamerasToUse = 1
 
 DEVICE = None
-SERIAL_NUMBER = '22805482'
+SERIAL_NUMBER = '24058647'
 # Init all camera
 try:
     # Get the transport layer factory.
@@ -59,8 +60,6 @@ def init(device):
     camera.BalanceRatioRaw.SetValue(64)
     camera.AcquisitionFrameRateEnable.SetValue(False)
     camera.AcquisitionFrameRateAbs.SetValue(5)
-    camera.PixelFormat.SetValue("Mono8")
-    converter = pylon.ImageFormatConverter()
 
     # Transport layer
     # Packet Size
@@ -68,11 +67,17 @@ def init(device):
     # Inter-Packet Delay
     camera.GevSCPD.SetValue(1000)
 
+
+    camera.PixelFormat.SetValue("BayerRG8")
+    converter = pylon.ImageFormatConverter()
+
     # converting to opencv bgr format
-    converter.OutputPixelFormat = pylon.PixelType_Mono8
+    # converter.OutputPixelFormat = pylon.PixelType_Mono8
+    converter.OutputPixelFormat = pylon.PixelType_RGB16planar
     converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
 
     return converter, camera
+
 
 
 def read(camera, converter):
@@ -80,12 +85,11 @@ def read(camera, converter):
     if grabResult.GrabSucceeded():
         # Access the image data
         image = converter.Convert(grabResult)
-        #img = imutils.resize(image.GetArray(), width=480, height=480)
-        # if cv2.waitKey(1) & 0xFF == ord('q'):
-        # break
-    grabResult.Release()
-    arr = image.GetArray()
-    return arr
+        arr = np.ndarray(buffer=image.GetBuffer(), shape=(image.GetHeight(), image.GetWidth(), 3), dtype=np.uint8)
+        img = cv2.cvtColor(arr, cv2.COLOR_RGB2GRAY)
+        # grayImage = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        grabResult.Release()
+    return img
 
 
 def image_treat(image):
@@ -125,11 +129,10 @@ def calc(img, threshold=50):
     return thresh, contours, cX, cY, longest_contour_index
 
 
-converters = []
-
 print(f'Camera {SERIAL_NUMBER} is initializing...')
 converter, camera = init(DEVICE)
 camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+
 
 # Figure
 fig = plt.figure(figsize=(8.5, 5.5))
@@ -145,14 +148,12 @@ ax1_y = fig.add_subplot(3, 2, 5)
 ax1_y.set_ylim(100, 125)
 ax1_y.set_ylabel('Y1 position')
 
-
-
 img = read(camera, converter)
 
 positionsX1 = deque([], maxlen=120)
 positionsY1 = deque([], maxlen=120)
 
-im1 = ax_im1.imshow(calc(img)[0], cmap='gray', vmin=0, vmax=255)
+im1 = ax_im1.imshow(img, cmap='jet')
 Xpos1, = ax1_x.plot([1], [1], marker='o', markersize=2, color='b', linestyle= '')
 Ypos1, = ax1_y.plot([1], [1], marker='o', markersize=2, color='b', linestyle= '')
 
@@ -163,24 +164,24 @@ plt.ion()
 while camera.IsGrabbing():
     [p.remove() for p in reversed(ax_im1.patches)]
     img1 = read(camera, converter)
-    img1 = image_treat(img1)
-    thresh1, contours, cX1, cY1, index = calc(img1)
-    positionsX1.append(cX1)
-    positionsY1.append(cY1)
-    im1.set_data(thresh1)
+    # img1 = image_treat(img1)
+    # thresh1, contours, cX1, cY1, index = calc(img1)
+    # positionsX1.append(cX1)
+    # positionsY1.append(cY1)
+    # im1.set_data(thresh1)
     im1.set_data(img1)
 
 
-    circle1 = Circle((cX1, cY1), radius=10, color='black', zorder=10)
-    ax_im1.add_patch(circle1)
-    x1 = list([i for i in range(len(positionsX1))])
-    Xpos1.set_data(x1, positionsX1)
-    Ypos1.set_data(x1, positionsY1)
-
-    ax1_x.relim()
-    ax1_y.relim()
-    ax1_x.autoscale_view(True, True, True)
-    ax1_y.autoscale_view(True, True, True)
+    # circle1 = Circle((cX1, cY1), radius=10, color='black', zorder=10)
+    # ax_im1.add_patch(circle1)
+    # x1 = list([i for i in range(len(positionsX1))])
+    # Xpos1.set_data(x1, positionsX1)
+    # Ypos1.set_data(x1, positionsY1)
+    #
+    # ax1_x.relim()
+    # ax1_y.relim()
+    # ax1_x.autoscale_view(True, True, True)
+    # ax1_y.autoscale_view(True, True, True)
     plt.pause(0.2)
 
 plt.ioff()

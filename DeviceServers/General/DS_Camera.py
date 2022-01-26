@@ -1,8 +1,7 @@
 from abc import abstractmethod
-from tango import AttrWriteType, DevState, DevFloat, EncodedAttribute
 from tango.server import Device, attribute, command, device_property
 import numpy as np
-from tango import AttrWriteType, DispLevel, DevState
+from tango import AttrWriteType, DispLevel, DevState, DevFloat
 from tango.server import attribute, command, device_property
 from typing import Union, Tuple, Dict, Any
 
@@ -300,6 +299,10 @@ class DS_CAMERA_CCD(DS_General):
         self.info("Acquired")
         return self.last_image
 
+    @attribute(label='Center of gravity', dtype=str, access=AttrWriteType.READ)
+    def cg(self):
+        return str(self.CG_position)
+
     @abstractmethod
     def get_image(self):
         pass
@@ -309,6 +312,8 @@ class DS_CAMERA_CCD(DS_General):
         self.last_image: np.array = None
         self.camera = None
         self.trigger_software = False
+        self.CG_position = {'X': 0, 'Y': 0}
+
         super().init_device()
         self.parameters = eval(self.parameters)
         self.turn_on()
@@ -354,7 +359,6 @@ class DS_CAMERA_CCD(DS_General):
         else:
             self.error(f"Starting grabbing for {self.device_name} did not work, "
                        f"check state of the device {self.get_state()}.")
-
 
     @abstractmethod
     def start_grabbing_local(self):

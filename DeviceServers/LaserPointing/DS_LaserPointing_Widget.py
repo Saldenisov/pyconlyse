@@ -25,7 +25,7 @@ class LaserPointing(DS_General_Widget):
         self.widgets = {}
         self.device_servers = {}
         self.db = Database()
-        self.positions = deque([], maxlen=120)
+        self.positions = {'X': deque([], maxlen=120), 'Y': deque([], maxlen=120)}
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -105,9 +105,13 @@ class LaserPointing(DS_General_Widget):
             # Enable antialiasing for prettier plots
             pg.setConfigOptions(antialias=True)
             win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
-            p1 = win.addPlot(title="Basic array plotting", y=self.positions)
+            p1 = win.addPlot(title="X position", y=self.positions['X'])
             p1.setLabel('left', "Y Axis", units='pixel')
             p1.setLabel('bottom', "N of measurement", units='')
+
+            p2 = win.addPlot(title="Y position", y=self.positions['Y'])
+            p2.setLabel('left', "Y Axis", units='pixel')
+            p2.setLabel('bottom', "N of measurement", units='')
 
             lo_image.addWidget(win)
             vspacer = QtWidgets.QSpacerItem(20, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)

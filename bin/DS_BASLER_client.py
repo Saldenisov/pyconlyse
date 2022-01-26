@@ -10,7 +10,10 @@ from bin.DS_General_Client import main
 
 layouts = {'V0': {'selection': ['manip/V0/Cam1_V0', 'manip/V0/Cam2_V0'], 'width': 2},
            'all': {'selection': ['manip/V0/Cam1_V0', 'manip/V0/Cam2_V0', 'manip/V0/Cam3_V0'], 'width': 3},
-           'test': {'selection': ['manip/V0/Cam2_V0'], 'width':1}
+           'test': {'selection': ['manip/V0/Cam2_V0'], 'width':1},
+           'Cam1': {'selection': ['manip/V0/Cam1_V0'], 'width': 1},
+           'Cam2': {'selection': ['manip/V0/Cam2_V0'], 'width': 1},
+           'Cam3': {'selection': ['manip/V0/Cam3_V0'], 'width': 1},
            }
 
 
