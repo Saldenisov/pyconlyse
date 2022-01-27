@@ -882,31 +882,31 @@ class Andor_test():
         return True if res == 20002 else self._error(res)
 
     def _GetStatus(self, status: int) -> Tuple[bool, str]:
-    """
-    unsigned int WINAPI GetStatus(int* status)
-    Description         This function will return the current status of the Andor SDK system. This function should
-                        be called before an acquisition is started to ensure that it is IDLE and during an acquisition
-                        to monitor the process.
-    Parameters          int* status: current status
-                        DRV_IDLE                    IDLE waiting on instructions.
-                        DRV_TEMPCYCLE               Executing temperature cycle.
-                        DRV_ACQUIRING               Acquisition in progress.
-                        DRV_ACCUM_TIME_NOT_MET      Unable to meet Accumulate cycle time.
-                        DRV_KINETIC_TIME_NOT_MET    Unable to meet Kinetic cycle time.
-                        DRV_ERROR_ACK               Unable to communicate with card.
-                        DRV_ACQ_BUFFER              Computer unable to read the data via the ISA slot
-                                                    at the required rate.
-                        DRV_ACQ_DOWNFIFO_FULL       Computer unable to read data fast enough to stop
-                                                    camera memory going full.
-                        DRV_SPOOLERROR              Overflow of the spool buffer.
-    Return              unsigned int
-                        DRV_SUCCESS                 Status returned
-                        DRV_NOT_INITIALIZED         System not initialized
-    """
-    serial_number = ctypes.c_int(0)
-    res = self.dll.GetStatus(ctypes.byref(status))
-    self.status_real = status.value
-    return True if res == 20002 else self._error(res)
+        """
+        unsigned int WINAPI GetStatus(int* status)
+        Description         This function will return the current status of the Andor SDK system. This function should
+                            be called before an acquisition is started to ensure that it is IDLE and during an acquisition
+                            to monitor the process.
+        Parameters          int* status: current status
+                            DRV_IDLE                    IDLE waiting on instructions.
+                            DRV_TEMPCYCLE               Executing temperature cycle.
+                            DRV_ACQUIRING               Acquisition in progress.
+                            DRV_ACCUM_TIME_NOT_MET      Unable to meet Accumulate cycle time.
+                            DRV_KINETIC_TIME_NOT_MET    Unable to meet Kinetic cycle time.
+                            DRV_ERROR_ACK               Unable to communicate with card.
+                            DRV_ACQ_BUFFER              Computer unable to read the data via the ISA slot
+                                                        at the required rate.
+                            DRV_ACQ_DOWNFIFO_FULL       Computer unable to read data fast enough to stop
+                                                        camera memory going full.
+                            DRV_SPOOLERROR              Overflow of the spool buffer.
+        Return              unsigned int
+                            DRV_SUCCESS                 Status returned
+                            DRV_NOT_INITIALIZED         System not initialized
+        """
+        serial_number = ctypes.c_int(0)
+        res = self.dll.GetStatus(ctypes.byref(status))
+        self.status_real = status.value
+        return True if res == 20002 else self._error(res)
 
     def _GetAcquiredData(self, array: int, size: int) -> Tuple[bool, str]:
 
@@ -926,14 +926,12 @@ class Andor_test():
                                 DRV_P2INVALID           Array size is incorrect.
                                 DRV_NO_NEW_DATA         No acquisition has taken place
         """
-    serial_number = ctypes.c_int(0)
-    res = self.dll.GetAcquiredData(ctypes.byref(array))
-    self.array_real = array.value
-    res = self.dll.GetAcquiredData(ctypes.byref(size))
-    self.size_real = size.value
-    return True if res == 20002 else self._error(res)
-
-
+        serial_number = ctypes.c_int(0)
+        res = self.dll.GetAcquiredData(ctypes.byref(array))
+        self.array_real = array.value
+        res = self.dll.GetAcquiredData(ctypes.byref(size))
+        self.size_real = size.value
+        return True if res == 20002 else self._error(res)
 
     def _error(self, code: int, user_def='') -> str:
         """
@@ -981,7 +979,6 @@ class Andor_test():
                 res = user_def
         print(f'Error: {res}, Caller: {inspect.stack()[1].function}')
         return user_def
-
 
 
 if __name__ == "__main__":
