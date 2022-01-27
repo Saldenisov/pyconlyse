@@ -204,6 +204,7 @@ class Basler_camera(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         self.view.setImage(self.convert_image(ds.image))
 
+
     def convert_image(self, image):
         image2D = image
         shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)
