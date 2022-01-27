@@ -48,8 +48,8 @@ class LaserPointing(DS_General_Widget):
                     ds_class_widget = class_match[ds_class_name]
                     if issubclass(ds_class_widget, OWIS_motor):
                         ds_widget = ds_class_widget(device_name, extra, self, VisType.MIN)
-                    elif issubclass(ds_class_widget, DS_Basler_camera):
-                        ds_widget = ds_class_widget(device_name, self, VisType.FULL)
+                    elif issubclass(ds_class_widget, Basler_camera):
+                        ds_widget = ds_class_widget(device_name, self, self.vis_type)
                     else:
                         ds_widget = ds_class_widget(device_name, self, VisType.MIN)
 

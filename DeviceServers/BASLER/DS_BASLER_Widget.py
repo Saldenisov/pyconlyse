@@ -158,36 +158,37 @@ class Basler_camera(DS_General_Widget):
         self.view.setMinimumSize(500, 500)
         lo_image.addWidget(self.view)
 
-        if self.vis_type == VisType.FULL:
-            layout_cg_threshold = Qt.QHBoxLayout()
+        self.roi_circle = pg.CircleROI([0, 0], size=2, pen=pg.mkPen('r', width=2))
+        self.view.addItem(self.roi_circle)
 
-            self.cg_threshold = TaurusValueSpinBox()
-            self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
-            self.cg_threshold.setValue(self.ds.center_gravity_threshold)
-            self.label_X_pos = TaurusLabel(f'X position: ')
-            self.label_Y_pos = TaurusLabel(f'Y position: ')
+        layout_cg_threshold = Qt.QHBoxLayout()
 
+        self.cg_threshold = TaurusValueSpinBox()
+        self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
+        self.cg_threshold.setValue(self.ds.center_gravity_threshold)
+        self.label_X_pos = TaurusLabel(f'X position: ')
+        self.label_Y_pos = TaurusLabel(f'Y position: ')
 
-            layout_cg_threshold.addWidget(self.label_X_pos)
-            layout_cg_threshold.addWidget(self.label_Y_pos)
-            layout_cg_threshold.addWidget(self.cg_threshold)
+        layout_cg_threshold.addWidget(self.label_X_pos)
+        layout_cg_threshold.addWidget(self.label_Y_pos)
+        layout_cg_threshold.addWidget(self.cg_threshold)
 
-            # Enable antialiasing for prettier plots
-            pg.setConfigOptions(antialias=True)
-            win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
-            p1 = win.addPlot(title="X position", y=self.positions['X'])
-            p1.setLabel('left', "Y Axis", units='pixel')
-            p1.setLabel('bottom', "N of measurement", units='')
-            p1.showGrid(x=True, y=True)
-            self.x_pos = p1.plot(self.positions['X'])
+        # Enable antialiasing for prettier plots
+        pg.setConfigOptions(antialias=True)
+        win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
+        p1 = win.addPlot(title="X position", y=self.positions['X'])
+        p1.setLabel('left', "Y Axis", units='pixel')
+        p1.setLabel('bottom', "N of measurement", units='')
+        p1.showGrid(x=True, y=True)
+        self.x_pos = p1.plot(self.positions['X'])
 
-            p2 = win.addPlot(title="Y position", y=self.positions['Y'])
-            p2.setLabel('left', "Y Axis", units='pixel')
-            p2.setLabel('bottom', "N of measurement", units='')
-            p2.showGrid(x=True, y=True)
-            self.y_pos = p2.plot(self.positions['Y'])
-            lo_image.addLayout(layout_cg_threshold)
-            lo_image.addWidget(win)
+        p2 = win.addPlot(title="Y position", y=self.positions['Y'])
+        p2.setLabel('left', "Y Axis", units='pixel')
+        p2.setLabel('bottom', "N of measurement", units='')
+        p2.showGrid(x=True, y=True)
+        self.y_pos = p2.plot(self.positions['Y'])
+        lo_image.addLayout(layout_cg_threshold)
+        lo_image.addWidget(win)
 
         ## Set a custom color map
         colors = [
@@ -239,22 +240,21 @@ class Basler_camera(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         self.view.setImage(self.convert_image(ds.image))
 
-        if self.vis_type == VisType.FULL:
-            positions = eval(ds.cg)
-            x_pos = self.positions['X']
-            x_pos.append(positions['X'])
-            self.positions['X'] = x_pos
-            y_pos = self.positions['Y']
-            y_pos.append(positions['Y'])
-            self.positions['Y'] = y_pos
-            x = positions['X']
-            y = positions['Y']
-            self.label_X_pos.setText(f'X position: {x}')
-            self.label_Y_pos.setText(f'X position: {y}')
-            self.x_pos.setData(self.positions['X'])
-            self.y_pos.setData(self.positions['Y'])
-            # roi_circle = pg.CircleROI([x, y], size=2, pen=pg.mkPen('r', width=2))
-            # self.view.addItem(roi_circle)
+        positions = eval(ds.cg)
+        x_pos = self.positions['X']
+        x_pos.append(positions['X'])
+        self.positions['X'] = x_pos
+        y_pos = self.positions['Y']
+        y_pos.append(positions['Y'])
+        self.positions['Y'] = y_pos
+        x = positions['X']
+        y = positions['Y']
+        self.label_X_pos.setText(f'X position: {x}')
+        self.label_Y_pos.setText(f'Y position: {y}')
+        self.x_pos.setData(self.positions['X'])
+        self.y_pos.setData(self.positions['Y'])
+        self.roi_circle.setPos([x, y])
+
 
     def convert_image(self, image):
         image2D = image
