@@ -275,7 +275,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
         # to change, what if someone wants color converter
-        self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
+        self.converter.OutputPixelFormat = pylon.PixelType_RGB8packed
         # self.converter.OutputPixelFormat = pylon.PixelType_Mono8
         self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
         return self._set_parameters(formed_parameters_dict_image_format)
@@ -305,10 +305,10 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         if not self.grabbing:
             self.start_grabbing()
 
-    def calc_cg(self, img, threshold=50):
+    def calc_cg(self, image, threshold=50):
         # apply thresholding
         cX, cY = -1, -1
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
         longest_contour = 0
@@ -324,7 +324,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             if M["m00"] != 0:
                 cX = int(M["m10"] / M["m00"])
                 cY = int(M["m01"] / M["m00"])
-        return {'X': cX, 'Y': cY}
+
+        self.CG_position = {'X': cX, 'Y': cY}
 
     def wait(self, timeout):
 
@@ -343,7 +344,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     image = np.ndarray(buffer=image.GetBuffer(),
                                        shape=(image.GetHeight(), image.GetWidth(), 3),
                                        dtype=np.uint8)
-                    self.CG_position = self.calc_cg(image)
+                    self.calc_cg(image)
                     # Convert 3D array to 2D for Tango to transfer it
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                     self.info('Image is received...')

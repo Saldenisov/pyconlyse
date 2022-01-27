@@ -1,11 +1,11 @@
 from abc import abstractmethod
-from tango.server import Device, attribute, command, device_property
+from typing import Union
+
 import numpy as np
 from tango import AttrWriteType, DispLevel, DevState, DevFloat
 from tango.server import attribute, command, device_property
-from typing import Union, Tuple, Dict, Any
 
-from DeviceServers.General.DS_general import DS_General, standard_str_output
+from DeviceServers.General.DS_general import DS_General
 
 
 class DS_CAMERA_CCD(DS_General):
