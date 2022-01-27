@@ -1,42 +1,75 @@
+# -*- coding: utf-8 -*-
+"""
+This example displays all color maps currently available, either as local data
+or imported from Matplotlib of ColorCET.
+"""
+## Add path to library (just for examples; you do not need this)
+import initExample
 
-import random
+from pyqtgraph.Qt import QtCore, QtGui
+import pyqtgraph as pg
 
-random.seed()
-import matplotlib.pyplot as plt
-import numpy as np
-from pathlib import Path
-from collections import namedtuple
-from typing import Union, List
-from scipy.optimize import least_squares
+app = pg.mkQApp()
 
-dt = 0.1
-tb = 0
-te = 1000
-N = int((te - tb) / dt) +1
-time_range = np.linspace(tb, te, N)
-ct = np.zeros(N)
+win = QtGui.QMainWindow()
+win.resize(1000,800)
 
-lifetime = 1/43
+lw = pg.GraphicsLayoutWidget()
+lw.setFixedWidth(1000)
+lw.setSizePolicy(QtGui.QSizePolicy.Policy.Expanding, QtGui.QSizePolicy.Policy.Expanding)
 
-i = 0
-for t in time_range:
-    if t % 24 == 0:
-        ct[i] = ct[i] + 10 / 1000 / 5 / 324
-    ct[i + 1] = ct[i] - lifetime * dt * ct[i]
-    i += 1
+scr = QtGui.QScrollArea()
+scr.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+scr.setWidget(lw)
+win.setCentralWidget(scr)
+win.setWindowTitle('pyqtgraph example: Color maps')
+win.show()
 
+bar_width = 32
+bar_data = pg.colormap.modulatedBarData(width=bar_width)
 
-    if i == N - 1:
-        break
+num_bars = 0
 
-time_range = np.array(time_range)
-concentration = np.array(ct)
+def add_heading(lw, name):
+    global num_bars
+    lw.addLabel('=== '+name+' ===')
+    num_bars += 1
+    lw.nextRow()
 
-fig1, ax1 = plt.subplots()
-ax1.plot(time_range, ct, 'b')
-ax1.set_xlabel('Time, hours')
-ax1.set_ylabel('Concentration, M')
-ax1.set_title('Pharma kinetics')
-ax1.grid(True)
+def add_bar(lw, name, cm):
+    global num_bars
+    lw.addLabel(name)
+    imi = pg.ImageItem( bar_data )
+    imi.setLookupTable( cm.getLookupTable(alpha=True) )
+    vb = lw.addViewBox(lockAspect=True, enableMouse=False)
+    vb.addItem( imi )
+    num_bars += 1
+    lw.nextRow()
 
-plt.show()
+add_heading(lw, 'local color maps')
+list_of_maps = pg.colormap.listMaps()
+list_of_maps = sorted( list_of_maps, key=lambda x: x.swapcase() )
+for map_name in list_of_maps:
+    cm = pg.colormap.get(map_name)
+    add_bar(lw, map_name, cm)
+
+add_heading(lw, 'Matplotlib import')
+list_of_maps = pg.colormap.listMaps('matplotlib')
+list_of_maps = sorted( list_of_maps, key=lambda x: x.lower() )
+for map_name in list_of_maps:
+    cm = pg.colormap.get(map_name, source='matplotlib', skipCache=True)
+    if cm is not None:
+        add_bar(lw, map_name, cm)
+
+add_heading(lw, 'ColorCET import')
+list_of_maps = pg.colormap.listMaps('colorcet')
+list_of_maps = sorted( list_of_maps, key=lambda x: x.lower() )
+for map_name in list_of_maps:
+    cm = pg.colormap.get(map_name, source='colorcet', skipCache=True)
+    if cm is not None:
+        add_bar(lw, map_name, cm)
+
+lw.setFixedHeight(num_bars * (bar_width+5) )
+
+if __name__ == '__main__':
+    pg.exec()

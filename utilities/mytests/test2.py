@@ -1,23 +1,61 @@
-import zmq
+from lima import Basler
+from lima import Core
+
+#----------------------------------------+
+#                        packet-size     |
+#                                        |
+#-------------------------------------+  |
+#              inter-packet delay     |  |
+#                                     |  |
+#----------------------------------+  |  |
+#      frame-transmission delay    |  |  |
+#                                  |  |  |
+#--------------------+             |  |  |
+# cam ip or hostname |             |  |  |
+#                    v             v  v  v
+cam = Basler.Camera('192.168.1.1', 0, 0, 8000)
+
+hwint = Basler.Interface(cam)
+ct = Core.CtControl(hwint)
+
+acq = ct.acquisition()
 
 
-context = zmq.Context()
-router1 = context.socket(zmq.ROUTER)
-router2 = context.socket(zmq.ROUTER)
-router1.bind('tcp://129.175.100.70:5556')
-router2.bind('tcp://129.175.100.70:5557')
+# set and test video
+#
 
-poller = zmq.Poller()
-poller.register(router1, zmq.POLLIN)
-poller.register(router2, zmq.POLLIN)
+video=ct.video()
+video.setMode(Core.RGB24)
+video.startLive()
+video.stopLive()
+video_img = video.getLastImage()
 
-i = 0
-while True:
-    sockets = dict(poller.poll(1000))
-    if router1 in sockets:
-        print(router1.recv_multipart())
-    if router2 in sockets:
-        print(router2.recv_multipart())
+# set and test an acquisition
+#
 
+# setting new file parameters and autosaving mode
+saving=ct.saving()
 
+pars=saving.getParameters()
+pars.directory='/buffer/lcb18012/opisg/test_lima'
+pars.prefix='test1_'
+pars.suffix='.edf'
+pars.fileFormat=Core.CtSaving.TIFF
+pars.savingMode=Core.CtSaving.AutoFrame
+saving.setParameters(pars)
 
+# now ask for 2 sec. exposure and 10 frames
+acq.setAcqExpoTime(2)
+acq.setNbImages(10)
+
+ct.prepareAcq()
+ct.startAcq()
+
+# wait for last image (#9) ready
+lastimg = ct.getStatus().ImageCounters.LastImageReady
+while lastimg !=9:
+  time.sleep(1)
+  lastimg = ct.getStatus().ImageCounters.LastImageReady
+
+# read the first image
+im0 = ct.ReadImage(0)
