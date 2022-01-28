@@ -1,12 +1,14 @@
-import pyqtgraph as pg
+from collections import deque
+
 import numpy as np
+import pyqtgraph as pg
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
-import taurus_pyqtgraph as tpg
+
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
@@ -14,6 +16,7 @@ class Basler_camera(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.grabbing = False
+        self.positions = {'X': deque([], maxlen=120), 'Y': deque([], maxlen=120)}
         super().__init__(device_name, parent, vis_type)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.image_listener)
@@ -159,35 +162,57 @@ class Basler_camera(DS_General_Widget):
     def set_image(self, lo_image):
         self.view = pg.ImageView()
         image = np.ones(shape=(512, 512))
-        #self.view.setImage(self.convert_image(image))
         self.view.setImage(image)
         self.view.autoRange()
-        self.view.setMinimumSize(500, 500)
+        self.view.setMinimumSize(300, 300)
         lo_image.addWidget(self.view)
 
-        ## Set a custom color map
-        colors = [
-            (0, 0, 0),
-            (45, 5, 61),
-            (84, 42, 55),
-            (150, 87, 60),
-            (208, 171, 141),
-            (255, 255, 255)
-        ]
-        # cmap = pg.colormap.get('rainbow')
+        self.roi_circle = pg.CircleROI([0, 0], size=2, pen=pg.mkPen('r', width=2))
+        self.view.addItem(self.roi_circle)
+
+        layout_cg_threshold = Qt.QHBoxLayout()
+
+        self.cg_threshold = TaurusValueSpinBox()
+        self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
+        self.cg_threshold.setValue(self.ds.center_gravity_threshold)
+        self.cg_threshold.setMaximumWidth(60)
+        self.label_X_pos = TaurusLabel(f'X position: ')
+        self.label_Y_pos = TaurusLabel(f'Y position: ')
+
+        layout_cg_threshold.addWidget(self.label_X_pos)
+        layout_cg_threshold.addWidget(self.label_Y_pos)
+        layout_cg_threshold.addWidget(TaurusLabel('Threshold CG'))
+        layout_cg_threshold.addWidget(self.cg_threshold)
+
+        # Enable antialiasing for prettier plots
+        pg.setConfigOptions(antialias=True)
+        win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
+        p1 = win.addPlot(title="X position", y=self.positions['X'])
+        p1.setLabel('left', "X pos", units='pixel')
+        p1.setLabel('bottom', "N of measurement", units='')
+        p1.showGrid(x=True, y=True)
+        self.x_pos = p1.plot(self.positions['X'])
+
+        p2 = win.addPlot(title="Y position", y=self.positions['Y'])
+        p2.setLabel('left', "Y pos", units='pixel')
+        p2.setLabel('bottom', "N of measurement", units='')
+        p2.showGrid(x=True, y=True)
+        self.y_pos = p2.plot(self.positions['Y'])
+        lo_image.addLayout(layout_cg_threshold)
+        lo_image.addWidget(win)
+
         cmap = pg.colormap.get('CET-L9')
-        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
         self.view.setColorMap(cmap)
 
     def register_full_layouts(self):
         super(Basler_camera, self).register_full_layouts()
         setattr(self, f'layout_parameters_{self.dev_name}', Qt.QHBoxLayout())
         setattr(self, f'layout_parameters2_{self.dev_name}', Qt.QHBoxLayout())
-        setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_image_{self.dev_name}', Qt.QVBoxLayout())
 
     def register_min_layouts(self):
         super(Basler_camera, self).register_min_layouts()
-        setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
+        setattr(self, f'layout_image_{self.dev_name}', Qt.QVBoxLayout())
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()
@@ -214,6 +239,22 @@ class Basler_camera(DS_General_Widget):
     def image_listener(self):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         self.view.setImage(self.convert_image(ds.image))
+
+        positions = eval(ds.cg)
+        x_pos = self.positions['X']
+        x_pos.append(positions['X'])
+        self.positions['X'] = x_pos
+        y_pos = self.positions['Y']
+        y_pos.append(positions['Y'])
+        self.positions['Y'] = y_pos
+        x = positions['X']
+        y = positions['Y']
+        self.label_X_pos.setText(f'X position: {x}')
+        self.label_Y_pos.setText(f'Y position: {y}')
+        self.x_pos.setData(self.positions['X'])
+        self.y_pos.setData(self.positions['Y'])
+        self.roi_circle.setPos([x, y])
+
 
     def convert_image(self, image):
         image2D = image

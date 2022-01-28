@@ -1,12 +1,11 @@
 from abc import abstractmethod
-from tango import AttrWriteType, DevState, DevFloat, EncodedAttribute
-from tango.server import Device, attribute, command, device_property
-import numpy as np
-from tango import AttrWriteType, DispLevel, DevState
-from tango.server import attribute, command, device_property
-from typing import Union, Tuple, Dict, Any
+from typing import Union
 
-from DeviceServers.General.DS_general import DS_General, standard_str_output
+import numpy as np
+from tango import AttrWriteType, DispLevel, DevState, DevFloat
+from tango.server import attribute, command, device_property
+
+from DeviceServers.General.DS_general import DS_General
 
 polling_infinite = 10000
 
@@ -303,6 +302,10 @@ class DS_CAMERA_CCD(DS_General):
         self.info("Acquired")
         return self.last_image
 
+    @attribute(label='Center of gravity', dtype=str, access=AttrWriteType.READ)
+    def cg(self):
+        return str(self.CG_position)
+
     @abstractmethod
     def get_image(self):
         pass
@@ -312,6 +315,8 @@ class DS_CAMERA_CCD(DS_General):
         self.last_image: np.array = None
         self.camera = None
         self.trigger_software = False
+        self.CG_position = {'X': 0, 'Y': 0}
+
         super().init_device()
         self.parameters = eval(self.parameters)
         self.turn_on()

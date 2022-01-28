@@ -3,6 +3,7 @@
 import os
 import sys
 from pathlib import Path
+import cv2
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
@@ -15,9 +16,10 @@ from DeviceServers.General.DS_general import standard_str_output
 from collections import OrderedDict
 # -----------------------------
 
-from tango.server import device_property, command
-from tango import DevState
+from tango.server import device_property, command, attribute
+from tango import DevState, AttrWriteType
 from pypylon import pylon, genicam
+from threading import Thread
 
 
 class DS_Basler_camera(DS_CAMERA_CCD):
@@ -44,7 +46,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000
-
+    cg_threshold = device_property(dtype=int, default_value=50)
     ip_address = device_property(dtype=str)
 
     def get_camera_friendly_name(self):
@@ -173,7 +175,9 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.camera: pylon.InstantCamera = None
         self.converter: pylon.ImageFormatConverter = None
         self.device = None
+        self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
         super().init_device()
+        self.start_grabbing_local()
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -272,7 +276,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
         formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
         # to change, what if someone wants color converter
-        self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
+        self.converter.OutputPixelFormat = pylon.PixelType_RGB8packed
         # self.converter.OutputPixelFormat = pylon.PixelType_Mono8
         self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
         return self._set_parameters(formed_parameters_dict_image_format)
@@ -293,33 +297,64 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def _get_camera_device(self):
         for device in pylon.TlFactory.GetInstance().EnumerateDevices():
-            if device.GetSerialNumber() == self.serial_number:
+            serial_number = device.GetSerialNumber()
+            if serial_number == self.serial_number:
                 return device
         return None
 
     def get_image(self):
-        self.last_image = self.wait(self.timeoutt)
-
-    def wait(self, timeout):
         if not self.grabbing:
             self.start_grabbing()
-        try:
-            grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
-            if grabResult.GrabSucceeded():
-                image = self.converter.Convert(grabResult)
-                grabResult.Release()
-                image = np.ndarray(buffer=image.GetBuffer(),
-                                   shape=(image.GetHeight(), image.GetWidth(), 3),
-                                   dtype=np.uint16)
-                # Convert 3D array to 2D for Tango to transfer it
-                image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
-                self.info('Image is received...')
-                return image2D
-            else:
-                raise pylon.GenericException
-        except (pylon.GenericException, pylon.TimeoutException) as e:
-            self.error(str(e))
-            return np.arange(300).reshape(10, 10, 3)
+
+    def calc_cg(self, image, threshold=50):
+        # apply thresholding
+        cX, cY = -1, -1
+        img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+        ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
+        contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+        longest_contour = 0
+        longest_contour_index = 0
+        i = 0
+        if contours:
+            for contour in contours:
+                if longest_contour < contour.shape[0]:
+                    longest_contour_index = i
+                    longest_contour = contour.shape[0]
+                i += 1
+            M = cv2.moments(contours[longest_contour_index])
+            if M["m00"] != 0:
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+
+        self.CG_position = {'X': cX, 'Y': cY}
+
+    def wait(self, timeout):
+
+        def image_treat(image):
+            img = cv2.GaussianBlur(image, (3, 3), 0)
+            return img
+        i = 0
+        while self.grabbing:
+            i += 1
+            self.info(f'Grabbing: {i}', False)
+            try:
+                grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
+                if grabResult.GrabSucceeded():
+                    image = self.converter.Convert(grabResult)
+                    grabResult.Release()
+                    image = np.ndarray(buffer=image.GetBuffer(),
+                                       shape=(image.GetHeight(), image.GetWidth(), 3),
+                                       dtype=np.uint8)
+                    self.calc_cg(image)
+                    # Convert 3D array to 2D for Tango to transfer it
+                    image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
+                    self.info('Image is received...')
+                    self.last_image = image2D
+                else:
+                    raise pylon.GenericException
+            except (pylon.GenericException, pylon.TimeoutException) as e:
+                self.error(str(e))
+                return np.arange(300).reshape(10, 10, 3)
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0
@@ -339,6 +374,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             try:
                 self.info("Grabbing LatestImageOnly", True)
                 self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
+                self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
+                self.grabbing_thread.start()
                 return 0
             except Exception as e:
                 return str(e)
@@ -380,6 +417,13 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         if restart:
             self.start_grabbing()
         return str(0)
+
+    @attribute(label='Center of gravity threshold', dtype=int, access=AttrWriteType.READ_WRITE)
+    def center_gravity_threshold(self):
+        return self.cg_threshold
+
+    def write_center_gravity_threshold(self, value):
+        self.cg_threshold = value
 
 
 if __name__ == "__main__":
