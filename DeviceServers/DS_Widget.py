@@ -1,15 +1,10 @@
-from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit
-from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device
 from taurus.external.qt import Qt
 from PyQt5 import QtWidgets
-from PyQt5.QtGui import QMouseEvent
 from enum import Enum
-from typing import List
 from abc import abstractmethod
-from _functools import partial
-from PyQt5.QtGui import QIcon, QMouseEvent, QKeyEvent
+import tango
 
 class VisType(Enum):
     MIN = 'min'
@@ -39,6 +34,9 @@ class DS_General_Widget(Qt.QWidget):
         elif self.vis_type == VisType.MIN:
             self.register_DS_min()
 
+        # self.ds_sync = Device('elyse/clocks/sync_main')
+        # self.ds_sync.subscribe_event("sync", tango.EventType.CHANGE_EVENT, self.sync_listener)
+
         print(f'Widget for {self.dev_name} is created.')
 
     @abstractmethod
@@ -63,8 +61,8 @@ class DS_General_Widget(Qt.QWidget):
 
         s1.model = f'{dev_name}/device_friendly_name'
         s2.model = f'{dev_name}/state'
-        lo_status.addWidget(s1)
         lo_status.addWidget(s2)
+        lo_status.addWidget(s1)
         if not short:
             s3.model = f'{dev_name}/status'
             lo_status.addWidget(s3)
@@ -95,3 +93,6 @@ class DS_General_Widget(Qt.QWidget):
     def set_the_control_value(self, value):
         pass
 
+    # def sync_listener(self, event):
+    #     val = self.ds_sync.sync
+    #     self.sync_count.setText(f'Count: {val}')

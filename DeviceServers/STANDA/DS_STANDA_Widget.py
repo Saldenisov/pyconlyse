@@ -198,6 +198,10 @@ class Standa_motor(DS_General_Widget):
 
         # State and status
         self.set_state_status()
+        setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
+        button_on: TaurusCommandButton = getattr(self, f'button_on_{dev_name}')
+        button_on.setModel(dev_name)
+        lo_status.addWidget(button_on)
 
         # Position controls
         widgets = [TaurusLabel(), TaurusLabel(), TaurusWheelEdit(), MyQLabel(f'Relative shift: {self.relative_shift}')]

@@ -1,22 +1,17 @@
-import pyqtgraph as pg
-import numpy as np
 from taurus import Device
-from taurus.core import TaurusDevState
-from tango import AttrWriteType, DispLevel, DevState, Database
-from taurus.external.qt import Qt, QtCore
-from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
-import pyqtgraph as pg
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from _functools import partial
 from collections import OrderedDict
 from typing import Dict
+
 from PyQt5 import QtWidgets
-from _functools import partial
-from collections import deque
+from PyQt5.QtGui import QMouseEvent
+from tango import Database
+from taurus import Device
+from taurus.core import TaurusDevState
+from taurus.external.qt import Qt
 
 from DeviceServers import *
-from PyQt5.QtGui import QMouseEvent
+from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
 class LaserPointing(DS_General_Widget):
@@ -25,7 +20,6 @@ class LaserPointing(DS_General_Widget):
         self.widgets = {}
         self.device_servers = {}
         self.db = Database()
-        self.positions = deque([], maxlen=120)
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -54,6 +48,8 @@ class LaserPointing(DS_General_Widget):
                     ds_class_widget = class_match[ds_class_name]
                     if issubclass(ds_class_widget, OWIS_motor):
                         ds_widget = ds_class_widget(device_name, extra, self, VisType.MIN)
+                    elif issubclass(ds_class_widget, Basler_camera):
+                        ds_widget = ds_class_widget(device_name, self, self.vis_type)
                     else:
                         ds_widget = ds_class_widget(device_name, self, VisType.MIN)
 
@@ -103,15 +99,6 @@ class LaserPointing(DS_General_Widget):
             except Exception as e:
                 print(e)
             lo_image.addWidget(self.widgets['Camera'])
-
-            # Enable antialiasing for prettier plots
-            pg.setConfigOptions(antialias=True)
-            win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
-            p1 = win.addPlot(title="Basic array plotting", y=self.positions)
-            p1.setLabel('left', "Y Axis", units='pixel')
-            p1.setLabel('bottom', "N of measurement", units='')
-
-            lo_image.addWidget(win)
             vspacer = QtWidgets.QSpacerItem(20, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
             lo_image.addSpacerItem(vspacer)
 
