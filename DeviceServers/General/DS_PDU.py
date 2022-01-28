@@ -41,16 +41,8 @@ class DS_PDU(DS_General):
         self._names = []
         self._ids = []
         self._states = []
-        super().init_device()
-        self._device_id_internal = -1
         self._outputs = {}
-        self._device_id_internal, self._uri = self.find_device()
-        if self._device_id_internal >= 0:
-            self.info(f"Device {self.device_name} was found.", True)
-            self.set_state(DevState.OFF)
-        else:
-            self.info(f"Device {self.device_name} was NOT found.", True)
-            self.set_state(DevState.FAULT)
+        super().init_device()
 
     # @command(doc_in="Reads PDU channels state.", polling_period=500, dtype_out=)
     # def get_channels_states(self):
