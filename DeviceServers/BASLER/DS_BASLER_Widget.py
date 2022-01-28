@@ -20,7 +20,6 @@ class Basler_camera(DS_General_Widget):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.image_listener)
 
-
     def register_DS_full(self, group_number=1):
         super(Basler_camera, self).register_DS_full()
         dev_name = self.dev_name
@@ -152,10 +151,9 @@ class Basler_camera(DS_General_Widget):
     def set_image(self, lo_image):
         self.view = pg.ImageView()
         image = np.ones(shape=(512, 512))
-        #self.view.setImage(self.convert_image(image))
         self.view.setImage(image)
         self.view.autoRange()
-        self.view.setMinimumSize(500, 500)
+        self.view.setMinimumSize(300, 300)
         lo_image.addWidget(self.view)
 
         self.roi_circle = pg.CircleROI([0, 0], size=2, pen=pg.mkPen('r', width=2))
@@ -166,42 +164,33 @@ class Basler_camera(DS_General_Widget):
         self.cg_threshold = TaurusValueSpinBox()
         self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
         self.cg_threshold.setValue(self.ds.center_gravity_threshold)
+        self.cg_threshold.setMaximumWidth(60)
         self.label_X_pos = TaurusLabel(f'X position: ')
         self.label_Y_pos = TaurusLabel(f'Y position: ')
 
         layout_cg_threshold.addWidget(self.label_X_pos)
         layout_cg_threshold.addWidget(self.label_Y_pos)
+        layout_cg_threshold.addWidget(TaurusLabel('Threshold CG'))
         layout_cg_threshold.addWidget(self.cg_threshold)
 
         # Enable antialiasing for prettier plots
         pg.setConfigOptions(antialias=True)
         win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
         p1 = win.addPlot(title="X position", y=self.positions['X'])
-        p1.setLabel('left', "Y Axis", units='pixel')
+        p1.setLabel('left', "X pos", units='pixel')
         p1.setLabel('bottom', "N of measurement", units='')
         p1.showGrid(x=True, y=True)
         self.x_pos = p1.plot(self.positions['X'])
 
         p2 = win.addPlot(title="Y position", y=self.positions['Y'])
-        p2.setLabel('left', "Y Axis", units='pixel')
+        p2.setLabel('left', "Y pos", units='pixel')
         p2.setLabel('bottom', "N of measurement", units='')
         p2.showGrid(x=True, y=True)
         self.y_pos = p2.plot(self.positions['Y'])
         lo_image.addLayout(layout_cg_threshold)
         lo_image.addWidget(win)
 
-        ## Set a custom color map
-        colors = [
-            (0, 0, 0),
-            (45, 5, 61),
-            (84, 42, 55),
-            (150, 87, 60),
-            (208, 171, 141),
-            (255, 255, 255)
-        ]
-        # cmap = pg.colormap.get('rainbow')
         cmap = pg.colormap.get('CET-L9')
-        # cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
         self.view.setColorMap(cmap)
 
     def register_full_layouts(self):

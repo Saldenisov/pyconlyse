@@ -1,12 +1,10 @@
-from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusValueCheckBox
+from _functools import partial
+
+import tango
 from PyQt5.QtWidgets import QCheckBox
-from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus import Device
 from taurus.external.qt import Qt
-from _functools import partial
-import tango
-
+from taurus.qt.qtgui.button import TaurusCommandButton
 
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
