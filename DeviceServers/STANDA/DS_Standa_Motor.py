@@ -100,7 +100,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                         argreturn = device_id, uri
                         break
         self.info(f'Result: {argreturn}', True)
-        return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def read_position_local(self) -> Union[int, str]:
         pos = get_position_t()

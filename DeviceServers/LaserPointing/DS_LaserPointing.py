@@ -34,8 +34,9 @@ class DS_LaserPointing(DS_ControlPosition):
         super().init_device()
         self.turn_on()
 
-    def find_device(self) -> Tuple[int, str]:
-        return self.server_id, self.device_id
+    def find_device(self):
+        argreturn = self.server_id, self.device_id
+        self._device_id_internal, self._uri = argreturn
 
     def get_controller_status_local(self) -> Union[int, str]:
         return super().get_controller_status_local()
