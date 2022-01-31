@@ -56,6 +56,8 @@ class LaserPointing(DS_General_Widget):
                     self.widgets[device_role] = ds_widget
                     self.device_servers[device_role] = ds
                 else:
+                    self.widgets[device_role] = QtWidgets.QLabel(f'Device {device_name} is not ready: {state}.')
+                    self.device_servers[device_role] = None
                     print(f'Device {device_name} is not ready. Restart TANGO if NOTHING HELPS!')
 
             self.groups: OrderedDict = eval(ds.get_groups)

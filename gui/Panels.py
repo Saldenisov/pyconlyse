@@ -4,6 +4,7 @@ from PyQt5.QtCore import Qt
 from abc import abstractmethod
 from DeviceServers.STANDA.DS_STANDA_Widget import Standa_motor
 from DeviceServers.BASLER.DS_BASLER_Widget import Basler_camera
+from DeviceServers.ANDOR_CCD.DS_ANDOR_CCD_Widget import ANDOR_CCD
 from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
 from DeviceServers.TopDirect.DS_TOPDIRECT_Widget import TopDirect_Motor
@@ -156,6 +157,14 @@ class BaslerPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != Basler_camera:
+            raise Exception(f'Wrong widget class {widget_class} is passed.')
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class ANDOR_CCDPanel(GeneralPanel):
+
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
+        if widget_class != ANDOR_CCD:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
 

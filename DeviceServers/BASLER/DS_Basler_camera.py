@@ -23,7 +23,7 @@ from threading import Thread
 
 
 class DS_Basler_camera(DS_CAMERA_CCD):
-    '''
+    """
     Basler
     This controls the connection to Basler Cameras. One can also see many of
     the properties form the camera as well as the image observed by it.
@@ -41,7 +41,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     Sensor readout mode: normal (the readout time for each row of pixels
     remains unchanged), fast (the readout time for each row of pixels is
                               reduced, compared to normal readout. )
-    '''
+    """
+
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000
@@ -178,7 +179,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         super().init_device()
         self.start_grabbing_local()
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
@@ -193,7 +194,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.error(f'Could not open camera. {e}')
             else:
                 self.error(f'Could not find camera.')
-            return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self.camera and not self.camera.IsOpen():
