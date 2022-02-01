@@ -1,67 +1,61 @@
-<<<<<<< HEAD
-<<<<<<< HEAD
-from time import sleep
-from concurrent.futures import ThreadPoolExecutor
-class A:
+import sys
+from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QWidget, QAction, QTabWidget, QVBoxLayout
+from PyQt5.QtGui import QIcon
+from PyQt5.QtCore import pyqtSlot
+
+
+class App(QMainWindow):
+
     def __init__(self):
-        self.a = 10
-        self._main_executor = ThreadPoolExecutor(max_workers=10)
+        super().__init__()
+        self.title = 'PyQt5 tabs - pythonspot.com'
+        self.left = 0
+        self.top = 0
+        self.width = 300
+        self.height = 200
+        self.setWindowTitle(self.title)
+        self.setGeometry(self.left, self.top, self.width, self.height)
 
-    def add_to_executor(self, func, **kwargs):
-        # used for slow methods and functions
-        self._main_executor.submit(func, **kwargs)
+        self.table_widget = MyTableWidget(self)
+        self.setCentralWidget(self.table_widget)
 
-    def _exec_mes_every_n_sec(self, f=None, flag=False, delay=1, n_max=2, specififc={}):
-        print("_exec_mes_every_n_se")
-        i = 0
-        if delay > 5:
-            delay = 5
-        from time import sleep
-        while self.flag and i <= n_max:
-            i += 1
-            print(i)
-            f(**specififc)
-            sleep(delay)
-
-    def f(self, b=0, **kwargs):
-        print(f'func f {b}')
+        self.show()
 
 
-    def test(self, **kwargs):
-        #self._exec_mes_every_n_sec(f=self.f, flag=True, delay=1, n_max=2, specififc=kwargs)
-        self.add_to_executor(self._exec_mes_every_n_sec, f=self.f, flag=self.flag, delay=1, n_max=2, specififc=kwargs)
+class MyTableWidget(QWidget):
+
+    def __init__(self, parent):
+        super(QWidget, self).__init__(parent)
+        self.layout = QVBoxLayout(self)
+
+        # Initialize tab screen
+        self.tabs = QTabWidget()
+        self.tab1 = QWidget()
+        self.tab2 = QWidget()
+        self.tabs.resize(300, 200)
+
+        # Add tabs
+        self.tabs.addTab(self.tab1, "Tab 1")
+        self.tabs.addTab(self.tab2, "Tab 2")
+
+        # Create first tab
+        self.tab1.layout = QVBoxLayout(self)
+        self.pushButton1 = QPushButton("PyQt5 button")
+        self.tab1.layout.addWidget(self.pushButton1)
+        self.tab1.setLayout(self.tab1.layout)
+
+        # Add tabs to widget
+        self.layout.addWidget(self.tabs)
+        self.setLayout(self.layout)
+
+    @pyqtSlot()
+    def on_click(self):
+        print("\n")
+        for currentQTableWidgetItem in self.tableWidget.selectedItems():
+            print(currentQTableWidgetItem.row(), currentQTableWidgetItem.column(), currentQTableWidgetItem.text())
 
 
-a = A()
-a.flag = True
-a.test(b=1000, flag=True)
-sleep(1.5)
-a.flag = False
-
-
-
-
-
-=======
-from functools import wraps
-=======
->>>>>>> develop
-
-from datetime import datetime
-
-# current date and time
-now = datetime.now()
-
-timestamp = datetime.timestamp(now)
-print(type(timestamp))
-
-print("timestamp =", timestamp)
-
-<<<<<<< HEAD
-
-a = A()
-a.f()
->>>>>>> develop
-=======
-print(datetime.fromtimestamp(timestamp))
->>>>>>> develop
+if __name__ == '__main__':
+    app = QApplication(sys.argv)
+    ex = App()
+    sys.exit(app.exec_())
