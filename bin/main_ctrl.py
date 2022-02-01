@@ -1,5 +1,8 @@
 import sys
 import os
+from taurus import Device
+from taurus.core.tango import DevState
+
 from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusValueCheckBox, TaurusValueComboBox
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.external.qt import Qt
@@ -8,6 +11,9 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from _functools import partial
 import subprocess
+
+from tango import Database
+
 
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
@@ -34,10 +40,18 @@ def rb_clicked(value: str):
 
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
+    tabs = QtWidgets.QTabWidget()
+    tab1 = QtWidgets.QWidget()
+    tab2 = QtWidgets.QWidget()
+    tabs.addTab(tab1, 'Clients')
+    tabs.addTab(tab2, 'Devices')
+
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
     panel.setWindowIcon(QIcon('icons//main_icon.png'))
 
+    layout_clients = Qt.QVBoxLayout()
+    layout_devices = QtWidgets.QGridLayout()
     layout_main = Qt.QVBoxLayout()
     setattr(panel, f'layout_main', layout_main)
 
@@ -95,20 +109,24 @@ def main():
     lo_laser_pointing.addWidget(button_laser_pointing)
     lo_laser_pointing.addWidget(cbox_laser_pointing)
 
-    layout_main.addLayout(lo_type)
-    layout_main.addLayout(lo_NETIO)
-    layout_main.addLayout(lo_OWIS)
-    layout_main.addLayout(lo_STANDA)
-    layout_main.addLayout(lo_TOPDIRECT)
-    layout_main.addLayout(lo_Basler)
+    layout_clients.addLayout(lo_type)
+    layout_clients.addLayout(lo_NETIO)
+    layout_clients.addLayout(lo_OWIS)
+    layout_clients.addLayout(lo_STANDA)
+    layout_clients.addLayout(lo_TOPDIRECT)
+    layout_clients.addLayout(lo_Basler)
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
     separator_devices.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     separator_devices.setLineWidth(2)
 
-    layout_main.addWidget(separator_devices)
-    layout_main.addLayout(lo_laser_pointing)
+    layout_clients.addWidget(separator_devices)
+    layout_clients.addLayout(lo_laser_pointing)
+    vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+    layout_clients.addSpacerItem(vspacer)
+
+
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -116,6 +134,38 @@ def main():
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
+
+    tab1.setLayout(layout_clients)
+
+    db = Database()
+    devices = list(db.get_device_exported("*"))
+    devices.remove('dserver/DataBaseds/2')
+    taurus_devices = {}
+    columns = 3
+    r = 0
+    c = 0
+    i = 1
+    for dev_name in devices:
+        print(f'Checking device {dev_name} {i}:{len(devices)}')
+        dev = Device(dev_name)
+        taurus_devices[dev_name] = dev
+        state = dev.state
+
+        lab = QtWidgets.QLabel(f'{dev_name}:STATE:{state}')
+
+        if state == 4:
+            lab.setStyleSheet(f"background-color: red")
+
+        layout_devices.addWidget(lab, r, c)
+        c += 1
+        if c == columns:
+            c = 0
+            r += 1
+        i += 1
+
+    tab2.setLayout(layout_devices)
+
+    layout_main.addWidget(tabs)
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
