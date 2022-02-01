@@ -206,7 +206,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             return 0
         else:
             return f'Could not turn on camera it is opened already.' if self.camera else f'Could not turn on camera, ' \
-                                                                                         f'because it does not exist.'
 
     def turn_off_local(self) -> Union[int, str]:
         if self.camera and self.camera.IsOpen():

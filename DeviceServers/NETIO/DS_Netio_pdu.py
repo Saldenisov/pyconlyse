@@ -131,7 +131,7 @@ class DS_Netio_pdu(DS_PDU):
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
-            self._device_id_internal, self._uri = self.find_device()
+            self.find_device()
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
             return f'Could NOT turn on {self.device_name}: Device could not be found.'

@@ -109,7 +109,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
-            self._device_id_internal, self._uri = self.find_device()
+            self.find_device()
 
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
