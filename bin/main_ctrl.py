@@ -11,7 +11,7 @@ from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from _functools import partial
 import subprocess
-
+from threading import Thread
 from tango import Database
 
 
@@ -38,6 +38,63 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
+def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
+    db = Database()
+    servers = ['ELYSE', 'manip']
+    devices = []
+    for server in servers:
+        devices = devices + list(db.get_device_exported(f"{server}*"))
+    labels = {}
+    taurus_devices = {}
+    columns = 3
+    r = 0
+    c = 0
+    i = 1
+
+    for dev_name in devices:
+        print(f'Device {dev_name} {i}/{len(devices)}')
+        dev = Device(dev_name)
+        taurus_devices[dev_name] = dev
+        if check:
+            state = dev.state
+        else:
+            state = '-1'
+        lab = QtWidgets.QLabel(dev_name)
+        labels[dev_name] = lab
+
+        layout_devices.addWidget(lab, r, c)
+        c += 1
+        if c == columns:
+            c = 0
+            r += 1
+        i += 1
+
+    return taurus_devices, labels
+
+
+def set_state(taurus_devices, labels):
+    from time import sleep
+    while True:
+        for dev_name, dev in taurus_devices.items():
+            sleep(0.15)
+            state_ds = dev.state
+            if state_ds == 4:
+                labels[dev_name].setStyleSheet(f"background-color: red")
+            else:
+                state = dev.State()
+                if state == DevState.ON:
+                    labels[dev_name].setStyleSheet(f"background-color: green")
+                elif state == DevState.STANDBY:
+                    labels[dev_name].setStyleSheet(f"background-color: yellow")
+                elif state == DevState.OFF:
+                    labels[dev_name].setStyleSheet(f"background-color: gray")
+                elif state == DevState.FAULT:
+                    labels[dev_name].setStyleSheet(f"background-color: red")
+                else:
+                    labels[dev_name].setStyleSheet(f"background-color: purple")
+
+        sleep(2)
+
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
     tabs = QtWidgets.QTabWidget()
@@ -46,12 +103,13 @@ def main():
     tabs.addTab(tab1, 'Clients')
     tabs.addTab(tab2, 'Devices')
 
+
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
     panel.setWindowIcon(QIcon('icons//main_icon.png'))
 
     layout_clients = Qt.QVBoxLayout()
-    layout_devices = QtWidgets.QGridLayout()
+    layout_devices= Qt.QGridLayout()
     layout_main = Qt.QVBoxLayout()
     setattr(panel, f'layout_main', layout_main)
 
@@ -126,8 +184,6 @@ def main():
     vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
 
-
-
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
     button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
@@ -136,40 +192,16 @@ def main():
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
 
     tab1.setLayout(layout_clients)
-
-    db = Database()
-    devices = list(db.get_device_exported("*"))
-    devices.remove('dserver/DataBaseds/2')
-    taurus_devices = {}
-    columns = 3
-    r = 0
-    c = 0
-    i = 1
-    for dev_name in devices:
-        print(f'Checking device {dev_name} {i}:{len(devices)}')
-        dev = Device(dev_name)
-        taurus_devices[dev_name] = dev
-        state = dev.state
-
-        lab = QtWidgets.QLabel(f'{dev_name}:STATE:{state}')
-
-        if state == 4:
-            lab.setStyleSheet(f"background-color: red")
-
-        layout_devices.addWidget(lab, r, c)
-        c += 1
-        if c == columns:
-            c = 0
-            r += 1
-        i += 1
-
     tab2.setLayout(layout_devices)
 
     layout_main.addWidget(tabs)
+    taurus_devices, labels = set_devices_states(layout_devices, False)
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
     panel.show()
+    states_thread = Thread(target=set_state, args=[taurus_devices, labels])
+    states_thread.start()
     sys.exit(app.exec_())
 
 

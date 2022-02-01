@@ -95,7 +95,6 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                     result = lib.get_serial_number(device_id, ctypes.byref(x_serial))
                     self._device_id_internal = device_id
                     self.turn_off_local()
-                    serial = int(x_serial.value)
                     if int(self.device_id) == int(x_serial.value):
                         argreturn = device_id, uri
                         break
@@ -149,7 +148,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
-            self._device_id_internal, self._uri = self.find_device()
+            self.find_device()
 
         if self._device_id_internal == -1:
             return f'Could NOT turn on {self.device_name}: Device could not be found.'
