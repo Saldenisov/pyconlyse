@@ -20,36 +20,35 @@ except ModuleNotFoundError:
     from General.DS_PDU import DS_PDU
 
 
-class DS_Numatio_GPIO(DS_PDU):
+class DS_Numato_GPIO(DS_PDU):
     """
-    Device Server (Tango) which controls the NETIO pdu using JSON API.
+    Device Server (Tango) which controls the NUMATO pdu using JSON API.
     """
     _version_ = '0.1'
-    _model_ = 'NETIO PDU'
+    _model_ = 'NUMATO_GPIO'
     polling = 500
 
 
     def init_device(self):
         self._actions = []
-        self._delays = []
         super().init_device()
         self.turn_on()
 
     def _addr(self):
-        return f'http://{self.ip_address}/netio.json'
+        return f'http://{self.ip_address}/numato.json'
 
     def _authentication(self):
         return self.authentication_name, self.authentication_password
 
     def find_device(self) -> Tuple[int, str]:
         arg_return = -1, ''
-        self.info(f"Searching for NETIO PDU device {self.device_name}", True)
+        self.info(f"Searching for NUMATO_GPIO device {self.device_name}", True)
         res = self._get_request()
         if isinstance(res, requests.Response):
             if res.status_code == 200:
                 arg_return = 1, res.json()['Agent']['SerialNumber']
                 outputs_list = res.json()['Outputs']
-                self.__set_attributes_netio(outputs_list)
+                self.__set_attributes_numato(outputs_list)
         self._device_id_internal, self._uri = arg_return
 
     def get_channels_state_local(self) -> Union[int, str]:
@@ -57,29 +56,26 @@ class DS_Numatio_GPIO(DS_PDU):
         if isinstance(res, requests.Response):
             if res.status_code == 200:
                 outputs_list = res.json()['Outputs']
-                return self.__set_attributes_netio(outputs_list)
+                return self.__set_attributes_numato(outputs_list)
         return f'Could not get channels states for {self.device_name}. Res {res}'
 
-    def __set_attributes_netio(self, outputs_list) -> Union[int, str]:
+    def __set_attributes_numato(self, outputs_list) -> Union[int, str]:
         try:
             names = []
             ids = []
             states = []
             actions = []
-            delays = []
 
             for output in outputs_list:
                 names.append(output['Name'])
                 ids.append(output['ID'])
                 states.append(output['State'])
                 actions.append(output['Action'])
-                delays.append(output['Delay'])
 
             self._names = names
             self._states = states
             self._ids = ids
             self._actions = actions
-            self._delays = delays
             return 0
         except Exception as e:
             return e
@@ -159,4 +155,4 @@ class DS_Numatio_GPIO(DS_PDU):
 
 
 if __name__ == "__main__":
-    DS_Numatio_GPIO.run_server()
+    DS_Numato_GPIO.run_server()
