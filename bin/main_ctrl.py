@@ -2,7 +2,8 @@ import sys
 import os
 from taurus import Device
 from taurus.core.tango import DevState
-
+import imageio
+import numpy as np
 from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusValueCheckBox, TaurusValueComboBox
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.external.qt import Qt
@@ -13,13 +14,13 @@ from _functools import partial
 import subprocess
 from threading import Thread
 from tango import Database
-
+import pyqtgraph as pg
 
 from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
-
+from functools import partial
 
 type_vis = VisType.FULL
 
@@ -68,6 +69,7 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             c = 0
             r += 1
         i += 1
+        break
 
     return taurus_devices, labels
 
@@ -95,6 +97,35 @@ def set_state(taurus_devices, labels):
 
         sleep(2)
 
+
+def show_map(main_widget):
+    map = QtWidgets.QWidget()
+    layout_map_main = QtWidgets.QHBoxLayout()
+    layout_map_image = QtWidgets.QHBoxLayout()
+    layout_map_labels = QtWidgets.QHBoxLayout()
+    layout_map_main.addLayout(layout_map_image)
+    layout_map_main.addLayout(layout_map_labels)
+    from PIL import Image
+    imageWidget = pg.GraphicsLayoutWidget()
+    vb = imageWidget.addViewBox(row=1, col=1)
+    # im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.jpg')
+    im = np.array(Image.open('C:\\dev\\pyconlyse\\bin\\icons\\layout.jpg'))
+
+    img = pg.ImageItem()
+    img.setImage(np.transpose(im, (1, 0, 2)))
+    vb.addItem(img)
+    vb.setAspectLocked(True)
+    vb.invertY(True)
+
+
+    layout_map_image.addWidget(imageWidget)
+    map.setLayout(layout_map_main)
+    main_widget.map_widget = map
+    map.setGeometry(300, 300, 1000, 800)
+    map.setWindowTitle('Map')
+    map.show()
+
+
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
     tabs = QtWidgets.QTabWidget()
@@ -102,7 +133,6 @@ def main():
     tab2 = QtWidgets.QWidget()
     tabs.addTab(tab1, 'Clients')
     tabs.addTab(tab2, 'Devices')
-
 
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
@@ -192,7 +222,12 @@ def main():
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
 
     tab1.setLayout(layout_clients)
-    tab2.setLayout(layout_devices)
+    layout_devices_tab = QtWidgets.QVBoxLayout()
+    layout_devices_tab.addLayout(layout_devices)
+    button_map = QtWidgets.QPushButton('Map')
+    button_map.clicked.connect(partial(show_map, panel))
+    layout_devices_tab.addWidget(button_map)
+    tab2.setLayout(layout_devices_tab)
 
     layout_main.addWidget(tabs)
     taurus_devices, labels = set_devices_states(layout_devices, False)

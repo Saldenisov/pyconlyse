@@ -1,7 +1,5 @@
-from tango import Database
-db = Database()
+import imageio
 
+im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
 
-devices = db.get_device_exported("*")
-
-print(devices)
+a = 0
