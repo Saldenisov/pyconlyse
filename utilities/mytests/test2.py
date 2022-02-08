@@ -1,61 +1,24 @@
-from lima import Basler
-from lima import Core
+# Set up a window with plot
+import pyqtgraph as pg
+win = pg.GraphicsLayoutWidget()
+plt = win.addPlot()
+plt.plot(x=[0, 0.1, 0.2, 0.3, 0.4], y=[1, 7, 2, 4, 3])
 
-#----------------------------------------+
-#                        packet-size     |
-#                                        |
-#-------------------------------------+  |
-#              inter-packet delay     |  |
-#                                     |  |
-#----------------------------------+  |  |
-#      frame-transmission delay    |  |  |
-#                                  |  |  |
-#--------------------+             |  |  |
-# cam ip or hostname |             |  |  |
-#                    v             v  v  v
-cam = Basler.Camera('192.168.1.1', 0, 0, 8000)
+# Add a ViewBox below with two rectangles
+vb = win.addViewBox(col=0, row=1)
+r1 = pg.QtGui.QGraphicsRectItem(0, 0, 0.4, 1)
+r1.setPen(pg.mkPen(None))
+r1.setBrush(pg.mkBrush('r'))
+vb.addItem(r1)
+circle = pg.CircleROI([250, 250], [120, 120], pen=pg.mkPen('r',width=2))
+vb.addItem(circle)
 
-hwint = Basler.Interface(cam)
-ct = Core.CtControl(hwint)
+# Make the ViewBox flat
+vb.setMaximumHeight(70)
 
-acq = ct.acquisition()
+# Force y-axis to be always auto-scaled
+vb.setMouseEnabled(y=False)
+vb.enableAutoRange(y=True)
 
-
-# set and test video
-#
-
-video=ct.video()
-video.setMode(Core.RGB24)
-video.startLive()
-video.stopLive()
-video_img = video.getLastImage()
-
-# set and test an acquisition
-#
-
-# setting new file parameters and autosaving mode
-saving=ct.saving()
-
-pars=saving.getParameters()
-pars.directory='/buffer/lcb18012/opisg/test_lima'
-pars.prefix='test1_'
-pars.suffix='.edf'
-pars.fileFormat=Core.CtSaving.TIFF
-pars.savingMode=Core.CtSaving.AutoFrame
-saving.setParameters(pars)
-
-# now ask for 2 sec. exposure and 10 frames
-acq.setAcqExpoTime(2)
-acq.setNbImages(10)
-
-ct.prepareAcq()
-ct.startAcq()
-
-# wait for last image (#9) ready
-lastimg = ct.getStatus().ImageCounters.LastImageReady
-while lastimg !=9:
-  time.sleep(1)
-  lastimg = ct.getStatus().ImageCounters.LastImageReady
-
-# read the first image
-im0 = ct.ReadImage(0)
+# Force x-axis to match the plot above
+vb.setXLink(plt)
