@@ -23,6 +23,7 @@ from DeviceServers.DS_Widget import VisType
 from functools import partial
 
 type_vis = VisType.FULL
+from gui.MyWidgets import MyQLabel
 
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
@@ -37,6 +38,7 @@ def start_cmd(call: str, cbox: TaurusValueComboBox):
 def rb_clicked(value: str):
     global type_vis
     type_vis = VisType(value)
+
 
 
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
@@ -60,7 +62,7 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             state = dev.state
         else:
             state = '-1'
-        lab = QtWidgets.QLabel(dev_name)
+        lab = MyQLabel(dev_name)
         labels[dev_name] = lab
 
         layout_devices.addWidget(lab, r, c)
@@ -81,49 +83,122 @@ def set_state(taurus_devices, labels):
             sleep(0.15)
             state_ds = dev.state
             if state_ds == 4:
-                labels[dev_name].setStyleSheet(f"background-color: red")
+                labels[dev_name].update_style(f"background-color: red")
             else:
                 state = dev.State()
                 if state == DevState.ON:
-                    labels[dev_name].setStyleSheet(f"background-color: green")
+                    labels[dev_name].update_style(f"background-color: green")
                 elif state == DevState.STANDBY:
-                    labels[dev_name].setStyleSheet(f"background-color: yellow")
+                    labels[dev_name].update_style(f"background-color: yellow")
                 elif state == DevState.OFF:
-                    labels[dev_name].setStyleSheet(f"background-color: gray")
+                    labels[dev_name].update_style(f"background-color: gray")
                 elif state == DevState.FAULT:
-                    labels[dev_name].setStyleSheet(f"background-color: red")
+                    labels[dev_name].update_style(f"background-color: red")
                 else:
-                    labels[dev_name].setStyleSheet(f"background-color: purple")
+                    labels[dev_name].update_style(f"background-color: purple")
 
         sleep(2)
 
 
-def show_map(main_widget):
+def label_focus(map, event):
+    """
+
+ manip/V0/Cam1_V0 14/38
+ manip/V0/Cam2_V0 15/38
+ manip/V0/Cam3_V0 16/38
+ manip/V0/DV01 17/38
+ manip/V0/DV02 18/38
+ manip/V0/DV03 19/38
+ manip/V0/DV04 20/38
+ manip/V0/F1 21/38
+ manip/V0/L-2_1 22/38
+ manip/V0/LaserPointing-Cam1 23/38
+ manip/V0/LaserPointing-Cam2 24/38
+ manip/V0/LaserPointing-Cam3 25/38
+ manip/V0/MM3_X 26/38
+ manip/V0/MM3_Y 27/38
+ manip/V0/MM4_X 28/38
+ manip/V0/MM4_Y 29/38
+ manip/V0/OPA_X 30/38
+ manip/V0/OPA_Y 31/38
+ manip/V0/PDU_VO 32/38
+ manip/V0/S1 33/38
+ manip/V0/S2 34/38
+ manip/V0/S3 35/38
+ manip/V0/TS_OPA_m 36/38
+ manip/V0/TS_SC_m 37/38
+ manip/VD2/PDU_VD2 38/38
+    """
+    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300),
+                 'ELYSE/motorized_devices/DE1': (400, 400),
+                 'ELYSE/motorized_devices/DE2': (500, 500),
+                 'ELYSE/motorized_devices/MM1_X': (600, 600),
+                 'ELYSE/motorized_devices/MM1_Y': (300, 400),
+                 'ELYSE/motorized_devices/MM2_X': (300, 500),
+                 'ELYSE/motorized_devices/MM2_Y': (300, 600),
+                 'ELYSE/motorized_devices/MME_X': (300, 700),
+                 'ELYSE/motorized_devices/MME_Y': (450, 300),
+                 'manip/ELYSE/PDU_ELYSE': (450, 350),
+                 'manip/SD1/PDU_SD1': (450, 450),
+                 'manip/SD1/PDU_SD2': (450, 450),
+                 'manip/general/DS_OWIS_PS90': (450, 450)
+                 }
+    print(event)
+    if event in positions:
+        if event not in map.circles:
+            circle = pg.CircleROI(list(positions[event]), [120, 120], movable=False, resizable=False,
+                                  pen=pg.mkPen('r', width=2))
+            map.view.addItem(circle)
+            map.circles[event] = circle
+        else:
+            circle = map.circles[event]
+            del map.circles[event]
+            map.view.removeItem(circle)
+
+
+from typing import Dict
+
+
+def show_map(main_widget, labels: Dict):
     map = QtWidgets.QWidget()
     layout_map_main = QtWidgets.QHBoxLayout()
     layout_map_image = QtWidgets.QHBoxLayout()
     layout_map_labels = QtWidgets.QHBoxLayout()
     layout_map_main.addLayout(layout_map_image)
     layout_map_main.addLayout(layout_map_labels)
-    from PIL import Image
+
     imageWidget = pg.GraphicsLayoutWidget()
     vb = imageWidget.addViewBox(row=1, col=1)
-    # im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.jpg')
-    im = np.array(Image.open('C:\\dev\\pyconlyse\\bin\\icons\\layout.jpg'))
+    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
 
     img = pg.ImageItem()
     img.setImage(np.transpose(im, (1, 0, 2)))
+
+    label = QtWidgets.QLabel('Position')
+    layout_map_labels.addWidget(label)
+
+    def mouseMoved(label, evt):
+        pos = evt[0]
+        label.setText(f'Position: {pos}')
+
+    proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=partial(mouseMoved,label))
+    map.proxy = proxy
     vb.addItem(img)
     vb.setAspectLocked(True)
     vb.invertY(True)
-
-
+    map.view = vb
+    map.circles = {}
+    map.labels = labels
     layout_map_image.addWidget(imageWidget)
     map.setLayout(layout_map_main)
     main_widget.map_widget = map
-    map.setGeometry(300, 300, 1000, 800)
+    map.setGeometry(300, 300, 1200, 700)
     map.setWindowTitle('Map')
     map.show()
+
+    for label in labels.values():
+        label: MyQLabel = label
+        label.clicked.connect(partial(label_focus, map))
 
 
 def main():
@@ -225,12 +300,14 @@ def main():
     layout_devices_tab = QtWidgets.QVBoxLayout()
     layout_devices_tab.addLayout(layout_devices)
     button_map = QtWidgets.QPushButton('Map')
-    button_map.clicked.connect(partial(show_map, panel))
     layout_devices_tab.addWidget(button_map)
     tab2.setLayout(layout_devices_tab)
 
     layout_main.addWidget(tabs)
     taurus_devices, labels = set_devices_states(layout_devices, False)
+
+    button_map.clicked.connect(partial(show_map, panel, labels))
+
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
