@@ -16,6 +16,7 @@ gpiozero
 guiqwt # for taurus
 ifaddr
 imutils
+imageio
 lxml  # for taurus
 matplotlib
 msgpack
@@ -30,7 +31,6 @@ PyQt5<5.13
 PyQt5-sip
 pyepics  # for taurus
 pytest-qt
-pywin32; sys_platform == 'win32'
 python-socketio
 pypylon
 pyserial
