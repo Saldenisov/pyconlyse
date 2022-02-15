@@ -1,27 +1,30 @@
+import subprocess
 import sys
-import os
-from taurus import Device
-from taurus.core.tango import DevState
+from _functools import partial
+from pathlib import Path
+from threading import Thread
+from typing import Dict
 
-from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusValueCheckBox, TaurusValueComboBox
-from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.external.qt import Qt
-from taurus.qt.qtgui.application import TaurusApplication
+import imageio
+import numpy as np
+import pyqtgraph as pg
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
-from _functools import partial
-import subprocess
-from threading import Thread
 from tango import Database
+from taurus import Device
+from taurus.core.tango import DevState
+from taurus.external.qt import Qt
+from taurus.qt.qtgui.application import TaurusApplication
+from taurus.qt.qtgui.button import TaurusCommandButton
+from taurus.qt.qtgui.input import TaurusValueComboBox
 
-
-from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
-
+from functools import partial
 
 type_vis = VisType.FULL
+from gui.MyWidgets import MyQLabel
 
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
@@ -38,6 +41,7 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
+
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     db = Database()
     servers = ['ELYSE', 'manip']
@@ -50,7 +54,7 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     r = 0
     c = 0
     i = 1
-
+    a = {}
     for dev_name in devices:
         print(f'Device {dev_name} {i}/{len(devices)}')
         dev = Device(dev_name)
@@ -59,7 +63,7 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             state = dev.state
         else:
             state = '-1'
-        lab = QtWidgets.QLabel(dev_name)
+        lab = MyQLabel(dev_name)
         labels[dev_name] = lab
 
         layout_devices.addWidget(lab, r, c)
@@ -68,7 +72,6 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             c = 0
             r += 1
         i += 1
-
     return taurus_devices, labels
 
 
@@ -79,21 +82,107 @@ def set_state(taurus_devices, labels):
             sleep(0.15)
             state_ds = dev.state
             if state_ds == 4:
-                labels[dev_name].setStyleSheet(f"background-color: red")
+                labels[dev_name].update_style(f"background-color: red")
             else:
                 state = dev.State()
                 if state == DevState.ON:
-                    labels[dev_name].setStyleSheet(f"background-color: green")
+                    labels[dev_name].update_style(f"background-color: green")
                 elif state == DevState.STANDBY:
-                    labels[dev_name].setStyleSheet(f"background-color: yellow")
+                    labels[dev_name].update_style(f"background-color: yellow")
                 elif state == DevState.OFF:
-                    labels[dev_name].setStyleSheet(f"background-color: gray")
+                    labels[dev_name].update_style(f"background-color: gray")
                 elif state == DevState.FAULT:
-                    labels[dev_name].setStyleSheet(f"background-color: red")
+                    labels[dev_name].update_style(f"background-color: red")
                 else:
-                    labels[dev_name].setStyleSheet(f"background-color: purple")
+                    labels[dev_name].update_style(f"background-color: purple")
 
         sleep(2)
+
+
+def label_focus(map, event):
+
+    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
+                 'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
+                 'ELYSE/motorized_devices/MM1_Y': (3300, 380), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
+                 'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
+                 'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
+                 'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
+                 'manip/SD2/PDU_SD2': (300, 300), 'manip/V0/Cam1_V0': (26, 990), 'manip/V0/Cam2_V0': (780, 620),
+                 'manip/V0/Cam3_V0': (300, 300), 'manip/V0/DV01': (1160, 640), 'manip/V0/DV02': (270, 640),
+                 'manip/V0/DV03': (300, 560), 'manip/V0/DV04': (920, 540), 'manip/V0/F1': (300, 300),
+                 'manip/V0/L-2_1': (300, 300), 'manip/V0/LaserPointing-Cam1': (300, 300),
+                 'manip/V0/LaserPointing-Cam2': (300, 300), 'manip/V0/LaserPointing-Cam3': (300, 300),
+                 'manip/V0/MM3_X': (60, 630), 'manip/V0/MM3_Y': (60, 630), 'manip/V0/MM4_X': (60, 1100),
+                 'manip/V0/MM4_Y': (60, 1100), 'manip/V0/OPA_X': (300, 300), 'manip/V0/OPA_Y': (300, 300),
+                 'manip/V0/PDU_VO': (300, 300), 'manip/V0/S1': (300, 300), 'manip/V0/S2': (300, 300),
+                 'manip/V0/S3': (300, 300), 'manip/V0/TS_OPA_m': (300, 300), 'manip/V0/TS_SC_m': (300, 300),
+                 'manip/VD2/PDU_VD2': (300, 300)}
+
+    if event in positions:
+        x = 120
+        y = 120
+        if event not in map.circles:
+            pos = list(positions[event])
+            circle = pg.CircleROI([pos[0] - x/2, pos[1] - y/2], [x, y], movable=False, resizable=False,
+                                  pen=pg.mkPen('r', width=2))
+            map.view.addItem(circle)
+            map.circles[event] = circle
+        else:
+            circle = map.circles[event]
+            del map.circles[event]
+            map.view.removeItem(circle)
+
+
+def show_map(main_widget, labels: Dict):
+    map = QtWidgets.QWidget()
+    layout_map_main = QtWidgets.QVBoxLayout()
+    layout_map_image = QtWidgets.QHBoxLayout()
+    layout_map_labels = QtWidgets.QHBoxLayout()
+    layout_map_main.addLayout(layout_map_image)
+    layout_map_main.addLayout(layout_map_labels)
+
+    imageWidget = pg.GraphicsLayoutWidget()
+    vb = imageWidget.addViewBox(row=1, col=1)
+    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
+
+    img = pg.ImageItem()
+    img.setImage(np.transpose(im, (1, 0, 2)))
+
+    label = QtWidgets.QLabel('Position')
+    layout_map_labels.addWidget(label)
+
+    def mouseMoved(label, img, evt):
+        pos = evt[0]
+        if img.sceneBoundingRect().contains(pos):
+            mousePoint = vb.mapSceneToView(pos)
+            index = int(mousePoint.x())
+            label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>" %
+                          (mousePoint.x(), mousePoint.y()))
+            # vLine.setPos(mousePoint.x())
+            # hLine.setPos(mousePoint.y())
+
+    proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=partial(mouseMoved, label, img))
+    map.proxy = proxy
+    vb.addItem(img)
+
+
+    vb.setAspectLocked(True)
+    vb.invertY(True)
+    map.view = vb
+    map.img = img
+    map.circles = {}
+    map.labels = labels
+    layout_map_image.addWidget(imageWidget)
+    map.setLayout(layout_map_main)
+    main_widget.map_widget = map
+    map.setGeometry(300, 300, 1200, 700)
+    map.setWindowTitle('Map')
+    map.show()
+
+    for label in labels.values():
+        label: MyQLabel = label
+        label.clicked.connect(partial(label_focus, map))
+
 
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
@@ -102,7 +191,6 @@ def main():
     tab2 = QtWidgets.QWidget()
     tabs.addTab(tab1, 'Clients')
     tabs.addTab(tab2, 'Devices')
-
 
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
@@ -192,10 +280,17 @@ def main():
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
 
     tab1.setLayout(layout_clients)
-    tab2.setLayout(layout_devices)
+    layout_devices_tab = QtWidgets.QVBoxLayout()
+    layout_devices_tab.addLayout(layout_devices)
+    button_map = QtWidgets.QPushButton('Map')
+    layout_devices_tab.addWidget(button_map)
+    tab2.setLayout(layout_devices_tab)
 
     layout_main.addWidget(tabs)
     taurus_devices, labels = set_devices_states(layout_devices, False)
+
+    button_map.clicked.connect(partial(show_map, panel, labels))
+
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
