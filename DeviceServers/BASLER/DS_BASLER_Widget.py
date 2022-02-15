@@ -171,7 +171,7 @@ class Basler_camera(DS_General_Widget):
         self.view.addItem(self.roi_circle)
 
         layout_cg_threshold = Qt.QHBoxLayout()
-
+ 
         self.cg_threshold = TaurusValueSpinBox()
         self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
         self.cg_threshold.setValue(self.ds.center_gravity_threshold)
