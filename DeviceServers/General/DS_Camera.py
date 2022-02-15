@@ -313,10 +313,9 @@ class DS_CAMERA_CCD(DS_General):
     def init_device(self):
         self.latestimage = True
         self.last_image: np.array = None
-        self.camera = None
         self.trigger_software = False
+        self.camera = None
         self.CG_position = {'X': 0, 'Y': 0}
-
         super().init_device()
         self.parameters = eval(self.parameters)
         self.turn_on()
