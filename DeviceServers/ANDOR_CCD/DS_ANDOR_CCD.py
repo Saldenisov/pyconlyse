@@ -9,7 +9,7 @@ sys.path.append(str(app_folder))
 from typing import Tuple, Union
 import ctypes
 import inspect
-
+from threading import Thread
 import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
@@ -23,186 +23,177 @@ from pypylon import pylon, genicam
 
 
 class DS_ANDOR_CCD(DS_CAMERA_CCD):
+    RULES = {**DS_CAMERA_CCD.RULES}
+
+    _version_ = '0.1'
+    _model_ = 'ANDOR CCD'
 
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000
 
-    dll_path= device_property(dtype=str)
-
-    def get_camera_friendly_name(self):
-        return self.camera.DeviceUserID.GetValue()
-
-    def set_camera_friendly_name(self, value):
-        self.friendly_name = str(value)
-        self.camera.DeviceUserID.SetValue(str(value))
-
-    def get_camera_serial_number(self) -> Union[str, int]:
-        return self.device.GetSerialNumber()
-
-    def get_camera_model_name(self) -> str:
-        return self.camera.GetDeviceInfo().GetModelName()
-
-    def get_exposure_time(self) -> float:
-        return self.camera.ExposureTimeAbs()
-
-    def set_exposure_time(self, value: float):
-        self.camera.ExposureTimeAbs.SetValue(value)
-
-    def set_trigger_delay(self, value: str):
-        self.camera.TriggerDelayAbs.SetValue(value)
-
-    def get_trigger_delay(self) -> str:
-        return self.camera.TriggerDelayAbs()
-
-    def get_exposure_min(self):
-        return self.camera.ExposureTimeAbs.Min
-
-    def get_exposure_max(self):
-        return self.camera.ExposureTimeAbs.Max
-
-    def set_gain(self, value: int):
-        self.camera.GainRaw.SetValue(value)
-
-    def get_gain(self) -> int:
-        return self.camera.GainRaw()
-
-    def get_gain_min(self) -> int:
-        return self.camera.GainRaw.Min
-
-    def get_gain_max(self) -> int:
-        return self.camera.GainRaw.Max
-
-    def get_width(self) -> int:
-        return self.camera.Width()
-
-    def set_width(self, value: int):
-        was_grabbing = False
-        if self.grabbing:
-            was_grabbing = True
-            self.stop_grabbing
-        self.camera.Width.SetValue(value)
-        if was_grabbing:
-            self.start_grabbing
-
-    def get_width_min(self):
-        return self.camera.Width.Min
-
-    def get_width_max(self):
-        return self.camera.Width.Max
-
-    def set_height(self, value: int):
-        was_grabbing = False
-        if self.grabbing:
-            was_grabbing = True
-            self.stop_grabbing
-        self.camera.Height.SetValue(value)
-        if was_grabbing:
-            self.start_grabbing
-
-    def get_height(self) -> int:
-        return self.camera.Height()
-
-    def get_height_min(self):
-        return self.camera.Height.Min
-
-    def get_height_max(self):
-        return self.camera.Height.Max
-
-    def get_offsetX(self) -> int:
-        return self.camera.OffsetX()
-
-    def set_offsetX(self, value: int):
-        self.camera.OffsetX = value
-
-    def get_offsetY(self) -> int:
-        return self.camera.OffsetY()
-
-    def set_offsetY(self, value: int):
-        self.camera.OffsetY = value
-
-    def set_format_pixel(self, value: str):
-        was_grabbing = False
-        if self.grabbing:
-            was_grabbing = True
-            self.stop_grabbing()
-        self.camera.PixelFormat = value
-        if was_grabbing:
-            self.start_grabbing()
-
-    def get_format_pixel(self) -> str:
-        return self.camera.PixelFormat()
-
-    def get_framerate(self):
-        return self.camera.ResultingFrameRateAbs()
-
-    def set_binning_horizontal(self, value: int):
-        self.camera.BinningHorizontal = value
-
-    def get_binning_horizontal(self) -> int:
-        return self.camera.BinningHorizontal()
-
-    def set_binning_vertical(self, value: int):
-        self.camera.BinningVertical = value
-
-    def get_binning_vertical(self) -> int:
-        return self.camera.BinningVertical()
-
-    def get_sensor_readout_mode(self) -> str:
-        return self.camera.SensorReadoutMode.GetValue()
+    dll_path = device_property(dtype=str)
+    width = device_property(dtype=int)
 
     def init_device(self):
-        self.pixel_format = None
-        self.camera: pylon.InstantCamera = None
-        self.converter: pylon.ImageFormatConverter = None
-        self.device = None
+        self.dll = None
+        self.serial_number_real = -1
+        self.head_name = ''
+        self.status_real = 0
+        self.exposure_time = -1
+        self.accumulate_time = -1
+        self.kinetic_time = -1
+        self.n_gains_max = 1
+        self.gain_value = -1
+        self.height_value = 256
+        self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
         super().init_device()
+        self.start_grabbing_local()
 
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
-            self.device = self._get_camera_device()
-            if self.device is not None:
-                try:
-                    instance = pylon.TlFactory.GetInstance()
-                    self.camera = pylon.InstantCamera(instance.CreateDevice(self.device))
-                    self.turn_on_local()
-                    argreturn = 1, str(self.camera.GetDeviceInfo().GetSerialNumber()).encode('utf-8')
-                except Exception as e:
-                    self.error(f'Could not open camera. {e}')
+            self.dll = self.load_dll()
+            res = self._Initialize()
+            if res:
+                self.set_state(DevState.ON)
+                self._GetCameraSerialNumber()
+                argreturn = 1, str(self.serial_number_real).encode('utf-8')
             else:
-                self.error(f'Could not find camera.')
+                self.error(f'Could not initialize camera.')
             self._device_id_internal, self._uri = argreturn
-            return argreturn
+
+    def get_camera_friendly_name(self):
+        return self.friendly_name
+
+    def set_camera_friendly_name(self, value):
+        self.friendly_name = str(value)
+
+    def get_camera_serial_number(self) -> Union[str, int]:
+        self._GetCameraSerialNumber()
+        return self.serial_number_real
+
+    def get_camera_model_name(self) -> str:
+        self._GetHeadModel()
+        return self.head_name
+
+    def get_exposure_time(self) -> float:
+        self._GetAcquisitionTimings()
+        return self.exposure_time
+
+    def set_exposure_time(self, value: float):
+        self._SetExposureTime(value)
+
+    def set_trigger_delay(self, value: str):
+        pass
+
+    def get_trigger_delay(self) -> str:
+        return -1
+
+    def get_exposure_min(self):
+        return 0.00001
+
+    def get_exposure_max(self):
+        return 1
+
+    def set_gain(self, value: int):
+        self._SetPreAmpGain(value)
+
+    def get_gain(self) -> int:
+        return self.gain_value
+
+    def get_gain_min(self) -> int:
+        return 0
+
+    def get_gain_max(self) -> int:
+        self._GetNumberPreAmpGains()
+        return self.n_gains_max
+
+    def get_width(self) -> int:
+        return self.width
+
+    def set_width(self, value: int):
+        pass
+
+    def get_width_min(self):
+        return self.width
+
+    def get_width_max(self):
+        return self.width
+
+    def set_height(self, value: int):
+        pass
+
+    def get_height(self) -> int:
+        return self.height_value
+
+    def get_height_min(self):
+        return 1
+
+    def get_height_max(self):
+        return 256
+
+    def get_offsetX(self) -> int:
+        return self.camera.OffsetX()
+
+    def set_offsetX(self, value: int):
+        pass
+
+    def get_offsetY(self) -> int:
+        return -1
+
+    def set_offsetY(self, value: int):
+        pass
+
+    def set_format_pixel(self, value: str):
+        pass
+
+    def get_format_pixel(self) -> str:
+        return 'None'
+
+    def get_framerate(self):
+        return -1
+
+    def set_binning_horizontal(self, value: int):
+        pass
+
+    def get_binning_horizontal(self) -> int:
+        return -1
+
+    def set_binning_vertical(self, value: int):
+        pass
+
+    def get_binning_vertical(self) -> int:
+        return -1
+
+    def get_sensor_readout_mode(self) -> str:
+        return 'None'
 
     def turn_on_local(self) -> Union[int, str]:
-        if self.camera and not self.camera.IsOpen():
-            self.camera.Open()
-            self.converter = pylon.ImageFormatConverter()
-            self.set_state(DevState.ON)
-            self.get_camera_friendly_name()
-            self.info(f"{self.device_name} was Opened.", True)
-            return 0
+        if self.get_state != DevState.ON:
+            res = self._Initialize()
+            if res == True:
+                self.info(f"{self.device_name} was Opened.", True)
+                return 0
+            else:
+                self.info(f'Could not turn on camera, because it does not exist.', True)
+                return res
         else:
-            return f'Could not turn on camera it is opened already.' if self.camera else f'Could not turn on camera, ' \
-                                                                                         f'because it does not exist.'
+            return f'Could not turn on camera it is opened already.'
 
     def turn_off_local(self) -> Union[int, str]:
-        if self.camera and self.camera.IsOpen():
-            if self.grabbing:
-                self.stop_grabbing()
-            self.camera.Close()
+        res = self._ShutDown()
+        if res == True:
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
             return 0
         else:
-            return f'Could not turn off camera it is closed already.' if not self.camera.IsOpen() \
-                else f'Could not turn on camera, because it does not exist.'
+            self.set_state(DevState.FAULT)
+            return res
 
     def set_param_after_init_local(self) -> Union[int, str]:
-        functions = [self.set_transport_layer, self.set_analog_controls, self.set_aio_controls,
-                     self.set_acquisition_controls, self.set_image_format]
+        functions = [self.set_acquisition_controls]
         results = []
         for func in functions:
             results.append(func())
@@ -213,97 +204,45 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return results_s if results_s else 0
 
     def set_acquisition_controls(self):
-        exposure_time = self.parameters['Acquisition_Controls']['ExposureTimeAbs']
-        trigger_mode = self.parameters['Acquisition_Controls']['TriggerMode']
-        trigger_delay = self.parameters['Acquisition_Controls']['TriggerDelayAbs']
-        frame_rate = self.parameters['Acquisition_Controls']['AcquisitionFrameRateAbs']
-        trigger_source = self.parameters['Acquisition_Controls']['TriggerSource']
-        formed_parameters_dict = {'TriggerSource': trigger_source, 'TriggerMode': trigger_mode,
-                                  'TriggerDelayAbs': trigger_delay, 'ExposureTimeAbs': exposure_time,
-                                  'AcquisitionFrameRateAbs': frame_rate, 'AcquisitionFrameRateEnable': True}
-        if trigger_mode == 'Trigger Software':
-            self.trigger_software = True
+        formed_parameters_dict = self.parameters['Acquisition_Controls']
         return self._set_parameters(formed_parameters_dict)
-
-    def set_transport_layer(self) -> Union[int, str]:
-        packet_size = self.parameters['Transport_layer']['Packet_size']
-        inter_packet_delay = self.parameters['Transport_layer']['Inter-Packet_Delay']
-        formed_parameters_dict = {'GevSCPSPacketSize': packet_size, 'GevSCPD': inter_packet_delay}
-        return self._set_parameters(formed_parameters_dict)
-
-    def set_analog_controls(self):
-        gain_mode = self.parameters['Analog_Controls']['GainAuto']
-        gain = self.parameters['Analog_Controls']['GainRaw']
-        blacklevel = self.parameters['Analog_Controls']['BlackLevelRaw']
-        balance_ratio = self.parameters['Analog_Controls']['BalanceRatioRaw']
-        formed_parameters_dict_analog_controls = {'GainAuto': gain_mode, 'GainRaw': gain, 'BlackLevelRaw': blacklevel,
-                                                  'BalanceRatioRaw': balance_ratio}
-        return self._set_parameters(formed_parameters_dict_analog_controls)
-
-    def set_aio_controls(self):
-        width = self.parameters['AOI_Controls']['Width']
-        height = self.parameters['AOI_Controls']['Height']
-        offset_x = self.parameters['AOI_Controls']['OffsetX']
-        offset_y = self.parameters['AOI_Controls']['OffsetY']
-        formed_parameters_dict_AOI = OrderedDict()
-        formed_parameters_dict_AOI['Width'] = width
-        formed_parameters_dict_AOI['Height'] = height
-        formed_parameters_dict_AOI['OffsetX'] = offset_x
-        formed_parameters_dict_AOI['OffsetY'] = offset_y
-        return self._set_parameters(formed_parameters_dict_AOI)
-
-    def set_image_format(self):
-        pixel_format = self.parameters['Image_Format_Control']['PixelFormat']
-        formed_parameters_dict_image_format = {'PixelFormat': pixel_format}
-        # to change, what if someone wants color converter
-        self.converter.OutputPixelFormat = pylon.PixelType_RGB16packed
-        # self.converter.OutputPixelFormat = pylon.PixelType_Mono8
-        self.converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
-        return self._set_parameters(formed_parameters_dict_image_format)
 
     def _set_parameters(self, formed_parameters_dict):
-        if self.camera.IsOpen():
+        if self.get_state == DevState.ON:
             if self.grabbing:
                 self.stop_grabbing()
-            try:
-                for param_name, param_value in formed_parameters_dict.items():
-                    setattr(self.camera, param_name, param_value)
-                return 0
-            except (genicam.GenericException, Exception) as e:
-                return f'Error appeared: {e} when setting parameter "{param_name}" for camera {self.device_name}.'
+            for param_name, param_value in formed_parameters_dict.items():
+                func = getattr(self, f'Set{param_name}')
+                res = func(*list(param_value))
+                if res != True:
+                    return f'Error appeared: {res} when setting parameter "{param_name}" for camera {self.device_name}.'
         else:
-            return f'Basler_Camera {self.device_name} connected states {self.camera.IsOpen()} ' \
-                   f'Camera grabbing status is {self.grabbing}.'
-
-    def _get_camera_device(self):
-        for device in pylon.TlFactory.GetInstance().EnumerateDevices():
-            if device.GetSerialNumber() == self.serial_number:
-                return device
-        return None
+            return f'{self.device_name} state is {self.get_state()}.'
 
     def get_image(self):
         self.last_image = self.wait(self.timeoutt)
 
     def wait(self, timeout):
-        if not self.grabbing:
-            self.start_grabbing()
-        try:
-            grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
-            if grabResult.GrabSucceeded():
-                image = self.converter.Convert(grabResult)
-                grabResult.Release()
-                image = np.ndarray(buffer=image.GetBuffer(),
-                                   shape=(image.GetHeight(), image.GetWidth(), 3),
-                                   dtype=np.uint16)
-                # Convert 3D array to 2D for Tango to transfer it
-                image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
-                self.info('Image is received...')
-                return image2D
-            else:
-                raise pylon.GenericException
-        except (pylon.GenericException, pylon.TimeoutException) as e:
-            self.error(str(e))
-            return np.arange(300).reshape(10, 10, 3)
+        pass
+        # if not self.grabbing:
+        #     self.start_grabbing()
+        # try:
+        #     grabResult = self.camera.RetrieveResult(timeout, pylon.TimeoutHandling_ThrowException)
+        #     if grabResult.GrabSucceeded():
+        #         image = self.converter.Convert(grabResult)
+        #         grabResult.Release()
+        #         image = np.ndarray(buffer=image.GetBuffer(),
+        #                            shape=(image.GetHeight(), image.GetWidth(), 3),
+        #                            dtype=np.uint16)
+        #         # Convert 3D array to 2D for Tango to transfer it
+        #         image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
+        #         self.info('Image is received...')
+        #         return image2D
+        #     else:
+        #         raise pylon.GenericException
+        # except (pylon.GenericException, pylon.TimeoutException) as e:
+        #     self.error(str(e))
+        #     return np.arange(300).reshape(10, 10, 3)
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0
@@ -366,12 +305,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return str(0)
 
     # DLL functions
-
     def load_dll(self):
         dll = ctypes.WinDLL(str(self.dll_path))
         return dll
 
-    def _Initialize(self, dir="") -> Tuple[bool, str]:
+    def _Initialize(self, dir='') -> Tuple[bool, str]:
         """
         unsigned int WINAPI Initialize(char* dir)
         Description         This function will initialize the Andor SDK System. As part of the initialization procedure on
@@ -394,7 +332,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         dir_char = ctypes.c_char_p(dir.encode('utf-8'))
         res = self.dll.Initialize(dir_char)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _GetCameraSerialNumber(self) -> Tuple[bool, str]:
         """
@@ -408,7 +346,47 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         serial_number = ctypes.c_int(0)
         res = self.dll.GetCameraSerialNumber(ctypes.byref(serial_number))
         self.serial_number_real = serial_number.value
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
+
+    def _GetHeadModel(self) -> Tuple[bool, str]:
+        """
+        unsigned int WINAPI GetHeadModel(char* name)
+        Description This function will retrieve the type of CCD attached to your system.
+        Parameters char* name: A user allocated array of characters for storage of the Head Model. This
+        should be declared as size MAX_PATH.
+        Return unsigned int
+        DRV_SUCCESS
+        DRV_NOT_INITIALIZED
+        Name returned.
+        System not initialized.
+        :return:
+        """
+        head = ctypes.c_char_p('HeadName                     '.encode('utf-8'))
+        res = self.dll.GetHeadModel(head)
+        self.head_name = head
+        return True if res == 20002 else self._error_andor(res)
+
+    def _GetNumberPreAmpGains(self):
+        """
+        unsigned int WINAPI GetNumberPreAmpGains(int* noGains)
+        Description Available in some systems are a number of pre amp gains that can be applied to the
+        data as it is read out. This function gets the number of these pre amp gains available.
+        The functions GetPreAmpGain and SetPreAmpGain can be used to specify which of
+        these gains is to be used.
+        Parameters int* noGains: number of allowed pre amp gains
+        :return:
+        Return unsigned int
+        DRV_SUCCESS
+        DRV_NOT_INITIALIZED
+        DRV_ACQUIRING
+        Number of pre amp gains returned.
+        System not initialized.
+        Acquisition in progress.
+        """
+        nogains = ctypes.c_int()
+        res = self.dll.GetNumberPreAmpGains(nogains)
+        self.n_gains_max =  nogains - 1
+        return True if res == 20002 else self._error_andor(res)
 
     def _GetNumberADChannels(self):
         """
@@ -422,7 +400,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         n_ad_channels = ctypes.c_int(0)
         res = self.dll.GetNumberADChannels(ctypes.byref(n_ad_channels))
         self.n_ad_channels = n_ad_channels.value
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetAcquisitionMode(self, mode: int) -> Tuple[bool, str]:
         """
@@ -447,10 +425,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         MODES = {1: 'Single Scan', 2: 'Accumulate', 3: 'Kinetics', 4: 'Fast Kinetics', 5: 'Run Till abort'}
         if mode not in MODES:
-            return self._error(-1, user_def=f'Wrong mode {mode} for SetAcquisitionMode. MODES: {MODES}')
+            return self._error_andor(-1, user_def=f'Wrong mode {mode} for SetAcquisitionMode. MODES: {MODES}')
         mode = ctypes.c_int(mode)
         res = self.dll.SetAcquisitionMode(mode)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetExposureTime(self, exp_time: float) -> Tuple[bool, str]:
         """
@@ -470,7 +448,41 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         exp_time = ctypes.c_float(exp_time)
         res = self.dll.SetExposureTime(exp_time)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
+
+    def _GetAcquisitionTimings(self) -> Tuple[bool, str]:
+        """
+        unsigned int WINAPI GetAcquisitionTimings(float* exposure, float* accumulate, float* kinetic)
+        Description This function will return the current “valid” acquisition timing information. This function
+        should be used after all the acquisitions settings have been set, e.g. SetExposureTime,
+        SetKineticCycleTime and SetReadMode etc. The values returned are the actual times
+        used in subsequent acquisitions.
+        This function is required as it is possible to set the exposure time to 20ms, accumulate
+        cycle time to 30ms and then set the readout mode to full image. As it can take 250ms to
+        read out an image it is not possible to have a cycle time of 30ms.
+        Parameters float* exposure: valid exposure time in seconds
+        float* accumulate: valid accumulate cycle time in seconds
+        float* kinetic: valid kinetic cycle time in seconds
+        :return:
+        Return unsigned int
+        DRV_SUCCESS
+        DRV_NOT_INITIALIZED
+        DRV_ACQUIRING
+        DRV_INVALID_MODE
+        Timing information returned.
+        System not initialized.
+        Acquisition in progress.
+        Acquisition or readout mode is not available
+        """
+        exp_time = ctypes.c_float()
+        accumulate_time = ctypes.c_float()
+        kinetic_time = ctypes.c_float()
+        res = self.dll.GetAcquisitionTimings(ctypes.byref(exp_time), ctypes.byref(accumulate_time),
+                                             ctypes.byref(kinetic_time))
+        self.exposure_time = exp_time.value
+        self.accumulate_time = accumulate_time.value
+        self.kinetic_time = kinetic_time.value
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetHSSpeed(self, typ: int, index: int) -> Tuple[bool, str]:
         """
@@ -494,7 +506,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         typ = ctypes.c_int(typ)
         index = ctypes.c_int(index)
         res = self.dll.SetHSSpeed(typ, index)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetVSSpeed(self, index: int) -> Tuple[bool, str]:
         """
@@ -510,7 +522,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         index = ctypes.c_int(index)
         res = self.dll.SetVSSpeed(index)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
         """
@@ -525,9 +537,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         channel = ctypes.c_int(channel)
         res = self.dll.SetADChannel(channel)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
-    def _SetPreAmpGain(self, index: int) -> Tuple[int, bool, str]:
+    def _SetPreAmpGain(self, index: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetPreAmpGain(int index)
         Description             This function will set the pre amp gain to be used for subsequent acquisitions. The actual
@@ -544,8 +556,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                                 DRV_P1INVALID           Index out of range
         """
         index = ctypes.c_int(index)
-        res = self.dll.SetVSSpeed(index)
-        return True if res == 20002 else self._error(res)
+        res = self.dll.SetPreAmpGain(index)
+        result = True if res == 20002 else self._error_andor(res)
+        if result:
+            self.gain_value = index
+        else:
+            self.gain_value = -1
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetTriggerMode(self, mode: int) -> Tuple[int, bool, str]:
         """
@@ -568,10 +585,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         MODES = {0: 'Internal', 1: 'External', 6: 'External Start', 7: 'External Exposure (Bulb)', 9: 'External FVB EM (only valid for EM Newton models in FVB mode', 10: 'Software Trigger', 12: 'External Charge Shifting'}
         if mode not in MODES:
-            return self._error(-1, user_def=f'Wrong mode {mode} for SetTriggerMode. MODES: {MODES}')
+            return self._error_andor(-1, user_def=f'Wrong mode {mode} for SetTriggerMode. MODES: {MODES}')
         mode = ctypes.c_int(mode)
         res = self.dll.SetTriggerMode(mode)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetFastExtTrigger(self, mode: int) -> Tuple[int, bool, str]:
         """
@@ -588,10 +605,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         MODES = {0: 'Disabled', 1: 'Enabled'}
         if mode not in MODES:
-            return self._error(-1, user_def=f'Wrong mode {mode} for SetFastExtTrigger. MODES: {MODES}')
+            return self._error_andor(-1, user_def=f'Wrong mode {mode} for SetFastExtTrigger. MODES: {MODES}')
         mode = ctypes.c_int(mode)
         res = self.dll.SetFastExtTrigger(mode)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetReadMode(self, mode: int) -> Tuple[int, bool, str]:
         """
@@ -612,10 +629,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         MODES = {0: 'Full Vertical Binning', 1: 'Multi-Track', 2: 'Random-Track', 3: 'Single-Track', 4: 'Image'}
         if mode not in MODES:
-            return self._error(-1, user_def=f'Wrong mode {mode} for SetReadMode. MODES: {MODES}')
+            return self._error_andor(-1, user_def=f'Wrong mode {mode} for SetReadMode. MODES: {MODES}')
         mode = ctypes.c_int(mode)
         res = self.dll.SetReadMode(mode)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetMultiTrack(self, typ: int, index: int, offset: int, bottom=0, gap=0) -> Tuple[int, bool, str]:
         """
@@ -650,7 +667,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         bottom = ctypes.byref(ctypes.c_int(bottom))
         gap = ctypes.byref(ctypes.c_int(gap))
         res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
         """
@@ -670,7 +687,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         state = ctypes.c_int(state)
         res = self.dll.SetBaselineClamp(state)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetTemperature(self, temperature: int) -> Tuple[bool, str]:
         """
@@ -691,7 +708,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         temperature = ctypes.c_int(temperature)
         res = self.dll.SetTemperature(temperature)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _CoolerON(self) -> Tuple[bool, str]:
         """
@@ -715,7 +732,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             GetCapabilities.
         """
         res = self.dll.CoolerON()
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _CoolerOff(self) -> Tuple[bool, str]:
         """
@@ -741,7 +758,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
         """
         res = self.dll.CoolerOff()
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _ShutDown(self):
         """
@@ -758,7 +775,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             called before unloading.
         """
         res = self.dll.ShutDown()
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _SetNumberKinetics(self, number: int) -> Tuple[int, bool, str]:
         """
@@ -775,7 +792,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         number = ctypes.c_int(number)
         res = self.dll.SetNumberKinetics(number)
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _PrepareAcquisition(self) -> Tuple[bool, str]:
         """
@@ -805,7 +822,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                     DRV_SPOOLSETUPERROR     Error with spool settings.
         """
         res = self.dll.PrepareAcquisition()
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _StartAcquisition(self) -> Tuple[bool, str]:
         """
@@ -827,9 +844,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                         DRV_SPOOLSETUPERROR     Error with spool settings.
         """
         res = self.dll.StartAcquisition()
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
-    def _GetStatus(self, status: int) -> Tuple[bool, str]:
+    def _GetStatus(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI GetStatus(int* status)
         Description         This function will return the current status of the Andor SDK system. This function should
@@ -851,10 +868,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                             DRV_SUCCESS                 Status returned
                             DRV_NOT_INITIALIZED         System not initialized
         """
-        serial_number = ctypes.c_int(0)
+        status = ctypes.c_int(0)
         res = self.dll.GetStatus(ctypes.byref(status))
         self.status_real = status.value
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
     def _GetAcquiredData(self, array: int, size: int) -> Tuple[bool, str]:
 
@@ -879,9 +896,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.array_real = array.value
         res = self.dll.GetAcquiredData(ctypes.byref(size))
         self.size_real = size.value
-        return True if res == 20002 else self._error(res)
+        return True if res == 20002 else self._error_andor(res)
 
-    def _error(self, code: int, user_def='') -> str:
+    def _error_andor(self, code: int, user_def='') -> str:
         """
         :param code: <=0
         :param type: 0 for Connection error codes, 1 for Function error codes
@@ -927,7 +944,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 res = user_def
         print(f'Error: {res}, Caller: {inspect.stack()[1].function}')
         return user_def
-
 
 
 class Andor_test():
@@ -982,7 +998,7 @@ class Andor_test():
     """
 
     def load_dll(self):
-        dll = ctypes.WinDLL(str(self.dll_path))
+        dll = ctypes.WinDLL(str(Path(self.dll_path)))
         return dll
 
     def _Initialize(self, dir="") -> Tuple[bool, str]:
@@ -1544,5 +1560,5 @@ class Andor_test():
 
 
 if __name__ == "__main__":
-    # DS_ANDOR_CCD.run_server()
-    a = Andor_test()
+    DS_ANDOR_CCD.run_server()
+    # Andor_test()
