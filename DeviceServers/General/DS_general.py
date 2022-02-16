@@ -69,8 +69,21 @@ class DS_General(Device):
         if printing:
             print(info_in)
 
+    @command(dtype_in=str)
+    def register_client_lock(self, name):
+        if name:
+            self.locking_client_token = name
+            self.locked_client = True
+
+    @command
+    def unregister_client_lock(self):
+        self.locking_client_token = ''
+        self.locked_client = False
+
     @abstractmethod
     def init_device(self):
+        self.locking_client_token = ''
+        self.locked_client = False
         self._comments = '...'
         self._error = '...'
         self._n = 0
@@ -144,7 +157,6 @@ class DS_General(Device):
         else:
             self.error(f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
-
     @abstractmethod
     def turn_on_local(self) -> Union[int, str]:
         pass
@@ -161,7 +173,6 @@ class DS_General(Device):
                 self.info(f"Device {self.device_name} is turned OFF.", True)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
-
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:

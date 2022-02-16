@@ -1,14 +1,16 @@
 import sys
-import requests
-
-from typing import Tuple, Union,  List
+import simple_pid as spid
 from pathlib import Path
+from typing import Union, List
+from collections import OrderedDict as od
+from tango.server import Device, attribute, command, pipe, device_property
+from time import sleep
+from threading import Thread
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
-from tango import AttrWriteType, DispLevel, DevState
-from tango.server import attribute
-from collections import OrderedDict
+from tango import DevState
+
 
 try:
     from DeviceServers.General.DS_Control import DS_ControlPosition
@@ -24,15 +26,39 @@ class DS_LaserPointing(DS_ControlPosition):
     Device Server (Tango) which controls laser pointing.
     """
     _version_ = '0.1'
-    _model_ = 'LaserPoiting Controller'
+    _model_ = 'LaserPointing Controller'
     polling = 500
 
-    def calc_correction(self, args):
-        pass
-
     def init_device(self):
+        self.cgc = False
+        self.delta = 0
+        self.pid_names = []
+        self.pid_locked = False
+        self.active_pid = ''
+        self.current_pos = [0, 0]
+        self.previos_pos = [0, 0]
+
         super().init_device()
         self.turn_on()
+
+    def set_pid_thread(self, pid_name: str, actuator_name: str, group_points: str):
+        pid_x = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True)
+        pid_y = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True)
+        actuators = self.groups[actuator_name]
+        actuators_devices = od()
+        for actuator in actuators:
+
+            if self.ds_dict[actuator] not in self.devices:
+                self.devices[self.ds_dict[actuator]] = Device(self.ds_dict[actuator])
+            actuators_devices[actuator] = self.devices[self.ds_dict[actuator]]
+
+            if self.ds_dict['Camera'] not in self.devices:
+                camera_name = self.ds_dict['Camera']
+                self.devices[camera_name] = Device(camera_name)
+        pid_group = Thread(target=self.group_pid_control, args=[[pid_x, pid_y], [actuators_devices.values()], camera,
+                                       group_points, pid_name])
+        self.pid_names.append(pid_name)
+        pid_group.start()
 
     def find_device(self):
         argreturn = self.server_id, self.device_id
@@ -49,6 +75,72 @@ class DS_LaserPointing(DS_ControlPosition):
         self.set_state(DevState.OFF)
         return 0
 
+    @command(dtype_in=str, dtype_out=int, doc_in='Command that start center of gravity control only for the '
+                                                 'locking client, thus it requires to pass client_token.')
+    def start_cgc(self, client_token=''):
+        if client_token == self.locking_client_token and self.locked_client:
+            self.cgc = True
+            self.set_pid_thread('pid1', 'Actuator 1', 'group1')
+            self.set_pid_thread('pid2', 'Actuator 2', 'group2')
+            return 0
+        else:
+            return -1
+
+    @command(dtype_in=str, dtype_out=int, doc_in='Command that stops center of gravity control only for the '
+                                                 'locking client, thus it requires to pass client_token.')
+    def stop_cgc(self, client_token=''):
+        if client_token == self.locking_client_token and self.locked_client:
+            self.cgc = False
+            self.stop_pids()
+            return 0
+        else:
+            return -1
+
+    def group_pid_control(self, pids: List[spid.PID], controlling_devices: List[Device],
+                          points_group: str, pid_name: str):
+        self.controlling_cycle = 0
+        while self.cgc:
+            while self.active_pid == pid_name:
+                if self.pid_locked:
+                    i = 0
+                    for pid, device in zip(pids, controlling_devices):
+                        action = pid(self.current_pos[i] - self.previos_pos[i])
+                        self.execute_action(action, device)
+                        i += 1
+                    sleep(0.05)
+                    self.controlling_cycle += 1
+                    self.pid_locked = False
+                else:
+                    for point in points_group:
+                        point_rules = self.controller_rules[point]
+                        for device_friendly_name, value in point_rules.items():
+                            device_name = self.ds_dict[device_friendly_name]
+                            if device_name not in self.devices:
+                                self.devices[device_name] = Device(device_name)
+                            device = self.devices[device_name]
+                            self.execute_action(value, device)
+                        sleep(1)
+                        camera_name = self.ds_dict['Camera']
+                        camera = self.devices[camera_name]
+                        cg = eval(camera.cg)
+
+
+            sleep(0.05)
+
+    def execute_action(self, action: float, device: Device, threaded=False):
+        if threaded:
+            ex_thread = Thread(target=self.execute_action, args=[action, device])
+            ex_thread.start()
+        else:
+            device.move_axis_rel(action)
+
+
+    def stop_pids(self):
+        self.pid_names = []
+        self.pid_locked = False
+        self.active_pid = ''
+        self.current_pos = [0, 0]
+        self.previos_pos = [0, 0]
 
 if __name__ == "__main__":
     DS_LaserPointing.run_server()
