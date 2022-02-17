@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Union, List
 from collections import OrderedDict as od
 from tango.server import Device, attribute, command, pipe, device_property
-from time import sleep
+from time import sleep, monotonic
 from threading import Thread
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
@@ -30,32 +30,32 @@ class DS_LaserPointing(DS_ControlPosition):
     polling = 500
 
     def init_device(self):
+        self.sample_time = 1
         self.cgc = False
-        self.delta = 0
+        self.deltas = [0, 0]
         self.pid_names = []
         self.pid_locked = False
         self.active_pid = ''
-        self.current_pos = [0, 0]
-        self.previos_pos = [0, 0]
-
+        self.current_pos = {'X': 0, 'Y': 0}
+        self.previos_pos = {'X': 0, 'Y': 0}
+        self.positions_before_pid = {}
+        camera_name = self.ds_dict['Camera']
+        self.devices[camera_name] = Device(camera_name)
         super().init_device()
         self.turn_on()
 
     def set_pid_thread(self, pid_name: str, actuator_name: str, group_points: str):
-        pid_x = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True)
-        pid_y = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True)
+        pid_x = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True, sample_time=self.sample_time)
+        pid_y = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True, sample_time=self.sample_time)
         actuators = self.groups[actuator_name]
         actuators_devices = od()
         for actuator in actuators:
-
             if self.ds_dict[actuator] not in self.devices:
                 self.devices[self.ds_dict[actuator]] = Device(self.ds_dict[actuator])
             actuators_devices[actuator] = self.devices[self.ds_dict[actuator]]
 
-            if self.ds_dict['Camera'] not in self.devices:
-                camera_name = self.ds_dict['Camera']
-                self.devices[camera_name] = Device(camera_name)
-        pid_group = Thread(target=self.group_pid_control, args=[[pid_x, pid_y], [actuators_devices.values()], camera,
+
+        pid_group = Thread(target=self.group_pid_control, args=[[pid_x, pid_y], [actuators_devices.values()],
                                        group_points, pid_name])
         self.pid_names.append(pid_name)
         pid_group.start()
@@ -99,17 +99,24 @@ class DS_LaserPointing(DS_ControlPosition):
     def group_pid_control(self, pids: List[spid.PID], controlling_devices: List[Device],
                           points_group: str, pid_name: str):
         self.controlling_cycle = 0
+        last_pid_time = monotonic()
         while self.cgc:
             while self.active_pid == pid_name:
                 if self.pid_locked:
                     i = 0
+                    dt = monotonic() - last_pid_time
+                    if not (dt >= self.sample_time):
+                        sleep(self.sample_time - dt)
+
                     for pid, device in zip(pids, controlling_devices):
-                        action = pid(self.current_pos[i] - self.previos_pos[i])
+                        pid: spid.PID = pid
+                        action = pid(self.deltas[i])
                         self.execute_action(action, device)
                         i += 1
                     sleep(0.05)
                     self.controlling_cycle += 1
                     self.pid_locked = False
+                    last_pid_time = monotonic()
                 else:
                     for point in points_group:
                         point_rules = self.controller_rules[point]
@@ -123,6 +130,22 @@ class DS_LaserPointing(DS_ControlPosition):
                         camera_name = self.ds_dict['Camera']
                         camera = self.devices[camera_name]
                         cg = eval(camera.cg)
+                        self.previos_pos = self.current_pos
+                        self.current_pos = cg
+
+                    delta_x = self.current_pos['X'] - self.previos_pos['X']
+                    delta_y = self.current_pos['Y'] - self.previos_pos['Y']
+                    self.deltas = [delta_x, delta_y]
+
+                    if delta_x <= 2 and delta_y <= 2:
+                        active_pid_idx = self.pid_names.index(self.active_pid)
+                        new_active_pid_idx = 0
+                        if active_pid_idx == 0:
+                            new_active_pid_idx = 1
+                        self.active_pid = self.pid_names[new_active_pid_idx]
+                        self.pid_locked = False
+                    else:
+                        self.pid_locked = True
 
 
             sleep(0.05)
@@ -133,7 +156,6 @@ class DS_LaserPointing(DS_ControlPosition):
             ex_thread.start()
         else:
             device.move_axis_rel(action)
-
 
     def stop_pids(self):
         self.pid_names = []
