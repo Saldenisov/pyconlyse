@@ -2,6 +2,7 @@ const String ID = "55838333832351518082";
 const int pulPin = 13;
 const int dirPin = 12;
 const int enblPin = 11;
+const int reset = 2;
 //310 turns in delay line in the long 200mm one
 // 128 - 1 (better 2)
 // 16 - 40 (50)
@@ -200,8 +201,6 @@ int treat_get(char* p){
     }
 }
 
-
-
 int treat_set(char *p){
     str_object = String(strtok(p, " "));
     if (str_object == "POS"){
@@ -248,6 +247,9 @@ int treat_set(char *p){
     return 0;
 }
 
+void treat_reset(){
+    digitalWrite(OUTPUT_PIN, LOW);
+}
 
 int execute_cmd(String &cmd, long &pos)
 {
@@ -265,6 +267,9 @@ int execute_cmd(String &cmd, long &pos)
   else if (str_object == "SET"){
     return treat_set(p);
   }
+  else if (str_object == "RESET"){
+    return treat_reset();
+  }
   else{
     return -3;
   }
@@ -274,7 +279,8 @@ int execute_cmd(String &cmd, long &pos)
   unsigned long delta;
 
 void setup() {
-  // put your setup code here, to run once:
+  digitalWrite(reset, HIGH);
+  pinMode(reset, OUTPUT);
   pinMode(pulPin, OUTPUT);
   pinMode(dirPin, OUTPUT);
   pinMode(enblPin, OUTPUT);
@@ -291,7 +297,6 @@ void setup() {
   Serial.println("INITIALIZED");
 
 }
-
 
 void loop() {
   if (Serial.available() >= 7) {
