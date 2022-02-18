@@ -33,7 +33,6 @@ tn.write(password)
 # tn.write(cmd2)
 # sleep(1)
 # print(tn.read_very_eager().decode('ascii'))
-
 def form_cmd(pin_n, value):
     cmd = ''
     if value == 1:
@@ -61,7 +60,7 @@ for device_name, parameters in param.items():
         set_pin(pin_n, value)
 
 a = time.time()
-for i in range(3000):
+for i in range(5500):
     # sleep(0.1)
     if i%2 == 0:
         value = 0
@@ -69,15 +68,8 @@ for i in range(3000):
         value = 1
 
     send_to_numato(form_cmd(1, value))
-tn.read_eager()
-for i in range(2100):
-    # sleep(0.1)
-    if i%2 == 0:
-        value = 0
-    else:
-        value = 1
+    tn.read_very_lazy()
 
-    send_to_numato(form_cmd(1, value))
 
 b = time.time()
 print(f'Time elapsed: {b - a}')
