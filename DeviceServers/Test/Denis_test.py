@@ -25,7 +25,7 @@ print(tn.read_very_eager().decode('ascii'))
 
 #cmd1 = 'gpio clear 0'.encode('ascii') + b"\n"
 #cmd1 = 'gpio clear 0'.encode('ascii') + b"\r"
-cmd1 = 'gpio clear 0'.encode('ascii') + b"\r\n"
+cmd1 = 'gpio get 0'.encode('ascii') + b"\r\n"
 tn.write(cmd1)
 sleep(1)
 
