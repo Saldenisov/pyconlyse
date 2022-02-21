@@ -3,9 +3,12 @@ import simple_pid as spid
 from pathlib import Path
 from typing import Union, List
 from collections import OrderedDict as od
-from tango.server import Device, attribute, command, pipe, device_property
+from tango.server import attribute, command, pipe, device_property
+from taurus import Device
 from time import sleep, monotonic
 from threading import Thread
+from scipy.optimize import minimize, basinhopping, dual_annealing
+
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
@@ -33,20 +36,21 @@ class DS_LaserPointing(DS_ControlPosition):
         self.sample_time = 1
         self.cgc = False
         self.deltas = [0, 0]
-        self.pid_names = []
-        self.pid_locked = False
-        self.active_pid = ''
+        self.optimization_names = []
+        self.opt_locked = False
+        self.active_opt = ''
         self.current_pos = {'X': 0, 'Y': 0}
         self.previos_pos = {'X': 0, 'Y': 0}
         self.positions_before_pid = {}
+        super().init_device()
         camera_name = self.ds_dict['Camera']
         self.devices[camera_name] = Device(camera_name)
-        super().init_device()
         self.turn_on()
+        # self.locking_client_token = 'test'
+        # self.locked_client = True
+        # # self.start_cgc('test')
 
-    def set_pid_thread(self, pid_name: str, actuator_name: str, group_points: str):
-        pid_x = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True, sample_time=self.sample_time)
-        pid_y = spid.PID(setpoint=0, output_limits=(-50, 50), auto_mode=True, sample_time=self.sample_time)
+    def set_optimization_thread(self, opt_name: str, actuator_name: str, group_points: str):
         actuators = self.groups[actuator_name]
         actuators_devices = od()
         for actuator in actuators:
@@ -54,11 +58,10 @@ class DS_LaserPointing(DS_ControlPosition):
                 self.devices[self.ds_dict[actuator]] = Device(self.ds_dict[actuator])
             actuators_devices[actuator] = self.devices[self.ds_dict[actuator]]
 
-
-        pid_group = Thread(target=self.group_pid_control, args=[[pid_x, pid_y], [actuators_devices.values()],
-                                       group_points, pid_name])
-        self.pid_names.append(pid_name)
-        pid_group.start()
+        optimization_group = Thread(target=self.minimization, args=[list(actuators_devices.values()),
+                                                                    self.pid_groups[group_points], opt_name])
+        self.optimization_names.append(opt_name)
+        optimization_group.start()
 
     def find_device(self):
         argreturn = self.server_id, self.device_id
@@ -78,10 +81,12 @@ class DS_LaserPointing(DS_ControlPosition):
     @command(dtype_in=str, dtype_out=int, doc_in='Command that start center of gravity control only for the '
                                                  'locking client, thus it requires to pass client_token.')
     def start_cgc(self, client_token=''):
-        if client_token == self.locking_client_token and self.locked_client:
+        # if client_token == self.locking_client_token and self.locked_client:
+        if True:
             self.cgc = True
-            self.set_pid_thread('pid1', 'Actuator 1', 'group1')
-            self.set_pid_thread('pid2', 'Actuator 2', 'group2')
+            self.set_optimization_thread('opt1', 'Actuators 1', 'group1')
+            self.set_optimization_thread('opt2', 'Actuators 2', 'group2')
+            self.active_opt = self.optimization_names[0]
             return 0
         else:
             return -1
@@ -89,78 +94,85 @@ class DS_LaserPointing(DS_ControlPosition):
     @command(dtype_in=str, dtype_out=int, doc_in='Command that stops center of gravity control only for the '
                                                  'locking client, thus it requires to pass client_token.')
     def stop_cgc(self, client_token=''):
-        if client_token == self.locking_client_token and self.locked_client:
+        # if client_token == self.locking_client_token and self.locked_client:
+        if True:
             self.cgc = False
-            self.stop_pids()
+            self.stop_opts()
             return 0
         else:
             return -1
 
-    def group_pid_control(self, pids: List[spid.PID], controlling_devices: List[Device],
-                          points_group: str, pid_name: str):
+    def minimization(self, controlling_devices: List[Device], points_group: str, opt_name: str):
         self.controlling_cycle = 0
-        last_pid_time = monotonic()
-        while self.cgc:
-            while self.active_pid == pid_name:
-                if self.pid_locked:
-                    i = 0
-                    dt = monotonic() - last_pid_time
-                    if not (dt >= self.sample_time):
-                        sleep(self.sample_time - dt)
 
-                    for pid, device in zip(pids, controlling_devices):
-                        pid: spid.PID = pid
-                        action = pid(self.deltas[i])
-                        self.execute_action(action, device)
-                        i += 1
-                    sleep(0.05)
-                    self.controlling_cycle += 1
-                    self.pid_locked = False
-                    last_pid_time = monotonic()
+        def min_func(x):
+            print(f'Trying {opt_name} with {x}')
+            if self.active_opt == opt_name:
+                for device, pos in zip(controlling_devices, x):
+                    self.execute_action(pos, device, True)
+
+                for point in points_group:
+                    point_rules = self.controller_rules[point]
+                    for device_friendly_name, value in point_rules.items():
+                        device_name = self.ds_dict[device_friendly_name]
+                        if device_name not in self.devices:
+                            self.devices[device_name] = Device(device_name)
+                        device = self.devices[device_name]
+                        self.execute_action(value, device, threaded=True)
+                    sleep(1.5)
+                    camera_name = self.ds_dict['Camera']
+                    camera = self.devices[camera_name]
+                    cg = eval(camera.cg)
+                    self.previos_pos = self.current_pos
+                    self.current_pos = cg
+
+                delta_x = self.previos_pos['X'] - self.current_pos['X']
+                delta_y = self.previos_pos['Y'] - self.current_pos['Y']
+                self.deltas = [delta_x, delta_y]
+
+                if abs(delta_x) <= 0.5 and abs(delta_y) <= .5:
+                    active_opt_idx = self.optimization_names.index(self.active_opt)
+                    new_active_opt_idx = 0
+                    if active_opt_idx == 0:
+                        new_active_opt_idx = 1
+                    self.active_opt = self.optimization_names[new_active_opt_idx]
+                    res = 0
                 else:
-                    for point in points_group:
-                        point_rules = self.controller_rules[point]
-                        for device_friendly_name, value in point_rules.items():
-                            device_name = self.ds_dict[device_friendly_name]
-                            if device_name not in self.devices:
-                                self.devices[device_name] = Device(device_name)
-                            device = self.devices[device_name]
-                            self.execute_action(value, device)
-                        sleep(1)
-                        camera_name = self.ds_dict['Camera']
-                        camera = self.devices[camera_name]
-                        cg = eval(camera.cg)
-                        self.previos_pos = self.current_pos
-                        self.current_pos = cg
+                    res = (delta_x**2 + delta_y**2)**.5
+            else:
+                res = 0
+            print(f'Deltas: {self.deltas}...Res: {res}')
 
-                    delta_x = self.current_pos['X'] - self.previos_pos['X']
-                    delta_y = self.current_pos['Y'] - self.previos_pos['Y']
-                    self.deltas = [delta_x, delta_y]
-
-                    if delta_x <= 2 and delta_y <= 2:
-                        active_pid_idx = self.pid_names.index(self.active_pid)
-                        new_active_pid_idx = 0
-                        if active_pid_idx == 0:
-                            new_active_pid_idx = 1
-                        self.active_pid = self.pid_names[new_active_pid_idx]
-                        self.pid_locked = False
-                    else:
-                        self.pid_locked = True
+            return res
 
 
-            sleep(0.05)
+        while self.cgc:
+            if self.active_opt == opt_name:
+                # minimize(fun=min_func, x0=[0, 0], args=([controlling_devices, self, opt_name]), )
+                # basinhopping(func=min_func, x0=[0, 0], niter=100, T=1.0, stepsize=5, interval=2,
+                #              disp=True, target_accept_rate=0.5, stepwise_factor=0.9)
+                dual_annealing(func=min_func, x0=[0, 0], maxiter=200, no_local_search=True,
+                               bounds=[(-150, 150), (-150, 150)])
 
-    def execute_action(self, action: float, device: Device, threaded=False):
+                # minimize(fun=min_func, x0=[0, 0], args=([controlling_devices, self, opt_name]), method='TNC',
+                #          bounds=[(-100, 100)] * 2, jac='2-point',
+                #          options={'disp': True, 'finite_diff_rel_step': 0.1, 'xtol': 0.1, 'accuracy': 0.1, 'eps': 0.1})
+            sleep(0.1)
+
+    def execute_action(self, action: float, device: Device, relative=False, threaded=False):
         if threaded:
             ex_thread = Thread(target=self.execute_action, args=[action, device])
             ex_thread.start()
         else:
-            device.move_axis_rel(action)
+            if relative:
+                device.move_axis_rel(action)
+            else:
+                device.move_axis_abs(action)
 
-    def stop_pids(self):
-        self.pid_names = []
-        self.pid_locked = False
-        self.active_pid = ''
+    def stop_opts(self):
+        self.optimization_names = []
+        self.opt_locked = False
+        self.active_opt = ''
         self.current_pos = [0, 0]
         self.previos_pos = [0, 0]
 
