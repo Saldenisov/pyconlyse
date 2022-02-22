@@ -208,14 +208,18 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return self._set_parameters(formed_parameters_dict)
 
     def _set_parameters(self, formed_parameters_dict):
-        if self.get_state == DevState.ON:
+        if self.get_state() == DevState.ON:
             if self.grabbing:
                 self.stop_grabbing()
             for param_name, param_value in formed_parameters_dict.items():
-                func = getattr(self, f'Set{param_name}')
-                res = func(*list(param_value))
+                func = getattr(self, f'_Set{param_name}')
+                if isinstance(param_value, tuple) or isinstance(param_value, list):
+                    res = func(*list(param_value))
+                else:
+                    res = func(param_value)
                 if res != True:
                     return f'Error appeared: {res} when setting parameter "{param_name}" for camera {self.device_name}.'
+            return 0
         else:
             return f'{self.device_name} state is {self.get_state()}.'
 
@@ -246,45 +250,21 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0
-        if self.camera.IsOpen():
-            self.set_status(DevState.ON)
-        else:
-            a = os.system('ping -c 1 -n 1 -w 1 ' + str(self.ip_address))
-            if a == 0:
-                self.set_status(DevState.OFF)
-            else:
-                self.set_status(DevState.FAULT)
-                r = f'{self.ip_address} is not reachable.'
+
         return r
 
     def start_grabbing_local(self):
-        if self.latestimage:
-            try:
-                self.info("Grabbing LatestImageOnly", True)
-                self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                return 0
-            except Exception as e:
-                return str(e)
-        else:
-            try:
-                self.info("Grabbing OneByOne", True)
-                self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
-                return 0
-            except Exception as e:
-                return str(e)
+
+        return 0
 
     def stop_grabbing_local(self):
         try:
-            self.camera.StopGrabbing()
             return 0
         except Exception as e:
             return str(e)
 
     def grabbing_local(self):
-        if self.camera:
-            return self.camera.IsGrabbing()
-        else:
-            return False
+        return False
 
     @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
     def set_trigger_mode(self, state):
@@ -709,6 +689,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         temperature = ctypes.c_int(temperature)
         res = self.dll.SetTemperature(temperature)
         return True if res == 20002 else self._error_andor(res)
+
+    def _SetCooler(self, state: bool):
+        if state:
+            res = self._CoolerON()
+        else:
+            res = self._CoolerOff()
+        return res
 
     def _CoolerON(self) -> Tuple[bool, str]:
         """

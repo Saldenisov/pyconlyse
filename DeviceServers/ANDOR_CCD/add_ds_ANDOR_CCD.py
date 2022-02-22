@@ -5,8 +5,8 @@ db = Database()
 names = {7428: ['manip/CR', 'ANDOR_CCD_V0', 'ANDOR_CCD1', 7428,
                 {'Acquisition_Controls': {'AcquisitionMode': 3, 'TriggerMode': 1, 'FastExtTrigger': False,
                                           'ReadMode': 1, 'MultiTrack': (2, 128, 0), 'ExposureTime': 0.0001,
-                                          'HSSpeed': 1, 'VSSpeed': 1, 'ADChannel': 1, 'PreAmpGain': 0,
-                                          'BaselineClamp': True, 'Temperature': -80, 'CoolerON': True
+                                          'HSSpeed': (0, 1), 'VSSpeed': 1, 'ADChannel': 1, 'PreAmpGain': 0,
+                                          'BaselineClamp': True, 'Temperature': -80, 'Cooler': True
                                               }},
                  {'width': 1024}, 'C:/dev/pyconlyse/DeviceServers/ANDOR_CCD/atmcd32d.dll'
                 ]
