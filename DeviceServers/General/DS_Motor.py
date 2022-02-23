@@ -357,7 +357,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         """
         pass
 
-    @command(dtype_in=[float], doc_in='Input is axis_id: int', dtype_out=str, doc_out=standard_str_output)
+    @command(dtype_in=[float], doc_in='Input is axis_id: int and then position value.', dtype_out=str, doc_out=standard_str_output)
     def move_axis(self, args):
         state_ok = self.check_func_allowance(self.move_axis)
         if state_ok == 1:
@@ -365,6 +365,10 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
             if res != 0:
                 self.error(f'Could not move axis {args[0]} of {self.device_name}: {res}')
         return str(res)
+
+    @command(dtype_in=float, doc_in='Input is axis_id: int and then position value.')
+    def move_axis_abs(self, args):
+        self.move_axis(args)
 
     @abstractmethod
     def move_axis_local(self, args) -> Union[int, str]:
