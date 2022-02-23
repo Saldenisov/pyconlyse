@@ -280,12 +280,8 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return 0
 
     def stop_grabbing_local(self):
-        res = self._AbortAcquisition()
-        if res:
-            self.abort = True
-            return 0
-        else:
-            return res
+        self.abort = True
+        return 0
 
     def grabbing_local(self):
         res = False
