@@ -293,21 +293,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
     def set_trigger_mode(self, state):
-        state = 'On' if state else 'Off'
-        self.info(f'Enabling hardware trigger: {state}', True)
-        restart = False
-        if self.grabbing:
-            self.stop_grabbing()
-            restart = True
-        try:
-            print(self.camera)
-            self.camera.TriggerMode = state
-        except Exception as e:
-            self.error(e)
-            return str(e)
-        if restart:
-            self.start_grabbing()
-        return str(0)
+        res = self._SetTriggerMode(state)
+        if res:
+            return str(0)
+        else:
+            return str(res)
 
     # DLL functions
     def load_dll(self):
