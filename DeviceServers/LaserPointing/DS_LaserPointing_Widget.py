@@ -9,7 +9,6 @@ from tango import Database
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt
-
 from DeviceServers import *
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
