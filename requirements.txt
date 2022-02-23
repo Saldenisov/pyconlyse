@@ -1,55 +1,45 @@
-numpy
 matplotlib
-configobj
-zmq>=0.0.0
-cryptography
-ifaddr
-PyQt5
-aiohttp
-atomicwrites
+# configobj
+# aiohttp
+# atomicwrites
 configobj
 colorcet
-cryptography
-cython
-fandango
-gpiozero
+# cython
+# fandango
+# gpiozero
 guiqwt # for taurus
 ifaddr
 imutils
 imageio
 lxml  # for taurus
-matplotlib
-msgpack
-#mysqlclient
-nidaqmx
-numpy
+# #mysqlclient
+# nidaqmx
 opencv-python
 pyqtgraph
-PyOpenGL
-PyTangoArchiving
+# PyOpenGL
+# PyTangoArchiving
 PyQt5<5.13
 PyQt5-sip
 pyepics  # for taurus
-pytest-qt
-python-socketio
+# pytest-qt
+# python-socketio
 pypylon
 pyserial
-pyvisa
+# pyvisa
 PyTango
 requests
-scipy
-sip
+# scipy
+# sip
 spyder # taurus
-tables
+simple-pid
+# tables
 taurus
 taurus_pyqtgraph
-vitables
-zmq
-# For guiqwt
+vitables # For HDF5
+# zmq
 QtPy >= 1.3
 PythonQwt>=0.5 # (pure Python reimplementation of Qwt6 C++ library)
 guidata>=1.7
-SciPy
 Pillow
-#conda install -c conda-forge -c esrf-bcu -c tango-controls lima-camera-basler-tango
-#for LIMA
+# difficult to install
+# h5py
