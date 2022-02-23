@@ -12,7 +12,7 @@ polling_infinite = 10000
 
 class DS_CAMERA_CCD(DS_General):
     RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
-             'stop_grabbing': [DevState.ON],
+             'stop_grabbing': [DevState.ON, DevState.FAULT, DevState.RUNNING],
              **DS_General.RULES}
 
     serial_number = device_property(dtype=str)
@@ -368,7 +368,7 @@ class DS_CAMERA_CCD(DS_General):
 
     @command
     def stop_grabbing(self):
-        state_ok = self.check_func_allowance(self.start_grabbing)
+        state_ok = self.check_func_allowance(self.stop_grabbing)
         if state_ok == 1:
             self.info(f"Stopping grabbing for {self.device_name}.", True)
             res = self.stop_grabbing_local()
