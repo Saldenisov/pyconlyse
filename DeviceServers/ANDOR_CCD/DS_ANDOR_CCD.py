@@ -3,26 +3,33 @@
 import os
 import sys
 from pathlib import Path
-
-import numpy
-
+import random
+import string
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict
+from time import time_ns, time
 import ctypes
 import inspect
 from threading import Thread
 import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
-from collections import OrderedDict
+from collections import OrderedDict, deque
 # -----------------------------
 
 from tango.server import device_property, command
-from tango import DevState
-from pypylon import pylon, genicam
+from tango import DevState, DevFloat
+from dataclasses import dataclass
 
+@dataclass
+class OrderInfo:
+    order_length: int
+    order_done: bool
+    order_timestamp: int
+    ready_to_delete: bool
+    order_array: np.ndarray
 
 
 class DS_ANDOR_CCD(DS_CAMERA_CCD):
@@ -37,6 +44,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     dll_path = device_property(dtype=str)
     width = device_property(dtype=int)
+    wavelengths = device_property(dtype=str)
 
     def init_device(self):
         self.dll = None
@@ -52,7 +60,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.grabbing_thread: Thread = None
         self.abort = False
         self.n_kinetics = 3
+        self.data_deque = deque(maxlen=1000)
+        self.time_stamp_deque = deque(maxlen=1000)
+        self.orders: Dict[str, OrderInfo] = {}
         super().init_device()
+        self.wavelengths = eval(self.wavelengths)
         self.start_grabbing()
 
     def find_device(self) -> Tuple[int, str]:
@@ -190,6 +202,8 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             return f'Could not turn on camera it is opened already.'
 
     def turn_off_local(self) -> Union[int, str]:
+        if self.grabbing:
+            self.stop_grabbing_local()
         res = self._ShutDown()
         self.camera = None
         if res == True:
@@ -245,17 +259,62 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 res = self._GetAcquiredData(size=1024 * self.n_kinetics * 2)
                 if res:
                     data2D = np.reshape(self.array_real, (-1, 1024))
+                    for spectrum in data2D:
+                        time_stamp = time_ns()
+                        self.time_stamp_deque.append(time_stamp)
+                        self.data_deque.append(spectrum)
+
+                        if self.orders:
+                            orders_to_delete = []
+                            for order_name, order_info in self.orders.items():
+                                if order_info.ready_to_delete or (time() - order_info.order_timestamp * 10**-9) >= 100:
+                                    orders_to_delete.append(order_name)
+                                else:
+                                    order_info.order_array = np.vstack([order_info.order_array, spectrum])
+
+                                if order_info.order_length == len(order_info.order_array) - 1:
+                                    order_info.order_done = True
+
+                            if orders_to_delete:
+                                for order_name in orders_to_delete:
+                                    del self.orders[order_name]
+
                     self.info('Image is received...')
                 else:
                     self.error(res)
                     data2D = np.zeros(1024 * self.n_kinetics * 2).reshape(-1, 1024)
                 self.last_image = data2D
                 b = time()
-                print(f'Time passed: {b - a}')
+                self.info(f'Time passed: {b - a}')
         except Exception as e:
             self.error(e)
         finally:
             self.stop_grabbing_local()
+
+    @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
+    def register_order(self, number_spectra):
+        s = 20  # number of characters in the string.
+        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
+        order_info = OrderInfo(number_spectra, False, time_ns(), False, np.array([self.wavelengths]))
+        self.orders[name] = order_info
+        return name
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
+    def is_order_ready(self, name):
+        res = False
+        if name in self.orders:
+            order = self.orders[name]
+            res = order.order_done
+        return res
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=bytearray)
+    def give_order(self, name):
+        if name in self.orders:
+            order = self.orders[name]
+            order.ready_to_delete = True
+            return order.order_array.tobytes()
+        else:
+            return self.last_image.tobytes()
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()
