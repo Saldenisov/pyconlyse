@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
+import zlib
 from pathlib import Path
 import random
 import string
@@ -9,7 +10,7 @@ app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
 from typing import Tuple, Union, List, Dict
-from time import time_ns, time
+from time import time_ns, time, sleep
 import ctypes
 import inspect
 from threading import Thread
@@ -292,7 +293,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             self.stop_grabbing_local()
 
     @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
-    def register_order(self, number_spectra):
+    def register_order(self, number_spectra: int):
         s = 20  # number of characters in the string.
         name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
         order_info = OrderInfo(number_spectra, False, time_ns(), False, np.array([self.wavelengths]))
@@ -307,14 +308,17 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             res = order.order_done
         return res
 
-    @command(dtype_in=str, doc_in='Order name', dtype_out=bytearray)
+    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
     def give_order(self, name):
+        res = self.last_image
         if name in self.orders:
             order = self.orders[name]
             order.ready_to_delete = True
-            return order.order_array.tobytes()
-        else:
-            return self.last_image.tobytes()
+            res = order.order_array
+        res = res.astype(dtype=np.int32)
+        res = res.tobytes()
+        res = zlib.compress(res)
+        return str(res)
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()

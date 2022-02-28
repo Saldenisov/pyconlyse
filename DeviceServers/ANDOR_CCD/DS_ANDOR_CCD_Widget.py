@@ -1,10 +1,10 @@
 import pyqtgraph as pg
 import numpy as np
-from taurus import Device
+import zlib
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
+from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox, TaurusWheelEdit
 from PyQt5 import QtWidgets
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
@@ -15,7 +15,8 @@ class ANDOR_CCD(DS_General_Widget):
         self.grabbing = False
         super().__init__(device_name, parent, vis_type)
         self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.image_listener)
+        self.timer.timeout.connect(self.data_listener)
+        self.order = None
 
     def before_ds(self):
         super().before_ds()
@@ -42,8 +43,6 @@ class ANDOR_CCD(DS_General_Widget):
         self.set_image(lo_image)
 
         # Buttons and commands
-        grabbing_led = TaurusLed()
-        grabbing_led.model = f'{dev_name}/isgrabbing'
         setattr(self, f'button_start_grabbing_{dev_name}', TaurusCommandButton(text='Grab'))
         button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{dev_name}')
         button_start_grabbing.clicked.connect(self.grab_clicked)
@@ -56,12 +55,14 @@ class ANDOR_CCD(DS_General_Widget):
         button_off: TaurusCommandButton = getattr(self, f'button_off_{dev_name}')
         button_off.setModel(dev_name)
 
-        lo_buttons.addWidget(grabbing_led)
         lo_buttons.addWidget(button_start_grabbing)
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
 
-        # Camera parameters
+        # CCD parameters
+        self.number_spectra = TaurusWheelEdit()
+        self.number_spectra.setValue(2)
+
         self.trigger_mode = TaurusValueComboBox()
         self.trigger_mode.addItems(['Internal', 'External'])
         self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
@@ -70,6 +71,8 @@ class ANDOR_CCD(DS_General_Widget):
         self.exposure_time.model = f'{dev_name}/exposure_time'
         # self.exposure_time.setValue(ds.exposure_time)
 
+        lo_parameters.addWidget(TaurusLabel('N spectra'))
+        lo_parameters.addWidget(self.number_spectra)
         lo_parameters.addWidget(TaurusLabel('Trigger'))
         lo_parameters.addWidget(self.trigger_mode)
 
@@ -115,13 +118,25 @@ class ANDOR_CCD(DS_General_Widget):
     def set_image(self, lo_image):
         self.view = pg.GraphicsLayoutWidget(parent=self, title='DATA')
         pg.setConfigOptions(antialias=True)
+        self.curves = []
         self.plot_spectra = self.view.addPlot(title="Spectra",)
         self.plot_spectra.setLabel('left', "Intensity", units='counts')
         self.plot_spectra.setLabel('bottom', "Wavelength", units='nm')
-        self.plot_spectra.plot(self.wavelengths,
-                               np.random.random_integers(low=0, high=65000, size=len(self.wavelengths)))
+        self.add_curve(self.wavelengths)
+        self.add_curve(self.wavelengths)
+        self.add_curve(self.wavelengths)
         self.view.setMinimumSize(1000, 450)
         lo_image.addWidget(self.view)
+
+    def update(self, i, y): # update a curve
+        self.curves[i].setData(self.wavelengths, y)
+
+    def del_curve(self, i): # remove a curve
+        self.curves[i].clear()
+
+    def add_curve(self, y): # add a curve
+        self.curves.append(self.plot_spectra.plot(self.wavelengths, y))
+
 
     def register_full_layouts(self):
         super(ANDOR_CCD, self).register_full_layouts()
@@ -137,22 +152,49 @@ class ANDOR_CCD(DS_General_Widget):
         self.ds.set_trigger_mode(1 if state == 'External' else 0)
 
     def grab_clicked(self):
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
         button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{self.dev_name}')
         if self.grabbing:
             self.timer.stop()
-            ds.stop_grabbing()
+            self.ds.stop_grabbing()
             self.grabbing = False
             button_start_grabbing.setText('Grab')
+            self.order = None
         else:
-            ds.start_grabbing()
-            self.timer.start(100)
+            self.ds.start_grabbing()
+            self.timer.start(50)
+            self.order = self.make_order()
             self.grabbing = True
             button_start_grabbing.setText('Grabbing')
 
-    def image_listener(self):
-        ds: Device = getattr(self, f'ds_{self.dev_name}')
-        self.view.setImage(self.convert_image(ds.image))
+    def make_order(self):
+        order = self.ds.register_order(int(self.number_spectra.value))
+        return order
+
+    def data_listener(self):
+        if self.order:
+            is_order_ready = self.ds.is_order_ready(self.order)
+            if is_order_ready:
+                data = self.ds.give_order(self.order)
+                data_b = zlib.decompress(eval(data))
+                data_array = np.frombuffer(data_b, dtype=np.int32)
+                data_array = data_array.reshape(-1, 1024)
+                self.wavelengths = data_array[0]
+                averaged_data = self.average_data_ELYSE_seq(data_array[1:])
+                self.update(0, data_array[1])
+                self.update(1, data_array[2])
+                self.update(2, data_array[3])
+                self.order = self.make_order()
+        else:
+            self.order = self.make_order()
+
+    def average_data_ELYSE_seq(self, data: np.ndarray) -> np.ndarray:
+        back_idx = 0
+        with_idx = 1
+        without_idx = 2
+        background = np.average(data[back_idx::3], axis=0)
+        with_e = np.average(data[with_idx::3], axis=0)
+        without_e = np.average(data[without_idx::3], axis=0)
+        return np.vstack((background, with_e, without_e))
 
     def convert_image(self, image):
         image2D = image
