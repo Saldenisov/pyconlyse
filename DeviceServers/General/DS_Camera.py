@@ -56,7 +56,7 @@ class DS_CAMERA_CCD(DS_General):
     def get_camera_model_name(self) -> str:
         pass
 
-    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE)
+    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
     def exposure_time(self):
         return self.get_exposure_time()
 

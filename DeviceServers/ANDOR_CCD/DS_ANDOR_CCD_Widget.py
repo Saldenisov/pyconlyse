@@ -180,9 +180,10 @@ class ANDOR_CCD(DS_General_Widget):
                 data_array = data_array.reshape(-1, 1024)
                 self.wavelengths = data_array[0]
                 averaged_data = self.average_data_ELYSE_seq(data_array[1:])
-                self.update(0, data_array[1])
-                self.update(1, data_array[2])
-                self.update(2, data_array[3])
+                print(data_array.nbytes)
+                self.update(0, averaged_data[0])
+                self.update(1, averaged_data[1])
+                self.update(2, averaged_data[2])
                 self.order = self.make_order()
         else:
             self.order = self.make_order()

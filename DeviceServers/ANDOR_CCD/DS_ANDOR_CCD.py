@@ -18,11 +18,13 @@ import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
 from collections import OrderedDict, deque
+from utilities.tools.decorators import dll_lock
 # -----------------------------
 
 from tango.server import device_property, command
 from tango import DevState, DevFloat
 from dataclasses import dataclass
+
 
 @dataclass
 class OrderInfo:
@@ -48,13 +50,14 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     wavelengths = device_property(dtype=str)
 
     def init_device(self):
+        self._dll_lock = True
         self.dll = None
         self.serial_number_real = -1
         self.head_name = ''
         self.status_real = 0
-        self.exposure_time = -1
-        self.accumulate_time = -1
-        self.kinetic_time = -1
+        self.exposure_time_local = -1
+        self.accumulate_time_local = -1
+        self.kinetic_time_local = -1
         self.n_gains_max = 1
         self.gain_value = -1
         self.height_value = 256
@@ -66,7 +69,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.orders: Dict[str, OrderInfo] = {}
         super().init_device()
         self.wavelengths = eval(self.wavelengths)
-        self.start_grabbing()
+        # self.start_grabbing()
 
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
@@ -99,7 +102,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def get_exposure_time(self) -> float:
         self._GetAcquisitionTimings()
-        return self.exposure_time
+        return self.exposure_time_local
 
     def set_exposure_time(self, value: float):
         self._SetExposureTime(value)
@@ -251,13 +254,12 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             self.start_grabbing()
 
     def wait(self, timeout=0):
-        from time import time
         try:
-            while self.abort != True and self.camera:
+            while self.abort is not True and self.camera:
                 a = time()
                 res = self._SetNumberKinetics(self.n_kinetics)
                 res = self._StartAcquisition()
-                res = self._GetAcquiredData(size=1024 * self.n_kinetics * 2)
+                res = self._GetData(size=1024 * self.n_kinetics * 2)
                 if res:
                     data2D = np.reshape(self.array_real, (-1, 1024))
                     for spectrum in data2D:
@@ -289,8 +291,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 self.info(f'Time passed: {b - a}')
         except Exception as e:
             self.error(e)
-        finally:
-            self.stop_grabbing_local()
+
 
     @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
     def register_order(self, number_spectra: int):
@@ -322,6 +323,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()
+        # self.info(f'get_controller_status {time()}', True)
         if res == True:
             r = 0
             if self.status_real == 20073:
@@ -336,6 +338,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return r
 
     def start_grabbing_local(self):
+        sleep(0.5)
         if not self.grabbing:
             self.abort = False
             self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
@@ -343,13 +346,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return 0
 
     def stop_grabbing_local(self):
+        res = self._AbortAcquisition()
         self.abort = True
         return 0
 
     def grabbing_local(self):
         res = False
         if self.camera:
-            self._GetStatus()
             if self.status_real == 20072:
                 res = True
         return res
@@ -365,8 +368,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     # DLL functions
     def load_dll(self):
         dll = ctypes.WinDLL(str(self.dll_path))
+        self._dll_lock = False
         return dll
 
+    @dll_lock
     def _Initialize(self, dir='') -> Tuple[bool, str]:
         """
         unsigned int WINAPI Initialize(char* dir)
@@ -392,6 +397,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.Initialize(dir_char)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetCameraSerialNumber(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI GetCameraSerialNumber (int* number)
@@ -406,6 +412,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.serial_number_real = serial_number.value
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetHeadModel(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI GetHeadModel(char* name)
@@ -424,6 +431,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.head_name = head
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetNumberPreAmpGains(self):
         """
         unsigned int WINAPI GetNumberPreAmpGains(int* noGains)
@@ -446,6 +454,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.n_gains_max =  nogains - 1
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetNumberADChannels(self):
         """
         unsigned int WINAPI GetNumberADChannels(int* channels)
@@ -460,6 +469,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.n_ad_channels = n_ad_channels.value
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetKineticCycleTime(self, time: float):
         """
         unsigned int WINAPI SetKineticCycleTime(float time)
@@ -480,6 +490,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetKineticCycleTime(ctypes.c_float(time))
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetAcquisitionMode(self, mode: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetAcquisitionMode(int mode)
@@ -508,6 +519,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetAcquisitionMode(mode)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetExposureTime(self, exp_time: float) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetExposureTime(float time)
@@ -528,6 +540,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetExposureTime(exp_time)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetAcquisitionTimings(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI GetAcquisitionTimings(float* exposure, float* accumulate, float* kinetic)
@@ -555,13 +568,15 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         exp_time = ctypes.c_float()
         accumulate_time = ctypes.c_float()
         kinetic_time = ctypes.c_float()
-        res = self.dll.GetAcquisitionTimings(ctypes.byref(exp_time), ctypes.byref(accumulate_time),
+        res = self.dll.GetAcquisitionTimings(ctypes.byref(exp_time),
+                                             ctypes.byref(accumulate_time),
                                              ctypes.byref(kinetic_time))
-        self.exposure_time = exp_time.value
-        self.accumulate_time = accumulate_time.value
-        self.kinetic_time = kinetic_time.value
+        self.exposure_time_local = exp_time.value
+        self.accumulate_time_local = accumulate_time.value
+        self.kinetic_time_local = kinetic_time.value
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetHSSpeed(self, typ: int, index: int) -> Tuple[bool, str]:
         """
             unsigned int WINAPI SetHSSpeed(int typ, int index)
@@ -586,6 +601,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetHSSpeed(typ, index)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetVSSpeed(self, index: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetVSSpeed(int index)
@@ -602,6 +618,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetVSSpeed(index)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetADChannel(int channel)
@@ -617,6 +634,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetADChannel(channel)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetPreAmpGain(self, index: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetPreAmpGain(int index)
@@ -642,6 +660,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             self.gain_value = -1
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetTriggerMode(self, mode: int) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetTriggerMode(int mode)
@@ -668,6 +687,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetTriggerMode(mode)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetFastExtTrigger(self, mode: int) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetFastExtTrigger(int mode)
@@ -688,6 +708,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetFastExtTrigger(mode)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetReadMode(self, mode: int) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetReadMode(int mode)
@@ -712,6 +733,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetReadMode(mode)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetMultiTrack(self, typ: int, index: int, offset: int, bottom=0, gap=0) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetMultiTrack(int number, int height, int offset, int* bottom, int *gap)
@@ -747,6 +769,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetBaselineClamp(int state)
@@ -767,6 +790,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetBaselineClamp(state)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetTemperature(self, temperature: int) -> Tuple[bool, str]:
         """
         unsigned int WINAPI SetTemperature(int temperature)
@@ -792,9 +816,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         if state:
             res = self._CoolerON()
         else:
-            res = self._CoolerOff()
+            res = self._CoolerOFF()
         return res
 
+    @dll_lock
     def _CoolerON(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI CoolerON(void)
@@ -819,7 +844,8 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.CoolerON()
         return True if res == 20002 else self._error_andor(res)
 
-    def _CoolerOff(self) -> Tuple[bool, str]:
+    @dll_lock
+    def _CoolerOFF(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI CoolerOFF(void)
         Description         Switches OFF the cooling. The rate of temperature change is controlled in some models
@@ -842,9 +868,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 cause the temperature to rise faster than certified.
 
         """
-        res = self.dll.CoolerOff()
+        res = self.dll.CoolerOFF()
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _ShutDown(self):
         """
         unsigned int WINAPI ShutDown(void)
@@ -862,6 +889,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.ShutDown()
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _SetNumberKinetics(self, number: int) -> Tuple[int, bool, str]:
         """
         unsigned int WINAPI SetNumberKinetics(int number)
@@ -879,6 +907,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.SetNumberKinetics(number)
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _PrepareAcquisition(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI PrepareAcquisition(void)
@@ -909,6 +938,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.PrepareAcquisition()
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _StartAcquisition(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI StartAcquisition(void)
@@ -931,6 +961,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         res = self.dll.StartAcquisition()
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _GetStatus(self) -> Tuple[bool, str]:
         """
         unsigned int WINAPI GetStatus(int* status)
@@ -958,6 +989,17 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.status_real = status.value
         return True if res == 20002 else self._error_andor(res)
 
+    def _GetData(self, size: int):
+        i = 0
+        while True:
+            sleep(0.015)
+            self._GetStatus()
+            i += 1
+            if self.status_real == 20073 or i > 100 or self.abort:
+                break
+        return self._GetAcquiredData(size)
+
+    @dll_lock
     def _GetAcquiredData(self, size: int) -> Tuple[bool, str]:
 
         """
@@ -976,23 +1018,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                                 DRV_P2INVALID           Array size is incorrect.
                                 DRV_NO_NEW_DATA         No acquisition has taken place
         """
-
-        from time import sleep
-        i = 0
-        while True:
-            sleep(0.005)
-            self._GetStatus()
-            i += 1
-            if self.status_real == 20073 or i > 1000 or self.abort:
-                break
-        # array = numpy.zeros(size)
-        # array_p = array.ctypes.data_as(ctypes.POINTER(ctypes.c_int32))
         array = (ctypes.c_int32 * size)()
         array_p = ctypes.cast(array, ctypes.POINTER(ctypes.c_int32))
         res = self.dll.GetAcquiredData(array_p, ctypes.c_long(size))
         self.array_real = np.array(array[:])
         return True if res == 20002 else self._error_andor(res)
 
+    @dll_lock
     def _AbortAcquisition(self):
         """
         unsigned int WINAPI AbortAcquisition(void)
