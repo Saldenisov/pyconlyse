@@ -307,7 +307,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def calc_cg(self, image, threshold=50):
         # apply thresholding
-        cX, cY = -1, -1
+        cX, cY = 1024, 1024
         img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)

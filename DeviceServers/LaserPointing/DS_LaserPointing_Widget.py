@@ -9,7 +9,6 @@ from tango import Database
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt
-
 from DeviceServers import *
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
@@ -162,7 +161,8 @@ class LaserPointing(DS_General_Widget):
     def rb_clicked(self, parameters: OrderedDict):
         for ds_role, state in parameters.items():
             ds_widget: DS_General_Widget = self.widgets[ds_role]
-            ds_widget.set_the_control_value(state)
+            if ds_widget and not isinstance(ds_widget, QtWidgets.QLabel):
+                ds_widget.set_the_control_value(state)
 
     def set_the_control_value(self, value):
         pass

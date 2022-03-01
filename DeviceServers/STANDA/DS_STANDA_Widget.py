@@ -377,7 +377,7 @@ class Standa_motor(DS_General_Widget):
         try:
             p3: TaurusWheelEdit = getattr(self, f'p3_{self.dev_name}')
             p3.setValue(float(value))
-            self.ds.move_axis_abs(float(value))
+            self.execute_action(float(value), self.ds, 'move_axis_abs', True)
         except Exception as e:
             print(e)
 

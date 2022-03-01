@@ -3,7 +3,8 @@ from tango import DbDevInfo, Database
 db = Database()
 
 
-names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.204', ('admin', 'Elys3!icp'), 32]}
+names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.204', ('admin', 'elyse'), 32]
+         }
 
 
 def main():
@@ -20,6 +21,7 @@ def main():
                                           'authentication_name': val[4][0],
                                           'authentication_password': val[4][1]})
         i += 1
+
 
 
 if __name__ == '__main__':

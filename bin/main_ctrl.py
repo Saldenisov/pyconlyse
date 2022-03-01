@@ -41,7 +41,6 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
-
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     db = Database()
     servers = ['ELYSE', 'manip']
@@ -207,7 +206,8 @@ def main():
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
-    lo_laser_pointing = Qt.QHBoxLayout()
+    lo_Laser_pointing = Qt.QHBoxLayout()
+    lo_Andor_ccd = Qt.QHBoxLayout()
 
     # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
@@ -216,6 +216,7 @@ def main():
     button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
+    button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -230,6 +231,8 @@ def main():
     cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
     cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
+    cbox_andor_ccd = TaurusValueComboBox(parent=panel)
+    cbox_andor_ccd.addItems(['V0'])
 
     # Type of vizualization
     group_visualization = QtWidgets.QGroupBox('Type')
@@ -252,8 +255,10 @@ def main():
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
     lo_Basler.addWidget(cbox_BASLER)
-    lo_laser_pointing.addWidget(button_laser_pointing)
-    lo_laser_pointing.addWidget(cbox_laser_pointing)
+    lo_Laser_pointing.addWidget(button_laser_pointing)
+    lo_Laser_pointing.addWidget(cbox_laser_pointing)
+    lo_Andor_ccd.addWidget(button_andor_ccd)
+    lo_Andor_ccd.addWidget(cbox_andor_ccd)
 
     layout_clients.addLayout(lo_type)
     layout_clients.addLayout(lo_NETIO)
@@ -261,6 +266,7 @@ def main():
     layout_clients.addLayout(lo_STANDA)
     layout_clients.addLayout(lo_TOPDIRECT)
     layout_clients.addLayout(lo_Basler)
+    layout_clients.addLayout(lo_Andor_ccd)
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
@@ -268,7 +274,7 @@ def main():
     separator_devices.setLineWidth(2)
 
     layout_clients.addWidget(separator_devices)
-    layout_clients.addLayout(lo_laser_pointing)
+    layout_clients.addLayout(lo_Laser_pointing)
     vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
 
@@ -278,6 +284,7 @@ def main():
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
+    button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
 
     tab1.setLayout(layout_clients)
     layout_devices_tab = QtWidgets.QVBoxLayout()

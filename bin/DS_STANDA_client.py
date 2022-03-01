@@ -7,7 +7,7 @@ from DeviceServers.STANDA.DS_STANDA_Widget import Standa_motor
 from bin.DS_General_Client import main
 
 
-layouts = {'ELYSE': {'selection': ['elyse/motorized_devices/de1', 'elyse/motorized_devices/de2',
+layouts = {'ELYSE': {'selection': ['elyse/motorized_devices/de1', 'manip/V0/F1',
                          'elyse/motorized_devices/mme_x', 'elyse/motorized_devices/mme_y',
                          'elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y',
                          'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y'], 'width': 4},

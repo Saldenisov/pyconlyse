@@ -48,6 +48,10 @@ class Basler_camera(DS_General_Widget):
         button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{dev_name}')
         button_start_grabbing.clicked.connect(self.grab_clicked)
 
+        setattr(self, f'button_init_{dev_name}', TaurusCommandButton(command='init'))
+        button_init: TaurusCommandButton = getattr(self, f'button_init_{dev_name}')
+        button_init.setModel(dev_name)
+
         setattr(self, f'button_on_{dev_name}', TaurusCommandButton(command='turn_on'))
         button_on: TaurusCommandButton = getattr(self, f'button_on_{dev_name}')
         button_on.setModel(dev_name)
@@ -58,6 +62,7 @@ class Basler_camera(DS_General_Widget):
 
         lo_buttons.addWidget(grabbing_led)
         lo_buttons.addWidget(button_start_grabbing)
+        lo_buttons.addWidget(button_init)
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
 
@@ -171,7 +176,7 @@ class Basler_camera(DS_General_Widget):
         self.view.addItem(self.roi_circle)
 
         layout_cg_threshold = Qt.QHBoxLayout()
-
+ 
         self.cg_threshold = TaurusValueSpinBox()
         self.cg_threshold.model = f'{self.dev_name}/center_gravity_threshold'
         self.cg_threshold.setValue(self.ds.center_gravity_threshold)

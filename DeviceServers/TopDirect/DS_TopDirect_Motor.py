@@ -267,6 +267,11 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
                 self._arduino_state = state
                 self.info(f"Arduino state was set to {state}.", True)
 
+    @command(doc_in="Resets ARDUINO")
+    def reset(self):
+        self._send_to_arduino(f'RESET')
+        return 0
+
 
 if __name__ == "__main__":
     DS_TopDirect_Motor.run_server()
