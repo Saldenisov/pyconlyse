@@ -10,16 +10,12 @@ from typing import Tuple, Union
 import ctypes
 import inspect
 from threading import Thread
-import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output
-from collections import OrderedDict
 # -----------------------------
 
 from tango.server import device_property, command
 from tango import DevState
-from pypylon import pylon, genicam
-
 
 
 class DS_ANDOR_CCD(DS_CAMERA_CCD):
@@ -258,20 +254,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return r
 
     def start_grabbing_local(self):
-        if self.latestimage:
-            try:
-                self.info("Grabbing LatestImageOnly", True)
-                self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                return 0
-            except Exception as e:
-                return str(e)
-        else:
-            try:
-                self.info("Grabbing OneByOne", True)
-                self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
-                return 0
-            except Exception as e:
-                return str(e)
+        pass
 
     def stop_grabbing_local(self):
         try:
