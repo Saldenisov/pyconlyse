@@ -21,7 +21,7 @@ from collections import OrderedDict, deque
 from utilities.tools.decorators import dll_lock
 # -----------------------------
 
-from tango.server import device_property, command
+from tango.server import device_property, command, attribute, AttrWriteType
 from tango import DevState, DevFloat
 from dataclasses import dataclass
 
@@ -69,7 +69,14 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.orders: Dict[str, OrderInfo] = {}
         super().init_device()
         self.wavelengths = eval(self.wavelengths)
-        # self.start_grabbing()
+        self.start_grabbing()
+
+    @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
+    def number_kinetics(self):
+        return self.n_kinetics
+
+    def write_number_kinetics(self, value: int):
+       self.n_kinetics = value
 
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
@@ -101,11 +108,27 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         return self.head_name
 
     def get_exposure_time(self) -> float:
-        self._GetAcquisitionTimings()
+        res = self._GetAcquisitionTimings()
+        if res:
+            self.info(f'Get exposure time worked', True)
+        else:
+            self.info(f'Get exposure time did not work: {res}', True)
         return self.exposure_time_local
 
     def set_exposure_time(self, value: float):
-        self._SetExposureTime(value)
+        restart = False
+        self.info(f'Setting exposure time {value}', True)
+        if self.grabbing:
+            self.stop_grabbing()
+            restart = True
+        res = self._SetExposureTime(value)
+        if res:
+            self.info(f'Exposure time was set to {value}', True)
+        else:
+            self.info(f'Exposure time was not set to {value}: {res}', True)
+
+        if restart:
+            self.start_grabbing()
 
     def set_trigger_delay(self, value: str):
         pass
@@ -196,6 +219,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         if self.get_state != DevState.ON:
             res = self._Initialize()
             if res == True:
+                import socket
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.connect(('10.20.30.131', 5025))
+                data = '*RCL 8\n'.encode('ascii')
+                s.send(data)
+                sleep(.1)
+                s.close()
                 self.info(f"{self.device_name} was Opened.", True)
                 self.set_state(DevState.ON)
                 return 0
@@ -208,6 +238,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     def turn_off_local(self) -> Union[int, str]:
         if self.grabbing:
             self.stop_grabbing_local()
+        res = self._GetStatus()
+        if self.status_real != 20073:
+            sleep(1)
         res = self._ShutDown()
         self.camera = None
         if res == True:
@@ -260,7 +293,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 res = self._SetNumberKinetics(self.n_kinetics)
                 res = self._StartAcquisition()
                 res = self._GetData(size=1024 * self.n_kinetics * 2)
-                if res:
+                if res == True:
                     data2D = np.reshape(self.array_real, (-1, 1024))
                     for spectrum in data2D:
                         time_stamp = time_ns()
@@ -270,12 +303,12 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                         if self.orders:
                             orders_to_delete = []
                             for order_name, order_info in self.orders.items():
-                                if order_info.ready_to_delete or (time() - order_info.order_timestamp * 10**-9) >= 100:
+                                if (time() - order_info.order_timestamp * 10**-9) >= 100:
                                     orders_to_delete.append(order_name)
-                                else:
+                                elif not order_info.order_done:
                                     order_info.order_array = np.vstack([order_info.order_array, spectrum])
 
-                                if order_info.order_length == len(order_info.order_array) - 1:
+                                if order_info.order_length * 3 == len(order_info.order_array) - 1:
                                     order_info.order_done = True
 
                             if orders_to_delete:
@@ -357,13 +390,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 res = True
         return res
 
-    @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
     def set_trigger_mode(self, state):
-        res = self._SetTriggerMode(state)
-        if res:
-            return str(0)
-        else:
-            return str(res)
+        self._SetTriggerMode(state)
+
+    def get_trigger_mode(self) -> int:
+        return self.trigger_mode_value
 
     # DLL functions
     def load_dll(self):
@@ -683,6 +714,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         MODES = {0: 'Internal', 1: 'External', 6: 'External Start', 7: 'External Exposure (Bulb)', 9: 'External FVB EM (only valid for EM Newton models in FVB mode', 10: 'Software Trigger', 12: 'External Charge Shifting'}
         if mode not in MODES:
             return self._error_andor(-1, user_def=f'Wrong mode {mode} for SetTriggerMode. MODES: {MODES}')
+        self.trigger_mode_value = mode
         mode = ctypes.c_int(mode)
         res = self.dll.SetTriggerMode(mode)
         return True if res == 20002 else self._error_andor(res)
@@ -997,8 +1029,11 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             i += 1
             if self.status_real == 20073 or i > 100 or self.abort:
                 break
-        return self._GetAcquiredData(size)
-
+        if not self.abort:
+            res = self._GetAcquiredData(size)
+        else:
+            res = 'Was aborted'
+        return res
     @dll_lock
     def _GetAcquiredData(self, size: int) -> Tuple[bool, str]:
 

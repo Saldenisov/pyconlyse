@@ -50,7 +50,7 @@ class DS_LaserPointing(DS_ControlPosition):
         self.turn_on()
         self.locking_client_token = 'test'
         self.locked_client = True
-        self.start_cgc('test')
+        # self.start_cgc('test')
 
     def set_optimization_thread(self, opt_name: str, actuator_name: str, group_points: str, bounds):
         actuators = self.groups[actuator_name]

@@ -56,8 +56,9 @@ class DS_CAMERA_CCD(DS_General):
     def get_camera_model_name(self) -> str:
         pass
 
-    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE, polling_period=polling_infinite)
+    @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE)
     def exposure_time(self):
+        print('Reading exposure time')
         return self.get_exposure_time()
 
     def write_exposure_time(self, value: float):
@@ -228,6 +229,21 @@ class DS_CAMERA_CCD(DS_General):
 
     @abstractmethod
     def get_trigger_delay(self) -> str:
+        pass
+
+    @attribute(label='trigger mode', dtype=int, access=AttrWriteType.READ_WRITE)
+    def trigger_mode(self):
+        return self.get_trigger_mode()
+
+    def write_trigger_mode(self, value):
+        self.set_trigger_mode(value)
+
+    @abstractmethod
+    def set_trigger_mode(self, value):
+        pass
+
+    @abstractmethod
+    def get_trigger_mode(self) -> int:
         pass
 
     @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)

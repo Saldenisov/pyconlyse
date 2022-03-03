@@ -221,7 +221,7 @@ class Basler_camera(DS_General_Widget):
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()
-        self.ds.set_trigger_mode(1 if state == 'On' else 0)
+        self.ds.set_trigger_mode = 1 if state == 'On' else 0
 
     def width_change(self):
         print(self.width.getValue())
