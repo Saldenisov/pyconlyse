@@ -399,23 +399,22 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         else:
             return False
 
-    @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
-    def set_trigger_mode(self, state):
-        state = 'On' if state else 'Off'
+    def get_trigger_mode(self) -> int:
+        return 1 if self.camera.TriggerMode == 'On' else 0
+
+    def set_trigger_mode(self, value: int):
+        state = 'On' if value else 'Off'
         self.info(f'Enabling hardware trigger: {state}', True)
         restart = False
         if self.grabbing:
             self.stop_grabbing()
             restart = True
         try:
-            print(self.camera)
             self.camera.TriggerMode = state
         except Exception as e:
             self.error(e)
-            return str(e)
         if restart:
             self.start_grabbing()
-        return str(0)
 
     @attribute(label='Center of gravity threshold', dtype=int, access=AttrWriteType.READ_WRITE)
     def center_gravity_threshold(self):

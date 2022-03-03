@@ -153,7 +153,7 @@ class Basler_camera(DS_General_Widget):
             self.offsetX.setValue(ds.offsetX)
             self.offsetY.setValue(ds.offsetY)
             self.trigger_delay.setValue(ds.trigger_delay)
-            self.exposure_time.setValue(ds.exposure_time)
+            self.exposure_time.setValue(ds.exposure_time_local)
 
         lo_parameters2.addWidget(TaurusLabel('Trigger'))
         lo_parameters2.addWidget(self.trigger_mode)
@@ -221,7 +221,7 @@ class Basler_camera(DS_General_Widget):
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()
-        self.ds.set_trigger_mode(1 if state == 'On' else 0)
+        self.ds.set_trigger_mode = 1 if state == 'On' else 0
 
     def width_change(self):
         print(self.width.getValue())
