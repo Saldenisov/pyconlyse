@@ -41,7 +41,6 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
-
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     db = Database()
     servers = ['ELYSE', 'manip']
