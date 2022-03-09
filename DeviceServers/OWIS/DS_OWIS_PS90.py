@@ -25,7 +25,7 @@ from utilities.tools.decorators import development_mode
 dev_mode = False
 # Strange delay for ps90.dll
 time_ps_delay = 0.005
-dll_path = str(app_folder / 'ps90.dll')
+dll_path = str(app_folder / 'ps90_64.dll')
 lib = ctypes.WinDLL(dll_path)
 
 try:
