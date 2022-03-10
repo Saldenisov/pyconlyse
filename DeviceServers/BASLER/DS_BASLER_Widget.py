@@ -153,7 +153,7 @@ class Basler_camera(DS_General_Widget):
             self.offsetX.setValue(ds.offsetX)
             self.offsetY.setValue(ds.offsetY)
             self.trigger_delay.setValue(ds.trigger_delay)
-            self.exposure_time.setValue(ds.exposure_time_local)
+            self.exposure_time.setValue(ds.exposure_time)
 
         lo_parameters2.addWidget(TaurusLabel('Trigger'))
         lo_parameters2.addWidget(self.trigger_mode)
@@ -206,7 +206,18 @@ class Basler_camera(DS_General_Widget):
         lo_image.addLayout(layout_cg_threshold)
         lo_image.addWidget(win)
 
-        cmap = pg.colormap.get('CET-L9')
+        ## Set a custom color map
+        colors = [
+            (0, 0, 0),
+            (45, 5, 61),
+            (84, 42, 55),
+            (150, 87, 60),
+            (208, 171, 141),
+            (255, 255, 255)
+        ]
+        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
+
+        # cmap = pg.colormap.get('CET-L9')
         self.view.setColorMap(cmap)
 
     def register_full_layouts(self):

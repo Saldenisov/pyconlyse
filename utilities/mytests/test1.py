@@ -1,42 +1,27 @@
-# -*- coding: utf-8 -*-
-"""
-Demonstrate ability of ImageItem to be used as a canvas for painting with
-the mouse.
-
-"""
-from PIL import Image
+import h5py
 import numpy as np
 
-im_frame = Image.open('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
-np_frame = np.array(im_frame)
+file_name = 'E:\\test.hdf5'
 
-img_data = np.flipud(np.array(Image.open('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')))
+f = h5py.File(file_name, 'a')
 
-from pyqtgraph.Qt import QtCore, QtGui
-import numpy as np
-import pyqtgraph as pg
+# data = np.array([np.arange(1024)])
+#
+# dset = f.create_dataset("data1", data=data, dtype='uint16', maxshape=(None, 1024))
 
-app = pg.mkQApp("Draw Example")
+dset = f['data1']
 
-## Create window with GraphicsView widget
-w = pg.GraphicsView()
-w.show()
-w.setWindowTitle('pyqtgraph example: Draw')
-
-view = pg.ViewBox()
-w.setCentralItem(view)
-
-## Create image item
-image = img_data.transpose([1, 0, 2])
-img = pg.ImageItem(image)
-view.addItem(img)
-
-circle = pg.CircleROI([1850, 850], [120, 120], movable=False, resizable=False, pen=pg.mkPen('r', width=2))
-view.addItem(circle)
-
-view.setMouseEnabled(x=False,y=False)
-view.enableAutoRange(x=True,y=True)
+print(dset.shape)
 
 
-if __name__ == '__main__':
-    pg.exec()
+for i in range(24 * 3600 * 3):
+    row_count = dset.shape[0]
+    data = np.random.randint(0, 2 ** 16, 1024)
+
+    dset.resize(row_count + 1, axis=0)
+
+    # Write the next chunk
+    dset[row_count:] = data
+
+
+print(dset.shape)
