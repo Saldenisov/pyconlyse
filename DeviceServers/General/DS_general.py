@@ -16,9 +16,9 @@ class DS_General(Device):
     server_id = device_property(dtype=int)
     polling_main = 500
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
-             'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT],
+             'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
-             'get_controller_status': [DevState.ON, DevState.MOVING, DevState.INIT]}
+             'get_controller_status': [DevState.ON, DevState.MOVING, DevState.RUNNING, DevState.INIT]}
 
     @property
     def _version_(self):
@@ -69,8 +69,21 @@ class DS_General(Device):
         if printing:
             print(info_in)
 
+    @command(dtype_in=str)
+    def register_client_lock(self, name):
+        if name:
+            self.locking_client_token = name
+            self.locked_client = True
+
+    @command
+    def unregister_client_lock(self):
+        self.locking_client_token = ''
+        self.locked_client = False
+
     @abstractmethod
     def init_device(self):
+        self.locking_client_token = ''
+        self.locked_client = False
         self._comments = '...'
         self._error = '...'
         self._n = 0
@@ -80,9 +93,8 @@ class DS_General(Device):
         Device.init_device(self)
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
-        device_id_internal, uri = self.find_device()
-        self._uri = uri
-        self._device_id_internal = device_id_internal
+        self._uri = b''
+        self.find_device()
 
         if self._device_id_internal >= 0:
             self.info(f"{self.device_name} was found.", True)
@@ -91,9 +103,9 @@ class DS_General(Device):
             self.set_state(DevState.FAULT)
 
     @abstractmethod
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         """
-        returns device_id_internal and uri if applicable
+        sets device_id_internal and uri if applicable
         """
         pass
 
@@ -145,7 +157,6 @@ class DS_General(Device):
         else:
             self.error(f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
-
     @abstractmethod
     def turn_on_local(self) -> Union[int, str]:
         pass
@@ -162,7 +173,6 @@ class DS_General(Device):
                 self.info(f"Device {self.device_name} is turned OFF.", True)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
-
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:

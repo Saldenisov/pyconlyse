@@ -7,10 +7,12 @@ from tango.server import attribute, command, device_property
 
 from DeviceServers.General.DS_general import DS_General
 
+polling_infinite = 10000
+
 
 class DS_CAMERA_CCD(DS_General):
     RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
-             'stop_grabbing': [DevState.ON],
+             'stop_grabbing': [DevState.ON, DevState.FAULT, DevState.RUNNING],
              **DS_General.RULES}
 
     serial_number = device_property(dtype=str)
@@ -56,6 +58,7 @@ class DS_CAMERA_CCD(DS_General):
 
     @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE)
     def exposure_time(self):
+        print('Reading exposure time')
         return self.get_exposure_time()
 
     def write_exposure_time(self, value: float):
@@ -117,7 +120,8 @@ class DS_CAMERA_CCD(DS_General):
     def get_gain_max(self) -> int:
         pass
 
-    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE)
+    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE,
+               polling_period=polling_infinite)
     def width(self):
         return self.get_width()
 
@@ -227,6 +231,21 @@ class DS_CAMERA_CCD(DS_General):
     def get_trigger_delay(self) -> str:
         pass
 
+    @attribute(label='trigger mode', dtype=int, access=AttrWriteType.READ_WRITE)
+    def trigger_mode(self):
+        return self.get_trigger_mode()
+
+    def write_trigger_mode(self, value):
+        self.set_trigger_mode(value)
+
+    @abstractmethod
+    def set_trigger_mode(self, value):
+        pass
+
+    @abstractmethod
+    def get_trigger_mode(self) -> int:
+        pass
+
     @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)
     def format_pixel(self):
         return self.get_format_pixel()
@@ -310,10 +329,9 @@ class DS_CAMERA_CCD(DS_General):
     def init_device(self):
         self.latestimage = True
         self.last_image: np.array = None
-        self.camera = None
         self.trigger_software = False
+        self.camera = None
         self.CG_position = {'X': 0, 'Y': 0}
-
         super().init_device()
         self.parameters = eval(self.parameters)
         self.turn_on()
@@ -366,7 +384,7 @@ class DS_CAMERA_CCD(DS_General):
 
     @command
     def stop_grabbing(self):
-        state_ok = self.check_func_allowance(self.start_grabbing)
+        state_ok = self.check_func_allowance(self.stop_grabbing)
         if state_ok == 1:
             self.info(f"Stopping grabbing for {self.device_name}.", True)
             res = self.stop_grabbing_local()

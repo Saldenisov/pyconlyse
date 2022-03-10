@@ -14,25 +14,17 @@ class DS_ControlPosition(DS_General):
     ds_dict = device_property(dtype=str)
     controller_rules = device_property(dtype=str)
     groups = device_property(dtype=str)
+    pid_groups = device_property(dtype=str)
 
     def init_device(self):
-        super().init_device()
         self.control_position = [0, 0]
+        super().init_device()
         self.ds_dict = eval(self.ds_dict)
         self.controller_rules = eval(self.controller_rules)
         self.groups = eval(self.groups)
-        self._device_id_internal = -1
-        self._device_id_internal, self._uri = self.find_device()
-        if self._device_id_internal >= 0:
-            self.info(f"Device {self.device_name} was found.", True)
-            self.set_state(DevState.OFF)
-        else:
-            self.info(f"Device {self.device_name} was NOT found.", True)
-            self.set_state(DevState.FAULT)
+        self.pid_groups = eval(self.pid_groups)
+        self.devices = {}
 
-    @abstractmethod
-    def calc_correction(self, args):
-        pass
 
     @attribute(label="Rules for controller", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ)
@@ -61,5 +53,3 @@ class DS_ControlPosition(DS_General):
 
     def write_control_position(self, value):
         self.control_position = value
-
-

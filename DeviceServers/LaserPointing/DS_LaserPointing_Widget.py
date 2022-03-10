@@ -9,7 +9,6 @@ from tango import Database
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt
-
 from DeviceServers import *
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
@@ -56,6 +55,8 @@ class LaserPointing(DS_General_Widget):
                     self.widgets[device_role] = ds_widget
                     self.device_servers[device_role] = ds
                 else:
+                    self.widgets[device_role] = QtWidgets.QLabel(f'Device {device_name} is not ready: {state}.')
+                    self.device_servers[device_role] = None
                     print(f'Device {device_name} is not ready. Restart TANGO if NOTHING HELPS!')
 
             self.groups: OrderedDict = eval(ds.get_groups)
@@ -160,7 +161,8 @@ class LaserPointing(DS_General_Widget):
     def rb_clicked(self, parameters: OrderedDict):
         for ds_role, state in parameters.items():
             ds_widget: DS_General_Widget = self.widgets[ds_role]
-            ds_widget.set_the_control_value(state)
+            if ds_widget and not isinstance(ds_widget, QtWidgets.QLabel):
+                ds_widget.set_the_control_value(state)
 
     def set_the_control_value(self, value):
         pass

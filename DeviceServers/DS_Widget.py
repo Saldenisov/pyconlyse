@@ -4,7 +4,7 @@ from taurus.external.qt import Qt
 from PyQt5 import QtWidgets
 from enum import Enum
 from abc import abstractmethod
-import tango
+from threading import Thread
 
 class VisType(Enum):
     MIN = 'min'
@@ -29,6 +29,8 @@ class DS_General_Widget(Qt.QWidget):
         self.setLayout(self.layout_main)
         self.widget_active = False
 
+        self.before_ds()
+
         if self.vis_type == VisType.FULL:
             self.register_DS_full()
         elif self.vis_type == VisType.MIN:
@@ -38,6 +40,10 @@ class DS_General_Widget(Qt.QWidget):
         # self.ds_sync.subscribe_event("sync", tango.EventType.CHANGE_EVENT, self.sync_listener)
 
         print(f'Widget for {self.dev_name} is created.')
+
+
+    def before_ds(self):
+        pass
 
     @abstractmethod
     def register_DS_full(self, group_number=1):
@@ -92,6 +98,14 @@ class DS_General_Widget(Qt.QWidget):
     @abstractmethod
     def set_the_control_value(self, value):
         pass
+
+    def execute_action(self, value, device: Device, func_name, threaded=False):
+        if threaded:
+            ex_thread = Thread(target=self.execute_action, args=[value, device, func_name])
+            ex_thread.start()
+        else:
+            func = getattr(device, func_name)
+            func(value)
 
     # def sync_listener(self, event):
     #     val = self.ds_sync.sync

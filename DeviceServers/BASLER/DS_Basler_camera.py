@@ -23,7 +23,7 @@ from threading import Thread
 
 
 class DS_Basler_camera(DS_CAMERA_CCD):
-    '''
+    """
     Basler
     This controls the connection to Basler Cameras. One can also see many of
     the properties form the camera as well as the image observed by it.
@@ -41,7 +41,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     Sensor readout mode: normal (the readout time for each row of pixels
     remains unchanged), fast (the readout time for each row of pixels is
                               reduced, compared to normal readout. )
-    '''
+    """
+
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000
@@ -178,7 +179,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         super().init_device()
         self.start_grabbing_local()
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
@@ -193,7 +194,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.error(f'Could not open camera. {e}')
             else:
                 self.error(f'Could not find camera.')
-            return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self.camera and not self.camera.IsOpen():
@@ -205,7 +206,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             return 0
         else:
             return f'Could not turn on camera it is opened already.' if self.camera else f'Could not turn on camera, ' \
-                                                                                         f'because it does not exist.'
 
     def turn_off_local(self) -> Union[int, str]:
         if self.camera and self.camera.IsOpen():
@@ -307,7 +307,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def calc_cg(self, image, threshold=50):
         # apply thresholding
-        cX, cY = -1, -1
+        cX, cY = 1024, 1024
         img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
         contours, hierarchy = cv2.findContours(thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -399,23 +399,22 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         else:
             return False
 
-    @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
-    def set_trigger_mode(self, state):
-        state = 'On' if state else 'Off'
+    def get_trigger_mode(self) -> int:
+        return 1 if self.camera.TriggerMode == 'On' else 0
+
+    def set_trigger_mode(self, value: int):
+        state = 'On' if value else 'Off'
         self.info(f'Enabling hardware trigger: {state}', True)
         restart = False
         if self.grabbing:
             self.stop_grabbing()
             restart = True
         try:
-            print(self.camera)
             self.camera.TriggerMode = state
         except Exception as e:
             self.error(e)
-            return str(e)
         if restart:
             self.start_grabbing()
-        return str(0)
 
     @attribute(label='Center of gravity threshold', dtype=int, access=AttrWriteType.READ_WRITE)
     def center_gravity_threshold(self):

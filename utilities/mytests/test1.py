@@ -1,23 +1,27 @@
-from threading import Thread
-from time import sleep
+import h5py
+import numpy as np
+
+file_name = 'E:\\test.hdf5'
+
+f = h5py.File(file_name, 'a')
+
+# data = np.array([np.arange(1024)])
+#
+# dset = f.create_dataset("data1", data=data, dtype='uint16', maxshape=(None, 1024))
+
+dset = f['data1']
+
+print(dset.shape)
 
 
-def test1():
-    while True:
-        i = 10
-        sleep(1)
-        print(i)
+for i in range(24 * 3600 * 3):
+    row_count = dset.shape[0]
+    data = np.random.randint(0, 2 ** 16, 1024)
+
+    dset.resize(row_count + 1, axis=0)
+
+    # Write the next chunk
+    dset[row_count:] = data
 
 
-def test2():
-    while True:
-        i = 20
-        sleep(0.25)
-        print(i)
-
-
-a = Thread(target=test1)
-b = Thread(target=test2)
-
-a.start()
-b.start()
+print(dset.shape)

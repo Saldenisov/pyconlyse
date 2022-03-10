@@ -9,12 +9,10 @@ from pathlib import Path
 p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
-
 app_folder1 = Path(p).resolve().parents[2]
 sys.path.append(str(app_folder1))
 
 from threading import Thread
-from tango import DevState
 from tango.server import attribute, device_property
 from tango import AttrWriteType, DispLevel, DevState
 
@@ -27,7 +25,7 @@ from utilities.tools.decorators import development_mode
 dev_mode = False
 # Strange delay for ps90.dll
 time_ps_delay = 0.005
-dll_path = str(app_folder / 'ps90.dll')
+dll_path = str(app_folder / 'ps90_64.dll')
 lib = ctypes.WinDLL(dll_path)
 
 try:
@@ -93,7 +91,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self.follow = {}
         self.turn_on()
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
@@ -106,12 +104,12 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 argreturn = self.control_unit_id, f'{self.serial_number}'.encode('utf-8')
             else:
                 self.set_state(DevState.FAULT)
-        return argreturn
+        self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self._device_id_internal == -1:
             self.info(f'Searching for device: {self.device_id}', True)
-            self._device_id_internal, self._uri = self.find_device()
+            self.find_device()
 
         if self._device_id_internal == -1:
             self.set_state(DevState.FAULT)
