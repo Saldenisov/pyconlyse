@@ -1,11 +1,10 @@
 from _functools import partial
 
 import tango
-from PyQt5.QtWidgets import QCheckBox
 from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
-
+from PyQt5 import QtWidgets
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
@@ -96,10 +95,10 @@ class Netio_pdu(DS_General_Widget):
             names = list(ds.names)
             ids = list(ds.ids)
             states = list(ds.states)
-            widgets = [QCheckBox(f'{dev_name}:id:{id}') for _, t, id in zip(range(number_outputs), names, ids)]
+            widgets = [QtWidgets.QCheckBox(f'{dev_name}:id:{id}') for _, t, id in zip(range(number_outputs), names, ids)]
             for cb, state, name, id in zip(widgets, states, names, ids):
                 setattr(self, f'cb{id}_{dev_name}', cb)
-                cb: QCheckBox = getattr(self, f'cb{id}_{dev_name}')
+                cb: QtWidgets.QCheckBox = getattr(self, f'cb{id}_{dev_name}')
                 cb.setChecked(bool(state))
                 cb.setText(f'{name}:id:{id}')
                 lo_state.addWidget(cb)
@@ -114,7 +113,7 @@ class Netio_pdu(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{dev_name}')
         states = []
         for id, name in zip(ds.ids, ds.names):
-            cb: QCheckBox = getattr(self, f'cb{id}_{dev_name}')
+            cb: QtWidgets.QCheckBox = getattr(self, f'cb{id}_{dev_name}')
             states.append(int(cb.isChecked()))
             #cb.setText(f'{name}:id:{id}')
         ds.set_channels_states(states)
@@ -123,7 +122,7 @@ class Netio_pdu(DS_General_Widget):
         ds: Device = getattr(self, f'ds_{self.dev_name}')
         names_new, states_new = list(ds.names), list(ds.states)
         for new_name, new_state, id in zip(names_new, states_new, self.ids):
-            cb: QCheckBox = getattr(self, f'cb{id}_{self.dev_name}')
+            cb: QtWidgets.QCheckBox = getattr(self, f'cb{id}_{self.dev_name}')
 
             if self.names[id - 1] != new_name:
                 cb.setText(f'{new_name}:id:{id}')

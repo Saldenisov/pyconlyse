@@ -11,6 +11,7 @@ guiqwt
 ifaddr
 imutils
 imageio
+msgpack
 lxml  # for taurus
 # #mysqlclient
 # nidaqmx

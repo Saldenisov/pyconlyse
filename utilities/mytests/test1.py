@@ -1,27 +1,12 @@
-import h5py
+import msgpack
+import zlib
 import numpy as np
+data = {1258461125: np.zeros(shape=(1024, 10)).tobytes()}
+a_m = msgpack.packb(data)
+a_z = zlib.compress(a_m)
+a_s = str(a_z)
+b_z = eval(a_s)
+b_z = zlib.decompress(b_z)
+b = msgpack.unpackb(b_z, strict_map_key=False)
 
-file_name = 'E:\\test.hdf5'
-
-f = h5py.File(file_name, 'a')
-
-# data = np.array([np.arange(1024)])
-#
-# dset = f.create_dataset("data1", data=data, dtype='uint16', maxshape=(None, 1024))
-
-dset = f['data1']
-
-print(dset.shape)
-
-
-for i in range(24 * 3600 * 3):
-    row_count = dset.shape[0]
-    data = np.random.randint(0, 2 ** 16, 1024)
-
-    dset.resize(row_count + 1, axis=0)
-
-    # Write the next chunk
-    dset[row_count:] = data
-
-
-print(dset.shape)
+print(b.keys())

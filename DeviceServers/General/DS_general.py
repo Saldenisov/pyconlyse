@@ -2,10 +2,14 @@ from abc import abstractmethod
 
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
 from tango.server import Device, attribute, command, pipe, device_property
-from typing import Tuple, Union, List
+from typing import Tuple, Union, List, Dict
 from threading import Thread
 from time import sleep
+import taurus
 
+import h5py as h5
+import zlib
+import msgpack
 
 standard_str_output = 'str: 0 if success, else error.'
 
@@ -14,6 +18,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
+    archive = 'manip/general/archive'
     polling_main = 500
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
              'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
@@ -90,6 +95,7 @@ class DS_General(Device):
         internal_time = Thread(target=self.int_time)
         internal_time.start()
         self._status_check_fault = 0
+        self.archive = taurus.Device(self.archive)
         Device.init_device(self)
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
@@ -177,3 +183,10 @@ class DS_General(Device):
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:
         pass
+
+    def write_to_archive(self, data: Dict):
+        if self.archive:
+            msg_b = msgpack.packb(data)
+            msg_b_c = zlib.compress(msg_b)
+            msg_b_c_s = str(msg_b_c)
+            self.archive.archive_it(msg_b_c_s)
