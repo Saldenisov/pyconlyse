@@ -2,7 +2,7 @@ from tango import DbDevInfo, Database
 
 db = Database()
 
-names = {'75833353934351B05090': ['ELYSE/motorized_devices', 'TopDirect_Lense', 'Lense260', [-10, -5, -2, 0, 2, 5, 10], [-20.0, 20.0],
+names = {'75833353934351B05090': ['ELYSE/motorized_devices', 'TopDirect_Lense', 'Lense260', [-10, -5, -2, 0, 2, 5, 10], [-200.0, 200.0],
                                   115200, 0.1],
          '55838333832351518082': ['manip/V0', 'TopDirect_SC', 'DL_SC1', [-2, -1, -.5, 0, 0.5, 1, 2, 3], [-5.0, 5.0],
                                   115200, 0.1],
