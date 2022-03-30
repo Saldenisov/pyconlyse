@@ -102,7 +102,7 @@ def label_focus(map, event):
 
     positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
                  'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
-                 'ELYSE/motorized_devices/MM1_Y': (3300, 380), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
+                 'ELYSE/motorized_devices/MM1_Y': (9430, 1280), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
                  'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
                  'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
                  'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
@@ -142,7 +142,7 @@ def show_map(main_widget, labels: Dict):
 
     imageWidget = pg.GraphicsLayoutWidget()
     vb = imageWidget.addViewBox(row=1, col=1)
-    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
+    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\Main_layout_1200.png')
 
     img = pg.ImageItem()
     img.setImage(np.transpose(im, (1, 0, 2)))
