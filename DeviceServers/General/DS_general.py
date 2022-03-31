@@ -1,16 +1,18 @@
+import time
 from abc import abstractmethod
 
+import numpy as np
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
 from tango.server import Device, attribute, command, pipe, device_property
 from typing import Tuple, Union, List, Dict
 from threading import Thread
 from time import sleep
 import taurus
-
+from datetime import datetime
 import h5py as h5
 import zlib
 import msgpack
-
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 standard_str_output = 'str: 0 if success, else error.'
 
 
@@ -95,8 +97,9 @@ class DS_General(Device):
         internal_time = Thread(target=self.int_time)
         internal_time.start()
         self._status_check_fault = 0
-        self.archive = taurus.Device(self.archive)
+        self.prev_state = DevState.FAULT
         Device.init_device(self)
+        self.archive = taurus.Device(self.archive)
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b''
@@ -143,6 +146,11 @@ class DS_General(Device):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok == 1:
             res = self.get_controller_status_local()
+            state = self.get_state()
+            if state != self.prev_state:
+                data = self.form_acrhive_data(int(state), 'State')
+                self.prev_state = state
+            self.write_to_archive(data)
             if res != 0:
                 self.error(f'{res}')
 
@@ -177,6 +185,8 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
+                data = self.form_acrhive_data(0, 'State')
+                self.write_to_archive(data)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
@@ -184,9 +194,21 @@ class DS_General(Device):
     def turn_off_local(self) -> Union[int, str]:
         pass
 
-    def write_to_archive(self, data: Dict):
+    def write_to_archive(self, data: ArchiveData):
         if self.archive:
-            msg_b = msgpack.packb(data)
+            msg_b = msgpack.packb(str(data))
             msg_b_c = zlib.compress(msg_b)
             msg_b_c_s = str(msg_b_c)
             self.archive.archive_it(msg_b_c_s)
+
+    def form_acrhive_data(self, data, name: str):
+        if isinstance(data, float):
+            data_s = Scalar(value=data, dtype='float')
+        elif isinstance(data, int):
+            data_s = Scalar(value=data, dtype='int')
+        elif isinstance(data, np.array) or isinstance(data, list):
+            data = np.array(data)
+            data_s = Array(value=data, dtype=str(data.dtype))
+        archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time.time(),
+                                   dataset_name=name, data=data_s)
+        return archive_data
