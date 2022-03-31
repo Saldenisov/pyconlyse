@@ -10,7 +10,7 @@ import numpy as np
 @dataclass
 class Scalar:
     value: float
-
+    dtype: str
 
 @dataclass
 class Array:
@@ -22,7 +22,7 @@ class Array:
 @dataclass
 class ArchiveData:
     tango_device: str  # Tango Device name
-    data_timestamp: str
+    data_timestamp: float
     dataset_name: str
     data: Union[Scalar, Array]
 

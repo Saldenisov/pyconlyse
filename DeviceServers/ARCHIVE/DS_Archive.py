@@ -51,43 +51,60 @@ class DS_Archive(DS_General):
             if not self.lock:
                 self.close_h5()
             else:
-                while not self.lock:
+                while self.lock:
                     sleep(0.01)
                 self.close_h5()
 
-
     @command(dtype_in=str, dtype_out=str)
     def archive_it(self, data_string):
+        self.info('Archiving...')
+        result = '0'
         try:
             self.lock = True
             self.open_h5()
             if not self.file_h5:
+                self.error('Cannot open h5 file.')
                 return 'Cannot open h5 file.'
             else:
                 data_bytes = eval(data_string)
                 data = zlib.decompress(data_bytes)
-                data: ArchiveData = msgpack.unpackb(data, strict_map_key=False)
+                data = msgpack.unpackb(data, strict_map_key=False)
+                data: ArchiveData = eval(data)
                 data_to_archive = None
                 if isinstance(data.data, Scalar):
-                    data_to_archive = np.array(data.data.value)
+                    data_to_archive = np.array([data.data.value])
                 elif isinstance(data.data, Array):
                     data_to_archive = np.frombuffer(data.data.value, dtype=np.dtype(data.data.dtype))
                     data_to_archive = data_to_archive.reshape(data.data.shape)
 
-                if data_to_archive:
+                if data_to_archive != None:
                     ts = float(data.data_timestamp)
                     dt = datetime.fromtimestamp(ts)
                     date_as_str = dt.date().__str__()
                     group_date = self.check_group(self.file_h5, date_as_str)
                     group_device = self.check_group(group_date, data.tango_device)
-                    self.dataset_update(group_device, data.dataset_name, data.data.shape,
-                                        maxshape=(None, data.data.shape[1]), dtype=np.dtype(data.data.dtype),
+                    shape = data_to_archive.shape
+
+                    if len(shape) == 1:
+                        maxshape = (None,)
+                        shape = (1,)
+                    else:
+                        maxshape = (None, data_to_archive.shape[0])
+                        shape = data_to_archive.shape
+
+                    self.dataset_update(group_device, data.dataset_name, shape=shape,
+                                        maxshape=maxshape, dtype=np.dtype(data.data.dtype),
                                         data=data_to_archive)
-                    self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (1, 1), (None, 1), np.float, ts)
+                    self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (1,), (None,),
+                                        np.dtype('float'), np.array([ts]))
+                else:
+                    raise Exception(f'Nothing to archive: {data}')
         except Exception as e:
             self.error(e)
+            result = str(e)
         finally:
             self.lock = False
+            return result
 
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
         if group_name in container:
@@ -102,7 +119,8 @@ class DS_Archive(DS_General):
             ds.resize((ds.shape[0] + data.shape[0]), axis=0)
             ds[-data.shape[0]:] = data
         else:
-            container.create_dataset(name=dataset_name, shape=shape, maxshape=maxshape, dtype=dtype, data=data)
+            ds = container.create_dataset(name=dataset_name, shape=shape, maxshape=maxshape, dtype=dtype, data=data)
+        print(ds)
 
     def create_new_h5(self, latest=None):
         if latest:

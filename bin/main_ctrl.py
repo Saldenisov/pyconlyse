@@ -102,7 +102,7 @@ def label_focus(map, event):
 
     positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
                  'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
-                 'ELYSE/motorized_devices/MM1_Y': (9430, 1280), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
+                 'ELYSE/motorized_devices/MM1_Y': (9430, 1280), 'ELYSE/motorized_devices/MM2_X': (9360, 1340),
                  'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
                  'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
                  'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
