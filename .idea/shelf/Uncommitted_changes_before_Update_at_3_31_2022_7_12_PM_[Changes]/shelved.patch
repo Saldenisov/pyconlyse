@@ -1,0 +1,14 @@
+Index: bin/start_TREATMENT.cmd
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/bin/start_TREATMENT.cmd b/bin/start_TREATMENT.cmd
+new file mode 100644
+--- /dev/null	(date 1648234335696)
++++ b/bin/start_TREATMENT.cmd	(date 1648234335696)
+@@ -0,0 +1,4 @@
++@echo off
++call %ANACONDA%/Scripts/activate.bat
++set arg1=%1
++start /min cmd /k "cd %PYCONLYSE%_old\bin & conda activate pyconlyse_old & python Treatment.py %arg1%"
