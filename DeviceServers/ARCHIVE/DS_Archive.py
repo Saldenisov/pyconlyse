@@ -25,7 +25,12 @@ from DeviceServers.General.DS_general import DS_General, standard_str_output
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 import numpy as np
 
+
+DEV = False
+
+
 class DS_Archive(DS_General):
+    RULES = {'archive_it': [DevState.ON], **DS_General.RULES}
 
     _version_ = '0.1'
     _model_ = 'DS_Archiving'
@@ -33,10 +38,16 @@ class DS_Archive(DS_General):
     maximum_size = device_property(dtype=int)
     folder_location = device_property(dtype=str)
 
+    @attribute(label="error", dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ, polling_period=1,
+               abs_change='1')
+    def internal_counter(self):
+        return self._internal_counter
+
     def init_device(self):
         self.file_h5: h5py.File = None
         self.file_working: Path = None
         self.lock = False
+        self._internal_counter = 0
         self.close_thread = Thread(target=self.closing, args=[5])
         super().init_device()
         self.folder_location = Path(self.folder_location)
@@ -45,66 +56,78 @@ class DS_Archive(DS_General):
         self.turn_on()
         self.close_thread.start()
 
+    def internal_time(self):
+        while True:
+            self._internal_counter += 1
+            sleep(1)
+
     def closing(self, time):
         while True:
             sleep(5)
-            if not self.lock:
-                self.close_h5()
-            else:
-                while self.lock:
-                    sleep(0.01)
-                self.close_h5()
+            if self.file_h5:
+                if not self.lock:
+                    self.close_h5()
+                else:
+                    while self.lock:
+                        sleep(0.01)
+                    self.close_h5()
 
     @command(dtype_in=str, dtype_out=str)
     def archive_it(self, data_string):
-        self.info('Archiving...')
-        result = '0'
-        try:
-            self.lock = True
-            self.open_h5()
-            if not self.file_h5:
-                self.error('Cannot open h5 file.')
-                return 'Cannot open h5 file.'
-            else:
-                data_bytes = eval(data_string)
-                data = zlib.decompress(data_bytes)
-                data = msgpack.unpackb(data, strict_map_key=False)
-                data: ArchiveData = eval(data)
-                data_to_archive = None
-                if isinstance(data.data, Scalar):
-                    data_to_archive = np.array([data.data.value])
-                elif isinstance(data.data, Array):
-                    data_to_archive = np.frombuffer(data.data.value, dtype=np.dtype(data.data.dtype))
-                    data_to_archive = data_to_archive.reshape(data.data.shape)
+        state_ok = self.check_func_allowance(self.archive_it)
+        if state_ok == 1:
+            self.info('Archiving...', DEV)
+            result = '0'
+            try:
+                self.lock = True
+                self.open_h5()
+                if not self.file_h5:
+                    self.error('Cannot open h5 file.')
+                    return 'Cannot open h5 file.'
+                else:
+                    data_bytes = eval(data_string)
+                    data = zlib.decompress(data_bytes)
+                    data = msgpack.unpackb(data, strict_map_key=False)
+                    data: ArchiveData = eval(data)
+                    data_to_archive = None
+                    if isinstance(data.data, Scalar):
+                        data_to_archive = np.array([data.data.value])
+                    elif isinstance(data.data, Array):
+                        data_to_archive = np.frombuffer(data.data.value, dtype=np.dtype(data.data.dtype))
+                        data_to_archive = data_to_archive.reshape(data.data.shape)
+                    self.info(f'DATA: {data}', DEV)
+                    self.info(f'DATA to archive: {data_to_archive}', DEV)
 
-                if data_to_archive != None:
-                    ts = float(data.data_timestamp)
-                    dt = datetime.fromtimestamp(ts)
-                    date_as_str = dt.date().__str__()
-                    group_date = self.check_group(self.file_h5, date_as_str)
-                    group_device = self.check_group(group_date, data.tango_device)
-                    shape = data_to_archive.shape
-
-                    if len(shape) == 1:
-                        maxshape = (None,)
-                        shape = (1,)
-                    else:
-                        maxshape = (None, data_to_archive.shape[0])
+                    if data_to_archive != None:
+                        ts = float(data.data_timestamp)
+                        dt = datetime.fromtimestamp(ts)
+                        date_as_str = dt.date().__str__()
+                        group_date = self.check_group(self.file_h5, date_as_str)
+                        group_device = self.check_group(group_date, data.tango_device)
                         shape = data_to_archive.shape
 
-                    self.dataset_update(group_device, data.dataset_name, shape=shape,
-                                        maxshape=maxshape, dtype=np.dtype(data.data.dtype),
-                                        data=data_to_archive)
-                    self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (1,), (None,),
-                                        np.dtype('float'), np.array([ts]))
-                else:
-                    raise Exception(f'Nothing to archive: {data}')
-        except Exception as e:
-            self.error(e)
-            result = str(e)
-        finally:
-            self.lock = False
-            return result
+                        if len(shape) == 1:
+                            maxshape = (None,)
+                            shape = (1,)
+                        else:
+                            maxshape = (None, data_to_archive.shape[0])
+                            shape = data_to_archive.shape
+
+                        self.dataset_update(group_device, data.dataset_name, shape=shape,
+                                            maxshape=maxshape, dtype=np.dtype(data.data.dtype),
+                                            data=data_to_archive)
+                        self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (1,), (None,),
+                                            np.dtype('float'), np.array([ts]))
+                    else:
+                        raise Exception(f'Nothing to archive: {data}')
+            except Exception as e:
+                self.error(e)
+                result = str(e)
+            finally:
+                self.lock = False
+                return result
+        else:
+            return f'Not allowed {self.get_state()}'
 
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
         if group_name in container:
@@ -120,7 +143,6 @@ class DS_Archive(DS_General):
             ds[-data.shape[0]:] = data
         else:
             ds = container.create_dataset(name=dataset_name, shape=shape, maxshape=maxshape, dtype=dtype, data=data)
-        print(ds)
 
     def create_new_h5(self, latest=None):
         if latest:
@@ -132,18 +154,29 @@ class DS_Archive(DS_General):
         self.info(f'Creating new file: {file}', True)
         self.file_working = file
 
+    @command(dtype_out=int)
     def open_h5(self):
         if not self.file_h5:
             file = str(self.file_working)
-            self.info(f'Openning file: {file}', True)
+            self.info(f'Openning file: {file}')
             self.file_h5 = h5py.File(file, 'a')
+        return 0
 
+    @command(dtype_out=int)
     def close_h5(self):
         if self.file_h5:
             file = str(self.file_working)
-            self.info(f'Closing file: {file}', True)
+            self.info(f'Closing file: {file}')
             self.file_h5.close()
             self.file_h5 = None
+        return 0
+
+    @attribute(label="error", dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ)
+    def is_h5_opened(self):
+        if self.file_h5:
+            return 1
+        else:
+            return 0
 
     def latest_h5(self):
         h5_files = list(self.folder_location.glob('*.hdf5'))
@@ -183,7 +216,6 @@ class DS_Archive(DS_General):
 
     def turn_off_local(self) -> Union[int, str]:
         self.close_h5()
-        self.close_thread = None
         self.set_state(DevState.OFF)
         return 0
 

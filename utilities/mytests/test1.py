@@ -1,12 +1,17 @@
-import msgpack
-import zlib
-import numpy as np
-data = {1258461125: np.zeros(shape=(1024, 10)).tobytes()}
-a_m = msgpack.packb(data)
-a_z = zlib.compress(a_m)
-a_s = str(a_z)
-b_z = eval(a_s)
-b_z = zlib.decompress(b_z)
-b = msgpack.unpackb(b_z, strict_map_key=False)
+from gpiozero import LED
+from time import sleep
 
-print(b.keys())
+from gpiozero.pins.pigpio import PiGPIOFactory
+
+factory = PiGPIOFactory(host='129.175.100.171')
+
+control_pin = LED(4, pin_factory=factory)
+
+def change_state():
+    control_pin.on()
+    sleep(1)
+    control_pin.off()
+
+while True:
+    command = input('Click any button to change state.')
+    change_state()

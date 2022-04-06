@@ -1,18 +1,18 @@
 import time
+import zlib
 from abc import abstractmethod
-
-import numpy as np
-from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
-from tango.server import Device, attribute, command, pipe, device_property
-from typing import Tuple, Union, List, Dict
 from threading import Thread
 from time import sleep
-import taurus
-from datetime import datetime
-import h5py as h5
-import zlib
+from typing import Union
+
 import msgpack
+import numpy as np
+import taurus
+from tango import AttrWriteType, DispLevel, DevState
+from tango.server import Device, attribute, command, pipe, device_property
+
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
+
 standard_str_output = 'str: 0 if success, else error.'
 
 
@@ -100,6 +100,7 @@ class DS_General(Device):
         self.prev_state = DevState.FAULT
         Device.init_device(self)
         self.archive = taurus.Device(self.archive)
+
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b''
@@ -144,13 +145,13 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
+        state = self.get_state()
+        if state != self.prev_state:
+            data = self.form_acrhive_data(int(state), 'State')
+            self.prev_state = state
+            self.write_to_archive(data)
         if state_ok == 1:
             res = self.get_controller_status_local()
-            state = self.get_state()
-            if state != self.prev_state:
-                data = self.form_acrhive_data(int(state), 'State')
-                self.prev_state = state
-            self.write_to_archive(data)
             if res != 0:
                 self.error(f'{res}')
 

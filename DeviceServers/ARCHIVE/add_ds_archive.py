@@ -13,7 +13,7 @@ def main():
         dev_info = DbDevInfo()
         dev_name = f'{val[0]}/{val[2]}'
         dev_info.name = dev_name
-        dev_info._class = 'DS_Archive'
+        dev_info._class = 'DS_c'
         dev_info.server = f'DS_Archive/{i}_{val[2]}'
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1],

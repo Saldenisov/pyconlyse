@@ -6,7 +6,8 @@ configobj
 colorcet
 # cython
 # fandango
-# gpiozero
+gpiozero
+pigpio
 guiqwt
 ifaddr
 imutils
