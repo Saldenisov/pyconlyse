@@ -185,6 +185,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
         if not com:
             self._delay_lines_parameters[axis]['position'] = res
+            data = self.form_acrhive_data(res, f'position_axis_{axis}')
+            self.write_to_archive(data)
             self.info(f"Reading position localy for axis {axis}: {res}", False)
             result = 0
         else:

@@ -27,9 +27,17 @@ class DS_Test(DS_General):
     _model_ = 'test'
     polling_local = 600
     unit = device_property(dtype=str)
+
     test_attr = attribute(label="test", dtype=float, display_level=DispLevel.OPERATOR,
                           access=AttrWriteType.READ_WRITE,
                           polling_period=polling_local, abs_change=0.001)
+
+    def test_archiving(self):
+        while True:
+            val = random.randint(0, 100)
+            arch_data = self.form_acrhive_data(val, 'test')
+            self.write_to_archive(arch_data)
+            sleep(1)
 
     def read_test_attr(self):
         return self.test_value
@@ -44,9 +52,13 @@ class DS_Test(DS_General):
         attr_prop.unit = self.unit
         self.test_attr.set_properties(attr_prop)
         self.set_state(DevState.INIT)
+        from threading import Thread
+        self.archiving = Thread(target=self.test_archiving)
+        self.archiving.start()
 
     def find_device(self) -> Tuple[int, str]:
-        return 1, b'test_device_id'
+        self._device_id_internal = 123456789
+        self._uri = b'test_device_id'
 
     def get_controller_status_local(self) -> Union[int, str]:
         return 0

@@ -6,11 +6,13 @@ configobj
 colorcet
 # cython
 # fandango
-# gpiozero
+gpiozero
+pigpio
 guiqwt
 ifaddr
 imutils
 imageio
+msgpack
 lxml  # for taurus
 # #mysqlclient
 # nidaqmx

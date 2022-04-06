@@ -1,11 +1,17 @@
+import time
+import zlib
 from abc import abstractmethod
-
-from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
-from tango.server import Device, attribute, command, pipe, device_property
-from typing import Tuple, Union, List
 from threading import Thread
 from time import sleep
+from typing import Union
 
+import msgpack
+import numpy as np
+import taurus
+from tango import AttrWriteType, DispLevel, DevState
+from tango.server import Device, attribute, command, pipe, device_property
+
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 
 standard_str_output = 'str: 0 if success, else error.'
 
@@ -14,6 +20,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
+    archive = 'manip/general/archive'
     polling_main = 500
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
              'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
@@ -90,7 +97,10 @@ class DS_General(Device):
         internal_time = Thread(target=self.int_time)
         internal_time.start()
         self._status_check_fault = 0
+        self.prev_state = DevState.FAULT
         Device.init_device(self)
+        self.archive = taurus.Device(self.archive)
+
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b''
@@ -135,6 +145,11 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
+        state = self.get_state()
+        if state != self.prev_state:
+            data = self.form_acrhive_data(int(state), 'State')
+            self.prev_state = state
+            self.write_to_archive(data)
         if state_ok == 1:
             res = self.get_controller_status_local()
             if res != 0:
@@ -171,9 +186,30 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
+                data = self.form_acrhive_data(0, 'State')
+                self.write_to_archive(data)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:
         pass
+
+    def write_to_archive(self, data: ArchiveData):
+        if self.archive:
+            msg_b = msgpack.packb(str(data))
+            msg_b_c = zlib.compress(msg_b)
+            msg_b_c_s = str(msg_b_c)
+            self.archive.archive_it(msg_b_c_s)
+
+    def form_acrhive_data(self, data, name: str):
+        if isinstance(data, float):
+            data_s = Scalar(value=data, dtype='float')
+        elif isinstance(data, int):
+            data_s = Scalar(value=data, dtype='int')
+        elif isinstance(data, np.array) or isinstance(data, list):
+            data = np.array(data)
+            data_s = Array(value=data, dtype=str(data.dtype))
+        archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time.time(),
+                                   dataset_name=name, data=data_s)
+        return archive_data

@@ -325,7 +325,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         except Exception as e:
             self.error(e)
 
-
     @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
     def register_order(self, number_spectra: int):
         s = 20  # number of characters in the string.
