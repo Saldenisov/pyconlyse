@@ -17,7 +17,7 @@ from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.input import TaurusValueComboBox
-
+from typing import List
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
@@ -200,6 +200,18 @@ def rpi_toggle_pin(rpi_device: Device, pin):
         rpi_device.set_pin_state([pin, 0])
 
 
+def activate_buttons(widgets: List[QtWidgets.QWidget]):
+    import keyboard
+    while True:
+        sleep(0.15)
+        if keyboard.is_pressed('q'):
+            for widget in widgets:
+                widget.setEnabled(True)
+        else:
+            for widget in widgets:
+                widget.setEnabled(False)
+
+
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
     tabs = QtWidgets.QTabWidget()
@@ -236,7 +248,9 @@ def main():
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
     button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
     button_light_room = TaurusCommandButton(text='SM light', parent=panel, icon=QIcon('icons//light.png'))
+    button_light_room.setEnabled(False)
     button_laser = TaurusCommandButton(text='Laser', parent=panel, icon=QIcon('icons//laser.svg'))
+    button_laser.setEnabled(False)
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -300,6 +314,7 @@ def main():
     vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
     layout_clients.addLayout(lo_lights)
+    layout_clients.addWidget(QtWidgets.QLabel("Press 'q' if you want to activate buttons."))
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -332,6 +347,8 @@ def main():
     panel.show()
     states_thread = Thread(target=set_state, args=[labels])
     states_thread.start()
+    buttons_activate = Thread(target=activate_buttons, args=[[button_laser, button_light_room]])
+    buttons_activate.start()
     sys.exit(app.exec_())
 
 

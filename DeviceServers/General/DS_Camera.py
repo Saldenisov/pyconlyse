@@ -332,7 +332,6 @@ class DS_CAMERA_CCD(DS_General):
         self.camera = None
         self.CG_position = {'X': 0, 'Y': 0}
         super().init_device()
-        self.parameters = eval(self.parameters)
         self.turn_on()
         self.set_param_after_init()
 
