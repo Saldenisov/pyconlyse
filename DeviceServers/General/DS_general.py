@@ -99,8 +99,9 @@ class DS_General(Device):
         self._status_check_fault = 0
         self.prev_state = DevState.FAULT
         Device.init_device(self)
+        if hasattr(self, 'parameters'):
+            self.parameters = eval(str(self.parameters))
         self.archive = taurus.Device(self.archive)
-
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b''
@@ -145,15 +146,15 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
+        if state_ok == 1:
+            res = self.get_controller_status_local()
+            if res != 0:
+                self.error(f'{res}')
         state = self.get_state()
         if state != self.prev_state:
             data = self.form_acrhive_data(int(state), 'State')
             self.prev_state = state
             self.write_to_archive(data)
-        if state_ok == 1:
-            res = self.get_controller_status_local()
-            if res != 0:
-                self.error(f'{res}')
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:

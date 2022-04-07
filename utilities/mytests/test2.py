@@ -1,10 +1,18 @@
-from pathlib import Path
-import numpy as np
+import platform    # For getting the operating system name
+import subprocess  # For executing a shell command
 
-p = Path('D:\\DATA_VD2\\2021\\20211019-VC\\waves_long.txt')
-d = np.loadtxt(str(p), dtype=float)
-d_t = d[::2]
+def ping(host):
+    """
+    Returns True if host (str) responds to a ping request.
+    Remember that a host may not respond to a ping (ICMP) request even if the host name is valid.
+    """
 
+    # Option for the number of packets as a function of
+    param = '-n' if platform.system().lower() == 'windows' else '-c'
 
-print(len(d))
-np.savetxt('D:\\DATA_VD2\\2021\\20211019-VC\\waves_short.txt', d_t, fmt='%3.3f')
+    # Building the command. Ex: "ping -c 1 google.com"
+    command = ['ping', param, '1', host]
+
+    return subprocess.call(command, stdout=subprocess.DEVNULL) == 0
+
+print(ping('129.175.100.171'))

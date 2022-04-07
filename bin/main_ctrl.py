@@ -4,7 +4,7 @@ from _functools import partial
 from pathlib import Path
 from threading import Thread
 from typing import Dict
-
+from time import sleep
 import imageio
 import numpy as np
 import pyqtgraph as pg
@@ -53,15 +53,10 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     r = 0
     c = 0
     i = 1
-    a = {}
     for dev_name in devices:
-        print(f'Device {dev_name} {i}/{len(devices)}')
-        dev = Device(dev_name)
-        taurus_devices[dev_name] = dev
-        if check:
-            state = dev.state
-        else:
-            state = '-1'
+        # print(f'Device {dev_name} {i}/{len(devices)}')
+        # dev = Device(dev_name)
+        # taurus_devices[dev_name] = dev
         lab = MyQLabel(dev_name)
         labels[dev_name] = lab
 
@@ -71,11 +66,24 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             c = 0
             r += 1
         i += 1
-    return taurus_devices, labels
+    return labels
+    # return taurus_devices, labels
 
 
-def set_state(taurus_devices, labels):
+def set_state(labels):
     from time import sleep
+    db = Database()
+    servers = ['ELYSE', 'manip']
+    devices = []
+    for server in servers:
+        devices = devices + list(db.get_device_exported(f"{server}*"))
+    taurus_devices = {}
+    i = 0
+    for dev_name in devices:
+        i += 1
+        print(f'Device {dev_name} {i}/{len(devices)}')
+        dev = Device(dev_name)
+        taurus_devices[dev_name] = dev
     while True:
         for dev_name, dev in taurus_devices.items():
             sleep(0.15)
@@ -94,7 +102,6 @@ def set_state(taurus_devices, labels):
                     labels[dev_name].update_style(f"background-color: red")
                 else:
                     labels[dev_name].update_style(f"background-color: purple")
-
         sleep(2)
 
 
@@ -183,6 +190,16 @@ def show_map(main_widget, labels: Dict):
         label.clicked.connect(partial(label_focus, map))
 
 
+def rpi_toggle_pin(rpi_device: Device, pin):
+    state = rpi_device.get_pin_state(pin)
+    if state == -1:
+        print(f'Wrong pin {pin} state.')
+    else:
+        rpi_device.set_pin_state([pin, 1])
+        sleep(0.25)
+        rpi_device.set_pin_state([pin, 0])
+
+
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
     tabs = QtWidgets.QTabWidget()
@@ -208,6 +225,7 @@ def main():
     lo_Basler = Qt.QHBoxLayout()
     lo_Laser_pointing = Qt.QHBoxLayout()
     lo_Andor_ccd = Qt.QHBoxLayout()
+    lo_lights = Qt.QHBoxLayout()
 
     # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
@@ -217,6 +235,8 @@ def main():
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
     button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
+    button_light_room = TaurusCommandButton(text='SM light', parent=panel, icon=QIcon('icons//light.png'))
+    button_laser = TaurusCommandButton(text='Laser', parent=panel, icon=QIcon('icons//laser.svg'))
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -259,6 +279,8 @@ def main():
     lo_Laser_pointing.addWidget(cbox_laser_pointing)
     lo_Andor_ccd.addWidget(button_andor_ccd)
     lo_Andor_ccd.addWidget(cbox_andor_ccd)
+    lo_lights.addWidget(button_laser)
+    lo_lights.addWidget(button_light_room)
 
     layout_clients.addLayout(lo_type)
     layout_clients.addLayout(lo_NETIO)
@@ -277,6 +299,7 @@ def main():
     layout_clients.addLayout(lo_Laser_pointing)
     vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
+    layout_clients.addLayout(lo_lights)
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -286,6 +309,12 @@ def main():
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
     button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
 
+    rpi_device = Device('manip/v0/rpi_gpio_v0')
+    light_pin = 3
+    laser_pin = 4
+    button_laser.clicked.connect(partial(rpi_toggle_pin, rpi_device, laser_pin))
+    button_light_room.clicked.connect(partial(rpi_toggle_pin, rpi_device, light_pin))
+
     tab1.setLayout(layout_clients)
     layout_devices_tab = QtWidgets.QVBoxLayout()
     layout_devices_tab.addLayout(layout_devices)
@@ -294,15 +323,14 @@ def main():
     tab2.setLayout(layout_devices_tab)
 
     layout_main.addWidget(tabs)
-    taurus_devices, labels = set_devices_states(layout_devices, False)
+    labels = set_devices_states(layout_devices, False)
 
     button_map.clicked.connect(partial(show_map, panel, labels))
-
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
     panel.show()
-    states_thread = Thread(target=set_state, args=[taurus_devices, labels])
+    states_thread = Thread(target=set_state, args=[labels])
     states_thread.start()
     sys.exit(app.exec_())
 

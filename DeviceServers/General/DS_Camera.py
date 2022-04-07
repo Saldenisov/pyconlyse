@@ -58,7 +58,6 @@ class DS_CAMERA_CCD(DS_General):
 
     @attribute(label='exposure time', dtype=float, access=AttrWriteType.READ_WRITE)
     def exposure_time(self):
-        print('Reading exposure time')
         return self.get_exposure_time()
 
     def write_exposure_time(self, value: float):
