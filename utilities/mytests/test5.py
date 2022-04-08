@@ -1,20 +1,21 @@
-def partial(func, *args, **keywords):
-    def newfunc(*fargs, **fkeywords):
-        newkeywords = keywords.copy()
-        newkeywords.update(fkeywords)
-        return func(*args, *fargs, **newkeywords)
-    return newfunc
+import numpy as np
 
 
+a = 3
+b = 4
+c = 5
 
-def a(*args, x = 2, y = 3):
-    result = 0
-    for i in args:
-        result += i
-    return result ** x - y
+d = np.arange(0, a * b * c)
+d = d.reshape((a, b, c))
+print(d)
 
-b = partial(a, -1, 1, x = 2)
 
-print(b(1,0, y=10))
+a = 1
+b = 4
+c = 5
+
+d = np.arange(0, a * b * c)
+d = d.reshape((a, b, c))
+print(d)
 
 

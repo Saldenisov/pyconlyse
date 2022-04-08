@@ -91,6 +91,9 @@ class DS_Netio_pdu(DS_PDU):
             self._ids = ids
             self._actions = actions
             self._delays = delays
+            for id, state in zip(ids, states):
+                data = self.form_acrhive_data(state, f'output_{id}', dt='uint8')
+                self.write_to_archive(data)
             return 0
         except Exception as e:
             return e

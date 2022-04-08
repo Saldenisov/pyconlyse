@@ -179,6 +179,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         super().init_device()
         self.start_grabbing_local()
 
+
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
@@ -326,6 +327,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 cY = int(M["m01"] / M["m00"])
 
         self.CG_position = {'X': cX, 'Y': cY}
+        data = self.form_acrhive_data(np.array([self.CG_position['X'], self.CG_position['Y']]).reshape((1, 2)), f'cg_position', dt='uint16')
+        self.write_to_archive(data)
 
     def wait(self, timeout):
 
@@ -341,10 +344,11 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 if grabResult.GrabSucceeded():
                     image = self.converter.Convert(grabResult)
                     grabResult.Release()
-                    image = np.ndarray(buffer=image.GetBuffer(),
-                                       shape=(image.GetHeight(), image.GetWidth(), 3),
-                                       dtype=np.uint8)
+                    image = np.ndarray(buffer=image.GetBuffer(), shape=(image.GetHeight(), image.GetWidth(), 3),
+                                       dtype='uint8')
                     self.calc_cg(image)
+                    data = self.form_acrhive_data(image, f'image', dt='uint8')
+                    self.write_to_archive(data)
                     # Convert 3D array to 2D for Tango to transfer it
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                     self.info('Image is received...')

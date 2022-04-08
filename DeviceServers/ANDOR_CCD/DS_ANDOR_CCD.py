@@ -302,7 +302,8 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                         self.time_stamp_deque.append(time_stamp)
                         self.data_deque.append(spectrum)
 
-                        data_archive = self.form_acrhive_data(spectrum, name='spectra', time_stamp=time_stamp)
+                        data_archive = self.form_acrhive_data(spectrum.reshape((1, 1024)),
+                                                              name='spectra', time_stamp=time_stamp)
                         self.write_to_archive(data_archive)
 
                         if self.orders:

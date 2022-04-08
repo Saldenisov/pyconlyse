@@ -271,7 +271,6 @@ class Basler_camera(DS_General_Widget):
         self.y_pos.setData(self.positions['Y'])
         self.roi_circle.setPos([x, y])
 
-
     def convert_image(self, image):
         image2D = image
         shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)

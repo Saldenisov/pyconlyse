@@ -24,6 +24,9 @@ from typing import Union, Tuple, Dict, Any
 from DeviceServers.General.DS_general import DS_General, standard_str_output
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 import numpy as np
+from numpy import array
+uint8 = np.dtype('uint8')
+int16 = np.dtype('int16')
 
 
 DEV = False
@@ -56,6 +59,12 @@ class DS_Archive(DS_General):
         self.turn_on()
         self.close_thread.start()
 
+        data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
+        msg_b = msgpack.packb(str(data))
+        msg_b_c = zlib.compress(msg_b)
+        msg_b_c_s = str(msg_b_c)
+        self.archive_it(msg_b_c_s)
+
     def internal_time(self):
         while True:
             self._internal_counter += 1
@@ -76,7 +85,6 @@ class DS_Archive(DS_General):
     def archive_it(self, data_string):
         state_ok = self.check_func_allowance(self.archive_it)
         if state_ok == 1:
-            self.info('Archiving...', DEV)
             result = '0'
             try:
                 self.lock = True
@@ -94,32 +102,30 @@ class DS_Archive(DS_General):
                     if isinstance(data.data, Scalar):
                         data_to_archive = np.array([data.data.value])
                     elif isinstance(data.data, Array):
-                        data_to_archive = np.frombuffer(data.data.value, dtype=np.dtype(data.data.dtype))
-                        data_to_archive = data_to_archive.reshape(data.data.shape)
-                    self.info(f'DATA: {data}', DEV)
+                        data_to_archive = data.data.value
+                        data_to_archive = np.frombuffer(data_to_archive, dtype=data.data.dtype).reshape(data.data.shape)
                     self.info(f'DATA to archive: {data_to_archive}', DEV)
 
-                    if data_to_archive != None:
-                        ts = float(data.data_timestamp)
-                        dt = datetime.fromtimestamp(ts)
-                        date_as_str = dt.date().__str__()
-                        group_date = self.check_group(self.file_h5, date_as_str)
-                        group_device = self.check_group(group_date, data.tango_device)
-                        shape = data_to_archive.shape
+                    ts = float(data.data_timestamp)
+                    dt = datetime.fromtimestamp(ts)
+                    date_as_str = dt.date().__str__()
+                    group_date = self.check_group(self.file_h5, date_as_str)
+                    group_device = self.check_group(group_date, data.tango_device)
+                    shape = data_to_archive.shape
 
-                        if len(shape) == 1:
-                            maxshape = (None,)
-                        else:
-                            maxshape = (None, data_to_archive.shape[1])
+                    if len(shape) == 1:
+                        maxshape = (None,)
+                    elif len(shape) == 2:
+                        maxshape = (None, data_to_archive.shape[1])
+                    elif len(shape) == 3:
+                        maxshape = (None, data_to_archive.shape[1], data_to_archive.shape[2])
 
-                        self.dataset_update(group_device, data.dataset_name, shape=shape,
-                                            maxshape=maxshape, dtype=np.dtype(data.data.dtype),
-                                            data=data_to_archive)
-                        ts_array = np.array([ts], dtype='float32')
-                        self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (ts_array.shape[0],),
-                                            maxshape, ts_array.dtype, ts_array)
-                    else:
-                        raise Exception(f'Nothing to archive: {data}')
+                    self.dataset_update(group_device, data.dataset_name, shape=shape,
+                                        maxshape=maxshape, dtype=np.dtype(data.data.dtype),
+                                        data=data_to_archive)
+                    ts_array = np.array([ts], dtype='float32')
+                    self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (ts_array.shape[0],),
+                                        (None,), ts_array.dtype, ts_array)
             except Exception as e:
                 self.error(e)
                 result = str(e)

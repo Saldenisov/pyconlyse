@@ -197,7 +197,7 @@ class DS_General(Device):
         pass
 
     def write_to_archive(self, data: ArchiveData):
-        if self.archive.state:
+        if self.archive.state == 1:
             msg_b = msgpack.packb(str(data))
             msg_b_c = zlib.compress(msg_b)
             msg_b_c_s = str(msg_b_c)
@@ -207,7 +207,7 @@ class DS_General(Device):
         if isinstance(data, float):
             if not dt:
                 dt = 'float32'
-            data_s = Scalar(value=data, dtype='float32')
+            data_s = Scalar(value=data, dtype=dt)
         elif isinstance(data, int):
             if not dt:
                 if data <= 127 and data >= 0:
@@ -217,11 +217,11 @@ class DS_General(Device):
                 else:
                     dt = 'int'
             data_s = Scalar(value=data, dtype=dt)
-        elif isinstance(data, np.array) or isinstance(data, list):
+        elif isinstance(data, np.ndarray):
             if not dt:
                 dt = str(data.dtype)
-            data = np.array(data)
-            data_s = Array(value=data, dtype=dt)
+                data.astype(dt)
+            data_s = Array(value=data.tobytes(), shape=data.shape, dtype=dt)
 
         if not time_stamp:
             time_stamp = time.time()

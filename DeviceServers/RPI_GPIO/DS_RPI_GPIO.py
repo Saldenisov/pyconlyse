@@ -74,6 +74,8 @@ class DS_RPI_GPIO(DS_GPIO):
             control_pin = self.pins[pin]
             value = control_pin.value
             states.append(value)
+            data = self.form_acrhive_data(value, f'pin_state_{pin}', dt='uint8')
+            self.write_to_archive(data)
         self._states = states
 
     def get_pin_state_local(self, pin_id: int) -> Union[int, str]:
