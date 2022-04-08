@@ -80,6 +80,7 @@ class DS_Archive(DS_General):
             result = '0'
             try:
                 self.lock = True
+                self.file_size_check(self.file_working)
                 self.open_h5()
                 if not self.file_h5:
                     self.error('Cannot open h5 file.')
@@ -108,16 +109,15 @@ class DS_Archive(DS_General):
 
                         if len(shape) == 1:
                             maxshape = (None,)
-                            shape = (1,)
                         else:
-                            maxshape = (None, data_to_archive.shape[0])
-                            shape = data_to_archive.shape
+                            maxshape = (None, data_to_archive.shape[1])
 
                         self.dataset_update(group_device, data.dataset_name, shape=shape,
                                             maxshape=maxshape, dtype=np.dtype(data.data.dtype),
                                             data=data_to_archive)
-                        self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (1,), (None,),
-                                            np.dtype('float'), np.array([ts]))
+                        ts_array = np.array([ts], dtype='float32')
+                        self.dataset_update(group_device, f'{data.dataset_name}_timestamp', (ts_array.shape[0],),
+                                            maxshape, ts_array.dtype, ts_array)
                     else:
                         raise Exception(f'Nothing to archive: {data}')
             except Exception as e:
@@ -178,6 +178,12 @@ class DS_Archive(DS_General):
         else:
             return 0
 
+    def file_size_check(self, file):
+        if file.stat().st_size < self.maximum_size:
+            self.file_working = file
+        else:
+            self.create_new_h5(latest=file)
+
     def latest_h5(self):
         h5_files = list(self.folder_location.glob('*.hdf5'))
         if h5_files:
@@ -190,10 +196,7 @@ class DS_Archive(DS_General):
                     latest_idx = i
                 i += 1
             file = h5_files[latest_idx]
-            if file.stat().st_size < self.maximum_size:
-                self.file_working = file
-            else:
-                self.create_new_h5(latest=file)
+            self.file_size_check(file)
         else:
             self.create_new_h5()
 

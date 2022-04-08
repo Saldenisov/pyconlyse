@@ -171,7 +171,6 @@ def show_map(main_widget, labels: Dict):
     map.proxy = proxy
     vb.addItem(img)
 
-
     vb.setAspectLocked(True)
     vb.invertY(True)
     map.view = vb

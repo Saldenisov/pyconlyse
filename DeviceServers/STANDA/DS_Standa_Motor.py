@@ -110,7 +110,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
             self._position = round(pos_basic_units / self.conversion, 3)
-            data = self.form_acrhive_data(self._position, f'position')
+            data = self.form_acrhive_data(self._position, f'position', dt='float16')
             self.write_to_archive(data)
             return 0
         else:

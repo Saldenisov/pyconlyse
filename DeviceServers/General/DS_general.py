@@ -197,20 +197,35 @@ class DS_General(Device):
         pass
 
     def write_to_archive(self, data: ArchiveData):
-        if self.archive:
+        if self.archive.state:
             msg_b = msgpack.packb(str(data))
             msg_b_c = zlib.compress(msg_b)
             msg_b_c_s = str(msg_b_c)
             self.archive.archive_it(msg_b_c_s)
 
-    def form_acrhive_data(self, data, name: str):
+    def form_acrhive_data(self, data, name: str, time_stamp=None, dt=None):
         if isinstance(data, float):
-            data_s = Scalar(value=data, dtype='float')
+            if not dt:
+                dt = 'float32'
+            data_s = Scalar(value=data, dtype='float32')
         elif isinstance(data, int):
-            data_s = Scalar(value=data, dtype='int')
+            if not dt:
+                if data <= 127 and data >= 0:
+                    dt = 'uint8'
+                elif data >= 0:
+                    dt = 'uintc'
+                else:
+                    dt = 'int'
+            data_s = Scalar(value=data, dtype=dt)
         elif isinstance(data, np.array) or isinstance(data, list):
+            if not dt:
+                dt = str(data.dtype)
             data = np.array(data)
-            data_s = Array(value=data, dtype=str(data.dtype))
-        archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time.time(),
+            data_s = Array(value=data, dtype=dt)
+
+        if not time_stamp:
+            time_stamp = time.time()
+
+        archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time_stamp,
                                    dataset_name=name, data=data_s)
         return archive_data

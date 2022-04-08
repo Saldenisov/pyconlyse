@@ -295,10 +295,15 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 res = self._GetData(size=1024 * self.n_kinetics * 2)
                 if res == True:
                     data2D = np.reshape(self.array_real, (-1, 1024))
+                    data2D.astype('int16')
+
                     for spectrum in data2D:
                         time_stamp = time_ns()
                         self.time_stamp_deque.append(time_stamp)
                         self.data_deque.append(spectrum)
+
+                        data_archive = self.form_acrhive_data(spectrum, name='spectra', time_stamp=time_stamp)
+                        self.write_to_archive(data_archive)
 
                         if self.orders:
                             orders_to_delete = []
@@ -348,7 +353,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             order = self.orders[name]
             order.ready_to_delete = True
             res = order.order_array
-        res = res.astype(dtype=np.int32)
+        res = res.astype(dtype=np.int16)
         res = res.tobytes()
         res = zlib.compress(res)
         return str(res)
