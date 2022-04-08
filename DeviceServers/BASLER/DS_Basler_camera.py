@@ -347,8 +347,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     image = np.ndarray(buffer=image.GetBuffer(), shape=(image.GetHeight(), image.GetWidth(), 3),
                                        dtype='uint8')
                     self.calc_cg(image)
-                    data = self.form_acrhive_data(image, f'image', dt='uint8')
-                    self.write_to_archive(data)
+                    # data = self.form_acrhive_data(image, f'image', dt='uint8')
+                    # self.write_to_archive(data)
                     # Convert 3D array to 2D for Tango to transfer it
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                     self.info('Image is received...')
