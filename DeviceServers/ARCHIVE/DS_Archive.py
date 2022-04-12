@@ -154,7 +154,7 @@ class DS_Archive(DS_General):
         if latest:
             stem = latest.stem
             idx = int(stem.split('_')[-1])
-            file = self.folder_location / f'Data_pyconlyse_{idx}.hdf5'
+            file = self.folder_location / f'Data_pyconlyse_{idx + 1}.hdf5'
         else:
             file = self.folder_location / 'Data_pyconlyse_1.hdf5'
         self.info(f'Creating new file: {file}', True)
