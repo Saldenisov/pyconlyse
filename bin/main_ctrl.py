@@ -236,6 +236,8 @@ def main():
     lo_Basler = Qt.QHBoxLayout()
     lo_Laser_pointing = Qt.QHBoxLayout()
     lo_Andor_ccd = Qt.QHBoxLayout()
+    lo_Archive = Qt.QHBoxLayout()
+    lo_Experiment = Qt.QHBoxLayout()
     lo_lights = Qt.QHBoxLayout()
 
     # Buttons
@@ -247,9 +249,11 @@ def main():
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
     button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
     button_light_room = TaurusCommandButton(text='SM light', parent=panel, icon=QIcon('icons//light.png'))
-    button_light_room.setEnabled(False)
     button_laser = TaurusCommandButton(text='Laser', parent=panel, icon=QIcon('icons//laser.svg'))
     button_laser.setEnabled(False)
+    button_archive = TaurusCommandButton(text='Archive', parent=panel, icon=QIcon('icons//archive.svg'))
+    button_experiment = TaurusCommandButton(text='Experiment', parent=panel, icon=QIcon('icons//experiment.png'))
+    button_experiment.setEnabled(False)
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -262,10 +266,14 @@ def main():
     cbox_TOPDIRECT.addItems(['all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
     cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
-    cbox_laser_pointing = TaurusValueComboBox(parent=panel)
-    cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
     cbox_andor_ccd = TaurusValueComboBox(parent=panel)
     cbox_andor_ccd.addItems(['V0'])
+    cbox_laser_pointing = TaurusValueComboBox(parent=panel)
+    cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
+    cbox_archive = TaurusValueComboBox(parent=panel)
+    cbox_archive.addItems(['Main'])
+    cbox_experiment = TaurusValueComboBox(parent=panel)
+    cbox_experiment.addItems(['Pump-Probe', '3P', 'Streak-camera'])
 
     # Type of vizualization
     group_visualization = QtWidgets.QGroupBox('Type')
@@ -294,6 +302,10 @@ def main():
     lo_Andor_ccd.addWidget(cbox_andor_ccd)
     lo_lights.addWidget(button_laser)
     lo_lights.addWidget(button_light_room)
+    lo_Archive.addWidget(button_archive)
+    lo_Archive.addWidget(cbox_archive)
+    lo_Experiment.addWidget(button_experiment)
+    lo_Experiment.addWidget(cbox_experiment)
 
     layout_clients.addLayout(lo_type)
     layout_clients.addLayout(lo_NETIO)
@@ -308,12 +320,21 @@ def main():
     separator_devices.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     separator_devices.setLineWidth(2)
 
+    separator_light = QtWidgets.QFrame()
+    separator_light.setFrameShape(QtWidgets.QFrame.HLine)
+    separator_light.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+    separator_light.setLineWidth(2)
+
     layout_clients.addWidget(separator_devices)
+    layout_clients.addWidget(QtWidgets.QLabel('Derivative clients'))
     layout_clients.addLayout(lo_Laser_pointing)
-    vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-    layout_clients.addSpacerItem(vspacer)
+    layout_clients.addLayout(lo_Archive)
+    layout_clients.addLayout(lo_Experiment)
+    layout_clients.addWidget(separator_light)
     layout_clients.addLayout(lo_lights)
     layout_clients.addWidget(QtWidgets.QLabel("Press 'q' if you want to activate buttons."))
+    vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
+    layout_clients.addSpacerItem(vspacer)
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -322,6 +343,8 @@ def main():
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
     button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
+    button_archive.clicked.connect(partial(start_cmd, 'start_ARCHIVE_client.cmd', cbox_archive))
+    button_experiment.clicked.connect(partial(start_cmd, 'start_EXPERIMENT_client.cmd', cbox_experiment))
 
     rpi_device = Device('manip/v0/rpi_gpio_v0')
     light_pin = 3
@@ -346,7 +369,7 @@ def main():
     panel.show()
     states_thread = Thread(target=set_state, args=[labels])
     states_thread.start()
-    buttons_activate = Thread(target=activate_buttons, args=[[button_laser, button_light_room]])
+    buttons_activate = Thread(target=activate_buttons, args=[[button_laser]])
     buttons_activate.start()
     sys.exit(app.exec_())
 

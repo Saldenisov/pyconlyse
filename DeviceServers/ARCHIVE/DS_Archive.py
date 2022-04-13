@@ -49,6 +49,7 @@ class DS_Archive(DS_General):
     def init_device(self):
         self.file_h5: h5py.File = None
         self.file_working: Path = None
+        self.archive_files = []
         self.lock = False
         self._internal_counter = 0
         self.close_thread = Thread(target=self.closing, args=[5])
@@ -135,6 +136,29 @@ class DS_Archive(DS_General):
         else:
             return f'Not allowed {self.get_state()}'
 
+    @command(dtype_out=str,doc_out='Returns str dict acrhive files struct')
+    def acrhive_structure(self):
+        structure = {}
+
+        def fill_keys(d, obj):
+            if isinstance(obj, h5py.Dataset):
+                return 'Dataset'
+            keys = [obj.keys()]
+            if len(obj.keys()) == 0:
+                return None
+            else:
+                for key in obj.keys():
+                    d[key] = {}
+                    d[key] = fill_keys(d[key], obj[key])
+                return d
+            for file in self.archive_files:
+                if Path(file) == self.file_working:
+                    self.open_h5
+                    structure = fill_keys(structure, self.file_h5)
+                with h5py.File(file, 'a') as h5f:
+                    structure = fill_keys(structure, h5f)
+        return str(structure)
+
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
         if group_name in container:
             group_date = container[group_name]
@@ -190,8 +214,13 @@ class DS_Archive(DS_General):
         else:
             self.create_new_h5(latest=file)
 
+    def _get_archive_files(self):
+        self.archive_files = list(self.folder_location.glob('*.hdf5'))
+        return self.archive_files
+
     def latest_h5(self):
-        h5_files = list(self.folder_location.glob('*.hdf5'))
+        h5_files = self._get_archive_files()
+
         if h5_files:
             latest = 0
             latest_idx = 0

@@ -1,17 +1,20 @@
-from gpiozero import LED
-from time import sleep
+def fill_keys(d, obj):
+    if isinstance(obj, int):
+        return None
+    keys = [obj.keys()]
+    if len(obj.keys()) == 0:
+        return None
+    else:
+        for key in obj.keys():
+            d[key] = {}
+            d[key] = fill_keys(d[key], obj[key])
+        return d
 
-from gpiozero.pins.pigpio import PiGPIOFactory
 
-factory = PiGPIOFactory(host='129.175.100.171')
+p = {'A': {'b': {'c': 1, 'd': 1}}}
 
-control_pin = LED(4, pin_factory=factory)
+a = {}
 
-def change_state():
-    control_pin.on()
-    sleep(1)
-    control_pin.off()
+fill_keys(a, p)
 
-while True:
-    command = input('Click any button to change state.')
-    change_state()
+print(a)
