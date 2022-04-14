@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Tuple, Union
 
+import numpy
 import numpy as np
 
 
@@ -25,6 +26,13 @@ class ArchiveData:
     data_timestamp: float
     dataset_name: str
     data: Union[Scalar, Array]
+
+
+@dataclass
+class DataXY:
+    name: str
+    X: numpy.ndarray
+    Y: numpy.ndarray
 
 
 # Cursors

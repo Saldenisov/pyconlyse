@@ -30,10 +30,27 @@ class ViewTree(QTreeWidget):
 
 if __name__ == '__main__':
     app = QApplication([])
-    window = ViewTree({"Pipe 1": {'1.Name': 'ABC', '2.Outside diameter': '10', '3.Wall thickness': '5',
-                                  '4.Density': '7850', '5.Liner layers': {
-            1: {'1.Liner name': 'SAD', '2.Liner thickness': '5', '3.Liner density': '900'}}, '6.Coating layers': {
-            1: {'1.Coating name': 'TWR', '2.Coating thickness': '50', '3.Coating density': '3000',
-                '4.Coating cutback': '0.7', '5.Coating absorption': '4'}}}})
+
+    import h5py
+
+    p = {}
+
+    with h5py.File("E:\\data\\h5\\Data_pyconlyse_1.hdf5", 'a') as h5f:
+        def fill_keys(d, obj):
+            if len(obj.keys()) == 0:
+                return None
+            else:
+                for key in obj.keys():
+                    if isinstance(obj[key], h5py.Dataset):
+                        d[key] = None
+                    else:
+                        d[key] = {}
+                        d[key] = fill_keys(d[key], obj[key])
+                return d
+
+
+        p = fill_keys(p, h5f)
+
+    window = ViewTree(p)
     window.show()
     app.exec_()

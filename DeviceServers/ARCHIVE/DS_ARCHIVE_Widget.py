@@ -11,10 +11,15 @@ from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
 from tango import DevState
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDate
-
-
+from functools import partial
+import zlib
+import msgpack
+from numpy import array
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXY
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
-
+uint8 = np.dtype('uint8')
+int16 = np.dtype('int16')
+float32 = np.dtype('float32')
 
 class ViewTree(QtWidgets.QTreeWidget):
     def __init__(self):
@@ -79,17 +84,24 @@ class Archive(DS_General_Widget):
         layout_v_tree = QtWidgets.QVBoxLayout()
         layout_h_tree_selectors = QtWidgets.QHBoxLayout()
         self.tree_structure = ViewTree()
+        self.tree_structure.itemClicked.connect(self.get_dataset_info)
+        self.tree_structure.itemDoubleClicked.connect(self.get_dataset)
         self.projects_cb = QtWidgets.QCheckBox('Projects')
         self.projects_cb.setChecked(True)
         self.devices_cb = QtWidgets.QCheckBox('Devices')
         self.devices_cb.setChecked(True)
         self.date_cb = QtWidgets.QCheckBox('Selected date?')
+        self.projects_cb.clicked.connect(self.structure_update)
+        self.devices_cb.clicked.connect(self.structure_update)
+        self.date_cb.clicked.connect(self.structure_update)
 
         layout_h_tree_selectors.addWidget(self.projects_cb)
         layout_h_tree_selectors.addWidget(self.devices_cb)
         layout_h_tree_selectors.addWidget(self.date_cb)
         layout_v_tree.addWidget(self.tree_structure)
         layout_v_tree.addLayout(layout_h_tree_selectors)
+        self.dataset_info = QtWidgets.QLabel('')
+        layout_v_tree.addWidget(self.dataset_info)
         self.tree_structure.setMinimumWidth(450)
         lo_calendar.addWidget(self.calendar)
         lo_calendar.addLayout(layout_v_tree)
@@ -116,6 +128,37 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_calendar)
         lo_group.addLayout(lo_device)
 
+    def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
+        def construct_name(item: QtWidgets.QTreeWidgetItem, s):
+            parent = item.parent()
+            if parent:
+                s.append(parent.text(0))
+                s = construct_name(parent, s)
+            return s
+        path = construct_name(item, [item.text(0)])
+        path.reverse()
+        dataset_name = '/'.join(path)
+        info = self.ds.get_info_object(dataset_name)
+        self.dataset_info.setText(info)
+
+    def get_dataset(self, item: QtWidgets.QTreeWidgetItem):
+        def construct_name(item: QtWidgets.QTreeWidgetItem, s):
+            parent = item.parent()
+            if parent:
+                s.append(parent.text(0))
+                s = construct_name(parent, s)
+            return s
+        path = construct_name(item, [item.text(0)])
+        path.reverse()
+        dataset_name = '/'.join(path)
+
+        data_string = self.ds.get_data([dataset_name, '0'])
+        data_bytes = eval(data_string)
+        data = zlib.decompress(data_bytes)
+        data = msgpack.unpackb(data, strict_map_key=False)
+        data = eval(data)
+
+
     def register_DS_min(self, group_number=1):
         self.register_DS_full(group_number)
 
@@ -137,6 +180,7 @@ class Archive(DS_General_Widget):
         self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), structure)
 
     def select_structure(self, date=None):
+        from copy import deepcopy
         date_structure = {}
         date_s = '...'
         if not self.structure:
@@ -144,9 +188,29 @@ class Archive(DS_General_Widget):
         try:
             if self.date_cb.isChecked() and date:
                 date_s = date.toString('yyyy-MM-dd')
-                date_structure[date_s] = self.structure[date_s]
+                date_structure[date_s] = deepcopy(self.structure[date_s])
             else:
-                date_structure = self.structure
+                date_structure = deepcopy(self.structure)
+
+            if not self.projects_cb.isChecked():
+                to_del = []
+                for date_key, value in date_structure.items():
+                    if 'projects' in value:
+                        to_del.append(date_key)
+                if to_del:
+                    for key in to_del:
+                        del date_structure[key]['projects']
+
+            if not self.devices_cb.isChecked():
+                to_del = []
+                for date_key, value in date_structure.items():
+                    for loc_key in value.keys():
+                        if loc_key != 'projects':
+                            to_del.append((date_key, loc_key))
+                if to_del:
+                    for date_key, loc_key in to_del:
+                        del date_structure[date_key][loc_key]
+
         except KeyError:
             print(f'Such date {date_s} is not present in Archive.')
         finally:

@@ -198,10 +198,14 @@ class DS_General(Device):
 
     def write_to_archive(self, data: ArchiveData):
         if self.archive.state == 1:
-            msg_b = msgpack.packb(str(data))
-            msg_b_c = zlib.compress(msg_b)
-            msg_b_c_s = str(msg_b_c)
-            self.archive.archive_it(msg_b_c_s)
+            data_c = self.compress_data(data)
+            self.archive.archive_it(data_c)
+
+    def compress_data(self, data):
+        msg_b = msgpack.packb(str(data))
+        msg_b_c = zlib.compress(msg_b)
+        msg_b_c_s = str(msg_b_c)
+        return msg_b_c_s
 
     def form_acrhive_data(self, data, name: str, time_stamp=None, dt=None):
         if isinstance(data, float):
