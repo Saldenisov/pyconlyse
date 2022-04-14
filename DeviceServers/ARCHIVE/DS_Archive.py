@@ -59,12 +59,11 @@ class DS_Archive(DS_General):
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.turn_on()
         self.close_thread.start()
-
-        data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
-        msg_b = msgpack.packb(str(data))
-        msg_b_c = zlib.compress(msg_b)
-        msg_b_c_s = str(msg_b_c)
-        self.archive_it(msg_b_c_s)
+        # data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
+        # msg_b = msgpack.packb(str(data))
+        # msg_b_c = zlib.compress(msg_b)
+        # msg_b_c_s = str(msg_b_c)
+        # self.archive_it(msg_b_c_s)
 
     def internal_time(self):
         while True:
@@ -136,14 +135,12 @@ class DS_Archive(DS_General):
         else:
             return f'Not allowed {self.get_state()}'
 
-    @command(dtype_out=str,doc_out='Returns str dict acrhive files struct')
-    def acrhive_structure(self):
-        structure = {}
-
+    @attribute(label="Archive structure as dict", dtype=str, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ)
+    def archive_structure(self):
         def fill_keys(d, obj):
             if isinstance(obj, h5py.Dataset):
-                return 'Dataset'
-            keys = [obj.keys()]
+                return f'{obj.name}__{obj.shape}'
             if len(obj.keys()) == 0:
                 return None
             else:
@@ -151,12 +148,14 @@ class DS_Archive(DS_General):
                     d[key] = {}
                     d[key] = fill_keys(d[key], obj[key])
                 return d
-            for file in self.archive_files:
-                if Path(file) == self.file_working:
-                    self.open_h5
-                    structure = fill_keys(structure, self.file_h5)
-                with h5py.File(file, 'a') as h5f:
-                    structure = fill_keys(structure, h5f)
+        structure = {}
+        for file in self.archive_files:
+            if Path(file) == self.file_working:
+                self.open_h5
+                structure = fill_keys(structure, self.file_h5)
+            with h5py.File(file, 'a') as h5f:
+                structure = fill_keys(structure, h5f)
+
         return str(structure)
 
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
