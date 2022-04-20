@@ -101,14 +101,25 @@ class DS_RPI_GPIO(DS_GPIO):
         else:
             return f'Wrong pin id {pin_id} was given.'
 
+    def check_ip(self):
+        return ping(self.ip_address)
+
     def get_controller_status_local(self) -> Union[int, str]:
-        if ping(self.ip_address):
+        res = self.check_ip()
+        if res:
             self.set_state(DevState.ON)
             self.get_pins_states()
             return 0
         else:
-            self.set_state(DevState.FAULT)
-            return f'Could not turn on, RPI {self.ip_address} is away...'
+            self.turn_on_local()
+            res = self.check_ip()
+            if res:
+                self.set_state(DevState.ON)
+                self.get_pins_states()
+                return 0
+            else:
+                self.set_state(DevState.FAULT)
+                return f'Could not turn on, RPI {self.ip_address} is away...'
 
     def turn_on_local(self) -> Union[int, str]:
         if ping(self.ip_address):

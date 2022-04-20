@@ -181,11 +181,11 @@ class ANDOR_CCD(DS_General_Widget):
     def update_curve(self, plot, i, y):
         plot.curves[i].setData(self.wavelengths, y)
 
-    def del_curve(self, plot, i):
-        plot.curves[i].clear()
-
     def add_curve(self, plot, y): # add a curve
         plot.curves.append(plot.plot(self.wavelengths, y))
+
+    def del_curve(self, plot, i):
+        plot.curves[i].clear()
 
     def register_full_layouts(self):
         super(ANDOR_CCD, self).register_full_layouts()

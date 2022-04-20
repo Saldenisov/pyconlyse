@@ -14,17 +14,19 @@ from threading import Thread
 from time import sleep
 from DeviceServers.General.DS_general import DS_General, standard_str_output
 import h5py
-import zlib
-import msgpack
+
 from abc import abstractmethod
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
 from typing import Union, Tuple, Dict, Any
 
 from DeviceServers.General.DS_general import DS_General, standard_str_output
-from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
+import zlib
+import msgpack
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXYb
 import numpy as np
 from numpy import array
+
 uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 
@@ -49,6 +51,7 @@ class DS_Archive(DS_General):
     def init_device(self):
         self.file_h5: h5py.File = None
         self.file_working: Path = None
+        self.archive_files = []
         self.lock = False
         self._internal_counter = 0
         self.close_thread = Thread(target=self.closing, args=[5])
@@ -58,12 +61,12 @@ class DS_Archive(DS_General):
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.turn_on()
         self.close_thread.start()
-
-        data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
-        msg_b = msgpack.packb(str(data))
-        msg_b_c = zlib.compress(msg_b)
-        msg_b_c_s = str(msg_b_c)
-        self.archive_it(msg_b_c_s)
+        self.create_structure()
+        # data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
+        # msg_b = msgpack.packb(str(data))
+        # msg_b_c = zlib.compress(msg_b)
+        # msg_b_c_s = str(msg_b_c)
+        # self.archive_it(msg_b_c_s)
 
     def internal_time(self):
         while True:
@@ -135,6 +138,35 @@ class DS_Archive(DS_General):
         else:
             return f'Not allowed {self.get_state()}'
 
+    @attribute(label="Archive structure as dict", dtype=str, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ)
+    def archive_structure(self):
+
+        return str(self.create_structure())
+
+    def create_structure(self):
+        def fill_keys(d, obj):
+            if len(obj.keys()) == 0:
+                return None
+            else:
+                for key in obj.keys():
+                    if isinstance(obj[key], h5py.Dataset):
+                        d[key] = None
+                    else:
+                        d[key] = {}
+                        d[key] = fill_keys(d[key], obj[key])
+                return d
+        structure = {}
+        self._get_archive_files()
+        for file in self.archive_files:
+            if Path(file) == self.file_working:
+                self.open_h5()
+                structure = fill_keys(structure, self.file_h5)
+            else:
+                with h5py.File(file, 'a') as h5f:
+                    structure = fill_keys(structure, h5f)
+        return structure
+
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
         if group_name in container:
             group_date = container[group_name]
@@ -179,6 +211,9 @@ class DS_Archive(DS_General):
 
     @attribute(label="error", dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ)
     def is_h5_opened(self):
+        return self._is_h5_opened()
+
+    def _is_h5_opened(self):
         if self.file_h5:
             return 1
         else:
@@ -190,8 +225,44 @@ class DS_Archive(DS_General):
         else:
             self.create_new_h5(latest=file)
 
+    def _get_archive_files(self):
+        self.archive_files = list(self.folder_location.glob('*.hdf5'))
+        return self.archive_files
+
+    @command(dtype_in=[str], dtype_out=str)
+    def get_data(self, value):
+        dataset_name = value[0]
+        idx = value[1]
+        idx_to = value[2]
+        res = b''
+        self.open_h5()
+        if dataset_name in self.file_h5:
+            item = self.file_h5[dataset_name]
+            if isinstance(item, h5py.Dataset):
+                dataset: h5py.Dataset = item
+                dataset_timestamp: h5py.Dataset = self.file_h5[f'{dataset_name}_timestamp']
+                if len(dataset.shape) == 1:
+                    idx = int(idx)
+                    idx_to = int(idx_to)
+                    data = DataXYb(X=dataset_timestamp[idx:idx_to].tobytes(), Y=dataset[idx:idx_to].tobytes(),
+                                   name=dataset_name, Xdtype=str(dataset_timestamp.dtype), Ydtype=str(dataset.dtype))
+                    res = self.compress_data(data)
+        return res
+
+    @command(dtype_in=str, dtype_out=str)
+    def get_info_object(self, object_name):
+        if not self._is_h5_opened():
+            self.open_h5()
+        object = self.file_h5[object_name]
+        result = ''
+        if isinstance(object, h5py.Dataset):
+            result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, Size: {object.nbytes / 1024} kB, ' \
+                     f'{object.dtype}'
+        return result
+
     def latest_h5(self):
-        h5_files = list(self.folder_location.glob('*.hdf5'))
+        h5_files = self._get_archive_files()
+
         if h5_files:
             latest = 0
             latest_idx = 0
