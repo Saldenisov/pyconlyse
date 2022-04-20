@@ -107,21 +107,21 @@ def set_state(labels):
 
 def label_focus(map, event):
 
-    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
-                 'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
-                 'ELYSE/motorized_devices/MM1_Y': (9430, 1280), 'ELYSE/motorized_devices/MM2_X': (9360, 1340),
-                 'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
-                 'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
-                 'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
-                 'manip/SD2/PDU_SD2': (300, 300), 'manip/V0/Cam1_V0': (26, 990), 'manip/V0/Cam2_V0': (780, 620),
-                 'manip/V0/Cam3_V0': (300, 300), 'manip/V0/DV01': (1160, 640), 'manip/V0/DV02': (270, 640),
-                 'manip/V0/DV03': (300, 560), 'manip/V0/DV04': (920, 540), 'manip/V0/F1': (300, 300),
-                 'manip/V0/L-2_1': (300, 300), 'manip/V0/LaserPointing-Cam1': (300, 300),
-                 'manip/V0/LaserPointing-Cam2': (300, 300), 'manip/V0/LaserPointing-Cam3': (300, 300),
+    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (11705, 1584),
+                 'ELYSE/motorized_devices/DE2': (4118, 2366), 'ELYSE/motorized_devices/MM1_X': (11152, 1578),
+                 'ELYSE/motorized_devices/MM1_Y': (11152, 1578), 'ELYSE/motorized_devices/MM2_X': (11171, 2381),
+                 'ELYSE/motorized_devices/MM2_Y': (11171, 2381), 'ELYSE/motorized_devices/MME_X': (11521, 2118),
+                 'ELYSE/motorized_devices/MME_Y': (11521, 2118), 'manip/ELYSE/PDU_ELYSE': (300, 300),
+                 'manip/general/DS_OWIS_PS90': (3273, 664), 'manip/SD1/PDU_SD1': (300, 300),
+                 'manip/SD2/PDU_SD2': (300, 300), 'manip/V0/Cam1_V0': (157, 3501), 'manip/V0/Cam2_V0': (1888, 2559),
+                 'manip/V0/Cam3_V0': (300, 300), 'manip/V0/DV01': (1010, 2235), 'manip/V0/DV02': (754, 2363),
+                 'manip/V0/DV03': (2921, 2247), 'manip/V0/DV04': (920, 540), 'manip/V0/F1': (300, 300),
+                 'manip/V0/L-2_1': (300, 300), 'manip/V0/LaserPointing-Cam1': (226, 3936),
+                 'manip/V0/LaserPointing-Cam2': (2331, 2270), 'manip/V0/LaserPointing-Cam3': (300, 300),
                  'manip/V0/MM3_X': (60, 630), 'manip/V0/MM3_Y': (60, 630), 'manip/V0/MM4_X': (60, 1100),
                  'manip/V0/MM4_Y': (60, 1100), 'manip/V0/OPA_X': (300, 300), 'manip/V0/OPA_Y': (300, 300),
-                 'manip/V0/PDU_VO': (300, 300), 'manip/V0/S1': (300, 300), 'manip/V0/S2': (300, 300),
-                 'manip/V0/S3': (300, 300), 'manip/V0/TS_OPA_m': (300, 300), 'manip/V0/TS_SC_m': (300, 300),
+                 'manip/V0/PDU_VO': (300, 300), 'manip/V0/S1': (209, 3961), 'manip/V0/S2': (2351, 2261),
+                 'manip/V0/S3': (300, 300), 'manip/V0/TS_OPA_m': (2620, 3697), 'manip/V0/TS_SC_m': (2192, 4194),
                  'manip/VD2/PDU_VD2': (300, 300)}
 
     if event in positions:
