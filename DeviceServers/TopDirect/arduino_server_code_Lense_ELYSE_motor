@@ -247,8 +247,9 @@ int treat_set(char *p){
     return 0;
 }
 
-void treat_reset(){
-    digitalWrite(OUTPUT_PIN, LOW);
+int treat_reset(){
+    digitalWrite(reset, LOW);
+    return 0;
 }
 
 int execute_cmd(String &cmd, long &pos)

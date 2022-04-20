@@ -4,7 +4,7 @@ from _functools import partial
 from pathlib import Path
 from threading import Thread
 from typing import Dict
-
+from time import sleep
 import imageio
 import numpy as np
 import pyqtgraph as pg
@@ -17,7 +17,7 @@ from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.input import TaurusValueComboBox
-
+from typing import List
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
@@ -41,7 +41,6 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
-
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     db = Database()
     servers = ['ELYSE', 'manip']
@@ -54,15 +53,10 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     r = 0
     c = 0
     i = 1
-    a = {}
     for dev_name in devices:
-        print(f'Device {dev_name} {i}/{len(devices)}')
-        dev = Device(dev_name)
-        taurus_devices[dev_name] = dev
-        if check:
-            state = dev.state
-        else:
-            state = '-1'
+        # print(f'Device {dev_name} {i}/{len(devices)}')
+        # dev = Device(dev_name)
+        # taurus_devices[dev_name] = dev
         lab = MyQLabel(dev_name)
         labels[dev_name] = lab
 
@@ -72,11 +66,24 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
             c = 0
             r += 1
         i += 1
-    return taurus_devices, labels
+    return labels
+    # return taurus_devices, labels
 
 
-def set_state(taurus_devices, labels):
+def set_state(labels):
     from time import sleep
+    db = Database()
+    servers = ['ELYSE', 'manip']
+    devices = []
+    for server in servers:
+        devices = devices + list(db.get_device_exported(f"{server}*"))
+    taurus_devices = {}
+    i = 0
+    for dev_name in devices:
+        i += 1
+        print(f'Device {dev_name} {i}/{len(devices)}')
+        dev = Device(dev_name)
+        taurus_devices[dev_name] = dev
     while True:
         for dev_name, dev in taurus_devices.items():
             sleep(0.15)
@@ -95,7 +102,6 @@ def set_state(taurus_devices, labels):
                     labels[dev_name].update_style(f"background-color: red")
                 else:
                     labels[dev_name].update_style(f"background-color: purple")
-
         sleep(2)
 
 
@@ -103,7 +109,7 @@ def label_focus(map, event):
 
     positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
                  'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
-                 'ELYSE/motorized_devices/MM1_Y': (3300, 380), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
+                 'ELYSE/motorized_devices/MM1_Y': (9430, 1280), 'ELYSE/motorized_devices/MM2_X': (9360, 1340),
                  'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
                  'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
                  'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
@@ -143,7 +149,7 @@ def show_map(main_widget, labels: Dict):
 
     imageWidget = pg.GraphicsLayoutWidget()
     vb = imageWidget.addViewBox(row=1, col=1)
-    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
+    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\Main_layout_1200.png')
 
     img = pg.ImageItem()
     img.setImage(np.transpose(im, (1, 0, 2)))
@@ -165,7 +171,6 @@ def show_map(main_widget, labels: Dict):
     map.proxy = proxy
     vb.addItem(img)
 
-
     vb.setAspectLocked(True)
     vb.invertY(True)
     map.view = vb
@@ -182,6 +187,28 @@ def show_map(main_widget, labels: Dict):
     for label in labels.values():
         label: MyQLabel = label
         label.clicked.connect(partial(label_focus, map))
+
+
+def rpi_toggle_pin(rpi_device: Device, pin):
+    state = rpi_device.get_pin_state(pin)
+    if state == -1:
+        print(f'Wrong pin {pin} state.')
+    else:
+        rpi_device.set_pin_state([pin, 1])
+        sleep(0.25)
+        rpi_device.set_pin_state([pin, 0])
+
+
+def activate_buttons(widgets: List[QtWidgets.QWidget]):
+    import keyboard
+    while True:
+        sleep(0.15)
+        if keyboard.is_pressed('q'):
+            for widget in widgets:
+                widget.setEnabled(True)
+        else:
+            for widget in widgets:
+                widget.setEnabled(False)
 
 
 def main():
@@ -207,7 +234,9 @@ def main():
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
-    lo_laser_pointing = Qt.QHBoxLayout()
+    lo_Laser_pointing = Qt.QHBoxLayout()
+    lo_Andor_ccd = Qt.QHBoxLayout()
+    lo_lights = Qt.QHBoxLayout()
 
     # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
@@ -216,6 +245,11 @@ def main():
     button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
+    button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
+    button_light_room = TaurusCommandButton(text='SM light', parent=panel, icon=QIcon('icons//light.png'))
+    button_light_room.setEnabled(False)
+    button_laser = TaurusCommandButton(text='Laser', parent=panel, icon=QIcon('icons//laser.svg'))
+    button_laser.setEnabled(False)
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -230,6 +264,8 @@ def main():
     cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
     cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
+    cbox_andor_ccd = TaurusValueComboBox(parent=panel)
+    cbox_andor_ccd.addItems(['V0'])
 
     # Type of vizualization
     group_visualization = QtWidgets.QGroupBox('Type')
@@ -252,8 +288,12 @@ def main():
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
     lo_Basler.addWidget(cbox_BASLER)
-    lo_laser_pointing.addWidget(button_laser_pointing)
-    lo_laser_pointing.addWidget(cbox_laser_pointing)
+    lo_Laser_pointing.addWidget(button_laser_pointing)
+    lo_Laser_pointing.addWidget(cbox_laser_pointing)
+    lo_Andor_ccd.addWidget(button_andor_ccd)
+    lo_Andor_ccd.addWidget(cbox_andor_ccd)
+    lo_lights.addWidget(button_laser)
+    lo_lights.addWidget(button_light_room)
 
     layout_clients.addLayout(lo_type)
     layout_clients.addLayout(lo_NETIO)
@@ -261,6 +301,7 @@ def main():
     layout_clients.addLayout(lo_STANDA)
     layout_clients.addLayout(lo_TOPDIRECT)
     layout_clients.addLayout(lo_Basler)
+    layout_clients.addLayout(lo_Andor_ccd)
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
@@ -268,9 +309,11 @@ def main():
     separator_devices.setLineWidth(2)
 
     layout_clients.addWidget(separator_devices)
-    layout_clients.addLayout(lo_laser_pointing)
+    layout_clients.addLayout(lo_Laser_pointing)
     vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
+    layout_clients.addLayout(lo_lights)
+    layout_clients.addWidget(QtWidgets.QLabel("Press 'q' if you want to activate buttons."))
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -278,6 +321,13 @@ def main():
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
+    button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
+
+    rpi_device = Device('manip/v0/rpi_gpio_v0')
+    light_pin = 3
+    laser_pin = 4
+    button_laser.clicked.connect(partial(rpi_toggle_pin, rpi_device, laser_pin))
+    button_light_room.clicked.connect(partial(rpi_toggle_pin, rpi_device, light_pin))
 
     tab1.setLayout(layout_clients)
     layout_devices_tab = QtWidgets.QVBoxLayout()
@@ -287,16 +337,17 @@ def main():
     tab2.setLayout(layout_devices_tab)
 
     layout_main.addWidget(tabs)
-    taurus_devices, labels = set_devices_states(layout_devices, False)
+    labels = set_devices_states(layout_devices, False)
 
     button_map.clicked.connect(partial(show_map, panel, labels))
-
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
     panel.show()
-    states_thread = Thread(target=set_state, args=[taurus_devices, labels])
+    states_thread = Thread(target=set_state, args=[labels])
     states_thread.start()
+    buttons_activate = Thread(target=activate_buttons, args=[[button_laser, button_light_room]])
+    buttons_activate.start()
     sys.exit(app.exec_())
 
 

@@ -1,4 +1,5 @@
 const String ID = "55838333832351518082";
+const String ID = "75833353934351B05090";
 const int pulPin = 13;
 const int dirPin = 12;
 const int enblPin = 11;
@@ -247,8 +248,9 @@ int treat_set(char *p){
     return 0;
 }
 
-void treat_reset(){
-    digitalWrite(OUTPUT_PIN, LOW);
+int treat_reset(){
+    digitalWrite(reset, LOW);
+    return 0;
 }
 
 int execute_cmd(String &cmd, long &pos)

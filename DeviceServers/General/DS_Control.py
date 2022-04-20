@@ -14,6 +14,7 @@ class DS_ControlPosition(DS_General):
     ds_dict = device_property(dtype=str)
     controller_rules = device_property(dtype=str)
     groups = device_property(dtype=str)
+    pid_groups = device_property(dtype=str)
 
     def init_device(self):
         self.control_position = [0, 0]
@@ -21,10 +22,9 @@ class DS_ControlPosition(DS_General):
         self.ds_dict = eval(self.ds_dict)
         self.controller_rules = eval(self.controller_rules)
         self.groups = eval(self.groups)
+        self.pid_groups = eval(self.pid_groups)
+        self.devices = {}
 
-    @abstractmethod
-    def calc_correction(self, args):
-        pass
 
     @attribute(label="Rules for controller", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ)
@@ -53,5 +53,3 @@ class DS_ControlPosition(DS_General):
 
     def write_control_position(self, value):
         self.control_position = value
-
-

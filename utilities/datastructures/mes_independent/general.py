@@ -5,6 +5,7 @@ from dataclasses import dataclass
 class FuncInput:
     pass
 
+
 @dataclass
 class FuncOutput:
     comments: str

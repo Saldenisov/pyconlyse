@@ -30,7 +30,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """"
     Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
     """
-    _version_ = '0.4'
+    _version_ = '0.5'
     _model_ = 'STANDA step motor'
     polling_local = 1500
 
@@ -110,6 +110,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
             self._position = round(pos_basic_units / self.conversion, 3)
+            data = self.form_acrhive_data(self._position, f'position', dt='float16')
+            self.write_to_archive(data)
             return 0
         else:
             return f'Could not read position of {self.device_name}: {result}.'
@@ -216,6 +218,15 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
+
+            current_data = self.form_acrhive_data(self._power_current, f'current')
+            voltage_data = self.form_acrhive_data(self._power_voltage, f'voltage')
+            temperature_data = self.form_acrhive_data(self._temperature, f'temperature')
+
+            self.write_to_archive(voltage_data)
+            self.write_to_archive(current_data)
+            self.write_to_archive(temperature_data)
+
             if self._status_check_fault > 0:
                 self._status_check_fault = 0
             return super().get_controller_status_local()
