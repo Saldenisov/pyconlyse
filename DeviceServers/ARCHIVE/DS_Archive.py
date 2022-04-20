@@ -23,7 +23,7 @@ from typing import Union, Tuple, Dict, Any
 from DeviceServers.General.DS_general import DS_General, standard_str_output
 import zlib
 import msgpack
-from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXY
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXYb
 import numpy as np
 from numpy import array
 
@@ -61,6 +61,7 @@ class DS_Archive(DS_General):
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.turn_on()
         self.close_thread.start()
+        self.create_structure()
         # data = self.form_acrhive_data(np.array([1024, 1024]).reshape((1, 2)), 'cg')
         # msg_b = msgpack.packb(str(data))
         # msg_b_c = zlib.compress(msg_b)
@@ -140,6 +141,10 @@ class DS_Archive(DS_General):
     @attribute(label="Archive structure as dict", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ)
     def archive_structure(self):
+
+        return str(self.create_structure())
+
+    def create_structure(self):
         def fill_keys(d, obj):
             if len(obj.keys()) == 0:
                 return None
@@ -152,15 +157,15 @@ class DS_Archive(DS_General):
                         d[key] = fill_keys(d[key], obj[key])
                 return d
         structure = {}
+        self._get_archive_files()
         for file in self.archive_files:
             if Path(file) == self.file_working:
-                self.open_h5
+                self.open_h5()
                 structure = fill_keys(structure, self.file_h5)
             else:
                 with h5py.File(file, 'a') as h5f:
                     structure = fill_keys(structure, h5f)
-
-        return str(structure)
+        return structure
 
     def check_group(self, container: Union[h5py.File, h5py.Group], group_name):
         if group_name in container:
@@ -206,6 +211,9 @@ class DS_Archive(DS_General):
 
     @attribute(label="error", dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ)
     def is_h5_opened(self):
+        return self._is_h5_opened()
+
+    def _is_h5_opened(self):
         if self.file_h5:
             return 1
         else:
@@ -225,20 +233,25 @@ class DS_Archive(DS_General):
     def get_data(self, value):
         dataset_name = value[0]
         idx = value[1]
+        idx_to = value[2]
         res = b''
         self.open_h5()
         if dataset_name in self.file_h5:
-            dataset: h5py.Dataset = self.file_h5[dataset_name]
-            dataset_timestamp: h5py.Dataset = self.file_h5[f'{dataset_name}_timestamp']
-            if len(dataset.shape) == 1:
-                idx = int(idx)
-                data = DataXY(X=dataset_timestamp[idx:1000], Y=dataset[idx:1000], name=dataset_name)
-                res = self.compress_data(data)
+            item = self.file_h5[dataset_name]
+            if isinstance(item, h5py.Dataset):
+                dataset: h5py.Dataset = item
+                dataset_timestamp: h5py.Dataset = self.file_h5[f'{dataset_name}_timestamp']
+                if len(dataset.shape) == 1:
+                    idx = int(idx)
+                    idx_to = int(idx_to)
+                    data = DataXYb(X=dataset_timestamp[idx:idx_to].tobytes(), Y=dataset[idx:idx_to].tobytes(),
+                                   name=dataset_name, Xdtype=str(dataset_timestamp.dtype), Ydtype=str(dataset.dtype))
+                    res = self.compress_data(data)
         return res
 
     @command(dtype_in=str, dtype_out=str)
     def get_info_object(self, object_name):
-        if not self.is_h5_opened:
+        if not self._is_h5_opened():
             self.open_h5()
         object = self.file_h5[object_name]
         result = ''
