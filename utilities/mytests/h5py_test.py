@@ -2,17 +2,26 @@ import h5py
 from h5py import Dataset, Group
 import numpy as np
 
-with h5py.File("test.hdf5", 'a') as h5f :
-    # data = np.arange(0, 10)
+with h5py.File("E:\\data\\h5\\dset.h5", 'a') as h5f :
+    data = np.arange(10, 20)
     # data = data.reshape((1, 10))
     # # print(data)
-    # dset = h5f.create_dataset("test4", (1, 10), maxshape=(None, 10), data=data)
-    # dset = h5f.get('test5')
+    # dset = h5f.create_dataset("top/middle/bottom/test2", (10, ), maxshape=(None, ), data=data)
+    dset = h5f.get("top/middle/bottom/test2")
+    d = dset[:]
+    indexes_lower = [idx[0] for idx in np.argwhere(dset[:] <= 16)]
+    d = dset[indexes_lower]
+    indexes_upper = [idx[0] for idx in np.argwhere(d >= 12)]
+    d = d[indexes_upper]
+
+    print(d)
     # # dset.resize((dset.shape[0] + data.shape[0]), axis=0)
     # # dset[-data.shape[0]:] = data
 
 
-    print(len(h5f['one'].shape))
+    # print(h5f['2022-04-15']['ELYSE']['motorized_devices']['DE1'].keys())
+    # print(h5f['2022-04-15']['ELYSE']['motorized_devices']['DE1']['position'])
+    # print(h5f['2022-04-15']['ELYSE']['motorized_devices']['DE1']['position_timestamp'])
     h5f.close()
 
 
