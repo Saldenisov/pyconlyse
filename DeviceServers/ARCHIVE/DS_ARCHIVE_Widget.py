@@ -194,7 +194,7 @@ class Archive(DS_General_Widget):
         path.reverse()
         dataset_name = '/'.join(path)
 
-        data_string = self.ds.get_data([dataset_name, '0', '10000'])
+        data_string = self.ds.get_data([dataset_name, '-1', '-1'])
         if data_string:
             data_bytes = eval(data_string)
             data_d = zlib.decompress(data_bytes)
