@@ -9,6 +9,7 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
 from tango import DevState
+from datetime import datetime
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDate
 from functools import partial
@@ -121,6 +122,8 @@ class Archive(DS_General_Widget):
         self.tree_devices = ViewTree()
         self.tree_devices.setMinimumWidth(300)
         self.tree_devices.setMinimumHeight(300)
+        self.tree_devices.itemClicked.connect(self.get_dataset_info)
+        self.tree_devices.itemDoubleClicked.connect(self.get_dataset)
 
         self.projects_cb = QtWidgets.QCheckBox('Projects')
         self.projects_cb.setChecked(True)
@@ -170,6 +173,14 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
 
+    @staticmethod
+    def check_if_date(s: str):
+        try:
+            datetime.strptime(s, '%Y-%m-%d')
+            return True
+        except TypeError:
+            return False
+
     def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
         def construct_name(item: QtWidgets.QTreeWidgetItem, s):
             parent = item.parent()
@@ -178,6 +189,8 @@ class Archive(DS_General_Widget):
                 s = construct_name(parent, s)
             return s
         path = construct_name(item, [item.text(0)])
+        if not self.check_if_date(path[-1]):
+            path.append('any_date')
         path.reverse()
         dataset_name = '/'.join(path)
         info = self.ds.get_info_object(dataset_name)
@@ -191,10 +204,12 @@ class Archive(DS_General_Widget):
                 s = construct_name(parent, s)
             return s
         path = construct_name(item, [item.text(0)])
+        if not self.check_if_date(path[-1]):
+            path.append('any_date')
         path.reverse()
         dataset_name = '/'.join(path)
-
-        data_string = self.ds.get_data([dataset_name, '-1', '-1'])
+        print(f'Getting dataset {dataset_name}.')
+        data_string = self.ds.get_data([dataset_name, '0', '1000'])
         if data_string:
             data_bytes = eval(data_string)
             data_d = zlib.decompress(data_bytes)
@@ -249,7 +264,7 @@ class Archive(DS_General_Widget):
         structure = self.ds.archive_structure
         self.structure = eval(structure)
         selected_structure = self.form_main_tree_structure()
-        self.fill_tree_structure(selected_structure)
+        self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), selected_structure)
 
     def fill_device_tree_sructure(self):
         structure = self.ds.archive_structure
@@ -258,33 +273,21 @@ class Archive(DS_General_Widget):
 
         self.tree_devices.fill_items(self.tree_devices.invisibleRootItem(), device_structure)
 
-    def fill_tree_structure(self, structure):
-        self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), structure)
-
     def form_device_tree_structure(self):
         from copy import deepcopy
-        date_structure = {}
         date_s = '...'
         if not self.structure:
             self.get_structure()
         try:
             date_structure = deepcopy(self.structure)
-
-
-            if not self.devices_cb.isChecked():
-                to_del = []
-                for date_key, value in date_structure.items():
-                    for loc_key in value.keys():
-                        if loc_key != 'projects':
-                            to_del.append((date_key, loc_key))
-                if to_del:
-                    for date_key, loc_key in to_del:
-                        del date_structure[date_key][loc_key]
+            device_structure = {}
+            for date, value in date_structure.items():
+                device_structure.update(value)
 
         except KeyError:
             print(f'Such date {date_s} is not present in Archive.')
         finally:
-            return date_structure
+            return device_structure
 
     def form_main_tree_structure(self, date=None):
         from copy import deepcopy

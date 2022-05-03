@@ -53,14 +53,30 @@ class H5_container:
         self.close_thread.start()
         self.create_structure()
 
+    def _object_name_to_names(self, object_name):
+        object_name_split = object_name.split('/')
+        names = []
+        if object_name_split[0] == 'any_date' and len(object_name_split) > 1:
+            for date in list(self.h5_file.keys()):
+                name = f'{date}/{"/".join(object_name_split[1:])}'
+                names.append(name)
+        else:
+            names.append(object_name)
+        return names
+
     def get_object(self, object_name):
-        self.open()
-        return self.h5_file.get(object_name)
+        res = []
+        object_names = self._object_name_to_names(object_name)
+        for name in object_names:
+            if name in self.h5_file:
+                obj = self.h5_file.get(name)
+                res.append(obj)
+        return res
 
     def open(self, lock=False):
         if not self.h5_file:
             self.lock = True
-            self.parent.info(f'Openning file: {self.file_path}')
+            # self.parent.info(f'Openning file: {self.file_path}')
             self.h5_file = h5py.File(str(self.file_path), 'a')
         self.lock = lock
 
@@ -88,7 +104,6 @@ class H5_container:
                         d[key] = fill_keys(d[key], obj[key])
                 return d
         structure = {}
-        self.open()
         if len(self.h5_file.keys()) != 0:
             structure = fill_keys(structure, self.h5_file)
         self._structure = structure
@@ -101,22 +116,22 @@ class H5_container:
                     self.close()
 
     def is_object_present(self, object_name: str):
-        self.open()
-        if object_name in self.h5_file:
-            return True
-        else:
-            return False
+        object_names = self._object_name_to_names(object_name)
+        res = []
+        for name in object_names:
+            if name in self.h5_file:
+                res.append(True)
+            else:
+                res.append(False)
+        return any(res)
 
     def dataset_update(self, dataset_name, shape, maxshape, dtype, data):
-        self.open()
-        self.lock = True
         if dataset_name in self.h5_file:
             ds = self.h5_file[dataset_name]
             ds.resize((ds.shape[0] + data.shape[0]), axis=0)
             ds[-data.shape[0]:] = data
         else:
             self.h5_file.create_dataset(name=dataset_name, shape=shape, maxshape=maxshape, dtype=dtype, data=data)
-        self.lock = False
 
 
 DEV = False
@@ -131,7 +146,21 @@ class DS_Archive(DS_General):
     maximum_size = device_property(dtype=int)
     folder_location = device_property(dtype=str)
 
-    @command(dtype_in=str, dtype_out=str)
+    @command(dtype_in=str, dtype_out=str, doc_in="String as 'device_name'_'data_as_str'")
+    def archive_it_labview(self, data_string: str):
+        dataset, data, timestamp = data_string.split(':')
+        labview_var_split = dataset.split('/')
+        device_name = '/'.join(labview_var_split[0:-1])
+        dataset = labview_var_split[-1]
+        data = float(data)
+        timestamp = float(timestamp)
+        data_to_archive = ArchiveData(tango_device=device_name, dataset_name=dataset, data_timestamp=timestamp,
+                                      data=Scalar(data, 'float'))
+        data_to_archive = self.compress_data(data_to_archive)
+        return self.archive_it(data_to_archive)
+
+    @command(dtype_in=str, dtype_out=str,
+             doc_in="ArchiveData converted to string and compressed using zlib and msgpack")
     def archive_it(self, data_string):
         state_ok = self.check_func_allowance(self.archive_it)
         if state_ok == 1:
@@ -141,6 +170,7 @@ class DS_Archive(DS_General):
                 actual_h5_container.open()
                 actual_h5_container.lock = True
                 file_h5 = actual_h5_container.h5_file
+
                 if not file_h5:
                     error = f'Cannot open h5 file {actual_h5_container.file_path}.'
                     self.error(error)
@@ -151,6 +181,7 @@ class DS_Archive(DS_General):
                     data = msgpack.unpackb(data, strict_map_key=False)
                     data: ArchiveData = eval(data)
                     data_to_archive = None
+
                     if isinstance(data.data, Scalar):
                         data_to_archive = np.array([data.data.value])
                     elif isinstance(data.data, Array):
@@ -174,6 +205,7 @@ class DS_Archive(DS_General):
                     actual_h5_container.dataset_update(dataset_name_h5, shape=shape, maxshape=maxshape,
                                                        dtype=np.dtype(data.data.dtype), data=data_to_archive)
                     ts_array = np.array([ts], dtype='float32')
+
                     actual_h5_container.dataset_update(f'{dataset_name_h5}_timestamp',
                                                        (ts_array.shape[0],), (None,), ts_array.dtype, ts_array)
             except Exception as e:
@@ -232,7 +264,7 @@ class DS_Archive(DS_General):
         self._device_id_internal, self._uri = arg_return
         return arg_return
 
-    @command(dtype_in=[str], dtype_out=str)
+    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from, timestamp_to]")
     def get_data(self, value):
         dataset_name = value[0]
         timestamp_from: int = int(value[1])  # timestamp
@@ -245,13 +277,15 @@ class DS_Archive(DS_General):
 
         for container in containers:
             container.open(True)
-            item = container.get_object(dataset_name)
-            if isinstance(item, h5py.Dataset):
-                dataset = item[:]
-                dataset_timestamp = container.get_object(f'{dataset_name}_timestamp')[:]
-                if len(dataset.shape) == 1:
-                    data.append(dataset)
-                    data_timestamps.append(dataset_timestamp)
+            items = container.get_object(dataset_name)
+            item_timestamps = container.get_object(f'{dataset_name}_timestamp')[:]
+            for item, item_timestamp in zip(items, item_timestamps):
+                if isinstance(item, h5py.Dataset):
+                    dataset = item[:]
+                    dataset_timestamp = item_timestamp[:]
+                    if len(dataset.shape) == 1:
+                        data.append(dataset)
+                        data_timestamps.append(dataset_timestamp)
 
         if data and data_timestamps:
             timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps]
@@ -291,20 +325,19 @@ class DS_Archive(DS_General):
     @command(dtype_in=str, dtype_out=str)
     def get_info_object(self, object_name):
         containers: List[H5_container] = self.search_object(object_name)
-
-        result = []
+        result = 'Nothing to tell you about'
         if containers:
+            size = 0
             for container in containers:
-                object = container.get_object(object_name)
-                if isinstance(object, h5py.Dataset):
-                    info = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
-                           f'Size: {object.nbytes / 1024} kB, {object.dtype}'
-                    result.append(info)
-        if result:
-            result_str = '. '.join(result)
-        else:
-            result_str = 'Nothing to tell you about'
-        return result_str
+                container.open(True)
+                objects = container.get_object(object_name)
+                for object in objects:
+                    if isinstance(object, h5py.Dataset):
+                        size += object.nbytes
+                result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
+                         f'Size: {size / 1024} kB, {object.dtype}'
+                container.lock = False
+        return result
 
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
@@ -325,7 +358,8 @@ class DS_Archive(DS_General):
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.latest_h5()
         self.turn_on()
-        self.get_data(['2022-04-12/ELYSE/motorized_devices/DE1/position', '-1', '-1'])
+        self.get_data(['any_date/ELYSE/motorized_devices/DE1/position', '-1', '-1'])
+        # self.get_info_object('any_date/ELYSE/motorized_devices/DE1/position')
 
     def internal_time(self):
         while True:
@@ -354,9 +388,11 @@ class DS_Archive(DS_General):
     def search_object(self, object_name: str) -> List[H5_container]:
         group = []
         for container in self.containers_h5.values():
+            container.open()
             res = container.is_object_present(object_name)
             if res:
                 group.append(container)
+            container.close()
         return group
 
     def turn_on_local(self) -> Union[int, str]:
