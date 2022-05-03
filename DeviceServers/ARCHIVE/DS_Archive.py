@@ -146,7 +146,21 @@ class DS_Archive(DS_General):
     maximum_size = device_property(dtype=int)
     folder_location = device_property(dtype=str)
 
-    @command(dtype_in=str, dtype_out=str)
+    @command(dtype_in=str, dtype_out=str, doc_in="String as 'device_name'_'data_as_str'")
+    def archive_it_labview(self, data_string: str):
+        dataset, data, timestamp = data_string.split(':')
+        labview_var_split = dataset.split('/')
+        device_name = '/'.join(labview_var_split[0:-1])
+        dataset = labview_var_split[-1]
+        data = float(data)
+        timestamp = float(timestamp)
+        data_to_archive = ArchiveData(tango_device=device_name, dataset_name=dataset, data_timestamp=timestamp,
+                                      data=Scalar(data, 'float'))
+        data_to_archive = self.compress_data(data_to_archive)
+        return self.archive_it(data_to_archive)
+
+    @command(dtype_in=str, dtype_out=str,
+             doc_in="ArchiveData converted to string and compressed using zlib and msgpack")
     def archive_it(self, data_string):
         state_ok = self.check_func_allowance(self.archive_it)
         if state_ok == 1:
@@ -156,6 +170,7 @@ class DS_Archive(DS_General):
                 actual_h5_container.open()
                 actual_h5_container.lock = True
                 file_h5 = actual_h5_container.h5_file
+
                 if not file_h5:
                     error = f'Cannot open h5 file {actual_h5_container.file_path}.'
                     self.error(error)
@@ -166,6 +181,7 @@ class DS_Archive(DS_General):
                     data = msgpack.unpackb(data, strict_map_key=False)
                     data: ArchiveData = eval(data)
                     data_to_archive = None
+
                     if isinstance(data.data, Scalar):
                         data_to_archive = np.array([data.data.value])
                     elif isinstance(data.data, Array):
@@ -189,6 +205,7 @@ class DS_Archive(DS_General):
                     actual_h5_container.dataset_update(dataset_name_h5, shape=shape, maxshape=maxshape,
                                                        dtype=np.dtype(data.data.dtype), data=data_to_archive)
                     ts_array = np.array([ts], dtype='float32')
+
                     actual_h5_container.dataset_update(f'{dataset_name_h5}_timestamp',
                                                        (ts_array.shape[0],), (None,), ts_array.dtype, ts_array)
             except Exception as e:
@@ -247,7 +264,7 @@ class DS_Archive(DS_General):
         self._device_id_internal, self._uri = arg_return
         return arg_return
 
-    @command(dtype_in=[str], dtype_out=str)
+    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from, timestamp_to]")
     def get_data(self, value):
         dataset_name = value[0]
         timestamp_from: int = int(value[1])  # timestamp

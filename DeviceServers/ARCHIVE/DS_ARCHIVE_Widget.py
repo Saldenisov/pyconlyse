@@ -176,7 +176,7 @@ class Archive(DS_General_Widget):
     @staticmethod
     def check_if_date(s: str):
         try:
-            datetime.fromtimestamp(s)
+            datetime.strptime(s, '%Y-%m-%d')
             return True
         except TypeError:
             return False
@@ -208,8 +208,8 @@ class Archive(DS_General_Widget):
             path.append('any_date')
         path.reverse()
         dataset_name = '/'.join(path)
-
-        data_string = self.ds.get_data([dataset_name, '-1', '-1'])
+        print(f'Getting dataset {dataset_name}.')
+        data_string = self.ds.get_data([dataset_name, '0', '1000'])
         if data_string:
             data_bytes = eval(data_string)
             data_d = zlib.decompress(data_bytes)
