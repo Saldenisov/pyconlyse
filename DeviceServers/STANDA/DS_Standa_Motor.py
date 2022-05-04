@@ -73,7 +73,25 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         attr_prop = self.position.get_properties()
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
+        self.register_variables_for_archive()
         self.turn_on()
+
+    def power_status(self):
+        return self._power_status
+
+    def power_current(self):
+        return self._power_current
+
+    def power_voltage(self):
+        return self._power_voltage
+
+    def temperature(self):
+        return self._temperature
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+        self.archive_state = {'current': (self.power_current, 'float16'), 'voltage': (self.power_voltage, 'float16'),
+                              'temperature': (self.temperature, 'float16')}
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -110,7 +128,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
             self._position = round(pos_basic_units / self.conversion, 3)
-            data = self.form_acrhive_data(self._position, f'position', dt='float16')
+            data = self.form_archive_data(self._position, f'position', dt='float16')
             self.write_to_archive(data)
             return 0
         else:
@@ -131,7 +149,6 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
         return res, comments
 
-    #Commands
     def define_position_local(self, position) -> Union[str, int]:
         position = position * self.conversion
         pos_steps = int(position // 1)
@@ -214,18 +231,11 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         sleep(wait / 1000.)
         result = lib.get_status(self._device_id_internal, ctypes.byref(x_status))
         if result == Result.Ok:
+
             self._temperature = x_status.CurT / 10.0
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
-
-            current_data = self.form_acrhive_data(self._power_current, f'current')
-            voltage_data = self.form_acrhive_data(self._power_voltage, f'voltage')
-            temperature_data = self.form_acrhive_data(self._temperature, f'temperature')
-
-            self.write_to_archive(voltage_data)
-            self.write_to_archive(current_data)
-            self.write_to_archive(temperature_data)
 
             if self._status_check_fault > 0:
                 self._status_check_fault = 0

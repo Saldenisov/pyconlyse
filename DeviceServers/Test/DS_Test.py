@@ -35,7 +35,7 @@ class DS_Test(DS_General):
     def test_archiving(self):
         while True:
             val = random.randint(0, 100)
-            arch_data = self.form_acrhive_data(val, 'test')
+            arch_data = self.form_archive_data(val, 'test')
             self.write_to_archive(arch_data)
             sleep(1)
 

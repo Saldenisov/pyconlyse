@@ -3,7 +3,7 @@ import zlib
 from abc import abstractmethod
 from threading import Thread
 from time import sleep
-from typing import Union
+from typing import Union, Dict, Any
 
 import msgpack
 import numpy as np
@@ -21,7 +21,7 @@ class DS_General(Device):
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
     archive = 'manip/general/archive'
-    polling_main = 500
+    polling_main = 100
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
              'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
@@ -89,6 +89,8 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self.previous_archive_state: Dict[str, Any] = {}
+        self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
         self.locked_client = False
         self._comments = '...'
@@ -112,6 +114,24 @@ class DS_General(Device):
         else:
             self.info(f"{self.device_name} was NOT found.", True)
             self.set_state(DevState.FAULT)
+
+    @abstractmethod
+    def register_variables_for_archive(self):
+        self.archive_state['State'] = (self.get_state, 'int8')
+
+    def send_state_archive(self):
+        for key, value in self.previous_archive_state.items():
+            current_value = self.archive_state[key][0]()
+            dt = self.archive_state[key][1]
+            if value != current_value:
+                data = self.form_archive_data(current_value, key, dt)
+                self.write_to_archive(data)
+
+    def fix_state(self):
+        res = {}
+        for key, value in self.archive_state.items():
+            res[key] = value[0]()
+        self.previous_archive_state = res
 
     @abstractmethod
     def find_device(self):
@@ -147,14 +167,11 @@ class DS_General(Device):
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok == 1:
+            self.fix_state()
             res = self.get_controller_status_local()
+            self.send_state_archive()
             if res != 0:
                 self.error(f'{res}')
-        state = self.get_state()
-        if state != self.prev_state:
-            data = self.form_acrhive_data(int(state), 'State')
-            self.prev_state = state
-            self.write_to_archive(data)
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
@@ -187,7 +204,7 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
-                data = self.form_acrhive_data(0, 'State')
+                data = self.form_archive_data(0, 'State')
                 self.write_to_archive(data)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
@@ -207,7 +224,7 @@ class DS_General(Device):
         msg_b_c_s = str(msg_b_c)
         return msg_b_c_s
 
-    def form_acrhive_data(self, data, name: str, time_stamp=None, dt=None):
+    def form_archive_data(self, data, name: str, time_stamp=None, dt=None):
         if isinstance(data, float):
             if not dt:
                 dt = 'float32'

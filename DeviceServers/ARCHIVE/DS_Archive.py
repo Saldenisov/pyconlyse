@@ -166,9 +166,8 @@ class DS_Archive(DS_General):
         if state_ok == 1:
             result = '0'
             try:
-                actual_h5_container = self.get_actual_container()
-                actual_h5_container.open()
-                actual_h5_container.lock = True
+                actual_h5_container: H5_container = self.get_actual_container()
+                actual_h5_container.open(lock=True)
                 file_h5 = actual_h5_container.h5_file
 
                 if not file_h5:
@@ -204,7 +203,7 @@ class DS_Archive(DS_General):
 
                     actual_h5_container.dataset_update(dataset_name_h5, shape=shape, maxshape=maxshape,
                                                        dtype=np.dtype(data.data.dtype), data=data_to_archive)
-                    ts_array = np.array([ts], dtype='float32')
+                    ts_array = np.array([ts], dtype='float')
 
                     actual_h5_container.dataset_update(f'{dataset_name_h5}_timestamp',
                                                        (ts_array.shape[0],), (None,), ts_array.dtype, ts_array)
@@ -334,8 +333,8 @@ class DS_Archive(DS_General):
                 for object in objects:
                     if isinstance(object, h5py.Dataset):
                         size += object.nbytes
-                result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
-                         f'Size: {size / 1024} kB, {object.dtype}'
+                        result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
+                                 f'Size: {size / 1024} kB, {object.dtype}'
                 container.lock = False
         return result
 
@@ -357,9 +356,11 @@ class DS_Archive(DS_General):
         if not self.folder_location.exists():
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.latest_h5()
+        self.register_variables_for_archive()
         self.turn_on()
-        self.get_data(['any_date/ELYSE/motorized_devices/DE1/position', '-1', '-1'])
-        # self.get_info_object('any_date/ELYSE/motorized_devices/DE1/position')
+        # self.get_info_object('2022-05-03/elyse/modulator')
+        # self.get_data(['2022-05-03/elyse/modulator/focale1/current/value', '-1', '-1'])
+        # self.archive_it_labview('elyse/timestamp:3734421386.935:1.651572987049E+9')
 
     def internal_time(self):
         while True:
@@ -409,6 +410,9 @@ class DS_Archive(DS_General):
         container.close()
         self.set_state(DevState.OFF)
         return 0
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
 
 if __name__ == "__main__":

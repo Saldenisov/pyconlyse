@@ -68,6 +68,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.time_stamp_deque = deque(maxlen=1000)
         self.orders: Dict[str, OrderInfo] = {}
         super().init_device()
+        self.register_variables_for_archive()
         self.wavelengths = eval(self.wavelengths)
         self.start_grabbing()
 
@@ -302,8 +303,8 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                         self.time_stamp_deque.append(time_stamp)
                         self.data_deque.append(spectrum)
 
-                        data_archive = self.form_acrhive_data(spectrum.reshape((1, 1024)),
-                                                              name='spectra', time_stamp=time_stamp)
+                        data_archive = self.form_archive_data(spectrum.reshape((1, 1024)),
+                                                              name='spectra', time_stamp=time_stamp, dt='int16')
                         self.write_to_archive(data_archive)
 
                         if self.orders:
@@ -361,7 +362,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()
-        # self.info(f'get_controller_status {time()}', True)
         if res == True:
             r = 0
             if self.status_real == 20073:
@@ -400,6 +400,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def get_trigger_mode(self) -> int:
         return self.trigger_mode_value
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
     # DLL functions
     def load_dll(self):

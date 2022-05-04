@@ -1,7 +1,19 @@
-import numpy
-vals = [0, 2, 1]
+from copy import deepcopy
 
-# 1 2 0
+class A:
 
-sort_index = numpy.argsort(vals, )
-print(sort_index)
+    def __init__(self):
+        self._b = {'q': -15}
+
+    def b(self):
+        return self._b
+
+a = A()
+
+c = {'c': a._b}
+
+
+print(c['c'])
+a._b['q'] = 15
+print(c['c'])
+
