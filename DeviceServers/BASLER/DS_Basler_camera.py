@@ -177,8 +177,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.device = None
         self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
         super().init_device()
+        self.register_variables_for_archive()
         self.start_grabbing_local()
-
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -327,8 +327,12 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 cY = int(M["m01"] / M["m00"])
 
         self.CG_position = {'X': cX, 'Y': cY}
-        data = self.form_acrhive_data(np.array([self.CG_position['X'], self.CG_position['Y']]).reshape((1, 2)), f'cg_position', dt='uint16')
+        data = self.form_archive_data(np.array([self.CG_position['X'], self.CG_position['Y']]).reshape((1, 2)),
+                                      f'cg_position', dt='uint16')
         self.write_to_archive(data)
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
     def wait(self, timeout):
 

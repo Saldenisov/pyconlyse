@@ -15,7 +15,7 @@ from DeviceServers.General.DS_GPIO import DS_GPIO
 from DeviceServers.General.DS_general import standard_str_output
 from collections import OrderedDict
 # -----------------------------
-
+from functools import partial
 from tango.server import device_property, command, attribute
 from tango import DevState, AttrWriteType
 from pypylon import pylon, genicam
@@ -48,6 +48,7 @@ class DS_RPI_GPIO(DS_GPIO):
     def init_device(self):
         super().init_device()
         self.turn_on()
+        self.register_variables_for_archive()
         self.get_pins_states()
 
     def find_device(self):
@@ -74,9 +75,19 @@ class DS_RPI_GPIO(DS_GPIO):
             control_pin = self.pins[pin]
             value = control_pin.value
             states.append(value)
-            data = self.form_acrhive_data(value, f'pin_state_{pin}', dt='uint8')
+            data = self.form_archive_data(value, f'pin_state_{pin}', dt='uint8')
             self.write_to_archive(data)
         self._states = states
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+        for pin in self._pin_ids:
+            control_pin = self.pins[pin]
+            archive_key = f'pin_state_{pin}'
+            self.archive_state[archive_key] = (partial(self.value_from_pin, control_pin), 'uint8')
+
+    def value_from_pin(self, control_pin):
+        return control_pin.value
 
     def get_pin_state_local(self, pin_id: int) -> Union[int, str]:
         if pin_id in self.pins:
@@ -95,7 +106,7 @@ class DS_RPI_GPIO(DS_GPIO):
             elif pin_value <= 0:
                 self.pins[pin_id].off()
                 pin_value = 0
-            data = self.form_acrhive_data(pin_value, f'state_pin_{pin_id}')
+            data = self.form_archive_data(pin_value, f'state_pin_{pin_id}')
             self.write_to_archive(data)
             return 0
         else:

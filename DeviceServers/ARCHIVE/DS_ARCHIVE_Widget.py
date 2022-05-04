@@ -156,15 +156,15 @@ class Archive(DS_General_Widget):
         button_off: TaurusCommandButton = getattr(self, f'button_off_{dev_name}')
         button_off.setModel(dev_name)
 
-        self.button_update_structure = QtWidgets.QPushButton('Archive Tree')
-        self.button_update_structure.clicked.connect(self.get_structure)
-        self.button_update_structure_device = QtWidgets.QPushButton('Device Archive')
-        self.button_update_structure_device.clicked.connect(self.fill_device_tree_sructure)
+        self.button_tree_structure = QtWidgets.QPushButton('Archive Tree')
+        self.button_tree_structure.clicked.connect(self.fill_tree_structure)
+        self.button_structure_device = QtWidgets.QPushButton('Device Archive')
+        self.button_structure_device.clicked.connect(self.fill_device_tree_structure)
 
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
-        lo_buttons.addWidget(self.button_update_structure)
-        lo_buttons.addWidget(self.button_update_structure_device)
+        lo_buttons.addWidget(self.button_tree_structure)
+        lo_buttons.addWidget(self.button_structure_device)
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_buttons)
@@ -209,7 +209,7 @@ class Archive(DS_General_Widget):
         path.reverse()
         dataset_name = '/'.join(path)
         print(f'Getting dataset {dataset_name}.')
-        data_string = self.ds.get_data([dataset_name, '0', '1000'])
+        data_string = self.ds.get_data([dataset_name, '-1', '-1'])
         if data_string:
             data_bytes = eval(data_string)
             data_d = zlib.decompress(data_bytes)
@@ -263,15 +263,16 @@ class Archive(DS_General_Widget):
     def get_structure(self):
         structure = self.ds.archive_structure
         self.structure = eval(structure)
-        selected_structure = self.form_main_tree_structure()
-        self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), selected_structure)
 
-    def fill_device_tree_sructure(self):
-        structure = self.ds.archive_structure
-        self.structure = eval(structure)
+    def fill_device_tree_structure(self):
+        self.get_structure()
         device_structure = self.form_device_tree_structure()
-
         self.tree_devices.fill_items(self.tree_devices.invisibleRootItem(), device_structure)
+
+    def fill_tree_structure(self):
+        self.get_structure()
+        structure = self.form_main_tree_structure()
+        self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), structure)
 
     def form_device_tree_structure(self):
         from copy import deepcopy
@@ -326,6 +327,6 @@ class Archive(DS_General_Widget):
         finally:
             return date_structure
 
-    def structure_update(self, date: QDate):
-        part_structure = self.form_main_tree_structure(date)
-        self.fill_tree_structure(part_structure)
+    def structure_update(self):
+        self.fill_device_tree_structure()
+        self.fill_device_tree_structure()

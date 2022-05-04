@@ -5,7 +5,7 @@
 import os
 import sys
 from pathlib import Path
-
+from functools import partial
 p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
@@ -89,7 +89,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def init_device(self):
         super().init_device()
         self.follow = {}
+        self.delay_lines_parameters = eval(self.delay_lines_parameters)
+        self.register_variables_for_archive()
         self.turn_on()
+        self.get_controller_status()
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -181,13 +184,20 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self._delay_lines_parameters[axis]['state'] = result
         return 0
 
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+        for axis in self.delay_lines_parameters.keys():
+            archive_key = f'position_axis_{axis}'
+            self.archive_state[archive_key] = (partial(self._get_axis_position, axis), 'float16')
+
+    def _get_axis_position(self, axis):
+        return self._delay_lines_parameters[axis]['position']
+
     def read_position_axis_local(self, axis: int) -> Union[int, str]:
         res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
         if not com:
             self._delay_lines_parameters[axis]['position'] = res
-            data = self.form_acrhive_data(res, f'position_axis_{axis}', dt='float16')
-            self.write_to_archive(data)
-            self.info(f"Reading position localy for axis {axis}: {res}", False)
+            self.info(f"Reading position locally for axis {axis}: {res}", False)
             result = 0
         else:
             result = f'Device {self.device_name} reading position of axis {axis} was not successful.'
