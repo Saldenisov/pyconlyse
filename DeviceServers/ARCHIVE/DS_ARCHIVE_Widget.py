@@ -18,9 +18,11 @@ import msgpack
 from numpy import array
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXY, DataXYb
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
+
 uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 float32 = np.dtype('float32')
+
 
 class ViewTree(QtWidgets.QTreeWidget):
     def __init__(self):
@@ -84,6 +86,7 @@ class Archive(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.structure = {}
+        self.dataset_name = ''
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -141,8 +144,27 @@ class Archive(DS_General_Widget):
         layout_h_tree.addWidget(self.tree_devices)
         layout_v_all_trees.addLayout(layout_h_tree)
         layout_v_all_trees.addLayout(layout_h_tree_selectors)
+        self.selected_object = QtWidgets.QLabel(self.dataset_name)
+        layout_v_all_trees.addWidget(self.selected_object)
+
+        layout_data_selection = QtWidgets.QHBoxLayout()
         self.dataset_info = QtWidgets.QLabel('')
-        layout_v_all_trees.addWidget(self.dataset_info)
+        layout_data_selection.addWidget(self.dataset_info)
+        self.average_data = QtWidgets.QSpinBox()
+        self.average_data.setMinimum(1)
+        self.average_data.setMaximum(20)
+        self.average_data.setMaximumWidth(40)
+        layout_data_selection.addWidget(self.average_data)
+        self.date_from = QtWidgets.QDateTimeEdit()
+        self.date_to = QtWidgets.QDateTimeEdit()
+        self.date_to.setDate(datetime.now())
+        self.date_to.setTime(datetime.now().time())
+        layout_data_selection.addWidget(self.date_from)
+        layout_data_selection.addWidget(self.date_to)
+        self.button_set_dates = QtWidgets.QPushButton('Dates Min/Max')
+        self.button_set_dates.clicked.connect(self.min_max_dates)
+        layout_data_selection.addWidget(self.button_set_dates)
+        layout_v_all_trees.addLayout(layout_data_selection)
 
         lo_calendar.addWidget(self.calendar)
         lo_calendar.addLayout(layout_v_all_trees)
@@ -173,6 +195,13 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
 
+    def min_max_dates(self):
+        if self.dataset_name:
+            min_max_timestamps = eval(self.ds.get_object_timestamps(self.dataset_name))
+
+            self.date_from.setDate(datetime.fromtimestamp(min_max_timestamps[0]))
+            self.date_to.setDate(datetime.fromtimestamp(min_max_timestamps[1]))
+
     @staticmethod
     def check_if_date(s: str):
         try:
@@ -192,8 +221,11 @@ class Archive(DS_General_Widget):
         if not self.check_if_date(path[-1]):
             path.append('any_date')
         path.reverse()
-        dataset_name = '/'.join(path)
-        info = self.ds.get_info_object(dataset_name)
+        if not self.date_cb.isChecked():
+            path[0] = 'any_date'
+        self.dataset_name = '/'.join(path)
+        self.selected_object.setText(self.dataset_name)
+        info = self.ds.get_info_object(self.dataset_name)
         self.dataset_info.setText(info)
 
     def get_dataset(self, item: QtWidgets.QTreeWidgetItem):
@@ -209,7 +241,10 @@ class Archive(DS_General_Widget):
         path.reverse()
         dataset_name = '/'.join(path)
         print(f'Getting dataset {dataset_name}.')
-        data_string = self.ds.get_data([dataset_name, '-1', '-1'])
+        average = str(self.average_data.value())
+        date_from = self.date_from.dateTime().toPyDateTime().timestamp()
+        date_to = self.date_from.dateTime().toPython().timestamp()
+        data_string = self.ds.get_data([dataset_name, '-1', '-1', average])
         if data_string:
             data_bytes = eval(data_string)
             data_d = zlib.decompress(data_bytes)
@@ -328,5 +363,5 @@ class Archive(DS_General_Widget):
             return date_structure
 
     def structure_update(self):
-        self.fill_device_tree_structure()
+        self.fill_tree_structure()
         self.fill_device_tree_structure()

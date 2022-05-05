@@ -263,58 +263,120 @@ class DS_Archive(DS_General):
         self._device_id_internal, self._uri = arg_return
         return arg_return
 
-    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from, timestamp_to]")
+    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from, timestamp_to, "
+                                                   "average]")
     def get_data(self, value):
         dataset_name = value[0]
         timestamp_from: int = int(value[1])  # timestamp
         timestamp_to: int = int(value[2])  # timestamp
+        average = 1
+        if len(value) == 4:
+            average = int(value[3])
         res = b''
         containers: List[H5_container] = self.search_object(dataset_name)
 
-        data = []
-        data_timestamps = []
+        data_containers = []
+        data_timestamps_containers = []
 
         for container in containers:
             container.open(True)
             items = container.get_object(dataset_name)
-            item_timestamps = container.get_object(f'{dataset_name}_timestamp')[:]
+            item_timestamps = container.get_object(f'{dataset_name}_timestamp')
             for item, item_timestamp in zip(items, item_timestamps):
                 if isinstance(item, h5py.Dataset):
-                    dataset = item[:]
-                    dataset_timestamp = item_timestamp[:]
-                    if len(dataset.shape) == 1:
-                        data.append(dataset)
-                        data_timestamps.append(dataset_timestamp)
+                    data_containers.append(item)
+                    data_timestamps_containers.append(item_timestamp)
 
-        if data and data_timestamps:
-            timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps]
+        if data_containers and data_timestamps_containers:
+            timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
+            timestamp_min_values = [data_timestamp[0] for data_timestamp in data_timestamps_containers]
 
             order = np.argsort(timestamp_max_values)
 
-            data_timestamps_ordered = []
-            data_ordered = []
+            data_timestamps_containers_ordered = []
+            data_containers_ordered = []
 
             for idx in order:
-                data_timestamps_ordered.append(data_timestamps[idx])
-                data_ordered.append(data[idx])
-
-            data_timestamps = numpy.concatenate(data_timestamps_ordered)[:]
-            data = numpy.concatenate(data_ordered)[:]
+                data_timestamps_containers_ordered.append(data_timestamps_containers[idx])
+                data_containers_ordered.append(data_containers[idx])
 
             if timestamp_to == -1:
-                timestamp_to = np.max(data_timestamps)
+                timestamp_to = np.max(timestamp_max_values)
             if timestamp_from == -1:
-                timestamp_from = np.min(data_timestamps)
+                timestamp_from = np.min(timestamp_min_values)
 
-            indexes_lower = [idx[0] for idx in np.argwhere(data_timestamps <= timestamp_to)]
-            data_timestamps = data_timestamps[indexes_lower]
-            data = data[indexes_lower]
-            indexes_upper = [idx[0] for idx in np.argwhere(data_timestamps >= timestamp_from)]
-            data_timestamps = data_timestamps[indexes_upper]
-            data = data[indexes_upper]
+            def search_for_value(dataset: h5py.Dataset, value):
+                return True if value in dataset else False
 
-            dataXY = DataXYb(X=data_timestamps.tobytes(), Y=data.tobytes(),
-                             name=dataset_name, Xdtype=str(data_timestamps.dtype), Ydtype=str(data.dtype))
+            def form_data(timestamps_containers: List[h5py.Dataset], data_containers: List[h5py.Dataset],
+                          time_from: int, time_to: int) -> Tuple[numpy.ndarray]:
+
+                indexes_of_containers = [-1, -1]
+                # min index
+                for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
+                    res = search_for_value(timestamp_dataset, time_from)
+                    if res:
+                        indexes_of_containers[0] = index
+                        break
+                # max index
+                for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
+                    res = search_for_value(timestamp_dataset, time_to)
+                    if res:
+                        indexes_of_containers[1] = index
+                        break
+
+                if indexes_of_containers[0] == -1:
+                    time_from = timestamps_containers[0][0]
+                    indexes_of_containers[0] = 0
+                if indexes_of_containers[1] == -1:
+                    indexes_of_containers[1] = len(timestamps_containers) - 1
+                    time_to = timestamps_containers[-1][-1]
+
+                # form data
+                timestamps = []
+                data = []
+                for idx in range(indexes_of_containers[0], indexes_of_containers[1] + 1):
+                    timestamps.append(timestamps_containers[idx][:])
+                    data.append(data_containers[idx][:])
+
+                timestamps = np.concatenate(timestamps)[:]
+                data = np.concatenate(data)[:]
+
+                indexes_lower = [idx[0] for idx in np.argwhere(timestamps <= time_to)]
+                timestamps = timestamps[indexes_lower]
+                data = data[indexes_lower]
+                indexes_upper = [idx[0] for idx in np.argwhere(timestamps >= time_from)]
+                timestamps = timestamps[indexes_upper]
+                data = data[indexes_upper]
+
+                return timestamps, data
+
+
+            data_timestamps, data = form_data(data_timestamps_containers_ordered, data_containers_ordered,
+                                              timestamp_from, timestamp_to)
+
+            if average != 1:
+                for i in range(len(data_timestamps)):
+                    if (len(data_timestamps) + i) % average == 0:
+                        break
+                if i != 0:
+                    data_timestamps = np.pad(data_timestamps, [0, i], mode='constant')
+
+                if len(data.shape) == 1:
+                    data = np.pad(data, [0, i], mode='constant')
+                elif len(data.shape) == 2:
+                    data = np.pad(data, ([0, 1], [0, 0]), mode='constant')
+
+
+                data_timestamps = np.average(data_timestamps.reshape(-1, average), axis=1).astype(data_timestamps.dtype)
+                data = np.average(data.reshape(-1, average), axis=1).astype(data.dtype)
+
+            # check that data does not exceed 10000 points
+            data_timestamps = data_timestamps[0:10000]
+            data = data[0:10000]
+
+            dataXY = DataXYb(X=data_timestamps.tobytes(), Y=data.tobytes(), name=dataset_name,
+                             Xdtype=str(data_timestamps.dtype), Ydtype=str(data.dtype))
 
             res = self.compress_data(dataXY)
         for container in containers:
@@ -327,16 +389,45 @@ class DS_Archive(DS_General):
         result = 'Nothing to tell you about'
         if containers:
             size = 0
+            shape = [0, 0]
             for container in containers:
                 container.open(True)
                 objects = container.get_object(object_name)
                 for object in objects:
                     if isinstance(object, h5py.Dataset):
                         size += object.nbytes
-                        result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
+                        if len(object.shape) == 1:
+                            shape[0] += object.shape[0]
+                        elif len(object.shape) == 2:
+                            shape[0] += object.shape[0]
+                            shape[1] += object.shape[1]
+
+                        result = f'Shape: {shape}; Maxshape: {object.maxshape}, ' \
                                  f'Size: {size / 1024} kB, {object.dtype}'
                 container.lock = False
         return result
+
+    @command(dtype_in=str, dtype_out=str)
+    def get_object_timestamps(self, value):
+        dataset_name = value
+        res = [datetime.now().timestamp(), datetime.now().timestamp()]
+        containers: List[H5_container] = self.search_object(dataset_name)
+
+        data_timestamps_containers = []
+
+        for container in containers:
+            container.open(True)
+            item_timestamps = container.get_object(f'{dataset_name}_timestamp')
+            for item_timestamp in item_timestamps:
+                if isinstance(item_timestamp, h5py.Dataset):
+                    data_timestamps_containers.append(item_timestamp)
+
+        if data_timestamps_containers:
+            timestamp_max = max([data_timestamp[-1] for data_timestamp in data_timestamps_containers])
+            timestamp_min = min([data_timestamp[0] for data_timestamp in data_timestamps_containers])
+            res = [timestamp_min, timestamp_max]
+        res = str(res).encode('utf-8')
+        return res
 
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
@@ -358,9 +449,10 @@ class DS_Archive(DS_General):
         self.latest_h5()
         self.register_variables_for_archive()
         self.turn_on()
-        # self.get_info_object('2022-05-03/elyse/modulator')
-        # self.get_data(['2022-05-03/elyse/modulator/focale1/current/value', '-1', '-1'])
+        # self.get_info_object('any_date/elyse/modulator/focale1/current/value')
+        # self.get_data(['any_date/elyse/modulator/focale1/current/value', '-1', '-1', '7'])
         # self.archive_it_labview('elyse/timestamp:3734421386.935:1.651572987049E+9')
+        # self.get_object_timestamps('any_date/elyse/modulator/focale1/current/value')
 
     def internal_time(self):
         while True:
@@ -389,7 +481,7 @@ class DS_Archive(DS_General):
     def search_object(self, object_name: str) -> List[H5_container]:
         group = []
         for container in self.containers_h5.values():
-            container.open()
+            container.open(True)
             res = container.is_object_present(object_name)
             if res:
                 group.append(container)
