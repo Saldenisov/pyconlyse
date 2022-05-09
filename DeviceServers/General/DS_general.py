@@ -51,8 +51,16 @@ class DS_General(Device):
 
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last essential comment.", polling_period=polling_main)
-    def last_comments(self):
-        return self._comments
+    def last_comment(self):
+        return self._comment
+
+    @property
+    def comment(self):
+        return self._comment
+
+    @comment.setter
+    def comment(self, value):
+        self._comment = value
 
     @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last error.", polling_period=polling_main)
@@ -72,7 +80,7 @@ class DS_General(Device):
 
     def info(self, info_in, printing=False):
         self.info_stream(info_in)
-        self._comments = info_in
+        self._comment = info_in
         if printing:
             print(info_in)
 
@@ -93,7 +101,7 @@ class DS_General(Device):
         self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
         self.locked_client = False
-        self._comments = '...'
+        self._comment = '...'
         self._error = '...'
         self._n = 0
         internal_time = Thread(target=self.int_time)

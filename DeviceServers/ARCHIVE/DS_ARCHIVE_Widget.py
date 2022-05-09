@@ -154,16 +154,25 @@ class Archive(DS_General_Widget):
         self.average_data.setMinimum(1)
         self.average_data.setMaximum(20)
         self.average_data.setMaximumWidth(40)
+        self.n_points = QtWidgets.QSpinBox()
+        self.n_points.setMinimum(1)
+        self.n_points.setMaximum(10000)
+        self.n_points.setValue(2000)
+        layout_data_selection.addWidget(QtWidgets.QLabel('Average'))
         layout_data_selection.addWidget(self.average_data)
+        layout_data_selection.addWidget(QtWidgets.QLabel('N of points'))
+        layout_data_selection.addWidget(self.n_points)
         self.date_from = QtWidgets.QDateTimeEdit()
         self.date_to = QtWidgets.QDateTimeEdit()
         self.date_to.setDate(datetime.now())
         self.date_to.setTime(datetime.now().time())
+        layout_data_selection.addWidget(QtWidgets.QLabel('From'))
         layout_data_selection.addWidget(self.date_from)
-        layout_data_selection.addWidget(self.date_to)
-        self.button_set_dates = QtWidgets.QPushButton('Dates Min/Max')
-        self.button_set_dates.clicked.connect(self.min_max_dates)
-        layout_data_selection.addWidget(self.button_set_dates)
+        self.button_set_min_date = QtWidgets.QPushButton('Date Min')
+        self.button_set_min_date.clicked.connect(self.min_date)
+        layout_data_selection.addWidget(self.button_set_min_date)
+        layout_data_selection.addSpacerItem(QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding,
+                                                                  QtWidgets.QSizePolicy.Minimum))
         layout_v_all_trees.addLayout(layout_data_selection)
 
         lo_calendar.addWidget(self.calendar)
@@ -195,10 +204,9 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
 
-    def min_max_dates(self):
+    def min_date(self):
         if self.dataset_name:
             min_max_timestamps = eval(self.ds.get_object_timestamps(self.dataset_name))
-
             self.date_from.setDate(datetime.fromtimestamp(min_max_timestamps[0]))
             self.date_to.setDate(datetime.fromtimestamp(min_max_timestamps[1]))
 
@@ -210,7 +218,7 @@ class Archive(DS_General_Widget):
         except TypeError:
             return False
 
-    def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
+    def construct_object_name(self, item: QtWidgets.QTreeWidgetItem):
         def construct_name(item: QtWidgets.QTreeWidgetItem, s):
             parent = item.parent()
             if parent:
@@ -224,37 +232,48 @@ class Archive(DS_General_Widget):
         if not self.date_cb.isChecked():
             path[0] = 'any_date'
         self.dataset_name = '/'.join(path)
+
+    def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
+        self.construct_object_name(item)
         self.selected_object.setText(self.dataset_name)
         info = self.ds.get_info_object(self.dataset_name)
         self.dataset_info.setText(info)
 
     def get_dataset(self, item: QtWidgets.QTreeWidgetItem):
-        def construct_name(item: QtWidgets.QTreeWidgetItem, s):
-            parent = item.parent()
-            if parent:
-                s.append(parent.text(0))
-                s = construct_name(parent, s)
-            return s
-        path = construct_name(item, [item.text(0)])
-        if not self.check_if_date(path[-1]):
-            path.append('any_date')
-        path.reverse()
-        dataset_name = '/'.join(path)
-        print(f'Getting dataset {dataset_name}.')
+        import time
+        self.construct_object_name(item)
         average = str(self.average_data.value())
-        date_from = self.date_from.dateTime().toPyDateTime().timestamp()
-        date_to = self.date_from.dateTime().toPython().timestamp()
-        data_string = self.ds.get_data([dataset_name, '-1', '-1', average])
-        if data_string:
-            data_bytes = eval(data_string)
-            data_d = zlib.decompress(data_bytes)
-            data_d = msgpack.unpackb(data_d, strict_map_key=False)
-            data_d: DataXYb = eval(data_d)
+        n_points = str(self.n_points.value())
+        date_from: QtCore.QDateTime = self.date_from.dateTime()
+        date_from = date_from.toPyDateTime()
+        date_from = date_from.timestamp()
+        # date_to = self.date_to.dateTime().toPyDateTime().timestamp()
+        order_name = self.ds.get_data([self.dataset_name, f'{date_from}', average, n_points])
+        ready = False
 
-            data = DataXY(X=np.frombuffer(data_d.X, dtype=data_d.Xdtype),
-                          Y=np.frombuffer(data_d.Y, dtype=data_d.Ydtype),
-                          name=data_d.name)
-            self.add_curve(self.plot, data)
+        for i in range(60):
+            ready = self.ds.is_order_ready(order_name)
+            print(f'Getting dataset {self.dataset_name}.')
+            if ready:
+                break
+            time.sleep(.5)
+        data_string = self.ds.give_order(order_name)
+
+        if ready:
+            if data_string:
+                data_bytes = eval(data_string)
+                data_d = zlib.decompress(data_bytes)
+                data_d = msgpack.unpackb(data_d, strict_map_key=False)
+                data_d: DataXYb = eval(data_d)
+
+                data = DataXY(X=np.frombuffer(data_d.X, dtype=data_d.Xdtype),
+                              Y=np.frombuffer(data_d.Y, dtype=data_d.Ydtype),
+                              name=data_d.name)
+
+                self.add_curve(self.plot, data)
+        else:
+            print(f'Did not get response in time.')
+
 
     def add_curve(self, plot: pg.PlotItem, data: DataXY): # add a curve
         p = plot.plot(data.X, data.Y)

@@ -8,6 +8,7 @@ with h5py.File("dset.h5", 'a') as h5f :
     # # print(data)
     # dset = h5f.create_dataset("top/middle/bottom/test2", (10, ), maxshape=(None, ), data=data)
     dset = h5f.get("top/middle/bottom/test2")
+    print(5.5 in dset)
     d = dset[:]
     indexes_lower = [idx[0] for idx in np.argwhere(d <= 16)]
     d = dset[indexes_lower]

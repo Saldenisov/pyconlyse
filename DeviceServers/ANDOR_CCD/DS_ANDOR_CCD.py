@@ -310,7 +310,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                         if self.orders:
                             orders_to_delete = []
                             for order_name, order_info in self.orders.items():
-                                if (time() - order_info.order_timestamp * 10**-9) >= 100:
+                                if (time() - order_info.order_timestamp) >= 100:
                                     orders_to_delete.append(order_name)
                                 elif not order_info.order_done:
                                     order_info.order_array = np.vstack([order_info.order_array, spectrum])
@@ -336,7 +336,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     def register_order(self, number_spectra: int):
         s = 20  # number of characters in the string.
         name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
-        order_info = OrderInfo(number_spectra, False, time_ns(), False, np.array([self.wavelengths]))
+        order_info = OrderInfo(number_spectra, False, time(), False, np.array([self.wavelengths]))
         self.orders[name] = order_info
         return name
 
