@@ -20,6 +20,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
+    always_on = device_property(dtype=int, default_value=0)
     archive = 'manip/general/archive'
     polling_main = 100
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
@@ -180,6 +181,8 @@ class DS_General(Device):
             self.send_state_archive()
             if res != 0:
                 self.error(f'{res}')
+            if self.get_state() != DevState.ON and self.always_on == 1:
+                self.turn_on()
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:

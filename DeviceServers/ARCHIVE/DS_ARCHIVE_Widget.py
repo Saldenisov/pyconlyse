@@ -23,6 +23,8 @@ uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 float32 = np.dtype('float32')
 
+import logging
+logger = logging.getLogger('root')
 
 class ViewTree(QtWidgets.QTreeWidget):
     def __init__(self):
@@ -166,11 +168,10 @@ class Archive(DS_General_Widget):
         self.date_to = QtWidgets.QDateTimeEdit()
         self.date_to.setDate(datetime.now())
         self.date_to.setTime(datetime.now().time())
-        layout_data_selection.addWidget(QtWidgets.QLabel('From'))
-        layout_data_selection.addWidget(self.date_from)
-        self.button_set_min_date = QtWidgets.QPushButton('Date Min')
-        self.button_set_min_date.clicked.connect(self.min_date)
-        layout_data_selection.addWidget(self.button_set_min_date)
+        self.from_idx = QtWidgets.QSpinBox()
+        self.from_idx.setValue(0)
+        layout_data_selection.addWidget(QtWidgets.QLabel('From Idx:'))
+        layout_data_selection.addWidget(self.from_idx)
         layout_data_selection.addSpacerItem(QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding,
                                                                   QtWidgets.QSizePolicy.Minimum))
         layout_v_all_trees.addLayout(layout_data_selection)
@@ -204,12 +205,6 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
 
-    def min_date(self):
-        if self.dataset_name:
-            min_max_timestamps = eval(self.ds.get_object_timestamps(self.dataset_name))
-            self.date_from.setDate(datetime.fromtimestamp(min_max_timestamps[0]))
-            self.date_to.setDate(datetime.fromtimestamp(min_max_timestamps[1]))
-
     @staticmethod
     def check_if_date(s: str):
         try:
@@ -238,6 +233,8 @@ class Archive(DS_General_Widget):
         self.selected_object.setText(self.dataset_name)
         info = self.ds.get_info_object(self.dataset_name)
         self.dataset_info.setText(info)
+        min_max_timestamps = eval(self.ds.get_object_timestamps(self.dataset_name))
+        self.from_idx.setMaximum(min_max_timestamps[2])
 
     def get_dataset(self, item: QtWidgets.QTreeWidgetItem):
         import time

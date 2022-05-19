@@ -304,7 +304,7 @@ class DS_Archive(DS_General):
         self.orders[order_name].started = True
         print(f'Executing command {value}')
         dataset_name = value[0]
-        timestamp_from: float = float(value[1])  # timestamp
+        from_idx: int = int(value[1])  # timestamp
         average = 1
         n_of_points = 10000
 
@@ -329,7 +329,6 @@ class DS_Archive(DS_General):
 
         if data_containers and data_timestamps_containers:
             timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
-            timestamp_min_values = [data_timestamp[0] for data_timestamp in data_timestamps_containers]
 
             order = np.argsort(timestamp_max_values)
 
@@ -340,43 +339,26 @@ class DS_Archive(DS_General):
                 data_timestamps_containers_ordered.append(data_timestamps_containers[idx])
                 data_containers_ordered.append(data_containers[idx])
 
-            if timestamp_from == -1:
-                timestamp_from = np.min(timestamp_min_values)
-
-            def search_for_value(dataset: h5py.Dataset, value, sign):
-                d = dataset[:]
-                if sign == '<=':
-                    res = np.argwhere(d <= value)
-                elif sign == '>=':
-                    res = np.argwhere(d >= value)
-                elif sign == '>':
-                    res = np.argwhere(d > value)
-                elif sign == '<':
-                    res = np.argwhere(d < value)
-                return res
-
             def form_data(timestamps_containers: List[h5py.Dataset], data_containers: List[h5py.Dataset],
-                          time_from: float, n_of_points: int, average: int) -> Tuple[numpy.ndarray]:
-                indexes_of_containers = [-1, -1]
+                          from_idx=0, n_of_points=10000, average=1) -> Tuple[numpy.ndarray]:
+                indexes_of_containers = [0, -1]
                 # min index
+                length = 0
                 for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
-                    res = search_for_value(timestamp_dataset, time_from, sign='>=')
-                    if len(res) > 0:
+                    length += timestamp_dataset.shape[0]
+                    if len(res) >= from_idx:
                         indexes_of_containers[0] = index
                         break
-                if indexes_of_containers[0] == -1:
-                    time_from = timestamps_containers[0][0]
-                    indexes_of_containers[0] = 0
 
                 timestamps_containers = timestamps_containers[indexes_of_containers[0]:]
                 data_containers = data_containers[indexes_of_containers[0]:]
 
                 # max index
-                total_length = 0
+                length = 0
                 for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
-                    total_length += timestamp_dataset.shape[0]
+                    length += timestamp_dataset.shape[0]
                     indexes_of_containers[1] = index
-                    if total_length >= n_of_points:
+                    if length >= n_of_points:
                         break
 
                 timestamps_containers = timestamps_containers[:indexes_of_containers[1] + 1]
@@ -421,7 +403,7 @@ class DS_Archive(DS_General):
 
             try:
                 data_timestamps, data = form_data(data_timestamps_containers_ordered, data_containers_ordered,
-                                                  timestamp_from, n_of_points, average)
+                                                  from_idx, n_of_points, average)
 
                 dataXY = DataXYb(X=data_timestamps.tobytes(), Y=data.tobytes(), name=dataset_name,
                                  Xdtype=str(data_timestamps.dtype), Ydtype=str(data.dtype))
@@ -461,7 +443,7 @@ class DS_Archive(DS_General):
     @command(dtype_in=str, dtype_out=str)
     def get_object_timestamps(self, value):
         dataset_name = value
-        res = [datetime.now().timestamp(), datetime.now().timestamp()]
+        res = [datetime.now().timestamp(), datetime.now().timestamp(), 0]
         containers: List[H5_container] = self.search_object(dataset_name)
 
         data_timestamps_containers = []
@@ -474,9 +456,10 @@ class DS_Archive(DS_General):
                     data_timestamps_containers.append(item_timestamp)
 
         if data_timestamps_containers:
-            timestamp_max = max([data_timestamp[-1] for data_timestamp in data_timestamps_containers])
-            timestamp_min = min([data_timestamp[0] for data_timestamp in data_timestamps_containers])
-            res = [timestamp_min, timestamp_max]
+            timestamp_min = [data_timestamp[0] for data_timestamp in data_timestamps_containers]
+            timestamp_max = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
+            length = [len(data_timestamp) for data_timestamp in data_timestamps_containers]
+            res = [min(timestamp_min), max(timestamp_max), np.sum(length)]
         res = str(res).encode('utf-8')
         return res
 
