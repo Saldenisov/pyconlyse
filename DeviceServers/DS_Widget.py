@@ -1,4 +1,5 @@
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
+from taurus.qt.qtgui.input import TaurusValueCheckBox
 from taurus import Device
 from taurus.external.qt import Qt
 from PyQt5 import QtWidgets
@@ -56,7 +57,7 @@ class DS_General_Widget(Qt.QWidget):
     def set_state_status(self, short=True):
         dev_name = self.dev_name
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
-        widgets = [TaurusLabel(), TaurusLed(), TaurusLabel()]
+        widgets = [TaurusLabel(), TaurusLed(), TaurusLabel(), TaurusValueCheckBox()]
         i = 1
         for s in widgets:
             setattr(self, f's{i}_{dev_name}', s)
@@ -64,11 +65,14 @@ class DS_General_Widget(Qt.QWidget):
         s1: TaurusLabel = getattr(self, f's1_{dev_name}')
         s2 = getattr(self, f's2_{dev_name}')
         s3 = getattr(self, f's3_{dev_name}')
+        s4 = getattr(self, f's4_{dev_name}')
 
         s1.model = f'{dev_name}/device_friendly_name'
         s2.model = f'{dev_name}/state'
+        s4.model = f'{dev_name}/alway_on'
         lo_status.addWidget(s2)
         lo_status.addWidget(s1)
+        lo_status.addWidget(s4)
         if not short:
             s3.model = f'{dev_name}/status'
             lo_status.addWidget(s3)

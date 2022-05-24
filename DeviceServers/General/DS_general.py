@@ -36,12 +36,21 @@ class DS_General(Device):
     def _model_(self):
         raise NotImplementedError
 
+
     @pipe(label="DS_Info", doc="General info about DS.")
     def read_info_ds(self):
         return ('info_ds', dict(manufacturer=f'{self.__class__.__name__}',
                             model=self._model_,
                             version_number=self._version_,
                             device_id=self.device_id))
+
+    @attribute(label='Always on?', dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
+    def always_on(self):
+        return self.always_on
+
+    def write_always_on(self, value: int):
+        self.always_on = value
+
 
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
     def device_friendly_name(self):
@@ -175,7 +184,7 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
-        if state_ok == 1:
+        if True:
             self.fix_state()
             res = self.get_controller_status_local()
             self.send_state_archive()
