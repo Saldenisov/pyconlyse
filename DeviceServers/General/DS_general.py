@@ -20,6 +20,7 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
+    always_on = device_property(dtype=int, default_value=0)
     archive = 'manip/general/archive'
     polling_main = 100
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
@@ -51,8 +52,16 @@ class DS_General(Device):
 
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last essential comment.", polling_period=polling_main)
-    def last_comments(self):
-        return self._comments
+    def last_comment(self):
+        return self._comment
+
+    @property
+    def comment(self):
+        return self._comment
+
+    @comment.setter
+    def comment(self, value):
+        self._comment = value
 
     @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last error.", polling_period=polling_main)
@@ -72,7 +81,7 @@ class DS_General(Device):
 
     def info(self, info_in, printing=False):
         self.info_stream(info_in)
-        self._comments = info_in
+        self._comment = info_in
         if printing:
             print(info_in)
 
@@ -93,7 +102,7 @@ class DS_General(Device):
         self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
         self.locked_client = False
-        self._comments = '...'
+        self._comment = '...'
         self._error = '...'
         self._n = 0
         internal_time = Thread(target=self.int_time)
@@ -172,6 +181,8 @@ class DS_General(Device):
             self.send_state_archive()
             if res != 0:
                 self.error(f'{res}')
+            if self.get_state() != DevState.ON and self.always_on == 1:
+                self.turn_on()
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:

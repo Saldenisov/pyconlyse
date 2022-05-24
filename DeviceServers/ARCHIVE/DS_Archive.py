@@ -3,6 +3,7 @@
 
 
 import sys
+import time
 
 from pathlib import Path
 from typing import Union, Tuple
@@ -19,10 +20,12 @@ from DeviceServers.General.DS_general import DS_General, standard_str_output
 import h5py
 from dataclasses import dataclass, field
 
+import random
+import string
+
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
 from typing import Union, Tuple, Dict, Any, List
-
 from DeviceServers.General.DS_general import DS_General, standard_str_output
 import zlib
 import msgpack
@@ -34,6 +37,16 @@ uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 # Keep this to make everything work
 __a = array([1])
+
+
+@dataclass
+class Order:
+    order_param: List[str]
+    timestamp: int
+    started: bool = False
+    order_done: bool = False
+    ready_to_delete: bool = False
+    order_res: str = b''
 
 
 @dataclass
@@ -134,13 +147,13 @@ class H5_container:
             self.h5_file.create_dataset(name=dataset_name, shape=shape, maxshape=maxshape, dtype=dtype, data=data)
 
 
-DEV = False
+DEV = True
 
 
 class DS_Archive(DS_General):
-    RULES = {'archive_it': [DevState.ON], **DS_General.RULES}
+    RULES = {'archive_it': [DevState.ON], 'archive_it_labview': [DevState.ON], **DS_General.RULES}
 
-    _version_ = '0.4'
+    _version_ = '0.5'
     _model_ = 'DS_Archiving'
     polling_local = 25
     maximum_size = device_property(dtype=int)
@@ -160,7 +173,7 @@ class DS_Archive(DS_General):
         return self.archive_it(data_to_archive)
 
     @command(dtype_in=str, dtype_out=str,
-             doc_in="ArchiveData converted to string and compressed using zlib and msgpack")
+             doc_in="ArchiveData converted to string and compressed using zlib and msgpack.")
     def archive_it(self, data_string):
         state_ok = self.check_func_allowance(self.archive_it)
         if state_ok == 1:
@@ -180,13 +193,12 @@ class DS_Archive(DS_General):
                     data = msgpack.unpackb(data, strict_map_key=False)
                     data: ArchiveData = eval(data)
                     data_to_archive = None
-
+                    self.comment = f'Archiving for {data.tango_device}.'
                     if isinstance(data.data, Scalar):
                         data_to_archive = np.array([data.data.value])
                     elif isinstance(data.data, Array):
                         data_to_archive = data.data.value
                         data_to_archive = np.frombuffer(data_to_archive, dtype=data.data.dtype).reshape(data.data.shape)
-                    self.info(f'DATA to archive: {data_to_archive}', DEV)
 
                     ts = float(data.data_timestamp)
                     dt = datetime.fromtimestamp(ts)
@@ -263,63 +275,146 @@ class DS_Archive(DS_General):
         self._device_id_internal, self._uri = arg_return
         return arg_return
 
-    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from, timestamp_to]")
+    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
+    def is_order_ready(self, name):
+        res = False
+        if name in self.orders:
+            order = self.orders[name]
+            res = order.order_done
+        return res
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
+    def give_order(self, name):
+        order = b''
+        if name in self.orders:
+            order: Order = self.orders[name]
+            order.ready_to_delete = True
+        return order.order_res
+
+    @command(dtype_in=[str], dtype_out=str, doc_in="array of string [dataset_name, timestamp_from "
+                                                   "average, n_of_points]", doc_out="Return name of order.")
     def get_data(self, value):
+        s = 20  # number of characters in the string.
+        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
+        self.orders[name] = Order(order_param=value, timestamp=time.time())
+        return name
+
+    def _get_data(self, order_name: str):
+        value = self.orders[order_name].order_param
+        self.orders[order_name].started = True
+        print(f'Executing command {value}')
         dataset_name = value[0]
-        timestamp_from: int = int(value[1])  # timestamp
-        timestamp_to: int = int(value[2])  # timestamp
+        from_idx: int = int(value[1])  # timestamp
+        average = 1
+        n_of_points = 10000
+
+        if len(value) >= 3:
+            average = int(value[2])
+        if len(value) >= 4:
+            n_of_points = int(value[3])
         res = b''
         containers: List[H5_container] = self.search_object(dataset_name)
 
-        data = []
-        data_timestamps = []
+        data_containers = []
+        data_timestamps_containers = []
 
         for container in containers:
             container.open(True)
             items = container.get_object(dataset_name)
-            item_timestamps = container.get_object(f'{dataset_name}_timestamp')[:]
+            item_timestamps = container.get_object(f'{dataset_name}_timestamp')
             for item, item_timestamp in zip(items, item_timestamps):
                 if isinstance(item, h5py.Dataset):
-                    dataset = item[:]
-                    dataset_timestamp = item_timestamp[:]
-                    if len(dataset.shape) == 1:
-                        data.append(dataset)
-                        data_timestamps.append(dataset_timestamp)
+                    data_containers.append(item)
+                    data_timestamps_containers.append(item_timestamp)
 
-        if data and data_timestamps:
-            timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps]
+        if data_containers and data_timestamps_containers:
+            timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
 
             order = np.argsort(timestamp_max_values)
 
-            data_timestamps_ordered = []
-            data_ordered = []
+            data_timestamps_containers_ordered = []
+            data_containers_ordered = []
 
             for idx in order:
-                data_timestamps_ordered.append(data_timestamps[idx])
-                data_ordered.append(data[idx])
+                data_timestamps_containers_ordered.append(data_timestamps_containers[idx])
+                data_containers_ordered.append(data_containers[idx])
 
-            data_timestamps = numpy.concatenate(data_timestamps_ordered)[:]
-            data = numpy.concatenate(data_ordered)[:]
+            def form_data(timestamps_containers: List[h5py.Dataset], data_containers: List[h5py.Dataset],
+                          from_idx=0, n_of_points=10000, average=1) -> Tuple[numpy.ndarray]:
+                indexes_of_containers = [0, -1]
+                # min index
+                length = 0
+                for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
+                    length += timestamp_dataset.shape[0]
+                    if len(res) >= from_idx:
+                        indexes_of_containers[0] = index
+                        break
 
-            if timestamp_to == -1:
-                timestamp_to = np.max(data_timestamps)
-            if timestamp_from == -1:
-                timestamp_from = np.min(data_timestamps)
+                timestamps_containers = timestamps_containers[indexes_of_containers[0]:]
+                data_containers = data_containers[indexes_of_containers[0]:]
 
-            indexes_lower = [idx[0] for idx in np.argwhere(data_timestamps <= timestamp_to)]
-            data_timestamps = data_timestamps[indexes_lower]
-            data = data[indexes_lower]
-            indexes_upper = [idx[0] for idx in np.argwhere(data_timestamps >= timestamp_from)]
-            data_timestamps = data_timestamps[indexes_upper]
-            data = data[indexes_upper]
+                # max index
+                length = 0
+                for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
+                    length += timestamp_dataset.shape[0]
+                    indexes_of_containers[1] = index
+                    if length >= n_of_points:
+                        break
 
-            dataXY = DataXYb(X=data_timestamps.tobytes(), Y=data.tobytes(),
-                             name=dataset_name, Xdtype=str(data_timestamps.dtype), Ydtype=str(data.dtype))
+                timestamps_containers = timestamps_containers[:indexes_of_containers[1] + 1]
+                data_containers = data_containers[:indexes_of_containers[1] + 1]
 
-            res = self.compress_data(dataXY)
-        for container in containers:
-            container.lock = False
-        return res
+                # form data
+                timestamps = []
+                data = []
+
+                for timestamp_dataset, dataset in zip(timestamps_containers, data_containers):
+                    number = (n_of_points - len(timestamps))
+                    if timestamp_dataset.shape[0] >= number:
+                        timestamps.append(timestamp_dataset[:number])
+                        data.append(dataset[:number])
+                        break
+                    else:
+                        timestamps.append(timestamp_dataset[:])
+                        data.append(dataset[:])
+                    n_of_points -= len(timestamps)
+
+                timestamps = np.concatenate(timestamps)[:n_of_points]
+                data = np.concatenate(data)[:n_of_points]
+
+                if average != 1 and len(data) > 10 * average:
+                    j = 0
+                    for i in range(len(timestamps)):
+                        if (len(timestamps) + i) % average == 0:
+                            j = i
+                            break
+                    if j != 0:
+                        timestamps = np.pad(timestamps, [0, j], mode='constant')
+
+                    if len(data.shape) == 1:
+                        data = np.pad(data, [0, j], mode='constant')
+                    elif len(data.shape) == 2:
+                        data = np.pad(data, ([0, j], [0, 0]), mode='constant')
+
+                    timestamps = np.average(timestamps.reshape(-1, average), axis=1).astype(timestamps.dtype)
+                    data = np.average(data.reshape(-1, average), axis=1).astype(data.dtype)
+
+                return timestamps, data
+
+            try:
+                data_timestamps, data = form_data(data_timestamps_containers_ordered, data_containers_ordered,
+                                                  from_idx, n_of_points, average)
+
+                dataXY = DataXYb(X=data_timestamps.tobytes(), Y=data.tobytes(), name=dataset_name,
+                                 Xdtype=str(data_timestamps.dtype), Ydtype=str(data.dtype))
+                self.info('Data is formed.', DEV)
+                res = self.compress_data(dataXY)
+                for container in containers:
+                    container.lock = False
+            except Exception as e:
+                self.error(e)
+        self.orders[order_name].order_res = res
+        self.orders[order_name].order_done = True
 
     @command(dtype_in=str, dtype_out=str)
     def get_info_object(self, object_name):
@@ -327,16 +422,46 @@ class DS_Archive(DS_General):
         result = 'Nothing to tell you about'
         if containers:
             size = 0
+            shape = [0, 0]
             for container in containers:
                 container.open(True)
                 objects = container.get_object(object_name)
                 for object in objects:
                     if isinstance(object, h5py.Dataset):
                         size += object.nbytes
-                        result = f'Shape: {object.shape}; Maxshape: {object.maxshape}, ' \
+                        if len(object.shape) == 1:
+                            shape[0] += object.shape[0]
+                        elif len(object.shape) == 2:
+                            shape[0] += object.shape[0]
+                            shape[1] += object.shape[1]
+
+                        result = f'Shape: {shape}; Maxshape: {object.maxshape}, ' \
                                  f'Size: {size / 1024} kB, {object.dtype}'
                 container.lock = False
         return result
+
+    @command(dtype_in=str, dtype_out=str)
+    def get_object_timestamps(self, value):
+        dataset_name = value
+        res = [datetime.now().timestamp(), datetime.now().timestamp(), 0]
+        containers: List[H5_container] = self.search_object(dataset_name)
+
+        data_timestamps_containers = []
+
+        for container in containers:
+            container.open(True)
+            item_timestamps = container.get_object(f'{dataset_name}_timestamp')
+            for item_timestamp in item_timestamps:
+                if isinstance(item_timestamp, h5py.Dataset):
+                    data_timestamps_containers.append(item_timestamp)
+
+        if data_timestamps_containers:
+            timestamp_min = [data_timestamp[0] for data_timestamp in data_timestamps_containers]
+            timestamp_max = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
+            length = [len(data_timestamp) for data_timestamp in data_timestamps_containers]
+            res = [min(timestamp_min), max(timestamp_max), np.sum(length)]
+        res = str(res).encode('utf-8')
+        return res
 
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
@@ -347,6 +472,7 @@ class DS_Archive(DS_General):
         return self._internal_counter
 
     def init_device(self):
+        self.orders: Dict[str, Order] = {}
         self.dates_files = {}
         self.containers_h5: Dict[Path, H5_container] = {}
         self.file_working: Path = None
@@ -357,10 +483,37 @@ class DS_Archive(DS_General):
             self.folder_location.mkdir(parents=True, exist_ok=True)
         self.latest_h5()
         self.register_variables_for_archive()
+        self.orders_thread = Thread(target=self.execute_orders)
         self.turn_on()
-        # self.get_info_object('2022-05-03/elyse/modulator')
-        # self.get_data(['2022-05-03/elyse/modulator/focale1/current/value', '-1', '-1'])
+        # c = self._get_data(Order(order_param=['2022-05-06/elyse/cooling/canon/temperature/measurement', '1651788000.0', '20', '10000'], timestamp=time.time()))
+        self.orders_thread.start()
+        # order_name = self.get_data(['2022-05-06/elyse/cooling/canon/temperature/measurement', '1651788000.0', '20', '10000'])
+        # for i in range(60):
+        #     ready = self.is_order_ready(order_name)
+        #     if ready:
+        #         break
+        #     time.sleep(.5)
+        # order = self.give_order(order_name)
         # self.archive_it_labview('elyse/timestamp:3734421386.935:1.651572987049E+9')
+        # self.get_object_timestamps('any_date/elyse/modulator/focale1/current/value')
+
+    def execute_orders(self):
+        while True:
+            sleep(0.1)
+            if self.orders:
+                orders_to_delete = []
+                for order_name, order in self.orders.items():
+                    if not order.order_done and not order.started:
+                        print(f'Getting data for order: {order_name}.')
+                        thread_get_data = Thread(target=self._get_data, args=[order_name])
+                        thread_get_data.start()
+                    if order.ready_to_delete:
+                        orders_to_delete.append(order_name)
+                    if (time.time() - order.timestamp) >= 100:
+                        orders_to_delete.append(order_name)
+                if orders_to_delete:
+                    for order_name in orders_to_delete:
+                        del self.orders[order_name]
 
     def internal_time(self):
         while True:
@@ -389,7 +542,7 @@ class DS_Archive(DS_General):
     def search_object(self, object_name: str) -> List[H5_container]:
         group = []
         for container in self.containers_h5.values():
-            container.open()
+            container.open(True)
             res = container.is_object_present(object_name)
             if res:
                 group.append(container)
