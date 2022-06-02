@@ -107,6 +107,7 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self.always_on = int(self.always_on)
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
