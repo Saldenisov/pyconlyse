@@ -2,10 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 import sys
-import zlib
 from pathlib import Path
-import random
-import string
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
@@ -15,24 +12,13 @@ import ctypes
 import inspect
 from threading import Thread
 import numpy as np
-from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
+from DeviceServers.General.DS_Camera import DS_CAMERA_CCD, OrderInfo
 from DeviceServers.General.DS_general import standard_str_output
-from collections import OrderedDict, deque
 from utilities.tools.decorators import dll_lock
 # -----------------------------
 
 from tango.server import device_property, command, attribute, AttrWriteType
 from tango import DevState, DevFloat
-from dataclasses import dataclass
-
-
-@dataclass
-class OrderInfo:
-    order_length: int
-    order_done: bool
-    order_timestamp: int
-    ready_to_delete: bool
-    order_array: np.ndarray
 
 
 class DS_ANDOR_CCD(DS_CAMERA_CCD):
@@ -50,8 +36,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     wavelengths = device_property(dtype=str)
 
     def init_device(self):
-        self._dll_lock = True
-        self.dll = None
         self.serial_number_real = -1
         self.head_name = ''
         self.status_real = 0
@@ -64,9 +48,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.grabbing_thread: Thread = None
         self.abort = False
         self.n_kinetics = 3
-        self.data_deque = deque(maxlen=1000)
-        self.time_stamp_deque = deque(maxlen=1000)
-        self.orders: Dict[str, OrderInfo] = {}
+
         super().init_device()
         self.register_variables_for_archive()
         self.wavelengths = eval(self.wavelengths)
@@ -332,34 +314,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         except Exception as e:
             self.error(e)
 
-    @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
-    def register_order(self, number_spectra: int):
-        s = 20  # number of characters in the string.
-        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
-        order_info = OrderInfo(number_spectra, False, time(), False, np.array([self.wavelengths]))
-        self.orders[name] = order_info
-        return name
-
-    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
-    def is_order_ready(self, name):
-        res = False
-        if name in self.orders:
-            order = self.orders[name]
-            res = order.order_done
-        return res
-
-    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
-    def give_order(self, name):
-        res = self.last_image
-        if name in self.orders:
-            order = self.orders[name]
-            order.ready_to_delete = True
-            res = order.order_array
-        res = res.astype(dtype=np.int16)
-        res = res.tobytes()
-        res = zlib.compress(res)
-        return str(res)
-
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()
         if res == True:
@@ -405,11 +359,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         super().register_variables_for_archive()
 
     # DLL functions
-    def load_dll(self):
-        dll = ctypes.WinDLL(str(self.dll_path))
-        self._dll_lock = False
-        return dll
-
     @dll_lock
     def _Initialize(self, dir='') -> Tuple[bool, str]:
         """
