@@ -86,7 +86,7 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
         reply = self._get_reply_from_arduino(True)
         if reply:
             self._position = reply[0]
-            data = self.form_acrhive_data(self._position, f'position', dt='float16')
+            data = self.form_archive_data(self._position, f'position', dt='float16')
             self.write_to_archive(data)
             return 0
         else:

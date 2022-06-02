@@ -21,11 +21,11 @@ names = {22929018: ['manip/V0', 'Camera1_Pointing', 'Cam1_V0', '10.20.30.31', 22
                                               'AcquisitionFrameRateEnable': True},
                      'Image_Format_Control': {'PixelFormat': 'BayerRG8'}}
                     ],
-         24058647: ['manip/V0', 'Camera3_Pointing', 'Cam3_V0', '10.20.30.33', 24058647,
+         24058647: ['manip/V0', 'Camera3_Pointing', 'Cam3_V0', '10.20.30.34', 24058647,
                     {'Transport_layer': {'Packet_size': 1500, 'Inter-Packet_Delay': 1000},
                      'Analog_Controls': {'GainAuto': 'Off', 'GainRaw': 0, 'BlackLevelRaw': -30, 'BalanceRatioRaw': 64},
-                     'AOI_Controls': {'Width': 370, 'Height': 370, 'OffsetX': 600, 'OffsetY': 300},
-                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'Off', 'TriggerDelayAbs': 185000,
+                     'AOI_Controls': {'Width': 300, 'Height': 300, 'OffsetX': 50, 'OffsetY': 200},
+                     'Acquisition_Controls': {'TriggerSource': 'Line1', 'TriggerMode': 'On', 'TriggerDelayAbs': 185000,
                                               'ExposureTimeAbs': 20000, 'AcquisitionFrameRateAbs': 10,
                                               'AcquisitionFrameRateEnable': True},
                      'Image_Format_Control': {'PixelFormat': 'BayerRG8'}}

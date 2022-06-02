@@ -1,23 +1,88 @@
 from abc import abstractmethod
 from typing import Union
-
+import zlib
+import random
+import string
 import numpy as np
 from tango import AttrWriteType, DispLevel, DevState, DevFloat
 from tango.server import attribute, command, device_property
-
+from dataclasses import dataclass
+from time import time
 from DeviceServers.General.DS_general import DS_General
-
+from collections import OrderedDict, deque
+from typing import Dict
+import ctypes
 polling_infinite = 10000
 
 
-class DS_CAMERA_CCD(DS_General):
+
+
+@dataclass
+class OrderInfo:
+    order_length: int
+    order_done: bool
+    order_timestamp: int
+    ready_to_delete: bool
+    order_array: np.ndarray
+
+
+class DS_CAMERA(DS_General):
     RULES = {'set_param_after_init': [DevState.ON], 'start_grabbing': [DevState.ON],
              'stop_grabbing': [DevState.ON, DevState.FAULT, DevState.RUNNING],
              **DS_General.RULES}
 
+    polling_main = 5000
+    polling_infinite = 100000
+    timeoutt = 5000
+
     serial_number = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     parameters = device_property(dtype=str)
+
+    @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
+    def register_order(self, number_spectra: int):
+        s = 20  # number of characters in the string.
+        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
+        order_info = OrderInfo(number_spectra, False, time(), False, np.array([self.wavelengths]))
+        self.orders[name] = order_info
+        return name
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
+    def is_order_ready(self, name):
+        res = False
+        if name in self.orders:
+            order = self.orders[name]
+            res = order.order_done
+        return res
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
+    def give_order(self, name):
+        res = self.last_image
+        if name in self.orders:
+            order = self.orders[name]
+            order.ready_to_delete = True
+            res = order.order_array
+        res = res.astype(dtype=np.int16)
+        res = res.tobytes()
+        res = zlib.compress(res)
+        return str(res)
+
+    def init_device(self):
+        self._dll_lock = True
+        self.dll = None
+        self.data_deque = deque(maxlen=1000)
+        self.time_stamp_deque = deque(maxlen=1000)
+        self.orders: Dict[str, OrderInfo] = {}
+        super().init_device()
+
+    def load_dll(self):
+        dll = ctypes.WinDLL(str(self.dll_path))
+        self._dll_lock = False
+        return dll
+
+
+class DS_CAMERA_CCD(DS_CAMERA):
+    RULES = {**DS_CAMERA.RULES}
 
     # Cameras' attributes
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)

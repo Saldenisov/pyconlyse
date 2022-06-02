@@ -9,6 +9,7 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueSpinBox, TaurusValueComboBox
 from tango import DevState
+from datetime import datetime
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QDate
 from functools import partial
@@ -17,9 +18,13 @@ import msgpack
 from numpy import array
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXY, DataXYb
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
+
 uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 float32 = np.dtype('float32')
+
+import logging
+logger = logging.getLogger('root')
 
 class ViewTree(QtWidgets.QTreeWidget):
     def __init__(self):
@@ -83,6 +88,7 @@ class Archive(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.structure = {}
+        self.dataset_name = ''
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -121,6 +127,8 @@ class Archive(DS_General_Widget):
         self.tree_devices = ViewTree()
         self.tree_devices.setMinimumWidth(300)
         self.tree_devices.setMinimumHeight(300)
+        self.tree_devices.itemClicked.connect(self.get_dataset_info)
+        self.tree_devices.itemDoubleClicked.connect(self.get_dataset)
 
         self.projects_cb = QtWidgets.QCheckBox('Projects')
         self.projects_cb.setChecked(True)
@@ -138,8 +146,35 @@ class Archive(DS_General_Widget):
         layout_h_tree.addWidget(self.tree_devices)
         layout_v_all_trees.addLayout(layout_h_tree)
         layout_v_all_trees.addLayout(layout_h_tree_selectors)
+        self.selected_object = QtWidgets.QLabel(self.dataset_name)
+        layout_v_all_trees.addWidget(self.selected_object)
+
+        layout_data_selection = QtWidgets.QHBoxLayout()
         self.dataset_info = QtWidgets.QLabel('')
-        layout_v_all_trees.addWidget(self.dataset_info)
+        layout_data_selection.addWidget(self.dataset_info)
+        self.average_data = QtWidgets.QSpinBox()
+        self.average_data.setMinimum(1)
+        self.average_data.setMaximum(20)
+        self.average_data.setMaximumWidth(40)
+        self.n_points = QtWidgets.QSpinBox()
+        self.n_points.setMinimum(1)
+        self.n_points.setMaximum(10000)
+        self.n_points.setValue(2000)
+        layout_data_selection.addWidget(QtWidgets.QLabel('Average'))
+        layout_data_selection.addWidget(self.average_data)
+        layout_data_selection.addWidget(QtWidgets.QLabel('N of points'))
+        layout_data_selection.addWidget(self.n_points)
+        self.date_from = QtWidgets.QDateTimeEdit()
+        self.date_to = QtWidgets.QDateTimeEdit()
+        self.date_to.setDate(datetime.now())
+        self.date_to.setTime(datetime.now().time())
+        self.from_idx = QtWidgets.QSpinBox()
+        self.from_idx.setValue(0)
+        layout_data_selection.addWidget(QtWidgets.QLabel('From Idx:'))
+        layout_data_selection.addWidget(self.from_idx)
+        layout_data_selection.addSpacerItem(QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Expanding,
+                                                                  QtWidgets.QSizePolicy.Minimum))
+        layout_v_all_trees.addLayout(layout_data_selection)
 
         lo_calendar.addWidget(self.calendar)
         lo_calendar.addLayout(layout_v_all_trees)
@@ -153,15 +188,15 @@ class Archive(DS_General_Widget):
         button_off: TaurusCommandButton = getattr(self, f'button_off_{dev_name}')
         button_off.setModel(dev_name)
 
-        self.button_update_structure = QtWidgets.QPushButton('Archive Tree')
-        self.button_update_structure.clicked.connect(self.get_structure)
-        self.button_update_structure_device = QtWidgets.QPushButton('Device Archive')
-        self.button_update_structure_device.clicked.connect(self.fill_device_tree_sructure)
+        self.button_tree_structure = QtWidgets.QPushButton('Archive Tree')
+        self.button_tree_structure.clicked.connect(self.fill_tree_structure)
+        self.button_structure_device = QtWidgets.QPushButton('Device Archive')
+        self.button_structure_device.clicked.connect(self.fill_device_tree_structure)
 
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
-        lo_buttons.addWidget(self.button_update_structure)
-        lo_buttons.addWidget(self.button_update_structure_device)
+        lo_buttons.addWidget(self.button_tree_structure)
+        lo_buttons.addWidget(self.button_structure_device)
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_buttons)
@@ -170,7 +205,15 @@ class Archive(DS_General_Widget):
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
 
-    def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
+    @staticmethod
+    def check_if_date(s: str):
+        try:
+            datetime.strptime(s, '%Y-%m-%d')
+            return True
+        except TypeError:
+            return False
+
+    def construct_object_name(self, item: QtWidgets.QTreeWidgetItem):
         def construct_name(item: QtWidgets.QTreeWidgetItem, s):
             parent = item.parent()
             if parent:
@@ -178,33 +221,56 @@ class Archive(DS_General_Widget):
                 s = construct_name(parent, s)
             return s
         path = construct_name(item, [item.text(0)])
+        if not self.check_if_date(path[-1]):
+            path.append('any_date')
         path.reverse()
-        dataset_name = '/'.join(path)
-        info = self.ds.get_info_object(dataset_name)
+        if not self.date_cb.isChecked():
+            path[0] = 'any_date'
+        self.dataset_name = '/'.join(path)
+
+    def get_dataset_info(self, item: QtWidgets.QTreeWidgetItem):
+        self.construct_object_name(item)
+        self.selected_object.setText(self.dataset_name)
+        info = self.ds.get_info_object(self.dataset_name)
         self.dataset_info.setText(info)
+        min_max_timestamps = eval(self.ds.get_object_timestamps(self.dataset_name))
+        self.from_idx.setMaximum(min_max_timestamps[2])
 
     def get_dataset(self, item: QtWidgets.QTreeWidgetItem):
-        def construct_name(item: QtWidgets.QTreeWidgetItem, s):
-            parent = item.parent()
-            if parent:
-                s.append(parent.text(0))
-                s = construct_name(parent, s)
-            return s
-        path = construct_name(item, [item.text(0)])
-        path.reverse()
-        dataset_name = '/'.join(path)
+        import time
+        self.construct_object_name(item)
+        average = str(self.average_data.value())
+        n_points = str(self.n_points.value())
+        date_from: QtCore.QDateTime = self.date_from.dateTime()
+        date_from = date_from.toPyDateTime()
+        date_from = date_from.timestamp()
+        # date_to = self.date_to.dateTime().toPyDateTime().timestamp()
+        order_name = self.ds.get_data([self.dataset_name, f'{date_from}', average, n_points])
+        ready = False
 
-        data_string = self.ds.get_data([dataset_name, '0', '10000'])
-        if data_string:
-            data_bytes = eval(data_string)
-            data_d = zlib.decompress(data_bytes)
-            data_d = msgpack.unpackb(data_d, strict_map_key=False)
-            data_d: DataXYb = eval(data_d)
+        for i in range(60):
+            ready = self.ds.is_order_ready(order_name)
+            print(f'Getting dataset {self.dataset_name}.')
+            if ready:
+                break
+            time.sleep(.5)
+        data_string = self.ds.give_order(order_name)
 
-            data = DataXY(X=np.frombuffer(data_d.X, dtype=data_d.Xdtype),
-                          Y=np.frombuffer(data_d.Y, dtype=data_d.Ydtype),
-                          name=data_d.name)
-            self.add_curve(self.plot, data)
+        if ready:
+            if data_string:
+                data_bytes = eval(data_string)
+                data_d = zlib.decompress(data_bytes)
+                data_d = msgpack.unpackb(data_d, strict_map_key=False)
+                data_d: DataXYb = eval(data_d)
+
+                data = DataXY(X=np.frombuffer(data_d.X, dtype=data_d.Xdtype),
+                              Y=np.frombuffer(data_d.Y, dtype=data_d.Ydtype),
+                              name=data_d.name)
+
+                self.add_curve(self.plot, data)
+        else:
+            print(f'Did not get response in time.')
+
 
     def add_curve(self, plot: pg.PlotItem, data: DataXY): # add a curve
         p = plot.plot(data.X, data.Y)
@@ -248,43 +314,32 @@ class Archive(DS_General_Widget):
     def get_structure(self):
         structure = self.ds.archive_structure
         self.structure = eval(structure)
-        selected_structure = self.form_main_tree_structure()
-        self.fill_tree_structure(selected_structure)
 
-    def fill_device_tree_sructure(self):
-        structure = self.ds.archive_structure
-        self.structure = eval(structure)
+    def fill_device_tree_structure(self):
+        self.get_structure()
         device_structure = self.form_device_tree_structure()
-
         self.tree_devices.fill_items(self.tree_devices.invisibleRootItem(), device_structure)
 
-    def fill_tree_structure(self, structure):
+    def fill_tree_structure(self):
+        self.get_structure()
+        structure = self.form_main_tree_structure()
         self.tree_structure.fill_items(self.tree_structure.invisibleRootItem(), structure)
 
     def form_device_tree_structure(self):
         from copy import deepcopy
-        date_structure = {}
         date_s = '...'
         if not self.structure:
             self.get_structure()
         try:
             date_structure = deepcopy(self.structure)
-
-
-            if not self.devices_cb.isChecked():
-                to_del = []
-                for date_key, value in date_structure.items():
-                    for loc_key in value.keys():
-                        if loc_key != 'projects':
-                            to_del.append((date_key, loc_key))
-                if to_del:
-                    for date_key, loc_key in to_del:
-                        del date_structure[date_key][loc_key]
+            device_structure = {}
+            for date, value in date_structure.items():
+                device_structure.update(value)
 
         except KeyError:
             print(f'Such date {date_s} is not present in Archive.')
         finally:
-            return date_structure
+            return device_structure
 
     def form_main_tree_structure(self, date=None):
         from copy import deepcopy
@@ -323,6 +378,6 @@ class Archive(DS_General_Widget):
         finally:
             return date_structure
 
-    def structure_update(self, date: QDate):
-        part_structure = self.form_main_tree_structure(date)
-        self.fill_tree_structure(part_structure)
+    def structure_update(self):
+        self.fill_tree_structure()
+        self.fill_device_tree_structure()
