@@ -45,10 +45,10 @@ class DS_General(Device):
                             device_id=self.device_id))
 
     @attribute(label='Always on?', dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
-    def always_on(self):
+    def always_on_value(self):
         return self.always_on
 
-    def write_always_on(self, value: int):
+    def write_always_on_value(self, value: int):
         self.always_on = value
 
 
@@ -107,7 +107,6 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
-        self.always_on = int(self.always_on)
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
