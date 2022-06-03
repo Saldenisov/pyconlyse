@@ -47,10 +47,14 @@ class DS_LaserPointing(DS_ControlPosition):
         super().init_device()
         camera_name = self.ds_dict['Camera']
         self.devices[camera_name] = Device(camera_name)
+        self.register_variables_for_archive()
         self.turn_on()
         self.locking_client_token = 'test'
         self.locked_client = True
         # self.start_cgc('test')
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
     def set_optimization_thread(self, opt_name: str, actuator_name: str, group_points: str, bounds):
         actuators = self.groups[actuator_name]

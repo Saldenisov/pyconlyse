@@ -35,6 +35,16 @@ class DataXY:
     Y: numpy.ndarray
 
 
+@dataclass
+class DataXYb:
+    name: str
+    X: b''
+    Y: b''
+    Xdtype: str
+    Ydtype: str
+
+
+
 # Cursors
 @dataclass
 class Cursors2D:

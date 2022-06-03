@@ -32,6 +32,7 @@ class DS_Numato_GPIO(DS_PDU):
     def init_device(self):
         self._actions = []
         super().init_device()
+        self.register_variables_for_archive()
         self.turn_on()
 
     def _addr(self):

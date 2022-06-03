@@ -44,6 +44,7 @@ class DS_Netio_pdu(DS_PDU):
         self._actions = []
         self._delays = []
         super().init_device()
+        self.register_variables_for_archive()
         self.turn_on()
 
     def _addr(self):
@@ -92,7 +93,7 @@ class DS_Netio_pdu(DS_PDU):
             self._actions = actions
             self._delays = delays
             for id, state in zip(ids, states):
-                data = self.form_acrhive_data(state, f'output_{id}', dt='uint8')
+                data = self.form_archive_data(state, f'output_{id}', dt='uint8')
                 self.write_to_archive(data)
             return 0
         except Exception as e:
@@ -170,6 +171,9 @@ class DS_Netio_pdu(DS_PDU):
         else:
             error(self)
             return f'Could not get controller status of {self.device_name}: {res}.'
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
 
 if __name__ == "__main__":

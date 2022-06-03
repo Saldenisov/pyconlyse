@@ -1,21 +1,19 @@
-import numpy as np
+from copy import deepcopy
+
+class A:
+
+    def __init__(self):
+        self._b = {'q': -15}
+
+    def b(self):
+        return self._b
+
+a = A()
+
+c = {'c': a._b}
 
 
-a = 3
-b = 4
-c = 5
-
-d = np.arange(0, a * b * c)
-d = d.reshape((a, b, c))
-print(d)
-
-
-a = 1
-b = 4
-c = 5
-
-d = np.arange(0, a * b * c)
-d = d.reshape((a, b, c))
-print(d)
-
+print(c['c'])
+a._b['q'] = 15
+print(c['c'])
 
