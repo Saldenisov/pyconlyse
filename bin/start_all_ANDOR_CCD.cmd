@@ -1,6 +1,6 @@
 @echo off
 call %ANACONDA%/Scripts/activate.bat %ANACONDA%
-ECHO 'Starting BASLER cameras'
+ECHO 'Starting ANDOR cameras'
 set list=1_ANDOR_CCD1
 timeout 1
 for %%x in (%list%) do (
