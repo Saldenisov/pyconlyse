@@ -241,11 +241,11 @@ class Archive(DS_General_Widget):
         self.construct_object_name(item)
         average = str(self.average_data.value())
         n_points = str(self.n_points.value())
-        date_from: QtCore.QDateTime = self.date_from.dateTime()
-        date_from = date_from.toPyDateTime()
-        date_from = date_from.timestamp()
-        # date_to = self.date_to.dateTime().toPyDateTime().timestamp()
-        order_name = self.ds.get_data([self.dataset_name, f'{date_from}', average, n_points])
+        # date_from: QtCore.QDateTime = self.date_from.dateTime()
+        # date_from = date_from.toPyDateTime()
+        # date_from = date_from.timestamp()
+        from_idx = self.from_idx.value()
+        order_name = self.ds.get_data([self.dataset_name, f'{from_idx}', average, n_points])
         ready = False
 
         for i in range(60):
