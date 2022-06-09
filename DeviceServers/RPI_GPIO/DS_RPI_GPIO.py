@@ -85,7 +85,7 @@ class DS_RPI_GPIO(DS_GPIO):
         for pin in self._pin_ids:
             control_pin = self.pins[pin]
             archive_key = f'pin_state_{pin}'
-            extra = (partial(self.value_from_pin, control_pin), 'uint8')
+            extra[archive_key] = (partial(self.value_from_pin, control_pin), 'uint8')
         self.archive_state.update(extra)
 
     def value_from_pin(self, control_pin):
