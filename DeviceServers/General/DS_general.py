@@ -1,11 +1,17 @@
+import time
+import zlib
 from abc import abstractmethod
-
-from tango import AttrQuality, AttrWriteType, DispLevel, DevState, InfoIt, PipeWriteType, Pipe
-from tango.server import Device, attribute, command, pipe, device_property
-from typing import Tuple, Union, List
 from threading import Thread
 from time import sleep
+from typing import Union, Dict, Any
 
+import msgpack
+import numpy as np
+import taurus
+from tango import AttrWriteType, DispLevel, DevState
+from tango.server import Device, attribute, command, pipe, device_property
+
+from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 
 standard_str_output = 'str: 0 if success, else error.'
 
@@ -14,7 +20,9 @@ class DS_General(Device):
     device_id = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
-    polling_main = 500
+    always_on = device_property(dtype=int, default_value=0)
+    archive = 'manip/general/archive'
+    polling_main = 100
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
              'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
@@ -28,12 +36,20 @@ class DS_General(Device):
     def _model_(self):
         raise NotImplementedError
 
+
     @pipe(label="DS_Info", doc="General info about DS.")
     def read_info_ds(self):
         return ('info_ds', dict(manufacturer=f'{self.__class__.__name__}',
                             model=self._model_,
                             version_number=self._version_,
                             device_id=self.device_id))
+
+    @attribute(label='Always on?', dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
+    def always_on_value(self):
+        return self.always_on
+
+    def write_always_on_value(self, value: int):
+        self.always_on = value
 
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
     def device_friendly_name(self):
@@ -44,8 +60,16 @@ class DS_General(Device):
 
     @attribute(label="comments", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last essential comment.", polling_period=polling_main)
-    def last_comments(self):
-        return self._comments
+    def last_comment(self):
+        return self._comment
+
+    @property
+    def comment(self):
+        return self._comment
+
+    @comment.setter
+    def comment(self, value):
+        self._comment = value
 
     @attribute(label="error", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ,
                doc="Last error.", polling_period=polling_main)
@@ -65,7 +89,7 @@ class DS_General(Device):
 
     def info(self, info_in, printing=False):
         self.info_stream(info_in)
-        self._comments = info_in
+        self._comment = info_in
         if printing:
             print(info_in)
 
@@ -82,15 +106,21 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self.previous_archive_state: Dict[str, Any] = {}
+        self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
         self.locked_client = False
-        self._comments = '...'
+        self._comment = '...'
         self._error = '...'
         self._n = 0
         internal_time = Thread(target=self.int_time)
         internal_time.start()
         self._status_check_fault = 0
+        self.prev_state = DevState.FAULT
         Device.init_device(self)
+        if hasattr(self, 'parameters'):
+            self.parameters = eval(str(self.parameters))
+        self.archive = taurus.Device(self.archive)
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b''
@@ -101,6 +131,28 @@ class DS_General(Device):
         else:
             self.info(f"{self.device_name} was NOT found.", True)
             self.set_state(DevState.FAULT)
+
+    @abstractmethod
+    def register_variables_for_archive(self):
+        self.archive_state['State'] = (self.get_state, 'int8')
+
+    def send_state_archive(self):
+        res = {}
+        for key, prev_value in self.previous_archive_state.items():
+            current_value = self.archive_state[key][0]()
+            dt = self.archive_state[key][1]
+            res[key] = current_value
+            if prev_value != current_value:
+                data = self.form_archive_data(current_value, key, dt)
+                self.write_to_archive(data)
+        self.previous_archive_state = res
+
+    def fix_state(self):
+        res = {}
+        for key, value in self.archive_state.items():
+            res[key] = value[0]()
+        self.previous_archive_state = res
+        self.info('Fixing archiving state', True)
 
     @abstractmethod
     def find_device(self):
@@ -135,10 +187,13 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
-        if state_ok == 1:
+        if True:
             res = self.get_controller_status_local()
+            self.send_state_archive()
             if res != 0:
                 self.error(f'{res}')
+            if self.get_state() != DevState.ON and self.always_on == 1:
+                self.turn_on()
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
@@ -154,6 +209,7 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} WAS turned ON.", True)
+                self.fix_state()
         else:
             self.error(f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
@@ -171,9 +227,49 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
+                data = self.form_archive_data(0, 'State')
+                self.write_to_archive(data)
         else:
             self.error(f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}.")
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:
         pass
+
+    def write_to_archive(self, data: ArchiveData):
+        if self.archive.state == 1:
+            data_c = self.compress_data(data)
+            self.archive.archive_it(data_c)
+
+    def compress_data(self, data):
+        msg_b = msgpack.packb(str(data))
+        msg_b_c = zlib.compress(msg_b)
+        msg_b_c_s = str(msg_b_c)
+        return msg_b_c_s
+
+    def form_archive_data(self, data, name: str, time_stamp=None, dt=None):
+        if isinstance(data, float):
+            if not dt:
+                dt = 'float32'
+            data_s = Scalar(value=data, dtype=dt)
+        elif isinstance(data, int):
+            if not dt:
+                if data <= 127 and data >= 0:
+                    dt = 'uint8'
+                elif data >= 0:
+                    dt = 'uintc'
+                else:
+                    dt = 'int'
+            data_s = Scalar(value=data, dtype=dt)
+        elif isinstance(data, np.ndarray):
+            if not dt:
+                dt = str(data.dtype)
+                data.astype(dt)
+            data_s = Array(value=data.tobytes(), shape=data.shape, dtype=dt)
+
+        if not time_stamp:
+            time_stamp = time.time()
+
+        archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time_stamp,
+                                   dataset_name=name, data=data_s)
+        return archive_data

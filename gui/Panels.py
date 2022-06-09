@@ -9,6 +9,7 @@ from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
 from DeviceServers.TopDirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.LaserPointing.DS_LaserPointing_Widget import LaserPointing
+from DeviceServers.ARCHIVE.DS_ARCHIVE_Widget import Archive
 from DeviceServers.DS_Widget import DS_General_Widget
 from DeviceServers.DS_Widget import VisType
 
@@ -173,5 +174,13 @@ class LaserPointingPanel(GeneralPanel):
 
     def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
         if widget_class != LaserPointing:
+            raise Exception(f'Wrong widget class {widget_class} is passed.')
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class ArchivePanel(GeneralPanel):
+
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
+        if widget_class != Archive:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)

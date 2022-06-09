@@ -12,7 +12,7 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                       'speed': 10,
                       'revolution': 200,
                       'limit_min': -40.0,
-                      'limit_max': 160.0,
+                      'limit_max': 260.0,
                       'real_pos': 30.0,
                       'wait_time': 5,
                       'preset_positions': [0, 12.9, 24.8, 38.7, 51.6, 83.0],
@@ -62,7 +62,7 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                }
 names_param = {'1': ['manip/general/DS_OWIS_PS90',
                      {'baudrate': 9600,
-                      'com_port': 4,
+                      'com_port': 3,
                       'interface': 0,
                       'control_unit_id': 1,
                       'friendly_name': 'DS_OWIS_PS90',
@@ -88,4 +88,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

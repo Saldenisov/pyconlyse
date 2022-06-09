@@ -1,7 +1,48 @@
 from dataclasses import dataclass
-from typing import Tuple
+from typing import Tuple, Union
 
+import numpy
 import numpy as np
+
+
+# Tango
+
+
+@dataclass
+class Scalar:
+    value: float
+    dtype: str
+
+@dataclass
+class Array:
+    value: bytes
+    shape: tuple
+    dtype: str
+
+
+@dataclass
+class ArchiveData:
+    tango_device: str  # Tango Device name
+    data_timestamp: float
+    dataset_name: str
+    data: Union[Scalar, Array]
+
+
+@dataclass
+class DataXY:
+    name: str
+    X: numpy.ndarray
+    Y: numpy.ndarray
+
+
+@dataclass
+class DataXYb:
+    name: str
+    X: b''
+    Y: b''
+    Xdtype: str
+    Ydtype: str
+
 
 
 # Cursors
@@ -74,9 +115,3 @@ class CameraReadings:
             self.X = np.arange(self.data.shape[1])
         if not self.Y:
             self.Y = np.arange(self.data.shape[0])
-
-
-
-
-
-

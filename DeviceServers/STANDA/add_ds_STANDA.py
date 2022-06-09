@@ -69,7 +69,7 @@ def main():
         db.put_device_property(dev_name, {'ip_address': '10.20.30.204', 'uri': uri, 'friendly_name': val[1],
                                           'wait_time': 5, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
                                           'limit_max': val[4][1], 'real_pos': 0.0, 'device_id': val[5],
-                                          'unit': val[6][0], 'conversion': val[6][1]})
+                                          'unit': val[6][0], 'conversion': val[6][1], 'always_on': 1})
 
         i += 1
     # print(a)

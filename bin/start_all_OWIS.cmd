@@ -1,5 +1,6 @@
 @echo off
 ECHO 'Starting OWIS DL'
+call %ANACONDA%/Scripts/activate.bat %ANACONDA%
 set list=1
 timeout 1
 for %%x in (%list%) do (

@@ -205,8 +205,19 @@ class Basler_camera(DS_General_Widget):
         self.y_pos = p2.plot(self.positions['Y'])
         lo_image.addLayout(layout_cg_threshold)
         lo_image.addWidget(win)
+        
+        ## Set a custom color map
+        colors = [
+            (0, 0, 0),
+            (45, 5, 61),
+            (84, 42, 55),
+            (150, 87, 60),
+            (208, 171, 141),
+            (255, 255, 255)
+        ]
+        cmap = pg.ColorMap(pos=np.linspace(0.0, 1.0, 6), color=colors)
 
-        cmap = pg.colormap.get('CET-L9')
+        # cmap = pg.colormap.get('CET-L9')
         self.view.setColorMap(cmap)
 
     def register_full_layouts(self):
@@ -221,7 +232,7 @@ class Basler_camera(DS_General_Widget):
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()
-        self.ds.set_trigger_mode(1 if state == 'On' else 0)
+        self.ds.set_trigger_mode = 1 if state == 'On' else 0
 
     def width_change(self):
         print(self.width.getValue())
@@ -259,7 +270,6 @@ class Basler_camera(DS_General_Widget):
         self.x_pos.setData(self.positions['X'])
         self.y_pos.setData(self.positions['Y'])
         self.roi_circle.setPos([x, y])
-
 
     def convert_image(self, image):
         image2D = image

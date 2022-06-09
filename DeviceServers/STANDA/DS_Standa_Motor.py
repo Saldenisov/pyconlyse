@@ -30,7 +30,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """"
     Device Server (Tango) which controls the Standa motorized equipment using libximc.dll
     """
-    _version_ = '0.4'
+    _version_ = '0.5'
     _model_ = 'STANDA step motor'
     polling_local = 1500
 
@@ -73,7 +73,27 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         attr_prop = self.position.get_properties()
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
+        self.register_variables_for_archive()
         self.turn_on()
+
+    def power_status(self):
+        return self._power_status
+
+    def power_current(self):
+        return self._power_current
+
+    def power_voltage(self):
+        return self._power_voltage
+
+    def temperature(self):
+        return self._temperature
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+        self.archive_state.update({'current': (self.power_current, 'float16'),
+                                   'voltage': (self.power_voltage, 'float16'),
+                                   'temperature': (self.temperature, 'float16'),
+                                   'position': (self.position, 'float16')})
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -129,7 +149,6 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
         return res, comments
 
-    #Commands
     def define_position_local(self, position) -> Union[str, int]:
         position = position * self.conversion
         pos_steps = int(position // 1)
@@ -212,10 +231,12 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         sleep(wait / 1000.)
         result = lib.get_status(self._device_id_internal, ctypes.byref(x_status))
         if result == Result.Ok:
+
             self._temperature = x_status.CurT / 10.0
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
+
             if self._status_check_fault > 0:
                 self._status_check_fault = 0
             return super().get_controller_status_local()

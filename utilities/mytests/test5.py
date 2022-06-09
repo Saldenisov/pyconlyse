@@ -1,20 +1,19 @@
-def partial(func, *args, **keywords):
-    def newfunc(*fargs, **fkeywords):
-        newkeywords = keywords.copy()
-        newkeywords.update(fkeywords)
-        return func(*args, *fargs, **newkeywords)
-    return newfunc
+from copy import deepcopy
+
+class A:
+
+    def __init__(self):
+        self._b = {'q': -15}
+
+    def b(self):
+        return self._b
+
+a = A()
+
+c = {'c': a._b}
 
 
-
-def a(*args, x = 2, y = 3):
-    result = 0
-    for i in args:
-        result += i
-    return result ** x - y
-
-b = partial(a, -1, 1, x = 2)
-
-print(b(1,0, y=10))
-
+print(c['c'])
+a._b['q'] = 15
+print(c['c'])
 

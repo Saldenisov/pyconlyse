@@ -177,6 +177,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.device = None
         self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
         super().init_device()
+        self.register_variables_for_archive()
         self.start_grabbing_local()
 
     def find_device(self):
@@ -326,6 +327,12 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 cY = int(M["m01"] / M["m00"])
 
         self.CG_position = {'X': cX, 'Y': cY}
+        data = self.form_archive_data(np.array([self.CG_position['X'], self.CG_position['Y']]).reshape((1, 2)),
+                                      f'cg_position', dt='uint16')
+        self.write_to_archive(data)
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
 
     def wait(self, timeout):
 
@@ -341,10 +348,11 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 if grabResult.GrabSucceeded():
                     image = self.converter.Convert(grabResult)
                     grabResult.Release()
-                    image = np.ndarray(buffer=image.GetBuffer(),
-                                       shape=(image.GetHeight(), image.GetWidth(), 3),
-                                       dtype=np.uint8)
+                    image = np.ndarray(buffer=image.GetBuffer(), shape=(image.GetHeight(), image.GetWidth(), 3),
+                                       dtype='uint8')
                     self.calc_cg(image)
+                    # data = self.form_acrhive_data(image, f'image', dt='uint8')
+                    # self.write_to_archive(data)
                     # Convert 3D array to 2D for Tango to transfer it
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                     self.info('Image is received...')
@@ -399,23 +407,22 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         else:
             return False
 
-    @command(dtype_in=int, doc_in='state 1 or 0', dtype_out=str, doc_out=standard_str_output)
-    def set_trigger_mode(self, state):
-        state = 'On' if state else 'Off'
+    def get_trigger_mode(self) -> int:
+        return 1 if self.camera.TriggerMode == 'On' else 0
+
+    def set_trigger_mode(self, value: int):
+        state = 'On' if value else 'Off'
         self.info(f'Enabling hardware trigger: {state}', True)
         restart = False
         if self.grabbing:
             self.stop_grabbing()
             restart = True
         try:
-            print(self.camera)
             self.camera.TriggerMode = state
         except Exception as e:
             self.error(e)
-            return str(e)
         if restart:
             self.start_grabbing()
-        return str(0)
 
     @attribute(label='Center of gravity threshold', dtype=int, access=AttrWriteType.READ_WRITE)
     def center_gravity_threshold(self):
