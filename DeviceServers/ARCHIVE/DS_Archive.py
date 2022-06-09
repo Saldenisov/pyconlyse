@@ -329,7 +329,7 @@ class DS_Archive(DS_General):
             items = container.get_object(dataset_name)
             item_timestamps = container.get_object(f'{dataset_name}_timestamp')
             for item, item_timestamp in zip(items, item_timestamps):
-                if isinstance(item, h5py.Dataset):
+                if isinstance(item, h5py.Dataset) and item.shape[0] >= 1:
                     data_containers.append(np.array(item))
                     data_timestamps_containers.append(np.array(item_timestamp))
 

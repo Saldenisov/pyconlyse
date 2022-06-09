@@ -3,8 +3,8 @@ from tango import DbDevInfo, Database
 db = Database()
 
 
-names = {1: ['manip/general', 'Archiving_Experimental', 'Archive', "E:\\data\\h5", 1, 2**30],
-         2: ['manip/general', 'Archiving_Test', 'Archivetest', "E:\\data\\h5", 1, 2**30]}
+names = {1: ['manip/general', 'Archiving_Experimental', 'Archive', "E:\\data\\h5", 1, 2**27],
+         2: ['manip/general', 'Archiving_Test', 'Archivetest', "E:\\data\\h5", 1, 2**27]}
 
 
 

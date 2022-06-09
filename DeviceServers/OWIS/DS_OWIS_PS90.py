@@ -186,9 +186,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
+        extra = {}
         for axis in self.delay_lines_parameters.keys():
             archive_key = f'position_axis_{axis}'
-            self.archive_state[archive_key] = (partial(self._get_axis_position, axis), 'float16')
+            extra[archive_key] = (partial(self._get_axis_position, axis), 'float16')
+        self.archive_state.update(extra)
 
     def _get_axis_position(self, axis):
         return self._delay_lines_parameters[axis]['position']
@@ -508,7 +510,7 @@ long error = PS90_GetReadError(1);
         control_unit = ctypes.c_long(control_unit)
         res = lib.PS90_GetSerNumber(control_unit, buf, 25)
         result = buf.value.decode('utf-8')
-        return int(result)
+        return int(result) if result else -1
 
     @development_mode(dev=dev_mode, with_return=(3, 'DEV MODE'))
     def _get_axis_state_ps90(self, control_unit: int, axis: int) -> Tuple[Union[int, bool, str]]:

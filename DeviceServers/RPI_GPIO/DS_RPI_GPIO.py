@@ -81,10 +81,12 @@ class DS_RPI_GPIO(DS_GPIO):
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
+        extra = {}
         for pin in self._pin_ids:
             control_pin = self.pins[pin]
             archive_key = f'pin_state_{pin}'
-            self.archive_state[archive_key] = (partial(self.value_from_pin, control_pin), 'uint8')
+            extra[archive_key] = (partial(self.value_from_pin, control_pin), 'uint8')
+        self.archive_state.update(extra)
 
     def value_from_pin(self, control_pin):
         return control_pin.value

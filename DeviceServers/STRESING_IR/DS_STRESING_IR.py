@@ -351,8 +351,6 @@ class DS_STRESING_IR(DS_CAMERA):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
-
-
     # DLL functions
     @dll_lock
     def _DLLCCDDrvInit(self) -> Tuple[bool, str]:
