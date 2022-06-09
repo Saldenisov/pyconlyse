@@ -184,8 +184,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
     def get_gain_max(self) -> int:
         pass
 
-    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE,
-               polling_period=polling_infinite)
+    @attribute(label='width of the image', dtype=int, access=AttrWriteType.READ_WRITE)
     def width(self):
         return self.get_width()
 

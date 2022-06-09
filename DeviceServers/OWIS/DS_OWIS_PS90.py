@@ -5,7 +5,7 @@
 import os
 import sys
 from pathlib import Path
-from functools import partial
+
 p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
@@ -25,8 +25,6 @@ from utilities.tools.decorators import development_mode
 dev_mode = False
 # Strange delay for ps90.dll
 time_ps_delay = 0.005
-dll_path = str(app_folder / 'ps90_64.dll')
-lib = ctypes.WinDLL(dll_path)
 
 try:
     from DeviceServers.General.DS_Motor import DS_MOTORIZED_MULTI_AXES
@@ -87,12 +85,12 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self.move_axis([4, pos])
 
     def init_device(self):
+        self.dll_path = str(app_folder / 'ps90.dll')
+        self.lib = ctypes.WinDLL(self.dll_path)
+
         super().init_device()
         self.follow = {}
-        self.delay_lines_parameters = eval(self.delay_lines_parameters)
-        self.register_variables_for_archive()
         self.turn_on()
-        self.get_controller_status()
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -184,22 +182,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self._delay_lines_parameters[axis]['state'] = result
         return 0
 
-    def register_variables_for_archive(self):
-        super().register_variables_for_archive()
-        extra = {}
-        for axis in self.delay_lines_parameters.keys():
-            archive_key = f'position_axis_{axis}'
-            extra[archive_key] = (partial(self._get_axis_position, axis), 'float16')
-        self.archive_state.update(extra)
-
-    def _get_axis_position(self, axis):
-        return self._delay_lines_parameters[axis]['position']
-
     def read_position_axis_local(self, axis: int) -> Union[int, str]:
         res, com = self._get_pos_ex_ps90(self.control_unit_id, axis)
         if not com:
             self._delay_lines_parameters[axis]['position'] = res
-            self.info(f"Reading position locally for axis {axis}: {res}", False)
+            self.info(f"Reading position localy for axis {axis}: {res}", False)
             result = 0
         else:
             result = f'Device {self.device_name} reading position of axis {axis} was not successful.'
@@ -349,7 +336,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         par6 = ctypes.c_long(par6)
         # res x -1 is according official documentation
         sleep(time_ps_delay)
-        res = lib.PS90_Connect(control_unit, interface, port, baudrate, par3, par4, par5, par6) * -1
+        res = self.lib.PS90_Connect(control_unit, interface, port, baudrate, par3, par4, par5, par6) * -1
         return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -386,7 +373,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         control_unit = ctypes.c_long(control_unit)
         ser_num = ctypes.c_char_p(ser_num)
         sleep(time_ps_delay)
-        res = lib.PS90_SimpleConnect(control_unit, ser_num) * -1  # *-1 is according official documentation
+        res = self.lib.PS90_SimpleConnect(control_unit, ser_num) * -1  # *-1 is according official documentation
         return True if res == 0 else False, self._error_OWIS_ps90(res, 0)
 
     def _convert_axis_state_format_ps90(self, axis_state_OWIS: int) -> int:
@@ -420,7 +407,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         """
         control_unit = ctypes.c_long(control_unit)
         sleep(time_ps_delay)
-        res = lib.PS90_Disconnect(control_unit)
+        res = self.lib.PS90_Disconnect(control_unit)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -449,7 +436,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_FreeSwitch(control_unit, axis)
+        res = self.lib.PS90_FreeSwitch(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -508,9 +495,9 @@ long error = PS90_GetReadError(1);
         """
         buf = ctypes.create_string_buffer(25)
         control_unit = ctypes.c_long(control_unit)
-        res = lib.PS90_GetSerNumber(control_unit, buf, 25)
+        res = self.lib.PS90_GetSerNumber(control_unit, buf, 25)
         result = buf.value.decode('utf-8')
-        return int(result) if result else -1
+        return int(result)
 
     @development_mode(dev=dev_mode, with_return=(3, 'DEV MODE'))
     def _get_axis_state_ps90(self, control_unit: int, axis: int) -> Tuple[Union[int, bool, str]]:
@@ -538,7 +525,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_GetAxisState(control_unit, axis)
+        res = self.lib.PS90_GetAxisState(control_unit, axis)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -569,7 +556,7 @@ long error = PS90_GetReadError(1);
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
         axis = ctypes.c_long(axis)
-        res = lib.PS90_GetTargetEx(control_unit, axis) / 10000
+        res = self.lib.PS90_GetTargetEx(control_unit, axis) / 10000
         sleep(time_ps_delay)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
@@ -599,7 +586,7 @@ long error = PS90_GetReadError(1);
         pitch = self._delay_lines_parameters[axis]['pitch']
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_GetPosition(control_unit, axis) / 10000 * pitch
+        res = self.lib.PS90_GetPosition(control_unit, axis) / 10000 * pitch
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -630,7 +617,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_GetTargetMode(control_unit, axis)
+        res = self.lib.PS90_GetTargetMode(control_unit, axis)
         error = self.__get_read_error_ps90(control_unit)
         if error != 0:
             res = False
@@ -661,7 +648,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_GoTarget(control_unit, axis)
+        res = self.lib.PS90_GoTarget(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -669,7 +656,7 @@ long error = PS90_GetReadError(1);
         if not isinstance(control_unit, ctypes.c_long):
             control_unit = ctypes.c_long(control_unit)
         sleep(time_ps_delay)
-        res = lib.PS90_GetReadError(control_unit)
+        res = self.lib.PS90_GetReadError(control_unit)
         return res
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -695,7 +682,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_MotorInit(control_unit, axis)
+        res = self.lib.PS90_MotorInit(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is initialized')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -720,7 +707,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_MotorOn(control_unit, axis)
+        res = self.lib.PS90_MotorOn(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is on.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -745,7 +732,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_int(axis)
         sleep(time_ps_delay)
-        res = lib.PS90_MotorOff(control_unit, axis)
+        res = self.lib.PS90_MotorOff(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Motor of axis {axis} is off.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -766,7 +753,7 @@ long error = PS90_GetReadError(1);
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
         axis = ctypes.c_long(axis)
-        res = lib.PS90_Stop(control_unit, axis)
+        res = self.lib.PS90_Stop(control_unit, axis)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1, f'Axis {axis} movement is stopped.')
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -794,7 +781,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
-        res = lib.PS90_SetLimitMinEx(control_unit, axis, value)
+        res = self.lib.PS90_SetLimitMinEx(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -822,7 +809,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
-        res = lib.PS90_SetLimitMaxEx(control_unit, axis, value)
+        res = self.lib.PS90_SetLimitMaxEx(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -831,7 +818,7 @@ long error = PS90_GetReadError(1);
         axis = int(axis)
         axis = ctypes.c_long(axis)
         pos = ctypes.c_double(pos)
-        res = lib.PS90_SetPositionEx(control_unit, axis, pos)
+        res = self.lib.PS90_SetPositionEx(control_unit, axis, pos)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -853,7 +840,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         sleep(time_ps_delay)
-        res = lib.PS90_SetPosMode(control_unit, axis, mode)
+        res = self.lib.PS90_SetPosMode(control_unit, axis, mode)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -881,7 +868,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
-        res = lib.PS90_SetPosFEx(control_unit, axis, value)
+        res = self.lib.PS90_SetPosFEx(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -916,7 +903,7 @@ long error = PS90_GetReadError(1);
         inc_rev = ctypes.c_long(int(inc_rev))
         gear_ratio = ctypes.c_double(gear_ratio)
         sleep(time_ps_delay)
-        res = lib.PS90_SetStageAttributes(control_unit, axis, pitch, inc_rev, gear_ratio)
+        res = self.lib.PS90_SetStageAttributes(control_unit, axis, pitch, inc_rev, gear_ratio)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -941,7 +928,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         mode = ctypes.c_long(mode)
         sleep(time_ps_delay)
-        res = lib.PS90_SetTargetMode(control_unit, axis, mode)
+        res = self.lib.PS90_SetTargetMode(control_unit, axis, mode)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -968,7 +955,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         value = ctypes.c_long(value)
         sleep(time_ps_delay)
-        res = lib.PS90_SetTarget(control_unit, axis, value)
+        res = self.lib.PS90_SetTarget(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
@@ -996,7 +983,7 @@ long error = PS90_GetReadError(1);
         axis = ctypes.c_long(axis)
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
-        res = lib.PS90_SetTargetEx(control_unit, axis, value)
+        res = self.lib.PS90_SetTargetEx(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     def _error_OWIS_ps90(self, code: int, type: int, user_def='') -> str:

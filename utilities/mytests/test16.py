@@ -1,42 +1,30 @@
+from dataclasses import dataclass
 from threading import Thread
+from typing import Dict
 from time import sleep
+@dataclass
+class OrderInfo:
+    order_done: bool
 
 
-class A(Thread):
 
-    def __init__(self):
-        super().__init__()
-        self.active = False
-        self.pause = False
-    def a(self):
-        print('Alive')
-        sleep(0.5)
-
-    def stop(self):
-        self.active = False
-
-    def hold(self):
-        self.pause = True
-
-    def unhold(self):
-        self.pause = False
-
-    def activate(self):
-        self.active = True
-        self.start()
-
-    def run(self):
-        while self.active:
-            if not self.pause:
-                self.a()
-            else:
-                sleep(0.2)
+a = {1: OrderInfo(False), 2: OrderInfo(True)}
 
 
-a = A()
-a.activate()
-a.hold()
+def change(a: Dict[int, OrderInfo]):
+    while True:
+        for name, order_info in a.items():
+            order_info.order_done = False if order_info.order_done else True
+        sleep(0.25)
 
-sleep(1)
-a.unhold()
+def show(a: Dict[int, OrderInfo]):
+    while True:
+        for name, order_info in a.items():
+            print(f'{name}: {order_info}')
+        sleep(0.25)
 
+t1 = Thread(target=change, args=[a])
+t2 = Thread(target=show, args=[a])
+
+t1.start()
+t2.start()
