@@ -43,10 +43,15 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                          access=AttrWriteType.READ_WRITE, format="8.4f", doc="the position of axis",
                          polling_period=polling_local, abs_change=0.001)
 
+    def get_pos(self):
+        return self._position
 
     @attribute(label='Temperature', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='deg',
                polling_period=polling_local, doc="Temperature in tenths of degrees C.")
     def temperature(self):
+        return self._temperature
+
+    def get_temp(self):
         return self._temperature
 
     @attribute(label='Power current', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='mA',
@@ -54,9 +59,15 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def power_current(self):
         return self._power_current
 
+    def get_current(self):
+        return self._power_current
+
     @attribute(label='Power voltage', access=AttrWriteType.READ, display_level=DispLevel.OPERATOR, unit='V',
                polling_period=polling_local)
     def power_voltage(self):
+        return self._power_voltage
+
+    def get_voltage(self):
         return self._power_voltage
 
     @attribute(label='Power status', access=AttrWriteType.READ, dtype=str, display_level=DispLevel.OPERATOR,
@@ -90,10 +101,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
-        self.archive_state.update({'current': (self.power_current, 'float16'),
-                                   'voltage': (self.power_voltage, 'float16'),
-                                   'temperature': (self.temperature, 'float16'),
-                                   'position': (self.position, 'float16')})
+        self.archive_state.update({'current': (self.get_current, 'float16'),
+                                   'voltage': (self.get_voltage, 'float16'),
+                                   'temperature': (self.get_temp, 'float16'),
+                                   'position': (self.get_pos, 'float16')})
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)

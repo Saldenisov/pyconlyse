@@ -147,6 +147,19 @@ class DS_Netio_pdu(DS_PDU):
         self.set_state(DevState.OFF)
         return 0
 
+    def register_variables_for_archive(self):
+        from functools import partial
+        super().register_variables_for_archive()
+        extra = {}
+        extra['output1'] = (partial(self.get_channel_state, 0), 'int8')
+        extra['output2'] = (partial(self.get_channel_state, 1), 'int8')
+        extra['output3'] = (partial(self.get_channel_state, 2), 'int8')
+        extra['output4'] = (partial(self.get_channel_state, 3), 'int8')
+        self.archive_state.update(extra)
+
+    def get_channel_state(self, channel):
+        return self._states[channel]
+
     def get_controller_status_local(self) -> Union[int, str]:
         def error(self):
             self._status_check_fault += 1
@@ -172,14 +185,6 @@ class DS_Netio_pdu(DS_PDU):
             error(self)
             return f'Could not get controller status of {self.device_name}: {res}.'
 
-    def register_variables_for_archive(self):
-        super().register_variables_for_archive()
-        extra = {}
-        extra['output1'] = (self._states[0], 'int8')
-        extra['output2'] = (self._states[1], 'int8')
-        extra['output3'] = (self._states[2], 'int8')
-        extra['output4'] = (self._states[3], 'int8')
-        self.archive_state.update(extra)
 
 
 if __name__ == "__main__":
