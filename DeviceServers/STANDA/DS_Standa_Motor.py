@@ -90,8 +90,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
-        self.archive_state = {'current': (self.power_current, 'float16'), 'voltage': (self.power_voltage, 'float16'),
-                              'temperature': (self.temperature, 'float16')}
+        self.archive_state.update({'current': (self.power_current, 'float16'),
+                                   'voltage': (self.power_voltage, 'float16'),
+                                   'temperature': (self.temperature, 'float16'),
+                                   'position': (self.position, 'float16')})
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -128,8 +130,6 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             pos_microsteps = pos.Position * 256 + pos.uPosition
             pos_basic_units = pos_microsteps / 256
             self._position = round(pos_basic_units / self.conversion, 3)
-            data = self.form_archive_data(self._position, f'position', dt='float16')
-            self.write_to_archive(data)
             return 0
         else:
             return f'Could not read position of {self.device_name}: {result}.'

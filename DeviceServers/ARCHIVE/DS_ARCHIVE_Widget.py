@@ -241,11 +241,8 @@ class Archive(DS_General_Widget):
         self.construct_object_name(item)
         average = str(self.average_data.value())
         n_points = str(self.n_points.value())
-        date_from: QtCore.QDateTime = self.date_from.dateTime()
-        date_from = date_from.toPyDateTime()
-        date_from = date_from.timestamp()
-        # date_to = self.date_to.dateTime().toPyDateTime().timestamp()
-        order_name = self.ds.get_data([self.dataset_name, f'{date_from}', average, n_points])
+        from_idx = self.from_idx.value()
+        order_name = self.ds.get_data([self.dataset_name, f'{from_idx}', average, n_points])
         ready = False
 
         for i in range(60):
@@ -265,22 +262,24 @@ class Archive(DS_General_Widget):
 
                 data = DataXY(X=np.frombuffer(data_d.X, dtype=data_d.Xdtype),
                               Y=np.frombuffer(data_d.Y, dtype=data_d.Ydtype),
-                              name=data_d.name)
+                              name=f'{data_d.name}_{from_idx}_{n_points}_{average}')
 
                 self.add_curve(self.plot, data)
         else:
             print(f'Did not get response in time.')
 
-
-    def add_curve(self, plot: pg.PlotItem, data: DataXY): # add a curve
+    def add_curve(self, plot: pg.PlotItem, data: DataXY):  # add a curve
+        plot.idx += 1
+        name = f'{plot.idx}_{data.name}'
         p = plot.plot(data.X, data.Y)
         plot.curves.append(p)
-        plot.curves_names[data.name] = len(plot.curves) - 1
-        self.legend.addItem(p, data.name)
+        plot.curves_names[name] = len(plot.curves) - 1
+        self.legend.addItem(p, name)
 
     def del_curve(self, plot: pg.PlotItem, name):
         idx = plot.curves_names[name]
         plot.curves[idx].clear()
+        plot.idx -= 1
         plot.replot()
 
     def set_image(self, lo_image):
@@ -292,6 +291,7 @@ class Archive(DS_General_Widget):
         self.plot.setLabel('left', "Data", units='')
         self.plot.setLabel('bottom', "Timestamp", units='')
         self.plot.curves_names = {}
+        self.plot.idx = 0
 
         self.view.setMinimumSize(500, 450)
 

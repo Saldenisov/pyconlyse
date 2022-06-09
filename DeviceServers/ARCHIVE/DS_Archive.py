@@ -86,10 +86,13 @@ class H5_container:
                 res.append(obj)
         return res
 
+    def get_shape(self):
+        self.open()
+        return self.shape()
+
     def open(self, lock=False):
         if not self.h5_file:
             self.lock = True
-            # self.parent.info(f'Openning file: {self.file_path}')
             self.h5_file = h5py.File(str(self.file_path), 'a')
         self.lock = lock
 
@@ -117,8 +120,11 @@ class H5_container:
                         d[key] = fill_keys(d[key], obj[key])
                 return d
         structure = {}
+        self.open(lock=True)
         if len(self.h5_file.keys()) != 0:
             structure = fill_keys(structure, self.h5_file)
+        self.lock = False
+        print(f'Structure is creating for {self.file_path}')
         self._structure = structure
 
     def closing(self):
@@ -319,13 +325,13 @@ class DS_Archive(DS_General):
         data_timestamps_containers = []
 
         for container in containers:
-            container.open(True)
+            container.open(lock=True)
             items = container.get_object(dataset_name)
             item_timestamps = container.get_object(f'{dataset_name}_timestamp')
             for item, item_timestamp in zip(items, item_timestamps):
-                if isinstance(item, h5py.Dataset):
-                    data_containers.append(item)
-                    data_timestamps_containers.append(item_timestamp)
+                if isinstance(item, h5py.Dataset) and item.shape[0] >= 1:
+                    data_containers.append(np.array(item))
+                    data_timestamps_containers.append(np.array(item_timestamp))
 
         if data_containers and data_timestamps_containers:
             timestamp_max_values = [data_timestamp[-1] for data_timestamp in data_timestamps_containers]
@@ -358,7 +364,7 @@ class DS_Archive(DS_General):
                 for timestamp_dataset, index in zip(timestamps_containers, range(len(timestamps_containers))):
                     length += timestamp_dataset.shape[0]
                     indexes_of_containers[1] = index
-                    if length >= n_of_points:
+                    if length >= n_of_points + from_idx:
                         break
 
                 timestamps_containers = timestamps_containers[:indexes_of_containers[1] + 1]
@@ -369,15 +375,16 @@ class DS_Archive(DS_General):
                 data = []
 
                 for timestamp_dataset, dataset in zip(timestamps_containers, data_containers):
-                    number = (n_of_points - len(timestamps))
+                    number = n_of_points + from_idx
                     if timestamp_dataset.shape[0] >= number:
-                        timestamps.append(timestamp_dataset[:number])
-                        data.append(dataset[:number])
+                        timestamps.append(timestamp_dataset[from_idx: number])
+                        data.append(dataset[from_idx: number])
                         break
                     else:
-                        timestamps.append(timestamp_dataset[:])
-                        data.append(dataset[:])
-                    n_of_points -= len(timestamps)
+                        timestamps.append(timestamp_dataset[from_idx:])
+                        data.append(dataset[from_idx:])
+                    n_of_points -= len(timestamp_dataset) - from_idx
+                    from_idx = 0
 
                 timestamps = np.concatenate(timestamps)[:n_of_points]
                 data = np.concatenate(data)[:n_of_points]

@@ -45,12 +45,11 @@ class DS_General(Device):
                             device_id=self.device_id))
 
     @attribute(label='Always on?', dtype=int, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
-    def always_on(self):
+    def always_on_value(self):
         return self.always_on
 
-    def write_always_on(self, value: int):
+    def write_always_on_value(self, value: int):
         self.always_on = value
-
 
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
     def device_friendly_name(self):
@@ -138,18 +137,22 @@ class DS_General(Device):
         self.archive_state['State'] = (self.get_state, 'int8')
 
     def send_state_archive(self):
-        for key, value in self.previous_archive_state.items():
+        res = {}
+        for key, prev_value in self.previous_archive_state.items():
             current_value = self.archive_state[key][0]()
             dt = self.archive_state[key][1]
-            if value != current_value:
+            res[key] = current_value
+            if prev_value != current_value:
                 data = self.form_archive_data(current_value, key, dt)
                 self.write_to_archive(data)
+        self.previous_archive_state = res
 
     def fix_state(self):
         res = {}
         for key, value in self.archive_state.items():
             res[key] = value[0]()
         self.previous_archive_state = res
+        self.info('Fixing archiving state', True)
 
     @abstractmethod
     def find_device(self):
@@ -185,7 +188,6 @@ class DS_General(Device):
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if True:
-            self.fix_state()
             res = self.get_controller_status_local()
             self.send_state_archive()
             if res != 0:
@@ -207,6 +209,7 @@ class DS_General(Device):
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} WAS turned ON.", True)
+                self.fix_state()
         else:
             self.error(f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}.")
 

@@ -174,6 +174,12 @@ class DS_Netio_pdu(DS_PDU):
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
+        extra = {}
+        extra['output1'] = (self._states[0], 'int8')
+        extra['output2'] = (self._states[1], 'int8')
+        extra['output3'] = (self._states[2], 'int8')
+        extra['output4'] = (self._states[3], 'int8')
+        self.archive_state.update(extra)
 
 
 if __name__ == "__main__":
