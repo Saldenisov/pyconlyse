@@ -51,7 +51,6 @@ class DS_General(Device):
     def write_always_on_value(self, value: int):
         self.always_on = value
 
-
     @attribute(label="Friendly name", dtype=str, display_level=DispLevel.OPERATOR, access=AttrWriteType.READ_WRITE)
     def device_friendly_name(self):
         return self.friendly_name
