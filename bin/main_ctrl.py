@@ -1,30 +1,21 @@
-import subprocess
 import sys
-from _functools import partial
-from pathlib import Path
-from threading import Thread
-from typing import Dict
-
-import imageio
-import numpy as np
-import pyqtgraph as pg
-from PyQt5 import QtWidgets
-from PyQt5.QtGui import QIcon
-from tango import Database
-from taurus import Device
-from taurus.core.tango import DevState
+import os
+from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit, TaurusValueCheckBox, TaurusValueComboBox
+from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
-from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.qt.qtgui.input import TaurusValueComboBox
+from PyQt5 import QtWidgets
+from PyQt5.QtGui import QIcon
+from _functools import partial
+import subprocess
 
+from pathlib import Path
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
-from functools import partial
+
 
 type_vis = VisType.FULL
-from gui.MyWidgets import MyQLabel
 
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
@@ -41,162 +32,12 @@ def rb_clicked(value: str):
     type_vis = VisType(value)
 
 
-def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
-    db = Database()
-    servers = ['ELYSE', 'manip']
-    devices = []
-    for server in servers:
-        devices = devices + list(db.get_device_exported(f"{server}*"))
-    labels = {}
-    taurus_devices = {}
-    columns = 3
-    r = 0
-    c = 0
-    i = 1
-    a = {}
-    for dev_name in devices:
-        print(f'Device {dev_name} {i}/{len(devices)}')
-        dev = Device(dev_name)
-        taurus_devices[dev_name] = dev
-        if check:
-            state = dev.state
-        else:
-            state = '-1'
-        lab = MyQLabel(dev_name)
-        labels[dev_name] = lab
-
-        layout_devices.addWidget(lab, r, c)
-        c += 1
-        if c == columns:
-            c = 0
-            r += 1
-        i += 1
-    return taurus_devices, labels
-
-
-def set_state(taurus_devices, labels):
-    from time import sleep
-    while True:
-        for dev_name, dev in taurus_devices.items():
-            sleep(0.15)
-            state_ds = dev.state
-            if state_ds == 4:
-                labels[dev_name].update_style(f"background-color: red")
-            else:
-                state = dev.State()
-                if state == DevState.ON:
-                    labels[dev_name].update_style(f"background-color: green")
-                elif state == DevState.STANDBY:
-                    labels[dev_name].update_style(f"background-color: yellow")
-                elif state == DevState.OFF:
-                    labels[dev_name].update_style(f"background-color: gray")
-                elif state == DevState.FAULT:
-                    labels[dev_name].update_style(f"background-color: red")
-                else:
-                    labels[dev_name].update_style(f"background-color: purple")
-
-        sleep(2)
-
-
-def label_focus(map, event):
-
-    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (850, 284),
-                 'ELYSE/motorized_devices/DE2': (300, 300), 'ELYSE/motorized_devices/MM1_X': (3300, 380),
-                 'ELYSE/motorized_devices/MM1_Y': (3300, 380), 'ELYSE/motorized_devices/MM2_X': (3300, 660),
-                 'ELYSE/motorized_devices/MM2_Y': (3300, 660), 'ELYSE/motorized_devices/MME_X': (1800, 580),
-                 'ELYSE/motorized_devices/MME_Y': (1800, 580), 'manip/ELYSE/PDU_ELYSE': (300, 300),
-                 'manip/general/DS_OWIS_PS90': (300, 300), 'manip/SD1/PDU_SD1': (300, 300),
-                 'manip/SD2/PDU_SD2': (300, 300), 'manip/V0/Cam1_V0': (26, 990), 'manip/V0/Cam2_V0': (780, 620),
-                 'manip/V0/Cam3_V0': (300, 300), 'manip/V0/DV01': (1160, 640), 'manip/V0/DV02': (270, 640),
-                 'manip/V0/DV03': (300, 560), 'manip/V0/DV04': (920, 540), 'manip/V0/F1': (300, 300),
-                 'manip/V0/L-2_1': (300, 300), 'manip/V0/LaserPointing-Cam1': (300, 300),
-                 'manip/V0/LaserPointing-Cam2': (300, 300), 'manip/V0/LaserPointing-Cam3': (300, 300),
-                 'manip/V0/MM3_X': (60, 630), 'manip/V0/MM3_Y': (60, 630), 'manip/V0/MM4_X': (60, 1100),
-                 'manip/V0/MM4_Y': (60, 1100), 'manip/V0/OPA_X': (300, 300), 'manip/V0/OPA_Y': (300, 300),
-                 'manip/V0/PDU_VO': (300, 300), 'manip/V0/S1': (300, 300), 'manip/V0/S2': (300, 300),
-                 'manip/V0/S3': (300, 300), 'manip/V0/TS_OPA_m': (300, 300), 'manip/V0/TS_SC_m': (300, 300),
-                 'manip/VD2/PDU_VD2': (300, 300)}
-
-    if event in positions:
-        x = 120
-        y = 120
-        if event not in map.circles:
-            pos = list(positions[event])
-            circle = pg.CircleROI([pos[0] - x/2, pos[1] - y/2], [x, y], movable=False, resizable=False,
-                                  pen=pg.mkPen('r', width=2))
-            map.view.addItem(circle)
-            map.circles[event] = circle
-        else:
-            circle = map.circles[event]
-            del map.circles[event]
-            map.view.removeItem(circle)
-
-
-def show_map(main_widget, labels: Dict):
-    map = QtWidgets.QWidget()
-    layout_map_main = QtWidgets.QVBoxLayout()
-    layout_map_image = QtWidgets.QHBoxLayout()
-    layout_map_labels = QtWidgets.QHBoxLayout()
-    layout_map_main.addLayout(layout_map_image)
-    layout_map_main.addLayout(layout_map_labels)
-
-    imageWidget = pg.GraphicsLayoutWidget()
-    vb = imageWidget.addViewBox(row=1, col=1)
-    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\layout.png')
-
-    img = pg.ImageItem()
-    img.setImage(np.transpose(im, (1, 0, 2)))
-
-    label = QtWidgets.QLabel('Position')
-    layout_map_labels.addWidget(label)
-
-    def mouseMoved(label, img, evt):
-        pos = evt[0]
-        if img.sceneBoundingRect().contains(pos):
-            mousePoint = vb.mapSceneToView(pos)
-            index = int(mousePoint.x())
-            label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>" %
-                          (mousePoint.x(), mousePoint.y()))
-            # vLine.setPos(mousePoint.x())
-            # hLine.setPos(mousePoint.y())
-
-    proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=partial(mouseMoved, label, img))
-    map.proxy = proxy
-    vb.addItem(img)
-
-
-    vb.setAspectLocked(True)
-    vb.invertY(True)
-    map.view = vb
-    map.img = img
-    map.circles = {}
-    map.labels = labels
-    layout_map_image.addWidget(imageWidget)
-    map.setLayout(layout_map_main)
-    main_widget.map_widget = map
-    map.setGeometry(300, 300, 1200, 700)
-    map.setWindowTitle('Map')
-    map.show()
-
-    for label in labels.values():
-        label: MyQLabel = label
-        label.clicked.connect(partial(label_focus, map))
-
-
 def main():
     app = TaurusApplication(sys.argv, cmd_line_parser=None)
-    tabs = QtWidgets.QTabWidget()
-    tab1 = QtWidgets.QWidget()
-    tab2 = QtWidgets.QWidget()
-    tabs.addTab(tab1, 'Clients')
-    tabs.addTab(tab2, 'Devices')
-
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
     panel.setWindowIcon(QIcon('icons//main_icon.png'))
 
-    layout_clients = Qt.QVBoxLayout()
-    layout_devices= Qt.QGridLayout()
     layout_main = Qt.QVBoxLayout()
     setattr(panel, f'layout_main', layout_main)
 
@@ -206,8 +47,7 @@ def main():
     lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
-    lo_Laser_pointing = Qt.QHBoxLayout()
-    lo_Andor_ccd = Qt.QHBoxLayout()
+    lo_laser_pointing = Qt.QHBoxLayout()
 
     # Buttons
     button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
@@ -216,7 +56,6 @@ def main():
     button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
     button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
     button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
-    button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
@@ -231,8 +70,6 @@ def main():
     cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
     cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
-    cbox_andor_ccd = TaurusValueComboBox(parent=panel)
-    cbox_andor_ccd.addItems(['V0'])
 
     # Type of vizualization
     group_visualization = QtWidgets.QGroupBox('Type')
@@ -255,28 +92,23 @@ def main():
     lo_TOPDIRECT.addWidget(cbox_TOPDIRECT)
     lo_Basler.addWidget(button_Basler)
     lo_Basler.addWidget(cbox_BASLER)
-    lo_Laser_pointing.addWidget(button_laser_pointing)
-    lo_Laser_pointing.addWidget(cbox_laser_pointing)
-    lo_Andor_ccd.addWidget(button_andor_ccd)
-    lo_Andor_ccd.addWidget(cbox_andor_ccd)
+    lo_laser_pointing.addWidget(button_laser_pointing)
+    lo_laser_pointing.addWidget(cbox_laser_pointing)
 
-    layout_clients.addLayout(lo_type)
-    layout_clients.addLayout(lo_NETIO)
-    layout_clients.addLayout(lo_OWIS)
-    layout_clients.addLayout(lo_STANDA)
-    layout_clients.addLayout(lo_TOPDIRECT)
-    layout_clients.addLayout(lo_Basler)
-    layout_clients.addLayout(lo_Andor_ccd)
+    layout_main.addLayout(lo_type)
+    layout_main.addLayout(lo_NETIO)
+    layout_main.addLayout(lo_OWIS)
+    layout_main.addLayout(lo_STANDA)
+    layout_main.addLayout(lo_TOPDIRECT)
+    layout_main.addLayout(lo_Basler)
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
     separator_devices.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     separator_devices.setLineWidth(2)
 
-    layout_clients.addWidget(separator_devices)
-    layout_clients.addLayout(lo_Laser_pointing)
-    vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
-    layout_clients.addSpacerItem(vspacer)
+    layout_main.addWidget(separator_devices)
+    layout_main.addLayout(lo_laser_pointing)
 
     button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
     button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
@@ -284,26 +116,10 @@ def main():
     button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
     button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
     button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
-    button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
-
-    tab1.setLayout(layout_clients)
-    layout_devices_tab = QtWidgets.QVBoxLayout()
-    layout_devices_tab.addLayout(layout_devices)
-    button_map = QtWidgets.QPushButton('Map')
-    layout_devices_tab.addWidget(button_map)
-    tab2.setLayout(layout_devices_tab)
-
-    layout_main.addWidget(tabs)
-    taurus_devices, labels = set_devices_states(layout_devices, False)
-
-    button_map.clicked.connect(partial(show_map, panel, labels))
-
 
     panel.setMinimumWidth(300)
     panel.setLayout(layout_main)
     panel.show()
-    states_thread = Thread(target=set_state, args=[taurus_devices, labels])
-    states_thread.start()
     sys.exit(app.exec_())
 
 
