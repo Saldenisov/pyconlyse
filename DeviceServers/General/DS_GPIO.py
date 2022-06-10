@@ -17,6 +17,8 @@ class DS_GPIO(DS_General):
     ip_address = device_property(dtype=str)
     number_outputs = device_property(dtype=int)
     parameters = device_property(dtype=str)
+    authentication_name = device_property(dtype=str, default_value='admin')
+    authentication_password = device_property(dtype=str, default_value='admin')
 
     def init_device(self):
         self._names = []
