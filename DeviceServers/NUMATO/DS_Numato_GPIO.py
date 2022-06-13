@@ -8,6 +8,8 @@ import telnetlib
 
 from typing import Tuple, Union,  List
 from pathlib import Path
+import time
+import  re
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
@@ -48,20 +50,14 @@ class DS_Numato_GPIO(DS_GPIO):
         self._device_id_internal, self._uri = -1, b''
         if state_ok:
             if ping(self.ip_address):
-                if self.connect_to_device():
+                if self.turn_on_local() == 1:
                     self.set_state(DevState.INIT)
                     self._device_id_internal, self._uri = int(self.device_id), self.friendly_name.encode('utf-8')
                     states = []
                     for pins_param in self.parameters['Pins']:
-                        # TODO: complete init the pins' state
-                        control_pin = pins_param[0]
-                        self.gpio_set(control_pin, )
-                        self.pins[pins_param[0]] = control_pin
-                        states.append(control_pin.value)
-                    self._states = states
+                        self.gpio_set(pins_param[0], pins_param[3])
 
-
-    def connect_to_device(self):
+    def turn_on_local(self) -> Union[int, str]:
         # Wait for login prompt from device and enter user name when prompted
         self.telnet_obj = telnetlib.Telnet(self.ip_address)
         self.telnet_obj.read_until(b"login")
@@ -77,20 +73,57 @@ class DS_Numato_GPIO(DS_GPIO):
 
         # Check if login attempt was successful
         if b"successfully" in log_result:
-            return True
+            return 1
         elif "denied" in log_result:
-            return False
+            return log_result
 
-    def gpio_set(self, gpio_pin: int, value=True):
-        gpio_pin = str(hex(gpio_pin)[2:]).upper()
+    @staticmethod
+    def _int_to_hex(gpio_pin:int):
+        return str(hex(gpio_pin)[2:]).upper()
+
+    def set_pin_state_local(self, gpio_pin: int, value: int) -> Union[int, str]:
+        gpio_pin = DS_Numato_GPIO._int_to_hex(gpio_pin)
         if value:
             self.telnet_obj.write(("gpio set " + str(gpio_pin) + "\r\n").encode())
         else:
             self.telnet_obj.write(("gpio clear " + str(gpio_pin) + "\r\n").encode())
 
-        self.info(f"GPIO {gpio_pin} was set to {value}")
-        self.time.sleep(1)
+        self.info(f"GPIO {gpio_pin} was set to {value}", True)
+        time.sleep(0.5)
         self.telnet_obj.read_eager()
+        # TODO: return
+
+
+    def get_pin_state_local(self, gpio_pin: int) -> Union[int, str]:
+        gpio_pin = DS_Numato_GPIO._int_to_hex(gpio_pin)
+        self.telnet_obj.write(b"gpio read " + str(gpio_pin).encode("ascii") + b"\r\n")
+        time.sleep(0.5)
+        response = self.telnet_obj.read_eager()
+        result = int(re.split(br'[&>]', response)[0].decode())
+        self.info(f'GPIO pin {gpio_pin} is set to {result}')
+        return result
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+
+    def check_ip(self):
+        return ping(self.ip_address)
+
+    def get_controller_status_local(self) -> Union[int, str]:
+        res = self.check_ip()
+        if res and self.telnet_obj:
+            self.set_state(DevState.ON)
+            return 0
+        else:
+            self.turn_on_local()
+            res = self.check_ip()
+            if res:
+                self.set_state(DevState.ON)
+                return 0
+            else:
+                self.set_state(DevState.FAULT)
+                return f'Could not turn on, Numato {self.ip_address} is away...'
+
 
 if __name__ == "__main__":
     DS_Numato_GPIO.run_server()
