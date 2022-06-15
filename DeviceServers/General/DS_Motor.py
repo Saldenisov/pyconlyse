@@ -157,6 +157,7 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
              'get_status_axis': [DevState.ON], **DS_General.RULES}
 
     delay_lines_parameters = device_property(dtype=str)  # Specific for Controller: see, e.g., DS_OWIS_PS90
+    dll_path = device_property(dtype=str, default_value='')
 
     @attribute(label="Axes states", dtype=str, display_level=DispLevel.OPERATOR,
                access=AttrWriteType.READ,
