@@ -98,7 +98,7 @@ class DS_RPI_GPIO(DS_GPIO):
         else:
             return f'Wrong pin id {pin_id} was given.'
 
-    def set_pin_state_local(self, pins_values: List[int]) -> Union[int, str]:
+    def set_pins_state_local(self, pins_values: List[int]) -> Union[int, str]:
         pin_id = pins_values[0]
         pin_value = int(pins_values[1])
         if pin_id in self.pins:
