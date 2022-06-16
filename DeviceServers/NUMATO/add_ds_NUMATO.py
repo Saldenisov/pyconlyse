@@ -15,7 +15,11 @@ names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.206', ('adm
                    (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 0)]
          }, 'DS_Numato_GPIO'],
 '2': ['manip/general', 'Numato2_RELAY', 'Numato2', '10.20.30.207', ('admin', 'admin'), 16,
-         {'Pins': [(0, 'LED', 'power_X', 1)]
+         {'Pins': [(0, 'LED', 'power1_12V', 0), (1, 'LED', 'power2_12V', 0), (2, 'LED', 'power3_12V', 0),
+                   (3, 'LED', 'power4_12V', 0), (4, 'LED', 'power5_12V', 0), (5, 'LED', 'power6_12V', 0),
+                   (6, 'LED', 'power7_12V', 0), (7, 'LED', 'power8_12V', 0), (8, 'LED', 'power9_12V', 0),
+                   (9, 'LED', 'power10_24V', 0), (10, 'LED', 'power11_24V', 0), (11, 'LED', 'power12_24V', 0),
+                   (12, 'LED', 'power13_36V', 0)]
          }, 'DS_Numato_Relay']
          }
 
