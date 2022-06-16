@@ -4,10 +4,15 @@ db = Database()
 
 
 names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.206', ('admin', 'admin'), 32,
-         {'Pins': [(31, 'LED', 'DIR+_DM542_1st', 1), (30, 'LED', 'ENA+_DM542_1st', 0), (29, 'LED', 'DIR_A4988_4st', 1), (28, 'LED', 'enable_A4988_4st', 0), (27, 'LED', 'DIR_A4988_5th', 1),
-                   (26, 'LED', 'ennable_A4988_5th', 0), (25, 'LED', 'Dir+_DM542_2nd', 1), (24, 'LED', 'Ena+_DM542_2nd', 0), (23, 'LED', 'Dir+_DM542_3rd', 1), (22, 'LED', 'Ena+_DM542_3-rd', 0),
-                   (21, 'LED', 'MS3_A4988_all', 1), (20, 'LED', 'MS2_A4988_all', 1), (19, 'LED', 'MS1_A4988_all', 1), (18, 'LED', 'DIR_A4988_1st', 1), (17, 'LED', 'enable_A4988_1st', 0),
-                   (16, 'LED', 'DIR_A4988_2nd', 1), (15, 'LED', 'enable_A4988_2nd', 0), (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 0)]
+         {'Pins': [(31, 'LED', 'DIR+_DM542_1st', 1), (30, 'LED', 'ENA+_DM542_1st', 0), (29, 'LED', 'DIR_A4988_4st', 1),
+                   (28, 'LED', 'enable_A4988_4st', 0), (27, 'LED', 'DIR_A4988_5th', 1),
+                   (26, 'LED', 'ennable_A4988_5th', 0), (25, 'LED', 'Dir+_DM542_2nd', 1),
+                   (24, 'LED', 'Ena+_DM542_2nd', 0), (23, 'LED', 'Dir+_DM542_3rd', 1),
+                   (22, 'LED', 'Ena+_DM542_3-rd', 0), (21, 'LED', 'MS3_A4988_all', 1),
+                   (20, 'LED', 'MS2_A4988_all', 1), (19, 'LED', 'MS1_A4988_all', 1),
+                   (18, 'LED', 'DIR_A4988_1st', 1), (17, 'LED', 'enable_A4988_1st', 0),
+                   (16, 'LED', 'DIR_A4988_2nd', 1), (15, 'LED', 'enable_A4988_2nd', 0),
+                   (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 0)]
          }]
          }
 

@@ -22,7 +22,7 @@ class DS_General(Device):
     server_id = device_property(dtype=int)
     always_on = device_property(dtype=int, default_value=0)
     archive = 'manip/general/archive'
-    polling_main = 100
+    polling_main = 300
     RULES = {'turn_on': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
              'turn_off': [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
              'find_device': [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
@@ -37,7 +37,7 @@ class DS_General(Device):
         raise NotImplementedError
 
 
-    @pipe(label="DS_Info", doc="General info about DS.")
+    @pipe(label="DS_Info", doc="General info about DS")
     def read_info_ds(self):
         return ('info_ds', dict(manufacturer=f'{self.__class__.__name__}',
                             model=self._model_,

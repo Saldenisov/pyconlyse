@@ -22,22 +22,7 @@ from pypylon import pylon, genicam
 from threading import Thread
 
 
-import platform    # For getting the operating system name
-import subprocess  # For executing a shell command
-
-def ping(host):
-    """
-    Returns True if host (str) responds to a ping request.
-    Remember that a host may not respond to a ping (ICMP) request even if the host name is valid.
-    """
-
-    # Option for the number of packets as a function of
-    param = '-n' if platform.system().lower() == 'windows' else '-c'
-
-    # Building the command. Ex: "ping -c 1 google.com"
-    command = ['ping', param, '1', host]
-
-    return subprocess.call(command, stdout=subprocess.DEVNULL) == 0
+from utilities.myfunc import ping
 
 
 class DS_RPI_GPIO(DS_GPIO):
@@ -61,9 +46,10 @@ class DS_RPI_GPIO(DS_GPIO):
                 self.factory = PiGPIOFactory(host=self.ip_address)
                 states = []
                 for pins_param in self.parameters['Pins']:
-                    pin_type = eval(pins_param[1])
-                    control_pin = pin_type(pins_param[0], pin_factory=self.factory)
+                    pin_type = eval(pins_param[1])  # Led or Button
+                    control_pin = pin_type(pins_param[0], pin_factory=self.factory)  # Make object of pin using factory
                     self.pins[pins_param[0]] = control_pin
+                    self.set_pin_state_local([pins_param[0], pins_param[3]])
                     states.append(control_pin.value)
                 self._states = states
             else:
@@ -75,20 +61,18 @@ class DS_RPI_GPIO(DS_GPIO):
             control_pin = self.pins[pin]
             value = control_pin.value
             states.append(value)
-            data = self.form_archive_data(value, f'pin_state_{pin}', dt='uint8')
-            self.write_to_archive(data)
         self._states = states
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
         extra = {}
         for pin in self._pin_ids:
-            control_pin = self.pins[pin]
             archive_key = f'pin_state_{pin}'
-            extra[archive_key] = (partial(self.value_from_pin, control_pin), 'uint8')
+            extra[archive_key] = (partial(self.value_from_pin, pin), 'uint8')
         self.archive_state.update(extra)
 
-    def value_from_pin(self, control_pin):
+    def value_from_pin(self, pin_id: int):
+        control_pin = self.pins[pin_id]
         return control_pin.value
 
     def get_pin_state_local(self, pin_id: int) -> Union[int, str]:
@@ -98,34 +82,27 @@ class DS_RPI_GPIO(DS_GPIO):
         else:
             return f'Wrong pin id {pin_id} was given.'
 
-    def set_pins_state_local(self, pins_values: List[int]) -> Union[int, str]:
-        pin_id = pins_values[0]
-        pin_value = int(pins_values[1])
+    def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
+        pin_id = pin_id_value[0]
+        pin_value = int(pin_id_value[1])
         if pin_id in self.pins:
             if pin_value >= 1:
                 self.pins[pin_id].on()
-                pin_value = 1
             elif pin_value <= 0:
                 self.pins[pin_id].off()
-                pin_value = 0
-            data = self.form_archive_data(pin_value, f'state_pin_{pin_id}')
-            self.write_to_archive(data)
             return 0
         else:
             return f'Wrong pin id {pin_id} was given.'
 
-    def check_ip(self):
-        return ping(self.ip_address)
-
     def get_controller_status_local(self) -> Union[int, str]:
-        res = self.check_ip()
+        res = DS_GPIO.check_ip(self.ip_address)
         if res:
             self.set_state(DevState.ON)
             self.get_pins_states()
             return 0
         else:
             self.turn_on_local()
-            res = self.check_ip()
+            res = DS_GPIO.check_ip(self.ip_address)
             if res:
                 self.set_state(DevState.ON)
                 self.get_pins_states()
