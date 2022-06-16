@@ -13,7 +13,10 @@ names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.206', ('adm
                    (18, 'LED', 'DIR_A4988_1st', 1), (17, 'LED', 'enable_A4988_1st', 0),
                    (16, 'LED', 'DIR_A4988_2nd', 1), (15, 'LED', 'enable_A4988_2nd', 0),
                    (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 0)]
-         }]
+         }, 'DS_Numato_GPIO'],
+'2': ['manip/general', 'Numato2_RELAY', 'Numato2', '10.20.30.207', ('admin', 'admin'), 16,
+         {'Pins': [(0, 'LED', 'power_X', 1)]
+         }, 'DS_Numato_Relay']
          }
 
 def main():
@@ -22,8 +25,8 @@ def main():
         dev_info = DbDevInfo()
         dev_name = f'{val[0]}/{val[1]}'
         dev_info.name = dev_name
-        dev_info._class = 'DS_Numato_GPIO'
-        dev_info.server = f'DS_Numato_GPIO/{i}_{val[2]}'
+        dev_info._class = val[7]
+        dev_info.server = f'{val[7]}/{i}_{val[2]}'
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'ip_address': val[3], 'device_id': dev_id, 'friendly_name': val[1],
                                           'server_id': i, 'number_outputs': val[5],

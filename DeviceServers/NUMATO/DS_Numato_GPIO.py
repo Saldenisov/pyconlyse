@@ -70,25 +70,28 @@ class DS_Numato_GPIO(DS_GPIO):
                 return f'{self.ip_address} is not available'
 
     @staticmethod
-    def _int_to_hex(gpio_pin:int):
-        return str(hex(gpio_pin)[2:]).upper()
+    def _int_to_numato_numbering(gpio_pin: int):
+        map = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 'A', 11: 'B', 12: 'C', 13: 'D',
+               14: 'E', 15: 'F', 16: 'G', 17: 'H', 18: 'I', 19: 'J', 20: 'K', 21: 'L', 22: 'M', 23: 'N', 24: 'O',
+               25: 'P', 26: 'Q', 27: 'R', 28: 'S', 29: 'T', 30: 'U', 31: 'V'}
+        return map[gpio_pin]
 
     def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
         gpio_pin = pin_id_value[0]
         value = pin_id_value[1]
-        gpio_pin = DS_Numato_GPIO._int_to_hex(gpio_pin)
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
         if value:
-            self.telnet_obj.write(("gpio set " + str(gpio_pin) + "\r\n").encode())
+            self.telnet_obj.write(b"gpio set " + str(gpio_pin).encode("ascii") + b"\r\n")
         else:
-            self.telnet_obj.write(("gpio clear " + str(gpio_pin) + "\r\n").encode())
+            self.telnet_obj.write(b"gpio clear " + str(gpio_pin).encode("ascii") + b"\r\n")
 
         self.info(f"GPIO {gpio_pin} was set to {value}", True)
         time.sleep(self.telnet_wait)
-        self.telnet_obj.read_eager()
-        # TODO: return
+        res = self.telnet_obj.read_eager()
+        return 0
 
     def get_pin_state_local(self, gpio_pin: int) -> Union[int, str]:
-        gpio_pin = DS_Numato_GPIO._int_to_hex(gpio_pin)
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
         self.telnet_obj.write(b"gpio read " + str(gpio_pin).encode("ascii") + b"\r\n")
         time.sleep(self.telnet_wait)
         response = self.telnet_obj.read_eager()
@@ -123,6 +126,32 @@ class DS_Numato_GPIO(DS_GPIO):
         if isinstance(res, str):
             res = -1
         return res
+
+
+class DS_Numato_Relay(DS_Numato_GPIO):
+
+    def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
+        gpio_pin = pin_id_value[0]
+        value = pin_id_value[1]
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        if value:
+            self.telnet_obj.write(b"relay on " + str(gpio_pin).encode("ascii") + b"\r\n")
+        else:
+            self.telnet_obj.write(b"relay off " + str(gpio_pin).encode("ascii") + b"\r\n")
+
+        self.info(f"Relay {gpio_pin} was set to {value}", True)
+        time.sleep(self.telnet_wait)
+        res = self.telnet_obj.read_eager()
+        return 0
+
+    def get_pin_state_local(self, gpio_pin: int) -> Union[int, str]:
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        self.telnet_obj.write(b"relay read " + str(gpio_pin).encode("ascii") + b"\r\n")
+        time.sleep(self.telnet_wait)
+        response = self.telnet_obj.read_eager()
+        result = int(re.split(br'[&>]', response)[0].decode())
+        self.info(f'Relay {gpio_pin} is set to {result}')
+        return result
 
 
 if __name__ == "__main__":
