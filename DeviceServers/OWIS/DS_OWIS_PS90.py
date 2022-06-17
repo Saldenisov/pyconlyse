@@ -84,6 +84,9 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def write_pos4(self, pos):
         self.move_axis([4, pos])
 
+    def get_pos(self, axis):
+       return self._delay_lines_parameters[axis]['position']
+
     def init_device(self):
         self.dll_path = str(app_folder / 'ps90.dll')
         self.lib = ctypes.WinDLL(self.dll_path)
@@ -91,6 +94,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         super().init_device()
         self.follow = {}
         self.turn_on()
+
+    def register_variables_for_archive(self):
+        from functools import partial
+        super().register_variables_for_archive()
+        self.archive_state.update({'position_axis_1': (partial(self.get_pos, 1), 'float16'),
+                                   'position_axis_2': (partial(self.get_pos, 2), 'float16'),
+                                   'position_axis_3': (partial(self.get_pos, 3), 'float16'),
+                                   'position_axis_4': (partial(self.get_pos, 4), 'float16')})
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
