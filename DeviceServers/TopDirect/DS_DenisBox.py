@@ -15,6 +15,7 @@ import serial.tools.list_ports
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
 from taurus import Device
+from taurus.core import TaurusDevState
 
 try:
     from DeviceServers.General.DS_Motor import DS_MOTORIZED_MONO_AXIS
@@ -32,17 +33,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
     polling_local = 500
     _local_sleep = 0.15
 
-    enable_ds = device_property(dtype=str)
-    enable_pin = device_property(dtype=int)
-    dir_ds = device_property(dtype=str)
-    dir_pin = device_property(dtype=int)
-    pulse_ds = device_property(dtype=str)
-    pulse_pin = device_property(dtype=int)
-    microstep = device_property(dtype=int)
-    dt = device_property(dtype=int)
-    delay_time = device_property(dtype=int)
-    max_full_steps = device_property(dtype=int)
-    step_mm = device_property(dtype=float)
+    parameters = device_property(dtype=str)
 
     # if it is done so leave it like this
     position = attribute(label="Position", dtype=float, display_level=DispLevel.OPERATOR,
@@ -60,14 +51,22 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
     def init_device(self):
         super().init_device()
         self.turn_on()
+        self.move_axis(10)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
-            self.enable_ds = Device(self.enable_ds)
-            self.dir_ds = Device(self.dir_ds)
-            self.pulse_ds = Device(self.pulse_ds)
+            self.dir_pin = int(self.parameters['dir_pin'])
+            self.pulse_pin = int(self.parameters['pulse_pin'])
+            self.enable_pin = int(self.parameters['enable_pin'])
+            self.microstep = int(self.parameters['microstep'])
+            self.step_mm = self.parameters['step_mm']
+            self.delay_time = int(self.parameters['delay_time'])
+            self.dt = int(self.parameters['dt'])
+            self.enable_ds = Device(self.parameters['enable_ds'])
+            self.dir_ds = Device(self.parameters['dir_ds'])
+            self.pulse_ds = Device(self.parameters['pulse_ds'])
             error, errors = self.check_controlled_devices()
 
             if error:
@@ -82,7 +81,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         error = False
         errors = []
         for name, value in active.items():
-            if value != DevState.ON:
+            if value != TaurusDevState.Ready:
                 error = True
                 errors.append(f'State of {name} is {value}')
         return error, errors
@@ -111,25 +110,25 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         return 0
 
     def move_axis_local(self, pos) -> Union[int, str]:
-        rel_pos = self._position - pos
+        rel_pos = pos - self._position
 
         if rel_pos > 0:
             dir = 1
         else:
             dir = 0
-        self.dir_ds.set_pin_state([self.dir_ds, dir])
+        self.dir_ds.set_pin_state([self.dir_pin, dir])
 
-        microsteps = rel_pos / self.step_mm * self.microstep
+        microsteps = int(rel_pos / self.step_mm * self.microstep)
 
         if microsteps != 0:
             self.enable_ds.set_pin_state([self.enable_pin, 0])  # enable controller
-            order_name = self.pulse_ds.register_order([self.dir_pin, microsteps, self.dt, self.delay_time])
+            order_name = self.pulse_ds.register_order([self.pulse_pin, microsteps, self.dt, self.delay_time])
 
             already_done = 0
             for i in range(60):
                 ready = self.pulse_ds.is_order_ready(order_name)
                 if not ready:
-                    done = self.pulse_ds.give_pulses_done()
+                    done = self.pulse_ds.give_pulses_done(order_name)
                     self._position += dir * (done - already_done) / self.microstep * self.step_mm
                     already_done = done
                 else:
@@ -138,7 +137,6 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
                     self._position += dir * (microsteps_done - already_done) / self.microstep * self.step_mm
 
             self.enable_ds.set_pin_state([self.enable_pin, 1])  # disable controller
-
 
     def stop_movement_local(self) -> Union[int, str]:
         return 'Cannot be stopped by user. Code on Arduino is wrong.'

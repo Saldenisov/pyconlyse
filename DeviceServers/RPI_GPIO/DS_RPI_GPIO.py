@@ -99,6 +99,8 @@ class DS_RPI_GPIO(DS_GPIO):
         sleep(dt / 10**6)
         self.pins[pin].off()
         sleep(time_delay / 10**6)
+        # pin_LED: LED = self.pins[pin]
+        # pin_LED.blink(on_time=dt/10**6, off_time=time_delay / 10**6, n=10000)
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = DS_GPIO.check_ip(self.ip_address)

@@ -13,8 +13,8 @@ from typing import Dict
 class OrderPulsesInfo(GeneralOrderInfo):
     pin: int
     number_of_pulses: int
-    dt: float
-    time_delay: float
+    dt: int  # in us
+    time_delay: int  # in us
     order_done: bool
     ready_to_delete: bool
     pulses_done: int
@@ -101,7 +101,8 @@ class DS_GPIO(DS_General):
         dt = value[2]
         time_delay = value[3]
         if pin not in self._blocking_pins:
-            order_info = OrderPulsesInfo(pin, number_of_pulses, dt, time_delay, False, time(), False, 0)
+            order_info = OrderPulsesInfo(order_done=False, order_timestamp=time(), ready_to_delete=False, pin=pin,
+                                         number_of_pulses=number_of_pulses, dt=dt, time_delay=time_delay, pulses_done=0)
             self.orders[name] = order_info
             order_thread = Thread(target=self.generate_pulses, args=[order_info])
             order_thread.start()
@@ -121,6 +122,9 @@ class DS_GPIO(DS_General):
             order.pulses_done += 1
             if order.order_done:
                 break
+        # self.generate_TTL(order.pin, order.dt, order.time_delay)
+        # order.pulses_done = 10000
+        order.order_done = True
 
     def give_order_local(self, name):
         res = 0

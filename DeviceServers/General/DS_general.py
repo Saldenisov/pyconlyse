@@ -304,7 +304,10 @@ class DS_General(Device):
     @command(dtype_in=str, doc_in='Order name', dtype_out=str)
     def give_order(self, name):
         res = self.give_order_local(name)
-        res = res.tobytes()
+        try:
+            res = res.tobytes()
+        except AttributeError:
+            res = str(res).encode('utf-8')
         res = zlib.compress(res)
         return str(res)
 
