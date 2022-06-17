@@ -111,8 +111,34 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         return 0
 
     def move_axis_local(self, pos) -> Union[int, str]:
-        microsteps = pos / self.step_mm * self.microstep
-        self.
+        rel_pos = self._position - pos
+
+        if rel_pos > 0:
+            dir = 1
+        else:
+            dir = 0
+        self.dir_ds.set_pin_state([self.dir_ds, dir])
+
+        microsteps = rel_pos / self.step_mm * self.microstep
+
+        if microsteps != 0:
+            self.enable_ds.set_pin_state([self.enable_pin, 0])  # enable controller
+            order_name = self.pulse_ds.register_order([self.dir_pin, microsteps, self.dt, self.delay_time])
+
+            already_done = 0
+            for i in range(60):
+                ready = self.pulse_ds.is_order_ready(order_name)
+                if not ready:
+                    done = self.pulse_ds.give_pulses_done()
+                    self._position += dir * (done - already_done) / self.microstep * self.step_mm
+                    already_done = done
+                else:
+                    order = self.pulse_ds.give_order(order_name)
+                    microsteps_done = eval(order)
+                    self._position += dir * (microsteps_done - already_done) / self.microstep * self.step_mm
+
+            self.enable_ds.set_pin_state([self.enable_pin, 1])  # disable controller
+
 
     def stop_movement_local(self) -> Union[int, str]:
         return 'Cannot be stopped by user. Code on Arduino is wrong.'
@@ -124,7 +150,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
             return super().get_controller_status_local()
         else:
             self.set_state(DevState.FAULT)
-            return f'{errors}
+            return f'{errors}'
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
@@ -132,4 +158,4 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
 
 
 if __name__ == "__main__":
-    DS_TopDirect_Motor.run_server()
+    DS_DenisBox_Motor.run_server()
