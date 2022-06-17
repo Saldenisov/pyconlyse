@@ -4,155 +4,154 @@
 
 import sys
 import requests
+import telnetlib
 
 from typing import Tuple, Union,  List
 from pathlib import Path
+import time
+import  re
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute
+from functools import partial
+
+from DeviceServers.General.DS_GPIO import DS_GPIO
+
+from utilities.myfunc import ping
 
 
-try:
-    from DeviceServers.General.DS_PDU import DS_PDU
-except ModuleNotFoundError:
-    from General.DS_PDU import DS_PDU
-
-
-class DS_Numato_GPIO(DS_PDU):
+class DS_Numato_GPIO(DS_GPIO):
     """
     Device Server (Tango) which controls the NUMATO pdu using JSON API.
     """
     _version_ = '0.1'
     _model_ = 'NUMATO_GPIO'
     polling = 500
+    telnet_wait = 0.2
 
-
-    def init_device(self):
-        self._actions = []
-        super().init_device()
-        self.register_variables_for_archive()
-        self.turn_on()
-
-    def _addr(self):
-        return f'http://{self.ip_address}/numato.json'
-
-    def _authentication(self):
-        return self.authentication_name, self.authentication_password
-
-    def find_device(self) -> Tuple[int, str]:
-        arg_return = -1, ''
-        self.info(f"Searching for NUMATO_GPIO device {self.device_name}", True)
-        res = self._get_request()
-        if isinstance(res, requests.Response):
-            if res.status_code == 200:
-                arg_return = 1, res.json()['Agent']['SerialNumber']
-                outputs_list = res.json()['Outputs']
-                self.__set_attributes_numato(outputs_list)
-        self._device_id_internal, self._uri = arg_return
-
-    def get_channels_state_local(self) -> Union[int, str]:
-        res = self._get_request()
-        if isinstance(res, requests.Response):
-            if res.status_code == 200:
-                outputs_list = res.json()['Outputs']
-                return self.__set_attributes_numato(outputs_list)
-        return f'Could not get channels states for {self.device_name}. Res {res}'
-
-    def __set_attributes_numato(self, outputs_list) -> Union[int, str]:
-        try:
-            names = []
-            ids = []
-            states = []
-            actions = []
-
-            for output in outputs_list:
-                names.append(output['Name'])
-                ids.append(output['ID'])
-                states.append(output['State'])
-                actions.append(output['Action'])
-
-            self._names = names
-            self._states = states
-            self._ids = ids
-            self._actions = actions
-            return 0
-        except Exception as e:
-            return e
-
-    def _get_request(self) -> Union[requests.Response, bool]:
-        try:
-            res = requests.get(self._addr(), auth=self._authentication())
-        except requests.ConnectionError as e:
-            self.error(f'{e}')
-            res = False
-        return res
-
-    def set_channels_states_local(self, outputs: List[int]) -> Union[int, str]:
-        """
-               { "Outputs": [{ "ID": 1,  "Action": 1 }]}
-        """
-        json_dict = {}
-        outputs_list = list([{'ID': int(id), 'Action': int(action)} for id, action in zip(self._ids, outputs)])
-        json_dict["Outputs"] = list(outputs_list)
-        res = self._send_request(json_dict)
-        if isinstance(res, requests.Response):
-            if res.status_code == 200:
-                outputs_list = res.json()['Outputs']
-                return self.__set_attributes_netio(outputs_list)
-            else:
-                return res
-        else:
-            return 'Unknown error during setting channels'
-
-    def _send_request(self, j_string) -> Union[requests.Response, bool]:
-        try:
-            res = requests.post(self._addr(), json=j_string, auth=self._authentication())
-        except (requests.ConnectionError, requests.RequestException) as e:
-            res = False
-        finally:
-            return res
+    def find_device(self):
+        state_ok = self.check_func_allowance(self.find_device)
+        self._device_id_internal, self._uri = -1, b''
+        if state_ok:
+            if ping(self.ip_address):
+                if self.turn_on_local() == 0:
+                    self._device_id_internal, self._uri = int(self.device_id), self.friendly_name.encode('utf-8')
+                    states = []
+                    for pins_param in self.parameters['Pins']:
+                        self.set_pin_state_local([pins_param[0], pins_param[3]])
+                        states.append(pins_param[3])
+                    self._states = states
 
     def turn_on_local(self) -> Union[int, str]:
-        if self._device_id_internal == -1:
-            self.info(f'Searching for device: {self.device_id}', True)
-            self.find_device()
-        if self._device_id_internal == -1:
-            self.set_state(DevState.FAULT)
-            return f'Could NOT turn on {self.device_name}: Device could not be found.'
-        else:
-            self.set_state(DevState.ON)
-            return 0
+        # Wait for login prompt from device and enter user name when prompted
+        if ping(self.ip_address):
+            self.telnet_obj = telnetlib.Telnet(self.ip_address)
+            self.telnet_obj.read_until(b"login")
+            self.telnet_obj.write(self.authentication_name.encode('ascii') + b"\r\n")
 
-    def turn_off_local(self) -> Union[int, str]:
-        self.set_state(DevState.OFF)
+            # Wait for password prompt and enter password when prompted by device
+            self.telnet_obj.read_until(b"Password: ")
+            self.telnet_obj.write(self.authentication_password.encode('ascii') + b"\r\n")
+
+            # Wait for device response
+            log_result = self.telnet_obj.read_until(b"successfully\r\n")
+            self.telnet_obj.read_until(b">")
+
+            # Check if login attempt was successful
+            if b"successfully" in log_result:
+                self.set_state(DevState.ON)
+                return 0
+            elif "denied" in log_result:
+                self.set_state(DevState.FAULT)
+                return log_result
+            else:
+                return f'{self.ip_address} is not available'
+
+    @staticmethod
+    def _int_to_numato_numbering(gpio_pin: int):
+        map = {0: 0, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 'A', 11: 'B', 12: 'C', 13: 'D',
+               14: 'E', 15: 'F', 16: 'G', 17: 'H', 18: 'I', 19: 'J', 20: 'K', 21: 'L', 22: 'M', 23: 'N', 24: 'O',
+               25: 'P', 26: 'Q', 27: 'R', 28: 'S', 29: 'T', 30: 'U', 31: 'V'}
+        return map[gpio_pin]
+
+    def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
+        gpio_pin = pin_id_value[0]
+        value = pin_id_value[1]
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        if value:
+            self.telnet_obj.write(b"gpio set " + str(gpio_pin).encode("ascii") + b"\r\n")
+        else:
+            self.telnet_obj.write(b"gpio clear " + str(gpio_pin).encode("ascii") + b"\r\n")
+
+        self.info(f"GPIO {gpio_pin} was set to {value}", True)
+        time.sleep(self.telnet_wait)
+        res = self.telnet_obj.read_eager()
         return 0
 
+    def get_pin_state_local(self, gpio_pin: int) -> Union[int, str]:
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        self.telnet_obj.write(b"gpio read " + str(gpio_pin).encode("ascii") + b"\r\n")
+        time.sleep(self.telnet_wait)
+        response = self.telnet_obj.read_eager()
+        result = int(re.split(br'[&>]', response)[0].decode())
+        self.info(f'GPIO pin {gpio_pin} is set to {result}')
+        return result
+
+    def register_variables_for_archive(self):
+        super().register_variables_for_archive()
+        extra = {}
+        for pin in self._pin_ids:
+            archive_key = f'pin_state_{pin}'
+            extra[archive_key] = (partial(self.value_from_pin, pin), 'uint8')
+        self.archive_state.update(extra)
+
     def get_controller_status_local(self) -> Union[int, str]:
-        def error(self):
-            self._status_check_fault += 1
-            if self._status_check_fault > 10:
-                self.set_state(DevState.FAULT)
-
-        res = self._get_request()
-        if isinstance(res, requests.Response):
-            if res.status_code == 200:
-                res = self.__set_attributes_netio(res.json()['Outputs'])
-                if res == 0:
-                    if self._status_check_fault > 0:
-                        self._status_check_fault = 0
-                    return 0
-                else:
-                    return f'Could not get controller status of {self.device_name}: {res}.'
-            else:
-                error(self)
-                return f'Could not get controller status of {self.device_name}: {res}.'
-
-            return super().get_controller_status_local()
+        res = DS_GPIO.check_ip(self.ip_address)
+        if res and self.telnet_obj:
+            self.set_state(DevState.ON)
+            return 0
         else:
-            error(self)
-            return f'Could not get controller status of {self.device_name}: {res}.'
+            return self.turn_on_local()
+
+    def turn_off_local(self) -> Union[int, str]:
+        if self.telnet_obj:
+            self.telnet_obj.close()
+        self.telnet_obj = None
+        return 0
+
+    def value_from_pin(self, pin_id: int):
+        res = self.get_pin_state_local(pin_id)
+        if isinstance(res, str):
+            res = -1
+        return res
+
+
+class DS_Numato_Relay(DS_Numato_GPIO):
+
+    def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
+        gpio_pin = pin_id_value[0]
+        value = pin_id_value[1]
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        if value:
+            self.telnet_obj.write(b"relay on " + str(gpio_pin).encode("ascii") + b"\r\n")
+        else:
+            self.telnet_obj.write(b"relay off " + str(gpio_pin).encode("ascii") + b"\r\n")
+
+        self.info(f"Relay {gpio_pin} was set to {value}", True)
+        time.sleep(self.telnet_wait)
+        res = self.telnet_obj.read_eager()
+        return 0
+
+    def get_pin_state_local(self, gpio_pin: int) -> Union[int, str]:
+        gpio_pin = DS_Numato_GPIO._int_to_numato_numbering(gpio_pin)
+        self.telnet_obj.write(b"relay read " + str(gpio_pin).encode("ascii") + b"\r\n")
+        time.sleep(self.telnet_wait)
+        response = self.telnet_obj.read_eager()
+        result = int(re.split(br'[&>]', response)[0].decode())
+        self.info(f'Relay {gpio_pin} is set to {result}')
+        return result
 
 
 if __name__ == "__main__":

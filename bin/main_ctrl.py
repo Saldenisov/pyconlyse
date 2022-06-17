@@ -346,7 +346,7 @@ def main():
     button_archive.clicked.connect(partial(start_cmd, 'start_ARCHIVE_client.cmd', cbox_archive))
     button_experiment.clicked.connect(partial(start_cmd, 'start_EXPERIMENT_client.cmd', cbox_experiment))
 
-    rpi_device = Device('manip/v0/rpi_gpio_v0')
+    rpi_device = Device('manip/v0/rpi4_gpio_v0')
     light_pin = 3
     laser_pin = 4
     button_laser.clicked.connect(partial(rpi_toggle_pin, rpi_device, laser_pin))

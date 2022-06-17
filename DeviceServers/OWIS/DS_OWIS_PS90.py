@@ -88,9 +88,6 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
        return self._delay_lines_parameters[axis]['position']
 
     def init_device(self):
-        self.dll_path = str(app_folder / 'ps90.dll')
-        self.lib = ctypes.WinDLL(self.dll_path)
-
         super().init_device()
         self.follow = {}
         self.turn_on()
@@ -107,6 +104,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
+            self.dll_path = Path(self.dll_path)
+            self.lib = ctypes.WinDLL(str(self.dll_path))
             res, comments = self._connect_ps90(self.control_unit_id,
                                                interface=self.interface,
                                                port=self.com_port,

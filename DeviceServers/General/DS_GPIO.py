@@ -5,7 +5,7 @@ from tango.server import attribute, command, device_property
 from typing import Union, List
 
 from DeviceServers.General.DS_general import DS_General
-
+from utilities.myfunc import ping
 
 class DS_GPIO(DS_General):
     """
@@ -17,6 +17,8 @@ class DS_GPIO(DS_General):
     ip_address = device_property(dtype=str)
     number_outputs = device_property(dtype=int)
     parameters = device_property(dtype=str)
+    authentication_name = device_property(dtype=str, default_value='admin')
+    authentication_password = device_property(dtype=str, default_value='admin')
 
     def init_device(self):
         self._names = []
@@ -70,10 +72,20 @@ class DS_GPIO(DS_General):
         return res
 
     @abstractmethod
-    def set_pin_state_local(self, pins_values: List[int]) -> Union[int, str]:
+    def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:
+        """
+        It takes List of pin_id, pin_value. So it change the state of one pin, not all
+        """
+        pass
+
+    @abstractmethod
+    def value_from_pin(self, pin_id: int):
         pass
 
     @abstractmethod
     def get_pin_state_local(self, pin_id: int) -> Union[int, str]:
         pass
 
+    @staticmethod
+    def check_ip(ip_address):
+        return ping(ip_address)
