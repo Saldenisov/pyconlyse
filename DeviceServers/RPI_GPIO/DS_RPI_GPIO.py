@@ -20,7 +20,7 @@ from tango.server import device_property, command, attribute
 from tango import DevState, AttrWriteType
 from pypylon import pylon, genicam
 from threading import Thread
-
+from time import sleep
 
 from utilities.myfunc import ping
 
@@ -93,6 +93,12 @@ class DS_RPI_GPIO(DS_GPIO):
             return 0
         else:
             return f'Wrong pin id {pin_id} was given.'
+
+    def generate_TTL(self, pin: int, dt: int, time_delay: int):
+        self.pins[pin].on()
+        sleep(dt / 10**6)
+        self.pins[pin].off()
+        sleep(time_delay / 10**6)
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = DS_GPIO.check_ip(self.ip_address)

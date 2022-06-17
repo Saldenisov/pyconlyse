@@ -220,7 +220,7 @@ class ANDOR_CCD(DS_General_Widget):
             button_start_grabbing.setText('Grabbing')
 
     def make_order(self):
-        order = self.ds.register_order(int(self.number_spectra.value))
+        order = self.ds.register_order([int(self.number_spectra.value)])
         return order
 
     def data_listener(self):

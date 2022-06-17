@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Union
+from typing import Union, Any
 import zlib
 import random
 import string
@@ -14,15 +14,12 @@ from typing import Dict
 import ctypes
 polling_infinite = 10000
 
-
+from DeviceServers.General.DS_general import GeneralOrderInfo
 
 
 @dataclass
-class OrderInfo:
+class OrderInfo(GeneralOrderInfo):
     order_length: int
-    order_done: bool
-    order_timestamp: int
-    ready_to_delete: bool
     order_array: np.ndarray
 
 
@@ -39,40 +36,25 @@ class DS_CAMERA(DS_General):
     friendly_name = device_property(dtype=str)
     parameters = device_property(dtype=str)
 
-    @command(dtype_in=int, dtype_out=str, doc_in='Takes number of spectra', doc_out='return name of order')
-    def register_order(self, number_spectra: int):
-        s = 20  # number of characters in the string.
-        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
-        order_info = OrderInfo(number_spectra, False, time(), False, np.array([self.wavelengths]))
+    def register_order_local(self, name, value):
+        order_info = OrderInfo(value[0], False, time(), False, np.array([self.wavelengths]))
         self.orders[name] = order_info
-        return name
+        return 0
 
-    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
-    def is_order_ready(self, name):
-        res = False
-        if name in self.orders:
-            order = self.orders[name]
-            res = order.order_done
-        return res
-
-    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
-    def give_order(self, name):
+    def give_order_local(self, name) -> Any:
         res = self.last_image
         if name in self.orders:
             order = self.orders[name]
             order.ready_to_delete = True
             res = order.order_array
         res = res.astype(dtype=np.int16)
-        res = res.tobytes()
-        res = zlib.compress(res)
-        return str(res)
+        return res
 
     def init_device(self):
         self._dll_lock = True
         self.dll = None
         self.data_deque = deque(maxlen=1000)
         self.time_stamp_deque = deque(maxlen=1000)
-        self.orders: Dict[str, OrderInfo] = {}
         super().init_device()
 
     def load_dll(self):
