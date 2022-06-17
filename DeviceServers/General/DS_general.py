@@ -126,7 +126,7 @@ class DS_General(Device):
         self._uri = b''
         self.find_device()
 
-        if self._device_id_internal >= 0:
+        if self._device_id_internal != -1:
             self.info(f"{self.device_name} was found.", True)
         else:
             self.info(f"{self.device_name} was NOT found.", True)

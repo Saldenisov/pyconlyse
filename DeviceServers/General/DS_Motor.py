@@ -39,6 +39,9 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
     def power_status(self):
         return self._power_status
 
+    def get_pos(self):
+        return self._position
+
     def init_device(self):
         self._prev_pos = 0.0
         self._position = 0.0
