@@ -14,7 +14,13 @@ from tango.server import Device, attribute, command, pipe, device_property
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array
 
 standard_str_output = 'str: 0 if success, else error.'
+from dataclasses import dataclass
 
+@dataclass
+class GeneralOrderInfo:
+    order_done: bool
+    order_timestamp: int
+    ready_to_delete: bool
 
 class DS_General(Device):
     device_id = device_property(dtype=str)
@@ -106,6 +112,7 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
         self.locking_client_token = ''
@@ -126,7 +133,7 @@ class DS_General(Device):
         self._uri = b''
         self.find_device()
 
-        if self._device_id_internal >= 0:
+        if self._device_id_internal != -1:
             self.info(f"{self.device_name} was found.", True)
         else:
             self.info(f"{self.device_name} was NOT found.", True)
@@ -273,3 +280,45 @@ class DS_General(Device):
         archive_data = ArchiveData(tango_device=self.get_name(), data_timestamp=time_stamp,
                                    dataset_name=name, data=data_s)
         return archive_data
+
+    @command(dtype_in=[int,], dtype_out=str, doc_in='Takes an order', doc_out='return name of order')
+    def register_order(self, value: int):
+        import string
+        import random
+        s = 20  # number of characters in the string.
+        name = ''.join(random.choices(string.ascii_uppercase + string.digits, k=s))
+        res = self.register_order_local(name, value)
+        return name if res == 0 else '-1, could not register order'
+
+    def register_order_local(self, name, value):
+        pass
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=bool)
+    def is_order_ready(self, name):
+        res = False
+        if name in self.orders:
+            order = self.orders[name]
+            res = order.order_done
+        return res
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=str)
+    def give_order(self, name):
+        res = self.give_order_local(name)
+        try:
+            res = res.tobytes()
+        except AttributeError:
+            res = str(res).encode('utf-8')
+        res = zlib.compress(res)
+        return str(res)
+
+    @command(dtype_in=str, doc_in='Order name', dtype_out=int, doc_out='0 if Ok -1 if order is not present in orders')
+    def stop_order(self, name):
+        order = self.orders[name]
+        res = -1
+        if name in self.orders:
+            order.order_done = True
+            res = 0
+        return res
+
+    def give_order_local(self, name) -> Any:
+        pass
