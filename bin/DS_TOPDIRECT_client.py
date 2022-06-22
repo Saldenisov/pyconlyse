@@ -11,7 +11,8 @@ from bin.DS_General_Client import main
 
 
 
-layouts = {'all': {'selection': ['elyse/motorized_devices/Lense260', 'manip/V0/DL_SC1'],'width': 1}}
+layouts = {'all': {'selection': ['elyse/motorized_devices/Lense260', 'manip/V0/DL_SC1'],'width': 1},
+           'Denis': {'selection': ['elyse/motorized_devices/mirror_vd2'],'width': 1}}
 
 
 if __name__ == '__main__':

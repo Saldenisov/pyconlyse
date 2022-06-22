@@ -263,7 +263,7 @@ def main():
     cbox_STANDA = TaurusValueComboBox(parent=panel)
     cbox_STANDA.addItems(['alignment', 'V0',  'V0_short', 'ELYSE'])
     cbox_TOPDIRECT = TaurusValueComboBox(parent=panel)
-    cbox_TOPDIRECT.addItems(['all'])
+    cbox_TOPDIRECT.addItems(['Denis','all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
     cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
     cbox_andor_ccd = TaurusValueComboBox(parent=panel)

@@ -21,7 +21,7 @@ const long max_full_steps = 3930;
 const float step_mm = 0.003198;
 """
 
-names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_VD2', [0, 90], [-10.0, 90.0],
+names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_VD2', [0, 90], [-1000.0, 1000.0],
                      {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/V0/RPI3_GPIO_Controller',
@@ -32,7 +32,7 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'dt': 80,
                                      'delay_time': 90,
                                      'max_full_steps':  3930,
-                                     'step_mm': 0.051168
+                                     'step_mm': 1
                                      }},],
         'DM542_2': ['ELYSE/motorized_devices', 'TopDirect_line_1', 'something1', [0, 90], [-10.0, 90.0],
                      {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',

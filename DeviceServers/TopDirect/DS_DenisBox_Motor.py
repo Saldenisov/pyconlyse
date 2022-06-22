@@ -87,7 +87,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         return error, errors
 
     def read_position_local(self) -> Union[int, str]:
-        return self._position
+        return 0
 
     def write_position_local(self, pos) -> Union[int, str]:
         self.move_axis(pos)
