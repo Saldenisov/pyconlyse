@@ -10,7 +10,7 @@ from typing import Tuple, Union, List
 from time import sleep
 import serial
 import serial.tools.list_ports
-
+import zlib
 
 from tango import AttrWriteType, DispLevel, DevState
 from tango.server import attribute, command, device_property
@@ -51,7 +51,6 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
     def init_device(self):
         super().init_device()
         self.turn_on()
-        self.move_axis(10)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -87,7 +86,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         return error, errors
 
     def read_position_local(self) -> Union[int, str]:
-        return self._position
+        return 0
 
     def write_position_local(self, pos) -> Union[int, str]:
         self.move_axis(pos)
@@ -118,23 +117,26 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
             dir = 0
         self.dir_ds.set_pin_state([self.dir_pin, dir])
 
-        microsteps = int(rel_pos / self.step_mm * self.microstep)
+        microsteps = abs(int(rel_pos / self.step_mm * self.microstep))
 
         if microsteps != 0:
             self.enable_ds.set_pin_state([self.enable_pin, 0])  # enable controller
             order_name = self.pulse_ds.register_order([self.pulse_pin, microsteps, self.dt, self.delay_time])
 
             already_done = 0
-            for i in range(60):
+            for i in range(120):
+                sleep(0.5)
                 ready = self.pulse_ds.is_order_ready(order_name)
                 if not ready:
                     done = self.pulse_ds.give_pulses_done(order_name)
                     self._position += dir * (done - already_done) / self.microstep * self.step_mm
                     already_done = done
                 else:
-                    order = self.pulse_ds.give_order(order_name)
-                    microsteps_done = eval(order)
+                    order = eval(self.pulse_ds.give_order(order_name))
+                    order = zlib.decompress(order)
+                    microsteps_done = int(order)
                     self._position += dir * (microsteps_done - already_done) / self.microstep * self.step_mm
+                    break
 
             self.enable_ds.set_pin_state([self.enable_pin, 1])  # disable controller
 

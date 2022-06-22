@@ -95,12 +95,11 @@ class DS_RPI_GPIO(DS_GPIO):
             return f'Wrong pin id {pin_id} was given.'
 
     def generate_TTL(self, pin: int, dt: int, time_delay: int):
-        self.pins[pin].on()
-        sleep(dt / 10**6)
-        self.pins[pin].off()
-        sleep(time_delay / 10**6)
-        # pin_LED: LED = self.pins[pin]
-        # pin_LED.blink(on_time=dt/10**6, off_time=time_delay / 10**6, n=10000)
+        # self.pins[pin].on()
+        # sleep(dt / 10**6)
+        # self.pins[pin].off()
+        # sleep(time_delay / 10**6)
+        self.pins[pin].toggle()
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = DS_GPIO.check_ip(self.ip_address)

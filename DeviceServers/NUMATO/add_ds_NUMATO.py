@@ -8,8 +8,8 @@ names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.206', ('adm
                    (28, 'LED', 'enable_A4988_4st', 1), (27, 'LED', 'DIR_A4988_5th', 1),
                    (26, 'LED', 'ennable_A4988_5th', 1), (25, 'LED', 'Dir+_DM542_2nd', 1),
                    (24, 'LED', 'Ena+_DM542_2nd', 1), (23, 'LED', 'Dir+_DM542_3rd', 1),
-                   (22, 'LED', 'Ena+_DM542_3-rd', 1), (21, 'LED', 'MS3_A4988_all', 1),
-                   (20, 'LED', 'MS2_A4988_all', 1), (19, 'LED', 'MS1_A4988_all', 1),
+                   (22, 'LED', 'Ena+_DM542_3-rd', 1), (21, 'LED', 'MS3_A4988_all', 0),
+                   (20, 'LED', 'MS2_A4988_all', 0), (19, 'LED', 'MS1_A4988_all', 1),
                    (18, 'LED', 'DIR_A4988_1st', 1), (17, 'LED', 'enable_A4988_1st', 1),
                    (16, 'LED', 'DIR_A4988_2nd', 1), (15, 'LED', 'enable_A4988_2nd', 1),
                    (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 1)]
