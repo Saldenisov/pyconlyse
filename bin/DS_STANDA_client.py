@@ -22,6 +22,7 @@ layouts = {'ELYSE': {'selection': ['elyse/motorized_devices/de1', 'manip/V0/F1',
                             'elyse/motorized_devices/mm2_x', 'elyse/motorized_devices/mm2_y',
                             'manip/V0/mm3_x', 'manip/V0/mm3_y', 'manip/V0/mm4_x', 'manip/V0/mm4_y',
                             'manip/V0/s1', 'manip/V0/s2', 'manip/V0/L-2_1', 'manip/V0/dv03'], 'width': 4},
+           'OPA': {'selection': ['manip/v0/opa_x', 'manip/v0/opa_y'], 'width': 2},
            'test': {'selection': ['elyse/motorized_devices/mm1_x', 'elyse/motorized_devices/mm1_y'], 'width': 4}
            }
 
