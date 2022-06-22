@@ -28,7 +28,7 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'enable_pin': 30,
                                      'dir_pin': 31,
                                      'pulse_pin': 9,
-                                     'microstep': 8,
+                                     'microstep': 2,
                                      'dt': 80,
                                      'delay_time': 90,
                                      'max_full_steps':  3930,
@@ -67,11 +67,11 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'enable_pin': 22,
                                      'dir_pin': 18,
                                      'step_pin': 24,
-                                     'microstep': 128,
+                                     'microstep': 2,
                                      'dt': '1',
                                      'delay_time': 2,
-                                     'max_full_steps': 90,
-                                     'step_mm': 90
+                                     'max_full_steps': 180,
+                                     'step_mm': 0.00555556
                                      }}, ],
         'A4988_2': ['ELYSE/motorized_devices', 'TopDirect_filter_1_VD2', 'filter_1_VD2', [0, 360], [0, 6],
                     {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',

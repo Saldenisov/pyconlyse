@@ -103,6 +103,7 @@ class DS_GPIO(DS_General):
         if pin not in self._blocking_pins:
             order_info = OrderPulsesInfo(order_done=False, order_timestamp=time(), ready_to_delete=False, pin=pin,
                                          number_of_pulses=number_of_pulses, dt=dt, time_delay=time_delay, pulses_done=0)
+            self.info(f'Order {order_info} was registered.', True)
             self.orders[name] = order_info
             order_thread = Thread(target=self.generate_pulses, args=[order_info])
             order_thread.start()
@@ -122,8 +123,6 @@ class DS_GPIO(DS_General):
             order.pulses_done += 1
             if order.order_done:
                 break
-        # self.generate_TTL(order.pin, order.dt, order.time_delay)
-        # order.pulses_done = 10000
         order.order_done = True
 
     def give_order_local(self, name):
@@ -132,6 +131,8 @@ class DS_GPIO(DS_General):
             order: OrderPulsesInfo = self.orders[name]
             order.ready_to_delete = True
             res = order.pulses_done
+        del self._blocking_pins[order.pin]
+        del self.orders[name]
         return res
 
     @abstractmethod
