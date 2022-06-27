@@ -125,7 +125,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
 
             already_done = 0
             for i in range(120):
-                sleep(0.5)
+                sleep(2)
                 ready = self.pulse_ds.is_order_ready(order_name)
                 if not ready:
                     done = self.pulse_ds.give_pulses_done(order_name)
@@ -139,6 +139,7 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
                     break
 
             self.enable_ds.set_pin_state([self.enable_pin, 1])  # disable controller
+        return 0
 
     def stop_movement_local(self) -> Union[int, str]:
         return 'Cannot be stopped by user. Code on Arduino is wrong.'

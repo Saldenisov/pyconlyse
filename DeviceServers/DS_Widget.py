@@ -65,11 +65,12 @@ class DS_General_Widget(Qt.QWidget):
         s1: TaurusLabel = getattr(self, f's1_{dev_name}')
         s2 = getattr(self, f's2_{dev_name}')
         s3 = getattr(self, f's3_{dev_name}')
-        s4 = getattr(self, f's4_{dev_name}')
+        s4: TaurusValueCheckBox = getattr(self, f's4_{dev_name}')
 
         s1.model = f'{dev_name}/device_friendly_name'
         s2.model = f'{dev_name}/state'
-        s4.model = f'{dev_name}/alway_on'
+        s4.model = f'{dev_name}/always_on_value'
+        s4.setChecked(bool(self.ds.always_on_value))
         lo_status.addWidget(s2)
         lo_status.addWidget(s1)
         lo_status.addWidget(s4)
