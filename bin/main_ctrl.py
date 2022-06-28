@@ -253,7 +253,6 @@ def main():
     button_laser.setEnabled(False)
     button_archive = TaurusCommandButton(text='Archive', parent=panel, icon=QIcon('icons//archive.svg'))
     button_experiment = TaurusCommandButton(text='Experiment', parent=panel, icon=QIcon('icons//experiment.png'))
-    button_experiment.setEnabled(False)
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
