@@ -2,7 +2,7 @@ from gpiozero.pins.pigpio import PiGPIOFactory
 from gpiozero import LED
 
 
-factory = PiGPIOFactory(host='10.20.30')
+factory = PiGPIOFactory(host='10.20.30.205')
 
 pin1 = LED(pin='1', pin_factory=factory)
 
