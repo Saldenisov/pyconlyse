@@ -574,6 +574,46 @@ class DS_Archive(DS_General):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
+    # Project part
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def create_project(self, name: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def edit_project(self, name: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def delete_project(self, name: str):
+        pass
+
+    @attribute(label="List of projects files", dtype=str, display_level=DispLevel.OPERATOR,
+               access=AttrWriteType.READ)
+    def list_of_projects(self):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def add_sub_project(self, value: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def create_measurement(self, value: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def edit_measurement_info(self, value: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def add_data_measurement(self, value: str):
+        pass
+
+    @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
+    def edit_measurement_data(self, value: str):
+        pass
+
+
 
 if __name__ == "__main__":
    DS_Archive.run_server()

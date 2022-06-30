@@ -186,6 +186,5 @@ class DS_Netio_pdu(DS_PDU):
             return f'Could not get controller status of {self.device_name}: {res}.'
 
 
-
 if __name__ == "__main__":
     DS_Netio_pdu.run_server()

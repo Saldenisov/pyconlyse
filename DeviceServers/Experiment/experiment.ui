@@ -60,6 +60,12 @@
          <string>Projects</string>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <property name="topMargin">
+          <number>1</number>
+         </property>
+         <property name="bottomMargin">
+          <number>1</number>
+         </property>
          <item>
           <widget class="QComboBox" name="comboBox_projects">
            <property name="minimumSize">
@@ -130,6 +136,12 @@
          <string>Operator</string>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_9">
+         <property name="topMargin">
+          <number>1</number>
+         </property>
+         <property name="bottomMargin">
+          <number>1</number>
+         </property>
          <item>
           <widget class="QComboBox" name="comboBox_operators">
            <property name="minimumSize">
@@ -175,7 +187,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QPushButton" name="pushButton_delete_project_2">
+          <widget class="QPushButton" name="pushButton_delete_operator">
            <property name="maximumSize">
             <size>
              <width>25</width>
@@ -206,6 +218,12 @@
          <string>Measurements</string>
         </property>
         <layout class="QHBoxLayout" name="horizontalLayout_3">
+         <property name="topMargin">
+          <number>2</number>
+         </property>
+         <property name="bottomMargin">
+          <number>2</number>
+         </property>
          <item>
           <layout class="QVBoxLayout" name="layout_measurements">
            <property name="bottomMargin">
@@ -214,7 +232,14 @@
            <item>
             <layout class="QHBoxLayout" name="layout_measurement_buttons">
              <item>
-              <widget class="QTextEdit" name="textEdit_measurement_name"/>
+              <widget class="QTextEdit" name="textEdit_measurement_name">
+               <property name="maximumSize">
+                <size>
+                 <width>16777215</width>
+                 <height>50</height>
+                </size>
+               </property>
+              </widget>
              </item>
              <item>
               <widget class="QPushButton" name="pushButton_add_measurement">
@@ -285,7 +310,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QPushButton" name="pushButton_savemeasurement">
+              <widget class="QPushButton" name="pushButton_save_measurement">
                <property name="maximumSize">
                 <size>
                  <width>25</width>
@@ -390,6 +415,12 @@
               <string>Running...</string>
              </property>
              <layout class="QVBoxLayout" name="verticalLayout">
+              <property name="topMargin">
+               <number>0</number>
+              </property>
+              <property name="bottomMargin">
+               <number>0</number>
+              </property>
               <item>
                <layout class="QHBoxLayout" name="horizontalLayout_10">
                 <item>
@@ -484,7 +515,7 @@
            <item>
             <widget class="QTabWidget" name="tabWidget_settings">
              <property name="currentIndex">
-              <number>3</number>
+              <number>1</number>
              </property>
              <widget class="QWidget" name="tab_samples">
               <attribute name="title">
@@ -531,7 +562,7 @@
                   </widget>
                  </item>
                  <item row="0" column="1">
-                  <widget class="QDoubleSpinBox" name="doubleSpinBox_BG">
+                  <widget class="QDoubleSpinBox" name="doubleSpinBox_bg">
                    <property name="maximum">
                     <double>100000.000000000000000</double>
                    </property>
@@ -541,7 +572,7 @@
                   </widget>
                  </item>
                  <item row="1" column="1">
-                  <widget class="QDoubleSpinBox" name="doubleSpinBox_4">
+                  <widget class="QDoubleSpinBox" name="doubleSpinBox_difference">
                    <property name="value">
                     <double>10.000000000000000</double>
                    </property>
@@ -551,6 +582,9 @@
                   <widget class="QCheckBox" name="checkBox">
                    <property name="text">
                     <string>Cooling</string>
+                   </property>
+                   <property name="checked">
+                    <bool>true</bool>
                    </property>
                   </widget>
                  </item>
@@ -570,23 +604,52 @@
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayout_3">
                   <item>
-                   <widget class="QRadioButton" name="radioButton_8">
+                   <widget class="QRadioButton" name="radioButton_detection_avantes">
                     <property name="text">
-                     <string>Streak</string>
+                     <string>Avantes</string>
                     </property>
                    </widget>
                   </item>
                   <item>
-                   <widget class="QRadioButton" name="radioButton_7">
+                   <widget class="QRadioButton" name="radioButton_detection_ir">
                     <property name="text">
                      <string>IR</string>
                     </property>
                    </widget>
                   </item>
                   <item>
-                   <widget class="QRadioButton" name="radioButton_6">
+                   <widget class="QRadioButton" name="radioButton_detection_andor">
                     <property name="text">
                      <string>Andor</string>
+                    </property>
+                    <property name="checked">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item>
+                <widget class="QGroupBox" name="groupBox">
+                 <property name="title">
+                  <string>Type</string>
+                 </property>
+                 <layout class="QVBoxLayout" name="verticalLayout_2">
+                  <item>
+                   <widget class="QRadioButton" name="radioButton_experiment_type_pp">
+                    <property name="text">
+                     <string>PP</string>
+                    </property>
+                    <property name="checked">
+                     <bool>true</bool>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QRadioButton" name="radioButton_experiment_type_3p">
+                    <property name="text">
+                     <string>3P</string>
                     </property>
                    </widget>
                   </item>
@@ -731,6 +794,35 @@
        </widget>
       </item>
       <item>
+       <layout class="QHBoxLayout" name="horizontalLayout_14">
+        <property name="bottomMargin">
+         <number>15</number>
+        </property>
+        <item>
+         <widget class="QPushButton" name="pushButton_login">
+          <property name="text">
+           <string>Login</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../gui/icons/login_FILL0_wght400_GRAD0_opsz48.svg</normaloff>../../gui/icons/login_FILL0_wght400_GRAD0_opsz48.svg</iconset>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="pushButton_logout">
+          <property name="text">
+           <string>Logout</string>
+          </property>
+          <property name="icon">
+           <iconset>
+            <normaloff>../../gui/icons/logout_FILL0_wght400_GRAD0_opsz48.svg</normaloff>../../gui/icons/logout_FILL0_wght400_GRAD0_opsz48.svg</iconset>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
        <spacer name="verticalSpacer">
         <property name="orientation">
          <enum>Qt::Vertical</enum>
@@ -762,12 +854,35 @@
     </property>
     <addaction name="actionAnalysis"/>
    </widget>
+   <widget class="QMenu" name="menuHelp">
+    <property name="title">
+     <string>Help</string>
+    </property>
+    <addaction name="actionManual"/>
+    <addaction name="actionSOS_telephone"/>
+   </widget>
    <addaction name="menuMain"/>
+   <addaction name="menuHelp"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
   <action name="actionAnalysis">
    <property name="text">
     <string>Analysis</string>
+   </property>
+  </action>
+  <action name="actionHelp">
+   <property name="text">
+    <string>Help</string>
+   </property>
+  </action>
+  <action name="actionManual">
+   <property name="text">
+    <string>Manual</string>
+   </property>
+  </action>
+  <action name="actionSOS_telephone">
+   <property name="text">
+    <string>SOS</string>
    </property>
   </action>
  </widget>
