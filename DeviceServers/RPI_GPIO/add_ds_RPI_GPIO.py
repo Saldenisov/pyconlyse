@@ -9,8 +9,8 @@ names = {1: ['manip/V0', 'RPI4_GPIO_Controller', 'RPI4_GPIO_V0', '129.175.100.17
          2: ['manip/V0', 'RPI3_GPIO_Controller', 'RPI3_GPIO_Controller', '10.20.30.205', 'rpi3sc',
              {'Pins': [(17, 'LED', 'step_A4988_4st', 0), (27, 'LED', 'step_A4988_5th', 0),
                        (22, 'LED', 'PUL+_DM542_3rd', 0), (23, 'LED', 'PUL+_DM542_2nd', 0),
-                       (24, 'LED', 'step_A4988_1st', 0), (25, 'LED', 'step_A4988_2nd', 0),
-                       (10, 'LED', 'step_A4988_3rd', 0), (9, 'LED', 'PUL+_DM542_1st', 0)]}
+                       (18, 'LED', 'step_A4988_1st', 0), (25, 'LED', 'step_A4988_2nd', 0),
+                       (5, 'LED', 'step_A4988_3rd', 0), (6, 'LED', 'PUL+_DM542_1st', 0)]}
              ]
          }
 
