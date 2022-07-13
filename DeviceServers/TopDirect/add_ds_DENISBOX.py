@@ -27,7 +27,7 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
                                      'enable_pin': 30,
                                      'dir_pin': 31,
-                                     'pulse_pin': 9,
+                                     'pulse_pin': 6,
                                      'microstep': 2,
                                      'dt': 80,
                                      'delay_time': 90,
