@@ -112,10 +112,12 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
         rel_pos = pos - self._position
 
         if rel_pos > 0:
+            dir_state = 1
             dir = 1
         else:
-            dir = 0
-        self.dir_ds.set_pin_state([self.dir_pin, dir])
+            dir_state = 0
+            dir = -1
+        self.dir_ds.set_pin_state([self.dir_pin, dir_state])
 
         microsteps = abs(int(rel_pos / self.step_mm * self.microstep))
 
