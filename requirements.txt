@@ -21,7 +21,7 @@ opencv-python
 pyqtgraph
 # PyOpenGL
 # PyTangoArchiving
-PyQt5<5.13
+PyQt5 #<5.13
 PyQt5-sip
 pyepics  # for taurus
 # pytest-qt
