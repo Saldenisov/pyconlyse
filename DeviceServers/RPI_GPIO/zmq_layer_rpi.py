@@ -34,20 +34,20 @@ def main(ip_adress: int):
 
     def create_sockets():
         context = zmq.Context()
-        dealer = context.socket(zmq.DEALER)
+        dealer = context.socket(zmq.PAIR)
         dealer.setsockopt_unicode(zmq.IDENTITY, f'{get_random_string(5)}')
         # POLLER
         poller = zmq.Poller()
         poller.register(dealer, zmq.POLLIN)
         return dealer, poller
 
-    def connect(socket: zmq.DEALER, ip_address: str):
-        socket.connect(ip_address)
+    def bind(socket: zmq.PAIR, ip_address: str):
+        socket.bind(ip_address)
 
     def send_msg(msg: str):
         dealer_socket.send_string(msg)
 
-    def receive_msg(socket: zmq.DEALER, poller: zmq.Poller):
+    def receive_msg(socket: zmq.PAIR, poller: zmq.Poller):
         """
         cmd[0]:
         1 - TTL
@@ -120,7 +120,7 @@ def main(ip_adress: int):
         send_msg(reply)
 
     dealer_socket, poller = create_sockets()
-    connect(dealer_socket, ip_adress)
+    bind(dealer_socket, ip_adress)
 
     while True:
         msg = receive_msg(dealer_socket, poller)
