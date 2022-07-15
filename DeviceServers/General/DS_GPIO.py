@@ -20,6 +20,10 @@ class OrderPulsesInfo(GeneralOrderInfo):
     pulses_done: int
 
 
+class MyPin:
+    pass
+
+
 class DS_GPIO(DS_General):
     """
     bla-bla
@@ -38,7 +42,7 @@ class DS_GPIO(DS_General):
         self._names = []
         self._pin_ids = []
         self._states = []
-        self.pins = {}
+        self.pins: Dict[int, MyPin] = {}
         self.pulses_orders: Dict[str, OrderPulsesInfo] = {}
         super().init_device()
         for pin_param in self.parameters['Pins']:
@@ -112,18 +116,14 @@ class DS_GPIO(DS_General):
         else:
             return -1
 
-    @abstractmethod
-    def generate_TTL(self, pin: int, dt: int, time_delay: int):
-        pass
-
     def generate_pulses(self, order: OrderPulsesInfo):
-        number_of_pulses = order.number_of_pulses
-        for i in range(number_of_pulses):
-            self.generate_TTL(order.pin, order.dt, order.time_delay)
-            order.pulses_done += 1
-            if order.order_done:
-                break
+        self.info(f'Starting to generate TTL pulses for order: {order}', True)
+        self.generate_pulses_local(order)
         order.order_done = True
+
+    @abstractmethod
+    def generate_pulses_local(self, order: OrderPulsesInfo):
+        pass
 
     def give_order_local(self, name):
         res = 0

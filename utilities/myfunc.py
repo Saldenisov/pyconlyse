@@ -26,6 +26,15 @@ module_logger = logging.getLogger(__name__)
 import platform    # For getting the operating system name
 import subprocess  # For executing a shell command
 
+import random
+import string
+
+def get_random_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = ''.join(random.choice(letters) for i in range(length))
+    return result_str
+
 def ping(host):
     """
     Returns True if host (str) responds to a ping request.

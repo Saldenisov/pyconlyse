@@ -9,20 +9,19 @@ sys.path.append(str(app_folder))
 
 from typing import Tuple, Union, List
 from gpiozero.pins.pigpio import PiGPIOFactory
-from gpiozero import LED
-import numpy as np
-from DeviceServers.General.DS_GPIO import DS_GPIO
+from gpiozero import LED, Button
+import zmq
+from DeviceServers.General.DS_GPIO import DS_GPIO, OrderPulsesInfo, MyPin
 from DeviceServers.General.DS_general import standard_str_output
 from collections import OrderedDict
+from threading import Thread
 # -----------------------------
 from functools import partial
-from tango.server import device_property, command, attribute
 from tango import DevState, AttrWriteType
-from pypylon import pylon, genicam
 from threading import Thread
 from time import sleep
 
-from utilities.myfunc import ping
+from utilities.myfunc import ping, get_random_string
 
 
 class DS_RPI_GPIO(DS_GPIO):
@@ -43,14 +42,14 @@ class DS_RPI_GPIO(DS_GPIO):
             if ping(self.ip_address):
                 self.set_state(DevState.INIT)
                 self._device_id_internal, self._uri = int(self.device_id), self.friendly_name.encode('utf-8')
-                self.factory = PiGPIOFactory(host=self.ip_address)
                 states = []
                 for pins_param in self.parameters['Pins']:
-                    pin_type = eval(pins_param[1])  # Led or Button
-                    control_pin = pin_type(pins_param[0], pin_factory=self.factory)  # Make object of pin using factory
-                    self.pins[pins_param[0]] = control_pin
-                    self.set_pin_state_local([pins_param[0], pins_param[3]])
-                    states.append(control_pin.value)
+                    pin_number = pins_param[0]
+                    mypin = MyPinRPI(pin_number=pin_number, parameters=pins_param[1:], ip_address=self.ip_address,
+                                     parent=self)
+                    self.pins[pins_param[0]] = mypin
+                    self.set_pin_state_local([pin_number, pins_param[3]])
+                    states.append(mypin.value)
                 self._states = states
             else:
                 self._device_id_internal, self._uri = argreturn
@@ -94,9 +93,13 @@ class DS_RPI_GPIO(DS_GPIO):
         else:
             return f'Wrong pin id {pin_id} was given.'
 
+    def generate_pulses_local(self, order: OrderPulsesInfo):
+        pin: MyPinRPI = self.pins[order.pin]
+        pin.generate_TTL(order)
+
     def generate_TTL(self, pin: int, dt: int, time_delay: int):
         # self.pins[pin].on()
-        # sleep(dt / 10**6)
+        # sleep(dt / 10**6)off_zmq()
         # self.pins[pin].off()
         # sleep(time_delay / 10**6)
         self.pins[pin].toggle()
@@ -127,7 +130,172 @@ class DS_RPI_GPIO(DS_GPIO):
             return f'Could not turn on, RPI {self.ip_address} is away...'
 
     def turn_off_local(self) -> Union[int, str]:
+        for pin in self.pins.values():
+            pin.stop()
         self.set_state(DevState.OFF)
+
+
+class MyPinRPI(MyPin):
+    def __init__(self, pin_number: int, parameters: tuple, ip_address: str, parent: DS_RPI_GPIO):
+        """
+        parameters ('LED', 'Laser_shutter', 0, 'gpiozero')
+        or
+        parameters ('LED', 'step_A4988_5th', 0, 'zmq')
+        """
+        self.pin_number = pin_number
+        self.ip_address = ip_address
+        self.pin_type: str = None
+        if parameters[3] == 'gpiozero':
+            self.pin_type = 'gpiozero'
+            factory = PiGPIOFactory(host=self.ip_address)
+            self.pin: LED = eval(parameters[0])(pin=self.pin_number, pin_factory=factory)
+            self.on = self.pin.on
+            self.off = self.pin.off
+            self.toggle = self.pin.toggle
+            self.value = self.pin.value
+            self.generate_TTL = partial(self.generate_TTL_gpiozero, self)
+        elif parameters[3] == 'zmq':
+            self.pin_type = 'zmq'
+            dealer, poller, context = self.create_sockets()
+            self.bind_socket(dealer)
+            self.on = self.on_zmq
+            self.off = self.off_zmq
+            self.toggle = self.toggle_zmq
+            self.value = partial(self.value_zmq, self)
+            self.generate_TTL = partial(self.generate_TTL_zmq, self)
+
+    def on_zmq(self):
+        """
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {'cmd': 'ON', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def off_zmq(self):
+        """
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {'cmd': 'OFF', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def toggle_zmq(self):
+        """
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {'cmd': 'TOGGLE', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def ttl_done_zmq(self):
+        msg = {'cmd': 'GET_TTL', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def ttl_stop_zmq(self):
+        msg = {'cmd': 'STOP', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def value_zmq(self):
+        """
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {'cmd': 'VALUE', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def ttl_zmq(self, order: OrderPulsesInfo):
+        """
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {'cmd': 'TTL', 'order_id': get_random_string(10), 'pin_number': self.pin_number,
+               'number_ttl': order.number_of_pulses, 'delay': order.time_delay, 'width': order.dt}
+        msg = str(msg)
+        self.send_msg(msg)
+
+    def generate_TTL_zmq(self, order: OrderPulsesInfo):
+        self.ttl_zmq()
+        self.order = order
+        while True:
+            sleep(0.25)
+            self.receive_msg()
+            self.ttl_done_zmq()
+            if order.order_done:
+                self.ttl_stop_zmq()
+                break
+
+    def stop(self):
+        if self.pin_type == 'zmq':
+            self.dealer.close()
+            self.poller.close()
+            self.context.term()
+        elif self.pin_type == 'gpiozero':
+            self.pin.close()
+
+    def on(self):
+        pass
+
+    def off(self):
+        pass
+
+    def toggle(self):
+        pass
+
+    def generate_TTL(self, order: OrderPulsesInfo):
+        pass
+
+    def generate_TTL_gpiozero(self, order: OrderPulsesInfo):
+        for i in range(order.number_of_pulses):
+            self.toggle()
+            order.pulses_done += 1
+            if order.order_done:
+                break
+
+    def value(self):
+        pass
+
+    def create_sockets(self):
+        context = zmq.Context()
+        dealer: zmq.DEALER = context.socket(zmq.DEALER)
+        dealer.setsockopt_unicode(zmq.IDENTITY, f'{get_random_string(5)}')
+        # POLLER
+        poller = zmq.Poller()
+        poller.register(dealer, zmq.POLLIN)
+        self.dealer = dealer
+        self.poller = poller
+        self.context = context
+        return dealer, poller, context
+
+    def bind_socket(self, dealer: zmq.DEALER):
+        dealer.connect(f'tcp://{self.ip_address}:{5555}')
+
+    def send_msg(self, msg: str):
+        self.dealer.send_string(msg)
+
+    def receive_msg(self):
+        """
+        cmd[0]:
+        1 - TTL
+        2 - STOP
+        3 - GET_TTL
+        4 - TOGGLE
+        msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
+        """
+        msg = {}
+        sockets = dict(self.poller.poll(1))
+        if self.dealer in sockets:
+            msg: str = self.dealer.recv_string()
+            msg = msg.decode('utf-8')
+            msg = eval(msg)
+            self.treat_msg(msg)
+
+    def treat_msg(self, msg):
+        if msg:
+            self.order.pulses_done = msg['ttl_done']
+            if self.order.number_of_pulses == self.order.pulses_done:
+                self.order.order_done = True
 
 
 if __name__ == "__main__":
