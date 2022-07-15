@@ -34,6 +34,8 @@ class DS_RPI_GPIO(DS_GPIO):
         self.turn_on()
         self.register_variables_for_archive()
         self.get_pins_states()
+        order = OrderPulsesInfo(False, 0, False, 6, 100, 1000, 2000, 0)
+        self.generate_pulses_local(order)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -145,6 +147,9 @@ class MyPinRPI(MyPin):
         self.pin_number = pin_number
         self.ip_address = ip_address
         self.pin_type: str = None
+        self._stop = False
+        self.state = 0
+        self.order = None
         if parameters[3] == 'gpiozero':
             self.pin_type = 'gpiozero'
             factory = PiGPIOFactory(host=self.ip_address)
@@ -152,7 +157,6 @@ class MyPinRPI(MyPin):
             self.on = self.pin.on
             self.off = self.pin.off
             self.toggle = self.pin.toggle
-            self.value = self.pin.value
             self.generate_TTL = partial(self.generate_TTL_gpiozero, self)
         elif parameters[3] == 'zmq':
             self.pin_type = 'zmq'
@@ -161,8 +165,9 @@ class MyPinRPI(MyPin):
             self.on = self.on_zmq
             self.off = self.off_zmq
             self.toggle = self.toggle_zmq
-            self.value = partial(self.value_zmq, self)
-            self.generate_TTL = partial(self.generate_TTL_zmq, self)
+            self.generate_TTL = self.generate_TTL_zmq
+            thread_zmq = Thread(target=self.receive_msg)
+            thread_zmq.start()
 
     def on_zmq(self):
         """
@@ -205,6 +210,8 @@ class MyPinRPI(MyPin):
         msg = {'cmd': 'VALUE', 'order_id': get_random_string(10), 'pin_number': self.pin_number}
         msg = str(msg)
         self.send_msg(msg)
+        sleep(0.05)
+        return self.state
 
     def ttl_zmq(self, order: OrderPulsesInfo):
         """
@@ -216,11 +223,10 @@ class MyPinRPI(MyPin):
         self.send_msg(msg)
 
     def generate_TTL_zmq(self, order: OrderPulsesInfo):
-        self.ttl_zmq()
+        self.ttl_zmq(order)
         self.order = order
         while True:
             sleep(0.25)
-            self.receive_msg()
             self.ttl_done_zmq()
             if order.order_done:
                 self.ttl_stop_zmq()
@@ -228,6 +234,8 @@ class MyPinRPI(MyPin):
 
     def stop(self):
         if self.pin_type == 'zmq':
+            self._stop = True
+            sleep(0.1)
             self.dealer.close()
             self.poller.close()
             self.context.term()
@@ -253,8 +261,13 @@ class MyPinRPI(MyPin):
             if order.order_done:
                 break
 
+    @property
     def value(self):
-        pass
+        if self.pin_type == 'gpiozero':
+            return self.pin.value
+        elif self.pin_type == 'zmq':
+            return self.value_zmq()
+
 
     def create_sockets(self):
         context = zmq.Context()
@@ -283,19 +296,24 @@ class MyPinRPI(MyPin):
         4 - TOGGLE
         msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
         """
-        msg = {}
-        sockets = dict(self.poller.poll(1))
-        if self.dealer in sockets:
-            msg: str = self.dealer.recv_string()
-            msg = msg.decode('utf-8')
-            msg = eval(msg)
-            self.treat_msg(msg)
+        while not self._stop:
+            msg = {}
+            sockets = dict(self.poller.poll(10))
+            if self.dealer in sockets:
+                msg: str = self.dealer.recv_multipart()[0]
+                msg = msg.decode('utf-8')
+                msg = eval(msg)
+                self.treat_msg(msg)
 
     def treat_msg(self, msg):
         if msg:
-            self.order.pulses_done = msg['ttl_done']
-            if self.order.number_of_pulses == self.order.pulses_done:
-                self.order.order_done = True
+            print(f'Message is received {msg}')
+            self.state = msg['state']
+            if self.order:
+                self.order.pulses_done = msg['ttl_done']
+                self.order.state = msg['state']
+                if self.order.number_of_pulses == self.order.pulses_done:
+                    self.order.order_done = True
 
 
 if __name__ == "__main__":
