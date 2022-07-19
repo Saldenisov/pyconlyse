@@ -72,8 +72,16 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
                 self.error(str(errors))
             else:
                 argreturn = self.device_id, self.device_id
-
         self._device_id_internal, self._uri = argreturn
+        from os.path import exists
+        file_exists = exists(f'{self.friendly_name}_position.txt')
+        if file_exists:
+            with open(f'{self.friendly_name}_position.txt', 'r') as f:
+                line = f.readline()
+                self._position = float(line)
+        else:
+            with open(f'{self.friendly_name}_position.txt', 'w') as f:
+                f.write('0')
 
     def check_controlled_devices(self):
         active = {'enable_ds': self.enable_ds.state, 'dir_ds': self.dir_ds.state, 'pulse_ds': self.pulse_ds.state}
@@ -94,6 +102,8 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
 
     def define_position_local(self, position) -> Union[str, int]:
         self._position = position
+        with open(f'{self.friendly_name}_position.txt', 'w') as f:
+            f.write(str(self._position))
         return 0
 
     def turn_on_local(self) -> Union[int, str]:
@@ -140,6 +150,8 @@ class DS_DenisBox_Motor(DS_MOTORIZED_MONO_AXIS):
                     self._position += dir * (microsteps_done - already_done) / self.microstep * self.step_mm
                     break
 
+            with open(f'{self.friendly_name}_position.txt', 'w') as f:
+                f.write(str(self._position))
             self.enable_ds.set_pin_state([self.enable_pin, 1])  # disable controller
         return 0
 

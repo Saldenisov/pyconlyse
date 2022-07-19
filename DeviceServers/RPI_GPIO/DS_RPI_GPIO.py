@@ -34,8 +34,6 @@ class DS_RPI_GPIO(DS_GPIO):
         self.turn_on()
         self.register_variables_for_archive()
         self.get_pins_states()
-        order = OrderPulsesInfo(False, 0, False, 6, 100, 1000, 2000, 0)
-        self.generate_pulses_local(order)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -268,7 +266,6 @@ class MyPinRPI(MyPin):
         elif self.pin_type == 'zmq':
             return self.value_zmq()
 
-
     def create_sockets(self):
         context = zmq.Context()
         dealer: zmq.DEALER = context.socket(zmq.DEALER)
@@ -307,13 +304,13 @@ class MyPinRPI(MyPin):
 
     def treat_msg(self, msg):
         if msg:
-            print(f'Message is received {msg}')
             self.state = msg['state']
             if self.order:
                 self.order.pulses_done = msg['ttl_done']
                 self.order.state = msg['state']
                 if self.order.number_of_pulses == self.order.pulses_done:
                     self.order.order_done = True
+                    print(f'Order {self.order.number_of_pulses} is done.')
 
 
 if __name__ == "__main__":

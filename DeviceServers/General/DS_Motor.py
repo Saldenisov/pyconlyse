@@ -102,7 +102,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
 
     @abstractmethod
     def define_position_local(self, position) -> Union[int, str]:
-        pass
+            pass
 
     @command(dtype_in=float, doc_in="Takes pos of axis in float.")
     def move_axis_abs(self, pos):

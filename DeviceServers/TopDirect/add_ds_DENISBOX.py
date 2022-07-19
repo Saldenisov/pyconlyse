@@ -29,8 +29,8 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'dir_pin': 31,
                                      'pulse_pin': 6,
                                      'microstep': 2,
-                                     'dt': 80,
-                                     'delay_time': 90,
+                                     'dt': 130,
+                                     'delay_time': 140,
                                      'max_full_steps':  72600,
                                      'step_mm': .00168
                                      }},],

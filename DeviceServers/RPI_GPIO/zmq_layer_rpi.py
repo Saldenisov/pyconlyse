@@ -57,7 +57,7 @@ def main(ip_adress: int):
         socket.bind(ip_address)
 
     def send_msg(msg: str, id: str):
-        print(f'Sending msg {msg}')
+        # print(f'Sending msg {msg}')
         router.send_multipart([id, msg])
 
     def receive_msg(socket: zmq.ROUTER, poller: zmq.Poller):
@@ -75,7 +75,7 @@ def main(ip_adress: int):
             id, msg = socket.recv_multipart()
             msg = msg.decode('utf-8')
             msg = eval(msg)
-            print(f'Received cmd {msg}')
+            # print(f'Received cmd {msg}')
             return msg, id
         return -1, 0
 
@@ -99,51 +99,65 @@ def main(ip_adress: int):
         if number_ttl >=1 and delay > 0 and width >0:
             width = width / 10 ** 6
             delay = delay / 10 ** 6
-            print(f'Start to generate TTL with width {width} and dt {delay}.')
+            print(f'Start to generate TTL pulses {number_ttl} with width {width} and dt {delay}.')
+            print('[', end='')
+            i = 1
             while mypin.active and mypin.ttl_done < number_ttl:
                 mypin.on()
                 sleep(width)
                 mypin.off()
                 sleep(delay)
                 mypin.ttl_done += 1
-            mypin.thread = None
-            print('Stopped generating TTL pulses')
-            reply = form_reply(mypin)
-            send_msg(reply, id)
 
+                if mypin.ttl_done / number_ttl > i * .1:
+                    i += 1
+                    print("#", end='')
+
+            mypin.thread = None
+            if mypin.ttl_done == number_ttl:
+                print(']')
+            print(f'Stopped generating TTL pulses. Number of pulses: {mypin.ttl_done}')
+            reply = form_reply(mypin, 'ttl')
+            send_msg(reply, id)
             make_not_busy(pin_number)
 
-    def stop_ttl(pin_number: int, id: str):
+    def stop_ttl(pin_number: int, id: str, order_id=""):
         mypin = get_pin(pin_number)
         mypin.active = False
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'stop_ttl')
         send_msg(reply, id)
 
-    def on(pin_number: int, id: str):
+    def on(pin_number: int, id: str, order_id=""):
         mypin = get_pin(pin_number)
         mypin.on()
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'on')
         send_msg(reply, id)
 
-    def off(pin_number: int, id: str):
+    def off(pin_number: int, id: str, order_id=""):
         mypin = get_pin(pin_number)
         mypin.off()
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'off')
         send_msg(reply, id)
 
-    def toggle(pin_number: int, id: str):
+    def toggle(pin_number: int, id: str, order_id=""):
         mypin = get_pin(pin_number)
         mypin.toggle()
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'toggle')
         send_msg(reply, id)
 
-    def value(pin_number: int, id: str):
+    def value(pin_number: int, id: str, order_id=""):
         mypin = get_pin(pin_number)
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'value')
         send_msg(reply, id)
 
-    def get_ttl_accomplished(pin_number: int, id: str) -> int:
+    def get_ttl_accomplished(pin_number: int, id: str, order_id="") -> int:
         mypin = get_pin(pin_number)
+        mypin.order_id = order_id
         reply = form_reply(mypin, 'get_ttl')
         send_msg(reply, id)
 
@@ -176,17 +190,17 @@ def main(ip_adress: int):
                     mypin.thread = thr
                     thr.start()
             elif cmd == 'STOP':
-                stop_ttl(pin_number=msg['pin_number'], id=id)
+                stop_ttl(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'GET_TTL':
-                get_ttl_accomplished(pin_number=msg['pin_number'], id=id)
+                get_ttl_accomplished(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'TOGGLE':
-                toggle(pin_number=msg['pin_number'], id=id)
+                toggle(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'ON':
-                on(pin_number=msg['pin_number'], id=id)
+                on(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'OFF':
-                off(pin_number=msg['pin_number'], id=id)
+                off(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'VALUE':
-                value(pin_number=msg['pin_number'], id=id)
+                value(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
 
 
 
