@@ -41,6 +41,7 @@ class MyPin:
 
 pins: Dict[int, MyPin] = {}
 router = None
+publisher = None
 
 def main(ip_adress: int):
 
@@ -48,13 +49,27 @@ def main(ip_adress: int):
         context = zmq.Context()
         router = context.socket(zmq.ROUTER)
         router.setsockopt_unicode(zmq.IDENTITY, f'{get_random_string(5)}')
+        pub = context.socket(zmq.PUB)
+
         # POLLER
         poller = zmq.Poller()
         poller.register(router, zmq.POLLIN)
-        return router, poller
+        return router, poller, pub
 
-    def bind(socket: zmq.ROUTER, ip_address: str):
+    def send_heartbeat(publisher: zmq.PUB):
+        while True:
+            publisher.send_string('ALIVE')
+            print('HB')
+            sleep(1)
+
+    def bind(socket: zmq.ROUTER, pub: zmq.PUB, ip_address: str):
         socket.bind(ip_address)
+        split = ip_address.split(':')
+        port_pub = int(split[-1]) + 1
+        ip_address_pub = ':'.join(split[:-1])
+        pub.bind(f'{ip_address_pub}:{port_pub}')
+        pub_thread = Thread(target=send_heartbeat, args=[pub])
+        pub_thread.start()
 
     def send_msg(msg: str, id: str):
         # print(f'Sending msg {msg}')
@@ -170,8 +185,8 @@ def main(ip_adress: int):
         reply = str(reply).encode('utf-8')
         return reply
 
-    router, poller = create_sockets()
-    bind(router, ip_adress)
+    router, poller, publisher = create_sockets()
+    bind(router, publisher, ip_adress)
 
     while True:
         msg, id = receive_msg(router, poller)
@@ -201,7 +216,6 @@ def main(ip_adress: int):
                 off(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
             elif cmd == 'VALUE':
                 value(pin_number=msg['pin_number'], id=id, order_id=msg['order_id'])
-
 
 
 if __name__ == "__main__":

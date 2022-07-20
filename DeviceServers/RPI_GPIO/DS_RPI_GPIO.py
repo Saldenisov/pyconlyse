@@ -34,6 +34,7 @@ class DS_RPI_GPIO(DS_GPIO):
         self.turn_on()
         self.register_variables_for_archive()
         self.get_pins_states()
+        self.get_pin_state(4)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -146,6 +147,7 @@ class MyPinRPI(MyPin):
         self.ip_address = ip_address
         self.pin_type: str = None
         self._stop = False
+        self._alive = True
         self.state = 0
         self.order = None
         if parameters[3] == 'gpiozero':
@@ -158,8 +160,8 @@ class MyPinRPI(MyPin):
             self.generate_TTL = partial(self.generate_TTL_gpiozero, self)
         elif parameters[3] == 'zmq':
             self.pin_type = 'zmq'
-            dealer, poller, context = self.create_sockets()
-            self.bind_socket(dealer)
+            dealer, subscriber, poller, context = self.create_sockets()
+            self.connect_socket(dealer, subscriber)
             self.on = self.on_zmq
             self.off = self.off_zmq
             self.toggle = self.toggle_zmq
@@ -270,19 +272,32 @@ class MyPinRPI(MyPin):
         context = zmq.Context()
         dealer: zmq.DEALER = context.socket(zmq.DEALER)
         dealer.setsockopt_unicode(zmq.IDENTITY, f'{get_random_string(5)}')
+        subscriber = context.socket(zmq.SUB)
+        subscriber.setsockopt(zmq.SUBSCRIBE, b'')
         # POLLER
         poller = zmq.Poller()
         poller.register(dealer, zmq.POLLIN)
+        poller.register(subscriber, zmq.POLLIN)
         self.dealer = dealer
+        self.subscriber = subscriber
         self.poller = poller
         self.context = context
-        return dealer, poller, context
+        return dealer, subscriber, poller, context
 
-    def bind_socket(self, dealer: zmq.DEALER):
+    def connect_socket(self, dealer: zmq.DEALER, subscriber: zmq.SUB):
         dealer.connect(f'tcp://{self.ip_address}:{5555}')
+        subscriber.connect(f'tcp://{self.ip_address}:{5555 + 1}')
 
     def send_msg(self, msg: str):
         self.dealer.send_string(msg)
+
+    def heartbeat(self):
+        while not self._stop:
+            sleep(2)
+            if not self._alive:
+                print(f'Heartbeat absent from RPI for pin {self.pin_number}.')
+            else:
+                self._alive = False
 
     def receive_msg(self):
         """
@@ -293,6 +308,10 @@ class MyPinRPI(MyPin):
         4 - TOGGLE
         msg is utf string dict{cmd: str, order_id: str, pin_number: int, etc}
         """
+
+        hb = Thread(target=self.heartbeat)
+        hb.start()
+
         while not self._stop:
             msg = {}
             sockets = dict(self.poller.poll(10))
@@ -301,6 +320,9 @@ class MyPinRPI(MyPin):
                 msg = msg.decode('utf-8')
                 msg = eval(msg)
                 self.treat_msg(msg)
+            elif self.subscriber in sockets:
+                msg: str = self.subscriber.recv_string()
+                self._alive = True
 
     def treat_msg(self, msg):
         if msg:
@@ -308,7 +330,7 @@ class MyPinRPI(MyPin):
             if self.order:
                 self.order.pulses_done = msg['ttl_done']
                 self.order.state = msg['state']
-                if self.order.number_of_pulses == self.order.pulses_done:
+                if self.order.number_of_pulses == self.order.pulses_done and not self.order.order_done:
                     self.order.order_done = True
                     print(f'Order {self.order.number_of_pulses} is done.')
 
