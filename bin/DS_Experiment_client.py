@@ -7,9 +7,9 @@ from gui.Panels import ExperimentPanel
 from DeviceServers.Experiment.DS_Experiment_Widget import Experiment
 
 
-layouts = {'Pulse-Probe': {'selection': ['manip/V0/pulse-probe'], 'width': 1},
-           '3P': {'selection': ['manip/VD2/pulse-repump-probe'], 'width': 1},
-           'Streak-Camera': {'selection': ['manip/VD2/pulse-probe-streak'], 'width': 1}
+layouts = {'Pulse-Probe': {'selection': ['manip/cr/pulse-probe'], 'width': 1},
+           '3P': {'selection': ['manip/cr/pulse-repump-probe'], 'width': 1},
+           'Streak-Camera': {'selection': ['manip/cr/pulse-probe-streak'], 'width': 1}
           }
 
 

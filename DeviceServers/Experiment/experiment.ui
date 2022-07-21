@@ -131,82 +131,6 @@
        </widget>
       </item>
       <item>
-       <widget class="QGroupBox" name="groupBox_operators">
-        <property name="title">
-         <string>Operator</string>
-        </property>
-        <layout class="QHBoxLayout" name="horizontalLayout_9">
-         <property name="topMargin">
-          <number>1</number>
-         </property>
-         <property name="bottomMargin">
-          <number>1</number>
-         </property>
-         <item>
-          <widget class="QComboBox" name="comboBox_operators">
-           <property name="minimumSize">
-            <size>
-             <width>175</width>
-             <height>0</height>
-            </size>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_add_opertor">
-           <property name="maximumSize">
-            <size>
-             <width>25</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset>
-             <normaloff>../../gui/icons/add_FILL0_wght400_GRAD0_opsz48.svg</normaloff>../../gui/icons/add_FILL0_wght400_GRAD0_opsz48.svg</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_edit_operartor">
-           <property name="maximumSize">
-            <size>
-             <width>25</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset>
-             <normaloff>../../gui/icons/edit_FILL0_wght400_GRAD0_opsz48.svg</normaloff>../../gui/icons/edit_FILL0_wght400_GRAD0_opsz48.svg</iconset>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QPushButton" name="pushButton_delete_operator">
-           <property name="maximumSize">
-            <size>
-             <width>25</width>
-             <height>25</height>
-            </size>
-           </property>
-           <property name="text">
-            <string/>
-           </property>
-           <property name="icon">
-            <iconset>
-             <normaloff>../../gui/icons/delete_FILL0_wght400_GRAD0_opsz48.svg</normaloff>../../gui/icons/delete_FILL0_wght400_GRAD0_opsz48.svg</iconset>
-           </property>
-          </widget>
-         </item>
-        </layout>
-       </widget>
-      </item>
-      <item>
        <widget class="QGroupBox" name="groupBox_measurements">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -515,7 +439,7 @@
            <item>
             <widget class="QTabWidget" name="tabWidget_settings">
              <property name="currentIndex">
-              <number>1</number>
+              <number>0</number>
              </property>
              <widget class="QWidget" name="tab_samples">
               <attribute name="title">
@@ -624,32 +548,6 @@
                     </property>
                     <property name="checked">
                      <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
-                </widget>
-               </item>
-               <item>
-                <widget class="QGroupBox" name="groupBox">
-                 <property name="title">
-                  <string>Type</string>
-                 </property>
-                 <layout class="QVBoxLayout" name="verticalLayout_2">
-                  <item>
-                   <widget class="QRadioButton" name="radioButton_experiment_type_pp">
-                    <property name="text">
-                     <string>PP</string>
-                    </property>
-                    <property name="checked">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                  <item>
-                   <widget class="QRadioButton" name="radioButton_experiment_type_3p">
-                    <property name="text">
-                     <string>3P</string>
                     </property>
                    </widget>
                   </item>
@@ -798,6 +696,13 @@
         <property name="bottomMargin">
          <number>15</number>
         </property>
+        <item>
+         <widget class="QLabel" name="label_user">
+          <property name="text">
+           <string>User: XXX</string>
+          </property>
+         </widget>
+        </item>
         <item>
          <widget class="QPushButton" name="pushButton_login">
           <property name="text">

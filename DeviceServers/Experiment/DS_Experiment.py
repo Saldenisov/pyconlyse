@@ -28,7 +28,7 @@ class DS_Experiment(DS_General):
              **DS_General.RULES}
 
     _version_ = '0.1'
-    _model_ = 'Experiment pulse radiolysis'
+    _model_ = 'Experiment ds'
     polling = 500
 
     authentication_name = device_property(dtype=str, default_value='admin')

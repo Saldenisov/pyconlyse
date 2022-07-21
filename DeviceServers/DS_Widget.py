@@ -70,7 +70,8 @@ class DS_General_Widget(Qt.QWidget):
         s1.model = f'{dev_name}/device_friendly_name'
         s2.model = f'{dev_name}/state'
         s4.model = f'{dev_name}/always_on_value'
-        s4.setChecked(bool(self.ds.always_on_value))
+        always_on = True if self.ds.always_on_value == 1 else False
+        s4.setChecked(always_on)
         lo_status.addWidget(s2)
         lo_status.addWidget(s1)
         lo_status.addWidget(s4)
