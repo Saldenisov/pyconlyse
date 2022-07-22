@@ -80,10 +80,10 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
                                      'enable_pin': 15,
                                      'dir_pin': 16,
-                                     'pulse_pin': 24,
+                                     'pulse_pin': 25,
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 140,
+                                     'delay_time': 140,
                                      'max_full_steps': 360,
                                      'step_mm': 1
                                      }}, ],
@@ -96,8 +96,8 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'dir_pin': 16,
                                      'pulse_pin': 24,
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 140,
+                                     'delay_time': 140,
                                      'max_full_steps': 360,
                                      'step_mm': 1
                                      }}, ],
@@ -109,8 +109,8 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'dir_pin': 16,
                                      'pulse_pin': 24,
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 140,
+                                     'delay_time': 140,
                                      'max_full_steps': 200,
                                      'step_mm': 1
                                      }}, ],
@@ -129,8 +129,8 @@ def main():
         a.append(f'{i}_{val[2]}')
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1],
-                                          'wait_time': 10, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
-                                          'limit_max': val[4][1], 'real_pos': 0.0,
+                                          'wait_time': 10, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[3][0],
+                                          'limit_max': val[3][1], 'real_pos': 0.0,
                                           'parameters': str(val[5]['parameters'])})
 
         i += 1
