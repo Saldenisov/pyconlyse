@@ -59,7 +59,6 @@ def main(ip_adress: int):
     def send_heartbeat(publisher: zmq.PUB):
         while True:
             publisher.send_string('ALIVE')
-            print('HB')
             sleep(1)
 
     def bind(socket: zmq.ROUTER, pub: zmq.PUB, ip_address: str):
