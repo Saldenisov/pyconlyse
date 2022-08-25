@@ -7,7 +7,7 @@ import numpy as np
 from tango import AttrWriteType, DispLevel, DevState, DevFloat
 from tango.server import attribute, command, device_property
 from dataclasses import dataclass
-from time import time
+from time import time, time_ns
 from DeviceServers.General.DS_general import DS_General
 from collections import OrderedDict, deque
 from typing import Dict
@@ -15,7 +15,6 @@ import ctypes
 polling_infinite = 10000
 
 from DeviceServers.General.DS_general import GeneralOrderInfo
-
 
 @dataclass
 class OrderInfo(GeneralOrderInfo):
@@ -451,3 +450,30 @@ class DS_CAMERA_CCD(DS_CAMERA):
     @abstractmethod
     def grabbing_local(self):
         pass
+
+    def treat_orders(self, data2D: np.ndarray):
+        for spectrum in data2D:
+            time_stamp = time_ns()
+            self.time_stamp_deque.append(time_stamp)
+            self.data_deque.append(spectrum)
+
+            data_archive = self.form_archive_data(spectrum.reshape((1, self.width)),
+                                                  name='spectra', time_stamp=time_stamp, dt='int16')
+            # self.write_to_archive(data_archive)
+
+            if self.orders:
+                orders_to_delete = []
+                for order_name, order_info in self.orders.items():
+                    if (time() - order_info.order_timestamp) >= 100:
+                        orders_to_delete.append(order_name)
+
+                    elif not order_info.order_done:
+                        order_info.order_array = np.vstack([order_info.order_array, spectrum])
+
+                    if order_info.order_length == len(order_info.order_array) - 1:
+                        order_info.order_done = True
+
+                if orders_to_delete:
+                    for order_name in orders_to_delete:
+                        del self.orders[order_name]
+

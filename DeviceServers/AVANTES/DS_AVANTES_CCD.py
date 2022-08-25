@@ -20,6 +20,9 @@ from utilities.tools.decorators import dll_lock
 from tango.server import device_property, command, attribute, AttrWriteType
 from tango import DevState, DevFloat
 
+import requests
+
+
 
 from msl.equipment import (
     EquipmentRecord,
@@ -40,6 +43,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     dll_path = device_property(dtype=str)
     width = device_property(dtype=int)
     wavelengths = device_property(dtype=str)
+    arduino_sync = device_property(dtype=str, default_value='10.20.30.47')
 
     def init_device(self):
         self.serial_number_real = -1
@@ -54,7 +58,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         self.grabbing_thread: Thread = None
         self.abort = False
         self.n_kinetics = 1
-        self.ava = None
+        self.camera = None
         self.BG_level_value = 0
         self.integration_delay_value = 0
         self.integration_time_value = 0.05
@@ -64,10 +68,14 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
         super().init_device()
         self.register_variables_for_archive()
-        if self.ava:
-            self.wavelengths = self.ava.get_lambda()
+        if self.camera:
+            self.wavelengths = self.camera.get_lambda()
+            self.width = self.camera.get_num_pixels()
         else:
             self.wavelengths = eval(self.wavelengths)
+
+        self._arduino_addr_on = f'http://{self.arduino_sync}/?status=ON'
+        self._arduino_addr_off = f'http://{self.arduino_sync}/?status=OFF'
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -87,9 +95,9 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                                               address=f'SDK::{self.dll_path}',  # update the path to the DLL file
                                               backend=Backend.MSL
                                           ))
-            self.ava = self.record.connect(demo=False)
-            if self.ava:
-                self.camera = True
+            self.camera = self.record.connect(demo=False)
+            if self.camera:
+                self.camera.use_high_res_adc(True)
                 self.set_state(DevState.ON)
                 argreturn = 1, str(self.serial_number_real).encode('utf-8')
             else:
@@ -219,8 +227,8 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def turn_on_local(self) -> Union[int, str]:
         if self.get_state != DevState.ON:
-            self.ava = self.record.connect(demo=False)
-            if self.ava:
+            self.camera = self.record.connect(demo=False)
+            if self.camera:
                 self.info(f"{self.device_name} was Opened.", True)
                 self.set_state(DevState.ON)
                 return 0
@@ -233,9 +241,8 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def turn_off_local(self) -> Union[int, str]:
         if self.grabbing:
             self.stop_grabbing_local()
-        self.ava.disconnect()
+        self.camera.disconnect()
         self.camera = None
-        self.ava = None
         self.set_state(DevState.OFF)
         self.info(f"{self.device_name} was Closed.", True)
         return 0
@@ -277,48 +284,50 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def wait(self, timeout=0):
         try:
+            self.status_real = 1
             while self.abort is not True and self.camera:
                 a = time()
-                res = self._SetNumberKinetics(self.n_kinetics)
-                res = self._StartAcquisition()
-                res = self._GetData(size=1024 * self.n_kinetics * 2)
-                if res == True:
-                    data2D = np.reshape(self.array_real, (-1, 1024))
+                cfg = self.camera.MeasConfigType()
+                cfg.m_StopPixel = self.width - 1
+                cfg.m_IntegrationTime = self.integration_time_value  # in milliseconds
+                cfg.m_NrAverages = 1  # number of averages
+                m_Trigger = self.camera.TriggerType()
+                m_Trigger.m_Mode = self.trigger_mode_value
+                m_Trigger.m_Source = self.trigger_source_value
+                m_Trigger.m_SourceType = self.trigger_type_value
+                cfg.m_Trigger = m_Trigger
+                self.camera.prepare_measure(cfg)
+
+                # start 1 measurement, wait until the measurement is finished, then get the data
+                self.camera.measure(1)
+                finished = True
+                i = 0
+                while not self.camera.poll_scan():
+                    sleep(0.01)
+                    i += 1
+                    if i > 100:
+                        finished = False
+                        break
+                if finished:
+                    tick_count, data = self.camera.get_data()
+                else:
+                    data = None
+
+                if isinstance(data, np.ndarray):
+                    data2D = np.reshape(data, (-1, self.width))
                     data2D.astype('int16')
-
-                    for spectrum in data2D:
-                        time_stamp = time_ns()
-                        self.time_stamp_deque.append(time_stamp)
-                        self.data_deque.append(spectrum)
-
-                        data_archive = self.form_archive_data(spectrum.reshape((1, 1024)),
-                                                              name='spectra', time_stamp=time_stamp, dt='int16')
-                        self.write_to_archive(data_archive)
-
-                        if self.orders:
-                            orders_to_delete = []
-                            for order_name, order_info in self.orders.items():
-                                if (time() - order_info.order_timestamp) >= 100:
-                                    orders_to_delete.append(order_name)
-                                elif not order_info.order_done:
-                                    order_info.order_array = np.vstack([order_info.order_array, spectrum])
-
-                                if order_info.order_length * 3 == len(order_info.order_array) - 1:
-                                    order_info.order_done = True
-
-                            if orders_to_delete:
-                                for order_name in orders_to_delete:
-                                    del self.orders[order_name]
-
+                    self.treat_orders(data2D)
                     self.info('Image is received...')
                 else:
-                    self.error(res)
-                    data2D = np.zeros(1024 * self.n_kinetics * 2).reshape(-1, 1024)
+                    self.error('Did not measure, just sending you zeros.')
+                    data2D = np.zeros(self.width * self.n_kinetics).reshape(-1, self.width)
                 self.last_image = data2D
                 b = time()
                 self.info(f'Time passed: {b - a}')
         except Exception as e:
             self.error(e)
+        finally:
+            self.status_real = 0
 
     def get_controller_status_local(self) -> Union[int, str]:
         res = self._GetStatus()
@@ -338,20 +347,21 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def start_grabbing_local(self):
         sleep(0.5)
         if not self.grabbing:
+            requests.get(url=self._arduino_addr_on)
             self.abort = False
             self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
             self.grabbing_thread.start()
         return 0
 
     def stop_grabbing_local(self):
-        res = self._AbortAcquisition()
         self.abort = True
+        requests.get(url=self._arduino_addr_off)
         return 0
 
     def grabbing_local(self):
         res = False
         if self.camera:
-            if self.status_real == 20072:
+            if self.status_real == 1:
                 res = True
         return res
 
@@ -368,26 +378,21 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         self.trigger_mode_value = state
         return True
 
-
     def _SetTriggerSource(self, state):
         self.trigger_source_value = state
         return True
-
 
     def _SetTriggerType(self, state):
         self.trigger_type_value = state
         return True
 
-
     def _SetIntegrationTime(self, value):
         self.integration_time_value = value
         return True
 
-
     def _SetIntegrationDelay(self, value):
         self.integration_delay_value = value
         return True
-
 
     def _SetBGLevel(self, value):
         self.BG_level_value = value
