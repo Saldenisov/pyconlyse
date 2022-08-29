@@ -12,7 +12,7 @@ from taurus.core import TaurusDevState
 from collections import deque
 
 
-class ANDOR_CCD(DS_General_Widget):
+class AVANTES_CCD(DS_General_Widget):
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.grabbing = False
@@ -28,7 +28,7 @@ class ANDOR_CCD(DS_General_Widget):
         self.wavelengths = np.array(eval(waves))
 
     def register_DS_full(self, group_number=1):
-        super(ANDOR_CCD, self).register_DS_full()
+        super().register_DS_full()
 
         dev_name = self.dev_name
 
@@ -77,27 +77,52 @@ class ANDOR_CCD(DS_General_Widget):
         if self.ds.state == TaurusDevState.Ready:
             self.number_kinetics.setValue(self.ds.number_kinetics)
 
+        """
+        Trigger Settimgs
+            1) Trigger Mode:
+                Software - 0
+                Hardware - 1
+                Single Scan - n
+            2) Trigger Source:
+                External - 0
+                Synchronized - 1
+            3) Trigger Type
+                Edge - 0
+                Level - 1
+                
+        """
+
         self.trigger_mode = TaurusValueComboBox()
-        self.trigger_mode.addItems(['Internal', 'External'])
-        if self.ds.state == TaurusDevState.Ready:
-            res = int(self.ds.trigger_mode)
-            if res == 0:
-                self.trigger_mode.setCurrentIndex(0)
-            elif res == 1:
-                self.trigger_mode.setCurrentIndex(1)
+        self.trigger_mode.addItems(['Software', 'Hardware', 'Single Scan'])
+
+        self.trigger_source = TaurusValueComboBox()
+        self.trigger_source.addItems(['External', 'Synchronized'])
+
+        self.trigger_type = TaurusValueComboBox()
+        self.trigger_type.addItems(['Edge', 'Level'])
 
         self.exposure_time = TaurusWheelEdit()
-        # self.exposure_time.model = f'{dev_name}/exposure_time'
-        if self.ds.state == TaurusDevState.Ready:
-            self.exposure_time.setValue(self.ds.exposure_time)
         self.exposure_time.setDigitCount(1, 6)
+
+        if self.ds.state == TaurusDevState.Ready:
+            res = int(self.ds.trigger_mode)
+            self.trigger_mode.setCurrentIndex(res)
+            res = int(self.ds.trigger_source)
+            self.trigger_source.setCurrentIndex(res)
+            res = int(self.ds.trigger_type)
+            self.trigger_type.setCurrentIndex(res)
+            self.exposure_time.setValue(self.ds.exposure_time)
 
         lo_parameters.addWidget(TaurusLabel('N spectra'))
         lo_parameters.addWidget(self.number_spectra)
         lo_parameters.addWidget(TaurusLabel('N kinetics'))
         lo_parameters.addWidget(self.number_kinetics)
-        lo_parameters.addWidget(TaurusLabel('Trigger'))
+        lo_parameters.addWidget(TaurusLabel('Trigger Mode'))
         lo_parameters.addWidget(self.trigger_mode)
+        lo_parameters.addWidget(TaurusLabel('Trigger Source'))
+        lo_parameters.addWidget(self.trigger_source)
+        lo_parameters.addWidget(TaurusLabel('Trigger Type'))
+        lo_parameters.addWidget(self.trigger_type)
         lo_parameters.addWidget(TaurusLabel('Exposure Time, s'))
         lo_parameters.addWidget(self.exposure_time)
         lo_parameters.addSpacerItem(QtWidgets.QSpacerItem(0, 5, QtWidgets.QSizePolicy.Expanding,
@@ -124,7 +149,7 @@ class ANDOR_CCD(DS_General_Widget):
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, group_number=1):
-        super(ANDOR_CCD, self).register_DS_min()
+        super().register_DS_min()
         dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
@@ -161,41 +186,29 @@ class ANDOR_CCD(DS_General_Widget):
         self.plot_spectra.curves = []
         self.plot_spectra.setLabel('left', "Intensity", units='counts')
         self.plot_spectra.setLabel('bottom', "Wavelength", units='nm')
-        self.add_curve(self.plot_spectra, self.wavelengths)  # background1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # background2
-        self.add_curve(self.plot_spectra, self.wavelengths)  # with_e1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # with_e2
-        self.add_curve(self.plot_spectra, self.wavelengths)  # without_e1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # without_e2
+        self.add_curve(self.plot_spectra, self.wavelengths)  # background
+        self.add_curve(self.plot_spectra, self.wavelengths)  # spectra
 
-        self.plot_OD = self.view.addPlot(title="Transient absorption", row=0, column=1)
-        self.plot_OD.setYRange(-0.005, 0.005)
-        self.plot_OD.setMouseEnabled(x=True, y=True)
-        self.plot_OD.curves = []
-        self.plot_OD.setLabel('left', "delta O.D.", units='')
-        self.plot_OD.setLabel('bottom', "Wavelength", units='nm')
-        self.add_curve(self.plot_OD, numpy.zeros(len(self.wavelengths)))
-
-        self.view.setMinimumSize(1000, 450)
+        self.view.setMinimumSize(450, 450)
         lo_image.addWidget(self.view)
 
     def update_curve(self, plot, i, y):
         plot.curves[i].setData(self.wavelengths, y)
 
-    def add_curve(self, plot, y): # add a curve
+    def add_curve(self, plot, y):  # add a curve
         plot.curves.append(plot.plot(self.wavelengths, y))
 
     def del_curve(self, plot, i):
         plot.curves[i].clear()
 
     def register_full_layouts(self):
-        super(ANDOR_CCD, self).register_full_layouts()
+        super().register_full_layouts()
         setattr(self, f'layout_parameters_{self.dev_name}', QtWidgets.QHBoxLayout())
         setattr(self, f'layout_parameters_od_{self.dev_name}', QtWidgets.QHBoxLayout())
         setattr(self, f'layout_image_{self.dev_name}',  QtWidgets.QHBoxLayout())
 
     def register_min_layouts(self):
-        super(ANDOR_CCD, self).register_min_layouts()
+        super().register_min_layouts()
         setattr(self, f'layout_image_{self.dev_name}', Qt.QHBoxLayout())
 
     def trigger_mode_changed(self):

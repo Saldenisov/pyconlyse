@@ -22,7 +22,7 @@ record = EquipmentRecord(
     model='AvaSpec-2048L',  # update for your device
     serial='1810225U1',  # update for your device
     connection=ConnectionRecord(
-        address='SDK::C:/dev/pyconlyse/DeviceServers/AVANTES/avaspecx64.dll',  # update the path to the DLL file
+        address='SDK::C:/dev/pyconlyse/DeviceServers/AVANTES_CCD/avaspecx64.dll',  # update the path to the DLL file
         backend=Backend.MSL
     )
 )

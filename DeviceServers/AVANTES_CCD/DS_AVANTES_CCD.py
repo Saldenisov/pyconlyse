@@ -16,7 +16,7 @@ from DeviceServers.General.DS_Camera import DS_CAMERA_CCD, OrderInfo
 from DeviceServers.General.DS_general import standard_str_output
 from utilities.tools.decorators import dll_lock
 # -----------------------------
-
+from msl.equipment.exceptions import AvantesError
 from tango.server import device_property, command, attribute, AttrWriteType
 from tango import DevState, DevFloat
 
@@ -34,7 +34,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     RULES = {**DS_CAMERA_CCD.RULES}
 
     _version_ = '0.1'
-    _model_ = 'AVANTES CCD'
+    _model_ = 'AVANTES_CCD CCD'
 
     polling_main = 5000
     polling_infinite = 100000
@@ -84,6 +84,12 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def write_number_kinetics(self, value: int):
        self.n_kinetics = value
 
+    def _connect(self):
+        try:
+            self.camera = self.record.connect(demo=False)
+        except (Exception, AvantesError) as e:
+            pass
+
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
@@ -93,9 +99,10 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                                           serial=self.device_id,
                                           connection=ConnectionRecord(
                                               address=f'SDK::{self.dll_path}',  # update the path to the DLL file
-                                              backend=Backend.MSL
-                                          ))
-            self.camera = self.record.connect(demo=False)
+                                              backend=Backend.MSL))
+
+            self._connect()
+
             if self.camera:
                 self.camera.use_high_res_adc(True)
                 self.set_state(DevState.ON)
@@ -227,7 +234,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def turn_on_local(self) -> Union[int, str]:
         if self.get_state != DevState.ON:
-            self.camera = self.record.connect(demo=False)
+            self._connect()
             if self.camera:
                 self.info(f"{self.device_name} was Opened.", True)
                 self.set_state(DevState.ON)
