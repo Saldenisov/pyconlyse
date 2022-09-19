@@ -20,6 +20,7 @@ from typing import Tuple, List, Iterable, Generator, Union
 import numpy as np
 
 from utilities.errors.myexceptions import WrongInfoType
+import hashlib
 
 module_logger = logging.getLogger(__name__)
 
@@ -28,6 +29,12 @@ import subprocess  # For executing a shell command
 
 import random
 import string
+
+def calc_hash(input_str: str):
+    s = input_str.encode('utf-8')
+    m = hashlib.sha256()
+    m.update(s)
+    return m.hexdigest()
 
 def get_random_string(length):
     # choose from all lowercase letter

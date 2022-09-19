@@ -5,6 +5,8 @@ app_folder = Path(__file__).resolve().parents[0]
 sys.path.append(str(app_folder))
 import numpy as np
 import pyqtgraph as pg
+from dataclasses import dataclass, field
+from typing import List, Dict
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
@@ -21,13 +23,16 @@ import msgpack
 from numpy import array
 from utilities.datastructures.mes_independent.measurments_dataclass import ArchiveData, Scalar, Array, DataXY, DataXYb
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
-
+from data_classes import *
 uint8 = np.dtype('uint8')
 int16 = np.dtype('int16')
 float32 = np.dtype('float32')
 
 import logging
 logger = logging.getLogger('root')
+
+
+
 
 
 class ViewTree(QtWidgets.QTreeWidget):
@@ -93,6 +98,12 @@ class Experiment(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.structure = {}
         self.dataset_name = ''
+        self.translation_stage = TranslationStages()
+        self.sample_holder = SampleHolder()
+        self.settings = Settings()
+        self.projects: Dict[str, str] = {}
+        self.measurements: Dict[str, str] = {}
+
         super().__init__(device_name, parent, vis_type)
 
     def register_DS_full(self, group_number=1):
@@ -114,11 +125,24 @@ class Experiment(DS_General_Widget):
 
         self.ui = Ui_experiment_widget()
         self.ui.setupUi(self)
+        # C:/dev/pyconlyse/DeviceServers/Experiment/
+
+        # Sample holder
+        available_cell_holders: Dict[str, Dict[str, float]] = eval(self.ds.available_cell_holders)
+        group_box = self.ui.groupBox_positions_samples
+        _translate = QtCore.QCoreApplication.translate
+        for sample_holder_name, positions in available_cell_holders.items():
+            rb = QtWidgets.QRadioButton(self.ui.groupBox_sample_holder_type)
+            rb.setText(_translate("experiment_widget", f"{sample_holder_name}"))
+            setattr(self.ui, f'sample_holder_{sample_holder_name}', rb)
+            rb.toggled.connect(partial(self.rb_clicked_sample_holder, rb.text()))
+            self.ui.horizontalLayout_samples.addWidget(rb)
+        rb.setChecked(True)
+
         lo_control.addLayout(self.ui.horizontalLayout_experimental_widget)
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_control)
-
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, group_number=1):
@@ -130,3 +154,24 @@ class Experiment(DS_General_Widget):
 
     def register_min_layouts(self):
         self.register_full_layouts()
+
+    def rb_clicked_sample_holder(self, value: str):
+        available_cell_holders: Dict[str, Dict[str, float]] = eval(self.ds.available_cell_holders)
+        param = available_cell_holders[value]
+        _translate = QtCore.QCoreApplication.translate
+
+        count = self.ui.horizontalLayout_samples_pos.count()
+        if count != 1:
+            for i in reversed(range(self.ui.horizontalLayout_samples_pos.count())):
+                widget = self.ui.horizontalLayout_samples_pos.itemAt(i).widget()
+                widget.deleteLater()
+
+        for name, pos in param.items():
+            rb = QtWidgets.QRadioButton(self.ui.groupBox_positions_samples)
+            rb.setText(_translate("experiment_widget", f"{name}:{pos}"))
+            rb.toggled.connect(partial(self.rb_clicked_pos, pos))
+            self.ui.horizontalLayout_samples_pos.addWidget(rb)
+
+
+    def rb_clicked_pos(self, pos: float):
+        self.translation_stage.sc.move_axis_abs(float)

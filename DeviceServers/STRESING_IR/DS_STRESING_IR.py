@@ -275,6 +275,7 @@ class DS_STRESING_IR(DS_CAMERA):
     def init_device(self):
         self.number_of_boards = 0
         super().init_device()
+        self.turn_on()
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -283,12 +284,12 @@ class DS_STRESING_IR(DS_CAMERA):
     def write_number_kinetics(self, value: int):
        self.n_kinetics = value
 
-    def find_device(self) -> Tuple[int, str]:
+    def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b''
         if state_ok:
             self.dll = self.load_dll()
-            res = self._Initialize()
+            res = self._initialize()
             if res:
                 self.camera = True
                 self.set_state(DevState.ON)
@@ -422,7 +423,7 @@ class DS_STRESING_IR(DS_CAMERA):
 
     def turn_on_local(self) -> Union[int, str]:
         if self.get_state != DevState.ON:
-            res = self._Initialize()
+            res = self._initialize()
             if res == True:
                 import socket
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -580,6 +581,9 @@ class DS_STRESING_IR(DS_CAMERA):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
+    def _initialize(self):
+        pass
+
     # DLL functions
     @dll_lock
     def _DLLCCDDrvInit(self) -> Tuple[bool, str]:
@@ -641,7 +645,6 @@ class DS_STRESING_IR(DS_CAMERA):
         res = self.dll.DLLisMeasureOn(drv, ctypes.POINTER(measureOn))
         self.measure_on = bool(measureOn.value)
         return True if res == 0 else self._error_stresing(res)
-
 
     def _error_stresing(self, code: int, user_def='') -> str:
         if user_def != '':

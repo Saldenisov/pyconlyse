@@ -233,55 +233,13 @@
            </layout>
           </item>
           <item>
-           <widget class="QGroupBox" name="groupBox_poistions_samples">
+           <widget class="QGroupBox" name="groupBox_positions_samples">
             <property name="title">
              <string>Samples positions</string>
             </property>
-            <layout class="QHBoxLayout" name="horizontalLayout">
+            <layout class="QHBoxLayout" name="horizontalLayout_samples_pos">
              <item>
-              <widget class="QRadioButton" name="radioButton_sample_1">
-               <property name="text">
-                <string>1</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QRadioButton" name="radioButton_sample_2">
-               <property name="text">
-                <string>2</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QRadioButton" name="radioButton_sample_3">
-               <property name="text">
-                <string>3</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QRadioButton" name="radioButton_sample_4">
-               <property name="text">
-                <string>4</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QRadioButton" name="radioButton_sample_5">
-               <property name="text">
-                <string>5</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <widget class="QRadioButton" name="radioButton_sample_lanex">
-               <property name="text">
-                <string>Lanex</string>
-               </property>
-              </widget>
-             </item>
-             <item>
-              <spacer name="horizontalSpacer_3">
+              <spacer name="horizontalSpacer_samples">
                <property name="orientation">
                 <enum>Qt::Horizontal</enum>
                </property>
@@ -325,9 +283,9 @@
               <number>0</number>
              </property>
              <item>
-              <layout class="QHBoxLayout" name="horizontalLayout_10">
+              <layout class="QHBoxLayout" name="horizontalLayout_running">
                <item>
-                <widget class="QLabel" name="label_points">
+                <widget class="QLabel" name="label_points_done">
                  <property name="text">
                   <string>#</string>
                  </property>
@@ -391,7 +349,7 @@
                 </widget>
                </item>
                <item>
-                <spacer name="horizontalSpacer_2">
+                <spacer name="horizontalSpacer_running">
                  <property name="orientation">
                   <enum>Qt::Horizontal</enum>
                  </property>
@@ -418,7 +376,7 @@
           <item>
            <widget class="QTabWidget" name="tabWidget_settings">
             <property name="currentIndex">
-             <number>2</number>
+             <number>0</number>
             </property>
             <widget class="QWidget" name="tab_samples">
              <attribute name="title">
@@ -430,22 +388,7 @@
                 <property name="title">
                  <string>Sample holder</string>
                 </property>
-                <layout class="QHBoxLayout" name="horizontalLayout_6">
-                 <item>
-                  <widget class="QRadioButton" name="radioButton_9">
-                   <property name="text">
-                    <string>5mm</string>
-                   </property>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QRadioButton" name="radioButton_10">
-                   <property name="text">
-                    <string>10mm</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
+                <layout class="QHBoxLayout" name="horizontalLayout_samples"/>
                </widget>
               </item>
              </layout>
@@ -458,7 +401,7 @@
               <item>
                <layout class="QFormLayout" name="formLayout_detection_settings">
                 <item row="0" column="0">
-                 <widget class="QLabel" name="label">
+                 <widget class="QLabel" name="label_BG">
                   <property name="text">
                    <string>BG</string>
                   </property>
@@ -492,7 +435,7 @@
                  </widget>
                 </item>
                 <item row="1" column="0">
-                 <widget class="QLabel" name="label_2">
+                 <widget class="QLabel" name="label_diff_pulses">
                   <property name="text">
                    <string>Diff</string>
                   </property>
@@ -566,7 +509,7 @@
                  </widget>
                 </item>
                 <item row="0" column="0">
-                 <widget class="QLabel" name="label_5">
+                 <widget class="QLabel" name="label_PP">
                   <property name="text">
                    <string>PP</string>
                   </property>
@@ -590,7 +533,7 @@
                  </widget>
                 </item>
                 <item row="0" column="2">
-                 <widget class="QLabel" name="label_6">
+                 <widget class="QLabel" name="label_points">
                   <property name="text">
                    <string>Points</string>
                   </property>
@@ -624,7 +567,7 @@
                  </widget>
                 </item>
                 <item row="2" column="2">
-                 <widget class="QLabel" name="label_7">
+                 <widget class="QLabel" name="label_RZ">
                   <property name="text">
                    <string>RZ</string>
                   </property>
@@ -637,6 +580,17 @@
                     <width>50</width>
                     <height>20</height>
                    </size>
+                  </property>
+                 </widget>
+                </item>
+                <item row="2" column="4">
+                 <widget class="QPushButton" name="pushButton_load_delays">
+                  <property name="text">
+                   <string/>
+                  </property>
+                  <property name="icon">
+                   <iconset>
+                    <normaloff>icons/table_FILL0_wght400_GRAD0_opsz48.svg</normaloff>icons/table_FILL0_wght400_GRAD0_opsz48.svg</iconset>
                   </property>
                  </widget>
                 </item>
@@ -671,7 +625,7 @@
       </widget>
      </item>
      <item>
-      <layout class="QHBoxLayout" name="horizontalLayout_14">
+      <layout class="QHBoxLayout" name="horizontalLayout_operator">
        <property name="bottomMargin">
         <number>15</number>
        </property>
