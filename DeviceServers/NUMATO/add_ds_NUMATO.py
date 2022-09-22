@@ -4,15 +4,35 @@ db = Database()
 
 
 names = {'1': ['manip/general', 'Numato1_GPIO', 'Numato1', '10.20.30.206', ('admin', 'admin'), 32,
-         {'Pins': [(31, 'LED', 'DIR+_DM542_1st', 1), (30, 'LED', 'ENA+_DM542_1st', 1), (29, 'LED', 'DIR_A4988_4st', 1),
-                   (28, 'LED', 'enable_A4988_4st', 1), (27, 'LED', 'DIR_A4988_5th', 1),
-                   (26, 'LED', 'ennable_A4988_5th', 1), (25, 'LED', 'Dir+_DM542_2nd', 1),
-                   (24, 'LED', 'Ena+_DM542_2nd', 1), (23, 'LED', 'Dir+_DM542_3rd', 1),
-                   (22, 'LED', 'Ena+_DM542_3-rd', 1), (21, 'LED', 'MS3_A4988_all', 0),
-                   (20, 'LED', 'MS2_A4988_all', 0), (19, 'LED', 'MS1_A4988_all', 1),
-                   (18, 'LED', 'DIR_A4988_1st', 1), (17, 'LED', 'enable_A4988_1st', 1),
-                   (16, 'LED', 'DIR_A4988_2nd', 1), (15, 'LED', 'enable_A4988_2nd', 1),
-                   (14, 'LED', 'DIR_A4988_3rd', 1), (13, 'LED', 'enable_A4988_3rd', 1)]
+         {'Pins': [(31, 'LED', 'DIR+_DM542_1st', 1),   # checked
+                   (30, 'LED', 'ENA+_DM542_1st', 1),   # checked
+
+                   (25, 'LED', 'Dir+_DM542_2nd', 1),
+                   (24, 'LED', 'Ena+_DM542_2nd', 1),
+
+                   (23, 'LED', 'Dir+_DM542_3rd', 1),
+                   (22, 'LED', 'Ena+_DM542_3-rd', 1),
+
+                   (18, 'LED', 'DIR_A4988_1st', 1),
+                   (17, 'LED', 'enable_A4988_1st', 1),  # checked
+
+                   (14, 'LED', 'DIR_A4988_2nd', 1),
+                   (13, 'LED', 'enable_A4988_2nd', 1),
+
+                   (16, 'LED', 'DIR_A4988_3rd', 1),  # checked
+                   (15, 'LED', 'enable_A4988_3rd', 1),  # checked
+
+                   (29, 'LED', 'DIR_A4988_4st', 1),  # checked
+                   (28, 'LED', 'enable_A4988_4st', 1),  # checked
+
+                   (27, 'LED', 'DIR_A4988_5th', 1),
+                   (26, 'LED', 'enable_A4988_5th', 1),
+
+                   (21, 'LED', 'MS3_A4988_all', 0),   # checked
+                   (20, 'LED', 'MS2_A4988_all', 0),   # checked
+                   (19, 'LED', 'MS1_A4988_all', 1)   # checked
+
+                   ]
          }, 'DS_Numato_GPIO'],
 '2': ['manip/general', 'Numato2_RELAY', 'Numato2', '10.20.30.207', ('admin', 'admin'), 16,
          {'Pins': [(0, 'LED', 'power1_12V', 0), (1, 'LED', 'power2_12V', 0), (2, 'LED', 'power3_12V', 0),

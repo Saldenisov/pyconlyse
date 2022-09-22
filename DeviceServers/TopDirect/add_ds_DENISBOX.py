@@ -60,57 +60,57 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'max_full_steps':  72600,
                                      'step_mm': .00168
                                      }},],
-        'A4988_1': ['ELYSE/motorized_devices', 'TopDirect_flipper', 'flipper', [0, 90], [0, 1],
+        'A4988_2': ['ELYSE/motorized_devices', 'TopDirect_flipper', 'flipper', [0, 90], [0, 1],
                     {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
-                                     'enable_pin': 22,
+                                     'enable_pin': 17,
                                      'dir_pin': 18,
-                                     'pulse_pin': 24,
+                                     'pulse_pin': 18,
                                      'microstep': 2,
                                      'dt': 130,
                                      'delay_time': 140,
                                      'max_full_steps': 180,
-                                     'step_mm': 0.00555556
+                                     'step_mm': 1
                                      }}, ],
-        'A4988_2': ['ELYSE/motorized_devices', 'TopDirect_filter_1_VD2', 'filter_1_VD2', [0, 360],
+        'A4988_3': ['ELYSE/motorized_devices', 'TopDirect_filter_1_VD2', 'filter_1_VD2', [0, 360],
                     [0, 45, 90, 135, 180, 225, 270, 315],
                     {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
-                                     'enable_pin': 15,
-                                     'dir_pin': 16,
-                                     'pulse_pin': 24,
+                                     'enable_pin': 15,  # checked
+                                     'dir_pin': 16,  # checked
+                                     'pulse_pin': 25,  # checked
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 5000,
+                                     'delay_time': 5000,
                                      'max_full_steps': 360,
                                      'step_mm': 1
                                      }}, ],
-        'A4988_3': ['ELYSE/motorized_devices', 'TopDirect_filter_2_VD2', 'filter_2_VD2', [0, 360],
+        'A4988_4': ['ELYSE/motorized_devices', 'TopDirect_filter_2_VD2', 'filter_2_VD2', [0, 360],
                     [0, 45, 90, 135, 180, 225, 270, 315],
                     {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
-                                     'enable_pin': 15,
-                                     'dir_pin': 16,
-                                     'pulse_pin': 24,
+                                     'enable_pin': 17,  # checked
+                                     'dir_pin': 18,  # checked
+                                     'pulse_pin': 18,  # checked
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 5000,
+                                     'delay_time': 5000,
                                      'max_full_steps': 360,
                                      'step_mm': 1
                                      }}, ],
-         'A4988_4': ['ELYSE/motorized_devices', 'TopDirect_iris_VD2', 'iris_VD2', [0, 200], [0, 200],
+         'A4988_2': ['ELYSE/motorized_devices', 'TopDirect_iris_VD2', 'iris_VD2', [0, 200], [0, 200],
                      {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
-                                     'enable_pin': 15,
-                                     'dir_pin': 16,
+                                     'enable_pin': 28,
+                                     'dir_pin': 29,
                                      'pulse_pin': 24,
                                      'microstep': 2,
-                                     'dt': '1',
-                                     'delay_time': 2,
+                                     'dt': 140,
+                                     'delay_time': 140,
                                      'max_full_steps': 200,
                                      'step_mm': 1
                                      }}, ],
@@ -129,8 +129,8 @@ def main():
         a.append(f'{i}_{val[2]}')
         db.add_device(dev_info)
         db.put_device_property(dev_name, {'device_id': dev_id, 'friendly_name': val[1],
-                                          'wait_time': 10, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[4][0],
-                                          'limit_max': val[4][1], 'real_pos': 0.0,
+                                          'wait_time': 10, 'server_id': i, 'preset_pos': val[3], 'limit_min': val[3][0],
+                                          'limit_max': val[3][1], 'real_pos': 0.0,
                                           'parameters': str(val[5]['parameters'])})
 
         i += 1

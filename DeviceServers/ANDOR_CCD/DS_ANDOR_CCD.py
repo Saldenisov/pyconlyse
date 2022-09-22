@@ -279,31 +279,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 if res == True:
                     data2D = np.reshape(self.array_real, (-1, 1024))
                     data2D.astype('int16')
-
-                    for spectrum in data2D:
-                        time_stamp = time_ns()
-                        self.time_stamp_deque.append(time_stamp)
-                        self.data_deque.append(spectrum)
-
-                        data_archive = self.form_archive_data(spectrum.reshape((1, 1024)),
-                                                              name='spectra', time_stamp=time_stamp, dt='int16')
-                        self.write_to_archive(data_archive)
-
-                        if self.orders:
-                            orders_to_delete = []
-                            for order_name, order_info in self.orders.items():
-                                if (time() - order_info.order_timestamp) >= 100:
-                                    orders_to_delete.append(order_name)
-                                elif not order_info.order_done:
-                                    order_info.order_array = np.vstack([order_info.order_array, spectrum])
-
-                                if order_info.order_length * 3 == len(order_info.order_array) - 1:
-                                    order_info.order_done = True
-
-                            if orders_to_delete:
-                                for order_name in orders_to_delete:
-                                    del self.orders[order_name]
-
+                    self.treat_orders(data2D)
                     self.info('Image is received...')
                 else:
                     self.error(res)

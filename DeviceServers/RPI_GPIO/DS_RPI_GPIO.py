@@ -314,15 +314,18 @@ class MyPinRPI(MyPin):
 
         while not self._stop:
             msg = {}
-            sockets = dict(self.poller.poll(10))
-            if self.dealer in sockets:
-                msg: str = self.dealer.recv_multipart()[0]
-                msg = msg.decode('utf-8')
-                msg = eval(msg)
-                self.treat_msg(msg)
-            elif self.subscriber in sockets:
-                msg: str = self.subscriber.recv_string()
-                self._alive = True
+            try:
+                sockets = dict(self.poller.poll(10))
+                if self.dealer in sockets:
+                    msg: str = self.dealer.recv_multipart()[0]
+                    msg = msg.decode('utf-8')
+                    msg = eval(msg)
+                    self.treat_msg(msg)
+                elif self.subscriber in sockets:
+                    msg: str = self.subscriber.recv_string()
+                    self._alive = True
+            except Exception as e:
+                print(e)
 
     def treat_msg(self, msg):
         if msg:
