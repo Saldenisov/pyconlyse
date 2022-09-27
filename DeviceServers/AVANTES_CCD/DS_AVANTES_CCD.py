@@ -40,31 +40,23 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     polling_infinite = 100000
     timeoutt = 5000
 
-    dll_path = device_property(dtype=str)
     width = device_property(dtype=int)
     wavelengths = device_property(dtype=str)
     arduino_sync = device_property(dtype=str, default_value='10.20.30.47')
 
+    @attribute(label='background measurement', dtype=int, access=AttrWriteType.READ_WRITE)
+    def bg_measurement(self):
+        return self.bg_measurement_value
+
+    def write_bg_measurement(self, value: int):
+        if value in [0, 1]:
+            self.bg_measurement_value = value
+            if value == 0:
+                requests.get(url=self._arduino_addr_on)
+            else:
+                requests.get(url=self._arduino_addr_on_bg)
+
     def init_device(self):
-        self.serial_number_real = -1
-        self.head_name = ''
-        self.status_real = 0
-        self.exposure_time_local = -1
-        self.accumulate_time_local = -1
-        self.kinetic_time_local = -1
-        self.n_gains_max = 1
-        self.gain_value = -1
-        self.height_value = 1
-        self.grabbing_thread: Thread = None
-        self.abort = False
-        self.n_kinetics = 1
-        self.camera = None
-        self.BG_level_value = 0
-        self.integration_delay_value = 0
-        self.integration_time_value = 0.05
-        self.trigger_type_value = 0
-        self.trigger_source_value = 0
-        self.trigger_mode_value = 0
 
         super().init_device()
         self.register_variables_for_archive()
@@ -74,7 +66,8 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         else:
             self.wavelengths = eval(self.wavelengths)
 
-        self._arduino_addr_on = f'http://{self.arduino_sync}/?status=ON'
+        self._arduino_addr_on = f'http://{self.arduino_sync}/?status=ON-LAMP-AVANTES'
+        self._arduino_addr_on_bg = f'http://{self.arduino_sync}/?status=ON-AVANTES'
         self._arduino_addr_off = f'http://{self.arduino_sync}/?status=OFF'
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
@@ -125,39 +118,22 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return self.head_name
 
     def get_exposure_time(self) -> float:
-        res = self._GetAcquisitionTimings()
-        if res:
-            self.info(f'Get exposure time worked', True)
-        else:
-            self.info(f'Get exposure time did not work: {res}', True)
-        return self.exposure_time_local
+        return self.exposure_time_value
 
     def set_exposure_time(self, value: float):
-        restart = False
-        self.info(f'Setting exposure time {value}', True)
-        if self.grabbing:
-            self.stop_grabbing()
-            restart = True
-        res = self._SetExposureTime(value)
-        if res:
-            self.info(f'Exposure time was set to {value}', True)
-        else:
-            self.info(f'Exposure time was not set to {value}: {res}', True)
+        self._SetIntegrationDelay()
 
-        if restart:
-            self.start_grabbing()
+    def set_trigger_delay(self, value: float):
+        self._SetIntegrationDelay(value)
 
-    def set_trigger_delay(self, value: str):
-        self._SetIntegrationDelay(float(value))
-
-    def get_trigger_delay(self) -> str:
-        return str(self.trigger_delay_value)
+    def get_trigger_delay(self) -> float:
+        return self.exposure_delay_value
 
     def get_exposure_min(self):
         return 0.00001
 
     def get_exposure_max(self):
-        return
+        return 1
 
     def set_gain(self, value: int):
         pass
@@ -169,7 +145,6 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return 0
 
     def get_gain_max(self) -> int:
-        self._GetNumberPreAmpGains()
         return self.n_gains_max
 
     def get_width(self) -> int:
@@ -296,7 +271,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                 a = time()
                 cfg = self.camera.MeasConfigType()
                 cfg.m_StopPixel = self.width - 1
-                cfg.m_IntegrationTime = self.integration_time_value  # in milliseconds
+                cfg.m_IntegrationTime = self.exposure_time_value  # as float
                 cfg.m_NrAverages = 1  # number of averages
                 m_Trigger = self.camera.TriggerType()
                 m_Trigger.m_Mode = self.trigger_mode_value
@@ -354,7 +329,10 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def start_grabbing_local(self):
         sleep(0.5)
         if not self.grabbing:
-            requests.get(url=self._arduino_addr_on)
+            if self.bg_measurement:
+                requests.get(url=self._arduino_addr_on_bg)
+            else:
+                requests.get(url=self._arduino_addr_on)
             self.abort = False
             self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
             self.grabbing_thread.start()
@@ -378,6 +356,18 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def get_trigger_mode(self) -> int:
         return self.trigger_mode_value
 
+    def set_trigger_source(self, state):
+        self._SetTriggerSource(state)
+
+    def get_trigger_source(self) -> int:
+        return self.trigger_source_value
+
+    def set_trigger_type(self, state):
+        self._SetTriggerType(state)
+
+    def get_trigger_type(self) -> int:
+        return self.trigger_type_value
+
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
@@ -394,11 +384,11 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return True
 
     def _SetIntegrationTime(self, value):
-        self.integration_time_value = value
+        self.exposure_time_value = value
         return True
 
     def _SetIntegrationDelay(self, value):
-        self.integration_delay_value = value
+        self.exposure_delay_value = value
         return True
 
     def _SetBGLevel(self, value):

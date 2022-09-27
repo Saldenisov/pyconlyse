@@ -9,7 +9,7 @@ import string
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
-from typing import Tuple, Union, List, Dict
+from typing import Tuple, Union, List, Dict, Any
 from time import time_ns, time, sleep
 import ctypes
 import inspect
@@ -36,232 +36,126 @@ class OrderInfo:
 
 
 class GlobalSettings(ctypes.Structure):
-
     MAXPCIECARDS = 5
-    _fields_ = [("useSoftwarePolling", ctypes.c_uint32, 0),
-                """
-                brief useSoftwarePolling determines which method is used to copy data from DMA to user buffer.
-                true: Use Software Polling. When there is new available data in the DMA buffer, a thread copies the data one scan at a time to the user buffer. This method is reliable up to about 33kHz. This was measured with a 3030 camera system with 1088 pixels, priority of the thread is not changed, 14.12.2021, FH.
-                false: Use Interrupt. Every dma_buffer_size_in_scans/2 scan the interrupt starts a copy process, which copies dma_buffer_size_in_scans/2 scans to the user buffer. 1000 is our default value for dma_buffer_size_in_scans, so interrupt is started every 500 scans.
-                """
-                ("nos", ctypes.c_uint32, 100),
-                """
-                Number of blocks
-                """
-                ("nob", ctypes.c_uint32, 1),
-                """
-                Scan trigger input mode
-                STI = {I: 0, S1: 1, S2: 2, unused: 3, STimer: 4, ASL: 5}
-                """
-                ("sti_mode", ctypes.c_uint32, 4),
-                """
-                Block trigger input mode
-                BTI = {I: 0, S1: 1, S2: 2, S1 & S2: 3, BTimer: 4, S1 chopper: 5, S2 chopper: 6, S1 & S2 choppers: 7}
-                """
-                ("bti_mode", ctypes.c_uint32, 4),
-                """
-                Scan timer in microseconds.
-                """
-                ("stime_in_microsec", ctypes.c_uint32, 1000),
-                """
-                Block timer in microseconds.
-                """
-                ("btime_in_microsec", ctypes.c_uint32, 100000),
-                """
-                Scan delay after trigger in 10 ns steps.
-                """
-                ("sdat_in_10ns", ctypes.c_uint32, 0),
-                """
-                Block delay after trigger in 10 ns steps.
-                """
-                ("bdat_in_10ns", ctypes.c_uint32, 0),
-                """
-                Scan trigger slope.
-                pos - 0, neg - 1, both - 2
-                """
-                ("sslope", ctypes.c_uint32, 0),
-                """
-                Block trigger slope.
-                pos - 0, neg - 1, both - 2
-                """
-                ("bslope", ctypes.c_uint32, 1),
-                """
-                XCK delay in 10 ns steps
-                """
-                ("XCK delay in 10 ns steps", ctypes.c_uint32, 0),
-                """
-                SEC in 10 ns steps.
-                """
-                ("sec_in_10ns", ctypes.c_uint32, 0),
-                """
-                Trigger mode of camera control.
-                XCK - 0, Ext. Trig. - 1, DAT - 2
-                """
-                ("trigger_mode_cc", ctypes.c_uint32, 1),
-                """
-                Board sel.
-                0: 0
-                1: board 1
-                2: board 2
-                3: both boards
-                """
-                ("board_sel", ctypes.c_uint32, 1),
-                """
-                Sensor type.
-                0: PDA (line sensor)
-                1: FFT (area sensor)
-                """
-                ("sensor_type", ctypes.c_uint32, 1),
-                """
-                Camera system
-                0: 3001
-                1: 3010
-                2: 3030
-                """
-                ("camera_system", ctypes.c_uint32, 0),
-                """
-                Camera count
-                """
-                ("camcnt", ctypes.c_uint32, 1),
-                """
-                Pixel count
-                """
-                ("pixel", ctypes.c_uint32, 1088),
-                """
-                Mechanical shutter
-                """
-                ("mshut", ctypes.c_uint32, 0),
-                """
-                Turn leds off
-                """
-                ("led_off", ctypes.c_uint32, 0),
-                """
-                Sensor gain
-                """
-                ("adc_gain", ctypes.c_uint32, 0),
-                """
-                Temperature level
-                """
-                ("Temp_level", ctypes.c_uint32, 1),
-                """
-                Turn digital analog converter on / off
-                - 0: off
-                - >0: on
-                """
-                ("dac", ctypes.c_uint32, 0),
-                """
-                Enable GPX
-                """
-                ("enable_gpx", ctypes.c_uint32, 0),
-                """
-                GPX offset
-                """
-                ("gpx_offset", ctypes.c_uint32, 1000),
-                """
-                Count of lines for FFT sensors
-                """
-                ("FFTLines", ctypes.c_uint32, 128),
-                """
-                Vertical frequency for FFT sensors
-                """
-                ("Vfreq", ctypes.c_uint32, 7),
-                """
-                Mode for FFT sensors
-                Full binning - 0
-                Region of interest - 1
-                Area - 2
-                """
-                ("FFTMode", ctypes.c_uint32, 0),
-                """
-                Count of lines which are binned in area mode for FFT sensors
-                """
-                ("lines_binning", ctypes.c_uint32, 1),
-                """
-                Number of regions for fft mode range of interest
-                """
-                ("number_of_regions", ctypes.c_uint32, 2),
-                """
-                Deprecated: Keep. Was a parameter to determine whether a region for region 
-                of interest mode is filled with real or dummy data.
-                """
-                ("keep", ctypes.c_uint32, 0),
-                """
-                Size for each region for region of interest mode for FFT sensors.
-                When the first region is set to 0, all regions are automatically same sized.
-                """
-                ("region_size", ctypes.c_uint32 * 8, [32, 32, 16, 32, 68, 0, 0, 0]),
-                """
-                "This is a matrix"
-                Array for output levels of each digital to analog converter
-                """
-                ("dac_output", (ctypes.c_uint32 * MAXPCIECARDS) * 8,
+
+    _fields_ = [("useSoftwarePolling", ctypes.c_uint32),
+                ("nos", ctypes.c_uint32),
+                ("nob", ctypes.c_uint32),
+                ("sti_mode", ctypes.c_uint32),
+                ("bti_mode", ctypes.c_uint32),
+                ("stime_in_microsec", ctypes.c_uint32),
+                ("btime_in_microsec", ctypes.c_uint32),
+                ("sdat_in_10ns", ctypes.c_uint32),
+                ("bdat_in_10ns", ctypes.c_uint32),
+                ("sslope", ctypes.c_uint32),
+                ("bslope", ctypes.c_uint32),
+                ("XCK delay in 10 ns steps", ctypes.c_uint32),
+                ("sec_in_10ns", ctypes.c_uint32),
+                ("trigger_mode_cc", ctypes.c_uint32),
+                ("board_sel", ctypes.c_uint32),
+                ("sensor_type", ctypes.c_uint32),
+                ("camera_system", ctypes.c_uint32),
+                ("camcnt", ctypes.c_uint32),
+                ("pixel", ctypes.c_uint32),
+                ("mshut", ctypes.c_uint32),
+                ("led_off", ctypes.c_uint32),
+                ("adc_gain", ctypes.c_uint32),
+                ("Temp_level", ctypes.c_uint32),
+                ("dac", ctypes.c_uint32),
+                ("enable_gpx", ctypes.c_uint32),
+                ("gpx_offset", ctypes.c_uint32),
+                ("FFTLines", ctypes.c_uint32),
+                ("Vfreq", ctypes.c_uint32),
+                ("FFTMode", ctypes.c_uint32),
+                ("lines_binning", ctypes.c_uint32),
+                ("number_of_regions", ctypes.c_uint32),
+                ("keep", ctypes.c_uint32),
+                ("region_size", ctypes.c_uint32 * 8),
+                ("dac_output", (ctypes.c_uint32 * MAXPCIECARDS) * 8),
+                ("TORmodus", ctypes.c_uint32),
+                ("ADC_Mode", ctypes.c_uint32),
+                ("ADC_custom_pattern", ctypes.c_uint32),
+                ("bec_in_10ns", ctypes.c_uint32),
+                ("cont_pause_in_microseconds", ctypes.c_uint32),
+                ("isIr", ctypes.c_uint32),
+                ("IOCtrl_impact_start_pixel", ctypes.c_uint32),
+                ("IOCtrl_output_width_in_5ns", ctypes.c_uint32 * 8),
+                ("IOCtrl_output_delay_in_5ns", ctypes.c_uint32 * 8),
+                ("IOCtrl_T0_period_in_10ns", ctypes.c_uint32),
+                ("dma_buffer_size_in_scans", ctypes.c_uint32),
+                ("tocnt", ctypes.c_uint32),
+                ("ticnt", ctypes.c_uint32)
+                ]
+
+    _defaults_ = {"useSoftwarePolling": 0,
+                "nos": 100,
+                "nob": 1,
+                "sti_mode": 4,
+                "bti_mode": 4,
+                "stime_in_microsec": 1000,
+                "btime_in_microsec": 100000,
+                "sdat_in_10ns": 0,
+                "bdat_in_10ns": 0,
+                "sslope": 0,
+                "bslope": 1,
+                "XCK delay in 10 ns steps": 0,
+                "sec_in_10ns": 0,
+                "trigger_mode_cc": 1,
+                "board_sel": 1,
+                "sensor_type": 1,
+                "camera_system": 0,
+                "camcnt": 1,
+                "pixel": 1088,
+                "mshut": 0,
+                "led_off": 0,
+                "adc_gain": 0,
+                "Temp_level": 1,
+                "dac": 0,
+                "enable_gpx": 0,
+                "gpx_offset": 1000,
+                "FFTLines": 128,
+                "Vfreq": 7,
+                "FFTMode": 0,
+                "lines_binning": 1,
+                "number_of_regions": 2,
+                "keep": 0,
+                "region_size": [32, 32, 16, 32, 68, 0, 0, 0],
+                "dac_output":
                  [[51500, 51500, 51520, 51580, 51560, 51590, 51625, 51745],
                   [55000, 54530, 54530, 54530, 54530, 54530, 54530, 54530],
                   [0, 0, 0, 0, 0, 0, 0, 0],
-                  [0, 0, 0, 0, 0, 0, 0, 0]
-                  [0, 0, 0, 0, 0, 0, 0, 0]]),
-                """
-                XCK - 0
-                REG/OutTrig - 1
-                VON - 2
-                DMA_Act - 3
-                ASLS - 4
-                STIMER - 5
-                BTIMER - 6
-                INTRSR - 7
-                S1 - 8
-                S2 - 9
-                BON - 10
-                MEASUREON - 11
-                SDAT - 12
-                BDAT - 13
-                SSHUT - 14
-                BSHUT - 15
-                """
-                ("TORmodus", ctypes.c_uint32, 0),
-                """
-                normal - 0
-                ramp - 1
-                custrom pattern - 2
-                """
-                ("ADC_Mode", ctypes.c_uint32, 0),
-                """
-                """
-                ("ADC_custom_pattern", ctypes.c_uint32, 100),
-                """
-                """
-                ("bec_in_10ns", ctypes.c_uint32, 0),
-                """
+                  [0, 0, 0, 0, 0, 0, 0, 0],
+                  [0, 0, 0, 0, 0, 0, 0, 0]],
+                "TORmodus": 0,
+                "ADC_Mode": 0,
+                "ADC_custom_pattern": 100,
+                "bec_in_10ns": 0,
+                "cont_pause_in_microseconds": 1,
+                "isIr": 0,
+                "IOCtrl_impact_start_pixel": 1078,
+                "IOCtrl_output_width_in_5ns": [50, 50, 50, 50, 50, 50, 50, 0],
+                "IOCtrl_output_delay_in_5ns": [0, 100, 200, 300, 400, 500, 600, 0],
+                "IOCtrl_T0_period_in_10ns": 1000,
+                "dma_buffer_size_in_scans": 1000,
+                "tocnt": 0,
+                "ticnt": 0
+                }
 
-                """
-                ("cont_pause_in_microseconds", ctypes.c_uint32, 1),
-                """
-                """
-                ("isIr", ctypes.c_uint32, 0),
-                """
-                """
-                ("IOCtrl_impact_start_pixel", ctypes.c_uint32, 1078),
-                """
-                """
-                ("IOCtrl_output_width_in_5ns", ctypes.c_uint32 * 8, [50, 50, 50, 50, 50, 50, 50, 0]),
-                """
-                """
-                ("IOCtrl_output_delay_in_5ns", ctypes.c_uint32 * 8, [0, 100, 200, 300, 400, 500, 600, 0]),
-                """
-                """
-                ("IOCtrl_T0_period_in_10ns", ctypes.c_uint32, 1000),
-                """
-                Size of DMA buffer in scans. 1000 is our default. 60 is also working with highspeed 
-                (expt=0,02ms). 30 could be with one wrong scan every 10000 scans.
-                """
-                ("dma_buffer_size_in_scans", ctypes.c_uint32, 1000),
-                """
-                """
-                ("tocnt", ctypes.c_uint32, 0),
-                """
-                """
-                ("ticnt", ctypes.c_uint32, 0),
-                ]
+    def __init__(self, settings):
+        for name, value in settings.items():
+            if isinstance(value, list):
+                value = np.asarray(value, dtype=np.uint)
+                if len(value.shape) == 1:
+                    arr = (ctypes.c_uint * value.shape[0])(*value)
+                elif len(value.shape) == 2:
+                    arr = ((ctypes.c_uint * value.shape[0]) * value.shape[1])()
+                    # value = np.transpose(value)
+                    # for x in range(value.shape[0]):
+                    #     for y in range(value.shape[1]):
+                    #         arr[x][y] = value[x][y]
+                    # print(np.ctypeslib.as_array(arr))
+                value = arr
+            setattr(self, name, value)
 
 
 class DS_STRESING_IR(DS_CAMERA):
@@ -289,7 +183,7 @@ class DS_STRESING_IR(DS_CAMERA):
         if state_ok:
             self.dll = self.load_dll()
             res = self._Initialize()
-            if res:
+            if res == True:
                 self.camera = True
                 self.set_state(DevState.ON)
                 self._GetCameraSerialNumber()
@@ -443,11 +337,9 @@ class DS_STRESING_IR(DS_CAMERA):
     def turn_off_local(self) -> Union[int, str]:
         if self.grabbing:
             self.stop_grabbing_local()
-        res = self._GetStatus()
-        if self.status_real != 20073:
-            sleep(1)
         res = self._ShutDown()
         self.camera = None
+        self.dll = None
         if res == True:
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
@@ -502,29 +394,7 @@ class DS_STRESING_IR(DS_CAMERA):
                     data2D = np.reshape(self.array_real, (-1, 1024))
                     data2D.astype('int16')
 
-                    for spectrum in data2D:
-                        time_stamp = time_ns()
-                        self.time_stamp_deque.append(time_stamp)
-                        self.data_deque.append(spectrum)
-
-                        data_archive = self.form_archive_data(spectrum.reshape((1, 1024)),
-                                                              name='spectra', time_stamp=time_stamp, dt='int16')
-                        self.write_to_archive(data_archive)
-
-                        if self.orders:
-                            orders_to_delete = []
-                            for order_name, order_info in self.orders.items():
-                                if (time() - order_info.order_timestamp) >= 100:
-                                    orders_to_delete.append(order_name)
-                                elif not order_info.order_done:
-                                    order_info.order_array = np.vstack([order_info.order_array, spectrum])
-
-                                if order_info.order_length * 3 == len(order_info.order_array) - 1:
-                                    order_info.order_done = True
-
-                            if orders_to_delete:
-                                for order_name in orders_to_delete:
-                                    del self.orders[order_name]
+                    self.treat_orders(data2D)
 
                     self.info('Image is received...')
                 else:
@@ -580,6 +450,32 @@ class DS_STRESING_IR(DS_CAMERA):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
+    def _Initialize(self):
+        res = self._DLLCCDDrvInit()
+        if res != True:
+            return res
+
+        res = self._DLLInitBoard()
+        if res != True:
+            return res
+
+        res = self._DLLSetGlobalSettings()
+        if res != True:
+            return res
+
+        res = self._DLLInitMeasurement()
+
+        return res
+
+    def _GetCameraSerialNumber(self):
+        self.serial_number_real = self.serial_number
+
+    def _Shutdown(self):
+        res = self.dll.DLLStopFFLoop()
+        if res == 0:
+            res = self.dll.DLLCCDDrvExit(ctypes.c_uint32(1))
+        return True if res == 0 else self._error_stresing(res)
+
     # DLL functions
     @dll_lock
     def _DLLCCDDrvInit(self) -> Tuple[bool, str]:
@@ -588,8 +484,8 @@ class DS_STRESING_IR(DS_CAMERA):
         """
         number_of_boards = ctypes.c_int8(0)
         res = self.dll.DLLCCDDrvInit(ctypes.byref(number_of_boards))
-        self.number_of_boards = number_of_boards.value
-        return True if self.number_of_boards >= 0 else self._error_stresing(res)
+        self.number_of_boards = int(number_of_boards.value)
+        return True if self.number_of_boards > 0 else self._error_stresing(res)
 
     @dll_lock
     def _DLLInitBoard(self) -> Tuple[bool, str]:
@@ -599,29 +495,37 @@ class DS_STRESING_IR(DS_CAMERA):
         res = self.dll.DLLInitBoard()
         return True if res == 0 else self._error_stresing(res)
 
+    @dll_lock
     def _DLLConvertErrorCodeToMsg(self, error_code: int) -> str:
         """
         CStr DLLConvertErrorCodeToMsg(int32_t status);
         """
-        error_code = ctypes.c_int32(error_code)
+        error_code = ctypes.c_int(error_code)
+        self.dll.DLLConvertErrorCodeToMsg.restype = ctypes.c_char_p
         res = self.dll.DLLConvertErrorCodeToMsg(error_code)
         return res
 
-    def _InitMeasurement(self) -> Tuple[bool, str]:
+    @dll_lock
+    def _DLLInitMeasurement(self) -> Tuple[bool, str]:
         """
-        void  DLLSetGlobalSettings(void *struct global_settings);
         int32_t DLLInitMeasurement(void );
         """
-        global_settings = GlobalSettings()
-        res = self.dll.DLLInitMeasurement(ctypes.POINTER(global_settings))
+        res = self.dll.DLLInitMeasurement()
+        return True if res == 0 else self._error_stresing(res)
+
+    def _DLLSetGlobalSettings(self):
+        settings: Dict[str, Any] = self.parameters['Acquisition_Controls']['Measurement_Settings']
+        global_settings = GlobalSettings(settings=settings)
+        global_settings_pointer = ctypes.byref(global_settings)
+        res = self.dll.DLLSetGlobalSettings(global_settings_pointer)
         return True if res == 0 else self._error_stresing(res)
 
     def _DLLSetGammaValue(self, white: int, black: int):
         """
         void
         """
-        white =ctypes.c_uint32(white)
-        black =ctypes.c_uint32(black)
+        white = ctypes.c_uint32(white)
+        black = ctypes.c_uint32(black)
         self.dll.DLLSetGammaValue(white, black)
         return True
 
@@ -642,12 +546,12 @@ class DS_STRESING_IR(DS_CAMERA):
         self.measure_on = bool(measureOn.value)
         return True if res == 0 else self._error_stresing(res)
 
-
     def _error_stresing(self, code: int, user_def='') -> str:
         if user_def != '':
             return user_def
         res = self._DLLConvertErrorCodeToMsg(code)
-        print(f'Error: {res}, Caller: {inspect.stack()[1].function} : {inspect.stack()[2].function}')
+        print(f'Error: {res}, Caller: {inspect.stack()[1].function} : {inspect.stack()[2].function} '
+              f': {inspect.stack()[3].function}')
         return res
 
 
