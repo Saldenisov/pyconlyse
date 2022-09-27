@@ -15,6 +15,7 @@ import ctypes
 polling_infinite = 10000
 
 from DeviceServers.General.DS_general import GeneralOrderInfo
+from threading import Thread
 
 @dataclass
 class OrderInfo(GeneralOrderInfo):
@@ -31,6 +32,7 @@ class DS_CAMERA(DS_General):
     polling_infinite = 100000
     timeoutt = 5000
 
+    dll_path = device_property(dtype=str)
     serial_number = device_property(dtype=str)
     friendly_name = device_property(dtype=str)
     parameters = device_property(dtype=str)
@@ -54,6 +56,27 @@ class DS_CAMERA(DS_General):
         self.dll = None
         self.data_deque = deque(maxlen=1000)
         self.time_stamp_deque = deque(maxlen=1000)
+        self.bg_measurement_value = 0
+        self.serial_number_real = -1
+        self.head_name = ''
+        self.status_real = 0
+        self.exposure_time_value = -1
+        self.exposure_delay_value = -1
+        self.accumulate_time_local = -1
+        self.kinetic_time_local = -1
+        self.n_gains_max = 1
+        self.gain_value = -1
+        self.height_value = 1
+        self.grabbing_thread: Thread = None
+        self.abort = False
+        self.n_kinetics = 1
+        self.camera = None
+        self.BG_level_value = 0
+
+        self.trigger_type_value = 0
+        self.trigger_source_value = 0
+        self.trigger_mode_value = 0
+
         super().init_device()
 
     def load_dll(self):
@@ -268,11 +291,11 @@ class DS_CAMERA_CCD(DS_CAMERA):
         self.set_trigger_delay(value)
 
     @abstractmethod
-    def set_trigger_delay(self, value: str):
+    def set_trigger_delay(self, value: float):
         pass
 
     @abstractmethod
-    def get_trigger_delay(self) -> str:
+    def get_trigger_delay(self) -> float:
         pass
 
     @attribute(label='trigger mode', dtype=int, access=AttrWriteType.READ_WRITE)
@@ -288,6 +311,36 @@ class DS_CAMERA_CCD(DS_CAMERA):
 
     @abstractmethod
     def get_trigger_mode(self) -> int:
+        pass
+
+    @attribute(label='trigger source', dtype=int, access=AttrWriteType.READ_WRITE)
+    def trigger_source(self):
+        return self.get_trigger_source()
+
+    def write_trigger_source(self, value):
+        self.set_trigger_source(value)
+
+    @abstractmethod
+    def set_trigger_source(self, value):
+        pass
+
+    @abstractmethod
+    def get_trigger_source(self) -> int:
+        pass
+
+    @attribute(label='trigger type', dtype=int, access=AttrWriteType.READ_WRITE)
+    def trigger_type(self):
+        return self.get_trigger_type()
+
+    def write_trigger_type(self, value):
+        self.set_trigger_type(value)
+
+    @abstractmethod
+    def set_trigger_type(self, value):
+        pass
+
+    @abstractmethod
+    def get_trigger_type(self) -> int:
         pass
 
     @attribute(label='pixel format', dtype=str, access=AttrWriteType.READ_WRITE)

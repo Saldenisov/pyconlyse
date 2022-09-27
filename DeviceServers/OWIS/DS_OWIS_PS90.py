@@ -144,7 +144,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     def get_controller_status_local(self) -> Union[int, str]:
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
-        if self.serial_number != ser_num:
+        if ser_num < 0:
+            print(ser_num)
             self.set_state(DevState.FAULT)
             return f'Connection with PS90 is lost'
         else:
@@ -211,13 +212,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         speed = param['speed']
         limit_min = param['limit_min']
         limit_max = param['limit_max']
+        drive_current = param['drive_current']
+        hold_current = param['hold_current']
 
         res1, com1 = self._set_stage_attributes_ps90(self.control_unit_id, axis, pitch, revolution, gear_ratio)
         res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
         res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
         res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
+        # res5, com5 = self._set_drive_current_ex_ps90(self.control_unit_id, axis, drive_current)
+        res6, com6 = self._set_hold_current_ex_ps90(self.control_unit_id, axis, hold_current)
 
-        if all([res1, res2, res3, res4]):
+        if all([res1, res2, res3, res4, res6]):
             result = 0
         else:
             result = f'ERROR: {com1}:{com2}:{com3}:{com4}'
@@ -994,6 +999,78 @@ long error = PS90_GetReadError(1);
         value = ctypes.c_double(value)
         sleep(time_ps_delay)
         res = self.lib.PS90_SetTargetEx(control_unit, axis, value)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _set_drive_current_ex_ps90(self, control_unit: int, axis: int, value: float):
+        """
+        Synopsis
+        long PS90_SetDriveCurrent (long Index, long AxisId, long Value)
+
+        Description
+        set drive current for an axis (values in percent).
+        For step motor axes (Open Loop) it is an adjustable current. For dc servo motor axes (DC-Brush) it is an adjustable current limiting. For BLDC and step motor axes (Closed Loop) it is an adjustable current limiting. For step motor axes the maximum current will be defined with the function “PS90_SetCurrentLevel” (low – 2.4 A, high – 5.45 A). A maximum allowed current is 3.6 A. Therefore the maximum value for high current level is 66 percent.
+        For dc servo motor axes the maximum current limiting is defined (12 A). The function “PS90_SetCurrentLevel” has no effect.
+        For BLDC and step motor axes (Closed Loop) the maximum current limiting is defined (6 A). The function “PS90_SetCurrentLevel” has no effect.
+
+        Parameters
+        Index control unit index (1-10)
+        AxisId axis number (1...9)
+        Value drive current (values in percent)
+
+        Returns
+         0 – function was successful
+        -1 – function error
+        -2 – communication error
+        -3 – syntax error
+
+
+        Example
+        Set drive current of the control unit (Index=1, Axis=1):
+        long error = PS90_SetDriveCurrent(1,1,50);
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
+        axis = ctypes.c_long(axis)
+        value = ctypes.c_double(value)
+        sleep(time_ps_delay)
+        res = self.lib.PS90_SetDriveCurrent(control_unit, axis, value)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, 'DEV MODE'))
+    def _set_hold_current_ex_ps90(self, control_unit: int, axis: int, value: float):
+        """
+        Synopsis
+        long PS90_SetHoldCurrent (long Index, long AxisId, long Value)
+
+        Description
+        set hold current for an axis (values in percent).
+        This setting is valid only for step motor axes (Open Loop). The maximum current will be defined with the
+        function “PS90_SetCurrentLevel” (low – 2.4 A, high – 5.45 A). A maximum allowed current is 3.6 A.
+        Therefore the maximum value for high current level is 66 percent.
+
+        Parameters
+        Index control unit index (1-10)
+        AxisId axis number (1...9)
+        Value hold current (values in percent)
+
+        Returns
+         0 – function was successful
+        -1 – function error
+        -2 – communication error
+        -3 – syntax error
+
+
+        Example
+        Set hold current of the control unit (Index=1, Axis=1):
+        long error = PS90_SetHoldCurrent(1,1,30);
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = int(axis)
+        axis = ctypes.c_long(axis)
+        value = ctypes.c_double(value)
+        sleep(time_ps_delay)
+        res = self.lib.PS90_SetHoldCurrent(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
 
     def _error_OWIS_ps90(self, code: int, type: int, user_def='') -> str:
