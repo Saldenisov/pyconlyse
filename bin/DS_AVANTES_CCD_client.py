@@ -8,7 +8,7 @@ from DeviceServers.AVANTES_CCD.DS_AVANTES_CCD_Widget import AVANTES_CCD
 from bin.DS_General_Client import main
 
 
-layouts = {'spectrometer': {'selection': ['manip/CR/AVANTES_CCD1', 'manip/CR/AVANTES_CCD2'], 'width': 2},
+layouts = {'Spectrometer': {'selection': ['manip/CR/AVANTES_CCD1', 'manip/CR/AVANTES_CCD2'], 'width': 2},
            'test': {'selection': ['manip/CR/AVANTES_CCD1'], 'width': 1}
            }
 
