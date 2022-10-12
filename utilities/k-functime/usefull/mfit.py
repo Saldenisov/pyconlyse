@@ -5,12 +5,14 @@ Created on Sat Nov 19 20:49:51 2016
 @author: saldenisov
 """
 import numpy as np
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, leastsq
 from scipy.optimize.optimize import OptimizeWarning
 from scipy.signal import fftconvolve
 import matplotlib.pyplot as plt
-from usefull import FittingError
-from usefull import elongarray
+from .myexceptions import FittingError
+from .diffstuff import elongarray
+
+
 
 import functools
 def howmany(func):
@@ -324,11 +326,10 @@ def fitABC(Xexp,Yexp, guess, bounds,
         raise
     finally:
         Coeffs = dict(zip(('A','t0', 'tau1',' tau2', 'sigma','y0'), coeffs))
-        return Coeffs, fitfunc(Xexp, *coeffs)   
+        return Coeffs, fitfunc(Xexp, *coeffs)
 
-def fitAABC(Xexp,Yexp, guess, bounds,
-                    extraN=2,
-                    method='dogbox'):
+
+def fitAABC(Xexp,Yexp, guess, bounds, extraN=2, method='dogbox'):
     res = elongarray(Xexp, N=extraN)
     xnew = res[0]
     oldpos = res[1]
@@ -378,4 +379,91 @@ def fitAABC(Xexp,Yexp, guess, bounds,
         raise
     finally:
         Coeffs = dict(zip(('A','t0', 'tau1',' tau2', 'sigma','y0'), coeffs))
-        return Coeffs, fitfunc(Xexp, *coeffs)   
+        return Coeffs, fitfunc(Xexp, *coeffs)
+
+
+def fitAdistBC(Xexp, Yexp, guess, bounds, extraN=2, method='dogbox'):
+    res = elongarray(Xexp, N=extraN)
+    xnew = res[0]
+    oldpos = res[1]
+    dt = xnew[2] - xnew[1]
+
+    def gaussian(x, x0, sigma):
+        res = 1 / (2 * 3.14 * sigma) * np.exp(-(x - x0) ** 2 / (2 * sigma ** 2))
+        return res
+
+    @howmany
+    def fitfunc(x, *args):
+        A, t0, tau_lamda, tau2, sigma, tau_sigma, y0 = args
+        Yt = [0 + y0]
+        ts = t0 - 1.177 * sigma
+
+        n_bins = 10
+        dist = np.random.normal(tau_lamda * 1000, tau_sigma * 100, 1000)
+        a, b = np.histogram(dist, bins=n_bins, density=True)
+        # count, bins, ignored = plt.hist(dist, n_bins, density=True)
+        # print(args)
+        # plt.show()
+
+        weights = a / np.sum(a)
+
+        bins = b
+        pairs = []
+        i = 0
+
+        for weight, bin in zip(weights, bins):
+            if weight != 0 and bin > 0:
+                pairs.append((weight, bin, i))
+                i += 1
+
+        weights = weights / np.sum(weights)
+
+        # pairs = [(1, tau_lamda * 1000, 0)]
+
+        Ca = np.zeros(len(pairs))
+        Cb = np.zeros(len(pairs))
+
+        try:
+            for t, j in zip(xnew, np.arange(len(xnew))):
+                if j == len(xnew) - 1:
+                    dt = xnew[j] - xnew[j - 1]
+                else:
+                    dt = xnew[j + 1] - xnew[j]
+                Gaus = A * gaussian(t, t0, sigma)
+                for weight, tau, i in pairs:
+                    tau = tau / 1000
+                    Ca[i] = (Gaus * weight - Ca[i] / tau) * dt + Ca[i]
+                    Cb[i] = (Ca[i] / tau - Cb[i] / tau2) * dt + Cb[i]
+                Yt.append(np.sum(Cb) + y0)
+
+        except RuntimeWarning:
+            print('YEAP')
+            print(A, t0, tau_lamda, tau2, sigma, tau_sigma, y0)
+
+        Yt = np.array(Yt)[oldpos]
+
+        # plt.plot(x, Yt)
+        # plt.plot(x, Yexp)
+        # plt.show()
+
+        return Yt
+
+    try:
+        coeffs, _ = curve_fit(f=fitfunc,
+                              xdata=Xexp,
+                              ydata=Yexp,
+                              p0=guess,
+                              bounds=bounds,
+                              method=method)
+        print("Success fit")
+
+    except (ValueError, Exception) as e:
+        print(f'fitABC_dist did not work {e}')
+        coeffs = np.ones(7)
+        raise FittingError('fitABC did not work')
+
+    except OptimizeWarning:
+        raise
+    finally:
+        Coeffs = dict(zip(('A', 't0', 'tau1', ' tau2', 'sigma', 'sigma_tau', 'y0'), coeffs))
+        return Coeffs, fitfunc(Xexp, *coeffs)

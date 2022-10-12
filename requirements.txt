@@ -13,6 +13,8 @@ ifaddr
 imutils
 imageio
 msgpack
+msl-loadlib
+https://github.com/MSLNZ/msl-equipment/archive/main.zip
 lxml  # for taurus
 keyboard
 # #mysqlclient

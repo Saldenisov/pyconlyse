@@ -115,30 +115,30 @@ class AVANTES_CCD(DS_General_Widget):
 
         lo_parameters.addWidget(TaurusLabel('N spectra'))
         lo_parameters.addWidget(self.number_spectra)
-        lo_parameters.addWidget(TaurusLabel('N kinetics'))
-        lo_parameters.addWidget(self.number_kinetics)
-        lo_parameters.addWidget(TaurusLabel('Trigger Mode'))
-        lo_parameters.addWidget(self.trigger_mode)
-        lo_parameters.addWidget(TaurusLabel('Trigger Source'))
-        lo_parameters.addWidget(self.trigger_source)
-        lo_parameters.addWidget(TaurusLabel('Trigger Type'))
-        lo_parameters.addWidget(self.trigger_type)
+        # lo_parameters.addWidget(TaurusLabel('N kinetics'))
+        # lo_parameters.addWidget(self.number_kinetics)
+        # lo_parameters.addWidget(TaurusLabel('Trigger Mode'))
+        # lo_parameters.addWidget(self.trigger_mode)
+        # lo_parameters.addWidget(TaurusLabel('Trigger Source'))
+        # lo_parameters.addWidget(self.trigger_source)
+        # lo_parameters.addWidget(TaurusLabel('Trigger Type'))
+        # lo_parameters.addWidget(self.trigger_type)
         lo_parameters.addWidget(TaurusLabel('Exposure Time, s'))
         lo_parameters.addWidget(self.exposure_time)
         lo_parameters.addSpacerItem(QtWidgets.QSpacerItem(0, 5, QtWidgets.QSizePolicy.Expanding,
                                                           QtWidgets.QSizePolicy.Minimum))
 
-        lo_parameters_od.addWidget(QtWidgets.QLabel('BG level'))
-        self.bg_level = QtWidgets.QSpinBox()
-        self.bg_level.setValue(50000)
-        lo_parameters_od.addWidget(self.bg_level)
-        lo_parameters_od.addWidget(QtWidgets.QLabel('OD err range'))
-        self.od_err_left = QtWidgets.QDoubleSpinBox()
-        self.od_err_left.setValue(360.0)
-        self.od_err_right = QtWidgets.QDoubleSpinBox()
-        self.od_err_right.setValue(770.0)
-        lo_parameters_od.addWidget(self.od_err_left)
-        lo_parameters_od.addWidget(self.od_err_right)
+        # lo_parameters_od.addWidget(QtWidgets.QLabel('BG level'))
+        # self.bg_level = QtWidgets.QSpinBox()
+        # self.bg_level.setValue(50000)
+        # lo_parameters_od.addWidget(self.bg_level)
+        # lo_parameters_od.addWidget(QtWidgets.QLabel('OD err range'))
+        # self.od_err_left = QtWidgets.QDoubleSpinBox()
+        # self.od_err_left.setValue(360.0)
+        # self.od_err_right = QtWidgets.QDoubleSpinBox()
+        # self.od_err_right.setValue(770.0)
+        # lo_parameters_od.addWidget(self.od_err_left)
+        # lo_parameters_od.addWidget(self.od_err_right)
         lo_parameters_od.addSpacerItem(QtWidgets.QSpacerItem(0, 5, QtWidgets.QSizePolicy.Expanding,
                                                              QtWidgets.QSizePolicy.Minimum))
         lo_device.addLayout(lo_status)
@@ -189,7 +189,7 @@ class AVANTES_CCD(DS_General_Widget):
         self.add_curve(self.plot_spectra, self.wavelengths)  # background
         self.add_curve(self.plot_spectra, self.wavelengths)  # spectra
 
-        self.view.setMinimumSize(450, 450)
+        self.view.setMinimumSize(450, 250)
         lo_image.addWidget(self.view)
 
     def update_curve(self, plot, i, y):
@@ -257,54 +257,6 @@ class AVANTES_CCD(DS_General_Widget):
         else:
             self.order = self.make_order()
 
-    def search_for_indexes(self, data: np.ndarray):
-        """
-        return background_idx, with_electron, without_electron
-        """
-        def search_min(data):
-            i = 0
-            level = 10 ** 9
-            level_local = 0
-            idx_min = -1
-            for spectrum in data:
-                level_local = np.sum(spectrum)
-                if level_local < level:
-                    level = level_local
-                    idx_min = i
-                else:
-                    break
-                i += 1
-            return idx_min, level_local
-
-        def elyse_seq(idx_min):
-            if idx_min == -1:
-                return 0, 1, 2
-
-            if idx_min % 3 == 0:
-                return 0, 1, 2
-            elif idx_min % 3 == 1:
-                return 1, 0, 2
-            elif idx_min % 3 == 2:
-                return 2, 1, 0
-
-
-        idx1, level1 = search_min(data=data[::3])
-        idx2, level2 = search_min(data=data[1::3])
-
-        if idx1 != idx2 and idx1 >= 0 and idx2 >= 0:
-            if level1 <= level2:
-                return elyse_seq(idx1)
-            else:
-                return elyse_seq(idx2)
-        elif idx1 < 0 and idx2 >= 0:
-            return elyse_seq(idx2)
-        elif idx2 < 0 and idx1 >= 0:
-            return elyse_seq(idx1)
-        elif idx1 == idx2 and idx1 >= 0 and idx2 >= 0:
-            return elyse_seq(idx1)
-        else:
-            return 0, 1, 2
-
     def cald_OD(self, data: np.ndarray) -> np.ndarray:
         back_idx, with_idx, without_idx = self.search_for_indexes(data)
         ODs = []
@@ -329,26 +281,6 @@ class AVANTES_CCD(DS_General_Widget):
         ODs = np.array(ODs)
 
         return np.average(ODs, axis=0)
-
-    def set_stability(self):
-        stability = self.calc_stability()
-        self.plot_OD.setTitle(f'Transient absorption. Stability: {stability}')
-
-    def calc_stability(self):
-        return 0
-
-    def average_data_ELYSE_seq(self, data: np.ndarray) -> np.ndarray:
-        """
-        return np.ndarray(BG1, BG2, with_e1, with_e2, without_e1, without_e2)
-        """
-        back_idx, with_idx, without_idx = self.search_for_indexes(data)
-        background1 = np.average(data[back_idx::3], axis=0)
-        background2 = np.average(data[back_idx + 1::3], axis=0)
-        with_e1 = np.average(data[with_idx::3], axis=0)
-        with_e2 = np.average(data[with_idx + 1::3], axis=0)
-        without_e1 = np.average(data[without_idx::3], axis=0)
-        without_e2 = np.average(data[without_idx + 1::3], axis=0)
-        return np.vstack((background1, background2, with_e1, with_e2, without_e1, without_e2))
 
     def convert_image(self, image):
         image2D = image

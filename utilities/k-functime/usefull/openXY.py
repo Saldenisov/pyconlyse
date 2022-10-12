@@ -8,7 +8,7 @@ import os.path
 import numpy as np
 
 
-from usefull import MyException,WrongExtensionError, DataSizeException, WrongCommand
+from .myexceptions import MyException,WrongExtensionError, DataSizeException, WrongCommand
 
 def openXYtxt(command):
     """

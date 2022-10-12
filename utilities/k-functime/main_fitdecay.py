@@ -12,7 +12,10 @@ from matplotlib.figure import Figure
 from scipy.integrate import trapz
 from scipy.optimize.optimize import OptimizeWarning
 
-from usefull import *
+from usefull.mfit import *
+from usefull.openXY import openXYtxt
+from usefull.diffstuff import *
+from usefull.myexceptions import *
 
 
 def main():
@@ -101,37 +104,36 @@ def main():
             command.remove('fit')
             if testifallin(['Yexp'], locals()):             
                 A = .1
-                t0 = -0.01
-                tau1 = 1. / 100
-                tau2 = 0.5
+                t0 = 0.01
+                tau1 = 1. / 10
+                tau2 = 5.5
                 sigma = .02
+                sigma_dist = .012
                 part=0.5
-                y0 = -0.0027
+                y0 = 0.0
         #        A, t0, tau, sigma, y0
         #        bounds = ([0.001, -.5, .1, 0.001, -.005], [10, .5, 50, 0.1, 0.1])
         #        bi: A, t0, tau1, tau2, part, sigma, y0
         #        bounds = ([0.001, -1, 0.005, .02, 0.001, 0.001, -.001], [100, 1, 100, 1000, 1, 1, 0.1])
         #        rising A, t0, tau, part, sigma, y0
         #        AtoBtoC: A, t0, tau1, tau2,  sigma, y0
-                bounds = ([0, -0.03, 1. / 1000, 0.001, 0.001, -.0035], #min
-                          [10, 0.03, 100, 5, 0.085, .0027]) # max
-
+        #         bounds = ([0, -0.03, 1. / 1000, 0.001, 0.001, -.0035], #min
+        #                   [10, 0.03, 100, 5, 0.085, .0027]) # max
+                bounds = ([0, -0.03, 1. / 1000, 0.001, 0.001, 0.0001, -.0035], #min
+                          [10, 0.03, 100, 20, 0.085, 1, .0027]) # max
 
                 try:
                     #guess = [A, t0, tau1, sigma, 0.001]
                     #guess = [A, t0, tau1, tau2, part, sigma, 0]
                     #guess = [A, t0, tau1, tau2, sigma, 0.001]
                     #guess = [A, t0, tau1,part, sigma,0.01]
-                    guess_ABC= [A, t0, tau1, tau2, sigma, y0]
-                    res = mfit.fitAABC(Xexp, Yexp, 
-                                      guess_ABC, 
-                                      bounds,
-                                      extraN=10,
-                                      method='dogbox')
+                    # guess_ABC= [A, t0, tau1, tau2, sigma, y0]
+                    guess_ABC_dist= [A, t0, tau1, tau2, sigma, sigma_dist, y0]
+                    res = fitAdistBC(Xexp, Yexp, guess_ABC_dist, bounds, extraN=10, method='dogbox')
                     Yexpf = res[1]
                     print(res[0])
                     parameters = res[0]
-                    plt.plot(Xexp,Yexp)
+                    plt.plot(Xexp, Yexp)
                     plt.plot(Xexp, Yexpf)
                    # plt.ylim(ymin=0.08)
                     plt.show()
@@ -175,6 +177,7 @@ def main():
 
         command = inputcommand()
     print('Quitting. Прощай.')
-        
+
+
 if __name__ == '__main__':
     main()

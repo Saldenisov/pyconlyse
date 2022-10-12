@@ -22,8 +22,6 @@ from tango import DevState, DevFloat
 
 import requests
 
-
-
 from msl.equipment import (
     EquipmentRecord,
     ConnectionRecord,
