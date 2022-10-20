@@ -224,13 +224,10 @@ class AVANTES_CCDPanel(GeneralPanel):
             button_measure_blank = QtWidgets.QPushButton('Measure Blank')
             button_measure_sample = QtWidgets.QPushButton('Measure Sample Once')
             button_measure_cyclic = QtWidgets.QPushButton('Measure Sample Cyclic')
-            isgrabbing_signal = TaurusValueCheckBox('Grabbing Sig')
-            isgrabbing_signal.model = f'{self.dev_name}/isgrabbing'
             lo_controls.addWidget(button_measure_bg)
             lo_controls.addWidget(button_measure_blank)
             lo_controls.addWidget(button_measure_sample)
             lo_controls.addWidget(button_measure_cyclic)
-            lo_controls.addWidget(isgrabbi)
 
             # parameters
             lo_parameters = QtWidgets.QHBoxLayout()
