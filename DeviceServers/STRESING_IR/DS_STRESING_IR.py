@@ -49,8 +49,8 @@ class GlobalSettings(ctypes.Structure):
                 ("bdat_in_10ns", ctypes.c_uint32),
                 ("sslope", ctypes.c_uint32),
                 ("bslope", ctypes.c_uint32),
-                ("XCK delay in 10 ns steps", ctypes.c_uint32),
                 ("sec_in_10ns", ctypes.c_uint32),
+                ("XCK delay in 10 ns steps", ctypes.c_uint32),
                 ("trigger_mode_cc", ctypes.c_uint32),
                 ("board_sel", ctypes.c_uint32),
                 ("sensor_type", ctypes.c_uint32),
@@ -59,6 +59,7 @@ class GlobalSettings(ctypes.Structure):
                 ("pixel", ctypes.c_uint32),
                 ("mshut", ctypes.c_uint32),
                 ("led_off", ctypes.c_uint32),
+                ("sensor_gain", ctypes.c_uint32),
                 ("adc_gain", ctypes.c_uint32),
                 ("Temp_level", ctypes.c_uint32),
                 ("dac", ctypes.c_uint32),
@@ -98,8 +99,8 @@ class GlobalSettings(ctypes.Structure):
                 "bdat_in_10ns": 0,
                 "sslope": 0,
                 "bslope": 1,
-                "XCK delay in 10 ns steps": 0,
                 "sec_in_10ns": 0,
+                "XCK delay in 10 ns steps": 0,
                 "trigger_mode_cc": 1,
                 "board_sel": 1,
                 "sensor_type": 1,
@@ -108,7 +109,8 @@ class GlobalSettings(ctypes.Structure):
                 "pixel": 1088,
                 "mshut": 0,
                 "led_off": 0,
-                "adc_gain": 0,
+                "sensor_gain": 0,
+                "adc_gain": 1,
                 "Temp_level": 1,
                 "dac": 0,
                 "enable_gpx": 0,
@@ -157,7 +159,7 @@ class GlobalSettings(ctypes.Structure):
                 value = arr
             setattr(self, name, value)
 
-
+            
 class DS_STRESING_IR(DS_CAMERA):
     RULES = {**DS_CAMERA.RULES}
 

@@ -63,10 +63,12 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             self.width = self.camera.get_num_pixels()
         else:
             self.wavelengths = eval(self.wavelengths)
+        self.bg_measurement_value = 0
 
         self._arduino_addr_on = f'http://{self.arduino_sync}/?status=ON-LAMP-AVANTES'
         self._arduino_addr_on_bg = f'http://{self.arduino_sync}/?status=ON-AVANTES'
         self._arduino_addr_off = f'http://{self.arduino_sync}/?status=OFF'
+
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -266,7 +268,6 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         try:
             self.status_real = 1
             while self.abort is not True and self.camera:
-                a = time()
                 cfg = self.camera.MeasConfigType()
                 cfg.m_StopPixel = self.width - 1
                 cfg.m_IntegrationTime = self.exposure_time_value  # as float
@@ -302,8 +303,6 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                     self.error('Did not measure, just sending you zeros.')
                     data2D = np.zeros(self.width * self.n_kinetics).reshape(-1, self.width)
                 self.last_image = data2D
-                b = time()
-                self.info(f'Time passed: {b - a}')
         except Exception as e:
             self.error(e)
         finally:
@@ -324,21 +323,21 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             r = res
         return r
 
-    def start_grabbing_local(self):
-        sleep(0.5)
-        if not self.grabbing:
-            if self.bg_measurement:
-                requests.get(url=self._arduino_addr_on_bg)
-            else:
-                requests.get(url=self._arduino_addr_on)
-            self.abort = False
-            self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
-            self.grabbing_thread.start()
-        return 0
-
     def stop_grabbing_local(self):
         self.abort = True
         requests.get(url=self._arduino_addr_off)
+        return 0
+
+    def start_grabbing_local(self):
+        if not self.grabbing:
+            # if self.bg_measurement_value == 0:
+            #     requests.get(url=self._arduino_addr_on)
+            # else:
+            #     requests.get(url=self._arduino_addr_on_bg)
+            # sleep(0.5)
+            self.abort = False
+            self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
+            self.grabbing_thread.start()
         return 0
 
     def grabbing_local(self):
@@ -396,4 +395,3 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
 if __name__ == "__main__":
     DS_AVANTES_CCD.run_server()
-    # Andor_test()

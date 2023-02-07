@@ -199,6 +199,12 @@ class AVANTES_CCDPanel(GeneralPanel):
         button_spectometer_control.clicked.connect(self.add_spectrometer)
         self.layout_main.addWidget(button_spectometer_control)
 
+    def sync_type(self, rb_measure: QtWidgets.QRadioButton, rb_bg: QtWidgets.QRadioButton, ds):
+        if rb_measure.isChecked():
+            ds.bg_measurement = 0
+        elif rb_bg.isChecked():
+            ds.bg_measurement = 1
+
     def add_spectrometer(self):
         if not self.spectrometer_clicked:
             layout_spectrometer = QtWidgets.QVBoxLayout()
@@ -218,6 +224,19 @@ class AVANTES_CCDPanel(GeneralPanel):
             cb_ref.addItems(list(self.widgets.keys()))
             cb_ref.setCurrentIndex(len(self.widgets) - 1)
             lo_sig_ref.addWidget(cb_ref)
+            rb_group = QtWidgets.QGroupBox('Sync for:')
+            rb_lo = QtWidgets.QHBoxLayout()
+            rb_bg = QtWidgets.QRadioButton('BG')
+            rb_measurement = QtWidgets.QRadioButton('Measurement')
+            rb_measurement.setChecked(True)
+            rb_measurement.toggled.connect(lambda:self.sync_type(rb_measurement, rb_bg,
+                                                                 self.widgets[list(self.widgets.keys())[0]]))
+            rb_bg.toggled.connect(lambda:self.sync_type(rb_measurement, rb_bg,
+                                                        self.widgets[list(self.widgets.keys())[0]]))
+            rb_lo.addWidget(rb_bg)
+            rb_lo.addWidget(rb_measurement)
+            rb_group.setLayout(rb_lo)
+            lo_sig_ref.addWidget(rb_group)
 
             lo_controls = QtWidgets.QHBoxLayout()
             button_measure_bg = QtWidgets.QPushButton('Measure BG')

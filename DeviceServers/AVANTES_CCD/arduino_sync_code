@@ -5,10 +5,10 @@
 byte mac[] = {0xA8, 0x61, 0x0A, 0xAE, 0x84, 0xDA};
 IPAddress ip(10, 20, 30, 47);
 EthernetServer server(80); // Using port 80
-int led_lamp = 9; // LED attached to pin 9
-int led_avantes = 10; // LED attached to pin 9
+int led_lamp = 7;
+int led_avantes = 8;
 unsigned int width = 10; // in us
-unsigned long btw_ttl = 100; // in ms
+unsigned long btw_ttl = 100; // in ms equals to 10Hz specially for Denis
 int my_ttl_on_lamp = 0;
 int my_ttl_on_avantes = 0;
 int time_val;
@@ -41,6 +41,7 @@ void ttl_generate(int on_lamp, int on_avantes, unsigned int width, unsigned long
       digitalWrite(led_avantes, LOW);
       delay(btw_ttl);
 }
+
 }
 
 void loop() {
