@@ -22,10 +22,29 @@ app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from DeviceServers.DS_Widget import VisType
 from functools import partial
-
+from PyQt5.QtCore import QThread, pyqtSignal
+import zmq
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QHBoxLayout, \
+    QDoubleSpinBox, QGridLayout, QScrollArea, QSpacerItem, QSizePolicy
 type_vis = VisType.FULL
 from gui.MyWidgets import MyQLabel
 
+class WorkerThread(QThread):
+    # Define a signal to send data from the worker thread to the main thread
+    data_signal = pyqtSignal(str)
+
+    def run(self):
+        # Function to run in a separate thread
+        context = zmq.Context()
+        socket = context.socket(zmq.PULL)
+        socket.bind("tcp://127.0.0.1:5555")
+
+        while True:
+            message: str = socket.recv().decode('utf-8')
+            self.data_signal.emit(message)
+
+        socket.close()
+        context.destroy()
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
     c_idx = cbox.currentIndex()
@@ -216,8 +235,95 @@ def main():
     tabs = QtWidgets.QTabWidget()
     tab1 = QtWidgets.QWidget()
     tab2 = QtWidgets.QWidget()
+    tab3 = QtWidgets.QWidget()
     tabs.addTab(tab1, 'Clients')
     tabs.addTab(tab2, 'Devices')
+    tabs_elyse = QTabWidget()
+    layout_elyse = QHBoxLayout()
+    layout_elyse.addWidget(tabs_elyse)
+    tab3.setLayout(layout_elyse)
+    tabs.addTab(tab3, 'ELYSE')
+    primary = True
+    tabs_widgets_elyse = {}
+    layouts_elyse = {}
+    tabs_elements_elyse = {}
+    context = zmq.Context()
+    socket_push = context.socket(zmq.PUSH)
+    socket_push.connect("tcp://127.0.0.1:5556")
+    def update(message: str):
+        msg = eval(message)
+        for card in msg:
+            for elem in card:
+                split = elem.split('/')
+                if len(split) <= 3:
+                    continue
+                tab_name = '/'.join(split[0:2])
+                elem_name = '/'.join(split[-3:-1])
+
+                if f'tab_{tab_name}' not in tabs_widgets_elyse:
+                    add_tab(tab_name)
+
+                if f'tab_{tab_name}_label_{elem_name}' not in tabs_elements_elyse:
+                    add_element(elem_name, tab_name, elem)
+                else:
+                    update_element(tab_name, elem_name, elem)
+
+    def add_tab(name):
+        """
+        "elyse/sync/NI6071E/delay/0.000000"
+        """
+        tab = QWidget()
+        layout = QVBoxLayout()
+        scrollbar = QScrollArea(widgetResizable=True)
+        scrollbar.setWidget(tab)
+        tab.setLayout(layout)
+        tabs_elyse.addTab(scrollbar, name)
+        tabs_widgets_elyse[f'tab_{name}'] = tab
+        layouts_elyse[f'layout_{name}'] = layout
+
+    def add_element(element_name, tab_name, element_value: str):
+        split = element_value.split('/')
+        if len(split) > 3:
+            label = QLabel()
+            text = '/'.join(split[-3:])
+            val = float(split[-1])
+            sb = QDoubleSpinBox()
+            sb.setValue(val)
+            sb.valueChanged.connect(partial(change_sb_value, tab_name, element_name))
+            label.setText(text)
+            elem_name = '/'.join(split[-3:-1])
+            tabs_elements_elyse[f'tab_{tab_name}_label_{elem_name}'] = label
+            tabs_elements_elyse[f'tab_{tab_name}_sb_{elem_name}'] = sb
+            layout: QVBoxLayout = layouts_elyse[f'layout_{tab_name}']
+            lo_h = QHBoxLayout()
+            lo_h.addWidget(label)
+            spacer_h1 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+            # lo_h.addItem(spacer_h1)
+            lo_h.addWidget(sb)
+            spacer_h2 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+            lo_h.addItem(spacer_h2)
+            layout.addLayout(lo_h)
+
+    def update_element(tab_name: str, elem_name: str, value: str):
+        split = value.split('/')
+        text = '/'.join(split[-3:])
+        label = tabs_elements_elyse[f'tab_{tab_name}_label_{elem_name}']
+        label.setText(text)
+
+    def change_sb_value(tab_name, elem_name):
+        sb: QDoubleSpinBox = tabs_elements_elyse[f'tab_{tab_name}_sb_{elem_name}']
+        global primary
+        if not primary:
+            val = f'{tab_name}/{elem_name}/{sb.value()}'
+            socket_push.send(val.encode('utf-8'))
+            print(f'{tab_name}/{elem_name}/{sb.value()}')
+        else:
+            primary = False
+
+    thread_elyse = WorkerThread()
+    thread_elyse.data_signal.connect(update)
+    thread_elyse.start()
+
 
     panel = QtWidgets.QWidget()
     panel.setWindowTitle('PYCONLYSE')
