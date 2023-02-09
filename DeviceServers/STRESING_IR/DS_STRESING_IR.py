@@ -15,7 +15,7 @@ import ctypes
 import inspect
 from threading import Thread
 import numpy as np
-from DeviceServers.General.DS_Camera import DS_CAMERA_CCD, DS_CAMERA
+from DeviceServers.General.DS_Camera import DS_CAMERA_CCD
 from DeviceServers.General.DS_general import standard_str_output, DS_General
 from collections import OrderedDict, deque
 from utilities.tools.decorators import dll_lock
@@ -159,18 +159,20 @@ class GlobalSettings(ctypes.Structure):
                 value = arr
             setattr(self, name, value)
 
-            
-class DS_STRESING_IR(DS_CAMERA):
-    RULES = {**DS_CAMERA.RULES}
+
+class DS_STRESING_IR(DS_CAMERA_CCD):
+    RULES = {**DS_CAMERA_CCD.RULES}
 
     _version_ = '0.2'
     _model_ = 'STRESING IR Detector'
 
     camera_type = device_property(dtype=str)
+    wavelengths = device_property(dtype=str)
 
     def init_device(self):
-        self.number_of_boards = 0
         super().init_device()
+        self.number_of_boards = 0
+        self.wavelengths = eval(self.wavelengths)
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -339,7 +341,7 @@ class DS_STRESING_IR(DS_CAMERA):
     def turn_off_local(self) -> Union[int, str]:
         if self.grabbing:
             self.stop_grabbing_local()
-        res = self._ShutDown()
+        res = self._Shutdown()
         self.camera = None
         self.dll = None
         if res == True:
@@ -351,15 +353,7 @@ class DS_STRESING_IR(DS_CAMERA):
             return res
 
     def set_param_after_init_local(self) -> Union[int, str]:
-        functions = [self.set_acquisition_controls]
-        results = []
-        for func in functions:
-            results.append(func())
-        results_s = ''
-        for res in results:
-            if res != 0:
-                results_s = results_s + res
-        return results_s if results_s else 0
+        return 0
 
     def set_acquisition_controls(self):
         formed_parameters_dict = self.parameters['Acquisition_Controls']
@@ -381,6 +375,8 @@ class DS_STRESING_IR(DS_CAMERA):
         else:
             return f'{self.device_name} state is {self.get_state()}.'
 
+
+
     def get_image(self):
         if self.abort:
             self.start_grabbing()
@@ -389,15 +385,13 @@ class DS_STRESING_IR(DS_CAMERA):
         try:
             while self.abort is not True and self.camera:
                 a = time()
-                res = self._SetNumberKinetics(self.n_kinetics)
+                res = self._DLLReadFFLoop(1)
                 res = self._StartAcquisition()
                 res = self._GetData(size=1024 * self.n_kinetics * 2)
                 if res == True:
                     data2D = np.reshape(self.array_real, (-1, 1024))
-                    data2D.astype('int16')
-
+                    data2D.astype(np.uint16)
                     self.treat_orders(data2D)
-
                     self.info('Image is received...')
                 else:
                     self.error(res)
@@ -405,6 +399,8 @@ class DS_STRESING_IR(DS_CAMERA):
                 self.last_image = data2D
                 b = time()
                 self.info(f'Time passed: {b - a}')
+            else:
+
         except Exception as e:
             self.error(e)
 
@@ -473,10 +469,9 @@ class DS_STRESING_IR(DS_CAMERA):
         self.serial_number_real = self.serial_number
 
     def _Shutdown(self):
-        res = self.dll.DLLStopFFLoop()
-        if res == 0:
-            res = self.dll.DLLCCDDrvExit(ctypes.c_uint32(1))
-        return True if res == 0 else self._error_stresing(res)
+        self.dll.DLLStopFFLoop()
+        self.dll.DLLCCDDrvExit(ctypes.c_uint32(1))
+        return True
 
     # DLL functions
     @dll_lock
@@ -546,6 +541,14 @@ class DS_STRESING_IR(DS_CAMERA):
         measureOn = ctypes.c_uint8(0)
         res = self.dll.DLLisMeasureOn(drv, ctypes.POINTER(measureOn))
         self.measure_on = bool(measureOn.value)
+        return True if res == 0 else self._error_stresing(res)
+
+    def DLLAbortMeasurement(self, drv: int):
+        """
+        int32_t DLLAbortMeasurement(uint32_t drv);
+        """
+        drv = ctypes.c_uint32(drv)
+        res = self.DLLAbortMeasurement(drv)
         return True if res == 0 else self._error_stresing(res)
 
     def _error_stresing(self, code: int, user_def='') -> str:

@@ -7,6 +7,7 @@ from enum import Enum
 from abc import abstractmethod
 from threading import Thread
 
+
 class VisType(Enum):
     MIN = 'min'
     FULL = 'full'
