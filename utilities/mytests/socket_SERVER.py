@@ -7,7 +7,7 @@ sio.attach(app)
 
 async def index(request):
     """Serve the client-side application."""
-    with open('index.html') as f:
+    with open('templates/index.html') as f:
         return web.Response(text=f.read(), content_type='text/html')
 
 @sio.event

@@ -20,6 +20,7 @@ keyboard
 # #mysqlclient
 # nidaqmx
 opencv-python
+pandas
 pyqtgraph
 # PyOpenGL
 # PyTangoArchiving

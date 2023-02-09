@@ -263,7 +263,7 @@ class AVANTES_CCD(DS_General_Widget):
         n_od = len(data) / 3
         data1 = data[:3:]
         data2 = data[1:3:]
-
+        
         for idx in range(int(n_od)):
             i = 3 * idx
             denominator1 = (data1[with_idx + i] - data1[back_idx + i])
