@@ -42,7 +42,6 @@ class DS_General(Device):
     def _model_(self):
         raise NotImplementedError
 
-
     @pipe(label="DS_Info", doc="General info about DS")
     def read_info_ds(self):
         return ('info_ds', dict(manufacturer=f'{self.__class__.__name__}',

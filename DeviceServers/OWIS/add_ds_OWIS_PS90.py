@@ -70,7 +70,7 @@ delay_lines = {1: {'device_name': 'manip/VD2/DLs_VD2',
                }
 names_param = {'1': ['manip/general/DS_OWIS_PS90',
                      {'baudrate': 9600,
-                      'com_port': 3,
+                      'com_port': 6,
                       'interface': 0,
                       'control_unit_id': 1,
                       'friendly_name': 'DS_OWIS_PS90',
