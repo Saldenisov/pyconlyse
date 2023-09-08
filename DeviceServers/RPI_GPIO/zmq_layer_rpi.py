@@ -1,7 +1,6 @@
 import zmq
 import sys
-import gpiozero
-from typing import List, Dict, Tuple, Union
+from typing import Dict, Union
 from time import sleep
 from threading import Thread
 POLLING = 0.1
