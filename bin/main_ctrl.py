@@ -28,6 +28,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBo
     QDoubleSpinBox, QGridLayout, QScrollArea, QSpacerItem, QSizePolicy
 type_vis = VisType.FULL
 from gui.MyWidgets import MyQLabel
+from decimal import Decimal
 
 class WorkerThread(QThread):
     # Define a signal to send data from the worker thread to the main thread
@@ -37,7 +38,7 @@ class WorkerThread(QThread):
         # Function to run in a separate thread
         context = zmq.Context()
         socket = context.socket(zmq.PULL)
-        socket.bind("tcp://127.0.0.1:5555")
+        socket.bind("tcp://129.175.100.128:6050")
 
         while True:
             message: str = socket.recv().decode('utf-8')
@@ -45,6 +46,7 @@ class WorkerThread(QThread):
 
         socket.close()
         context.destroy()
+
 
 def start_cmd(call: str, cbox: TaurusValueComboBox):
     c_idx = cbox.currentIndex()
@@ -250,6 +252,7 @@ def main():
     context = zmq.Context()
     socket_push = context.socket(zmq.PUSH)
     socket_push.connect("tcp://127.0.0.1:5556")
+
     def update(message: str):
         msg = eval(message)
         for card in msg:
@@ -306,9 +309,10 @@ def main():
 
     def update_element(tab_name: str, elem_name: str, value: str):
         split = value.split('/')
-        text = '/'.join(split[-3:])
+        text = '/'.join(split[-3:-1])
+
         label = tabs_elements_elyse[f'tab_{tab_name}_label_{elem_name}']
-        label.setText(text)
+        label.setText(f'{text}/{Decimal(split[-1]):.2E}')
 
     def change_sb_value(tab_name, elem_name):
         sb: QDoubleSpinBox = tabs_elements_elyse[f'tab_{tab_name}_sb_{elem_name}']

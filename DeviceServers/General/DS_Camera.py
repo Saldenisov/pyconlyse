@@ -38,7 +38,8 @@ class DS_CAMERA(DS_General):
     parameters = device_property(dtype=str)
 
     def register_order_local(self, name, value):
-        order_info = OrderInfo(value[0], False, time(), False, np.array([self.wavelengths]))
+        order_info = OrderInfo(order_length=value[0], order_done=False, order_timestamp=time(),
+                               ready_to_delete=False, order_array=np.array([self.wavelengths]))
         self.orders[name] = order_info
         return 0
 
@@ -48,7 +49,7 @@ class DS_CAMERA(DS_General):
             order = self.orders[name]
             order.ready_to_delete = True
             res = order.order_array
-        res = res.astype(dtype=np.int16)
+        res = res.astype(dtype=np.uint16)
         return res
 
     def init_device(self):
@@ -409,6 +410,11 @@ class DS_CAMERA_CCD(DS_CAMERA):
     def isgrabbing(self):
         return self.grabbing
 
+    @attribute(label='Give list of orders?', dtype=str, access=AttrWriteType.READ,
+               polling_period=DS_General.polling_main)
+    def orders_dict(self):
+        return str(self.orders)
+
     @attribute(label='image', max_dim_x=4096, max_dim_y=4096, dtype=((DevFloat,),), access=AttrWriteType.READ)
     def image(self):
         self.get_image()
@@ -511,7 +517,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
             self.data_deque.append(spectrum)
 
             data_archive = self.form_archive_data(spectrum.reshape((1, self.width)),
-                                                  name='spectra', time_stamp=time_stamp, dt='int16')
+                                                  name='spectra', time_stamp=time_stamp, dt=np.uint16)
             # self.write_to_archive(data_archive)
 
             if self.orders:
@@ -524,7 +530,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
                         order_info.order_array = np.vstack([order_info.order_array, spectrum])
 
                     if order_info.order_length == len(order_info.order_array) - 1:
-                        order_info.order_done = True
+                        order_info.order_done= True
 
                 if orders_to_delete:
                     for order_name in orders_to_delete:
