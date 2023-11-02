@@ -8,7 +8,7 @@
 - For Windows OS only:( not all instruments support Linux
 - Device servers are written in pure Python 3.8, 64 bit, based on DLLs provided by manufacturers
 - all GUIs are based [TAURUS](https://tango-controls.readthedocs.io/en/latest/tools-and-extensions/gui/taurus/index.html) API
-- Works in a bundle with LabVIEW based control-sofrware for experimental manipulation TRANCON
+- Works in a bundle with LabVIEW based control-sofrware for experimental manipulation [TRANCON](https://github.com/Saldenisov/TRANCON)
 - Archiving data, based on [hdf5](https://www.hdfgroup.org/solutions/hdf5/) library
 
 
