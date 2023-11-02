@@ -60,8 +60,8 @@ void loop() {
           client.println("Content-Type: text/html");
           client.println(); // HTML code
           client.print("<center><br><h1>Turn on TTL generation for spectrograph</h1><br><br><br><FORM>");
-          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"ON-LAMP-AVANTES\">");
-          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"ON-AVANTES\">");
+          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"LAMP-AVANTES\">");
+          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"AVANTES\">");
           client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"OFF\">");
           client.print("</FORM></center>");
           break;
@@ -72,13 +72,13 @@ void loop() {
         }
         else if (c == '\r') { // Command from webpage
           // Did the on button get pressed
-          if (buffer.indexOf("GET /?status=ON-LAMP-AVANTES") >= 0){
-            Serial.println("ON-LAMP Was pressed");
+          if (buffer.indexOf("GET /?status=LAMP-AVANTES") >= 0){
+            Serial.println("LAMP + AVANTES was pressed");
             my_ttl_on_lamp = 1;
             my_ttl_on_avantes = 1;
           }
-          if (buffer.indexOf("GET /?status=ON-AVANTES") >= 0){
-            Serial.println("ON-LAMP Was pressed");
+          if (buffer.indexOf("GET /?status=AVANTES") >= 0){
+            Serial.println("AVANTES was pressed");
             my_ttl_on_lamp = 0;
             my_ttl_on_avantes = 1;
           }

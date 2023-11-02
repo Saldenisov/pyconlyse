@@ -98,3 +98,8 @@ if plt is not None:
 
 # disconnect from the spectrometer
 ava.disconnect()
+
+
+import time
+
+time.sleep(10)

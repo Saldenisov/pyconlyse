@@ -62,7 +62,7 @@ def main(ip_adress: int):
             sleep(1)
 
     def bind(socket: zmq.ROUTER, pub: zmq.PUB, ip_address: str):
-        socket.bind(ip_address)
+        route
         split = ip_address.split(':')
         port_pub = int(split[-1]) + 1
         ip_address_pub = ':'.join(split[:-1])

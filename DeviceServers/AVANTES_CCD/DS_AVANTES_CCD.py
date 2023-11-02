@@ -69,7 +69,6 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         self._arduino_addr_on_bg = f'http://{self.arduino_sync}/?status=ON-AVANTES'
         self._arduino_addr_off = f'http://{self.arduino_sync}/?status=OFF'
 
-
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
         return self.n_kinetics
@@ -81,7 +80,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         try:
             self.camera = self.record.connect(demo=False)
         except (Exception, AvantesError) as e:
-            pass
+            self.error(e)
 
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
