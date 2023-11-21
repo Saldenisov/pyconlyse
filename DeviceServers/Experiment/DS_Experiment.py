@@ -24,8 +24,7 @@ class DS_Experiment(DS_General):
     """
     Gives control to pulse and 3P epxeriment
     """
-    RULES = {
-             **DS_General.RULES}
+    RULES = {**DS_General.RULES}
 
     _version_ = '0.1'
     _model_ = 'Experiment ds'

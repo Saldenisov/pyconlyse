@@ -71,6 +71,7 @@ class DS_CAMERA(DS_General):
         self.grabbing_thread: Thread = None
         self.abort = False
         self.n_kinetics = 1
+        self.n_average = 1
         self.camera = None
         self.BG_level_value = 0
 
@@ -132,6 +133,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
 
     def write_exposure_time(self, value: float):
         self.set_exposure_time(value)
+        self.info(f'Exposure was set to {value}.', True)
 
     @abstractmethod
     def get_exposure_time(self) -> float:
@@ -289,6 +291,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
         return self.get_trigger_delay()
 
     def write_trigger_delay(self, value):
+        self.info(f'Trigger delay is being set to {value}.', True)
         self.set_trigger_delay(value)
 
     @abstractmethod
@@ -304,6 +307,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
         return self.get_trigger_mode()
 
     def write_trigger_mode(self, value):
+        self.info(f'Trigger mode is being set to {value}.', True)
         self.set_trigger_mode(value)
 
     @abstractmethod
@@ -358,6 +362,22 @@ class DS_CAMERA_CCD(DS_CAMERA):
     @abstractmethod
     def get_format_pixel(self) -> str:
         pass
+
+    @attribute(label='number average', dtype=int, access=AttrWriteType.READ_WRITE)
+    def number_average(self):
+        return self.n_average
+
+    def write_number_average(self, value: int):
+        self.n_average = value
+        self.info(f'Average number was set to {value}.', True)
+
+    @attribute(label='number kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
+    def number_kinetics(self):
+        return self.n_kinetics
+
+    def write_number_kinetics(self, value: int):
+        self.n_kinetics = value
+        self.info(f'Kinetics number was set to {value}.', True)
 
     @attribute(label='actual framerate', dtype=float, access=AttrWriteType.READ)
     def framerate(self):
@@ -430,6 +450,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
         pass
 
     def init_device(self):
+        self.n_kinetics = 1
         self.latestimage = True
         self.last_image: np.array = None
         self.trigger_software = False
@@ -516,8 +537,7 @@ class DS_CAMERA_CCD(DS_CAMERA):
             self.time_stamp_deque.append(time_stamp)
             self.data_deque.append(spectrum)
 
-            data_archive = self.form_archive_data(spectrum.reshape((1, self.width)),
-                                                  name='spectra', time_stamp=time_stamp, dt=np.uint16)
+            # data_archive = self.form_archive_data(spectrum.reshape((1, self.width)), name='spectra', time_stamp=time_stamp, dt=np.uint16)
             # self.write_to_archive(data_archive)
 
             if self.orders:
