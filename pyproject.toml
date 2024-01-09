@@ -42,6 +42,7 @@ QtPy = "^2"
 Pillow = "^10"
 pyarrow = "^14"
 h5py = "^3"
+msl-package-manager = "^2"
 
 
 
