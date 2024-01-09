@@ -8,7 +8,7 @@ EthernetServer server(80); // Using port 80
 int led_lamp = 7;
 int led_avantes = 8;
 unsigned int width = 10; // in us
-unsigned long btw_ttl = 100; // in ms equals to 10Hz specially for Denis
+unsigned long btw_ttl = 100; // in ms equals to 10Hz especially for Denis
 int my_ttl_on_lamp = 0;
 int my_ttl_on_avantes = 0;
 int time_val;
@@ -26,22 +26,20 @@ void setup() {
   my_ttl_on_avantes = 0;
 }
 
-void ttl_generate(int on_lamp, int on_avantes, unsigned int width, unsigned long btw_ttl){
-  if (on_lamp == 1 && on_avantes == 1){
+void ttl_generate(int on_lamp, int on_avantes, unsigned int width, unsigned long btw_ttl) {
+  if (on_lamp == 1 && on_avantes == 1) {
     digitalWrite(led_lamp, HIGH);
     digitalWrite(led_avantes, HIGH);
     delayMicroseconds(width);
     digitalWrite(led_lamp, LOW);
     digitalWrite(led_avantes, LOW);
     delay(btw_ttl);
+  } else if (on_lamp == 0 && on_avantes == 1) {
+    digitalWrite(led_avantes, HIGH);
+    delayMicroseconds(width);
+    digitalWrite(led_avantes, LOW);
+    delay(btw_ttl);
   }
-  else if (on_lamp == 0 && on_avantes == 1) {
-      digitalWrite(led_avantes, HIGH);
-      delayMicroseconds(width);
-      digitalWrite(led_avantes, LOW);
-      delay(btw_ttl);
-}
-
 }
 
 void loop() {
@@ -53,48 +51,55 @@ void loop() {
     while (client.connected()) {
       if (client.available()) {
         char c = client.read(); // Read from the Ethernet shield
-        buffer += c; // Add character to string buffer
+        buffer += c; // Add character to the string buffer
         // Client sent request, now waiting for response
         if (c == '\n' && currentLineIsBlank) {
           client.println("HTTP/1.1 200 OK"); // HTTP response
           client.println("Content-Type: text/html");
           client.println(); // HTML code
           client.print("<center><br><h1>Turn on TTL generation for spectrograph</h1><br><br><br><FORM>");
-          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"LAMP-AVANTES\">");
-          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"AVANTES\">");
+          // Change button values to reflect their functionality
+          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"LAMP AND AVANTES\">");
+          client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"ONLY AVANTES\">");
           client.print("<P> <INPUT type=\"submit\" name=\"status\" value=\"OFF\">");
+
+          // Add labels to display variable values
+          client.print("<P> <label for=\"my_ttl_on_lamp\">my_ttl_on_lamp:</label> <span id=\"my_ttl_on_lamp\">");
+          client.print(my_ttl_on_lamp);
+          client.print("</span>");
+          client.print("<P> <label for=\"my_ttl_on_avantes\">my_ttl_on_avantes:</label> <span id=\"my_ttl_on_avantes\">");
+          client.print(my_ttl_on_avantes);
+          client.print("</span>");
+
           client.print("</FORM></center>");
           break;
         }
         if (c == '\n') {
           currentLineIsBlank = true;
           buffer = "";
-        }
-        else if (c == '\r') { // Command from webpage
-          // Did the on button get pressed
-          if (buffer.indexOf("GET /?status=LAMP-AVANTES") >= 0){
-            Serial.println("LAMP + AVANTES was pressed");
+        } else if (c == '\r') { // Command from webpage
+          // Did the button get pressed
+          if (buffer.indexOf("GET /?status=LAMP+AND+AVANTES") >= 0) {
+            Serial.println("LAMP+AVANTES was pressed");
             my_ttl_on_lamp = 1;
             my_ttl_on_avantes = 1;
           }
-          if (buffer.indexOf("GET /?status=AVANTES") >= 0){
-            Serial.println("AVANTES was pressed");
+          if (buffer.indexOf("GET /?status=ONLY+AVANTES") >= 0) {
+            Serial.println("ONLY+AVANTES was pressed");
             my_ttl_on_lamp = 0;
             my_ttl_on_avantes = 1;
           }
           // Did the off button get pressed
-          if (buffer.indexOf("GET /?status=OFF") >= 0){
+          if (buffer.indexOf("GET /?status=OFF") >= 0) {
             Serial.println("OFF Was pressed");
             my_ttl_on_lamp = 0;
             my_ttl_on_avantes = 0;
           }
-        }
-        else {
+        } else {
           currentLineIsBlank = false;
         }
       }
     }
     client.stop(); // End server
-
   }
 }

@@ -8,8 +8,6 @@ sys.path.append(str(app_folder))
 
 from typing import Tuple, Union, List, Dict
 from time import time_ns, time, sleep
-import ctypes
-import inspect
 from threading import Thread
 import numpy as np
 from DeviceServers.General.DS_Camera import DS_CAMERA_CCD, OrderInfo
@@ -40,22 +38,8 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     width = device_property(dtype=int)
     wavelengths = device_property(dtype=str)
-    arduino_sync = device_property(dtype=str, default_value='10.20.30.47')
-
-    @attribute(label='background measurement', dtype=int, access=AttrWriteType.READ_WRITE)
-    def bg_measurement(self):
-        return self.bg_measurement_value
-
-    def write_bg_measurement(self, value: int):
-        if value in [0, 1]:
-            self.bg_measurement_value = value
-            if value == 0:
-                requests.get(url=self._arduino_addr_on)
-            else:
-                requests.get(url=self._arduino_addr_on_bg)
 
     def init_device(self):
-
         super().init_device()
         self.register_variables_for_archive()
         if self.camera:
@@ -63,11 +47,6 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             self.width = self.camera.get_num_pixels()
         else:
             self.wavelengths = eval(self.wavelengths)
-        self.bg_measurement_value = 0
-
-        self._arduino_addr_on = f'http://{self.arduino_sync}/?status=ON-LAMP-AVANTES'
-        self._arduino_addr_on_bg = f'http://{self.arduino_sync}/?status=ON-AVANTES'
-        self._arduino_addr_off = f'http://{self.arduino_sync}/?status=OFF'
 
     @attribute(label='number of kinetics', dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -120,7 +99,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return self.exposure_time_value
 
     def set_exposure_time(self, value: float):
-        self._SetIntegrationDelay()
+        self._SetIntegrationTime(value)
 
     def set_trigger_delay(self, value: float):
         self._SetIntegrationDelay(value)
@@ -269,8 +248,8 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             while self.abort is not True and self.camera:
                 cfg = self.camera.MeasConfigType()
                 cfg.m_StopPixel = self.width - 1
-                cfg.m_IntegrationTime = self.exposure_time_value  # as float
-                cfg.m_NrAverages = 1  # number of averages
+                cfg.m_IntegrationTime = int(self.exposure_time_value)  # as float
+                cfg.m_NrAverages = self.n_average  # number of averages
                 m_Trigger = self.camera.TriggerType()
                 m_Trigger.m_Mode = self.trigger_mode_value
                 m_Trigger.m_Source = self.trigger_source_value
@@ -279,7 +258,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                 self.camera.prepare_measure(cfg)
 
                 # start 1 measurement, wait until the measurement is finished, then get the data
-                self.camera.measure(1)
+                self.camera.measure(self.n_kinetics)
                 finished = True
                 i = 0
                 while not self.camera.poll_scan():
@@ -297,10 +276,12 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                     data2D = np.reshape(data, (-1, self.width))
                     data2D.astype('int16')
                     self.treat_orders(data2D)
-                    self.info('Image is received...')
+                    self.info('Image is received...', False)
                 else:
                     self.error('Did not measure, just sending you zeros.')
                     data2D = np.zeros(self.width * self.n_kinetics).reshape(-1, self.width)
+                    data2D.astype('int16')
+                    self.treat_orders(data2D)
                 self.last_image = data2D
         except Exception as e:
             self.error(e)
@@ -324,16 +305,10 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def stop_grabbing_local(self):
         self.abort = True
-        requests.get(url=self._arduino_addr_off)
         return 0
 
     def start_grabbing_local(self):
         if not self.grabbing:
-            # if self.bg_measurement_value == 0:
-            #     requests.get(url=self._arduino_addr_on)
-            # else:
-            #     requests.get(url=self._arduino_addr_on_bg)
-            # sleep(0.5)
             self.abort = False
             self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
             self.grabbing_thread.start()
@@ -380,6 +355,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return True
 
     def _SetIntegrationTime(self, value):
+        # In ms
         self.exposure_time_value = value
         return True
 

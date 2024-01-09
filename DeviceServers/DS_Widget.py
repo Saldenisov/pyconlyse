@@ -1,5 +1,6 @@
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueCheckBox
+from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus import Device
 from taurus.external.qt import Qt
 from PyQt5 import QtWidgets
@@ -83,6 +84,12 @@ class DS_General_Widget(Qt.QWidget):
             s3.model = f'{dev_name}/status'
             lo_status.addWidget(s3)
 
+        setattr(self, f'button_update_param_{dev_name}', TaurusCommandButton(text='Update param'))
+        button_update_param: TaurusCommandButton = getattr(self, f'button_update_param_{dev_name}')
+        button_update_param.clicked.connect(self.update_param)
+
+        lo_status.addWidget(button_update_param)
+
         hspacer = QtWidgets.QSpacerItem(0, 40, QtWidgets.QSizePolicy.Expanding,
                                         QtWidgets.QSizePolicy.Minimum)
         lo_status.addSpacerItem(hspacer)
@@ -117,6 +124,5 @@ class DS_General_Widget(Qt.QWidget):
             func = getattr(device, func_name)
             func(value)
 
-    # def sync_listener(self, event):
-    #     val = self.ds_sync.sync
-    #     self.sync_count.setText(f'Count: {val}')
+    def update_param(self):
+        pass
