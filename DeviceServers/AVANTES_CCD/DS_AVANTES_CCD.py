@@ -248,7 +248,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             while self.abort is not True and self.camera:
                 cfg = self.camera.MeasConfigType()
                 cfg.m_StopPixel = self.width - 1
-                cfg.m_IntegrationTime = float(self.exposure_time_value)  # as float
+                cfg.m_IntegrationTime = int(self.exposure_time_value)  # as float
                 cfg.m_NrAverages = self.n_average  # number of averages
                 m_Trigger = self.camera.TriggerType()
                 m_Trigger.m_Mode = self.trigger_mode_value
@@ -276,7 +276,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                     data2D = np.reshape(data, (-1, self.width))
                     data2D.astype('int16')
                     self.treat_orders(data2D)
-                    self.info('Image is received...')
+                    self.info('Image is received...', False)
                 else:
                     self.error('Did not measure, just sending you zeros.')
                     data2D = np.zeros(self.width * self.n_kinetics).reshape(-1, self.width)
@@ -305,22 +305,14 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def stop_grabbing_local(self):
         self.abort = True
-        requests.get(url=self._arduino_addr_off)
-        self.get_arduino_state()
         return 0
 
     def start_grabbing_local(self):
         if not self.grabbing:
-            if not self.ttl_arduino_bool:
-                requests.get(url=self._arduino_addr_on_bg)
-                self.get_arduino_state()
-            if self.ttl_arduino_bool:
-                self.abort = False
-                self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
-                self.grabbing_thread.start()
-                return 0
-            else:
-                return "Arduino doesn't generate TTL."
+            self.abort = False
+            self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
+            self.grabbing_thread.start()
+        return 0
 
     def grabbing_local(self):
         res = False
