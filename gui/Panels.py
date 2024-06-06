@@ -11,6 +11,7 @@ from DeviceServers.STANDA.DS_STANDA_Widget import Standa_motor
 from DeviceServers.BASLER.DS_BASLER_Widget import Basler_camera
 from DeviceServers.ANDOR_CCD.DS_ANDOR_CCD_Widget import ANDOR_CCD
 from DeviceServers.AVANTES_CCD.DS_AVANTES_CCD_Widget import AVANTES_CCD
+from DeviceServers.SPECTROGRAPH.AVANTES_SPECTRO.DS_AVANTES_SPECTRO_Widget import AVANTES_SPECTRO
 from DeviceServers.NETIO.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.Experiment.DS_Experiment_Widget import Experiment
 from DeviceServers.OWIS.DS_OWIS_widget import OWIS_motor
@@ -191,136 +192,14 @@ class AVANTES_CCDPanel(GeneralPanel):
         if widget_class != AVANTES_CCD:
             raise Exception(f'Wrong widget class {widget_class} is passed.')
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
-        self.spectrometer_clicked = False
-        button_spectometer_control = QtWidgets.QPushButton('Spectrometer Control')
-        button_spectometer_control.clicked.connect(self.add_spectrometer)
-        self.layout_main.addWidget(button_spectometer_control)
-
-    def sync_type(self, rb_measure: QtWidgets.QRadioButton, rb_bg: QtWidgets.QRadioButton, ds):
-        if rb_measure.isChecked():
-            ds.bg_measurement = 0
-        elif rb_bg.isChecked():
-            ds.bg_measurement = 1
-
-    def add_spectrometer(self):
-        if not self.spectrometer_clicked:
-            layout_spectrometer = QtWidgets.QVBoxLayout()
-            layout_spectrometer.addWidget(QtWidgets.QLabel('Spectrometer control'))
-
-            layout_spectrometer.addSpacerItem(QtWidgets.QSpacerItem(0, 5, QtWidgets.QSizePolicy.Expanding,
-                                                                    QtWidgets.QSizePolicy.Minimum))
-
-            lo_sig_ref = QtWidgets.QHBoxLayout()
-            lo_sig_ref.addWidget(QtWidgets.QLabel('Signal spectrometer'))
-            cb_signal = QtWidgets.QComboBox()
-            cb_signal.addItems(list(self.widgets.keys()))
-            cb_signal.setCurrentIndex(0)
-            lo_sig_ref.addWidget(cb_signal)
-            lo_sig_ref.addWidget(QtWidgets.QLabel('Reference spectrometer'))
-            cb_ref = QtWidgets.QComboBox()
-            cb_ref.addItems(list(self.widgets.keys()))
-            cb_ref.setCurrentIndex(len(self.widgets) - 1)
-            lo_sig_ref.addWidget(cb_ref)
-            rb_group = QtWidgets.QGroupBox('Sync for:')
-            rb_lo = QtWidgets.QHBoxLayout()
-            rb_bg = QtWidgets.QRadioButton('BG')
-            rb_measurement = QtWidgets.QRadioButton('Measurement')
-            rb_measurement.setChecked(True)
-            rb_measurement.toggled.connect(lambda:self.sync_type(rb_measurement, rb_bg,
-                                                                 self.widgets[list(self.widgets.keys())[0]]))
-            rb_bg.toggled.connect(lambda:self.sync_type(rb_measurement, rb_bg,
-                                                        self.widgets[list(self.widgets.keys())[0]]))
-            rb_lo.addWidget(rb_bg)
-            rb_lo.addWidget(rb_measurement)
-            rb_group.setLayout(rb_lo)
-            lo_sig_ref.addWidget(rb_group)
-
-            lo_controls = QtWidgets.QHBoxLayout()
-            button_measure_bg = QtWidgets.QPushButton('Measure BG')
-            button_measure_blank = QtWidgets.QPushButton('Measure Blank')
-            button_measure_sample = QtWidgets.QPushButton('Measure Sample Once')
-            button_measure_cyclic = QtWidgets.QPushButton('Measure Sample Cyclic')
-            lo_controls.addWidget(button_measure_bg)
-            lo_controls.addWidget(button_measure_blank)
-            lo_controls.addWidget(button_measure_sample)
-            lo_controls.addWidget(button_measure_cyclic)
-
-            # parameters
-            lo_parameters = QtWidgets.QHBoxLayout()
-            lo_parameters.addWidget(QtWidgets.QLabel('Average'))
-            sb_average = QtWidgets.QSpinBox()
-            sb_average.setValue(3)
-            lo_parameters.addWidget(sb_average)
-            lo_parameters.addWidget(QtWidgets.QLabel('Exposure, us'))
-            dsb_exposure = QtWidgets.QDoubleSpinBox()
-            dsb_exposure.setMinimum(20)
-            dsb_exposure.setMaximum(1000000.0)
-            dsb_exposure.setValue(500.0)
-            lo_parameters.addWidget(dsb_exposure)
-            lo_parameters.addWidget(QtWidgets.QLabel('Every n sec'))
-            sb_every_sec = QtWidgets.QSpinBox()
-            sb_every_sec.setValue(5)
-            lo_parameters.addWidget(sb_every_sec)
-            lo_parameters.addWidget(QtWidgets.QLabel('N measurement'))
-            sb_n_measurements = QtWidgets.QSpinBox()
-            sb_n_measurements.setValue(100)
-            lo_parameters.addWidget(sb_n_measurements)
 
 
-            # Image
-            lo_image = QtWidgets.QHBoxLayout()
-            view = pg.GraphicsLayoutWidget(parent=self, title='DATA')
-            pg.setConfigOptions(antialias=True)
+class AVANTES_SPECTROPanel(GeneralPanel):
 
-            self.plot_od = view.addPlot(title="Spectra", row=0, column=0)
-            self.plot_od.curves = []
-
-            self.plot_od.setLabel('left', "O.D.", units='counts')
-            self.plot_od.setLabel('bottom', "Wavelength", units='nm')
-            self.add_curve(self.plot_od, DataXY(X=np.arange(200, 800, 1), Y=np.zeros(600)))  # spectra
-
-            view.setMinimumSize(450, 250)
-
-            lo_image_buttons = QtWidgets.QVBoxLayout()
-            button_clear_image = QtWidgets.QPushButton('Clear all')
-            lo_image_buttons.addWidget(button_clear_image)
-
-            lo_image.addWidget(view)
-            lo_image.addLayout(lo_image_buttons)
-
-            # data
-            lo_data = QtWidgets.QHBoxLayout()
-            lo_data.addWidget(QtWidgets.QLabel('Name of sample:'))
-            le_data_name = QtWidgets.QLineEdit()
-            lo_data.addWidget(le_data_name)
-            button_save_data = QtWidgets.QPushButton('Save')
-            lo_data.addWidget(button_save_data)
-
-
-            layout_spectrometer.addLayout(lo_sig_ref)
-            layout_spectrometer.addLayout(lo_controls)
-            layout_spectrometer.addLayout(lo_parameters)
-            layout_spectrometer.addLayout(lo_image)
-            layout_spectrometer.addLayout(lo_data)
-
-
-
-            self.layout_main.addLayout(layout_spectrometer)
-            self.spectrometer_clicked = True
-        else:
-            pass
-
-    def measure_bg(self):
-        ref = np.zeros(2000)
-
-    def update_curve(self, plot, i, data: DataXY):
-        plot.curves[i].setData(data.X, data.Y)
-
-    def add_curve(self, plot, data: DataXY):  # add a curve
-        plot.curves.append(plot.plot(data.X, data.Y))
-
-    def del_curve(self, plot, i):
-        plot.curves[i].clear()
+    def __init__(self, choice, widget_class, title='', icon: QIcon = None, width=2, *args, **kwargs):
+        if widget_class != AVANTES_SPECTRO:
+            raise Exception(f'Wrong widget class {widget_class} is passed.')
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
 
 
 class LaserPointingPanel(GeneralPanel):

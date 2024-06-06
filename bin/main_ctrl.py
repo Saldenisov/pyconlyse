@@ -30,6 +30,7 @@ type_vis = VisType.FULL
 from gui.MyWidgets import MyQLabel
 from decimal import Decimal
 
+
 class WorkerThread(QThread):
     # Define a signal to send data from the worker thread to the main thread
     data_signal = pyqtSignal(str)

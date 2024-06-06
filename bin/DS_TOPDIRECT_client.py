@@ -12,7 +12,9 @@ from bin.DS_General_Client import main
 
 
 layouts = {'all': {'selection': ['elyse/motorized_devices/Lense260', 'manip/V0/DL_SC1'],'width': 1},
-           'VD2': {'selection': ['elyse/motorized_devices/mirror_vd2', 'elyse/motorized_devices/filter_1_vd2',
+           'VD2': {'selection': ['elyse/motorized_devices/mirror_vd2',
+                                 'elyse/motorized_devices/emission_mirrors_vd2',
+                                 'elyse/motorized_devices/filter_1_vd2',
                                  'elyse/motorized_devices/filter_2_vd2'],'width': 1}}
 
 

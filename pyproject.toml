@@ -1,0 +1,54 @@
+[tool.poetry]
+name = "pyconlyse"
+version = "0.2.0"
+description = "This is PYCONLYSE tango based application for controlling ELYSE experiment."
+authors = ["saldenisov <saldenisov@gmail.com>"]
+license = "MIT License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+matplotlib = "^3"
+configobj = "^5"
+colorcet = "^3"
+gpiozero = "^2"
+pigpio = "^1"
+ifaddr = "^0.2"
+imutils = "^0.5"
+imageio = "^2"
+msgpack = "^1"
+msl-loadlib = "^0"
+lxml = "^4.9"
+keyboard = "^0.13"
+opencv-python = "^4"
+pandas = "^2"
+pyqtgraph = "^0.13"
+PyQt5 = "^5"
+PyQt5-Qt5 = "5.15.2"
+pyqtwebengine-qt5 = "5.15.2"
+PyQt5-sip = "^12"
+pyepics = "^3"
+pypylon = "^3"
+pyserial = "^3"
+PyTango = "^9"
+requests = "^2"
+scipy = "^1"
+taurus = "^5"
+taurus_pyqtgraph = "^0.7"
+spyder = "^5.4"
+simple-pid = "^2"
+vitables = "^3"
+QtPy = "^2"
+Pillow = "^10"
+pyarrow = "^14"
+h5py = "^3"
+msl-package-manager = "^2"
+
+
+
+
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

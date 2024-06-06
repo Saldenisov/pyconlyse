@@ -1,0 +1,3 @@
+Requirement already satisfied: pyQt5 in c:\users\elyse\.conda\envs\pyconlyse39\lib\site-packages (5.15.10)
+Requirement already satisfied: PyQt5-sip<13,>=12.13 in c:\users\elyse\.conda\envs\pyconlyse39\lib\site-packages (from pyQt5) (12.13.0)
+Requirement already satisfied: PyQt5-Qt5>=5.15.2 in c:\users\elyse\.conda\envs\pyconlyse39\lib\site-packages (from pyQt5) (5.15.2)

@@ -33,7 +33,6 @@ class AVANTES_CCD(DS_General_Widget):
         dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f'lo_group_{group_number}')
-
         lo_device: Qt.QLayout = getattr(self, f'layout_main_{dev_name}')
         lo_status: Qt.QLayout = getattr(self, f'layout_status_{dev_name}')
         lo_buttons: Qt.QLayout = getattr(self, f'layout_buttons_{dev_name}')
@@ -65,17 +64,13 @@ class AVANTES_CCD(DS_General_Widget):
         lo_buttons.addWidget(button_off)
 
         # CCD parameters
-        self.number_spectra = TaurusWheelEdit()
-        self.number_spectra.setValue(2)
-        self.number_spectra.setDigitCount(2, 0)
-        self.number_spectra.setMinValue(1)
-        self.number_spectra.setMaxValue(50)
+        self.number_average = TaurusWheelEdit()
+        self.number_average.model = f'{dev_name}/number_average'
+        self.number_average.setDigitCount(2, 0)
 
-        self.number_kinetics = TaurusValueSpinBox()
-        # self.number_kinetics.model = f'{dev_name}/number_kinetics'
-        self.number_kinetics.setMinimumWidth(80)
-        if self.ds.state == TaurusDevState.Ready:
-            self.number_kinetics.setValue(self.ds.number_kinetics)
+        self.number_kinetics = TaurusWheelEdit()
+        self.number_kinetics.model = f'{dev_name}/number_kinetics'
+        self.number_kinetics.setDigitCount(2, 0)
 
         """
         Trigger Settimgs
@@ -91,7 +86,6 @@ class AVANTES_CCD(DS_General_Widget):
                 Level - 1
                 
         """
-
         self.trigger_mode = TaurusValueComboBox()
         self.trigger_mode.addItems(['Software', 'Hardware', 'Single Scan'])
 
@@ -102,19 +96,17 @@ class AVANTES_CCD(DS_General_Widget):
         self.trigger_type.addItems(['Edge', 'Level'])
 
         self.exposure_time = TaurusWheelEdit()
-        self.exposure_time.setDigitCount(1, 6)
+        self.exposure_time.setDigitCount(3, 3)
+        self.exposure_time.setValue(10)
+        self.exposure_time.model = f'{dev_name}/exposure_time'
 
-        if self.ds.state == TaurusDevState.Ready:
-            res = int(self.ds.trigger_mode)
-            self.trigger_mode.setCurrentIndex(res)
-            res = int(self.ds.trigger_source)
-            self.trigger_source.setCurrentIndex(res)
-            res = int(self.ds.trigger_type)
-            self.trigger_type.setCurrentIndex(res)
-            self.exposure_time.setValue(self.ds.exposure_time)
+        self.update_param()
 
-        lo_parameters.addWidget(TaurusLabel('N spectra'))
-        lo_parameters.addWidget(self.number_spectra)
+        lo_parameters.addWidget(TaurusLabel('N kinetics'))
+        lo_parameters.addWidget(self.number_kinetics)
+
+        lo_parameters.addWidget(TaurusLabel('N average'))
+        lo_parameters.addWidget(self.number_average)
         # lo_parameters.addWidget(TaurusLabel('N kinetics'))
         # lo_parameters.addWidget(self.number_kinetics)
         # lo_parameters.addWidget(TaurusLabel('Trigger Mode'))
@@ -123,7 +115,7 @@ class AVANTES_CCD(DS_General_Widget):
         # lo_parameters.addWidget(self.trigger_source)
         # lo_parameters.addWidget(TaurusLabel('Trigger Type'))
         # lo_parameters.addWidget(self.trigger_type)
-        lo_parameters.addWidget(TaurusLabel('Exposure Time, s'))
+        lo_parameters.addWidget(TaurusLabel('Exposure Time, ms'))
         lo_parameters.addWidget(self.exposure_time)
         lo_parameters.addSpacerItem(QtWidgets.QSpacerItem(0, 5, QtWidgets.QSizePolicy.Expanding,
                                                           QtWidgets.QSizePolicy.Minimum))
@@ -186,7 +178,6 @@ class AVANTES_CCD(DS_General_Widget):
         self.plot_spectra.curves = []
         self.plot_spectra.setLabel('left', "Intensity", units='counts')
         self.plot_spectra.setLabel('bottom', "Wavelength", units='nm')
-        self.add_curve(self.plot_spectra, self.wavelengths)  # background
         self.add_curve(self.plot_spectra, self.wavelengths)  # spectra
 
         self.view.setMinimumSize(450, 250)
@@ -216,7 +207,7 @@ class AVANTES_CCD(DS_General_Widget):
         self.ds.trigger_mode = 1 if state == 'External' else 0
 
     def exposure_time_changed(self):
-        self.ds.exposure_time = float(self.exposure_time.value / 1000)
+        self.ds.exposure_time = float(self.exposure_time.value)
 
     def grab_clicked(self):
         button_start_grabbing: TaurusCommandButton = getattr(self, f'button_start_grabbing_{self.dev_name}')
@@ -234,7 +225,7 @@ class AVANTES_CCD(DS_General_Widget):
             button_start_grabbing.setText('Grabbing')
 
     def make_order(self):
-        order = self.ds.register_order([int(self.number_spectra.value)])
+        order = self.ds.register_order([int(self.number_average.value)])
         return order
 
     def data_listener(self):
@@ -243,47 +234,23 @@ class AVANTES_CCD(DS_General_Widget):
             if is_order_ready:
                 data = self.ds.give_order(self.order)
                 data_b = zlib.decompress(eval(data))
-                data_array = np.frombuffer(data_b, dtype=np.int32)
-                data_array = data_array.reshape(-1, 1024)
+                data_array = np.frombuffer(data_b, dtype=np.int16)
+                data_array = data_array.reshape(-1, 2068)
                 self.wavelengths = data_array[0]
-                averaged_data = self.average_data_ELYSE_seq(data_array[1:])
-                self.update_curve(self.plot_spectra, 0, averaged_data[0])
-                self.update_curve(self.plot_spectra, 1, averaged_data[1])
-                self.update_curve(self.plot_spectra, 2, averaged_data[2])
-                od = self.cald_OD(data_array[1:])
-                self.update_curve(self.plot_OD, 0, od)
-                self.set_stability()
+                averaged_data = np.average(data_array[1:], axis=0)
+                self.update_curve(self.plot_spectra, 0, averaged_data)
                 self.order = self.make_order()
         else:
             self.order = self.make_order()
 
-    def cald_OD(self, data: np.ndarray) -> np.ndarray:
-        back_idx, with_idx, without_idx = self.search_for_indexes(data)
-        ODs = []
-        n_od = len(data) / 3
-        data1 = data[:3:]
-        data2 = data[1:3:]
-        
-        for idx in range(int(n_od)):
-            i = 3 * idx
-            denominator1 = (data1[with_idx + i] - data1[back_idx + i])
-            denominator1 = np.where(denominator1 != 0, denominator1, 10**-9)
-            transmission1 = (data1[without_idx + i] - data1[back_idx + i]) / denominator1
-            transmission1 = np.where(transmission1 > 0, transmission1, 100)
-
-            denominator2 = (data2[with_idx + i] - data2[back_idx + i])
-            denominator2 = np.where(denominator2 != 0, denominator2, 10**-9)
-            transmission2 = (data2[without_idx + i] - data2[back_idx + i]) / denominator2
-            transmission2 = np.where(transmission2 > 0, transmission2, 100)
-
-            od = numpy.log10(transmission1/transmission2)
-            ODs.append(od)
-        ODs = np.array(ODs)
-
-        return np.average(ODs, axis=0)
-
-    def convert_image(self, image):
-        image2D = image
-        shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)
-        image3D = image2D.reshape(np.roll(shp, 1)).transpose(1, 2, 0)
-        return np.transpose(image3D)
+    def update_param(self):
+        if self.ds.state == TaurusDevState.Ready:
+            res = int(self.ds.trigger_mode)
+            self.trigger_mode.setCurrentIndex(res)
+            res = int(self.ds.trigger_source)
+            self.trigger_source.setCurrentIndex(res)
+            res = int(self.ds.trigger_type)
+            self.trigger_type.setCurrentIndex(res)
+            self.exposure_time.setValue(self.ds.exposure_time)
+            self.number_kinetics.setValue(self.ds.number_kinetics)
+            self.number_average.setValue(self.ds.number_average)

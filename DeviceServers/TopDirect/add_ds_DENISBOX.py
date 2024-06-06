@@ -34,7 +34,7 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                                      'max_full_steps':  72600,
                                      'step_mm': .00168
                                      }},],
-        'DM542_2': ['ELYSE/motorized_devices', 'TopDirect_line_1', 'something1', [0, 90], [-10.0, 90.0],
+        'DM542_2': ['ELYSE/motorized_devices', 'TopDirect_Emission', 'Emission_mirrors_VD2', [0, 90], [-100.0, 100.0],
                      {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
@@ -51,10 +51,10 @@ names = {'DM542_1': ['ELYSE/motorized_devices', 'TopDirect_Mirror_VD2', 'Mirror_
                      {'parameters': {'enable_ds': 'manip/general/Numato1_GPIO',
                                      'dir_ds': 'manip/general/Numato1_GPIO',
                                      'pulse_ds': 'manip/v0/rpi4_gpio_v0',
-                                     'enable_pin': 22,
-                                     'dir_pin': 23,
-                                     'pulse_pin': 22,
-                                     'microstep': 2,
+                                     'enable_pin': 22,  # HUNIA
+                                     'dir_pin': 23,  # HUNIA
+                                     'pulse_pin': 22,  # HUNIA
+                                     'microstep': 2,  # HUNIA
                                      'dt': 130,
                                      'delay_time': 140,
                                      'max_full_steps':  72600,

@@ -22,7 +22,7 @@ record = EquipmentRecord(
     model='AvaSpec-2048L',  # update for your device
     serial='1810225U1',  # update for your device
     connection=ConnectionRecord(
-        address='SDK::C:/dev/pyconlyse/DeviceServers/AVANTES_CCD/avaspecx64.dll',  # update the path to the DLL file
+        address='SDK::C:/dev/pyconlyse/DeviceServers/AVANTES_CCD/avaspecx64_COPY.dll',  # update the path to the DLL file
         backend=Backend.MSL
     )
 )
@@ -70,7 +70,7 @@ ava.use_high_res_adc(True)
 # (the values of just a few parameters are updated here, see the manual for more details)
 cfg = ava.MeasConfigType()
 cfg.m_StopPixel = num_pixels - 1
-cfg.m_IntegrationTime = 5  # in milliseconds
+cfg.m_IntegrationTime = 100  # in milliseconds
 cfg.m_NrAverages = 1  # number of averages
 m_Trigger = ava.TriggerType()
 m_Trigger.m_Mode = 2
@@ -98,3 +98,8 @@ if plt is not None:
 
 # disconnect from the spectrometer
 ava.disconnect()
+
+
+import time
+
+time.sleep(10)

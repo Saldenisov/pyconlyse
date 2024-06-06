@@ -7,17 +7,14 @@ import cv2
 app_folder = Path(__file__).resolve().parents[2]
 sys.path.append(str(app_folder))
 
-from typing import Tuple, Union, List
+from typing import Union, List
 from gpiozero.pins.pigpio import PiGPIOFactory
-from gpiozero import LED, Button
+from gpiozero import LED
 import zmq
 from DeviceServers.General.DS_GPIO import DS_GPIO, OrderPulsesInfo, MyPin
-from DeviceServers.General.DS_general import standard_str_output
-from collections import OrderedDict
-from threading import Thread
 # -----------------------------
 from functools import partial
-from tango import DevState, AttrWriteType
+from tango import DevState
 from threading import Thread
 from time import sleep
 
@@ -99,10 +96,6 @@ class DS_RPI_GPIO(DS_GPIO):
         pin.generate_TTL(order)
 
     def generate_TTL(self, pin: int, dt: int, time_delay: int):
-        # self.pins[pin].on()
-        # sleep(dt / 10**6)off_zmq()
-        # self.pins[pin].off()
-        # sleep(time_delay / 10**6)
         self.pins[pin].toggle()
 
     def get_controller_status_local(self) -> Union[int, str]:
