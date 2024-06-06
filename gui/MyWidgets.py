@@ -1,6 +1,5 @@
 from PyQt5 import QtWidgets, QtCore
 
-
 class MyQLabel(QtWidgets.QLabel):
     clicked = QtCore.pyqtSignal(str)
 

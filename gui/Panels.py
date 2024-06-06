@@ -21,9 +21,6 @@ from DeviceServers.DS_Widget import DS_General_Widget
 from DeviceServers.DS_Widget import VisType
 
 
-
-
-
 class GeneralPanel(QtWidgets.QWidget):
 
     def __init__(self, choice, widget_class: DS_General_Widget, title='', icon: QIcon = None, width=2,

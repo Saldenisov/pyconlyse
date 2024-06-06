@@ -1,0 +1,981 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>FormSettings</class>
+ <widget class="QWidget" name="FormSettings">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>446</width>
+    <height>628</height>
+   </rect>
+  </property>
+  <property name="acceptDrops">
+   <bool>true</bool>
+  </property>
+  <property name="windowTitle">
+   <string>Settings</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout_4">
+   <item>
+    <layout class="QVBoxLayout" name="layoutmain">
+     <item>
+      <widget class="QTabWidget" name="Hardware">
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="tab_DL">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>DL.png</normaloff>DL.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string>Delay lines</string>
+        </attribute>
+        <layout class="QVBoxLayout" name="verticalLayout">
+         <item>
+          <layout class="QGridLayout" name="gridLayout">
+           <item row="0" column="0">
+            <widget class="QGroupBox" name="groupBoxAcc_G">
+             <property name="title">
+              <string>Accelerations</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_8">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_Acc_X_G">
+                <property name="text">
+                 <string>X</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Acc_X_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="lineEdit_Acc_X_G"/>
+              </item>
+              <item row="0" column="2">
+               <spacer name="horizontalSpacer_9">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_Acc_Y_G">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Acc_Y_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="lineEdit_Acc_Y_G"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_Acc_Z_G">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Acc_Z_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLineEdit" name="lineEdit_Acc_Z_G"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_Acc_A_G">
+                <property name="text">
+                 <string>A</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Acc_A_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_Acc_A_G"/>
+              </item>
+              <item row="4" column="1">
+               <spacer name="verticalSpacer_17">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>2</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item row="0" column="2">
+            <widget class="QGroupBox" name="groupBox_MC_G">
+             <property name="title">
+              <string>Motor currents</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_11">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_MC_X_G">
+                <property name="text">
+                 <string>X</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_MC_X_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="lineEdit_MC_X_G"/>
+              </item>
+              <item row="0" column="2">
+               <spacer name="horizontalSpacer_3">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_MC_Y_G">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_MC_Y_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="lineEdit_MC_Y_G"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_MC_Z_G">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_MC_Z_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLineEdit" name="lineEdit_MC_Z_G"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_MC_A_G">
+                <property name="text">
+                 <string>A</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_MC_A_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_MC_A_G"/>
+              </item>
+              <item row="4" column="1">
+               <spacer name="verticalSpacer_20">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>2</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QGroupBox" name="groupBox_Dim_G">
+             <property name="title">
+              <string>Dimension</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_7">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_Dim_X_G">
+                <property name="text">
+                 <string>X</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Dim_X_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="lineEdit_Dim_X_G"/>
+              </item>
+              <item row="0" column="2">
+               <spacer name="horizontalSpacer_6">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_Dim_Y_G">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Dim_Y_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="lineEdit_Dim_Y_G"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_Dim_Z_G">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Dim_Z_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLineEdit" name="lineEdit_Dim_Z_G"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_Dim_A_G">
+                <property name="text">
+                 <string>A</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Dim_A_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_Dim_A_G"/>
+              </item>
+              <item row="4" column="1">
+               <spacer name="verticalSpacer_19">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>3</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item row="0" column="1">
+            <widget class="QGroupBox" name="groupBoxVelocities_G">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
+             <property name="title">
+              <string>Velocities</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_10">
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_Vel_X_G">
+                <property name="text">
+                 <string>X</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Vel_X_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="lineEdit_Vel_X_G"/>
+              </item>
+              <item row="0" column="2">
+               <spacer name="horizontalSpacer_4">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="0" column="3">
+               <widget class="QLabel" name="label_6">
+                <property name="text">
+                 <string/>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_Vel_Y_G">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Vel_Y_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="lineEdit_Vel_Y_G"/>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_Vel_Z_G">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Vel_Z_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLineEdit" name="lineEdit_Vel_Z_G"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_Vel_A_G">
+                <property name="text">
+                 <string>A</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Vel_A_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_Vel_A_G"/>
+              </item>
+              <item row="4" column="1">
+               <spacer name="verticalSpacer_16">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>2</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+           <item row="1" column="1">
+            <widget class="QGroupBox" name="groupBox_Pitches_G">
+             <property name="title">
+              <string>Pitches</string>
+             </property>
+             <layout class="QGridLayout" name="gridLayout_6">
+              <item row="0" column="1">
+               <widget class="QLineEdit" name="lineEdit_Pitches_X_G">
+                <property name="enabled">
+                 <bool>true</bool>
+                </property>
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
+                <property name="minimumSize">
+                 <size>
+                  <width>120</width>
+                  <height>0</height>
+                 </size>
+                </property>
+                <property name="maxLength">
+                 <number>5</number>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="0">
+               <widget class="QLabel" name="label_Pitches_Z_G">
+                <property name="text">
+                 <string>Z</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Pitches_Z_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="0">
+               <widget class="QLabel" name="label_Pitches_Y_G">
+                <property name="text">
+                 <string>Y</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Pitches_Y_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="2" column="1">
+               <widget class="QLineEdit" name="lineEdit_Pitches_Z_G"/>
+              </item>
+              <item row="3" column="0">
+               <widget class="QLabel" name="label_Pitches_A_G">
+                <property name="text">
+                 <string>A</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Pitches_A_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="1">
+               <widget class="QLineEdit" name="lineEdit_Pitches_Y_G"/>
+              </item>
+              <item row="3" column="1">
+               <widget class="QLineEdit" name="lineEdit_Pitches_A_G"/>
+              </item>
+              <item row="0" column="0">
+               <widget class="QLabel" name="label_Pitches_X_G">
+                <property name="maximumSize">
+                 <size>
+                  <width>7</width>
+                  <height>16777215</height>
+                 </size>
+                </property>
+                <property name="text">
+                 <string>X</string>
+                </property>
+                <property name="buddy">
+                 <cstring>lineEdit_Pitches_X_G</cstring>
+                </property>
+               </widget>
+              </item>
+              <item row="4" column="1">
+               <spacer name="verticalSpacer_18">
+                <property name="orientation">
+                 <enum>Qt::Vertical</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>20</width>
+                  <height>3</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+              <item row="0" column="2">
+               <spacer name="horizontalSpacer_11">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
+              </item>
+             </layout>
+            </widget>
+           </item>
+          </layout>
+         </item>
+         <item>
+          <layout class="QVBoxLayout" name="layoutDL">
+           <item>
+            <widget class="QTabWidget" name="tabWidget_DL">
+             <property name="contextMenuPolicy">
+              <enum>Qt::NoContextMenu</enum>
+             </property>
+             <property name="currentIndex">
+              <number>0</number>
+             </property>
+             <widget class="QWidget" name="tabLDL">
+              <attribute name="icon">
+               <iconset>
+                <normaloff>DL.png</normaloff>DL.png</iconset>
+              </attribute>
+              <attribute name="title">
+               <string>Delay line long</string>
+              </attribute>
+              <layout class="QGridLayout" name="gridLayout_9">
+               <item row="0" column="5">
+                <widget class="QGroupBox" name="groupBox_Ranges_L">
+                 <property name="sizePolicy">
+                  <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                   <horstretch>0</horstretch>
+                   <verstretch>0</verstretch>
+                  </sizepolicy>
+                 </property>
+                 <property name="title">
+                  <string>Ranges</string>
+                 </property>
+                 <layout class="QGridLayout" name="gridLayout_4">
+                  <item row="2" column="1">
+                   <widget class="QLineEdit" name="lineEdit_Ranges_zero_L">
+                    <property name="inputMask">
+                     <string/>
+                    </property>
+                    <property name="maxLength">
+                     <number>32767</number>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="0">
+                   <widget class="QLabel" name="label_Ranges_max_L">
+                    <property name="text">
+                     <string>Max</string>
+                    </property>
+                    <property name="buddy">
+                     <cstring>lineEdit_Ranges_max_L</cstring>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QLineEdit" name="lineEdit_Ranges_min_L">
+                    <property name="inputMask">
+                     <string/>
+                    </property>
+                    <property name="maxLength">
+                     <number>32767</number>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="2" column="0">
+                   <widget class="QLabel" name="label_Ranges_zero_L">
+                    <property name="text">
+                     <string>Zero</string>
+                    </property>
+                    <property name="buddy">
+                     <cstring>lineEdit_Ranges_zero_L</cstring>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="1" column="1">
+                   <widget class="QLineEdit" name="lineEdit_Ranges_max_L">
+                    <property name="inputMask">
+                     <string/>
+                    </property>
+                    <property name="text">
+                     <string/>
+                    </property>
+                    <property name="maxLength">
+                     <number>32767</number>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="0">
+                   <widget class="QLabel" name="label_Ranges_min_L">
+                    <property name="text">
+                     <string>Min</string>
+                    </property>
+                    <property name="buddy">
+                     <cstring>lineEdit_Ranges_min_L</cstring>
+                    </property>
+                   </widget>
+                  </item>
+                 </layout>
+                </widget>
+               </item>
+               <item row="0" column="3">
+                <widget class="QLineEdit" name="lineEdit_Vel_Saxisvel_L"/>
+               </item>
+               <item row="0" column="0">
+                <widget class="QLabel" name="label_Vel_Saxis_L">
+                 <property name="text">
+                  <string>S/Axis velocity</string>
+                 </property>
+                 <property name="buddy">
+                  <cstring>lineEdit_Vel_Saxisvel_L</cstring>
+                 </property>
+                </widget>
+               </item>
+               <item row="0" column="6">
+                <spacer name="horizontalSpacer_2">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item row="0" column="4">
+                <spacer name="horizontalSpacer_5">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+             <widget class="QWidget" name="tabSDL">
+              <attribute name="icon">
+               <iconset>
+                <normaloff>DL.png</normaloff>DL.png</iconset>
+              </attribute>
+              <attribute name="title">
+               <string>Delay line short</string>
+              </attribute>
+              <layout class="QHBoxLayout" name="horizontalLayout_2">
+               <item>
+                <widget class="QLabel" name="label_Vel_Saxis_S">
+                 <property name="text">
+                  <string>S/Axis velocity</string>
+                 </property>
+                 <property name="buddy">
+                  <cstring>lineEdit_Vel_Saxisvel_S</cstring>
+                 </property>
+                </widget>
+               </item>
+               <item>
+                <widget class="QLineEdit" name="lineEdit_Vel_Saxisvel_S"/>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_8">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+               <item>
+                <layout class="QGridLayout" name="gridLayout_13">
+                 <item row="0" column="0">
+                  <widget class="QGroupBox" name="groupBox_Ranges_S">
+                   <property name="sizePolicy">
+                    <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+                     <horstretch>0</horstretch>
+                     <verstretch>0</verstretch>
+                    </sizepolicy>
+                   </property>
+                   <property name="title">
+                    <string>Ranges</string>
+                   </property>
+                   <layout class="QGridLayout" name="gridLayout_2">
+                    <item row="0" column="0">
+                     <widget class="QLabel" name="label_Ranges_min_S">
+                      <property name="text">
+                       <string>Min</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_Ranges_min_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="1">
+                     <widget class="QLineEdit" name="lineEdit_Ranges_min_S">
+                      <property name="inputMask">
+                       <string/>
+                      </property>
+                      <property name="maxLength">
+                       <number>32767</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QLabel" name="label_Ranges_max_S">
+                      <property name="text">
+                       <string>Max</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_Ranges_max_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QLineEdit" name="lineEdit_Ranges_max_S">
+                      <property name="inputMask">
+                       <string/>
+                      </property>
+                      <property name="text">
+                       <string/>
+                      </property>
+                      <property name="maxLength">
+                       <number>32767</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="2" column="1">
+                     <widget class="QLineEdit" name="lineEdit_Ranges_zero_S">
+                      <property name="inputMask">
+                       <string/>
+                      </property>
+                      <property name="maxLength">
+                       <number>32767</number>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="2" column="0">
+                     <widget class="QLabel" name="label_Ranges_zero_S">
+                      <property name="text">
+                       <string>Zero</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_Ranges_zero_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item row="0" column="1">
+                  <widget class="QGroupBox" name="groupBox_cells_pos">
+                   <property name="title">
+                    <string>Cells' positions in mm</string>
+                   </property>
+                   <layout class="QGridLayout" name="gridLayout_5">
+                    <item row="4" column="0">
+                     <widget class="QLabel" name="label_C4_S">
+                      <property name="text">
+                       <string>Cell4</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_C4_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="4" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_C4_S"/>
+                    </item>
+                    <item row="5" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_CL_S"/>
+                    </item>
+                    <item row="5" column="0">
+                     <widget class="QLabel" name="label_C4_Lanex">
+                      <property name="text">
+                       <string>CL</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_CL_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="3" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_C3_S"/>
+                    </item>
+                    <item row="2" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_CS_S"/>
+                    </item>
+                    <item row="3" column="0">
+                     <widget class="QLabel" name="label_C3_S">
+                      <property name="text">
+                       <string>Cell3</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_C3_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="0">
+                     <widget class="QLabel" name="label_C1_S">
+                      <property name="text">
+                       <string>Cell1</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_C1_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="0" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_C1_S"/>
+                    </item>
+                    <item row="1" column="0">
+                     <widget class="QLabel" name="label_C2_S">
+                      <property name="text">
+                       <string>Cell2</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_C2_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                    <item row="1" column="1">
+                     <widget class="QLineEdit" name="lineEdit_cells_C2_S"/>
+                    </item>
+                    <item row="2" column="0">
+                     <widget class="QLabel" name="label_CS_S">
+                      <property name="text">
+                       <string>CellS</string>
+                      </property>
+                      <property name="buddy">
+                       <cstring>lineEdit_cells_CS_S</cstring>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </widget>
+                 </item>
+                 <item row="1" column="0">
+                  <spacer name="verticalSpacer">
+                   <property name="orientation">
+                    <enum>Qt::Vertical</enum>
+                   </property>
+                   <property name="sizeHint" stdset="0">
+                    <size>
+                     <width>20</width>
+                     <height>40</height>
+                    </size>
+                   </property>
+                  </spacer>
+                 </item>
+                </layout>
+               </item>
+               <item>
+                <spacer name="horizontalSpacer_10">
+                 <property name="orientation">
+                  <enum>Qt::Horizontal</enum>
+                 </property>
+                 <property name="sizeHint" stdset="0">
+                  <size>
+                   <width>40</width>
+                   <height>20</height>
+                  </size>
+                 </property>
+                </spacer>
+               </item>
+              </layout>
+             </widget>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+        <zorder></zorder>
+       </widget>
+       <widget class="QWidget" name="tab_4">
+        <attribute name="icon">
+         <iconset>
+          <normaloff>spectrometer.png</normaloff>spectrometer.png</iconset>
+        </attribute>
+        <attribute name="title">
+         <string>Spectrometers</string>
+        </attribute>
+       </widget>
+      </widget>
+     </item>
+     <item>
+      <layout class="QHBoxLayout" name="horizontalLayout">
+       <item>
+        <widget class="QPushButton" name="Buttonsavesettings">
+         <property name="text">
+          <string>Save Settings</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <tabstops>
+  <tabstop>Hardware</tabstop>
+  <tabstop>lineEdit_Acc_X_G</tabstop>
+  <tabstop>lineEdit_Acc_Y_G</tabstop>
+  <tabstop>lineEdit_Acc_Z_G</tabstop>
+  <tabstop>lineEdit_Acc_A_G</tabstop>
+  <tabstop>lineEdit_Vel_X_G</tabstop>
+  <tabstop>lineEdit_Vel_Y_G</tabstop>
+  <tabstop>lineEdit_Vel_Z_G</tabstop>
+  <tabstop>lineEdit_Vel_A_G</tabstop>
+  <tabstop>lineEdit_MC_X_G</tabstop>
+  <tabstop>lineEdit_MC_Y_G</tabstop>
+  <tabstop>lineEdit_MC_Z_G</tabstop>
+  <tabstop>lineEdit_MC_A_G</tabstop>
+  <tabstop>lineEdit_Dim_X_G</tabstop>
+  <tabstop>lineEdit_Dim_Y_G</tabstop>
+  <tabstop>lineEdit_Dim_Z_G</tabstop>
+  <tabstop>lineEdit_Dim_A_G</tabstop>
+  <tabstop>lineEdit_Pitches_X_G</tabstop>
+  <tabstop>lineEdit_Pitches_Y_G</tabstop>
+  <tabstop>lineEdit_Pitches_Z_G</tabstop>
+  <tabstop>lineEdit_Pitches_A_G</tabstop>
+  <tabstop>tabWidget_DL</tabstop>
+  <tabstop>lineEdit_Vel_Saxisvel_L</tabstop>
+  <tabstop>lineEdit_Ranges_min_L</tabstop>
+  <tabstop>lineEdit_Ranges_max_L</tabstop>
+  <tabstop>lineEdit_Ranges_zero_L</tabstop>
+  <tabstop>lineEdit_Ranges_min_S</tabstop>
+  <tabstop>lineEdit_Ranges_max_S</tabstop>
+  <tabstop>lineEdit_Ranges_zero_S</tabstop>
+  <tabstop>lineEdit_cells_C1_S</tabstop>
+  <tabstop>lineEdit_cells_C2_S</tabstop>
+  <tabstop>lineEdit_cells_CS_S</tabstop>
+  <tabstop>lineEdit_cells_C3_S</tabstop>
+  <tabstop>lineEdit_cells_C4_S</tabstop>
+  <tabstop>lineEdit_cells_CL_S</tabstop>
+  <tabstop>Buttonsavesettings</tabstop>
+ </tabstops>
+ <resources/>
+ <connections/>
+</ui>

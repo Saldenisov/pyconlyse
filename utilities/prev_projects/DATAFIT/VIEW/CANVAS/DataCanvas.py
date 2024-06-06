@@ -11,7 +11,6 @@ class DataCanvas(MyMplCanvas):
 
     def compute_initial_figure(self, data_model=None,
                                figure_name=None):
-
         self.model = data_model
         data = data_model.data
         wavelengths = data_model.wavelengths
@@ -37,8 +36,6 @@ class DataCanvas(MyMplCanvas):
 
         self.dataplot.set_xlabel('Wavelength, nm')
         self.dataplot.set_ylabel('Time delay, ~s')
-        # self.dataplot.set_title(figure_name)
-
         self.Fig.colorbar(self.image)
 
     def update_figure(self):
@@ -51,7 +48,6 @@ class DataCanvas(MyMplCanvas):
         self.dataplot.axhline(y=self.model.timedelays[cur['y2']-1], color='r')
         self.dataplot.axvline(x=self.model.wavelengths[cur['x1']], color='r')
         self.dataplot.axvline(x=self.model.wavelengths[cur['x2']-1], color='r')
-
         self.draw()
 
     def update_limits(self, minv, maxv):
@@ -59,5 +55,4 @@ class DataCanvas(MyMplCanvas):
         update vmin and vmax of imshow
         """
         self.image.set_clim(vmin=minv, vmax=maxv)
-
         self.draw()
