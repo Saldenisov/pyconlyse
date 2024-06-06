@@ -24,8 +24,8 @@ from DeviceServers.DS_Widget import VisType
 from functools import partial
 from PyQt5.QtCore import QThread, pyqtSignal
 import zmq
-from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QHBoxLayout, \
-    QDoubleSpinBox, QGridLayout, QScrollArea, QSpacerItem, QSizePolicy
+from PyQt5.QtWidgets import QTabWidget, QWidget, QVBoxLayout, QLabel, QHBoxLayout, \
+    QDoubleSpinBox, QScrollArea, QSpacerItem, QSizePolicy
 type_vis = VisType.FULL
 from gui.MyWidgets import MyQLabel
 from decimal import Decimal

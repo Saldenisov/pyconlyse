@@ -52,7 +52,7 @@ class Cursors2D:
     y2: Tuple[int, float] = (0, 0)
 
 
-#Experimental Data structures
+# Experimental Data structures
 @dataclass
 class Measurement:
     """
