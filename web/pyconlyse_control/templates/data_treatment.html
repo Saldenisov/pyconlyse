@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}Data treatment{% endblock %}
+
+{% block content %}
+<h1>You can treat the data here</h1>
+
+<div class="horizontal-container">
+    <div class="block-1">
+        <div class="column">
+            <button id="button-v0" onclick="buttonClicked('V0')">V0</button>
+        </div>
+        <div class="column">
+            <button id="button-vd2" onclick="buttonClicked('VD2')">VD2</button>
+        </div>
+    </div>
+    <div class="block-2" id="block-2">
+        <label id="status-label">button is clicked</label>
+        <div id="visualization-container" style="display: none;">
+            <div id="selectors">
+                <label for="kinetics">Kinetics:</label>
+                <select id="kinetics">
+                    <option value="option1">Option 1</option>
+                    <option value="option2">Option 2</option>
+                </select>
+                <label for="spectrum">Spectrum:</label>
+                <select id="spectrum">
+                    <option value="option1">Option 1</option>
+                    <option value="option2">Option 2</option>
+                </select>
+            </div>
+            <div id="2d-map"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+.horizontal-container {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+}
+
+.block-1 {
+    display: flex;
+    height: 3cm;
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-right: 10px;
+}
+
+.column {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.block-2 {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #ccc;
+    padding: 10px;
+    height: 3cm;
+    width: 100%;
+}
+
+#visualization-container {
+    margin-top: 10px;
+    width: 100%;
+}
+
+#selectors {
+    display: flex;
+    justify-content: space-around;
+    width: 100%;
+    margin-bottom: 10px;
+}
+
+#2d-map {
+    width: 100%;
+    height: 400px;
+}
+</style>
+
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script>
+function buttonClicked(buttonId) {
+    var label = document.getElementById('status-label');
+    var visualizationContainer = document.getElementById('visualization-container');
+    if (buttonId === 'V0') {
+        label.textContent = 'button ' + buttonId + ' is clicked';
+        visualizationContainer.style.display = 'none';
+    } else if (buttonId === 'VD2') {
+        label.textContent = '';
+        visualizationContainer.style.display = 'block';
+        draw2DMap();
+    }
+}
+
+function draw2DMap() {
+    var data = [{
+        z: [
+            [1, 20, 30],
+            [20, 1, 60],
+            [30, 60, 1]
+        ],
+        type: 'heatmap'
+    }];
+
+    Plotly.newPlot('2d-map', data);
+}
+</script>
+
+{% endblock %}

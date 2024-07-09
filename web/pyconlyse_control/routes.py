@@ -18,7 +18,7 @@ DATABASE = 'pyconlyse.db'
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
-        db = g._database = sqlite3.connect(DATABASE)
+        raise Exception('No pyconlyse.db')
     return db
 
 
@@ -66,6 +66,11 @@ def pyconlyse():
 @app.route('/equipment')
 def equipment():
     return render_template('equipment.html')
+
+
+@app.route('/data_treatment')
+def data_treatment():
+    return render_template('data_treatment.html')
 
 
 @app.route('/tango')
