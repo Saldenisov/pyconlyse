@@ -38,3 +38,4 @@ guidata>=1.7
 Pillow
 pyarrow
 h5py
+Flask

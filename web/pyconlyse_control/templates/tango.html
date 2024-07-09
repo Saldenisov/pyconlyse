@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+
+{% block title %}Tango - Pyconlyse Project{% endblock %}
+
+{% block content %}
+<h1>Tango Page</h1>
+<p>This page displays the status of the MySQL server and Tango starter devices.</p>
+<div class="container">
+    <div class="row">
+        <div class="column">
+            <h2>MySQL Server Status</h2>
+            <div id="mysql-status" class="lamp"></div>
+            <p id="mysql-downtime"></p>
+        </div>
+        <div class="column">
+            <h2>Tango Starter Device Statuses</h2>
+            <div id="tango-statuses">
+                <!-- Statuses will be dynamically inserted here -->
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center; /* Center items vertically */
+    min-height: 100vh; /* Full viewport height */
+}
+.row {
+    display: flex;
+    justify-content: center; /* Center columns horizontally */
+    align-items: center; /* Center columns vertically */
+    width: 100%;
+}
+.column {
+    flex: 1;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center items horizontally within column */
+    text-align: center; /* Center text within column */
+}
+.lamp {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.lamp.green {
+    background-color: green;
+}
+.lamp.red {
+    background-color: red;
+}
+</style>
+<script>
+function updateStatuses() {
+    fetch('/tango_status')
+        .then(response => response.json())
+        .then(data => {
+            const mysqlStatus = document.getElementById('mysql-status');
+            mysqlStatus.className = 'lamp ' + (data.mysql_status ? 'green' : 'red');
+
+            const mysqlDowntime = document.getElementById('mysql-downtime');
+            if (!data.mysql_status) {
+                mysqlDowntime.textContent = 'Down for ' + data.mysql_downtime_seconds + ' seconds';
+            } else {
+                mysqlDowntime.textContent = '';
+            }
+
+            const tangoStatuses = document.getElementById('tango-statuses');
+            tangoStatuses.innerHTML = '';
+            data.tango_statuses.forEach(starter => {
+                const starterDiv = document.createElement('div');
+                starterDiv.innerHTML = `<span>${starter[0]} (${starter[1]})</span>
+                                        <div class="lamp ${starter[2] ? 'green' : 'red'}"></div>
+                                        ${starter[2] ? '' : `<p>Down for ${starter[3]} seconds</p>`}`;
+                tangoStatuses.appendChild(starterDiv);
+            });
+        });
+}
+
+// Update statuses every 5 seconds
+setInterval(updateStatuses, 1000);
+
+// Initial update
+updateStatuses();
+</script>
+{% endblock %}

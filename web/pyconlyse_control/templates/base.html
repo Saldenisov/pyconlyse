@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <title>{% block title %}Pyconlyse Project{% endblock %}</title>
+</head>
+<body>
+    <header>
+        <img src="{{ url_for('static', filename='images/pyconlyse_logo.png') }}" alt="Pyconlyse Logo" class="logo">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('home') }}">Home</a></li>
+                <li><a href="{{ url_for('pyconlyse') }}">Pyconlyse</a></li>
+                <li><a href="{{ url_for('equipment') }}">Equipment</a></li>
+                <li><a href="{{ url_for('elyse') }}">ELYSE</a></li>
+                <li><a href="{{ url_for('tango') }}">Tango</a></li>
+            </ul>
+        </nav>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+</html>

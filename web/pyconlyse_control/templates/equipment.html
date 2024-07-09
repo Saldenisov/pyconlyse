@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Equipment - Pyconlyse Project{% endblock %}
+
+{% block content %}
+<h1>Equipment Page</h1>
+<div class="container">
+    <div class="row">
+        <div class="column column-left">
+            <div class="grid-container">
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">PDU</span>
+                        <img src="{{ url_for('static', filename='images/pdu.png') }}" alt="1" onclick="updateWidget(1)">
+                    </div>
+                </div>
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">Motorized Stages</span>
+                        <img src="{{ url_for('static', filename='images/motorized_stages2.png') }}" alt="2" onclick="updateWidget(2)">
+                    </div>
+                </div>
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">Cameras</span>
+                        <img src="{{ url_for('static', filename='images/cameras.png') }}" alt="3" onclick="updateWidget(3)">
+                    </div>
+                </div>
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">Magnets</span>
+                        <img src="{{ url_for('static', filename='images/magnets.png') }}" alt="4" onclick="updateWidget(4)">
+                    </div>
+                </div>
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">Vacuum</span>
+                        <img src="{{ url_for('static', filename='images/vacuum.png') }}" alt="5" onclick="updateWidget(5)">
+                    </div>
+                </div>
+                <div class="grid-item">
+                    <div class="image-container">
+                        <span class="image-label">Pumps</span>
+                        <img src="{{ url_for('static', filename='images/pumps.png') }}" alt="6" onclick="updateWidget(6)">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="column column-right">
+            <div id="widget-container">
+                <h2>Select equipment to control</h2>
+                <!-- Initial widget content, will be updated by JavaScript -->
+            </div>
+        </div>
+    </div>
+</div>
+<style>
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.row {
+    display: flex;
+    width: 100%;
+}
+
+.column {
+    padding: 10px;
+}
+
+.column-left {
+    flex: 3;
+}
+
+.column-right {
+    flex: 2;
+    border-left: 1px solid #ccc;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+.grid-container {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.grid-item {
+    text-align: center;
+}
+
+.image-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.image-label {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background-color: gray;
+    color: white;
+    padding: 5px 10px;
+    border-radius: 3px;
+    pointer-events: none;
+}
+
+
+.grid-item img {
+    max-width: 100%;
+    height: auto;
+}
+</style>
+<script>
+function updateWidget(equipmentId) {
+    const widgetContainer = document.getElementById('widget-container');
+    widgetContainer.innerHTML = `
+        <h2>Control Equipment ${equipmentId}</h2>
+        <button onclick="handleClick(${equipmentId})">Click Me</button>
+        <p id="status${equipmentId}"></p>
+    `;
+}
+
+function handleClick(equipmentId) {
+    const statusElement = document.getElementById(`status${equipmentId}`);
+    statusElement.textContent = 'Equipment ' + equipmentId + ' button clicked!';
+}
+</script>
+{% endblock %}

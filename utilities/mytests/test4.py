@@ -15,7 +15,7 @@ social_graph.add_edges_from([
     ("Eve", "Alice"),
 ])
 
-# Create the Dash app
+# Create the Dash pyconlyse_control
 app = dash.Dash(__name__)
 
 # Define the layout
