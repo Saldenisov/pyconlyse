@@ -19,6 +19,7 @@ def main():
     app = QApplication(sys.argv)
     TreatmentController(TreatmentModel(app_folder,
                                        data_folder='E:\\'))
+
     app.exec_()
 
 

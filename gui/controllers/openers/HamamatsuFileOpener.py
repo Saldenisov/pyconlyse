@@ -83,6 +83,8 @@ class HamamatsuFileOpener(Opener):
                 bytes_per_point = 2
             elif pixel_size == 1:
                 bytes_per_point = 1
+            else:
+                bytes_per_point = 1
 
             number_maps = int.from_bytes(head_64_bytes[14:16], byteorder='little')
             if number_maps == 0:

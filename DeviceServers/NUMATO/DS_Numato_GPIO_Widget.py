@@ -5,7 +5,6 @@ from PyQt5.QtWidgets import QCheckBox
 from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
-
 from DeviceServers.DS_Widget import DS_General_Widget, VisType
 
 
