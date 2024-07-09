@@ -201,6 +201,7 @@ class TreatmentView(QMainWindow):
             # kineticscanvas update
             self.ui.kineticscanvas.new_data(measurement, cursors)
             self.ui.kinetics_average_canvas.new_data(critical_info)
+            self.ui.kinetics_average_canvas_copy.new_data(critical_info)
             self.update_kinetics_slider(critical_info.timedelays_length - 1, cursors)
             # spectrumcanvas update
             self.ui.spectracanvas.new_data(measurement, cursors)

@@ -191,6 +191,7 @@ class TreatmentController:
 
         if len(measurements_cleaned) != 0:
             self.view.ui.kinetics_average_canvas.new_data(measurements=measurements_cleaned)
+            self.view.ui.kinetics_average_canvas_copy.new_data(measurements=measurements_cleaned)
 
     def save_clean_h5(self):
         def dataset_update(h5_file, dataset_name, data, comments=''):

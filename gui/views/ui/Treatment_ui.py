@@ -19,7 +19,7 @@ class Ui_GraphWindow:
 
         window.setObjectName("GraphWindow")
         window.setGeometry(600, 50, 200, 400)
-        window.resize(1240, 950)
+        window.resize(1200, 900)
         self.main_widget = QtWidgets.QWidget(window)
         self.main_widget.setObjectName("main_widget")
 
@@ -127,7 +127,7 @@ class Ui_GraphWindow:
 
         # Tabs
         self.tabs = QTabWidget()
-        self.tabs.setMinimumSize(500, 200)
+        self.tabs.setMinimumSize(500, 250)
         self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         cleaing_tab = QWidget()
         cleaing_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -147,7 +147,6 @@ class Ui_GraphWindow:
 
         # Tree
         root = str(self.data_folder)
-        #root = 'D:\\DATA_VD2\\2020\\20200617-RK-940'
         self.tree_model = QtWidgets.QFileSystemModel()
         self.tree = QtWidgets.QTreeView()
         self.tree.setModel(self.tree_model)
@@ -164,16 +163,21 @@ class Ui_GraphWindow:
         layout_play_button.addWidget(self.button_right)
         #
 
+        layout_type = QtWidgets.QVBoxLayout()
         layout_type_exp = QtWidgets.QHBoxLayout()
+        layout_type_exp_but = QtWidgets.QHBoxLayout()
         #
         layout_type_exp.addWidget(self.combobox_type_exp)
         layout_type_exp.addWidget(self.checkbox_first_img_with_pulse)
         layout_type_exp.addWidget(self.radiobutton_individual)
         layout_type_exp.addWidget(self.radiobutton_averaged)
-        layout_type_exp.addWidget(self.button_average_noise)
-        layout_type_exp.addWidget(self.button_calc)
 
-        layout_type_exp.addWidget(self.button_save_result)
+        layout_type_exp_but.addWidget(self.button_average_noise)
+        layout_type_exp_but.addWidget(self.button_calc)
+        layout_type_exp_but.addWidget(self.button_save_result)
+
+        layout_type.addLayout(layout_type_exp)
+        layout_type.addLayout(layout_type_exp_but)
         #
 
         layout_noise = QtWidgets.QHBoxLayout()
@@ -193,7 +197,7 @@ class Ui_GraphWindow:
         layout_control_buttons.addWidget(self.combobox_files_selected)
         layout_control_buttons.addLayout(layout_data_buttons)
         layout_control_buttons.addLayout(layout_noise)
-        layout_control_buttons.addLayout(layout_type_exp)
+        layout_control_buttons.addLayout(layout_type)
         layout_control_buttons.addWidget(self.lineedit_save_folder)
         layout_control_buttons.addWidget(self.lineedit_save_file_name)
         layout_control_buttons.addWidget(self.progressbar_calc)
@@ -252,6 +256,7 @@ class Ui_GraphWindow:
 
         layout_cleaning.addWidget(cleaning_box)
         layout_cleaning.addWidget(self.kinetics_average_canvas)
+
         cleaing_tab.setLayout(layout_cleaning)
 
         # SELECTION
@@ -276,6 +281,7 @@ class Ui_GraphWindow:
         #
         layout_files.addWidget(groupbox_control_buttons)
         layout_files.addWidget(groupbox_tree_files)
+        layout_files.addWidget(self.kinetics_average_canvas_copy)
         files_tab.setLayout(layout_files)  # Tab files layout
         #
 
@@ -350,17 +356,18 @@ class Ui_GraphWindow:
         self.cursor_data = Cursor(self.datacanvas.axis, useblit=True, color='black', linewidth=1)
 
     def canvas_settings(self):
-        self.datacanvas = DataCanvas(width=9, height=10, dpi=70, canvas_parent=self.main_widget)
+        self.datacanvas = DataCanvas(width=6, height=6, dpi=70, canvas_parent=self.main_widget)
 
         self.datacanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
-        self.kineticscanvas = KineticsCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
+        self.kineticscanvas = KineticsCanvas(width=4, height=4, dpi=40, canvas_parent=self.main_widget)
 
-        self.kinetics_average_canvas = KineticsAverage(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
+        self.kinetics_average_canvas = KineticsAverage(width=10, height=5, dpi=40, canvas_parent=self.main_widget)
+        self.kinetics_average_canvas_copy = KineticsAverage(width=7, height=5, dpi=40, canvas_parent=self.main_widget)
 
         self.kineticscanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
-        self.spectracanvas = SpectrumCanvas(width=6, height=6, dpi=40, canvas_parent=self.main_widget)
+        self.spectracanvas = SpectrumCanvas(width=4, height=4, dpi=40, canvas_parent=self.main_widget)
 
         self.spectracanvas.setFocusPolicy(QtCore.Qt.ClickFocus)
 
@@ -414,6 +421,7 @@ class Ui_GraphVD2Window_(object):
         self.layout_tree.addWidget(self.tree)
         self.layout_form.addLayout(self.layout_data)
         self.layout_form.addLayout(self.layout_tree)
+
 
         self.main_widget.setFocus()
         window.setCentralWidget(self.main_widget)

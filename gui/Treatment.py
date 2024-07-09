@@ -18,7 +18,7 @@ def main():
     logger.info('Starting Treatment GUI...')
     app = QApplication(sys.argv)
     TreatmentController(TreatmentModel(app_folder,
-                                       data_folder='E:\\20240527_GdFAzo\\9701_water_600_x0'))
+                                       data_folder='E:\\'))
     app.exec_()
 
 
