@@ -1,22 +1,22 @@
 # folder_api.py
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 import os
 
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
-# Define the allowed root folder (only allow browsing within E:\)
+# Define the allowed root folder (only allow browsing within E:\ICP_notebooks)
 ALLOWED_ROOT = r'E:\\ICP_notebooks'
 
-def build_folder_tree(root_path):
+def build_folder_tree(root_path, include_files=False):
     """
-    Recursively builds a tree of directories starting from root_path.
-    Each node in the tree is represented as a dictionary with:
-      - 'name': Folder name
-      - 'path': Full path to the folder
-      - 'isFile': False for directories
-      - 'children': List of child directory nodes
+    Recursively builds a tree of directories (and optionally files)
+    starting from root_path. Each node is a dictionary with:
+      - 'name': Folder or file name
+      - 'path': Full path to the item
+      - 'isFile': False for directories, True for files (if included)
+      - 'children': List of child nodes (only for directories)
     """
-    tree = {
+    node = {
         "name": os.path.basename(root_path) or root_path,
         "path": root_path,
         "isFile": False,
@@ -26,17 +26,41 @@ def build_folder_tree(root_path):
         with os.scandir(root_path) as it:
             for entry in it:
                 if entry.is_dir():
-                    # Recursively build the tree for subdirectories.
-                    tree["children"].append(build_folder_tree(entry.path))
+                    node["children"].append(build_folder_tree(entry.path, include_files))
+                elif include_files:
+                    # Optionally include files in the tree
+                    node["children"].append({
+                        "name": entry.name,
+                        "path": entry.path,
+                        "isFile": True
+                    })
     except Exception as e:
-        # Log the error or handle it as needed.
         print(f"Error reading directory {root_path}: {e}")
-    return tree
+    return node
 
 @folder_api.route('/folder-structure', methods=['GET'])
 def get_folder_structure():
     """
-    GET endpoint that returns a JSON tree of allowed folders starting at E:\
+    Returns a JSON tree of allowed folders starting at ALLOWED_ROOT.
+    Used for folder selection.
     """
     folder_tree = build_folder_tree(ALLOWED_ROOT)
     return jsonify(folder_tree)
+
+@folder_api.route('/folder-contents', methods=['GET'])
+def get_folder_contents():
+    """
+    Returns a JSON tree of the contents of the folder specified by the
+    'folder' query parameter. Includes files if needed.
+    """
+    folder = request.args.get('folder')
+    if not folder:
+        return jsonify({"error": "Folder parameter is missing"}), 400
+
+    # Validate that the requested folder is within ALLOWED_ROOT
+    if not os.path.abspath(folder).startswith(os.path.abspath(ALLOWED_ROOT)):
+        return jsonify({"error": "Invalid folder"}), 403
+
+    # Build the tree for the selected folder. Here we include files.
+    contents_tree = build_folder_tree(folder, include_files=True)
+    return jsonify(contents_tree)
