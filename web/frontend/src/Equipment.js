@@ -34,7 +34,15 @@ const Equipment = () => {
         <div className="row">
           {/* Left Column: Equipment Images */}
           <div className="column column-left">
-            <div className="grid-container">
+            <div
+              className="grid-container"
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(3, 1fr)", // Three columns per row
+                gridTemplateRows: "repeat(2, auto)",   // Two rows
+                gap: "10px"
+              }}
+            >
               {equipmentItems.map(item => (
                 <div className="grid-item" key={item.id}>
                   <div

@@ -1,69 +1,41 @@
-// web/frontend/src/tabs/DataTreatment.js
-import React, { useState, useEffect, useRef } from 'react';
-import Plotly from 'plotly.js-dist';
+// DataTreatment.js
+import React, { useState } from 'react';
+import DataWindowVD2 from './DataWindowVD2'; // Adjust the path if necessary
 import './css/datatreatment.css';
 
 const DataTreatment = () => {
-  const [statusLabel, setStatusLabel] = useState("button is clicked");
-  const [visualizationVisible, setVisualizationVisible] = useState(false);
-  const plotRef = useRef(null);
+  // State to toggle between basic view and full VD2 treatment view.
+  const [showVD2Window, setShowVD2Window] = useState(false);
+  const [statusLabel, setStatusLabel] = useState("");
 
   const buttonClicked = (buttonId) => {
     if (buttonId === 'V0') {
-      setStatusLabel(`button ${buttonId} is clicked`);
-      setVisualizationVisible(false);
+      setStatusLabel(`Button ${buttonId} is clicked.`);
+      setShowVD2Window(false);
     } else if (buttonId === 'VD2') {
-      setStatusLabel('');
-      setVisualizationVisible(true);
+      setStatusLabel("Switching to full VD2 treatment view...");
+      setShowVD2Window(true);
     }
   };
 
-  // When visualization becomes visible, draw the 2D map.
-  useEffect(() => {
-    if (visualizationVisible && plotRef.current) {
-      const data = [{
-        z: [
-          [1, 20, 30],
-          [20, 1, 60],
-          [30, 60, 1]
-        ],
-        type: 'heatmap'
-      }];
-      Plotly.newPlot(plotRef.current, data);
-    }
-  }, [visualizationVisible]);
-
   return (
-    <div>
-      <h1>You can treat the data here</h1>
-      <div className="horizontal-container">
-        <div className="block-1">
-          <div className="column">
-            <button id="button-v0" onClick={() => buttonClicked('V0')}>V0</button>
-          </div>
-          <div className="column">
-            <button id="button-vd2" onClick={() => buttonClicked('VD2')}>VD2</button>
-          </div>
-        </div>
-        <div className="block-2" id="block-2">
-          <label id="status-label">{statusLabel}</label>
-          <div id="visualization-container" style={{ display: visualizationVisible ? 'block' : 'none' }}>
-            <div id="selectors">
-              <label htmlFor="kinetics">Kinetics:</label>
-              <select id="kinetics">
-                <option value="option1">Option 1</option>
-                <option value="option2">Option 2</option>
-              </select>
-              <label htmlFor="spectrum">Spectrum:</label>
-              <select id="spectrum">
-                <option value="option1">Option 1</option>
-                <option value="option2">Option 2</option>
-              </select>
-            </div>
-            <div id="map-2d" ref={plotRef}></div>
-          </div>
-        </div>
+    <div className="data-treatment-container">
+      <h1>Data Treatment</h1>
+      <div className="button-container">
+        <button id="button-v0" onClick={() => buttonClicked('V0')}>V0</button>
+        <button id="button-vd2" onClick={() => buttonClicked('VD2')}>VD2</button>
       </div>
+      <div className="status-label">
+        <label>{statusLabel}</label>
+      </div>
+      {showVD2Window ? (
+        <DataWindowVD2 />
+      ) : (
+        <div>
+          {/* Basic view or placeholder content */}
+          <p>Basic data treatment view. Click VD2 to load full VD2 treatment.</p>
+        </div>
+      )}
     </div>
   );
 };

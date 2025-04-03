@@ -115,7 +115,7 @@ class Netio_pdu(DS_General_Widget):
         for id, name in zip(ds.ids, ds.names):
             cb: QtWidgets.QCheckBox = getattr(self, f'cb{id}_{dev_name}')
             states.append(int(cb.isChecked()))
-            #cb.setText(f'{name}:id:{id}')
+            # cb.setText(f'{name}:id:{id}')
         ds.set_channels_states(states)
 
     def state_listener(self, event):
