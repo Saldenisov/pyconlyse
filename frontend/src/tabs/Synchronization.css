@@ -1,0 +1,58 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+  background-color: #f0f0f0;
+}
+
+/* Main container with two columns */
+.container {
+  display: flex;
+  gap: 40px; /* space between columns */
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Each column block */
+.column {
+  flex: 1;
+  background-color: #ddd;
+  padding: 20px;
+  border: 1px solid #999;
+}
+
+.column h2 {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+/* Row that contains label + input + unit */
+.control-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 4px;
+}
+
+.control-row label {
+  width: 170px;      /* space for the label */
+  font-weight: bold;
+  margin-right: 10px;
+}
+
+.control-row input {
+  width: 80px;       /* width of the input field */
+  margin-right: 5px; /* space between input and unit */
+  text-align: right;
+}
+
+.control-row span {
+  margin-right: 10px;
+}
+
+/* Highlight certain rows in green */
+.highlight {
+  background-color: #afffa7; /* light green */
+  border-radius: 4px;
+}
