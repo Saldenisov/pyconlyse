@@ -4,6 +4,7 @@ configobj
 colorcet
 # cython
 # fandango
+flask
 gpiozero
 pigpio
 guiqwt
