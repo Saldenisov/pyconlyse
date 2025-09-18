@@ -1,0 +1,115 @@
+# Warp Workflows for pyconlyse (PowerShell-friendly)
+# Save as .warp/workflows/pyconlyse.yaml
+
+workflows:
+  - name: Python: Create venv (.venv)
+    command: 'python -m venv .venv'
+    description: 'Create a virtual environment at .venv'
+    tags: ['python', 'setup']
+
+  - name: Python: Activate venv (.venv)
+    command: '.\.venv\Scripts\Activate.ps1'
+    description: 'Activate the PowerShell virtual environment'
+    tags: ['python', 'setup']
+
+  - name: Python: Deactivate venv
+    command: 'deactivate'
+    description: 'Deactivate the current virtual environment'
+    tags: ['python', 'setup']
+
+  - name: Deps: Upgrade pip/setuptools/wheel
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m pip install --upgrade pip setuptools wheel'
+    description: 'Upgrade pip, setuptools, wheel in the active venv'
+    tags: ['python', 'deps']
+
+  - name: Deps: Install from requirements
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m pip install -r {requirements_file}'
+    description: 'Install dependencies from a requirements file'
+    tags: ['python', 'deps']
+    arguments:
+      - name: requirements_file
+        default_value: 'requirements.txt'
+
+  - name: Deps: Install dev tools
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m pip install pytest ruff black mypy pre-commit'
+    description: 'Install common dev tooling into the venv'
+    tags: ['python', 'deps']
+
+  - name: Test: Run pytest
+    command: '. .\\.venv\\Scripts\\Activate.ps1; pytest -q'
+    description: 'Run the test suite with pytest'
+    tags: ['test']
+
+  - name: Test: Run pytest with coverage
+    command: '. .\\.venv\\Scripts\\Activate.ps1; pytest -q --maxfail=1 --disable-warnings --cov={package_name} --cov-report=term-missing'
+    description: 'Run pytest with coverage for a package'
+    tags: ['test']
+    arguments:
+      - name: package_name
+        default_value: 'pyconlyse'
+
+  - name: Lint: ruff check
+    command: '. .\\.venv\\Scripts\\Activate.ps1; ruff check .'
+    description: 'Run ruff linter'
+    tags: ['lint']
+
+  - name: Format: black
+    command: '. .\\.venv\\Scripts\\Activate.ps1; black .'
+    description: 'Format code with black'
+    tags: ['format']
+
+  - name: Types: mypy
+    command: '. .\\.venv\\Scripts\\Activate.ps1; mypy {target}'
+    description: 'Run mypy type checking'
+    tags: ['types']
+    arguments:
+      - name: target
+        default_value: '.'
+
+  - name: Git hooks: pre-commit install
+    command: '. .\\.venv\\Scripts\\Activate.ps1; pre-commit install'
+    description: 'Install pre-commit hooks'
+    tags: ['git', 'pre-commit']
+
+  - name: Git hooks: pre-commit run all
+    command: '. .\\.venv\\Scripts\\Activate.ps1; pre-commit run --all-files'
+    description: 'Run pre-commit hooks on all files'
+    tags: ['git', 'pre-commit']
+
+  - name: Deps: Freeze to requirements.txt
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m pip freeze | Set-Content -Encoding Ascii -Path {outfile}'
+    description: 'Write pip freeze into a requirements file'
+    tags: ['python', 'deps']
+    arguments:
+      - name: outfile
+        default_value: 'requirements.txt'
+
+  - name: Run: Module
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m {module} {args}'
+    description: 'Run a Python module with optional args'
+    tags: ['run']
+    arguments:
+      - name: module
+        default_value: 'pyconlyse'
+      - name: args
+        default_value: ''
+
+  - name: Run: Script file
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python {script} {args}'
+    description: 'Run a Python script file'
+    tags: ['run']
+    arguments:
+      - name: script
+        default_value: 'main.py'
+      - name: args
+        default_value: ''
+
+  - name: Build: Python package (PEP 517)
+    command: '. .\\.venv\\Scripts\\Activate.ps1; python -m pip install --upgrade build && python -m build'
+    description: 'Build sdist and wheel using python-build'
+    tags: ['build', 'release']
+
+  - name: Clean: Build artifacts
+    command: 'Get-ChildItem -Path . -Include build,dist,*.egg-info -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue'
+    description: 'Remove common Python build artifacts'
+    tags: ['clean']
