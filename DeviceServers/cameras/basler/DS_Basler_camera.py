@@ -170,16 +170,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.SensorReadoutMode.GetValue()
 
     def init_device(self):
-        # Add startup delay to prevent concurrent camera access conflicts
-        try:
-            from DeviceServers.startup_coordinator import wait_for_startup_delay
-
-            coordinator = wait_for_startup_delay("basler_camera")
-            self._startup_coordinator = coordinator  # Keep reference for cleanup
-        except Exception as e:
-            self.info(f"Startup coordinator not available: {e}", True)
-            self._startup_coordinator = None
-
         self.pixel_format = None
         self.camera: pylon.InstantCamera = None
         self.converter: pylon.ImageFormatConverter = None
@@ -187,7 +177,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.grabbing_thread = None
         super().init_device()
         self.register_variables_for_archive()
-        # Only start grabbing if camera is properly initialized
         if hasattr(self, "camera") and self.camera and self.camera.IsOpen():
             self.start_grabbing_local()
 
@@ -236,12 +225,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 self.stop_grabbing()
             self.camera.Close()
 
-            # Clean up startup coordinator on shutdown
-            if hasattr(self, "_startup_coordinator") and self._startup_coordinator:
-                try:
-                    self._startup_coordinator.cleanup_on_shutdown()
-                except Exception as e:
-                    self.info(f"Error cleaning up startup coordinator: {e}", True)
 
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
