@@ -15,7 +15,7 @@ from taurus.qt.qtgui.input import (
     TaurusWheelEdit,
 )
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
 
 class ANDOR_CCD(DS_General_Widget):

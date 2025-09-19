@@ -55,11 +55,14 @@ namespace DS_Basler_camera_Wrapper
                 // Set up the process to run the Python device server in a new visible terminal
                 ProcessStartInfo psi = new ProcessStartInfo();
                 psi.FileName = "cmd.exe";
-                psi.Arguments = "/k \"title DS_Basler_camera [" + instanceName + "] && " +
+psi.Arguments = "/k \"title DS_Basler_camera [" + instanceName + "] && " +
                               "cd /d \"" + pyconlyse + "\\DeviceServers\\cameras\\basler\" && " +
-                              "\"" + anaconda + "\\Scripts\\activate.bat\" " + pyconlyseEnv + " && " +
+                              "\\"" + anaconda + "\\\\Scripts\\\\activate.bat\\" " + pyconlyseEnv + " && " +
+                              "set DISABLE_ARCHIVE=1 && " +
+                              "set DEBUG_INIT_TIMING=1 && set DEBUG_TIMING_THRESHOLD_MS=1 && " +
+                              "set DEBUG_FUNCTION_TIMING=1 && set DEBUG_FUNCTION_MIN_MS=1 && " +
                               "echo Starting DS_Basler_camera device server... && " +
-                              "python DS_Basler_camera.py " + instanceName + "\"";
+                              "python DS_Basler_camera.py " + instanceName + "\\"";
                 psi.UseShellExecute = true;
                 psi.CreateNoWindow = false;
                 psi.WindowStyle = ProcessWindowStyle.Normal;

@@ -33,7 +33,7 @@ REM Step 1: Start Tango Database
 call :ColorText 0e "Step 1: Starting Tango Database..."
 echo.
 echo [%date% %time%] Starting Tango Database >> "%LOG_FILE%"
-start /min "Tango-DB" cmd /c "%TANGO_ROOT%\bin\start-db.bat"
+start "Tango-DB" cmd /c "%TANGO_ROOT%\bin\start-db.bat"
 
 REM Wait for DB to initialize
 timeout /t 5 /nobreak >nul
@@ -42,7 +42,7 @@ REM Step 2: Start Main Control Interface
 call :ColorText 0e "Step 2: Starting Main Control Interface..."
 echo.
 echo [%date% %time%] Starting Main Control >> "%LOG_FILE%"
-start /min "PyConlyse-Main" cmd /c "%PYCONLYSE%\bin\start_main_ctrl.cmd"
+start "PyConlyse-Main" cmd /c "%PYCONLYSE%\bin\start_main_ctrl.cmd"
 
 REM Wait for main control to initialize
 timeout /t 8 /nobreak >nul
@@ -60,13 +60,13 @@ REM Step 4: Start Astor (Device Server Manager)
 call :ColorText 0e "Step 4: Starting Astor (Device Server Manager)..."
 echo.
 echo [%date% %time%] Starting Astor >> "%LOG_FILE%"
-start /min "Tango-Astor" cmd /c "%TANGO_ROOT%\bin\start-astor.bat"
+start "Tango-Astor" cmd /c "%TANGO_ROOT%\bin\start-astor.bat"
 
 REM Step 5: Start Jive (optional GUI)
 call :ColorText 0e "Step 5: Starting Jive GUI..."
 echo.
 echo [%date% %time%] Starting Jive >> "%LOG_FILE%"
-start /min "Tango-Jive" cmd /c "%TANGO_ROOT%\bin\start-jive.bat"
+start "Tango-Jive" cmd /c "%TANGO_ROOT%\bin\start-jive.bat"
 
 REM Final message
 timeout /t 3 /nobreak >nul

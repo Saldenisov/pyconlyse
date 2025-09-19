@@ -10,7 +10,7 @@ from PyQt5 import QtWidgets
 from taurus import Device
 from taurus.external.qt import Qt
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
 uint8 = np.dtype("uint8")
 int16 = np.dtype("int16")

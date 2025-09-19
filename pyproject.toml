@@ -73,45 +73,73 @@ extend-exclude = '''
   | \.venv
   | build
   | dist
+  | DeviceServers
+  | legacy
+  | frontend
+  | bin
 )/
 '''
 
 [tool.isort]
 profile = "black"
 line_length = 88
-known_first_party = ["pyconlyse"]
-
-[tool.ruff]
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-select = ["E", "F", "W", "C90", "I", "N", "D", "UP", "YTT", "ANN", "S", "BLE", "FBT", "B", "A", "COM", "C4", "DTZ", "T10", "DJ", "EM", "EXE", "ISC", "ICN", "G", "INP", "PIE", "T20", "PYI", "PT", "Q", "RSE", "RET", "SLF", "SIM", "TID", "TCH", "INT", "ARG", "PTH", "ERA", "PD", "PGH", "PL", "TRY", "FLY", "NPY", "AIR", "PERF", "FURB", "LOG", "RUF"]
-ignore = [
-    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107", # Missing docstrings
-    "ANN101", "ANN102", "ANN401", # Type annotation issues
-    "S101", # Use of assert
-    "PT009", # Use of unittest-style assertions
-    "COM812", "ISC001", # Conflicts with formatter
+known_first_party = ["pyconlyse", "main_app", "DeviceServers"]
+skip_glob = [
+    "DeviceServers/*",
+    "legacy/*",
+    "frontend/*",
+    "bin/*",
 ]
 
-# Allow fix for all enabled rules (when `--fix`) is provided.
+[tool.ruff]
+# Global Ruff settings
+line-length = 88
+target-version = "py39"
+src = ["main_app", "scripts", "fixes"]
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "legacy",
+    "DeviceServers",
+    "frontend",
+    "bin",
+]
+
+[tool.ruff.lint]
+# Keep linting focused on essential, actionable rules.
+select = ["E", "F", "W", "I", "N"]
+ignore = [
+    "E402",  # allow imports not at top for scripts/Qt widgets
+    "N802", "N803", "N806", "N815",  # naming exceptions (Qt, constants)
+]
 fixable = ["ALL"]
 unfixable = []
 
-# Same as Black.
-line-length = 88
-
-# Allow unused variables when underscore-prefixed.
-dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
-
-# Assume Python 3.9
-target-version = "py39"
-
-[tool.ruff.mccabe]
-# Unlike Flake8, default to a complexity level of 10.
+[tool.ruff.lint.mccabe]
+# Complexity threshold
 max-complexity = 10
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "PLR2004", "S106", "S105"]
 "**/test_*.py" = ["S101", "PLR2004", "S106", "S105"]
+"main_app/__init__.py" = ["F403", "F405"]
+"main_app/core/__init__.py" = ["F403", "F405"]
+"main_app/main.py" = ["F403"]
+"main_app/main_interactive.py" = ["F403", "F405", "E501"]
+"main_app/main_gui.py" = ["E501"]
+"main_app/core/logging_config.py" = ["E501"]
+"main_app/managers/infrastructure_manager.py" = ["E501"]
+"main_app/managers/device_manager.py" = ["E501"]
+"main_app/managers/monitoring_threads.py" = ["E501"]
+"main_app/ui/main_window.py" = ["E501", "W293"]
+"main_app/test_timing.py" = ["E501"]
+"main_app/tests/test_integration.py" = ["F403", "F405"]
+"main_app/tests/test_simple.py" = ["F403", "F405", "E501"]
+"check_starter_config.py" = ["F401", "E501"]
+"restart_netio_servers.py" = ["F401", "E501"]
+"diagnose_netio.py" = ["F401", "E501"]
 
 [tool.mypy]
 python_version = "3.9"

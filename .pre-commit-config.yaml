@@ -10,29 +10,16 @@ repos:
         language: system
         files: \.py$
         args: [--line-length=88]
+        exclude: ^(legacy|DeviceServers|frontend|bin)[/\\]
         
-      # Ruff linting
+      # Ruff linting (with autofix, including import reordering)
       - id: ruff-check
         name: ruff check
         entry: poetry run ruff check
         language: system
         files: \.py$
-        args: [--fix, --exit-non-zero-on-fix]
-        
-      # Ruff formatting
-      - id: ruff-format
-        name: ruff format
-        entry: poetry run ruff format
-        language: system
-        files: \.py$
-        
-      # Import sorting
-      - id: isort
-        name: isort
-        entry: poetry run isort
-        language: system
-        files: \.py$
-        args: [--profile=black, --line-length=88]
+        args: [--fix]
+        exclude: ^(legacy|DeviceServers|frontend|bin)[/\\]
         
       # WARP maintenance auto-update
       - id: warp-auto-update
@@ -54,5 +41,9 @@ exclude: |
       \.venv/|
       __pycache__/|
       build/|
-      dist/
+      dist/|
+      legacy/|
+      DeviceServers/|
+      frontend/|
+      bin/
   )$

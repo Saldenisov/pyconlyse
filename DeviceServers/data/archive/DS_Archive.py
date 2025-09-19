@@ -9,9 +9,13 @@ from typing import Tuple, Union
 
 import numpy
 
-app_folder = Path(__file__).resolve().parents[2]
-sys.path.append(str(app_folder))
+repo_root = Path(__file__).resolve().parents[3]
+if str(repo_root) not in sys.path:
+    sys.path.append(str(repo_root))
+import base64
+import json
 import random
+import shutil
 import string
 import zlib
 from dataclasses import dataclass
@@ -47,7 +51,7 @@ class Order:
     started: bool = False
     order_done: bool = False
     ready_to_delete: bool = False
-    order_res: str = b""
+    order_res: str = ""
 
 
 @dataclass
@@ -128,6 +132,30 @@ class H5_container:
         print(f"Structure is creating for {self.file_path}")
         self._structure = structure
 
+    def update_structure(self):
+        # Refreshes the cached structure map
+        self.create_structure()
+
+    @property
+    def devices_list(self) -> List[str]:
+        # Returns a list of device paths (without dates and dataset names)
+        devices: set = set()
+
+        def collect_devices(node: dict, prefix: str = ""):
+            for key, val in node.items():
+                if val is None:
+                    if prefix:
+                        devices.add(prefix.rstrip("/"))
+                else:
+                    new_prefix = f"{prefix}/{key}" if prefix else key
+                    collect_devices(val, new_prefix)
+
+        # Top-level keys are dates; skip them and traverse children
+        for date_key, sub in self.structure.items():
+            if isinstance(sub, dict):
+                collect_devices(sub, "")
+        return sorted(devices)
+
     def closing(self):
         while True:
             sleep(self.close_time)
@@ -163,6 +191,88 @@ class H5_container:
 DEV = True
 
 
+# -------- Safe serialization helpers --------
+# We support a new base64-encoded payload and also the legacy 'str(bytes)' payload for backward compatibility.
+B64_PREFIX = "b64:"
+
+
+def _archive_to_payload_dict(data: ArchiveData) -> dict:
+    if isinstance(data.data, Scalar):
+        payload_data = {
+            "kind": "Scalar",
+            "value": data.data.value,
+            "dtype": data.data.dtype,
+        }
+    elif isinstance(data.data, Array):
+        payload_data = {
+            "kind": "Array",
+            "value": base64.b64encode(data.data.value).decode("ascii"),
+            "shape": list(data.data.shape),
+            "dtype": data.data.dtype,
+        }
+    else:
+        raise ValueError("Unsupported data type in ArchiveData")
+    return {
+        "version": 1,
+        "kind": "ArchiveData",
+        "tango_device": data.tango_device,
+        "dataset_name": data.dataset_name,
+        "data_timestamp": float(data.data_timestamp),
+        "data": payload_data,
+    }
+
+
+def _payload_dict_to_archive(d: dict) -> ArchiveData:
+    if not isinstance(d, dict) or d.get("kind") != "ArchiveData":
+        raise ValueError("Invalid payload: not an ArchiveData dict")
+    pdata = d.get("data", {})
+    if pdata.get("kind") == "Scalar":
+        data_field = Scalar(value=float(pdata["value"]), dtype=str(pdata["dtype"]))
+    elif pdata.get("kind") == "Array":
+        raw = (
+            base64.b64decode(pdata["value"])
+            if isinstance(pdata.get("value"), str)
+            else pdata.get("value", b"")
+        )
+        shape = tuple(pdata.get("shape", []))
+        dtype = str(pdata.get("dtype", "float"))
+        data_field = Array(value=raw, shape=shape, dtype=dtype)
+    else:
+        raise ValueError("Invalid payload: unknown data.kind")
+    return ArchiveData(
+        tango_device=str(d["tango_device"]),
+        data_timestamp=float(d["data_timestamp"]),
+        dataset_name=str(d["dataset_name"]),
+        data=data_field,
+    )
+
+
+def encode_archive_payload(data: ArchiveData) -> str:
+    packed = msgpack.packb(_archive_to_payload_dict(data), use_bin_type=True)
+    compressed = zlib.compress(packed)
+    return B64_PREFIX + base64.b64encode(compressed).decode("ascii")
+
+
+def decode_archive_payload(data_string: str) -> ArchiveData:
+    # New format: b64:<base64(zlib(msgpack(dict)))>
+    if isinstance(data_string, bytes):
+        data_string = data_string.decode("utf-8")
+    if str(data_string).startswith(B64_PREFIX):
+        b64 = data_string[len(B64_PREFIX) :]
+        compressed = base64.b64decode(b64)
+        unpacked = msgpack.unpackb(zlib.decompress(compressed), raw=False)
+        return _payload_dict_to_archive(unpacked)
+    # Legacy format: str(bytes(zlib(msgpack(str(dataclass))))) -> eval
+    try:
+        data_bytes = eval(data_string)
+        data = zlib.decompress(data_bytes)
+        unpacked = msgpack.unpackb(data, strict_map_key=False)
+        # unpacked here is a string representation of dataclass, legacy path
+        return eval(unpacked)
+    except Exception as e:
+        raise ValueError(f"Failed to decode payload: {e}")
+
+
 class DS_Archive(DS_General):
     RULES = {
         "archive_it": [DevState.ON],
@@ -192,8 +302,9 @@ class DS_Archive(DS_General):
             data_timestamp=timestamp,
             data=Scalar(data, "float"),
         )
-        data_to_archive = self.compress_data(data_to_archive)
-        return self.archive_it(data_to_archive)
+        # Use safe payload encoding
+        payload = encode_archive_payload(data_to_archive)
+        return self.archive_it(payload)
 
     @command(
         dtype_in=str,
@@ -213,10 +324,8 @@ class DS_Archive(DS_General):
                     error = f"Cannot open h5 file {actual_h5_container.file_path}."
                     self.error(error)
                     return error
-                data_bytes = eval(data_string)
-                data = zlib.decompress(data_bytes)
-                data = msgpack.unpackb(data, strict_map_key=False)
-                data: ArchiveData = eval(data)
+                # Decode payload (supports both legacy and new safe format)
+                data: ArchiveData = decode_archive_payload(data_string)
                 data_to_archive = None
                 self.comment = f"Archiving for {data.tango_device}."
                 if isinstance(data.data, Scalar):
@@ -342,7 +451,7 @@ class DS_Archive(DS_General):
         if name in self.orders:
             order: Order = self.orders[name]
             order.ready_to_delete = True
-        return order.order_res
+        return str(order.order_res)
 
     @command(
         dtype_in=[str],
@@ -414,7 +523,7 @@ class DS_Archive(DS_General):
                     timestamps_containers, range(len(timestamps_containers))
                 ):
                     length += timestamp_dataset.shape[0]
-                    if len(res) >= from_idx:
+                    if length >= from_idx:
                         indexes_of_containers[0] = index
                         break
 
@@ -558,8 +667,7 @@ class DS_Archive(DS_General):
                 len(data_timestamp) for data_timestamp in data_timestamps_containers
             ]
             res = [min(timestamp_min), max(timestamp_max), np.sum(length)]
-        res = str(res).encode("utf-8")
-        return res
+        return str(res)
 
     def get_controller_status_local(self) -> Union[int, str]:
         return 0
@@ -585,6 +693,8 @@ class DS_Archive(DS_General):
         self.folder_location = Path(self.folder_location)
         if not self.folder_location.exists():
             self.folder_location.mkdir(parents=True, exist_ok=True)
+        # Ensure projects directory exists
+        self._projects_dir().mkdir(parents=True, exist_ok=True)
         self.latest_h5()
         self.register_variables_for_archive()
         self.orders_thread = Thread(target=self.execute_orders)
@@ -673,19 +783,92 @@ class DS_Archive(DS_General):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
+    # Utilities for project management
+    def _projects_dir(self) -> Path:
+        return self.folder_location / "projects"
+
+    @staticmethod
+    def _try_json(val: str):
+        try:
+            return json.loads(val)
+        except Exception:
+            return val
+
     # Project part
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def create_project(self, name: str):
-        pass
+        try:
+            payload = self._try_json(name)
+            if isinstance(payload, dict):
+                project_name = str(payload.get("name", "")).strip()
+                meta = payload.get("meta", {})
+            else:
+                project_name = str(payload).strip()
+                meta = {}
+            if not project_name:
+                return 'ERROR: provide project name or {"name":...}'
+            proj_dir = self._projects_dir() / project_name
+            if proj_dir.exists():
+                return f"ERROR: project '{project_name}' already exists"
+            proj_dir.mkdir(parents=True, exist_ok=True)
+            data = {
+                "name": project_name,
+                "created_at": datetime.now().isoformat(),
+                "meta": meta,
+                "subprojects": {},
+                "measurements": {},
+            }
+            with open(proj_dir / "project.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: created project '{project_name}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def edit_project(self, name: str):
-        pass
+        try:
+            payload = self._try_json(name)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'name':..., 'set':{...}}"
+            project_name = str(payload.get("name", "")).strip()
+            to_set = payload.get("set", {})
+            if not project_name:
+                return "ERROR: 'name' missing"
+            proj_dir = self._projects_dir() / project_name
+            pfile = proj_dir / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project_name}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            # Merge 'meta'
+            if "meta" in to_set and isinstance(to_set["meta"], dict):
+                data.setdefault("meta", {}).update(to_set["meta"])
+            # Other top-level updates
+            for k, v in to_set.items():
+                if k != "meta":
+                    data[k] = v
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: edited project '{project_name}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def delete_project(self, name: str):
-        pass
+        try:
+            project_name = str(
+                self._try_json(name) if isinstance(self._try_json(name), str) else name
+            ).strip()
+            if not project_name:
+                return "ERROR: provide project name"
+            proj_dir = self._projects_dir() / project_name
+            if not proj_dir.exists():
+                return f"ERROR: project '{project_name}' not found"
+            shutil.rmtree(proj_dir, ignore_errors=True)
+            return f"OK: deleted project '{project_name}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @attribute(
         label="List of projects files",
@@ -694,27 +877,166 @@ class DS_Archive(DS_General):
         access=AttrWriteType.READ,
     )
     def list_of_projects(self):
-        pass
+        try:
+            root = self._projects_dir()
+            if not root.exists():
+                return "[]"
+            res = []
+            for p in sorted([d for d in root.iterdir() if d.is_dir()]):
+                pfile = p / "project.json"
+                if pfile.exists():
+                    with open(pfile, encoding="utf-8") as f:
+                        data = json.load(f)
+                    res.append(
+                        {
+                            "name": data.get("name", p.name),
+                            "created_at": data.get("created_at", ""),
+                        }
+                    )
+                else:
+                    res.append({"name": p.name})
+            return json.dumps(res)
+        except Exception as e:
+            return json.dumps({"error": str(e)})
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def add_sub_project(self, value: str):
-        pass
+        try:
+            payload = self._try_json(value)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'project':..., 'name':...}"
+            project = str(payload.get("project", "")).strip()
+            name = str(payload.get("name", "")).strip()
+            if not project or not name:
+                return "ERROR: 'project' and 'name' required"
+            pfile = self._projects_dir() / project / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            data.setdefault("subprojects", {})
+            if name in data["subprojects"]:
+                return f"ERROR: subproject '{name}' already exists"
+            data["subprojects"][name] = {"created_at": datetime.now().isoformat()}
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: added subproject '{name}' to '{project}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def create_measurement(self, value: str):
-        pass
+        try:
+            payload = self._try_json(value)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'project':..., 'name':..., 'info':{...}}"
+            project = str(payload.get("project", "")).strip()
+            name = str(payload.get("name", "")).strip()
+            info = payload.get("info", {})
+            if not project or not name:
+                return "ERROR: 'project' and 'name' required"
+            pfile = self._projects_dir() / project / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            data.setdefault("measurements", {})
+            if name in data["measurements"]:
+                return f"ERROR: measurement '{name}' already exists"
+            data["measurements"][name] = {
+                "created_at": datetime.now().isoformat(),
+                "info": info,
+                "data": [],
+            }
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: created measurement '{name}' in '{project}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def edit_measurement_info(self, value: str):
-        pass
+        try:
+            payload = self._try_json(value)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'project':..., 'name':..., 'set':{...}}"
+            project = str(payload.get("project", "")).strip()
+            name = str(payload.get("name", "")).strip()
+            to_set = payload.get("set", {})
+            if not project or not name:
+                return "ERROR: 'project' and 'name' required"
+            pfile = self._projects_dir() / project / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            if name not in data.get("measurements", {}):
+                return f"ERROR: measurement '{name}' not found"
+            data["measurements"][name].setdefault("info", {}).update(to_set)
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: edited measurement '{name}' in '{project}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def add_data_measurement(self, value: str):
-        pass
+        try:
+            payload = self._try_json(value)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'project':..., 'name':..., 'data':{...}}"
+            project = str(payload.get("project", "")).strip()
+            name = str(payload.get("name", "")).strip()
+            data_item = payload.get("data", {})
+            if not project or not name:
+                return "ERROR: 'project' and 'name' required"
+            pfile = self._projects_dir() / project / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            if name not in data.get("measurements", {}):
+                return f"ERROR: measurement '{name}' not found"
+            data["measurements"][name].setdefault("data", []).append(data_item)
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return f"OK: added data to measurement '{name}' in '{project}'"
+        except Exception as e:
+            return f"ERROR: {e}"
 
     @command(dtype_in=str, dtype_out=str, display_level=DispLevel.OPERATOR)
     def edit_measurement_data(self, value: str):
-        pass
+        try:
+            payload = self._try_json(value)
+            if not isinstance(payload, dict):
+                return "ERROR: provide JSON {'project':..., 'name':..., 'index': i, 'set':{...}}"
+            project = str(payload.get("project", "")).strip()
+            name = str(payload.get("name", "")).strip()
+            index = int(payload.get("index", -1))
+            to_set = payload.get("set", {})
+            if not project or not name or index < 0:
+                return "ERROR: 'project', 'name', and non-negative 'index' required"
+            pfile = self._projects_dir() / project / "project.json"
+            if not pfile.exists():
+                return f"ERROR: project '{project}' not found"
+            with open(pfile, encoding="utf-8") as f:
+                data = json.load(f)
+            if name not in data.get("measurements", {}):
+                return f"ERROR: measurement '{name}' not found"
+            items = data["measurements"][name].setdefault("data", [])
+            if index >= len(items):
+                return f"ERROR: index {index} out of range"
+            if isinstance(items[index], dict) and isinstance(to_set, dict):
+                items[index].update(to_set)
+            else:
+                items[index] = to_set
+            with open(pfile, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+            return (
+                f"OK: edited data item {index} in measurement '{name}' of '{project}'"
+            )
+        except Exception as e:
+            return f"ERROR: {e}"
 
 
 if __name__ == "__main__":

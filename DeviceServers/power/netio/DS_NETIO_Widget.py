@@ -1,3 +1,7 @@
+# Import the fixes for safe device access
+import sys
+from pathlib import Path
+
 import tango
 from _functools import partial
 from PyQt5 import QtWidgets
@@ -5,22 +9,46 @@ from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+
+fixes_path = Path(__file__).parents[3] / "fixes"
+if str(fixes_path) not in sys.path:
+    sys.path.append(str(fixes_path))
+from taurus_warnings_fix import (
+    check_device_connection,
+    get_device_ids_safely,
+    get_device_names_safely,
+    get_device_states_safely,
+    suppress_taurus_deprecation_warnings,
+)
 
 
 class Netio_pdu(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        # Suppress Taurus deprecation warnings
+        suppress_taurus_deprecation_warnings()
         super().__init__(device_name, parent, vis_type)
 
-        ds: Device = getattr(self, f"ds_{self.dev_name}")
+    def before_ds(self):
+        """Initialize device-dependent data before UI is built."""
+        dev_name = self.dev_name
+        ds: Device = getattr(self, f"ds_{dev_name}")
 
-        self.ids = list(ds.ids)
-        self.names = list(ds.names)
-        self.states = list(ds.states)
+        # Check device connection first
+        if not check_device_connection(ds):
+            print(f"Warning: Device {dev_name} is not properly connected")
+            # Initialize with empty lists as fallback
+            self.ids = []
+            self.names = []
+            self.states = []
+        else:
+            # Use safe accessors
+            self.ids = get_device_ids_safely(ds)
+            self.names = get_device_names_safely(ds)
+            self.states = get_device_states_safely(ds)
 
-        ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.state_listener)
-        ds.subscribe_event("names", tango.EventType.CHANGE_EVENT, self.state_listener)
-        ds.subscribe_event("ids", tango.EventType.CHANGE_EVENT, self.state_listener)
+        # Controls are not ready until set_states creates them
+        self._controls_ready = False
 
     def register_DS_full(self, group_number=1):
         super(Netio_pdu, self).register_DS_full()
@@ -36,6 +64,15 @@ class Netio_pdu(DS_General_Widget):
 
         # state positions
         group = self.set_states()
+
+        # Now that UI elements exist, subscribe to events (tolerate failures)
+        for attr in ("states", "names", "ids"):
+            try:
+                getattr(self, f"ds_{dev_name}").subscribe_event(
+                    attr, tango.EventType.CHANGE_EVENT, self.state_listener
+                )
+            except Exception as e:
+                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
 
         # Buttons and commands
         setattr(self, f"button_on_{dev_name}", TaurusCommandButton(command="turn_on"))
@@ -69,6 +106,15 @@ class Netio_pdu(DS_General_Widget):
         # state positions
         group = self.set_states()
 
+        # Now that UI elements exist, subscribe to events (tolerate failures)
+        for attr in ("states", "names", "ids"):
+            try:
+                getattr(self, f"ds_{dev_name}").subscribe_event(
+                    attr, tango.EventType.CHANGE_EVENT, self.state_listener
+                )
+            except Exception as e:
+                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
+
         lo_status.addWidget(group)
         lo_device.addLayout(lo_status)
         lo_group.addLayout(lo_device)
@@ -89,51 +135,135 @@ class Netio_pdu(DS_General_Widget):
         setattr(self, f"checkbox_group_{dev_name}", Qt.QGroupBox("Channels states"))
         group: Qt.QGroupBox = getattr(self, f"checkbox_group_{dev_name}")
 
+        controls_ready = False
         try:
-            number_outputs = int(ds.get_property("number_outputs")["number_outputs"][0])
-            names = list(ds.names)
-            ids = list(ds.ids)
-            states = list(ds.states)
-            widgets = [
-                QtWidgets.QCheckBox(f"{dev_name}:id:{id}")
-                for _, t, id in zip(range(number_outputs), names, ids)
-            ]
-            for cb, state, name, id in zip(widgets, states, names, ids):
-                setattr(self, f"cb{id}_{dev_name}", cb)
-                cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{dev_name}")
-                cb.setChecked(bool(state))
-                cb.setText(f"{name}:id:{id}")
-                lo_state.addWidget(cb)
-                cb.clicked.connect(partial(self.cb_clicked, dev_name))
+            # Check if device is connected and has data
+            if not check_device_connection(ds):
+                # Add a label indicating device is not connected
+                error_label = QtWidgets.QLabel(f"Device {dev_name} not connected")
+                error_label.setStyleSheet("color: red; font-weight: bold;")
+                lo_state.addWidget(error_label)
+            elif not self.ids or not self.names or not self.states:
+                # Device connected but no data yet
+                loading_label = QtWidgets.QLabel(
+                    f"Loading device data for {dev_name}..."
+                )
+                loading_label.setStyleSheet("color: orange; font-weight: bold;")
+                lo_state.addWidget(loading_label)
+            else:
+                # Normal operation - create checkboxes
+                try:
+                    # Try to get number_outputs property, fall back to data length
+                    number_outputs = len(self.ids)
+                    try:
+                        prop_outputs = int(
+                            ds.get_property("number_outputs")["number_outputs"][0]
+                        )
+                        number_outputs = min(number_outputs, prop_outputs)
+                    except:
+                        pass  # Use data length
+
+                    # Use safe data from initialization
+                    names = self.names[:number_outputs]
+                    ids = self.ids[:number_outputs]
+                    states = self.states[:number_outputs]
+
+                    widgets = [
+                        QtWidgets.QCheckBox(f"{dev_name}:id:{id}")
+                        for _, id in zip(range(number_outputs), ids)
+                    ]
+
+                    for cb, state, name, id in zip(widgets, states, names, ids):
+                        setattr(self, f"cb{id}_{dev_name}", cb)
+                        cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{dev_name}")
+                        cb.setChecked(bool(state))
+                        cb.setText(f"{name}:id:{id}")
+                        lo_state.addWidget(cb)
+                        cb.clicked.connect(partial(self.cb_clicked, dev_name))
+                    controls_ready = True
+                except Exception as inner_e:
+                    error_label = QtWidgets.QLabel(
+                        f"Error creating controls: {inner_e}"
+                    )
+                    error_label.setStyleSheet("color: red;")
+                    lo_state.addWidget(error_label)
+
         except Exception as e:
-            print(e)
+            print(f"Error in set_states for {dev_name}: {e}")
+            error_label = QtWidgets.QLabel(f"Error: {e!s}")
+            error_label.setStyleSheet("color: red;")
+            lo_state.addWidget(error_label)
+        finally:
+            # Mark controls readiness for listeners
+            self._controls_ready = bool(controls_ready)
 
         group.setLayout(lo_state)
         return group
 
     def cb_clicked(self, dev_name: str):
-        ds: Device = getattr(self, f"ds_{dev_name}")
-        states = []
-        for id, name in zip(ds.ids, ds.names):
-            cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{dev_name}")
-            states.append(int(cb.isChecked()))
-            # cb.setText(f'{name}:id:{id}')
-        ds.set_channels_states(states)
+        try:
+            ds: Device = getattr(self, f"ds_{dev_name}")
+
+            # Use safe accessors and local data
+            ids = get_device_ids_safely(ds) or self.ids
+            names = get_device_names_safely(ds) or self.names
+
+            states = []
+            for id, name in zip(ids, names):
+                try:
+                    cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{dev_name}")
+                    states.append(int(cb.isChecked()))
+                except AttributeError:
+                    # Checkbox doesn't exist, use default state
+                    states.append(0)
+
+            # Only send command if we have a valid device connection
+            if check_device_connection(ds):
+                ds.set_channels_states(states)
+            else:
+                print(f"Warning: Cannot send command to disconnected device {dev_name}")
+
+        except Exception as e:
+            print(f"Error in cb_clicked for {dev_name}: {e}")
 
     def state_listener(self, event):
-        ds: Device = getattr(self, f"ds_{self.dev_name}")
-        names_new, states_new = list(ds.names), list(ds.states)
-        for new_name, new_state, id in zip(names_new, states_new, self.ids):
-            cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{self.dev_name}")
+        try:
+            # Skip updates until controls have been created
+            if not getattr(self, "_controls_ready", False):
+                return
 
-            if self.names[id - 1] != new_name:
-                cb.setText(f"{new_name}:id:{id}")
+            ds: Device = getattr(self, f"ds_{self.dev_name}")
 
-            if self.states[id - 1] != new_state:
-                cb.setChecked(bool(new_state))
+            # Use safe accessors to get new data
+            names_new = get_device_names_safely(ds)
+            states_new = get_device_states_safely(ds)
 
-        self.names = names_new
-        self.states = states_new
+            # Only proceed if we have valid data
+            if not names_new or not states_new or len(names_new) != len(states_new):
+                return
+
+            # Update widgets if they exist
+            for new_name, new_state, id in zip(names_new, states_new, self.ids):
+                try:
+                    cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{self.dev_name}")
+
+                    # Check bounds before accessing arrays
+                    idx = id - 1
+                    if 0 <= idx < len(self.names) and self.names[idx] != new_name:
+                        cb.setText(f"{new_name}:id:{id}")
+
+                    if 0 <= idx < len(self.states) and self.states[idx] != new_state:
+                        cb.setChecked(bool(new_state))
+                except (AttributeError, IndexError):
+                    # Widget might not exist yet or index out of bounds
+                    continue
+
+            # Update stored data
+            self.names = names_new
+            self.states = states_new
+        except Exception:
+            # Avoid spamming prints on transient errors
+            pass
 
     def set_the_control_value(self, value):
         pass

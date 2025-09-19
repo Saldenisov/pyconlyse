@@ -201,7 +201,7 @@ try {
     $startedProcesses = @()
     
     # Step 1: Start Tango Database
-    $dbProcess = Start-TangoService -Name "Tango Database" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-db.bat`"" -Minimized -WaitSeconds $WaitTime
+    $dbProcess = Start-TangoService -Name "Tango Database" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-db.bat`"" -WaitSeconds $WaitTime
     $startedProcesses += $dbProcess
     
     # Test database connectivity
@@ -210,7 +210,7 @@ try {
     }
     
     # Step 2: Start Main Control
-    $mainCtrlProcess = Start-TangoService -Name "Main Control GUI" -Command "cmd" -Arguments "/c `"$pyconlyse\bin\start_main_ctrl.cmd`"" -Minimized -WaitSeconds $WaitTime
+    $mainCtrlProcess = Start-TangoService -Name "Main Control GUI" -Command "cmd" -Arguments "/c `"$pyconlyse\bin\start_main_ctrl.cmd`"" -WaitSeconds $WaitTime
     $startedProcesses += $mainCtrlProcess
     
     # Step 3: Start Tango Starter (critical for Astor DeviceServer management)
@@ -218,12 +218,12 @@ try {
     $startedProcesses += $starterProcess
     
     # Step 4: Start Astor (DeviceServer Manager)
-    $astorProcess = Start-TangoService -Name "Astor DeviceServer Manager" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-astor.bat`"" -Minimized -WaitSeconds 2
+    $astorProcess = Start-TangoService -Name "Astor DeviceServer Manager" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-astor.bat`"" -WaitSeconds 2
     $startedProcesses += $astorProcess
     
     # Step 5: Start Jive (optional)
     if (-not $SkipJive) {
-        $jiveProcess = Start-TangoService -Name "Jive GUI" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-jive.bat`"" -Minimized -WaitSeconds 1
+        $jiveProcess = Start-TangoService -Name "Jive GUI" -Command "cmd" -Arguments "/c `"$tangoRoot\bin\start-jive.bat`"" -WaitSeconds 1
         $startedProcesses += $jiveProcess
     }
     

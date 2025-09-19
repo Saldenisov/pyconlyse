@@ -1,7 +1,18 @@
+from collections import OrderedDict
+
 from tango import AttrWriteType, DevFloat, DispLevel
 from tango.server import attribute, device_property
 
-from DeviceServers.General.DS_general import DS_General
+try:
+    from DeviceServers.base.general import DS_General
+except ModuleNotFoundError:
+    # Fallback for when not imported from root
+    import sys
+    from pathlib import Path
+
+    app_folder = Path(__file__).resolve().parents[2]  # Go to pyconlyse root
+    sys.path.append(str(app_folder))
+    from DeviceServers.base.general import DS_General
 
 
 class DS_ControlPosition(DS_General):
@@ -14,10 +25,20 @@ class DS_ControlPosition(DS_General):
     def init_device(self):
         self.control_position = [0, 0]
         super().init_device()
-        self.ds_dict = eval(self.ds_dict)
-        self.controller_rules = eval(self.controller_rules)
-        self.groups = eval(self.groups)
-        self.pid_groups = eval(self.pid_groups)
+
+        # Create safe globals for eval with necessary imports
+        eval_globals = {
+            "__builtins__": {},
+            "OrderedDict": OrderedDict,
+            "dict": dict,
+            "list": list,
+            "tuple": tuple,
+        }
+
+        self.ds_dict = eval(self.ds_dict, eval_globals)
+        self.controller_rules = eval(self.controller_rules, eval_globals)
+        self.groups = eval(self.groups, eval_globals)
+        self.pid_groups = eval(self.pid_groups, eval_globals)
         self.devices = {}
 
     @attribute(
@@ -53,7 +74,7 @@ class DS_ControlPosition(DS_General):
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
     )
-    def get_rules(self):
+    def get_controller_rules(self):
         return str(self.controller_rules)
 
     @attribute(
@@ -64,7 +85,7 @@ class DS_ControlPosition(DS_General):
         max_dim_x=2,
     )
     def control_position(self):
-        self.control_position
+        return self.control_position
 
     def write_control_position(self, value):
         self.control_position = value

@@ -4,7 +4,7 @@ from typing import List, Union
 from tango import DevState, DispLevel
 from tango.server import AttrWriteType, attribute, command, device_property
 
-from DeviceServers.General.DS_general import DS_General
+from DeviceServers.base.general import DS_General
 
 
 class DS_PDU(DS_General):
@@ -95,7 +95,14 @@ class DS_PDU(DS_General):
         self.info(f"Setting output channels of device {self.device_name} to {outputs}.")
         state_ok = self.check_func_allowance(self.set_channels_states)
         if state_ok == 1:
-            res = self.set_channels_states_local(outputs)
+            # Time the local call when debug function timing is enabled
+            try:
+                res = self._time_call(
+                    "set_channels_states_local", self.set_channels_states_local, outputs
+                )
+            except AttributeError:
+                # Fallback if _time_call not available
+                res = self.set_channels_states_local(outputs)
             if res != 0:
                 self.error(
                     f"Setting output channels of device {self.device_name} was NOT "

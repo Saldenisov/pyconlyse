@@ -9,7 +9,7 @@ from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
 from taurus.qt.qtgui.input import TaurusValueLineEdit, TaurusWheelEdit
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from gui.MyWidgets import MyQLabel
 
 

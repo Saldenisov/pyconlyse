@@ -1,0 +1,147 @@
+omniORB: (0) 2025-09-19 10:31:22.760000: Configuration file "C:\OMNIORB.CFG" either does not exist or is not a file. No settings read.
+omniORB: (0) 2025-09-19 10:31:22.761000: Version: 4.2.5
+omniORB: (0) 2025-09-19 10:31:22.762000: Distribution date: Sun  9 Jan 14:51:38 GMT 2022
+omniORB: (0) 2025-09-19 10:31:22.762000: My addresses are: 
+omniORB: 127.0.0.1
+omniORB: 10.20.30.202
+omniORB: 129.175.100.128
+omniORB: (0) 2025-09-19 10:31:22.762000: Maximum supported GIOP version is 1.2
+omniORB: (0) 2025-09-19 10:31:22.763000: Native char code sets: UTF-8 ISO-8859-1.
+omniORB: (0) 2025-09-19 10:31:22.763000: Transmission char code sets: UTF-8(1.2) UTF-8(1.1) ISO-8859-1(1.2) ISO-8859-1(1.1) ISO-8859-1(1.0).
+omniORB: (0) 2025-09-19 10:31:22.764000: Native wide char code sets: UTF-16.
+omniORB: (0) 2025-09-19 10:31:22.764000: Transmission wide char code sets: UTF-16(1.2).
+omniORB: (0) 2025-09-19 10:31:22.764000: Initialising omniDynamic library.
+omniORB: (0) 2025-09-19 10:31:22.764000: Current configuration is as follows:
+omniORB:   DefaultInitRef (file) = 
+omniORB:   DefaultInitRef (args) = 
+omniORB:   abortOnInternalError = 0
+omniORB:   abortOnNativeException = 0
+omniORB:   acceptBiDirectionalGIOP = 0
+omniORB:   acceptMisalignedTcIndirections = 0
+omniORB:   bootstrapAgentHostname = 
+omniORB:   bootstrapAgentPort = 900
+omniORB:   clientCallTimeOutPeriod = 3000
+omniORB:   clientConnectTimeOutPeriod = 0
+omniORB:   clientTransportRule = * unix,ssl,tcp
+omniORB:   configFile = C:\OMNIORB.CFG
+omniORB:   connectionWatchImmediate = 0
+omniORB:   connectionWatchPeriod = 50000
+omniORB:   copyValuesInLocalCalls = 1
+omniORB:   defaultCharCodeSet = nil
+omniORB:   defaultWCharCodeSet = nil
+omniORB:   diiThrowsSysExceptions = 0
+omniORB:   dumpConfiguration = 0
+omniORB:   endPoint = giop:tcp::
+omniORB:   endPointPublish = all(addr)
+omniORB:   giopMaxMsgSize = 268435456
+omniORB:   giopTargetAddressMode = KeyAddr
+omniORB:   id = omniORB4
+omniORB:   idleThreadTimeout = 10
+omniORB:   immediateAddressSwitch = 0
+omniORB:   inConScanPeriod = 180
+omniORB:   lcdMode = 0
+omniORB:   listenBacklog = 2147483647
+omniORB:   maxClientThreadPoolSize = 100
+omniORB:   maxGIOPConnectionPerServer = 128
+omniORB:   maxGIOPVersion = 1.2
+omniORB:   maxInterleavedCallsPerConnection = 5
+omniORB:   maxServerThreadPerConnection = 100
+omniORB:   maxServerThreadPoolSize = 100
+omniORB:   maxSocketRecv = 131072
+omniORB:   maxSocketSend = 131072
+omniORB:   nativeCharCodeSet = ISO-8859-1
+omniORB:   nativeWCharCodeSet = UTF-16
+omniORB:   objectTableSize = 0
+omniORB:   offerBiDirectionalGIOP = 0
+omniORB:   oneCallPerConnection = 1
+omniORB:   outConScanPeriod = 120
+omniORB:   poaHoldRequestTimeout = 0
+omniORB:   poaUniquePersistentSystemIds = 1
+omniORB:   principal = [Null]
+omniORB:   resetTimeOutOnRetries = 0
+omniORB:   resolveNamesForTransportRules = 1
+omniORB:   retainAddressOrder = 1
+omniORB:   scanGranularity = 5
+omniORB:   serverCallTimeOutPeriod = 5000
+omniORB:   serverTransportRule = * unix,ssl,tcp
+omniORB:   socketSendBuffer = 16384
+omniORB:   strictIIOP = 1
+omniORB:   supportBootstrapAgent = 0
+omniORB:   supportCurrent = 0
+omniORB:   supportPerThreadTimeOut = 0
+omniORB:   tcAliasExpand = 0
+omniORB:   threadPerConnectionLowerLimit = 50
+omniORB:   threadPerConnectionPolicy = 1
+omniORB:   threadPerConnectionUpperLimit = 55
+omniORB:   threadPoolWatchConnection = 1
+omniORB:   throwTransientOnTimeOut = 1
+omniORB:   traceExceptions = 1
+omniORB:   traceFile = [stderr]
+omniORB:   traceInvocationReturns = 0
+omniORB:   traceInvocations = 0
+omniORB:   traceLevel = 25
+omniORB:   traceLocking = 0
+omniORB:   traceThreadId = 1
+omniORB:   traceTime = 1
+omniORB:   unixTransportDirectory = /tmp/omni-%u
+omniORB:   unixTransportPermission =  777
+omniORB:   useTypeCodeIndirections = 1
+omniORB:   validateUTF8 = 0
+omniORB:   verifyObjectExistsAndType = 0
+omniORB: (0) 2025-09-19 10:31:41.714000: Creating ref to remote: key<database>
+ target id      : IDL:omg.org/CORBA/Object:1.0
+ most derived id: 
+omniORB: (0) 2025-09-19 10:31:41.717000: Client attempt to connect to giop:tcp:10.20.30.202:10000
+omniORB: (2) 2025-09-19 10:31:41.717000: AsyncInvoker: thread id 2 has started. Total threads = 1.
+omniORB: (2) 2025-09-19 10:31:41.718000: AsyncInvoker: thread id 2 assigned to general tasks. Total general threads = 1.
+omniORB: (2) 2025-09-19 10:31:41.718000: AsyncInvoker: thread id 2 performing immediate general task.
+omniORB: (2) 2025-09-19 10:31:41.719000: Scavenger task execute.
+omniORB: (0) 2025-09-19 10:31:41.719000: Client opened connection to giop:tcp:10.20.30.202:10000
+omniORB: (0) 2025-09-19 10:31:41.720000: sendChunk: to giop:tcp:10.20.30.202:10000 79 bytes
+omniORB: (0) 2025-09-19 10:31:41.720000: inputMessage: from giop:tcp:10.20.30.202:10000 25 bytes
+omniORB: (0) 2025-09-19 10:31:41.721000: Creating ref to remote: key<database>
+ target id      : IDL:Tango/Device_5:1.0
+ most derived id: 
+omniORB: (0) 2025-09-19 10:31:41.721000: sendChunk: to giop:tcp:10.20.30.202:10000 60 bytes
+omniORB: (0) 2025-09-19 10:31:41.722000: inputMessage: from giop:tcp:10.20.30.202:10000 25 bytes
+omniORB: (0) 2025-09-19 10:31:41.723000: ObjRef() -- deleted.
+omniORB: (0) 2025-09-19 10:31:41.723000: sendChunk: to giop:tcp:10.20.30.202:10000 99 bytes
+omniORB: (0) 2025-09-19 10:31:41.724000: inputMessage: from giop:tcp:10.20.30.202:10000 158 bytes
+omniORB: (0) 2025-09-19 10:31:41.724000: sendChunk: to giop:tcp:10.20.30.202:10000 56 bytes
+omniORB: (0) 2025-09-19 10:31:41.725000: inputMessage: from giop:tcp:10.20.30.202:10000 43 bytes
+omniORB: (0) 2025-09-19 10:31:41.725000: sendChunk: to giop:tcp:10.20.30.202:10000 108 bytes
+omniORB: (0) 2025-09-19 10:31:41.763000: inputMessage: from giop:tcp:10.20.30.202:10000 128 bytes
+omniORB: (0) 2025-09-19 10:31:41.763000: sendChunk: to giop:tcp:10.20.30.202:10000 256 bytes
+omniORB: (0) 2025-09-19 10:31:41.865000: inputMessage: from giop:tcp:10.20.30.202:10000 2130 bytes
+omniORB: (0) 2025-09-19 10:31:41.866000: Initialising incoming endpoints.
+omniORB: (0) 2025-09-19 10:31:41.866000: Instantiate endpoint 'giop:tcp::0'
+omniORB: (0) 2025-09-19 10:31:41.867000: Attempt to set socket to listen on IPv4 and IPv6.
+omniORB: (0) 2025-09-19 10:31:41.867000: Bind to address :: ephemeral port.
+omniORB: (0) 2025-09-19 10:31:41.867000: Publish specification: 'all(addr)'
+omniORB: (0) 2025-09-19 10:31:41.867000: Try to publish 'addr' for endpoint giop:tcp:10.20.30.202:63669
+omniORB: (0) 2025-09-19 10:31:41.868000: Publish endpoint 'giop:tcp:10.20.30.202:63669'
+omniORB: (0) 2025-09-19 10:31:41.868000: Try to publish 'addr' for endpoint giop:tcp:129.175.100.128:63669
+omniORB: (0) 2025-09-19 10:31:41.868000: Publish endpoint 'giop:tcp:129.175.100.128:63669'
+omniORB: (0) 2025-09-19 10:31:41.868000: Starting serving incoming endpoints.
+omniORB: (3) 2025-09-19 10:31:41.869000: AsyncInvoker: thread id 3 has started. Total threads = 2.
+omniORB: (3) 2025-09-19 10:31:41.869000: AsyncInvoker: thread id 3 assigned to general tasks. Total general threads = 2.
+omniORB: (3) 2025-09-19 10:31:41.869000: AsyncInvoker: thread id 3 performing immediate general task.
+omniORB: (3) 2025-09-19 10:31:41.870000: giopRendezvouser task execute for giop:tcp:10.20.30.202:63669
+omniORB: (0) 2025-09-19 10:31:41.871000: sendChunk: to giop:tcp:10.20.30.202:10000 132 bytes
+omniORB: (0) 2025-09-19 10:31:41.872000: inputMessage: from giop:tcp:10.20.30.202:10000 28 bytes
+omniORB: (0) 2025-09-19 10:31:41.878000: sendChunk: to giop:tcp:10.20.30.202:10000 444 bytes
+omniORB: (0) 2025-09-19 10:31:41.882000: inputMessage: from giop:tcp:10.20.30.202:10000 594 bytes
+omniORB: (0) 2025-09-19 10:31:42.099000: Adding root<0> (activating) to object table.
+omniORB: (0) 2025-09-19 10:31:42.099000: State root<0> (activating) -> active
+omniORB: (0) 2025-09-19 10:31:42.099000: Creating ref to local: root<0>
+ target id      : IDL:Tango/Device:1.0
+ most derived id: IDL:Tango/Device_5:1.0
+omniORB: (0) 2025-09-19 10:31:42.100000: sendChunk: to giop:tcp:10.20.30.202:10000 628 bytes
+omniORB: (0) 2025-09-19 10:31:42.102000: inputMessage: from giop:tcp:10.20.30.202:10000 28 bytes
+omniORB: (0) 2025-09-19 10:31:42.103000: Adding root<1> (activating) to object table.
+omniORB: (0) 2025-09-19 10:31:42.103000: State root<1> (activating) -> active
+omniORB: (0) 2025-09-19 10:31:42.103000: Creating ref to local: root<1>
+ target id      : IDL:Tango/Device:1.0
+ most derived id: IDL:Tango/Device_5:1.0
+omniORB: (0) 2025-09-19 10:31:42.103000: sendChunk: to giop:tcp:10.20.30.202:10000 640 bytes
+omniORB: (0) 2025-09-19 10:31:42.110000: inputMessage: from giop:tcp:10.20.30.202:10000 28 bytes

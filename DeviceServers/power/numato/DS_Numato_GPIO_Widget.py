@@ -1,3 +1,7 @@
+# Import the fixes for safe device access
+import sys
+from pathlib import Path
+
 import tango
 from _functools import partial
 from PyQt5.QtWidgets import QCheckBox
@@ -5,22 +9,46 @@ from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+
+fixes_path = Path(__file__).parents[3] / "fixes"
+if str(fixes_path) not in sys.path:
+    sys.path.append(str(fixes_path))
+from taurus_warnings_fix import (
+    check_device_connection,
+    get_device_ids_safely,
+    get_device_names_safely,
+    get_device_states_safely,
+    suppress_taurus_deprecation_warnings,
+)
 
 
 class Numato_pdu(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        # Suppress Taurus deprecation warnings
+        suppress_taurus_deprecation_warnings()
         super().__init__(device_name, parent, vis_type)
 
-        ds: Device = getattr(self, f"ds_{self.dev_name}")
+    def before_ds(self):
+        """Initialize device-dependent data before UI is built."""
+        dev_name = self.dev_name
+        ds: Device = getattr(self, f"ds_{dev_name}")
 
-        self.ids = list(ds.ids)
-        self.names = list(ds.names)
-        self.states = list(ds.states)
+        # Check device connection first
+        if not check_device_connection(ds):
+            print(f"Warning: Device {dev_name} is not properly connected")
+            # Initialize with empty lists as fallback
+            self.ids = []
+            self.names = []
+            self.states = []
+        else:
+            # Use safe accessors
+            self.ids = get_device_ids_safely(ds)
+            self.names = get_device_names_safely(ds)
+            self.states = get_device_states_safely(ds)
 
-        ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self.state_listener)
-        ds.subscribe_event("names", tango.EventType.CHANGE_EVENT, self.state_listener)
-        ds.subscribe_event("ids", tango.EventType.CHANGE_EVENT, self.state_listener)
+        # Controls are not ready until set_states creates them
+        self._controls_ready = False
 
     def register_DS_full(self, group_number=1):
         super(Numato_pdu, self).register_DS_full()
@@ -36,6 +64,15 @@ class Numato_pdu(DS_General_Widget):
 
         # state positions
         group = self.set_states()
+
+        # Now that UI elements exist, subscribe to events (tolerate failures)
+        for attr in ("states", "names", "ids"):
+            try:
+                getattr(self, f"ds_{dev_name}").subscribe_event(
+                    attr, tango.EventType.CHANGE_EVENT, self.state_listener
+                )
+            except Exception as e:
+                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
 
         # Buttons and commands
         setattr(self, f"button_on_{dev_name}", TaurusCommandButton(command="turn_on"))
@@ -69,6 +106,15 @@ class Numato_pdu(DS_General_Widget):
         # state positions
         group = self.set_states()
 
+        # Now that UI elements exist, subscribe to events (tolerate failures)
+        for attr in ("states", "names", "ids"):
+            try:
+                getattr(self, f"ds_{dev_name}").subscribe_event(
+                    attr, tango.EventType.CHANGE_EVENT, self.state_listener
+                )
+            except Exception as e:
+                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
+
         lo_status.addWidget(group)
         lo_device.addLayout(lo_status)
         lo_group.addLayout(lo_device)
@@ -89,6 +135,7 @@ class Numato_pdu(DS_General_Widget):
         setattr(self, f"checkbox_group_{dev_name}", Qt.QGroupBox("Channels states"))
         group: Qt.QGroupBox = getattr(self, f"checkbox_group_{dev_name}")
 
+        controls_ready = False
         try:
             number_outputs = int(ds.get_property("number_outputs")["number_outputs"][0])
             names = list(ds.names)
@@ -105,8 +152,11 @@ class Numato_pdu(DS_General_Widget):
                 cb.setText(f"{name}:id:{id}")
                 lo_state.addWidget(cb)
                 cb.clicked.connect(partial(self.cb_clicked, dev_name))
+            controls_ready = True
         except Exception as e:
             print(e)
+        finally:
+            self._controls_ready = bool(controls_ready)
 
         group.setLayout(lo_state)
         return group
@@ -121,16 +171,21 @@ class Numato_pdu(DS_General_Widget):
         ds.set_channels_states(states)
 
     def state_listener(self, event):
+        if not getattr(self, "_controls_ready", False):
+            return
         ds: Device = getattr(self, f"ds_{self.dev_name}")
         names_new, states_new = list(ds.names), list(ds.states)
         for new_name, new_state, id in zip(names_new, states_new, self.ids):
-            cb: QCheckBox = getattr(self, f"cb{id}_{self.dev_name}")
+            try:
+                cb: QCheckBox = getattr(self, f"cb{id}_{self.dev_name}")
 
-            if self.names[id - 1] != new_name:
-                cb.setText(f"{new_name}:id:{id}")
+                if self.names[id - 1] != new_name:
+                    cb.setText(f"{new_name}:id:{id}")
 
-            if self.states[id - 1] != new_state:
-                cb.setChecked(bool(new_state))
+                if self.states[id - 1] != new_state:
+                    cb.setChecked(bool(new_state))
+            except AttributeError:
+                continue
 
         self.names = names_new
         self.states = states_new

@@ -9,15 +9,17 @@ from scipy.optimize import minimize
 from tango.server import command
 from taurus import Device
 
-app_folder = Path(__file__).resolve().parents[2]
+# Navigate to pyconlyse root: laser_pointing -> control -> DeviceServers -> pyconlyse
+app_folder = Path(__file__).resolve().parents[3]  # Go to pyconlyse root directory
 sys.path.append(str(app_folder))
 
 from tango import DevState
 
 try:
-    from DeviceServers.base.DS_Control import DS_ControlPosition
+    from DeviceServers.base.control import DS_ControlPosition
 except ModuleNotFoundError:
-    pass
+    # Fallback import path
+    from base.control import DS_ControlPosition
 
 global global_result
 global glob_res_n

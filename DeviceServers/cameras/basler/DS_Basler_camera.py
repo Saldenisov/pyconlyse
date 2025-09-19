@@ -170,14 +170,26 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.SensorReadoutMode.GetValue()
 
     def init_device(self):
+        # Add startup delay to prevent concurrent camera access conflicts
+        try:
+            from DeviceServers.startup_coordinator import wait_for_startup_delay
+
+            coordinator = wait_for_startup_delay("basler_camera")
+            self._startup_coordinator = coordinator  # Keep reference for cleanup
+        except Exception as e:
+            self.info(f"Startup coordinator not available: {e}", True)
+            self._startup_coordinator = None
+
         self.pixel_format = None
         self.camera: pylon.InstantCamera = None
         self.converter: pylon.ImageFormatConverter = None
         self.device = None
-        self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
+        self.grabbing_thread = None
         super().init_device()
         self.register_variables_for_archive()
-        self.start_grabbing_local()
+        # Only start grabbing if camera is properly initialized
+        if hasattr(self, "camera") and self.camera and self.camera.IsOpen():
+            self.start_grabbing_local()
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -202,6 +214,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             else:
                 self.error("Could not find camera.")
         self._device_id_internal, self._uri = argreturn
+        return argreturn
 
     def turn_on_local(self) -> Union[int, str]:
         if self.camera and not self.camera.IsOpen():
@@ -222,6 +235,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             if self.grabbing:
                 self.stop_grabbing()
             self.camera.Close()
+
+            # Clean up startup coordinator on shutdown
+            if hasattr(self, "_startup_coordinator") and self._startup_coordinator:
+                try:
+                    self._startup_coordinator.cleanup_on_shutdown()
+                except Exception as e:
+                    self.info(f"Error cleaning up startup coordinator: {e}", True)
+
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
             return 0
@@ -375,7 +396,21 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             return img
 
         i = 0
-        while self.grabbing:
+        max_errors = 10
+        error_count = 0
+
+        while self.grabbing and error_count < max_errors:
+            # Check if camera is still available
+            if (
+                not self.camera
+                or not self.camera.IsOpen()
+                or not self.camera.IsGrabbing()
+            ):
+                self.info(
+                    "Camera no longer available or not grabbing, stopping wait loop"
+                )
+                break
+
             i += 1
             self.info(f"Grabbing: {i}", False)
             try:
@@ -397,11 +432,22 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
                     self.info("Image is received...")
                     self.last_image = image2D
+                    error_count = 0  # Reset error count on success
                 else:
-                    raise pylon.GenericException
+                    raise pylon.GenericException("Grab failed")
             except (pylon.GenericException, pylon.TimeoutException) as e:
-                self.error(str(e))
-                return np.arange(300).reshape(10, 10, 3)
+                error_count += 1
+                self.error(f"Grabbing error {error_count}/{max_errors}: {e!s}")
+                if error_count >= max_errors:
+                    self.error("Too many grabbing errors, stopping grabbing thread")
+                    break
+                # Small delay before retrying
+                import time
+
+                time.sleep(0.1)
+
+        # Clean exit
+        self.info("Wait thread exiting")
 
     def get_controller_status_local(self) -> Union[int, str]:
         r = 0
@@ -417,22 +463,34 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return r
 
     def start_grabbing_local(self):
-        if self.latestimage:
-            try:
+        if not self.camera or not self.camera.IsOpen():
+            return "Camera not available or not open"
+
+        try:
+            if self.latestimage:
                 self.info("Grabbing LatestImageOnly", True)
                 self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
-                self.grabbing_thread.start()
-                return 0
-            except Exception as e:
-                return str(e)
-        else:
-            try:
+                # Start grabbing thread only if camera is grabbing
+                if self.camera.IsGrabbing():
+                    self.grabbing_thread = Thread(
+                        target=self.wait, args=[self.timeoutt]
+                    )
+                    self.grabbing_thread.daemon = True  # Make thread daemon
+                    self.grabbing_thread.start()
+            else:
                 self.info("Grabbing OneByOne", True)
                 self.camera.StartGrabbing(pylon.GrabStrategy_OneByOne)
-                return 0
-            except Exception as e:
-                return str(e)
+                # Start grabbing thread only if camera is grabbing
+                if self.camera.IsGrabbing():
+                    self.grabbing_thread = Thread(
+                        target=self.wait, args=[self.timeoutt]
+                    )
+                    self.grabbing_thread.daemon = True  # Make thread daemon
+                    self.grabbing_thread.start()
+            return 0
+        except Exception as e:
+            self.error(f"Error starting grabbing: {e!s}")
+            return str(e)
 
     def stop_grabbing_local(self):
         try:

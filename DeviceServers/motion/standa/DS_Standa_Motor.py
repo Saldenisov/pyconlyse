@@ -14,23 +14,49 @@ sys.path.append(str(app_folder))
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, device_property
 
+from DeviceServers.base.motor import DS_MOTORIZED_MONO_AXIS
+
 try:
-    from DeviceServers.base.DS_Motor import DS_MOTORIZED_MONO_AXIS
-except ModuleNotFoundError:
-    from DeviceServers.base.DS_Motor import DS_MOTORIZED_MONO_AXIS
+    from DeviceServers.motion.standa.ximc import (
+        EnumerateFlags,
+        PositionFlags,
+        Result,
+        arch_type,
+        get_position_t,
+        lib,
+        set_position_t,
+        status_t,
+        ximc_dir,
+    )
+except Exception:
+    # Provide lightweight stubs so the module can be imported without native libs
+    class _EnumerateFlags:
+        ENUMERATE_PROBE = 0
+        ENUMERATE_NETWORK = 0
 
+    EnumerateFlags = _EnumerateFlags
+    PositionFlags = object
 
-from DeviceServers.STANDA.ximc import (
-    EnumerateFlags,
-    PositionFlags,
-    Result,
-    arch_type,
-    get_position_t,
-    lib,
-    set_position_t,
-    status_t,
-    ximc_dir,
-)
+    class _Result:
+        Ok = 0
+
+    Result = _Result
+    arch_type = "win64"
+
+    def get_position_t():
+        return type("_pos", (), {"Position": 0, "uPosition": 0})()
+
+    class _DummyLib:
+        def __getattr__(self, _):
+            raise RuntimeError("libximc not available in this environment")
+
+    lib = _DummyLib()
+
+    def set_position_t(*_, **__):
+        return None
+
+    status_t = object
+    ximc_dir = Path()
 
 
 class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):

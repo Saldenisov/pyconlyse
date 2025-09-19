@@ -13,7 +13,7 @@ sys.path.append(str(app_folder))
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, device_property
 
-from DeviceServers.General.DS_general import DS_General
+from DeviceServers.base.general import DS_General
 
 
 class DS_Test(DS_General):

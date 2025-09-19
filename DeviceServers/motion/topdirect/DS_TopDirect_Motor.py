@@ -14,10 +14,7 @@ import serial.tools.list_ports
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, command, device_property
 
-try:
-    from DeviceServers.base.DS_Motor import DS_MOTORIZED_MONO_AXIS
-except ModuleNotFoundError:
-    from DeviceServers.base.DS_Motor import DS_MOTORIZED_MONO_AXIS
+from DeviceServers.base.motor import DS_MOTORIZED_MONO_AXIS
 
 
 class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):

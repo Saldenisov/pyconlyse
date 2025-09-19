@@ -8,7 +8,7 @@ from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
 
-from DeviceServers.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from utilities.datastructures.mes_independent.measurments_dataclass import (
     DataXY,
 )

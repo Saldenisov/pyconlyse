@@ -1,15 +1,107 @@
+import json
+import os
 import time
 import zlib
 from abc import abstractmethod
+from pathlib import Path
 from threading import Thread
 from time import sleep
 from typing import Any, Dict, Union
 
 import msgpack
 import numpy as np
-import taurus
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import Device, attribute, command, device_property, pipe
+
+# Centralized global settings for all DeviceServers
+# These can be overridden via a single JSON config file, environment variables, or at runtime via commands
+
+
+def _str_to_bool(val: str) -> bool:
+    return str(val).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+# Defaults for global settings
+CONFIG_DEFAULTS = {
+    "DISABLE_ARCHIVE": False,  # Disable archive connections globally
+    "ARCHIVE_TIMEOUT_SECONDS": 5,  # Default archive connection timeout,
+    "DEBUG_INIT_TIMING": False,  # Print init timing breakdown,
+    "DEBUG_TIMING_THRESHOLD_MS": 10,  # Only show steps >= this threshold
+    "DEBUG_FUNCTION_TIMING": False,  # Time essential DS functions
+    "DEBUG_FUNCTION_MIN_MS": 25,  # Only show function timings >= this threshold
+}
+
+# Determine config file path
+CONFIG_FILE_ENV = "PYCONLYSE_GLOBAL_CONFIG"
+DEFAULT_CONFIG_FILENAME = "global_settings.json"
+
+
+def _default_config_path() -> str:
+    # Place default in DeviceServers/ folder
+    return str(Path(__file__).resolve().parents[1] / DEFAULT_CONFIG_FILENAME)
+
+
+# Initialize GLOBAL_SETTINGS from defaults, then file, then env
+GLOBAL_SETTINGS = CONFIG_DEFAULTS.copy()
+
+
+def _load_global_settings_from_file() -> str:
+    path = os.environ.get(CONFIG_FILE_ENV, _default_config_path())
+    try:
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                for k in CONFIG_DEFAULTS:
+                    if k in data:
+                        if k == "DISABLE_ARCHIVE":
+                            GLOBAL_SETTINGS[k] = (
+                                data[k]
+                                if isinstance(data[k], bool)
+                                else _str_to_bool(str(data[k]))
+                            )
+                        elif k == "ARCHIVE_TIMEOUT_SECONDS":
+                            try:
+                                GLOBAL_SETTINGS[k] = int(data[k])
+                            except Exception:
+                                pass
+        return path
+    except Exception:
+        return path
+
+
+# Load from file first
+_current_config_path = _load_global_settings_from_file()
+
+# Then overlay env vars
+try:
+    if "DISABLE_ARCHIVE" in os.environ:
+        GLOBAL_SETTINGS["DISABLE_ARCHIVE"] = _str_to_bool(
+            os.environ.get("DISABLE_ARCHIVE", "")
+        )
+    if "ARCHIVE_TIMEOUT_SECONDS" in os.environ:
+        GLOBAL_SETTINGS["ARCHIVE_TIMEOUT_SECONDS"] = int(
+            os.environ.get("ARCHIVE_TIMEOUT_SECONDS", "5")
+        )
+    if "DEBUG_INIT_TIMING" in os.environ:
+        GLOBAL_SETTINGS["DEBUG_INIT_TIMING"] = _str_to_bool(
+            os.environ.get("DEBUG_INIT_TIMING", "")
+        )
+    if "DEBUG_TIMING_THRESHOLD_MS" in os.environ:
+        GLOBAL_SETTINGS["DEBUG_TIMING_THRESHOLD_MS"] = int(
+            os.environ.get("DEBUG_TIMING_THRESHOLD_MS", "10")
+        )
+    if "DEBUG_FUNCTION_TIMING" in os.environ:
+        GLOBAL_SETTINGS["DEBUG_FUNCTION_TIMING"] = _str_to_bool(
+            os.environ.get("DEBUG_FUNCTION_TIMING", "")
+        )
+    if "DEBUG_FUNCTION_MIN_MS" in os.environ:
+        GLOBAL_SETTINGS["DEBUG_FUNCTION_MIN_MS"] = int(
+            os.environ.get("DEBUG_FUNCTION_MIN_MS", "25")
+        )
+except Exception:
+    # Fallback silently if env parsing fails
+    pass
 
 from utilities.datastructures.mes_independent.measurments_dataclass import (
     ArchiveData,
@@ -33,8 +125,14 @@ class DS_General(Device):
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
     always_on = device_property(dtype=int, default_value=0)
+    debug_init_timing = device_property(dtype=int, default_value=0)
+    debug_function_timing = device_property(dtype=int, default_value=0)
+    archive_enabled = device_property(dtype=int, default_value=0)
     archive = "manip/general/archive"
     polling_main = 300
+
+    # Expose allowed global variable keys (for management commands)
+    ALLOWED_GLOBAL_VARS = tuple(CONFIG_DEFAULTS.keys())
     RULES = {
         "turn_on": [DevState.OFF, DevState.FAULT, DevState.STANDBY, DevState.INIT],
         "turn_off": [DevState.ON, DevState.STANDBY, DevState.INIT, DevState.RUNNING],
@@ -143,6 +241,32 @@ class DS_General(Device):
         if printing:
             print(info_in)
 
+    # ----- Debug helpers for function timing -----
+    def _debug_functions_on(self) -> bool:
+        try:
+            return (
+                bool(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_TIMING", False))
+                or getattr(self, "debug_function_timing", 0) == 1
+            )
+        except Exception:
+            return False
+
+    def _debug_functions_threshold_ms(self) -> int:
+        try:
+            return int(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_MIN_MS", 25))
+        except Exception:
+            return 25
+
+    def _time_call(self, label: str, func, *args, **kwargs):
+        t0 = time.time()
+        result = func(*args, **kwargs)
+        if self._debug_functions_on():
+            dt_ms = (time.time() - t0) * 1000.0
+            if dt_ms >= self._debug_functions_threshold_ms():
+                # Use ASCII-only output to avoid Windows console encoding issues
+                self.info(f"{label}: {dt_ms:.1f} ms", True)
+        return result
+
     @command(dtype_in=str)
     def register_client_lock(self, name):
         if name:
@@ -156,6 +280,33 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        # Debug timing setup
+        debug_on = (
+            bool(GLOBAL_SETTINGS.get("DEBUG_INIT_TIMING", False))
+            or getattr(self, "debug_init_timing", 0) == 1
+        )
+        self._init_marks = []
+        self._init_t0 = time.time()
+
+        def _mark(label: str):
+            if debug_on:
+                self._init_marks.append((label, time.time() - self._init_t0))
+
+        def _print_init_timing():
+            if not debug_on or not getattr(self, "_init_marks", None):
+                return
+            threshold = int(GLOBAL_SETTINGS.get("DEBUG_TIMING_THRESHOLD_MS", 10))
+            self.info("=== INIT TIMING (ms) ===", True)
+            prev = 0.0
+            for label, t in self._init_marks:
+                dt = (t - prev) * 1000.0
+                if dt >= threshold:
+                    self.info(f"{label}: {dt:.1f} ms (t={t * 1000.0:.1f})", True)
+                prev = t
+            total = (self._init_marks[-1][1]) * 1000.0
+            self.info(f"Total init: {total:.1f} ms", True)
+
+        _mark("start")
         self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
@@ -165,23 +316,43 @@ class DS_General(Device):
         self._error = "..."
         self._n = 0
         internal_time = Thread(target=self.int_time)
+        internal_time.daemon = True
         internal_time.start()
+        _mark("internal_time_started")
         self._status_check_fault = 0
         self.prev_state = DevState.FAULT
         Device.init_device(self)
+        _mark("tango_Device.init_device")
         if hasattr(self, "parameters"):
             self.parameters = eval(str(self.parameters))
-        self.archive = taurus.Device(self.archive)
+        _mark("parameters_parsed")
+
+        # Initialize archive connection with optional global disable flag
+        global_disable = bool(GLOBAL_SETTINGS.get("DISABLE_ARCHIVE", False))
+        if getattr(self, "archive_enabled", 1) == 0 or global_disable:
+            self.info(
+                "Archive disabled: Using mock archive (no connection attempt)", True
+            )
+            self._create_mock_archive()
+        else:
+            # Initialize archive connection with timeout handling
+            timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
+            self._init_archive_connection(timeout_seconds=timeout_val)
+        _mark("archive_init")
+
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b""
         self.find_device()
+        _mark("find_device")
 
         if self._device_id_internal != -1:
             self.info(f"{self.device_name} was found.", True)
         else:
             self.info(f"{self.device_name} was NOT found.", True)
             self.set_state(DevState.FAULT)
+        _mark("post_find_device")
+        _print_init_timing()
 
     @abstractmethod
     def register_variables_for_archive(self):
@@ -221,12 +392,83 @@ class DS_General(Device):
         return state_ok
 
     def int_time(self):
-        while 1:
-            sleep(0.5)
-            self._n += 1
-            if self._n > 10:
-                self._error = ""
-                self._n = 0
+        try:
+            while 1:
+                sleep(0.5)
+                self._n += 1
+                if self._n > 10:
+                    self._error = ""
+                    self._n = 0
+        except KeyboardInterrupt:
+            return
+
+    def _init_archive_connection(self, timeout_seconds=5):
+        """Initialize archive connection with timeout and graceful fallback"""
+        import queue
+        import threading
+
+        # Lazy import taurus only when archive is enabled to avoid heavy startup cost
+        try:
+            import taurus  # noqa: F401
+        except Exception as e:
+            self.info(f"Taurus not available ({e}); using mock archive", True)
+            self._create_mock_archive()
+            return
+
+        self.info(
+            f"Attempting archive connection to {self.archive} (timeout: {timeout_seconds}s)",
+            True,
+        )
+
+        def connect_to_archive(result_queue):
+            """Thread function to connect to archive"""
+            try:
+                import taurus as _taurus
+
+                archive_device = _taurus.Device(self.archive)
+                result_queue.put(("success", archive_device))
+            except Exception as e:
+                result_queue.put(("error", str(e)))
+
+        # Create queue and thread for timeout handling
+        result_queue = queue.Queue()
+        connect_thread = threading.Thread(
+            target=connect_to_archive, args=(result_queue,)
+        )
+        connect_thread.daemon = True
+        connect_thread.start()
+
+        # Wait for result with timeout
+        try:
+            status, result = result_queue.get(timeout=timeout_seconds)
+            if status == "success":
+                self.archive = result
+                self.info(f"Archive connection successful: {self.archive}", True)
+            else:
+                self._create_mock_archive()
+                self.info(
+                    f"Archive connection failed: {result}, using mock archive", True
+                )
+        except queue.Empty:
+            # Timeout occurred
+            self._create_mock_archive()
+            self.info(
+                f"Archive connection timed out after {timeout_seconds}s, using mock archive",
+                True,
+            )
+
+    def _create_mock_archive(self):
+        """Create a mock archive object that doesn't cause errors"""
+
+        class MockArchive:
+            def __init__(self):
+                self.state = 0  # Disabled state
+
+            def archive_it(self, data):
+                # Do nothing - archive is disabled
+                pass
+
+        self.archive = MockArchive()
 
     @property
     def device_name(self) -> str:
@@ -235,13 +477,15 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
-        if True:
-            res = self.get_controller_status_local()
-            self.send_state_archive()
+        if state_ok == 1:
+            res = self._time_call(
+                "get_controller_status_local", self.get_controller_status_local
+            )
+            self._time_call("send_state_archive", self.send_state_archive)
             if res != 0:
                 self.error(f"{res}")
             if self.get_state() != DevState.ON and self.always_on == 1:
-                self.turn_on()
+                self._time_call("turn_on", self.turn_on)
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
@@ -252,12 +496,12 @@ class DS_General(Device):
         state_ok = self.check_func_allowance(self.turn_on)
         if state_ok == 1:
             self.info(f"Turning ON {self.device_name}.", True)
-            res = self.turn_on_local()
+            res = self._time_call("turn_on_local", self.turn_on_local)
             if res != 0:
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} WAS turned ON.", True)
-                self.fix_state()
+                self._time_call("fix_state", self.fix_state)
         else:
             self.error(
                 f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}."
@@ -272,13 +516,15 @@ class DS_General(Device):
         state_ok = self.check_func_allowance(self.turn_off)
         if state_ok == 1:
             self.info(f"Turning off device {self.device_name}.", True)
-            res = self.turn_off_local()
+            res = self._time_call("turn_off_local", self.turn_off_local)
             if res != 0:
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
                 data = self.form_archive_data(0, "State")
-                self.write_to_archive(data)
+                self._time_call(
+                    "write_to_archive(State=0)", self.write_to_archive, data
+                )
         else:
             self.error(
                 f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}."
@@ -290,8 +536,28 @@ class DS_General(Device):
 
     def write_to_archive(self, data: ArchiveData):
         if self.archive.state == 1:
-            data_c = self.compress_data(data)
-            self.archive.archive_it(data_c)
+            if (
+                bool(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_TIMING", False))
+                or getattr(self, "debug_function_timing", 0) == 1
+            ):
+                t0 = time.time()
+                data_c = self.compress_data(data)
+                t1 = time.time()
+                self.archive.archive_it(data_c)
+                t2 = time.time()
+                comp_ms = (t1 - t0) * 1000.0
+                arch_ms = (t2 - t1) * 1000.0
+                total_ms = (t2 - t0) * 1000.0
+                thr = int(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_MIN_MS", 25))
+                if comp_ms >= thr:
+                    self.info(f"compress_data: {comp_ms:.1f} ms", True)
+                if arch_ms >= thr:
+                    self.info(f"archive_it: {arch_ms:.1f} ms", True)
+                if total_ms >= thr:
+                    self.info(f"write_to_archive: {total_ms:.1f} ms", True)
+            else:
+                data_c = self.compress_data(data)
+                self.archive.archive_it(data_c)
 
     def compress_data(self, data):
         msg_b = msgpack.packb(str(data))
@@ -384,3 +650,115 @@ class DS_General(Device):
 
     def give_order_local(self, name) -> Any:
         pass
+
+    # ----- Centralized global settings management commands -----
+    @command(
+        dtype_in=[str],
+        dtype_out=str,
+        doc_in="['name','value'] (global setting to change)",
+        doc_out="Result message",
+    )
+    def set_global_variable(self, name_value: list) -> str:
+        try:
+            name, value = name_value[0], name_value[1]
+        except Exception:
+            return "ERROR: Provide ['name','value'] as a two-element string array"
+        key = str(name).strip().upper()
+        if key not in self.ALLOWED_GLOBAL_VARS:
+            return f"ERROR: Unknown global variable '{key}'. Allowed: {self.ALLOWED_GLOBAL_VARS}"
+        # Coerce value
+        if key in ("DISABLE_ARCHIVE",):
+            coerced = _str_to_bool(value)
+        elif key in ("ARCHIVE_TIMEOUT_SECONDS",):
+            try:
+                coerced = int(value)
+            except Exception:
+                return f"ERROR: '{key}' expects integer value"
+        else:
+            coerced = str(value)
+        GLOBAL_SETTINGS[key] = coerced
+        # Apply immediately for archive-related changes
+        if key == "DISABLE_ARCHIVE":
+            if coerced:
+                # Switch to mock archive now
+                self._create_mock_archive()
+                self.info("Global DISABLE_ARCHIVE set: switched to mock archive", True)
+            else:
+                # Try reconnect with configured timeout
+                timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
+                self._init_archive_connection(timeout_seconds=timeout_val)
+                self.info(
+                    "Global DISABLE_ARCHIVE unset: attempted archive reconnect", True
+                )
+        return f"OK: {key} set to {GLOBAL_SETTINGS[key]}"
+
+    @command(
+        dtype_in=str,
+        dtype_out=str,
+        doc_in="name (global setting to read)",
+        doc_out="Value as string",
+    )
+    def get_global_variable(self, name: str) -> str:
+        key = str(name).strip().upper()
+        if key not in self.ALLOWED_GLOBAL_VARS:
+            return f"ERROR: Unknown global variable '{key}'. Allowed: {self.ALLOWED_GLOBAL_VARS}"
+        return str(GLOBAL_SETTINGS.get(key, CONFIG_DEFAULTS.get(key)))
+
+    @command(
+        dtype_out=str,
+        doc_out="All global settings as 'key=value' lines",
+    )
+    def list_global_variables(self) -> str:
+        lines = []
+        for k in self.ALLOWED_GLOBAL_VARS:
+            v = GLOBAL_SETTINGS.get(k, CONFIG_DEFAULTS.get(k))
+            lines.append(f"{k}={v}")
+        return "\n".join(lines)
+
+    @command(
+        dtype_out=str,
+        doc_out="Path to the global settings JSON file",
+    )
+    def get_global_config_path(self) -> str:
+        return os.environ.get(CONFIG_FILE_ENV, _default_config_path())
+
+    @command(
+        dtype_out=str,
+        doc_out="Reload result and current settings",
+    )
+    def reload_global_variables(self) -> str:
+        path = _load_global_settings_from_file()
+        # Overlay env again in case it is set
+        try:
+            if "DISABLE_ARCHIVE" in os.environ:
+                GLOBAL_SETTINGS["DISABLE_ARCHIVE"] = _str_to_bool(
+                    os.environ.get("DISABLE_ARCHIVE", "")
+                )
+            if "ARCHIVE_TIMEOUT_SECONDS" in os.environ:
+                GLOBAL_SETTINGS["ARCHIVE_TIMEOUT_SECONDS"] = int(
+                    os.environ.get("ARCHIVE_TIMEOUT_SECONDS", "5")
+                )
+        except Exception:
+            pass
+        return "Reloaded from: " + path + "\n" + self.list_global_variables()
+
+    @command(
+        dtype_out=str,
+        doc_out="Save result and path",
+    )
+    def save_global_variables(self) -> str:
+        path = os.environ.get(CONFIG_FILE_ENV, _default_config_path())
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        except Exception:
+            pass
+        try:
+            to_save = {
+                k: GLOBAL_SETTINGS.get(k, CONFIG_DEFAULTS.get(k))
+                for k in CONFIG_DEFAULTS
+            }
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(to_save, f, indent=2)
+            return f"Saved to: {path}"
+        except Exception as e:
+            return f"ERROR: Could not save to {path}: {e}"
