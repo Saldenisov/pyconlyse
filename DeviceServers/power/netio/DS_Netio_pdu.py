@@ -2,67 +2,26 @@
 
 
 import os as _os
-import time as _time
-
-_BOOT_T0 = _time.time()
-_DEBUG_BOOT = str(_os.environ.get("DEBUG_BOOT", "")).strip().lower() in (
-    "1",
-    "true",
-    "yes",
-    "y",
-)
 
 import sys
 from pathlib import Path
 from typing import List, Tuple, Union
 
-# Parse --DEBUG early, before importing base classes, so env flags are visible
-try:
-    if "--DEBUG" in sys.argv:
-        _os.environ["DEBUG_INIT_TIMING"] = "1"
-        _os.environ["DEBUG_TIMING_THRESHOLD_MS"] = "1"
-        _os.environ["DEBUG_FUNCTION_TIMING"] = "1"
-        _os.environ["DEBUG_FUNCTION_MIN_MS"] = "1"
-        _os.environ["DEBUG_BOOT"] = "1"
-        # Also set the module flag immediately so BOOT prints are enabled in this process
-        _DEBUG_BOOT = True
-        sys.argv.remove("--DEBUG")
-        try:
-            print("DEBUG: timing flags enabled via --DEBUG")
-        except Exception:
-            pass
-except Exception:
-    pass
+# Add the pyconlyse directory to Python path to enable DeviceServers imports
+_PYCONLYSE_ROOT = Path(__file__).parent.parent.parent.parent  # Go up 4 levels to the root of pyconlyse
+if str(_PYCONLYSE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PYCONLYSE_ROOT))
+
 
 import requests
 
-# Helper to print boot timing messages safely
-_def_boot_msg = (
-    lambda msg: (
-        print(f"BOOT: {msg} T={( _time.time() - _BOOT_T0 ) * 1000.0:.1f} ms")
-        if _DEBUG_BOOT
-        else None
-    )
-)
 
-_def_boot_msg("after DS_Netio_pdu basic imports")
 
-app_folder = Path(__file__).resolve().parents[3]  # Go to pyconlyse root directory
-sys.path.append(str(app_folder))
-
-_def_boot_msg("before tango import")
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute
-_def_boot_msg("after tango import")
 
-try:
-    from DeviceServers.base.pdu import DS_PDU
-except ModuleNotFoundError:
-    from DeviceServers.base.pdu import DS_PDU
-_def_boot_msg("after DS_PDU import")
+from DeviceServers.base.pdu import DS_PDU
 
-# Global handle for faulthandler output file
-_FAULTHANDLER_FILE = None
 
 
 class DS_Netio_pdu(DS_PDU):
@@ -101,18 +60,6 @@ class DS_Netio_pdu(DS_PDU):
         return self._delays
 
     def init_device(self):
-        # Cancel any pending startup traceback dumps now that init has started
-        try:
-            import faulthandler as _fhmod
-            _fhmod.cancel_dump_traceback_later()
-            global _FAULTHANDLER_FILE
-            try:
-                if _FAULTHANDLER_FILE:
-                    _FAULTHANDLER_FILE.close()
-            except Exception:
-                pass
-        except Exception:
-            pass
         self._actions = []
         self._delays = []
         super().init_device()
@@ -258,20 +205,6 @@ class DS_Netio_pdu(DS_PDU):
 
 
 if __name__ == "__main__":
-    # If boot debugging is on, schedule periodic stack dumps to help locate startup delays
-    if _DEBUG_BOOT:
-        try:
-            import faulthandler as _fh
-            trace_path = Path(__file__).with_suffix(".startup.trace")
-            _FAULTHANDLER_FILE = open(trace_path, "w", encoding="utf-8", errors="replace")
-            # Dump every 5 seconds until canceled in init_device()
-            _fh.dump_traceback_later(5, repeat=True, file=_FAULTHANDLER_FILE)
-        except Exception:
-            pass
-        try:
-            print(
-                f"BOOT: before run_server T={(_time.time() - _BOOT_T0) * 1000.0:.1f} ms"
-            )
-        except Exception:
-            pass
+    # ORBconfigFile handling removed - let omniORB use default configuration
+    # or rely on OMNIORB_CONFIG environment variable
     DS_Netio_pdu.run_server()

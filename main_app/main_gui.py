@@ -16,12 +16,22 @@ sys.path.insert(0, str(main_app_path.parent))
 # Import GUI window
 from main_app.ui.main_window import main as gui_main
 
-# Defer full logging setup to GUI after it shows for faster startup
+# Central logging setup
+from main_app.core.logging_config import setup_pyconlyse_logging
+
 logger = logging.getLogger(__name__)
 
 
 def main():
     """Main entry point for GUI application."""
+    # Initialize logging early so all GUI logs go to LOGS/GUI
+    try:
+        log_dir = Path(__file__).parent.parent / "LOGS" / "GUI"
+        setup_pyconlyse_logging(log_dir)
+    except Exception:
+        # If logging setup fails, continue with console logging
+        pass
+
     logger.info("Starting PyConlyse GUI application...")
     # Attempt to initialize Tango to catch potential issues early
     # This is a placeholder and might require more specific Tango client initialization code

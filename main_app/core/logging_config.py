@@ -41,11 +41,14 @@ class PyConlyseLogger:
         """Initialize the logging system.
 
         Args:
-            log_dir: Directory for log files. If None, uses bin directory.
+            log_dir: Directory for log files. If None, defaults to <repo_root>/LOGS/GUI
 
         """
-        self.log_dir = log_dir or (Path(__file__).parent.parent.parent / "bin")
-        self.log_dir.mkdir(exist_ok=True)
+        # Default logs for GUI go to <repo_root>/LOGS/GUI
+        default_gui_logs = Path(__file__).parent.parent.parent / "LOGS" / "GUI"
+        self.log_dir = log_dir or default_gui_logs
+        # Ensure directory exists (create parents if needed)
+        self.log_dir.mkdir(parents=True, exist_ok=True)
 
         # Create GUI handler for real-time log display
         self.gui_handler = GuiLogHandler()

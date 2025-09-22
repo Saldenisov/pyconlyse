@@ -19,7 +19,7 @@ from taurus_warnings_fix import suppress_taurus_deprecation_warnings
 # Suppress warnings as early as possible
 suppress_taurus_deprecation_warnings()
 
-from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal, pyqtSlot, QThread
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction,
@@ -39,6 +39,10 @@ from PyQt5.QtWidgets import (
     QTextEdit,
     QVBoxLayout,
     QWidget,
+    QDoubleSpinBox,
+    QSpacerItem,
+    QSizePolicy,
+    QComboBox,
 )
 
 # Add parent directory to path for imports
@@ -51,6 +55,18 @@ from main_app.core.async_manager import (
 )
 from main_app.core.config import OFFLINE_MODE
 from main_app.core.logging_config import setup_pyconlyse_logging
+
+# Additional third-party libs used for legacy features
+import zmq
+import imageio
+import numpy as np
+import pyqtgraph as pg
+
+# Optional DS visualization type
+try:
+    from DeviceServers.shared.DS_Widget import VisType as DSVisType
+except Exception:
+    DSVisType = None
 
 logger = logging.getLogger(__name__)
 
@@ -233,6 +249,64 @@ class LogViewer(QTextEdit):
         self.line_count += 1
 
 
+class ElyseDataThread(QThread):
+    """Thread handling ELYSE ZMQ data (legacy-compatible)."""
+
+    data_signal = pyqtSignal(str)
+
+    def __init__(self, zmq_address: str = "tcp://129.175.100.128:6050"):
+        super().__init__()
+        self.zmq_address = zmq_address
+        self.running = False
+
+    def run(self):
+        context = None
+        socket = None
+        try:
+            context = zmq.Context()
+            socket = context.socket(zmq.PULL)
+            # Proper cleanup options
+            socket.setsockopt(zmq.LINGER, 1000)
+            socket.setsockopt(zmq.RCVTIMEO, 1000)
+            try:
+                socket.bind(self.zmq_address)
+            except zmq.ZMQError:
+                # Fallback to local
+                alt = "tcp://127.0.0.1:6051"
+                try:
+                    socket.bind(alt)
+                    self.zmq_address = alt
+                except zmq.ZMQError:
+                    return
+            self.running = True
+            while self.running:
+                try:
+                    msg = socket.recv_string(flags=0)
+                    if self.running:
+                        self.data_signal.emit(msg)
+                except zmq.Again:
+                    continue
+                except zmq.ZMQError as e:
+                    if e.errno == zmq.ETERM:
+                        break
+                except Exception:
+                    self.msleep(100)
+        finally:
+            try:
+                if socket:
+                    socket.close()
+            except Exception:
+                pass
+            try:
+                if context:
+                    context.term()
+            except Exception:
+                pass
+
+    def stop(self):
+        self.running = False
+
+
 class PyConlyseMainWindow(QMainWindow):
     """Main PyConlyse GUI window - starts immediately, connects asynchronously."""
 
@@ -246,6 +320,25 @@ class PyConlyseMainWindow(QMainWindow):
         self.status_indicators = {}
         self._ui_ready = False
         self._deferred_started = False
+
+        # Legacy ELYSE control (ZMQ-driven) state
+        self.elyse_tabs = None
+        self._elyse_tabs_widgets: Dict[str, QWidget] = {}
+        self._elyse_layouts: Dict[str, QVBoxLayout] = {}
+        self._elyse_elements: Dict[str, QWidget] = {}
+        self._elyse_primary = True  # avoid sending on first value change
+        self._elyse_thread: ElyseDataThread | None = None
+
+        # ZMQ push socket for sending ELYSE changes
+        self._zmq_context = None
+        self._zmq_push = None
+
+        # Device Clients tab state
+        self._clients_tab = None
+        self._clients_sections = {}
+        self._client_devices_map: Dict[str, list] = {}
+        self._client_vis = getattr(DSVisType, "FULL", None)
+        self._launched_widgets = []
 
         # Create thread-safe signals
         self.signals = ThreadSafeSignals()
@@ -354,10 +447,14 @@ class PyConlyseMainWindow(QMainWindow):
         self.management_tabs = QTabWidget()
         overview_tab = self.create_overview_tab()
         devices_tab = self.create_devices_tab()
+        device_clients_tab = self.create_device_clients_tab()
         deviceservers_tab = self.create_deviceservers_tab()
+        elyse_tab = self.create_elyse_control_tab()
         self.management_tabs.addTab(overview_tab, "Overview")
         self.management_tabs.addTab(devices_tab, "Devices (DB)")
+        self.management_tabs.addTab(device_clients_tab, "Device Clients")
         self.management_tabs.addTab(deviceservers_tab, "DeviceServers")
+        self.management_tabs.addTab(elyse_tab, "ELYSE Control")
         layout.addWidget(self.management_tabs)
 
         # Progress bar
@@ -482,6 +579,12 @@ class PyConlyseMainWindow(QMainWindow):
         self.btn_refresh_db_status = QPushButton("Refresh States")
         self.btn_refresh_db_status.clicked.connect(self.update_db_devices_status_async)
         ctrl.addWidget(self.btn_refresh_db_status)
+
+        # Legacy map button
+        self.btn_show_map = QPushButton("Show System Map")
+        self.btn_show_map.clicked.connect(self.show_system_map)
+        ctrl.addWidget(self.btn_show_map)
+
         ctrl.addStretch()
         v.addLayout(ctrl)
 
@@ -502,6 +605,205 @@ class PyConlyseMainWindow(QMainWindow):
             QTimer.singleShot(0, self.refresh_db_devices_list_async)
 
         return tab
+
+    def create_device_clients_tab(self) -> QWidget:
+        """Create a GUI similar to legacy to open control widgets for DS by type."""
+        tab = QWidget()
+        v = QVBoxLayout(tab)
+
+        # Visualization type selection (if DSVisType available)
+        if DSVisType is not None:
+            vis_group = QGroupBox("Visualization Type")
+            vis_layout = QHBoxLayout()
+            for vt in DSVisType:
+                rb = QPushButton(vt.value)
+                rb.setCheckable(True)
+                if vt == DSVisType.FULL:
+                    rb.setChecked(True)
+                def _mk_setter(val):
+                    return lambda: self._set_client_vis(val)
+                rb.clicked.connect(_mk_setter(vt))
+                vis_layout.addWidget(rb)
+            vis_layout.addStretch()
+            vis_group.setLayout(vis_layout)
+            v.addWidget(vis_group)
+
+        # Controls row
+        ctrl = QHBoxLayout()
+        self.btn_refresh_clients = QPushButton("Refresh Device Lists")
+        self.btn_refresh_clients.clicked.connect(self.refresh_device_clients_list_async)
+        ctrl.addWidget(self.btn_refresh_clients)
+        ctrl.addStretch()
+        v.addLayout(ctrl)
+
+        # Scroll area
+        self.clients_scroll = QScrollArea()
+        self.clients_scroll.setWidgetResizable(True)
+        self._clients_tab = QWidget()
+        self._clients_tab_layout = QVBoxLayout(self._clients_tab)
+        self._clients_tab_layout.addStretch()
+        self.clients_scroll.setWidget(self._clients_tab)
+        v.addWidget(self.clients_scroll)
+
+        # Build sections
+        self._build_client_sections()
+
+        # Initial populate
+        QTimer.singleShot(0, self.refresh_device_clients_list_async)
+
+        return tab
+
+    def _set_client_vis(self, val):
+        try:
+            self._client_vis = val
+        except Exception:
+            self._client_vis = getattr(DSVisType, "FULL", None)
+
+    def _client_configs(self):
+        """Return list of client configurations: (key, display, keywords, launcher_fn_name, icon)."""
+        return [
+            ("NETIO", "NETIO", ["netio"], "start_netio_widget", "icons/NETIO.png"),
+            ("OWIS", "OWIS", ["owis", "delay"], "start_owis_widget", "icons/OWIS.png"),
+            ("STANDA", "STANDA", ["standa"], "start_standa_widget", "icons/STANDA.svg"),
+            ("TOPDIRECT", "TOPDIRECT", ["topdirect"], "start_topdirect_widget", "icons/TopDirect.svg"),
+            ("BASLER", "BASLER", ["basler", "camera"], "start_basler_widget", "icons/basler_camera.svg"),
+            ("LASER_POINTING", "Laser Pointing", ["laser"], "start_laser_pointing_widget", "icons/laser_pointing.svg"),
+        ]
+
+    def _build_client_sections(self):
+        # Clear existing (except stretch)
+        try:
+            while self._clients_tab_layout.count() > 1:
+                item = self._clients_tab_layout.takeAt(0)
+                w = item.widget()
+                if w:
+                    w.deleteLater()
+        except Exception:
+            pass
+        self._clients_sections = {}
+
+        from PyQt5.QtGui import QIcon
+
+        for key, display, _keywords, _launcher, icon in self._client_configs():
+            row = QHBoxLayout()
+            btn = QPushButton(display)
+            try:
+                btn.setIcon(QIcon(icon))
+            except Exception:
+                pass
+            combo = QComboBox()
+            combo.addItem("(loading...)")
+            open_btn = QPushButton("Open")
+            open_btn.clicked.connect(lambda _, k=key: self._open_selected_client(k))
+
+            row.addWidget(btn)
+            row.addWidget(combo)
+            row.addWidget(open_btn)
+            row.addStretch()
+            cont = QWidget()
+            cont.setLayout(row)
+            self._clients_tab_layout.insertWidget(self._clients_tab_layout.count() - 1, cont)
+            self._clients_sections[key] = {"container": cont, "combo": combo}
+
+    def refresh_device_clients_list_async(self):
+        """Fetch exported devices and categorize by DS keywords in background."""
+        from main_app.core.config import OFFLINE_MODE
+        if OFFLINE_MODE:
+            # Offline placeholders
+            categorized = {key: [] for key, *_ in self._client_configs()}
+            self._apply_clients_device_map(categorized)
+            return
+        try:
+            import concurrent.futures
+            from tango import Database
+        except Exception:
+            categorized = {key: [] for key, *_ in self._client_configs()}
+            self._apply_clients_device_map(categorized)
+            return
+
+        def _fetch():
+            try:
+                db = Database()
+                names = []
+                for prefix in ("ELYSE", "manip"):
+                    try:
+                        names.extend(list(db.get_device_exported(f"{prefix}*")))
+                    except Exception:
+                        continue
+                # Categorize by keywords
+                out = {key: [] for key, *_ in self._client_configs()}
+                lower_names = [(n, n.lower()) for n in set(names)]
+                for key, _display, keywords, _launcher, _icon in self._client_configs():
+                    for n, ln in lower_names:
+                        if any(kw in ln for kw in keywords):
+                            out[key].append(n)
+                # Sort
+                for k in out:
+                    out[k] = sorted(out[k])
+                return out
+            except Exception:
+                return {key: [] for key, *_ in self._client_configs()}
+
+        ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        fut = ex.submit(_fetch)
+
+        def _done(_f):
+            try:
+                categorized = _f.result(timeout=0) or {}
+            except Exception:
+                categorized = {key: [] for key, *_ in self._client_configs()}
+            QTimer.singleShot(0, lambda d=categorized: self._apply_clients_device_map(d))
+            try:
+                ex.shutdown(wait=False)
+            except Exception:
+                pass
+
+        fut.add_done_callback(_done)
+
+    def _apply_clients_device_map(self, categorized: Dict[str, list]):
+        self._client_devices_map = categorized or {}
+        for key, data in self._clients_sections.items():
+            combo = data["combo"]
+            combo.clear()
+            items = self._client_devices_map.get(key) or []
+            if not items:
+                combo.addItem("(none found)")
+                combo.setEnabled(False)
+            else:
+                combo.addItems(items)
+                combo.setEnabled(True)
+
+    def _open_selected_client(self, key: str):
+        data = self._clients_sections.get(key)
+        if not data:
+            return
+        combo = data["combo"]
+        if combo.count() == 0 or not combo.isEnabled():
+            return
+        device_name = combo.currentText()
+        try:
+            from main_app.ui import widget_launchers as wl
+            # Map key -> launcher function
+            fn_map = {
+                "NETIO": wl.start_netio_widget,
+                "OWIS": wl.start_owis_widget,
+                "STANDA": wl.start_standa_widget,
+                "TOPDIRECT": wl.start_topdirect_widget,
+                "BASLER": wl.start_basler_widget,
+                "LASER_POINTING": wl.start_laser_pointing_widget,
+            }
+            vis = self._client_vis.value if hasattr(self._client_vis, "value") else "FULL"
+            # Launch
+            w = None
+            if key in ("NETIO", "LASER_POINTING", "BASLER", "STANDA", "TOPDIRECT"):
+                w = fn_map[key](device_name, parent=None, vis=vis)
+            elif key == "OWIS":
+                # OWIS may auto-detect axes if not provided
+                w = fn_map[key](device_name, axes=None, parent=None, vis=vis)
+            if w is not None:
+                self._launched_widgets.append(w)
+        except Exception as e:
+            QMessageBox.critical(self, "Client", f"Failed to open widget for {key}: {e}")
 
     def create_deviceservers_tab(self) -> QWidget:
         """Create the DeviceServers management tab"""
@@ -815,6 +1117,173 @@ class PyConlyseMainWindow(QMainWindow):
         """Clear the log viewer."""
         self.log_viewer.clear()
         logger.info("Log viewer cleared")
+
+    # ===== Legacy-inspired ELYSE control integration =====
+    def create_elyse_control_tab(self) -> QWidget:
+        """Create ELYSE control tab with dynamic sub-tabs populated from ZMQ messages."""
+        tab = QWidget()
+        v = QVBoxLayout(tab)
+        self.elyse_tabs = QTabWidget()
+        v.addWidget(self.elyse_tabs)
+        return tab
+
+    def _ensure_zmq_push(self):
+        if self._zmq_push is None:
+            try:
+                self._zmq_context = zmq.Context()
+                self._zmq_push = self._zmq_context.socket(zmq.PUSH)
+                self._zmq_push.connect("tcp://127.0.0.1:5556")
+            except Exception:
+                self._zmq_push = None
+
+    def start_elyse_control(self):
+        """Start ELYSE ZMQ thread and handlers."""
+        if self._elyse_thread is not None:
+            return
+        try:
+            self._elyse_thread = ElyseDataThread()
+            self._elyse_thread.data_signal.connect(self.update_elyse_ui)
+            self._elyse_thread.start()
+            self._ensure_zmq_push()
+            logger.info("ELYSE control thread started")
+        except Exception as e:
+            logger.warning(f"Failed to start ELYSE thread: {e}")
+            self._elyse_thread = None
+
+    def update_elyse_ui(self, message: str):
+        """Handle incoming ELYSE ZMQ messages and update UI accordingly."""
+        try:
+            msg = eval(message)
+        except Exception:
+            return
+        for card in msg:
+            for elem in card:
+                parts = str(elem).split('/')
+                if len(parts) <= 3:
+                    continue
+                tab_name = '/'.join(parts[0:2])
+                elem_name = '/'.join(parts[-3:-1])
+                key_label = f"tab_{tab_name}_label_{elem_name}"
+                if f"tab_{tab_name}" not in self._elyse_tabs_widgets:
+                    self._add_elyse_tab(tab_name)
+                if key_label not in self._elyse_elements:
+                    self._add_elyse_element(elem_name, tab_name, elem)
+                else:
+                    self._update_elyse_element(tab_name, elem_name, elem)
+
+    def _add_elyse_tab(self, name: str):
+        w = QWidget()
+        layout = QVBoxLayout()
+        scroll = QScrollArea(widgetResizable=True)
+        scroll.setWidget(w)
+        w.setLayout(layout)
+        self.elyse_tabs.addTab(scroll, name)
+        self._elyse_tabs_widgets[f"tab_{name}"] = w
+        self._elyse_layouts[f"layout_{name}"] = layout
+
+    def _add_elyse_element(self, element_name: str, tab_name: str, element_value: str):
+        parts = str(element_value).split('/')
+        if len(parts) > 3:
+            label = QLabel()
+            text = '/'.join(parts[-3:])
+            try:
+                val = float(parts[-1])
+            except Exception:
+                val = 0.0
+            sb = QDoubleSpinBox()
+            sb.setDecimals(6)
+            sb.setRange(-1e9, 1e9)
+            sb.setValue(val)
+            sb.valueChanged.connect(lambda _v, t=tab_name, e=element_name: self._change_elyse_sb_value(t, e))
+            label.setText(text)
+            elem_key_label = f"tab_{tab_name}_label_{element_name}"
+            elem_key_sb = f"tab_{tab_name}_sb_{element_name}"
+            self._elyse_elements[elem_key_label] = label
+            self._elyse_elements[elem_key_sb] = sb
+            layout: QVBoxLayout = self._elyse_layouts.get(f"layout_{tab_name}")
+            lo_h = QHBoxLayout()
+            lo_h.addWidget(label)
+            lo_h.addWidget(sb)
+            lo_h.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+            layout.addLayout(lo_h)
+
+    def _update_elyse_element(self, tab_name: str, elem_name: str, value: str):
+        parts = str(value).split('/')
+        text = '/'.join(parts[-3:-1])
+        label: QLabel = self._elyse_elements.get(f"tab_{tab_name}_label_{elem_name}")
+        if label is not None:
+            try:
+                from decimal import Decimal
+                label.setText(f"{text}/{Decimal(parts[-1]):.2E}")
+            except Exception:
+                label.setText(f"{text}/{parts[-1]}")
+
+    def _change_elyse_sb_value(self, tab_name: str, elem_name: str):
+        key = f"tab_{tab_name}_sb_{elem_name}"
+        sb: QDoubleSpinBox = self._elyse_elements.get(key)
+        if sb is None:
+            return
+        if self._elyse_primary:
+            self._elyse_primary = False
+            return
+        self._ensure_zmq_push()
+        if self._zmq_push is None:
+            return
+        try:
+            val = f"{tab_name}/{elem_name}/{sb.value()}"
+            self._zmq_push.send(val.encode('utf-8'))
+            logger.info(f"ELYSE set: {val}")
+        except Exception:
+            pass
+
+    # ===== Legacy-inspired Map integration =====
+    def show_system_map(self):
+        """Show the system layout map (legacy-style)."""
+        try:
+            # Prepare window
+            map_w = QWidget()
+            map_w.setWindowTitle("System Map")
+            v = QVBoxLayout(map_w)
+            h_image = QHBoxLayout()
+            h_label = QHBoxLayout()
+            v.addLayout(h_image)
+            v.addLayout(h_label)
+
+            glw = pg.GraphicsLayoutWidget()
+            vb = glw.addViewBox(row=1, col=1)
+
+            # Use existing icon (uppercase extension in repo)
+            icon_path = str((self.bin_path / "icons" / "Main_layout_1200.PNG").resolve())
+            im = imageio.imread(icon_path)
+
+            img = pg.ImageItem()
+            img.setImage(np.transpose(im, (1, 0, 2)))
+
+            pos_lab = QLabel("Position")
+            h_label.addWidget(pos_lab)
+
+            def mouse_moved(lbl, ev):
+                pos = ev[0]
+                if img.sceneBoundingRect().contains(pos):
+                    mp = vb.mapSceneToView(pos)
+                    lbl.setText(f"x={mp.x():0.1f}, y={mp.y():0.1f}")
+
+            proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=lambda *e: mouse_moved(pos_lab, e))
+            map_w._proxy = proxy  # keep ref
+            vb.addItem(img)
+            vb.setAspectLocked(True)
+            vb.invertY(True)
+
+            h_image.addWidget(glw)
+            map_w.resize(1200, 700)
+            map_w.show()
+
+            # Keep reference to prevent GC
+            if not hasattr(self, "_map_windows"):
+                self._map_windows = []
+            self._map_windows.append(map_w)
+        except Exception as e:
+            QMessageBox.warning(self, "Map", f"Failed to show system map: {e}")
 
     def save_logs(self):
         """Save logs to file."""
@@ -1273,6 +1742,24 @@ Features:
         if self.async_manager:
             self.async_manager.shutdown()
 
+        # Stop ELYSE thread and ZMQ
+        try:
+            if self._elyse_thread:
+                self._elyse_thread.stop()
+                self._elyse_thread.wait(1000)
+        except Exception:
+            pass
+        try:
+            if self._zmq_push:
+                self._zmq_push.close()
+        except Exception:
+            pass
+        try:
+            if self._zmq_context:
+                self._zmq_context.term()
+        except Exception:
+            pass
+
         # Stop timers
         if hasattr(self, "status_timer"):
             self.status_timer.stop()
@@ -1304,6 +1791,9 @@ Features:
 
             # Async managers
             self.initialize_async_manager()
+
+            # Start legacy-inspired ELYSE control thread
+            self.start_elyse_control()
 
             logger.info("Deferred startup complete")
             self.statusBar.showMessage("System initializing in background...")

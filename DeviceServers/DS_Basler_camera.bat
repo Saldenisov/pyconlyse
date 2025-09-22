@@ -45,28 +45,25 @@ echo.
 
 REM Astor starts devices sequentially, so no startup delays needed
 echo.
-echo Starting in new visible terminal window...
-echo Terminal title: DS_Basler_camera [%INSTANCE_NAME%]
+echo Attempting to open in Windows Terminal tab (if available)...
+
 echo.
-
-echo A separate Control window will open. Type STOP there to terminate this DS.
-
-REM Disable archive for this process
+REM Disable archive for this process (inherited by child tab/window)
 set DISABLE_ARCHIVE=1
 
-REM Start the device server in a new visible terminal window
+REM Start the device server in a Windows Terminal tab if possible; otherwise fallback to a new window
 set "DS_TITLE=DS_Basler_camera [%INSTANCE_NAME%]"
-start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\basler" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && python DS_Basler_camera.py %INSTANCE_NAME%"
+where wt >nul 2>&1
+if %errorlevel%==0 (
+    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\cameras\basler" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && python DS_Basler_camera.py %INSTANCE_NAME%"
+) else (
+    echo Windows Terminal not found; starting in a separate window...
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\basler" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && python DS_Basler_camera.py %INSTANCE_NAME%"
+)
 
-REM Open control window to allow typing STOP to close DS
-start "Control - %DS_TITLE%" cmd /k "echo Control for %DS_TITLE%. & echo Type STOP to terminate this device server, or EXIT to close this control. & :control & set /p USER_INPUT=Command (STOP/EXIT):  & if /I "%USER_INPUT%"=="STOP" (taskkill /FI "WINDOWTITLE eq %DS_TITLE%" /T & echo Sent stop to %DS_TITLE%.) & if /I "%USER_INPUT%"=="EXIT" exit & goto control"
-
-echo Device server started in separate terminal window!
-echo You can monitor and control it from the terminal titled:
-echo "DS_Basler_camera [%INSTANCE_NAME%]"
+echo Device server started in terminal tab/window!
 echo.
 echo To close the device server:
-echo - Use Ctrl+C in the device server terminal, or
-echo - Close the terminal window, or
+echo - Use Ctrl+C in that tab, or close the tab/window, or
 echo - Use Astor to manage the device server
 echo.

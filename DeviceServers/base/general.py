@@ -24,11 +24,7 @@ def _str_to_bool(val: str) -> bool:
 # Defaults for global settings
 CONFIG_DEFAULTS = {
     "DISABLE_ARCHIVE": False,  # Disable archive connections globally
-    "ARCHIVE_TIMEOUT_SECONDS": 5,  # Default archive connection timeout,
-    "DEBUG_INIT_TIMING": False,  # Print init timing breakdown,
-    "DEBUG_TIMING_THRESHOLD_MS": 10,  # Only show steps >= this threshold
-    "DEBUG_FUNCTION_TIMING": False,  # Time essential DS functions
-    "DEBUG_FUNCTION_MIN_MS": 25,  # Only show function timings >= this threshold
+    "ARCHIVE_TIMEOUT_SECONDS": 5,  # Default archive connection timeout
 }
 
 # Determine config file path
@@ -83,22 +79,6 @@ try:
         GLOBAL_SETTINGS["ARCHIVE_TIMEOUT_SECONDS"] = int(
             os.environ.get("ARCHIVE_TIMEOUT_SECONDS", "5")
         )
-    if "DEBUG_INIT_TIMING" in os.environ:
-        GLOBAL_SETTINGS["DEBUG_INIT_TIMING"] = _str_to_bool(
-            os.environ.get("DEBUG_INIT_TIMING", "")
-        )
-    if "DEBUG_TIMING_THRESHOLD_MS" in os.environ:
-        GLOBAL_SETTINGS["DEBUG_TIMING_THRESHOLD_MS"] = int(
-            os.environ.get("DEBUG_TIMING_THRESHOLD_MS", "10")
-        )
-    if "DEBUG_FUNCTION_TIMING" in os.environ:
-        GLOBAL_SETTINGS["DEBUG_FUNCTION_TIMING"] = _str_to_bool(
-            os.environ.get("DEBUG_FUNCTION_TIMING", "")
-        )
-    if "DEBUG_FUNCTION_MIN_MS" in os.environ:
-        GLOBAL_SETTINGS["DEBUG_FUNCTION_MIN_MS"] = int(
-            os.environ.get("DEBUG_FUNCTION_MIN_MS", "25")
-        )
 except Exception:
     # Fallback silently if env parsing fails
     pass
@@ -125,8 +105,6 @@ class DS_General(Device):
     friendly_name = device_property(dtype=str)
     server_id = device_property(dtype=int)
     always_on = device_property(dtype=int, default_value=0)
-    debug_init_timing = device_property(dtype=int, default_value=0)
-    debug_function_timing = device_property(dtype=int, default_value=0)
     archive_enabled = device_property(dtype=int, default_value=0)
     archive = "manip/general/archive"
     polling_main = 300
@@ -241,31 +219,6 @@ class DS_General(Device):
         if printing:
             print(info_in)
 
-    # ----- Debug helpers for function timing -----
-    def _debug_functions_on(self) -> bool:
-        try:
-            return (
-                bool(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_TIMING", False))
-                or getattr(self, "debug_function_timing", 0) == 1
-            )
-        except Exception:
-            return False
-
-    def _debug_functions_threshold_ms(self) -> int:
-        try:
-            return int(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_MIN_MS", 25))
-        except Exception:
-            return 25
-
-    def _time_call(self, label: str, func, *args, **kwargs):
-        t0 = time.time()
-        result = func(*args, **kwargs)
-        if self._debug_functions_on():
-            dt_ms = (time.time() - t0) * 1000.0
-            if dt_ms >= self._debug_functions_threshold_ms():
-                # Use ASCII-only output to avoid Windows console encoding issues
-                self.info(f"{label}: {dt_ms:.1f} ms", True)
-        return result
 
     @command(dtype_in=str)
     def register_client_lock(self, name):
@@ -280,33 +233,6 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
-        # Debug timing setup
-        debug_on = (
-            bool(GLOBAL_SETTINGS.get("DEBUG_INIT_TIMING", False))
-            or getattr(self, "debug_init_timing", 0) == 1
-        )
-        self._init_marks = []
-        self._init_t0 = time.time()
-
-        def _mark(label: str):
-            if debug_on:
-                self._init_marks.append((label, time.time() - self._init_t0))
-
-        def _print_init_timing():
-            if not debug_on or not getattr(self, "_init_marks", None):
-                return
-            threshold = int(GLOBAL_SETTINGS.get("DEBUG_TIMING_THRESHOLD_MS", 10))
-            self.info("=== INIT TIMING (ms) ===", True)
-            prev = 0.0
-            for label, t in self._init_marks:
-                dt = (t - prev) * 1000.0
-                if dt >= threshold:
-                    self.info(f"{label}: {dt:.1f} ms (t={t * 1000.0:.1f})", True)
-                prev = t
-            total = (self._init_marks[-1][1]) * 1000.0
-            self.info(f"Total init: {total:.1f} ms", True)
-
-        _mark("start")
         self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
@@ -318,14 +244,11 @@ class DS_General(Device):
         internal_time = Thread(target=self.int_time)
         internal_time.daemon = True
         internal_time.start()
-        _mark("internal_time_started")
         self._status_check_fault = 0
         self.prev_state = DevState.FAULT
         Device.init_device(self)
-        _mark("tango_Device.init_device")
         if hasattr(self, "parameters"):
             self.parameters = eval(str(self.parameters))
-        _mark("parameters_parsed")
 
         # Initialize archive connection with optional global disable flag
         global_disable = bool(GLOBAL_SETTINGS.get("DISABLE_ARCHIVE", False))
@@ -338,21 +261,17 @@ class DS_General(Device):
             # Initialize archive connection with timeout handling
             timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
             self._init_archive_connection(timeout_seconds=timeout_val)
-        _mark("archive_init")
 
         self.set_state(DevState.OFF)
         self._device_id_internal = -1
         self._uri = b""
         self.find_device()
-        _mark("find_device")
 
         if self._device_id_internal != -1:
             self.info(f"{self.device_name} was found.", True)
         else:
             self.info(f"{self.device_name} was NOT found.", True)
             self.set_state(DevState.FAULT)
-        _mark("post_find_device")
-        _print_init_timing()
 
     @abstractmethod
     def register_variables_for_archive(self):
@@ -478,14 +397,12 @@ class DS_General(Device):
     def get_controller_status(self):
         state_ok = self.check_func_allowance(self.get_controller_status)
         if state_ok == 1:
-            res = self._time_call(
-                "get_controller_status_local", self.get_controller_status_local
-            )
-            self._time_call("send_state_archive", self.send_state_archive)
+            res = self.get_controller_status_local()
+            self.send_state_archive()
             if res != 0:
                 self.error(f"{res}")
             if self.get_state() != DevState.ON and self.always_on == 1:
-                self._time_call("turn_on", self.turn_on)
+                self.turn_on()
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
@@ -496,12 +413,12 @@ class DS_General(Device):
         state_ok = self.check_func_allowance(self.turn_on)
         if state_ok == 1:
             self.info(f"Turning ON {self.device_name}.", True)
-            res = self._time_call("turn_on_local", self.turn_on_local)
+            res = self.turn_on_local()
             if res != 0:
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} WAS turned ON.", True)
-                self._time_call("fix_state", self.fix_state)
+                self.fix_state()
         else:
             self.error(
                 f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}."
@@ -516,15 +433,13 @@ class DS_General(Device):
         state_ok = self.check_func_allowance(self.turn_off)
         if state_ok == 1:
             self.info(f"Turning off device {self.device_name}.", True)
-            res = self._time_call("turn_off_local", self.turn_off_local)
+            res = self.turn_off_local()
             if res != 0:
                 self.error(f"{res}")
             else:
                 self.info(f"Device {self.device_name} is turned OFF.", True)
                 data = self.form_archive_data(0, "State")
-                self._time_call(
-                    "write_to_archive(State=0)", self.write_to_archive, data
-                )
+                self.write_to_archive(data)
         else:
             self.error(
                 f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}."
@@ -536,28 +451,8 @@ class DS_General(Device):
 
     def write_to_archive(self, data: ArchiveData):
         if self.archive.state == 1:
-            if (
-                bool(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_TIMING", False))
-                or getattr(self, "debug_function_timing", 0) == 1
-            ):
-                t0 = time.time()
-                data_c = self.compress_data(data)
-                t1 = time.time()
-                self.archive.archive_it(data_c)
-                t2 = time.time()
-                comp_ms = (t1 - t0) * 1000.0
-                arch_ms = (t2 - t1) * 1000.0
-                total_ms = (t2 - t0) * 1000.0
-                thr = int(GLOBAL_SETTINGS.get("DEBUG_FUNCTION_MIN_MS", 25))
-                if comp_ms >= thr:
-                    self.info(f"compress_data: {comp_ms:.1f} ms", True)
-                if arch_ms >= thr:
-                    self.info(f"archive_it: {arch_ms:.1f} ms", True)
-                if total_ms >= thr:
-                    self.info(f"write_to_archive: {total_ms:.1f} ms", True)
-            else:
-                data_c = self.compress_data(data)
-                self.archive.archive_it(data_c)
+            data_c = self.compress_data(data)
+            self.archive.archive_it(data_c)
 
     def compress_data(self, data):
         msg_b = msgpack.packb(str(data))

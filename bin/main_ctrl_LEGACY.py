@@ -1,14 +1,13 @@
 import subprocess
 import sys
+from _functools import partial
 from pathlib import Path
 from threading import Thread
+from typing import Dict
 from time import sleep
-from typing import Dict, List
-
 import imageio
 import numpy as np
 import pyqtgraph as pg
-from _functools import partial
 from PyQt5 import QtWidgets
 from PyQt5.QtGui import QIcon
 from tango import Database
@@ -18,31 +17,18 @@ from taurus.external.qt import Qt
 from taurus.qt.qtgui.application import TaurusApplication
 from taurus.qt.qtgui.button import TaurusCommandButton
 from taurus.qt.qtgui.input import TaurusValueComboBox
-
+from typing import List
 app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
-from functools import partial
-
-import zmq
-from PyQt5.QtCore import QThread, pyqtSignal
-from PyQt5.QtWidgets import (
-    QDoubleSpinBox,
-    QHBoxLayout,
-    QLabel,
-    QScrollArea,
-    QSizePolicy,
-    QSpacerItem,
-    QTabWidget,
-    QVBoxLayout,
-    QWidget,
-)
-
 from DeviceServers.DS_Widget import VisType
-
+from functools import partial
+from PyQt5.QtCore import QThread, pyqtSignal
+import zmq
+from PyQt5.QtWidgets import QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout, QLabel, QHBoxLayout, \
+    QDoubleSpinBox, QGridLayout, QScrollArea, QSpacerItem, QSizePolicy
 type_vis = VisType.FULL
-from decimal import Decimal
-
 from gui.MyWidgets import MyQLabel
+from decimal import Decimal
 
 
 class WorkerThread(QThread):
@@ -56,7 +42,7 @@ class WorkerThread(QThread):
         socket.bind("tcp://129.175.100.128:6050")
 
         while True:
-            message: str = socket.recv().decode("utf-8")
+            message: str = socket.recv().decode('utf-8')
             self.data_signal.emit(message)
 
         socket.close()
@@ -67,8 +53,8 @@ def start_cmd(call: str, cbox: TaurusValueComboBox):
     c_idx = cbox.currentIndex()
     arg = cbox.itemText(c_idx)
     global type_vis
-    calling = f"{call} {arg} {type_vis.value}"
-    print(f"Calling {calling}")
+    calling = f'{call} {arg} {type_vis.value}'
+    print(f'Calling {calling}')
     subprocess.call([call, arg, type_vis.value])
 
 
@@ -79,7 +65,7 @@ def rb_clicked(value: str):
 
 def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
     db = Database()
-    servers = ["ELYSE", "manip"]
+    servers = ['ELYSE', 'manip']
     devices = []
     for server in servers:
         devices = devices + list(db.get_device_exported(f"{server}*"))
@@ -108,9 +94,8 @@ def set_devices_states(layout_devices: QtWidgets.QLayout, check=False):
 
 def set_state(labels):
     from time import sleep
-
     db = Database()
-    servers = ["ELYSE", "manip"]
+    servers = ['ELYSE', 'manip']
     devices = []
     for server in servers:
         devices = devices + list(db.get_device_exported(f"{server}*"))
@@ -118,7 +103,7 @@ def set_state(labels):
     i = 0
     for dev_name in devices:
         i += 1
-        print(f"Device {dev_name} {i}/{len(devices)}")
+        print(f'Device {dev_name} {i}/{len(devices)}')
         dev = Device(dev_name)
         taurus_devices[dev_name] = dev
     while True:
@@ -126,76 +111,48 @@ def set_state(labels):
             sleep(0.15)
             state_ds = dev.state
             if state_ds == 4:
-                labels[dev_name].update_style("background-color: red")
+                labels[dev_name].update_style(f"background-color: red")
             else:
                 state = dev.State()
                 if state == DevState.ON:
-                    labels[dev_name].update_style("background-color: green")
+                    labels[dev_name].update_style(f"background-color: green")
                 elif state == DevState.STANDBY:
-                    labels[dev_name].update_style("background-color: yellow")
+                    labels[dev_name].update_style(f"background-color: yellow")
                 elif state == DevState.OFF:
-                    labels[dev_name].update_style("background-color: gray")
+                    labels[dev_name].update_style(f"background-color: gray")
                 elif state == DevState.FAULT:
-                    labels[dev_name].update_style("background-color: red")
+                    labels[dev_name].update_style(f"background-color: red")
                 else:
-                    labels[dev_name].update_style("background-color: purple")
+                    labels[dev_name].update_style(f"background-color: purple")
         sleep(2)
 
 
 def label_focus(map, event):
-    positions = {
-        "ELYSE/clocks/SYNC_MAIN": (300, 300),
-        "ELYSE/motorized_devices/DE1": (11705, 1584),
-        "ELYSE/motorized_devices/DE2": (4118, 2366),
-        "ELYSE/motorized_devices/MM1_X": (11152, 1578),
-        "ELYSE/motorized_devices/MM1_Y": (11152, 1578),
-        "ELYSE/motorized_devices/MM2_X": (11171, 2381),
-        "ELYSE/motorized_devices/MM2_Y": (11171, 2381),
-        "ELYSE/motorized_devices/MME_X": (11521, 2118),
-        "ELYSE/motorized_devices/MME_Y": (11521, 2118),
-        "manip/ELYSE/PDU_ELYSE": (300, 300),
-        "manip/general/DS_OWIS_PS90": (3273, 664),
-        "manip/SD1/PDU_SD1": (300, 300),
-        "manip/SD2/PDU_SD2": (300, 300),
-        "manip/V0/Cam1_V0": (157, 3501),
-        "manip/V0/Cam2_V0": (1888, 2559),
-        "manip/V0/Cam3_V0": (300, 300),
-        "manip/V0/DV01": (1010, 2235),
-        "manip/V0/DV02": (754, 2363),
-        "manip/V0/DV03": (2921, 2247),
-        "manip/V0/DV04": (920, 540),
-        "manip/V0/F1": (300, 300),
-        "manip/V0/L-2_1": (300, 300),
-        "manip/V0/LaserPointing-Cam1": (226, 3936),
-        "manip/V0/LaserPointing-Cam2": (2331, 2270),
-        "manip/V0/LaserPointing-Cam3": (300, 300),
-        "manip/V0/MM3_X": (60, 630),
-        "manip/V0/MM3_Y": (60, 630),
-        "manip/V0/MM4_X": (60, 1100),
-        "manip/V0/MM4_Y": (60, 1100),
-        "manip/V0/OPA_X": (300, 300),
-        "manip/V0/OPA_Y": (300, 300),
-        "manip/V0/PDU_VO": (300, 300),
-        "manip/V0/S1": (209, 3961),
-        "manip/V0/S2": (2351, 2261),
-        "manip/V0/S3": (300, 300),
-        "manip/V0/TS_OPA_m": (2620, 3697),
-        "manip/V0/TS_SC_m": (2192, 4194),
-        "manip/VD2/PDU_VD2": (300, 300),
-    }
+
+    positions = {'ELYSE/clocks/SYNC_MAIN': (300, 300), 'ELYSE/motorized_devices/DE1': (11705, 1584),
+                 'ELYSE/motorized_devices/DE2': (4118, 2366), 'ELYSE/motorized_devices/MM1_X': (11152, 1578),
+                 'ELYSE/motorized_devices/MM1_Y': (11152, 1578), 'ELYSE/motorized_devices/MM2_X': (11171, 2381),
+                 'ELYSE/motorized_devices/MM2_Y': (11171, 2381), 'ELYSE/motorized_devices/MME_X': (11521, 2118),
+                 'ELYSE/motorized_devices/MME_Y': (11521, 2118), 'manip/ELYSE/PDU_ELYSE': (300, 300),
+                 'manip/general/DS_OWIS_PS90': (3273, 664), 'manip/SD1/PDU_SD1': (300, 300),
+                 'manip/SD2/PDU_SD2': (300, 300), 'manip/V0/Cam1_V0': (157, 3501), 'manip/V0/Cam2_V0': (1888, 2559),
+                 'manip/V0/Cam3_V0': (300, 300), 'manip/V0/DV01': (1010, 2235), 'manip/V0/DV02': (754, 2363),
+                 'manip/V0/DV03': (2921, 2247), 'manip/V0/DV04': (920, 540), 'manip/V0/F1': (300, 300),
+                 'manip/V0/L-2_1': (300, 300), 'manip/V0/LaserPointing-Cam1': (226, 3936),
+                 'manip/V0/LaserPointing-Cam2': (2331, 2270), 'manip/V0/LaserPointing-Cam3': (300, 300),
+                 'manip/V0/MM3_X': (60, 630), 'manip/V0/MM3_Y': (60, 630), 'manip/V0/MM4_X': (60, 1100),
+                 'manip/V0/MM4_Y': (60, 1100), 'manip/V0/OPA_X': (300, 300), 'manip/V0/OPA_Y': (300, 300),
+                 'manip/V0/PDU_VO': (300, 300), 'manip/V0/S1': (209, 3961), 'manip/V0/S2': (2351, 2261),
+                 'manip/V0/S3': (300, 300), 'manip/V0/TS_OPA_m': (2620, 3697), 'manip/V0/TS_SC_m': (2192, 4194),
+                 'manip/VD2/PDU_VD2': (300, 300)}
 
     if event in positions:
         x = 120
         y = 120
         if event not in map.circles:
             pos = list(positions[event])
-            circle = pg.CircleROI(
-                [pos[0] - x / 2, pos[1] - y / 2],
-                [x, y],
-                movable=False,
-                resizable=False,
-                pen=pg.mkPen("r", width=2),
-            )
+            circle = pg.CircleROI([pos[0] - x/2, pos[1] - y/2], [x, y], movable=False, resizable=False,
+                                  pen=pg.mkPen('r', width=2))
             map.view.addItem(circle)
             map.circles[event] = circle
         else:
@@ -214,12 +171,12 @@ def show_map(main_widget, labels: Dict):
 
     imageWidget = pg.GraphicsLayoutWidget()
     vb = imageWidget.addViewBox(row=1, col=1)
-    im = imageio.imread("C:\\dev\\pyconlyse\\bin\\icons\\Main_layout_1200.png")
+    im = imageio.imread('C:\\dev\\pyconlyse\\bin\\icons\\Main_layout_1200.png')
 
     img = pg.ImageItem()
     img.setImage(np.transpose(im, (1, 0, 2)))
 
-    label = QtWidgets.QLabel("Position")
+    label = QtWidgets.QLabel('Position')
     layout_map_labels.addWidget(label)
 
     def mouseMoved(label, img, evt):
@@ -227,16 +184,12 @@ def show_map(main_widget, labels: Dict):
         if img.sceneBoundingRect().contains(pos):
             mousePoint = vb.mapSceneToView(pos)
             index = int(mousePoint.x())
-            label.setText(
-                "<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>"
-                % (mousePoint.x(), mousePoint.y())
-            )
+            label.setText("<span style='font-size: 12pt'>x=%0.1f,   <span style='color: red'>y1=%0.1f</span>" %
+                          (mousePoint.x(), mousePoint.y()))
             # vLine.setPos(mousePoint.x())
             # hLine.setPos(mousePoint.y())
 
-    proxy = pg.SignalProxy(
-        vb.scene().sigMouseMoved, rateLimit=30, slot=partial(mouseMoved, label, img)
-    )
+    proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=partial(mouseMoved, label, img))
     map.proxy = proxy
     vb.addItem(img)
 
@@ -250,7 +203,7 @@ def show_map(main_widget, labels: Dict):
     map.setLayout(layout_map_main)
     main_widget.map_widget = map
     map.setGeometry(300, 300, 1200, 700)
-    map.setWindowTitle("Map")
+    map.setWindowTitle('Map')
     map.show()
 
     for label in labels.values():
@@ -261,7 +214,7 @@ def show_map(main_widget, labels: Dict):
 def rpi_toggle_pin(rpi_device: Device, pin):
     state = rpi_device.get_pin_state(pin)
     if state == -1:
-        print(f"Wrong pin {pin} state.")
+        print(f'Wrong pin {pin} state.')
     else:
         rpi_device.set_pin_state([pin, 1])
         sleep(0.25)
@@ -270,10 +223,9 @@ def rpi_toggle_pin(rpi_device: Device, pin):
 
 def activate_buttons(widgets: List[QtWidgets.QWidget]):
     import keyboard
-
     while True:
         sleep(0.15)
-        if keyboard.is_pressed("q"):
+        if keyboard.is_pressed('q'):
             for widget in widgets:
                 widget.setEnabled(True)
         else:
@@ -287,13 +239,13 @@ def main():
     tab1 = QtWidgets.QWidget()
     tab2 = QtWidgets.QWidget()
     tab3 = QtWidgets.QWidget()
-    tabs.addTab(tab1, "Clients")
-    tabs.addTab(tab2, "Devices")
+    tabs.addTab(tab1, 'Clients')
+    tabs.addTab(tab2, 'Devices')
     tabs_elyse = QTabWidget()
     layout_elyse = QHBoxLayout()
     layout_elyse.addWidget(tabs_elyse)
     tab3.setLayout(layout_elyse)
-    tabs.addTab(tab3, "ELYSE")
+    tabs.addTab(tab3, 'ELYSE')
     primary = True
     tabs_widgets_elyse = {}
     layouts_elyse = {}
@@ -306,45 +258,47 @@ def main():
         msg = eval(message)
         for card in msg:
             for elem in card:
-                split = elem.split("/")
+                split = elem.split('/')
                 if len(split) <= 3:
                     continue
-                tab_name = "/".join(split[0:2])
-                elem_name = "/".join(split[-3:-1])
+                tab_name = '/'.join(split[0:2])
+                elem_name = '/'.join(split[-3:-1])
 
-                if f"tab_{tab_name}" not in tabs_widgets_elyse:
+                if f'tab_{tab_name}' not in tabs_widgets_elyse:
                     add_tab(tab_name)
 
-                if f"tab_{tab_name}_label_{elem_name}" not in tabs_elements_elyse:
+                if f'tab_{tab_name}_label_{elem_name}' not in tabs_elements_elyse:
                     add_element(elem_name, tab_name, elem)
                 else:
                     update_element(tab_name, elem_name, elem)
 
     def add_tab(name):
-        """ "elyse/sync/NI6071E/delay/0.000000" """
+        """
+        "elyse/sync/NI6071E/delay/0.000000"
+        """
         tab = QWidget()
         layout = QVBoxLayout()
         scrollbar = QScrollArea(widgetResizable=True)
         scrollbar.setWidget(tab)
         tab.setLayout(layout)
         tabs_elyse.addTab(scrollbar, name)
-        tabs_widgets_elyse[f"tab_{name}"] = tab
-        layouts_elyse[f"layout_{name}"] = layout
+        tabs_widgets_elyse[f'tab_{name}'] = tab
+        layouts_elyse[f'layout_{name}'] = layout
 
     def add_element(element_name, tab_name, element_value: str):
-        split = element_value.split("/")
+        split = element_value.split('/')
         if len(split) > 3:
             label = QLabel()
-            text = "/".join(split[-3:])
+            text = '/'.join(split[-3:])
             val = float(split[-1])
             sb = QDoubleSpinBox()
             sb.setValue(val)
             sb.valueChanged.connect(partial(change_sb_value, tab_name, element_name))
             label.setText(text)
-            elem_name = "/".join(split[-3:-1])
-            tabs_elements_elyse[f"tab_{tab_name}_label_{elem_name}"] = label
-            tabs_elements_elyse[f"tab_{tab_name}_sb_{elem_name}"] = sb
-            layout: QVBoxLayout = layouts_elyse[f"layout_{tab_name}"]
+            elem_name = '/'.join(split[-3:-1])
+            tabs_elements_elyse[f'tab_{tab_name}_label_{elem_name}'] = label
+            tabs_elements_elyse[f'tab_{tab_name}_sb_{elem_name}'] = sb
+            layout: QVBoxLayout = layouts_elyse[f'layout_{tab_name}']
             lo_h = QHBoxLayout()
             lo_h.addWidget(label)
             spacer_h1 = QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
@@ -355,19 +309,19 @@ def main():
             layout.addLayout(lo_h)
 
     def update_element(tab_name: str, elem_name: str, value: str):
-        split = value.split("/")
-        text = "/".join(split[-3:-1])
+        split = value.split('/')
+        text = '/'.join(split[-3:-1])
 
-        label = tabs_elements_elyse[f"tab_{tab_name}_label_{elem_name}"]
-        label.setText(f"{text}/{Decimal(split[-1]):.2E}")
+        label = tabs_elements_elyse[f'tab_{tab_name}_label_{elem_name}']
+        label.setText(f'{text}/{Decimal(split[-1]):.2E}')
 
     def change_sb_value(tab_name, elem_name):
-        sb: QDoubleSpinBox = tabs_elements_elyse[f"tab_{tab_name}_sb_{elem_name}"]
+        sb: QDoubleSpinBox = tabs_elements_elyse[f'tab_{tab_name}_sb_{elem_name}']
         global primary
         if not primary:
-            val = f"{tab_name}/{elem_name}/{sb.value()}"
-            socket_push.send(val.encode("utf-8"))
-            print(f"{tab_name}/{elem_name}/{sb.value()}")
+            val = f'{tab_name}/{elem_name}/{sb.value()}'
+            socket_push.send(val.encode('utf-8'))
+            print(f'{tab_name}/{elem_name}/{sb.value()}')
         else:
             primary = False
 
@@ -375,19 +329,20 @@ def main():
     thread_elyse.data_signal.connect(update)
     thread_elyse.start()
 
+
     panel = QtWidgets.QWidget()
-    panel.setWindowTitle("PYCONLYSE")
-    panel.setWindowIcon(QIcon("icons//main_icon.png"))
+    panel.setWindowTitle('PYCONLYSE')
+    panel.setWindowIcon(QIcon('icons//main_icon.png'))
 
     layout_clients = Qt.QVBoxLayout()
-    layout_devices = Qt.QGridLayout()
+    layout_devices= Qt.QGridLayout()
     layout_main = Qt.QVBoxLayout()
-    panel.layout_main = layout_main
+    setattr(panel, f'layout_main', layout_main)
 
-    lo_type = Qt.QHBoxLayout()
+    lo_type= Qt.QHBoxLayout()
     lo_NETIO = Qt.QHBoxLayout()
-    lo_STANDA = Qt.QHBoxLayout()
-    lo_TOPDIRECT = Qt.QHBoxLayout()
+    lo_STANDA= Qt.QHBoxLayout()
+    lo_TOPDIRECT= Qt.QHBoxLayout()
     lo_OWIS = Qt.QHBoxLayout()
     lo_Basler = Qt.QHBoxLayout()
     lo_Laser_pointing = Qt.QHBoxLayout()
@@ -398,71 +353,47 @@ def main():
     lo_lights = Qt.QHBoxLayout()
 
     # Buttons
-    button_NETIO = TaurusCommandButton(
-        text="NETIO", parent=panel, icon=QIcon("icons//NETIO.ico")
-    )
-    button_STANDA = TaurusCommandButton(
-        text="STANDA", parent=panel, icon=QIcon("icons//STANDA.svg")
-    )
-    button_OWIS = TaurusCommandButton(
-        text="OWIS", parent=panel, icon=QIcon("icons//OWIS.png")
-    )
-    button_TopDirect = TaurusCommandButton(
-        text="TopDirect", parent=panel, icon=QIcon("icons//TopDirect.svg")
-    )
-    button_Basler = TaurusCommandButton(
-        text="BASLER", parent=panel, icon=QIcon("icons//basler_camera.svg")
-    )
-    button_laser_pointing = TaurusCommandButton(
-        text="Pointing", parent=panel, icon=QIcon("icons//laser_pointing.svg")
-    )
-    button_andor_ccd = TaurusCommandButton(
-        text="ANDOR CCD", parent=panel, icon=QIcon("icons//Andor_CCD.svg")
-    )
-    button_avantes_ccd = TaurusCommandButton(
-        text="AVANTES CCD", parent=panel, icon=QIcon("icons//AVANTES_CCD.svg")
-    )
-    button_light_room = TaurusCommandButton(
-        text="SM light", parent=panel, icon=QIcon("icons//light.png")
-    )
-    button_laser = TaurusCommandButton(
-        text="Laser", parent=panel, icon=QIcon("icons//laser.svg")
-    )
+    button_NETIO = TaurusCommandButton(text='NETIO', parent=panel, icon=QIcon('icons//NETIO.ico'))
+    button_STANDA = TaurusCommandButton(text='STANDA', parent=panel, icon=QIcon('icons//STANDA.svg'))
+    button_OWIS = TaurusCommandButton(text='OWIS', parent=panel, icon=QIcon('icons//OWIS.png'))
+    button_TopDirect = TaurusCommandButton(text='TopDirect', parent=panel, icon=QIcon('icons//TopDirect.svg'))
+    button_Basler = TaurusCommandButton(text='BASLER', parent=panel, icon=QIcon('icons//basler_camera.svg'))
+    button_laser_pointing = TaurusCommandButton(text='Pointing', parent=panel, icon=QIcon('icons//laser_pointing.svg'))
+    button_andor_ccd = TaurusCommandButton(text='ANDOR CCD', parent=panel, icon=QIcon('icons//Andor_CCD.svg'))
+    button_avantes_ccd = TaurusCommandButton(text='AVANTES CCD', parent=panel, icon=QIcon('icons//AVANTES_CCD.svg'))
+    button_light_room = TaurusCommandButton(text='SM light', parent=panel, icon=QIcon('icons//light.png'))
+    button_laser = TaurusCommandButton(text='Laser', parent=panel, icon=QIcon('icons//laser.svg'))
     button_laser.setEnabled(False)
-    button_archive = TaurusCommandButton(
-        text="Archive", parent=panel, icon=QIcon("icons//archive.svg")
-    )
-    button_experiment = TaurusCommandButton(
-        text="Experiment", parent=panel, icon=QIcon("icons//experiment.png")
-    )
+    button_archive = TaurusCommandButton(text='Archive', parent=panel, icon=QIcon('icons//archive.svg'))
+    button_experiment = TaurusCommandButton(text='Experiment', parent=panel, icon=QIcon('icons//experiment.png'))
 
     # Cboxes
     cbox_NETIO = TaurusValueComboBox(parent=panel)
-    cbox_NETIO.addItems(["all", "V0", "VD2"])
+    cbox_NETIO.addItems(['all', 'V0', 'VD2'])
     cbox_OWIS = TaurusValueComboBox(parent=panel)
-    cbox_OWIS.addItems(["V0", "VD2", "all"])
+    cbox_OWIS.addItems(['V0', 'VD2', 'all'])
     cbox_STANDA = TaurusValueComboBox(parent=panel)
-    cbox_STANDA.addItems(["alignment", "V0", "V0_short", "ELYSE", "OPA"])
+    cbox_STANDA.addItems(['alignment', 'V0',  'V0_short', 'ELYSE', 'OPA'])
     cbox_TOPDIRECT = TaurusValueComboBox(parent=panel)
-    cbox_TOPDIRECT.addItems(["VD2", "all"])
+    cbox_TOPDIRECT.addItems(['VD2','all'])
     cbox_BASLER = TaurusValueComboBox(parent=panel)
-    cbox_BASLER.addItems(["V0", "Cam1", "Cam2", "Cam3"])
+    cbox_BASLER.addItems(['V0', 'Cam1', 'Cam2', 'Cam3'])
     cbox_andor_ccd = TaurusValueComboBox(parent=panel)
-    cbox_andor_ccd.addItems(["V0"])
+    cbox_andor_ccd.addItems(['V0'])
     cbox_avantes_ccd = TaurusValueComboBox(parent=panel)
-    cbox_avantes_ccd.addItems(["Spectrometer"])
+    cbox_avantes_ccd.addItems(['Spectrometer'])
     cbox_laser_pointing = TaurusValueComboBox(parent=panel)
-    cbox_laser_pointing.addItems(["Cam1", "Cam2", "Cam3", "V0", "3P"])
+    cbox_laser_pointing.addItems(['Cam1', 'Cam2', 'Cam3', 'V0', '3P'])
     cbox_archive = TaurusValueComboBox(parent=panel)
-    cbox_archive.addItems(["Main"])
+    cbox_archive.addItems(['Main'])
     cbox_experiment = TaurusValueComboBox(parent=panel)
-    cbox_experiment.addItems(["Pump-Probe", "3P", "Streak-camera"])
+    cbox_experiment.addItems(['Pump-Probe', '3P', 'Streak-camera'])
 
     # Type of vizualization
-    group_visualization = QtWidgets.QGroupBox("Type")
+    group_visualization = QtWidgets.QGroupBox('Type')
     group_layout = Qt.QHBoxLayout()
     for typ in VisType:
-        rb = QtWidgets.QRadioButton(text=f"{typ.value}")
+        rb = QtWidgets.QRadioButton(text=f'{typ.value}')
         group_layout.addWidget(rb)
         rb.toggled.connect(partial(rb_clicked, rb.text()))
     rb.setChecked(True)
@@ -503,63 +434,37 @@ def main():
 
     separator_devices = QtWidgets.QFrame()
     separator_devices.setFrameShape(QtWidgets.QFrame.HLine)
-    separator_devices.setSizePolicy(
-        QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding
-    )
+    separator_devices.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     separator_devices.setLineWidth(2)
 
     separator_light = QtWidgets.QFrame()
     separator_light.setFrameShape(QtWidgets.QFrame.HLine)
-    separator_light.setSizePolicy(
-        QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding
-    )
+    separator_light.setSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     separator_light.setLineWidth(2)
 
     layout_clients.addWidget(separator_devices)
-    layout_clients.addWidget(QtWidgets.QLabel("Derivative clients"))
+    layout_clients.addWidget(QtWidgets.QLabel('Derivative clients'))
     layout_clients.addLayout(lo_Laser_pointing)
     layout_clients.addLayout(lo_Archive)
     layout_clients.addLayout(lo_Experiment)
     layout_clients.addWidget(separator_light)
     layout_clients.addLayout(lo_lights)
-    layout_clients.addWidget(
-        QtWidgets.QLabel("Press 'q' if you want to activate buttons.")
-    )
-    vspacer = QtWidgets.QSpacerItem(
-        0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding
-    )
+    layout_clients.addWidget(QtWidgets.QLabel("Press 'q' if you want to activate buttons."))
+    vspacer = QtWidgets.QSpacerItem(0, 0, QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Expanding)
     layout_clients.addSpacerItem(vspacer)
 
-    button_NETIO.clicked.connect(
-        partial(start_cmd, "start_NETIO_client.cmd", cbox_NETIO)
-    )
-    button_STANDA.clicked.connect(
-        partial(start_cmd, "start_STANDA_client.cmd", cbox_STANDA)
-    )
-    button_TopDirect.clicked.connect(
-        partial(start_cmd, "start_TOPDIRECT_client.cmd", cbox_TOPDIRECT)
-    )
-    button_OWIS.clicked.connect(partial(start_cmd, "start_OWIS_client.cmd", cbox_OWIS))
-    button_Basler.clicked.connect(
-        partial(start_cmd, "start_BASLER_client.cmd", cbox_BASLER)
-    )
-    button_laser_pointing.clicked.connect(
-        partial(start_cmd, "start_laser_pointing_client.cmd", cbox_laser_pointing)
-    )
-    button_andor_ccd.clicked.connect(
-        partial(start_cmd, "start_ANDOR_CCD_client.cmd", cbox_andor_ccd)
-    )
-    button_avantes_ccd.clicked.connect(
-        partial(start_cmd, "start_AVANTES_CCD_client.cmd", cbox_avantes_ccd)
-    )
-    button_archive.clicked.connect(
-        partial(start_cmd, "start_ARCHIVE_client.cmd", cbox_archive)
-    )
-    button_experiment.clicked.connect(
-        partial(start_cmd, "start_EXPERIMENT_client.cmd", cbox_experiment)
-    )
+    button_NETIO.clicked.connect(partial(start_cmd, 'start_NETIO_client.cmd', cbox_NETIO))
+    button_STANDA.clicked.connect(partial(start_cmd, 'start_STANDA_client.cmd', cbox_STANDA))
+    button_TopDirect.clicked.connect(partial(start_cmd, 'start_TOPDIRECT_client.cmd', cbox_TOPDIRECT))
+    button_OWIS.clicked.connect(partial(start_cmd, 'start_OWIS_client.cmd', cbox_OWIS))
+    button_Basler.clicked.connect(partial(start_cmd, 'start_BASLER_client.cmd', cbox_BASLER))
+    button_laser_pointing.clicked.connect(partial(start_cmd, 'start_laser_pointing_client.cmd', cbox_laser_pointing))
+    button_andor_ccd.clicked.connect(partial(start_cmd, 'start_ANDOR_CCD_client.cmd', cbox_andor_ccd))
+    button_avantes_ccd.clicked.connect(partial(start_cmd, 'start_AVANTES_CCD_client.cmd', cbox_avantes_ccd))
+    button_archive.clicked.connect(partial(start_cmd, 'start_ARCHIVE_client.cmd', cbox_archive))
+    button_experiment.clicked.connect(partial(start_cmd, 'start_EXPERIMENT_client.cmd', cbox_experiment))
 
-    rpi_device = Device("manip/v0/rpi4_gpio_v0")
+    rpi_device = Device('manip/v0/rpi4_gpio_v0')
     light_pin = 3
     laser_pin = 4
     button_laser.clicked.connect(partial(rpi_toggle_pin, rpi_device, laser_pin))
@@ -568,7 +473,7 @@ def main():
     tab1.setLayout(layout_clients)
     layout_devices_tab = QtWidgets.QVBoxLayout()
     layout_devices_tab.addLayout(layout_devices)
-    button_map = QtWidgets.QPushButton("Map")
+    button_map = QtWidgets.QPushButton('Map')
     layout_devices_tab.addWidget(button_map)
     tab2.setLayout(layout_devices_tab)
 
@@ -587,5 +492,5 @@ def main():
     sys.exit(app.exec_())
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -1,7 +1,8 @@
 @echo off
 REM =====================================================
-REM TANGO INFRASTRUCTURE - Windows Auto Startup
+REM TANGO INFRASTRUCTURE - Windows Auto Startup (Updated)
 REM This script starts Tango Database and Starter on Windows boot
+REM Updated for modern Tango installation (C:\dev\tango-install)
 REM Place this in Windows Startup folder or Task Scheduler
 REM =====================================================
 
@@ -26,15 +27,48 @@ if not defined TANGO_ROOT (
     exit /b 1
 )
 
+if not defined TANGO_HOST (
+    echo ERROR: TANGO_HOST environment variable not set!
+    echo [%date% %time%] ERROR: TANGO_HOST environment variable not set! >> "%LOG_FILE%"
+    pause
+    exit /b 1
+)
+
 echo TANGO_ROOT: %TANGO_ROOT%
+echo TANGO_HOST: %TANGO_HOST%
 echo [%date% %time%] TANGO_ROOT: %TANGO_ROOT% >> "%LOG_FILE%"
+echo [%date% %time%] TANGO_HOST: %TANGO_HOST% >> "%LOG_FILE%"
 echo.
+
+REM Extract port from TANGO_HOST
+for /f "tokens=2 delims=:" %%a in ("%TANGO_HOST%") do set DB_PORT=%%a
+if not defined DB_PORT set DB_PORT=10000
+
+echo Database port: %DB_PORT%
+echo [%date% %time%] Database port: %DB_PORT% >> "%LOG_FILE%"
+
+REM Check if executables exist
+if not exist "%TANGO_ROOT%\bin\Databaseds.exe" (
+    echo ERROR: Databaseds.exe not found in %TANGO_ROOT%\bin\
+    echo [%date% %time%] ERROR: Databaseds.exe not found >> "%LOG_FILE%"
+    pause
+    exit /b 1
+)
+
+if not exist "%TANGO_ROOT%\bin\Starter.exe" (
+    echo ERROR: Starter.exe not found in %TANGO_ROOT%\bin\
+    echo [%date% %time%] ERROR: Starter.exe not found >> "%LOG_FILE%"
+    pause
+    exit /b 1
+)
 
 REM Step 1: Start Tango Database in separate terminal
 echo [%date% %time%] === STARTING TANGO DATABASE ===
 echo [%date% %time%] === STARTING TANGO DATABASE === >> "%LOG_FILE%"
 echo Starting Tango Database in separate terminal...
-start "Tango-Database-Service" cmd /k "%TANGO_ROOT%\bin\start-db.bat"
+
+REM Start database with proper arguments
+start "Tango-Database-Service" cmd /k "cd /d %TANGO_ROOT%\bin && Databaseds.exe 2 -ORBendPoint giop:tcp::%DB_PORT%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to start Tango Database terminal
     echo [%date% %time%] ERROR: Failed to start Tango Database >> "%LOG_FILE%"
@@ -44,8 +78,8 @@ if %errorlevel% neq 0 (
 echo Database terminal started successfully
 
 REM Wait for database to initialize
-echo Waiting for database to initialize (10 seconds)...
-echo Please wait...
+echo Waiting for database to initialize (15 seconds)...
+timeout /t 15 /nobreak >nul
 
 REM Step 2: Start Tango Starter in separate terminal
 echo.
@@ -54,14 +88,11 @@ echo [%date% %time%] === STARTING TANGO STARTER === >> "%LOG_FILE%"
 echo Starting Tango Starter in separate terminal...
 
 REM Get hostname for starter
-set HOSTNAME=%COMPUTERNAME%
-if not defined HOSTNAME (
-    for /f "tokens=*" %%i in ('powershell -Command "$env:COMPUTERNAME"') do set HOSTNAME=%%i
-)
-if not defined HOSTNAME set HOSTNAME=localhost
+for /f "tokens=*" %%i in ('hostname') do set HOSTNAME=%%i
 echo Using hostname: %HOSTNAME%
 
-start "Tango-Starter-%HOSTNAME%" cmd /k "%TANGO_ROOT%\bin\Starter.exe %HOSTNAME%"
+REM Start Starter with proper arguments
+start "Tango-Starter-%HOSTNAME%" cmd /k "cd /d %TANGO_ROOT%\bin && Starter.exe %HOSTNAME%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to start Tango Starter terminal
     echo [%date% %time%] ERROR: Failed to start Tango Starter >> "%LOG_FILE%"
@@ -82,15 +113,20 @@ echo =====================================================
 echo - Database: Running in separate terminal (Tango-Database-Service)
 echo - Starter:  Running in separate terminal (Tango-Starter-%HOSTNAME%)
 echo - Log file: %LOG_FILE%
+echo - Database port: %DB_PORT%
+echo - Hostname: %HOSTNAME%
 echo.
 echo You should now see 2 additional terminal windows:
-echo   1. Tango Database (running start-db.bat)
+echo   1. Tango Database (running Databaseds.exe)
 echo   2. Tango Starter (running Starter.exe)
 echo.
 echo This main window will close in 10 seconds...
 echo.
 
-REM Countdown (simplified)
-echo Closing window...
+REM Countdown
+for /L %%i in (10,-1,1) do (
+    echo Closing in %%i seconds...
+    timeout /t 1 /nobreak >nul
+)
 
 exit /b 0

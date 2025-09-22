@@ -84,7 +84,7 @@ names_param = {
             "control_unit_id": 1,
             "friendly_name": "DS_OWIS_PS90",
             "serial_number": 15110070,
-            "dll_path": "C:/dev/pyconlyse/DeviceServers/OWIS/ps90_64.dll",
+            "dll_path": "C:/dev/pyconlyse/DeviceServers/motion/owis/drivers/ps90_64.dll",
             "delay_lines_parameters": str(delay_lines),
         },
     ]

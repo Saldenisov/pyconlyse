@@ -124,7 +124,44 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b""
         if state_ok:
-            self.dll_path = Path(self.dll_path)
+            # Resolve DLL path robustly: prefer valid device property, else fall back to local drivers dir
+            dll_candidate = None
+            try:
+                cfg_path = str(self.dll_path).strip()
+            except Exception:
+                cfg_path = ""
+            if cfg_path:
+                p = Path(cfg_path)
+                if p.exists():
+                    dll_candidate = p
+
+            if dll_candidate is None:
+                drivers_dir = Path(__file__).resolve().parent / "drivers"
+                # Prefer arch-specific DLL name; fall back to generic
+                arch_name = "ps90_64.dll" if sys.maxsize > 2**32 else "ps90_32.dll"
+                for name in (arch_name, "ps90.dll"):
+                    cand = drivers_dir / name
+                    if cand.exists():
+                        dll_candidate = cand
+                        break
+
+            if dll_candidate is None:
+                self.error(
+                    f"OWIS DLL not found. Checked property path '{cfg_path}' and drivers dir '{drivers_dir}'."
+                )
+                self.set_state(DevState.FAULT)
+                self._device_id_internal, self._uri = -1, b""
+                return
+
+            # Ensure Windows can locate any adjacent DLL dependencies (Python 3.8+)
+            try:
+                if hasattr(os, "add_dll_directory"):
+                    os.add_dll_directory(str(dll_candidate.parent))
+            except Exception as e:
+                self.info(f"add_dll_directory failed: {e}", True)
+
+            self.dll_path = dll_candidate
+            self.info(f"Using OWIS DLL: {self.dll_path}", True)
             self.lib = ctypes.WinDLL(str(self.dll_path))
             res, comments = self._connect_ps90(
                 self.control_unit_id,

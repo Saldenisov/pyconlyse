@@ -1,0 +1,11 @@
+Exiting: Server exited with tango.DevFailed:
+DevFailed[
+DevError[
+    desc = Can't open omniORB configuration file () to check endPointoption
+           
+  origin = class std::optional<class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > > __cdecl `anonymous-namespace'::get_omniorb_variable(int,char *[],const class std::basic_string<char,struct std::char_traits<char>,class std::allocator<char> > &) at (D:\bld\cpptango_1748873187989\work\src\server\utils.cpp:203)
+  reason = API_InvalidArgs
+severity = ERR]
+]
+
+Exited

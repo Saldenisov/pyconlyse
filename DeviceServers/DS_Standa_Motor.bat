@@ -32,12 +32,15 @@ echo Instance: %INSTANCE_NAME%
 echo Environment: %PYCONLYSE_ENV%
 echo =====================================================
 
-echo A separate Control window will open. Type STOP there to terminate this DS.
+echo To stop, press Ctrl+C in the tab or close the tab/window.
 
 set DISABLE_ARCHIVE=1
 
 set "DS_TITLE=DS_Standa_Motor [%INSTANCE_NAME%]"
-start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\motion\standa" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && python DS_Standa_Motor.py %INSTANCE_NAME%"
-
-REM Open control window to allow typing STOP to close DS
-start "Control - %DS_TITLE%" cmd /k "echo Control for %DS_TITLE%. & echo Type STOP to terminate this device server, or EXIT to close this control. & :control & set /p USER_INPUT=Command (STOP/EXIT):  & if /I "%USER_INPUT%"=="STOP" (taskkill /FI "WINDOWTITLE eq %DS_TITLE%" /T & echo Sent stop to %DS_TITLE%.) & if /I "%USER_INPUT%"=="EXIT" exit & goto control"
+where wt >nul 2>&1
+if %errorlevel%==0 (
+    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\motion\standa" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && python DS_Standa_Motor.py %INSTANCE_NAME%"
+) else (
+    echo Windows Terminal not found; starting in a separate window...
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\motion\standa" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && python DS_Standa_Motor.py %INSTANCE_NAME%"
+)

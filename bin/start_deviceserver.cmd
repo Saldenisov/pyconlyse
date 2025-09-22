@@ -92,9 +92,11 @@ if not exist "%DEVICE_PATH%\%DEVICE_SCRIPT%" (
 )
 
 REM Logging
-set LOG_DIR=%PYCONLYSE%\logs
+REM Ensure DS logs are written to <repo_root>\LOGS\DS\<DS_class>\<instance_name>\
+set LOG_DIR=%PYCONLYSE%\LOGS\DS\%DEVICE_TYPE%\%DEVICE_INSTANCE%
 if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
-set LOG_FILE=%LOG_DIR%\deviceserver_%DEVICE_TYPE%_%DEVICE_INSTANCE%_%date:~-4,4%%date:~-7,2%%date:~-10,2%.log
+set DATESTAMP=%date:~-4,4%%date:~-7,2%%date:~-10,2%
+set LOG_FILE=%LOG_DIR%\deviceserver_%DEVICE_TYPE%_%DEVICE_INSTANCE%_%DATESTAMP%.log
 
 echo [%date% %time%] Starting DeviceServer %DEVICE_TYPE% instance %DEVICE_INSTANCE% >> "%LOG_FILE%"
 echo [%date% %time%] Path: %DEVICE_PATH% >> "%LOG_FILE%"
@@ -116,10 +118,12 @@ echo =====================================================
 echo.
 
 REM Activate conda environment and start DeviceServer
+REM Capture stdout/stderr into the log file
+REM Note: cd /d switches drive as well if necessary
 echo Starting DeviceServer...
 echo [%date% %time%] Activating conda environment %PYCONLYSE_ENV% >> "%LOG_FILE%"
 
-start /min cmd /k "cd "%DEVICE_PATH%" & conda activate %PYCONLYSE_ENV% & python %DEVICE_SCRIPT% %DEVICE_INSTANCE% %VISUALIZATION_TYPE% & echo [%date% %time%] DeviceServer %DEVICE_TYPE% exited >> "%LOG_FILE%""
+start /min cmd /k "cd /d \"%DEVICE_PATH%\" ^& conda activate %PYCONLYSE_ENV% ^& python \"%DEVICE_SCRIPT%\" \"%DEVICE_INSTANCE%\" \"%VISUALIZATION_TYPE%\" >> \"%LOG_FILE%\" 2^>^&1 ^& echo [%date% %time%] DeviceServer %DEVICE_TYPE% exited >> \"%LOG_FILE%\""
 
 echo DeviceServer %DEVICE_TYPE% (%DEVICE_INSTANCE%) started successfully!
 echo Check the log file for details: %LOG_FILE%
