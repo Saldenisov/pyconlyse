@@ -17,7 +17,7 @@ from time import sleep
 from typing import Tuple, Union
 
 from tango import AttrWriteType, DevState, DispLevel
-from tango.server import attribute, device_property
+from tango.server import attribute, device_property, command
 
 from utilities.tools.decorators import development_mode
 
@@ -36,7 +36,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     Device Server (Tango) which controls the OWIS delay lines using ps90.dll
     """
 
-    RULES = {**DS_MOTORIZED_MULTI_AXES.RULES}
+    RULES = {
+        **DS_MOTORIZED_MULTI_AXES.RULES,
+        # Idempotent bring-up command: allowed even when already ON
+        "ensure_on": [
+            DevState.OFF,
+            DevState.FAULT,
+            DevState.STANDBY,
+            DevState.INIT,
+            DevState.ON,
+        ],
+    }
 
     baudrate = device_property(dtype=int, default_value=9600)
     com_port = device_property(dtype=int, default_value=4)
@@ -199,6 +209,22 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             return 0
         self.set_state(DevState.FAULT)
         return comments
+
+    def is_ensure_on_allowed(self):
+        return self.get_state() in self.RULES.get("ensure_on", [])
+
+    @command
+    def ensure_on(self):
+        """Ensure the controller is ON (idempotent).
+
+        If already ON, this is a no-op. Otherwise, delegates to turn_on().
+        """
+        state_ok = self.check_func_allowance(self.ensure_on)
+        if state_ok == 1:
+            if self.get_state() != DevState.ON:
+                self.turn_on()
+            else:
+                self.info(f"{self.device_name} already ON; ensure_on is a no-op.", True)
 
     def get_controller_status_local(self) -> Union[int, str]:
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
