@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>SQLite Form</title>
+  </head>
+  <body>
+    <form method="post" action="{{url_for('submit')}}">
+        <input type="text" name="name" placeholder="Name" required>
+        <input type="email" name="email" placeholder="Email" required>
+        <textarea name="message" placeholder="Message" required></textarea>
+        <input type="submit" value="Submit">
+    </form>
+  <div id="success-message"></div>
+  <script type="text/javascript" src="static/js/main.js"></script>
+  </body>
+</html>

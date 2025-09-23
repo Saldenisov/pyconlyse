@@ -8,6 +8,11 @@
 
 *.xml
 
-*.stpmtr·
+*.stpmtr
+
+*.txt
 
 .idea/pyconlyse.iml
+/DeviceServers/DS_DenisBox_Motor.exe
+/DeviceServers/OWIS/ps90_64.dll
+

@@ -23,6 +23,32 @@ from utilities.errors.myexceptions import WrongInfoType
 
 module_logger = logging.getLogger(__name__)
 
+import platform    # For getting the operating system name
+import subprocess  # For executing a shell command
+
+import random
+import string
+
+def get_random_string(length):
+    # choose from all lowercase letter
+    letters = string.ascii_lowercase
+    result_str = ''.join(random.choice(letters) for i in range(length))
+    return result_str
+
+def ping(host):
+    """
+    Returns True if host (str) responds to a ping request.
+    Remember that a host may not respond to a ping (ICMP) request even if the host name is valid.
+    """
+
+    # Option for the number of packets as a function of
+    param = '-n' if platform.system().lower() == 'windows' else '-c'
+
+    # Building the command. Ex: "ping -c 1 google.com"
+    command = ['ping', param, '1', host]
+
+    return subprocess.call(command, stdout=subprocess.DEVNULL) == 0
+
 
 def error_logger(obj: object, func, e):
     obj.logger.error(f'func:{func.__name__}: {e}')

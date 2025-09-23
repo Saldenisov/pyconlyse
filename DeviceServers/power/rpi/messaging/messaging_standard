@@ -1,0 +1,121 @@
+# TODO: must be updated
+Developper:
+DENISOV Sergey
+sergey.denisov@u-psud.fr
+
+
+The ELYSE_MESSAGE messaging protocol will be described here.
+
+STRUCTURE of network
+heartbeat = hb
+
+DEALER   <----------------->
+    (CLIENT1) SUB <- - - - - - - - - - -|
+.                                   |(hb)
+.                                   |     (hb)
+.                                   PUB- - - - - ->SUB
+ DEALER    <---------------> ROUTER <-> ROUTER  <-> DEALER
+(CLIENT2) SUB                    (SERVER)         (SERVICE1...n)
+.                                PUB|SUB              PUB
+.                                   |                  |
+.                                   |(hb)              |(status)
+DEALER   <----------------->        |                  |
+(CLIENTn)SUB <- - - - - - - - - - - | <- - - - - - - - |
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+MESSAGE:
+Message is a dictionary, that is transformed in json string to be send further:
+{'message_type': TYPE, 'id': message.id, 'from': SENDER.id, 'to': RECEIVER.ID, 'data': DATA, 'timestamp': CREATED}
+                        (auto)              (auto)            (auto)                                (auto)
+
+Messages from the CLIENTS are always send to the SERVER, who desides how to transfer them to another CLIENTS/SERVICES.
+
+Message has a standard type for all type of connections:
+Server-Client, Server-Service, PUB-SUB connections, etc.
+
+MESSAGE_TYPE= ('demand', 'reply', 'info')
+COMMANDS = ('server_status', 'available_services', 'reply', 'do', 'service_status', 'hello', 'welcome')
+
+DATA is a dictionary itself {'com': COMMAND, 'reply_to': MESSAGE_ID, 'info': INFO_to_PASS}
+
+DATA could be anything that can be converted into json string
+
+Every service are capable of dealing with certain commands, e.g.
+DelayLine_do_commands = ['connect', 'disconnect', 'get_pos:axis_x', 'move:axis_x:xx', 'set_param']
+These commands go to the field 'info' of 'DATA'.
+
+**********************************
+Example 1: Connect to DL contoller
+CLIENT sends do SERVER since it can send demands only to server:
+CLIENT has already obtained information on available services. It knows required service.ID.
+msg = {'message_type': 'demand', 'id': __auto__, 'from': client.ID, 'to': service.ID, 'data': {'com': connect, 'reply':'',
+'info': 'DL_name'},
+'timestamp': CREATED}
+
+SERVER resends this message to required service using zmq.send_multi_part [msg['to'], msg]
+
+SERVICE replies through DEALER socket back to SERVICE:
+if success:
+msg = {'message_type': 'reply', 'id': __auto__, 'from': service.ID, 'to': client.ID, 'data': {'com': connect,
+'reply': msg_from_client.ID,
+'info': 'str(Service.id, 'pos':[xx, yy, zz])'},
+'timestamp': CREATED}
+
+if not success:
+msg = {'message_type': 'reply', 'id': __auto__, 'from': service.ID, 'to': client.ID, 'data': {'com': connect,
+'reply': msg_from_client.ID,
+'info': 'str('Error')'},
+'timestamp': CREATED}
+++++++++++++++++++++++++++++++++++
+
+**********************************
+Example 2: Get position axis DL contoller
+msg = {'message_type': 'demand', 'id': __auto__, 'from': client.ID, 'to': service.ID, 'data': {'com': get_pos, 'reply':'',
+'info': str({'axis': [X, Y, Z]})},
+'timestamp': CREATED}
+
+SERVER resends this message to required service using zmq.send_multi_part [msg['to'], msg]
+
+SERVICE replies through DEALER socket back to SERVICE:
+if success:
+msg = {'message_type': 'reply', 'id': __auto__, 'from': service.ID, 'to': client.ID, 'data': {'com': get_pos,
+'reply': msg_from_client.ID,
+'info': str({'pos': {'X': Xpos, 'Y': Ypos, 'Z': Zpos})},
+'timestamp': CREATED}
+
+if not success:
+msg = {'message_type': 'reply', 'id': __auto__, 'from': service.ID, 'to': client.ID, 'data': {'com': get_pos,
+'reply': msg_from_client.ID,
+'info': str(Error)},
+'timestamp': CREATED}
+++++++++++++++++++++++++++++++++++
+
+############################
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+CLIENT:
+sockets = DEALER, SUBSCRIBER
+
+socket port is defined by user
+
+############################
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+SERVER:
+sockets = ROUTER (frontend), ROUTER (backend), PUBLISHER, SUBSCRIBER
+
+socket port is defined by user
+
+############################
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+SERVICE:
+sockets = DEALER, PUBLISHER
+
+socket port is defined by user
+
+############################

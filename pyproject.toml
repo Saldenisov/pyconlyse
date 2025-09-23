@@ -1,0 +1,171 @@
+[tool.poetry]
+name = "pyconlyse"
+version = "0.2.0"
+description = "This is PYCONLYSE tango based application for controlling ELYSE experiment."
+authors = ["saldenisov <saldenisov@gmail.com>"]
+license = "MIT License"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.9"
+matplotlib = "^3"
+numpy = "^1.26"
+configobj = "^5"
+colorcet = "^3"
+gpiozero = "^2"
+pigpio = "^1"
+ifaddr = "^0.2"
+imutils = "^0.5"
+imageio = "^2"
+msgpack = "^1"
+msl-loadlib = "^0"
+lxml = "^4.9"
+keyboard = "^0.13"
+opencv-python = "^4"
+pandas = "^2"
+pyqtgraph = "^0.13"
+PyQt5 = "^5"
+PyQt5-Qt5 = "5.15.2"
+pyqtwebengine-qt5 = "5.15.2"
+PyQt5-sip = "^12"
+pyepics = "^3.5"
+pypylon = "^3"
+pyserial = "^3"
+PyTango = "^10.0"
+requests = "^2"
+scipy = "^1"
+taurus = "^5.3"
+taurus_pyqtgraph = "^0.9"
+spyder = "^5.4"
+simple-pid = "^2"
+vitables = "^3"
+QtPy = "^2"
+Pillow = "^10"
+pyarrow = "^14"
+h5py = "^3"
+msl-package-manager = "^2"
+
+
+
+
+
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "^4.3.0"
+black = "^25.1.0"
+isort = "^6.0.1"
+ruff = "^0.13.0"
+mypy = "^1.18.1"
+bandit = "^1.8.6"
+
+# Tool configurations
+[tool.black]
+line-length = 88
+target-version = ['py39']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | DeviceServers
+  | legacy
+  | frontend
+  | bin
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["pyconlyse", "main_app", "DeviceServers"]
+skip_glob = [
+    "DeviceServers/*",
+    "legacy/*",
+    "frontend/*",
+    "bin/*",
+]
+
+[tool.ruff]
+# Global Ruff settings
+line-length = 88
+target-version = "py39"
+src = ["main_app", "scripts", "fixes"]
+exclude = [
+    ".git",
+    ".venv",
+    "build",
+    "dist",
+    "legacy",
+    "DeviceServers",
+    "frontend",
+    "bin",
+]
+
+[tool.ruff.lint]
+# Keep linting focused on essential, actionable rules.
+select = ["E", "F", "W", "I", "N"]
+ignore = [
+    "E402",  # allow imports not at top for scripts/Qt widgets
+    "N802", "N803", "N806", "N815",  # naming exceptions (Qt, constants)
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.mccabe]
+# Complexity threshold
+max-complexity = 10
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "PLR2004", "S106", "S105"]
+"**/test_*.py" = ["S101", "PLR2004", "S106", "S105"]
+"main_app/__init__.py" = ["F403", "F405"]
+"main_app/core/__init__.py" = ["F403", "F405"]
+"main_app/main.py" = ["F403"]
+"main_app/main_interactive.py" = ["F403", "F405", "E501"]
+"main_app/main_gui.py" = ["E501"]
+"main_app/core/logging_config.py" = ["E501"]
+"main_app/managers/infrastructure_manager.py" = ["E501"]
+"main_app/managers/device_manager.py" = ["E501"]
+"main_app/managers/monitoring_threads.py" = ["E501"]
+"main_app/ui/main_window.py" = ["E501", "W293"]
+"main_app/test_timing.py" = ["E501"]
+"main_app/tests/test_integration.py" = ["F403", "F405"]
+"main_app/tests/test_simple.py" = ["F403", "F405", "E501"]
+"check_starter_config.py" = ["F401", "E501"]
+"restart_netio_servers.py" = ["F401", "E501"]
+"diagnose_netio.py" = ["F401", "E501"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = true
+disallow_untyped_decorators = false
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+ignore_missing_imports = true
+
+[tool.bandit]
+skips = ["B101", "B601"]
+exclude_dirs = ["tests", "test"]
+
+[tool.pydocstyle]
+convention = "numpy"
+add-ignore = ["D100", "D104", "D105", "D107"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

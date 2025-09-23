@@ -1,19 +1,31 @@
-from copy import deepcopy
+from taurus.external.qt import QtGui  # Replace with the appropriate GUI toolkit import
+from taurus.qt.qtgui.base import TaurusBaseWidget
+class MyCustomWidget(TaurusBaseWidget):
+    def __init__(self, parent=None):
+        super(MyCustomWidget, self).__init__(parent)
+        # Your widget initialization code here
+        self.initUI()
 
-class A:
+    def initUI(self):
+        # Add and configure your GUI elements here
+        layout = QtGui.QVBoxLayout()
+        label = QtGui.QLabel("Custom Widget")
+        button = QtGui.QPushButton("Click Me")
+        layout.addWidget(label)
+        layout.addWidget(button)
+        self.setLayout(layout)
 
-    def __init__(self):
-        self._b = {'q': -15}
+from taurus.qt.qtgui.application import TaurusApplication
 
-    def b(self):
-        return self._b
+import sys
 
-a = A()
+from PyQt5 import QtWidgets
+if __name__ == '__main__':
+    app = TaurusApplication(sys.argv)
 
-c = {'c': a._b}
+    panel = QtWidgets.QWidget()
+    panel.setWindowTitle('PYCONLYSE')
 
-
-print(c['c'])
-a._b['q'] = 15
-print(c['c'])
-
+    my_widget = MyCustomWidget()
+    my_widget.show()
+    sys.exit(app.exec_())

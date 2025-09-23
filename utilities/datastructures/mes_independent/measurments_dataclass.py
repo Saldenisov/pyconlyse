@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Tuple, Union
 
 import numpy
@@ -6,7 +6,6 @@ import numpy as np
 
 
 # Tango
-
 
 @dataclass
 class Scalar:
@@ -30,9 +29,9 @@ class ArchiveData:
 
 @dataclass
 class DataXY:
-    name: str
     X: numpy.ndarray
     Y: numpy.ndarray
+    name: str = ''
 
 
 @dataclass
@@ -44,7 +43,6 @@ class DataXYb:
     Ydtype: str
 
 
-
 # Cursors
 @dataclass
 class Cursors2D:
@@ -54,7 +52,7 @@ class Cursors2D:
     y2: Tuple[int, float] = (0, 0)
 
 
-#Experimental Data structures
+# Experimental Data structures
 @dataclass
 class Measurement:
     """
@@ -68,6 +66,25 @@ class Measurement:
     wavelengths: np.array
     timedelays: np.array
     time_scale: str
+
+
+@dataclass
+class GammaSpectrometerBG:
+    BGref: np.array
+    BGsample: np.array
+
+
+@dataclass
+class GammaSpectrometerBlank:
+    Blankref: np.array
+    Blanksample: np.array
+
+
+@dataclass
+class GammaSpectrometerMeasurement:
+    name_sample: str
+    BG: GammaSpectrometerBG
+    Blank: GammaSpectrometerBlank
 
 
 @dataclass
