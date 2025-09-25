@@ -19,11 +19,13 @@ from taurus_warnings_fix import suppress_taurus_deprecation_warnings
 # Suppress warnings as early as possible
 suppress_taurus_deprecation_warnings()
 
-from PyQt5.QtCore import QObject, Qt, QTimer, pyqtSignal, pyqtSlot, QThread
+from PyQt5.QtCore import QObject, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtGui import QFont
 from PyQt5.QtWidgets import (
     QAction,
     QApplication,
+    QComboBox,
+    QDoubleSpinBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -33,34 +35,32 @@ from PyQt5.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
+    QSpacerItem,
     QSplitter,
     QStatusBar,
     QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
-    QDoubleSpinBox,
-    QSpacerItem,
-    QSizePolicy,
-    QComboBox,
 )
 
 # Add parent directory to path for imports
 main_app_path = Path(__file__).parent.parent
 sys.path.insert(0, str(main_app_path.parent))
 
+import imageio
+import numpy as np
+import pyqtgraph as pg
+
+# Additional third-party libs used for legacy features
+import zmq
 from main_app.core.async_manager import (
     ConnectionStatus,
     StatusUpdate,
 )
 from main_app.core.config import OFFLINE_MODE
 from main_app.core.logging_config import setup_pyconlyse_logging
-
-# Additional third-party libs used for legacy features
-import zmq
-import imageio
-import numpy as np
-import pyqtgraph as pg
 
 # Optional DS visualization type
 try:
@@ -620,8 +620,10 @@ class PyConlyseMainWindow(QMainWindow):
                 rb.setCheckable(True)
                 if vt == DSVisType.FULL:
                     rb.setChecked(True)
+
                 def _mk_setter(val):
                     return lambda: self._set_client_vis(val)
+
                 rb.clicked.connect(_mk_setter(vt))
                 vis_layout.addWidget(rb)
             vis_layout.addStretch()
@@ -662,12 +664,30 @@ class PyConlyseMainWindow(QMainWindow):
     def _client_configs(self):
         """Return list of client configurations: (key, display, keywords, launcher_fn_name, icon)."""
         return [
-            ("NETIO", "NETIO", ["netio"], "start_netio_widget", "icons/NETIO.png"),
+            ("NETIO", "NETIO", ["netio"], "start_netio_client", "icons/NETIO.png"),
             ("OWIS", "OWIS", ["owis", "delay"], "start_owis_widget", "icons/OWIS.png"),
             ("STANDA", "STANDA", ["standa"], "start_standa_widget", "icons/STANDA.svg"),
-            ("TOPDIRECT", "TOPDIRECT", ["topdirect"], "start_topdirect_widget", "icons/TopDirect.svg"),
-            ("BASLER", "BASLER", ["basler", "camera"], "start_basler_widget", "icons/basler_camera.svg"),
-            ("LASER_POINTING", "Laser Pointing", ["laser"], "start_laser_pointing_widget", "icons/laser_pointing.svg"),
+            (
+                "TOPDIRECT",
+                "TOPDIRECT",
+                ["topdirect"],
+                "start_topdirect_widget",
+                "icons/TopDirect.svg",
+            ),
+            (
+                "BASLER",
+                "BASLER",
+                ["basler", "camera"],
+                "start_basler_widget",
+                "icons/basler_camera.svg",
+            ),
+            (
+                "LASER_POINTING",
+                "Laser Pointing",
+                ["laser"],
+                "start_laser_pointing_widget",
+                "icons/laser_pointing.svg",
+            ),
         ]
 
     def _build_client_sections(self):
@@ -702,22 +722,28 @@ class PyConlyseMainWindow(QMainWindow):
             row.addStretch()
             cont = QWidget()
             cont.setLayout(row)
-            self._clients_tab_layout.insertWidget(self._clients_tab_layout.count() - 1, cont)
+            self._clients_tab_layout.insertWidget(
+                self._clients_tab_layout.count() - 1, cont
+            )
             self._clients_sections[key] = {"container": cont, "combo": combo}
 
     def refresh_device_clients_list_async(self):
         """Fetch exported devices and categorize by DS keywords in background."""
         from main_app.core.config import OFFLINE_MODE
+
         if OFFLINE_MODE:
-            # Offline placeholders
+            # Offline placeholders - special handling for NETIO
             categorized = {key: [] for key, *_ in self._client_configs()}
+            categorized["NETIO"] = ["V0", "VD2", "all"]  # NETIO instances
             self._apply_clients_device_map(categorized)
             return
         try:
             import concurrent.futures
+
             from tango import Database
         except Exception:
             categorized = {key: [] for key, *_ in self._client_configs()}
+            categorized["NETIO"] = ["V0", "VD2", "all"]  # NETIO instances
             self._apply_clients_device_map(categorized)
             return
 
@@ -734,15 +760,31 @@ class PyConlyseMainWindow(QMainWindow):
                 out = {key: [] for key, *_ in self._client_configs()}
                 lower_names = [(n, n.lower()) for n in set(names)]
                 for key, _display, keywords, _launcher, _icon in self._client_configs():
-                    for n, ln in lower_names:
-                        if any(kw in ln for kw in keywords):
-                            out[key].append(n)
-                # Sort
+                    if key == "NETIO":
+                        # Special handling for NETIO - show instances based on available devices
+                        netio_devices = [
+                            n
+                            for n, ln in lower_names
+                            if any(kw in ln for kw in keywords)
+                        ]
+                        if netio_devices:
+                            # Always offer all instances if any NETIO devices exist
+                            out[key] = ["V0", "VD2", "all"]
+                        else:
+                            out[key] = []
+                    else:
+                        for n, ln in lower_names:
+                            if any(kw in ln for kw in keywords):
+                                out[key].append(n)
+                # Sort (except NETIO which has predefined order)
                 for k in out:
-                    out[k] = sorted(out[k])
+                    if k != "NETIO":
+                        out[k] = sorted(out[k])
                 return out
             except Exception:
-                return {key: [] for key, *_ in self._client_configs()}
+                categorized = {key: [] for key, *_ in self._client_configs()}
+                categorized["NETIO"] = ["V0", "VD2", "all"]  # NETIO fallback
+                return categorized
 
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         fut = ex.submit(_fetch)
@@ -752,7 +794,10 @@ class PyConlyseMainWindow(QMainWindow):
                 categorized = _f.result(timeout=0) or {}
             except Exception:
                 categorized = {key: [] for key, *_ in self._client_configs()}
-            QTimer.singleShot(0, lambda d=categorized: self._apply_clients_device_map(d))
+                categorized["NETIO"] = ["V0", "VD2", "all"]  # NETIO fallback
+            QTimer.singleShot(
+                0, lambda d=categorized: self._apply_clients_device_map(d)
+            )
             try:
                 ex.shutdown(wait=False)
             except Exception:
@@ -780,30 +825,39 @@ class PyConlyseMainWindow(QMainWindow):
         combo = data["combo"]
         if combo.count() == 0 or not combo.isEnabled():
             return
-        device_name = combo.currentText()
+        selection = combo.currentText()
         try:
             from main_app.ui import widget_launchers as wl
+
             # Map key -> launcher function
             fn_map = {
-                "NETIO": wl.start_netio_widget,
+                "NETIO": wl.start_netio_client,  # Updated to use client approach
                 "OWIS": wl.start_owis_widget,
                 "STANDA": wl.start_standa_widget,
                 "TOPDIRECT": wl.start_topdirect_widget,
                 "BASLER": wl.start_basler_widget,
                 "LASER_POINTING": wl.start_laser_pointing_widget,
             }
-            vis = self._client_vis.value if hasattr(self._client_vis, "value") else "FULL"
+            vis = (
+                self._client_vis.value if hasattr(self._client_vis, "value") else "FULL"
+            )
             # Launch
             w = None
-            if key in ("NETIO", "LASER_POINTING", "BASLER", "STANDA", "TOPDIRECT"):
-                w = fn_map[key](device_name, parent=None, vis=vis)
+            if key == "NETIO":
+                # For NETIO, selection is an instance (V0, VD2, all)
+                w = fn_map[key](instance=selection, parent=None, vis=vis)
+            elif key in ("LASER_POINTING", "BASLER", "STANDA", "TOPDIRECT"):
+                # For these, selection is a device name
+                w = fn_map[key](selection, parent=None, vis=vis)
             elif key == "OWIS":
                 # OWIS may auto-detect axes if not provided
-                w = fn_map[key](device_name, axes=None, parent=None, vis=vis)
+                w = fn_map[key](selection, axes=None, parent=None, vis=vis)
             if w is not None:
                 self._launched_widgets.append(w)
         except Exception as e:
-            QMessageBox.critical(self, "Client", f"Failed to open widget for {key}: {e}")
+            QMessageBox.critical(
+                self, "Client", f"Failed to open widget for {key}: {e}"
+            )
 
     def create_deviceservers_tab(self) -> QWidget:
         """Create the DeviceServers management tab"""
@@ -1158,11 +1212,11 @@ class PyConlyseMainWindow(QMainWindow):
             return
         for card in msg:
             for elem in card:
-                parts = str(elem).split('/')
+                parts = str(elem).split("/")
                 if len(parts) <= 3:
                     continue
-                tab_name = '/'.join(parts[0:2])
-                elem_name = '/'.join(parts[-3:-1])
+                tab_name = "/".join(parts[0:2])
+                elem_name = "/".join(parts[-3:-1])
                 key_label = f"tab_{tab_name}_label_{elem_name}"
                 if f"tab_{tab_name}" not in self._elyse_tabs_widgets:
                     self._add_elyse_tab(tab_name)
@@ -1182,10 +1236,10 @@ class PyConlyseMainWindow(QMainWindow):
         self._elyse_layouts[f"layout_{name}"] = layout
 
     def _add_elyse_element(self, element_name: str, tab_name: str, element_value: str):
-        parts = str(element_value).split('/')
+        parts = str(element_value).split("/")
         if len(parts) > 3:
             label = QLabel()
-            text = '/'.join(parts[-3:])
+            text = "/".join(parts[-3:])
             try:
                 val = float(parts[-1])
             except Exception:
@@ -1194,7 +1248,9 @@ class PyConlyseMainWindow(QMainWindow):
             sb.setDecimals(6)
             sb.setRange(-1e9, 1e9)
             sb.setValue(val)
-            sb.valueChanged.connect(lambda _v, t=tab_name, e=element_name: self._change_elyse_sb_value(t, e))
+            sb.valueChanged.connect(
+                lambda _v, t=tab_name, e=element_name: self._change_elyse_sb_value(t, e)
+            )
             label.setText(text)
             elem_key_label = f"tab_{tab_name}_label_{element_name}"
             elem_key_sb = f"tab_{tab_name}_sb_{element_name}"
@@ -1204,16 +1260,19 @@ class PyConlyseMainWindow(QMainWindow):
             lo_h = QHBoxLayout()
             lo_h.addWidget(label)
             lo_h.addWidget(sb)
-            lo_h.addItem(QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum))
+            lo_h.addItem(
+                QSpacerItem(40, 20, QSizePolicy.Expanding, QSizePolicy.Minimum)
+            )
             layout.addLayout(lo_h)
 
     def _update_elyse_element(self, tab_name: str, elem_name: str, value: str):
-        parts = str(value).split('/')
-        text = '/'.join(parts[-3:-1])
+        parts = str(value).split("/")
+        text = "/".join(parts[-3:-1])
         label: QLabel = self._elyse_elements.get(f"tab_{tab_name}_label_{elem_name}")
         if label is not None:
             try:
                 from decimal import Decimal
+
                 label.setText(f"{text}/{Decimal(parts[-1]):.2E}")
             except Exception:
                 label.setText(f"{text}/{parts[-1]}")
@@ -1231,7 +1290,7 @@ class PyConlyseMainWindow(QMainWindow):
             return
         try:
             val = f"{tab_name}/{elem_name}/{sb.value()}"
-            self._zmq_push.send(val.encode('utf-8'))
+            self._zmq_push.send(val.encode("utf-8"))
             logger.info(f"ELYSE set: {val}")
         except Exception:
             pass
@@ -1253,7 +1312,9 @@ class PyConlyseMainWindow(QMainWindow):
             vb = glw.addViewBox(row=1, col=1)
 
             # Use existing icon (uppercase extension in repo)
-            icon_path = str((self.bin_path / "icons" / "Main_layout_1200.PNG").resolve())
+            icon_path = str(
+                (self.bin_path / "icons" / "Main_layout_1200.PNG").resolve()
+            )
             im = imageio.imread(icon_path)
 
             img = pg.ImageItem()
@@ -1268,7 +1329,11 @@ class PyConlyseMainWindow(QMainWindow):
                     mp = vb.mapSceneToView(pos)
                     lbl.setText(f"x={mp.x():0.1f}, y={mp.y():0.1f}")
 
-            proxy = pg.SignalProxy(vb.scene().sigMouseMoved, rateLimit=30, slot=lambda *e: mouse_moved(pos_lab, e))
+            proxy = pg.SignalProxy(
+                vb.scene().sigMouseMoved,
+                rateLimit=30,
+                slot=lambda *e: mouse_moved(pos_lab, e),
+            )
             map_w._proxy = proxy  # keep ref
             vb.addItem(img)
             vb.setAspectLocked(True)

@@ -90,6 +90,44 @@ def start_netio_widget(device_name: str, parent=None, vis: str | VisType = "FULL
     return w
 
 
+def start_netio_client(instance="V0", parent=None, vis: str | VisType = "FULL"):
+    """Start NETIO client with device selection (V0, VD2, all).
+
+    This is the new approach that launches a client panel with multiple devices
+    instead of individual device widgets.
+
+    Example: start_netio_client("V0")
+    """
+    if OFFLINE_MODE:
+        return _offline_placeholder(
+            "NETIO Client (offline)",
+            f"Offline mode is enabled. NETIO client would show instance: {instance}.",
+            parent,
+        )
+
+    try:
+        from DeviceServers.power.netio.DS_NETIO_client import (
+            start_netio_client as _start_client,
+        )
+
+        v = _to_vis(vis)
+        # Start as non-standalone (returns the panel)
+        panel = _start_client(instance=instance, vis_type=v, standalone=False)
+
+        if panel:
+            try:
+                panel.setParent(parent)
+            except Exception:
+                pass
+
+        return panel
+
+    except Exception as e:
+        return _offline_placeholder(
+            "NETIO Client (error)", f"Failed to start NETIO client: {e}", parent
+        )
+
+
 def _derive_owis_axes(device_name: str) -> List[int]:
     """Best-effort axes detection for OWIS controller.
 

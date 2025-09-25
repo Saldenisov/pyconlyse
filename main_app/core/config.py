@@ -55,7 +55,7 @@ TANGO_SERVERS = ["ELYSE", "manip"]
 
 # TEMPORARY: Offline mode to block connections to Tango DB/Device Servers
 # Set to False to re-enable connections later.
-OFFLINE_MODE = True
+OFFLINE_MODE = False
 
 # Mapping from logical device types to Tango server class names (admin devices)
 SERVER_CLASS_BY_TYPE: Dict[str, str] = {
