@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+"""AVANTES CCD Client using general DS panel framework"""
+import sys
+from pathlib import Path
+
+app_folder = Path(__file__).resolve().parents[2]
+sys.path.append(str(app_folder))
+
+from bin.DS_General_Client import main
+from gui.Panels import AVANTES_CCDPanel
+from DeviceServers.cameras.avantes.DS_AVANTES_CCD_Widget import AVANTES_CCD
+
+# Layouts from legacy
+layouts = {
+    "Spectrometer": {"selection": ["manip/CR/AVANTES_CCD1", "manip/CR/AVANTES_CCD2"], "width": 2},
+    "test": {"selection": ["manip/CR/AVANTES_CCD1", "manip/CR/AVANTES_CCD2"], "width": 2},
+}
+
+
+def start_avantes_ccd_client(instance: str = "Spectrometer", vis_type=None, standalone: bool = True):
+    from DeviceServers.shared.DS_Widget import VisType
+
+    if vis_type is None:
+        vis_type = VisType.FULL
+
+    return main(
+        AVANTES_CCDPanel,
+        "AVANTES CCD",
+        AVANTES_CCD,
+        "bin/icons/AVANTES_CCD.svg",
+        layouts,
+        instance=instance,
+        vis_type=vis_type,
+        standalone=standalone,
+    )
+
+
+if __name__ == "__main__":
+    sys.exit(start_avantes_ccd_client())

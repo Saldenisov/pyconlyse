@@ -88,7 +88,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         label="Temperature",
         access=AttrWriteType.READ,
         display_level=DispLevel.OPERATOR,
-        unit="deg",
+        unit="degC",
         polling_period=polling_local,
         doc="Temperature in tenths of degrees C.",
     )
@@ -146,17 +146,6 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self.register_variables_for_archive()
         self.turn_on()
 
-    def power_status(self):
-        return self._power_status
-
-    def power_current(self):
-        return self._power_current
-
-    def power_voltage(self):
-        return self._power_voltage
-
-    def temperature(self):
-        return self._temperature
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
