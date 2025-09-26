@@ -18,6 +18,7 @@ class OWIS_motor(DS_General_Widget):
     def __init__(self, device_name: str, axes, parent=None, vis_type=VisType.FULL):
         self.axis_selected = None
         self.axes = axes
+        self.delay_lines_parameters = {}
         super().__init__(device_name, parent, vis_type)
         ds: Device = getattr(self, f"ds_{self.dev_name}")
 
@@ -63,19 +64,31 @@ class OWIS_motor(DS_General_Widget):
         s2.model = f"{dev_name}/state"
         s3.model = f"{dev_name}/status"
 
-        lo_status.addWidget(s1)
-        lo_status.addWidget(s2)
-        lo_status.addWidget(s3)
-
-        lo_device.addLayout(lo_status)
+        # Compact status area: LED + name on single row (no textual state/status)
+        line1 = QtWidgets.QHBoxLayout()
+        try:
+            s1.setWordWrap(True)
+            s1.setToolTip(name)
+            s1.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
+        except Exception:
+            pass
+        try:
+            s2.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        except Exception:
+            pass
+        line1.addWidget(s2)
+        line1.addSpacing(8)
+        line1.addWidget(s1)
+        line1.addStretch()
+        lo_device.addLayout(line1)
 
         # States of axes
         names = eval(ds.friendly_names)
         states = eval(ds.states)
         widgets = [
-            (QCheckBox(f"{names[axis]}:id:{axis}"), TaurusLabel()) for axis in self.axes
+            (QCheckBox(), TaurusLabel()) for axis in self.axes
         ]
-        self.checkbox_group_axes = Qt.QGroupBox("Axes states")
+        self.checkbox_group_axes = Qt.QGroupBox("Axes")
 
         for axis, wheel in zip(self.axes, widgets):
             cb, lab = wheel
@@ -87,12 +100,20 @@ class OWIS_motor(DS_General_Widget):
             state = True if states[axis] == tango.DevState.ON else False
 
             cb.setChecked(state)
-            cb.setText(f"{names[axis]}:id:{axis}")
+            cb.setText(f"{axis}. {names[axis]}")
+            cb.setToolTip(f"Axis {axis}: {names[axis]}")
 
-            lab.setText(str(states[axis]))
+            # Compact ON/OFF label instead of raw DevState
+            if state:
+                lab.setText("ON")
+                lab.setStyleSheet("color: #2ECC71; font-weight: bold;")
+            else:
+                lab.setText("OFF")
+                lab.setStyleSheet("color: #888; font-weight: bold;")
 
-            lo_status_axes.addWidget(lab)
+            # Place checkbox first, then status label
             lo_status_axes.addWidget(cb)
+            lo_status_axes.addWidget(lab)
 
             cb.clicked.connect(partial(self.cb_clicked, axis))
 
@@ -211,10 +232,27 @@ class OWIS_motor(DS_General_Widget):
         # Buttons for DS_server and commands
         self.button_on = TaurusCommandButton(command="turn_on")
         self.button_on.setModel(dev_name)
+        self.button_on.setText("ON")
+        self.button_on.setToolTip("Send 'turn_on' to power ON all axes")
+        try:
+            self.button_on.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        except Exception:
+            pass
 
         self.button_off = TaurusCommandButton(command="turn_off")
         self.button_off.setModel(dev_name)
+        self.button_off.setText("OFF")
+        self.button_off.setToolTip("Send 'turn_off' to power OFF all axes")
+        try:
+            self.button_off.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogCancelButton))
+        except Exception:
+            pass
 
+        lo_buttons.setSpacing(8)
+        try:
+            lo_buttons.setContentsMargins(0, 4, 0, 0)
+        except Exception:
+            pass
         lo_buttons.addWidget(self.button_on)
         lo_buttons.addWidget(self.button_off)
 
@@ -336,7 +374,12 @@ class OWIS_motor(DS_General_Widget):
                 lab: TaurusLabel = getattr(self, f"lab{axis_id}_{self.dev_name}")
                 state = True if self.states[axis_id] == tango.DevState.ON else False
                 cb.setChecked(state)
-                lab.setText(str(self.states[axis_id]))
+                if state:
+                    lab.setText("ON")
+                    lab.setStyleSheet("color: #2ECC71; font-weight: bold;")
+                else:
+                    lab.setText("OFF")
+                    lab.setStyleSheet("color: #888; font-weight: bold;")
 
     def positions_listener(self, event):
         ds: Device = getattr(self, f"ds_{self.dev_name}")

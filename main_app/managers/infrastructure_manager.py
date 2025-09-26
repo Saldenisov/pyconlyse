@@ -542,9 +542,9 @@ class TangoInfrastructureManager:
             if not device_names:
                 return starters
             try:
-                from tango import DeviceProxy  # type: ignore
+                from taurus import Device  # type: ignore
             except Exception:
-                # If DeviceProxy is not available, just return names without state
+                # If Taurus is not available, just return names without state
                 for dn in device_names:
                     starters.append({"name": dn, "state": "Unknown"})
                 return starters
@@ -552,8 +552,8 @@ class TangoInfrastructureManager:
             for dn in device_names:
                 state_str = "Unknown"
                 try:
-                    dp = DeviceProxy(dn)
-                    st = dp.state()
+                    dev = Device(dn)
+                    st = dev.state()
                     # Map to simple string
                     state_str = str(st)
                 except Exception as e:
@@ -579,7 +579,7 @@ class TangoInfrastructureManager:
             if timeout is None:
                 timeout = Timeouts.DATABASE_CONNECTION
             try:
-                from tango import DeviceProxy, DevState  # type: ignore
+                from taurus import Device  # type: ignore
             except Exception:
                 return "Unknown"
 
@@ -591,27 +591,17 @@ class TangoInfrastructureManager:
                 )
                 return "Unknown"
             try:
-                dp = DeviceProxy(admin_name)
-                # Set a small timeout to avoid blocking the GUI
-                try:
-                    dp.set_timeout_millis(int(timeout * 1000))
-                except Exception:
-                    pass
-                st = dp.state()
-                # Interpret state
-                running_states = {
-                    getattr(DevState, n, None)
-                    for n in ("ON", "RUNNING", "STANDBY", "MOVING")
-                }
-                stopped_states = {getattr(DevState, n, None) for n in ("OFF", "INIT")}
-                error_states = {getattr(DevState, n, None) for n in ("FAULT", "ALARM")}
-                if st in running_states:
+                dev = Device(admin_name)
+                st = dev.state()
+                # Interpret state using string values to avoid PyTango DevState dependency
+                st_str = str(st).upper()
+                if st_str in ("ON", "RUNNING", "STANDBY", "MOVING"):
                     return "Running"
-                if st in stopped_states:
+                if st_str in ("OFF", "INIT"):
                     return "Stopped"
-                if st in error_states:
+                if st_str in ("FAULT", "ALARM", "UNKNOWN"):
                     return "Error"
-                return str(st)
+                return st_str
             except Exception as e:
                 # If we cannot contact the admin device, status is unknown (could be down or unreachable)
                 logger.debug(f"Admin device check failed for {admin_name}: {e}")
@@ -743,8 +733,8 @@ class TangoInfrastructureManager:
         if OFFLINE_MODE:
             return devices
         try:
-            if Database is None:
-                return devices
+            from tango import Database  # type: ignore
+
             db = Database()
             # Normalize class in case user passes logical type
             srv_class = SERVER_CLASS_BY_TYPE.get(server_class, server_class)
@@ -760,12 +750,10 @@ class TangoInfrastructureManager:
 
             import concurrent.futures
 
-            from tango import DeviceProxy  # type: ignore
-
             def _match(dev_name: str) -> str:
                 try:
-                    dp = DeviceProxy(dev_name)
-                    info = dp.info()
+                    db_local = Database()
+                    info = db_local.get_device_info(dev_name)
                     # Try common attribute names for server id/name
                     server_name = getattr(info, "server_name", None)
                     if not server_name:

@@ -1505,7 +1505,7 @@ class PyConlyseMainWindow(QMainWindow):
         try:
             import concurrent.futures
 
-            from tango import DeviceProxy
+            from taurus import Device
         except Exception:
             return
 
@@ -1518,11 +1518,8 @@ class PyConlyseMainWindow(QMainWindow):
 
                     def read_state(dev_name: str):
                         try:
-                            dp = DeviceProxy(dev_name)
-                            try:
-                                st = dp.state()
-                            except Exception:
-                                st = dp.State()
+                            dev = Device(dev_name)
+                            st = dev.state()
                             return dev_name, str(st)
                         except Exception:
                             return dev_name, "Error"

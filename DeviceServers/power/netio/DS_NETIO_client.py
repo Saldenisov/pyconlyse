@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from typing import Optional
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
@@ -28,10 +29,16 @@ layouts = {
         ],
         "width": 1,
     },
+    "ELYSE": {
+        "selection": [
+            "manip/ELYSE/PDU_ELYSE",
+        ],
+        "width": 1,
+    },
 }
 
 
-def start_netio_client(instance="V0", vis_type=None, standalone=True):
+def start_netio_client(instance: Optional[str] = None, vis_type=None, standalone=True):
     """Start NETIO client programmatically
     
     Args:

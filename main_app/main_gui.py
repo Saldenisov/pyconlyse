@@ -13,11 +13,10 @@ from pathlib import Path
 main_app_path = Path(__file__).parent
 sys.path.insert(0, str(main_app_path.parent))
 
-# Import GUI window
-from main_app.ui.main_window import main as gui_main
-
+# Import GUI window (simple, legacy-like modular GUI)
 # Central logging setup
 from main_app.core.logging_config import setup_pyconlyse_logging
+from main_app.ui.simple_main_window import main as gui_main
 
 logger = logging.getLogger(__name__)
 
@@ -32,23 +31,12 @@ def main():
         # If logging setup fails, continue with console logging
         pass
 
-    logger.info("Starting PyConlyse GUI application...")
-    # Attempt to initialize Tango to catch potential issues early
-    # This is a placeholder and might require more specific Tango client initialization code
-    # For example, calling a function that tries to connect to a known Tango device
-    # or checks the Tango host/port configuration.
-    try:
-        from tango import DeviceProxy
-
-        # Try connecting to a dummy device or a known device to check Tango connectivity
-        # This line might need to be adjusted based on actual Tango device availability
-        DeviceProxy("sys/tg_test/1").ping()
-        logger.info("Tango connection test successful.")
-    except Exception as e:
-        logger.warning(f"Tango connection test failed: {e}")
-        logger.warning(
-            "This might indicate issues with Tango device servers or network configuration."
-        )
+    logger.info(
+        "Starting PyConlyse GUI application (no DS connections during startup)."
+    )
+    # NOTE: DS/Tango connectivity checks are intentionally deferred until after the GUI is shown.
+    # If you later need a connectivity probe, use Taurus (e.g., taurus.Device) in deferred code,
+    # not PyTango's DeviceProxy.
 
     try:
         # Start the GUI application

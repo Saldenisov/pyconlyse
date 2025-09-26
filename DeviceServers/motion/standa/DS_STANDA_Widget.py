@@ -18,9 +18,12 @@ class Standa_motor(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.relative_shift = 1
         super().__init__(device_name, parent, vis_type)
-        self.ds.subscribe_event(
-            "position", tango.EventType.CHANGE_EVENT, self.position_listener
-        )
+        try:
+            self.ds.subscribe_event(
+                "position", tango.EventType.CHANGE_EVENT, self.position_listener
+            )
+        except Exception as e:
+            print(f"Info: could not subscribe to 'position' events for {self.dev_name}: {e}")
 
     def register_DS_full(self, group_number=1):
         super(Standa_motor, self).register_DS_full()
@@ -160,6 +163,12 @@ class Standa_motor(DS_General_Widget):
         setattr(self, f"button_on_{dev_name}", TaurusCommandButton(command="turn_on"))
         button_on: TaurusCommandButton = getattr(self, f"button_on_{dev_name}")
         button_on.setModel(dev_name)
+        button_on.setText("ON")
+        button_on.setToolTip("Turn ON (enable power/motion)")
+        try:
+            button_on.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        except Exception:
+            pass
 
         setattr(
             self,
@@ -172,6 +181,12 @@ class Standa_motor(DS_General_Widget):
         setattr(self, f"button_off_{dev_name}", TaurusCommandButton(command="turn_off"))
         button_off: TaurusCommandButton = getattr(self, f"button_off_{dev_name}")
         button_off.setModel(dev_name)
+        button_off.setText("OFF")
+        button_off.setToolTip("Turn OFF (disable power/motion)")
+        try:
+            button_off.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogCancelButton))
+        except Exception:
+            pass
 
         setattr(self, f"button_set_{dev_name}", QtWidgets.QPushButton("Set"))
         button_set: TaurusCommandButton = getattr(self, f"button_set_{dev_name}")
@@ -183,6 +198,11 @@ class Standa_motor(DS_General_Widget):
         # button_set.setParameters([0])
         button_set.clicked.connect(partial(self.set_clicked, dev_name))
 
+        lo_buttons.setSpacing(8)
+        try:
+            lo_buttons.setContentsMargins(0, 4, 0, 0)
+        except Exception:
+            pass
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
         lo_buttons.addWidget(button_stop)

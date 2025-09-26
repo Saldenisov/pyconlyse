@@ -3,6 +3,7 @@ from enum import Enum
 from threading import Thread
 
 from PyQt5 import QtWidgets
+from PyQt5.QtWidgets import QSizePolicy
 from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
@@ -56,15 +57,17 @@ class DS_General_Widget(Qt.QWidget):
     def set_state_status(self, short=True):
         dev_name = self.dev_name
         lo_status: Qt.QLayout = getattr(self, f"layout_status_{dev_name}")
+        
+        # Compact horizontal layout: LED + Device name + Always on checkbox + Update button
         widgets = [TaurusLabel(), TaurusLed(), TaurusLabel(), TaurusValueCheckBox()]
         i = 1
         for s in widgets:
             setattr(self, f"s{i}_{dev_name}", s)
             i += 1
-        s1: TaurusLabel = getattr(self, f"s1_{dev_name}")
-        s2 = getattr(self, f"s2_{dev_name}")
-        s3 = getattr(self, f"s3_{dev_name}")
-        s4: TaurusValueCheckBox = getattr(self, f"s4_{dev_name}")
+        s1: TaurusLabel = getattr(self, f"s1_{dev_name}")  # Device name
+        s2 = getattr(self, f"s2_{dev_name}")  # LED
+        s3 = getattr(self, f"s3_{dev_name}")  # Status text (unused)
+        s4: TaurusValueCheckBox = getattr(self, f"s4_{dev_name}")  # Always on
 
         s1.model = f"{dev_name}/device_friendly_name"
         s2.model = f"{dev_name}/state"
@@ -74,13 +77,34 @@ class DS_General_Widget(Qt.QWidget):
         except AttributeError:
             always_on = False
         s4.setChecked(always_on)
-        lo_status.addWidget(s2)
-        lo_status.addWidget(s1)
-        lo_status.addWidget(s4)
-        if not short:
-            s3.model = f"{dev_name}/status"
-            lo_status.addWidget(s3)
-
+        
+        # Make device name compact but readable
+        try:
+            s1.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Preferred)
+            s1.setWordWrap(True)
+            s1.setToolTip(self.dev_name)
+        except Exception:
+            pass
+        
+        # Make LED fixed size
+        try:
+            s2.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        except Exception:
+            pass
+        
+        # Single compact horizontal line: LED + Name + Always On + Update button
+        line = QtWidgets.QHBoxLayout()
+        line.setSpacing(8)
+        try:
+            line.setContentsMargins(0, 2, 0, 2)
+        except Exception:
+            pass
+        
+        line.addWidget(s2)  # LED first
+        line.addWidget(s1)  # Device name next to LED
+        line.addWidget(s4)  # Always on checkbox
+        
+        # Update button
         setattr(
             self,
             f"button_update_param_{dev_name}",
@@ -90,13 +114,12 @@ class DS_General_Widget(Qt.QWidget):
             self, f"button_update_param_{dev_name}"
         )
         button_update_param.clicked.connect(self.update_param)
-
-        lo_status.addWidget(button_update_param)
-
-        hspacer = QtWidgets.QSpacerItem(
-            0, 40, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
-        )
-        lo_status.addSpacerItem(hspacer)
+        line.addWidget(button_update_param)
+        
+        line.addStretch()  # Push everything to the left
+        
+        # Single-line compact layout only (no textual status label)
+        lo_status.addLayout(line)
 
     @abstractmethod
     def register_full_layouts(self):

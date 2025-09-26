@@ -335,7 +335,7 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
     if "topdirect" in name:
         return start_topdirect_widget(device_name, parent, vis)
 
-    # Fallback: try to determine by server class via DeviceProxy.info
+    # Fallback: determine by server name via Database.get_device_info (no DeviceProxy)
     if OFFLINE_MODE:
         return _offline_placeholder(
             "Widget (offline)",
@@ -343,12 +343,14 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
             parent,
         )
     try:
-        from tango import DeviceProxy
+        from tango import Database
 
-        dp = DeviceProxy(device_name)
-        info = dp.info()
+        db = Database()
+        info = db.get_device_info(device_name)
         srv = str(
-            getattr(info, "server_name", "") or getattr(info, "server_id", "") or ""
+            getattr(info, "server_name", "")
+            or getattr(info, "server_id", "")
+            or getattr(info, "server", "")
         )
         s = srv.lower()
         if "ds_netio_pdu" in s or "netio" in s:

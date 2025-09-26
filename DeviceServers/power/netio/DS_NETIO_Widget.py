@@ -5,6 +5,7 @@ from pathlib import Path
 import tango
 from _functools import partial
 from PyQt5 import QtWidgets
+from PyQt5.QtGui import QFont
 from taurus import Device
 from taurus.external.qt import Qt
 from taurus.qt.qtgui.button import TaurusCommandButton
@@ -78,11 +79,28 @@ class Netio_pdu(DS_General_Widget):
         setattr(self, f"button_on_{dev_name}", TaurusCommandButton(command="turn_on"))
         button_on: TaurusCommandButton = getattr(self, f"button_on_{dev_name}")
         button_on.setModel(dev_name)
+        button_on.setText("ON")
+        button_on.setToolTip("Send 'turn_on' command to device (all outlets)")
+        try:
+            button_on.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogApplyButton))
+        except Exception:
+            pass
 
         setattr(self, f"button_off_{dev_name}", TaurusCommandButton(command="turn_off"))
         button_off: TaurusCommandButton = getattr(self, f"button_off_{dev_name}")
         button_off.setModel(dev_name)
+        button_off.setText("OFF")
+        button_off.setToolTip("Send 'turn_off' command to device (all outlets)")
+        try:
+            button_off.setIcon(QtWidgets.QApplication.style().standardIcon(QtWidgets.QStyle.SP_DialogCancelButton))
+        except Exception:
+            pass
 
+        lo_buttons.setSpacing(8)
+        try:
+            lo_buttons.setContentsMargins(0, 4, 0, 0)
+        except Exception:
+            pass
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
 
@@ -131,9 +149,20 @@ class Netio_pdu(DS_General_Widget):
         dev_name = self.dev_name
         ds: Device = getattr(self, f"ds_{dev_name}")
 
-        lo_state: Qt.QLayout = getattr(self, f"layout_state_{dev_name}")
-        setattr(self, f"checkbox_group_{dev_name}", Qt.QGroupBox("Channels states"))
-        group: Qt.QGroupBox = getattr(self, f"checkbox_group_{dev_name}")
+        # Build a nicer grid for outlets
+        grid = QtWidgets.QGridLayout()
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(8)
+        try:
+            grid.setContentsMargins(8, 8, 8, 8)
+        except Exception:
+            pass
+
+        setattr(self, f"checkbox_group_{dev_name}", QtWidgets.QGroupBox("Power Outlets"))
+        group: QtWidgets.QGroupBox = getattr(self, f"checkbox_group_{dev_name}")
+
+        font = QFont()
+        font.setPointSize(10)
 
         controls_ready = False
         try:
@@ -142,16 +171,16 @@ class Netio_pdu(DS_General_Widget):
                 # Add a label indicating device is not connected
                 error_label = QtWidgets.QLabel(f"Device {dev_name} not connected")
                 error_label.setStyleSheet("color: red; font-weight: bold;")
-                lo_state.addWidget(error_label)
+                grid.addWidget(error_label, 0, 0, 1, 2)
             elif not self.ids or not self.names or not self.states:
                 # Device connected but no data yet
                 loading_label = QtWidgets.QLabel(
                     f"Loading device data for {dev_name}..."
                 )
                 loading_label.setStyleSheet("color: orange; font-weight: bold;")
-                lo_state.addWidget(loading_label)
+                grid.addWidget(loading_label, 0, 0, 1, 2)
             else:
-                # Normal operation - create checkboxes
+                # Normal operation - create checkboxes in a grid
                 try:
                     # Try to get number_outputs property, fall back to data length
                     number_outputs = len(self.ids)
@@ -160,7 +189,7 @@ class Netio_pdu(DS_General_Widget):
                             ds.get_property("number_outputs")["number_outputs"][0]
                         )
                         number_outputs = min(number_outputs, prop_outputs)
-                    except:
+                    except Exception:
                         pass  # Use data length
 
                     # Use safe data from initialization
@@ -168,36 +197,45 @@ class Netio_pdu(DS_General_Widget):
                     ids = self.ids[:number_outputs]
                     states = self.states[:number_outputs]
 
-                    widgets = [
-                        QtWidgets.QCheckBox(f"{dev_name}:id:{id}")
-                        for _, id in zip(range(number_outputs), ids)
-                    ]
+                    # Layout config: 2 columns of checkboxes
+                    cols = 2
+                    row = 0
+                    col = 0
 
-                    for cb, state, name, id in zip(widgets, states, names, ids):
+                    for state, name, id in zip(states, names, ids):
+                        # Checkbox with nicer text
+                        cb = QtWidgets.QCheckBox()
+                        cb.setFont(font)
+                        label_text = f"{id}. {name}" if name else f"Outlet {id}"
+                        cb.setText(label_text)
+                        cb.setToolTip(f"Toggle outlet {id} ({name})")
                         setattr(self, f"cb{id}_{dev_name}", cb)
-                        cb: QtWidgets.QCheckBox = getattr(self, f"cb{id}_{dev_name}")
                         cb.setChecked(bool(state))
-                        cb.setText(f"{name}:id:{id}")
-                        lo_state.addWidget(cb)
                         cb.clicked.connect(partial(self.cb_clicked, dev_name))
+
+                        grid.addWidget(cb, row, col)
+                        col += 1
+                        if col >= cols:
+                            col = 0
+                            row += 1
                     controls_ready = True
                 except Exception as inner_e:
                     error_label = QtWidgets.QLabel(
                         f"Error creating controls: {inner_e}"
                     )
                     error_label.setStyleSheet("color: red;")
-                    lo_state.addWidget(error_label)
+                    grid.addWidget(error_label, 0, 0, 1, 2)
 
         except Exception as e:
             print(f"Error in set_states for {dev_name}: {e}")
             error_label = QtWidgets.QLabel(f"Error: {e!s}")
             error_label.setStyleSheet("color: red;")
-            lo_state.addWidget(error_label)
+            grid.addWidget(error_label, 0, 0, 1, 2)
         finally:
             # Mark controls readiness for listeners
             self._controls_ready = bool(controls_ready)
 
-        group.setLayout(lo_state)
+        group.setLayout(grid)
         return group
 
     def cb_clicked(self, dev_name: str):
@@ -250,7 +288,7 @@ class Netio_pdu(DS_General_Widget):
                     # Check bounds before accessing arrays
                     idx = id - 1
                     if 0 <= idx < len(self.names) and self.names[idx] != new_name:
-                        cb.setText(f"{new_name}:id:{id}")
+                        cb.setText(f"{id}. {new_name}")
 
                     if 0 <= idx < len(self.states) and self.states[idx] != new_state:
                         cb.setChecked(bool(new_state))
