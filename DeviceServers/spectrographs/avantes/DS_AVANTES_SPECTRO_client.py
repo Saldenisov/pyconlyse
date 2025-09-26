@@ -36,3 +36,5 @@ def start_avantes_spectro_client(instance: str = "Gamma", vis_type=None, standal
 
 if __name__ == "__main__":
     sys.exit(start_avantes_spectro_client())
+
+

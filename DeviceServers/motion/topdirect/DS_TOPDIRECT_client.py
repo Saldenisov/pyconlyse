@@ -46,3 +46,5 @@ def start_topdirect_client(instance: Optional[str] = None, vis_type=None, standa
 
 if __name__ == "__main__":
     sys.exit(start_topdirect_client())
+
+

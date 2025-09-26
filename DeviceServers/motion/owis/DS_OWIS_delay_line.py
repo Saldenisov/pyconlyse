@@ -9,7 +9,7 @@ p = os.path.realpath(__file__)
 
 app_folder = Path(p).resolve().parents[0]
 
-app_folder1 = Path(p).resolve().parents[2]
+app_folder1 = Path(p).resolve().parents[3]
 sys.path.append(str(app_folder1))
 app_folder2 = Path(p).resolve().parents[3]
 sys.path.append(str(app_folder2))
@@ -247,3 +247,4 @@ def main(device_name=None):
 
 if __name__ == "__main__":
     DS_Owis_delay_line.run_server()
+

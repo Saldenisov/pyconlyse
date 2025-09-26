@@ -10,7 +10,7 @@ except ModuleNotFoundError:
     import sys
     from pathlib import Path
 
-    app_folder = Path(__file__).resolve().parents[2]  # Go to pyconlyse root
+    app_folder = Path(__file__).resolve().parents[3]  # Go to pyconlyse root
     sys.path.append(str(app_folder))
     from DeviceServers.base.general import DS_General
 
@@ -89,3 +89,4 @@ class DS_ControlPosition(DS_General):
 
     def write_control_position(self, value):
         self.control_position = value
+

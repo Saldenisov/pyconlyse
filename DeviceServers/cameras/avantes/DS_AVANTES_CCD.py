@@ -370,3 +370,5 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
 if __name__ == "__main__":
     DS_AVANTES_CCD.run_server()
+
+

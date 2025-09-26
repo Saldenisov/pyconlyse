@@ -37,3 +37,5 @@ def start_avantes_ccd_client(instance: str = "Spectrometer", vis_type=None, stan
 
 if __name__ == "__main__":
     sys.exit(start_avantes_ccd_client())
+
+

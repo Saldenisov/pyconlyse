@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import List, Union
 
-app_folder = Path(__file__).resolve().parents[2]
+app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
 
@@ -48,3 +48,4 @@ class DS_Numato_Relay(DS_Numato_GPIO):
 
 if __name__ == "__main__":
     DS_Numato_Relay.run_server()
+

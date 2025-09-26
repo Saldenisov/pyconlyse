@@ -49,3 +49,5 @@ def start_basler_client(instance: Optional[str] = None, vis_type=None, standalon
 
 if __name__ == "__main__":
     sys.exit(start_basler_client())
+
+

@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 
-app_folder = Path(__file__).resolve().parents[2]
+app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
 import ctypes
@@ -17,7 +17,7 @@ from tango import DevState
 # -----------------------------
 from tango.server import AttrWriteType, attribute, device_property
 
-from DeviceServers.base.DS_Camera import DS_CAMERA_CCD
+from DeviceServers.base.camera import DS_CAMERA_CCD
 from utilities.tools.decorators import dll_lock
 
 
@@ -1127,3 +1127,6 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 if __name__ == "__main__":
     DS_ANDOR_CCD.run_server()
     # Andor_test()
+
+
+

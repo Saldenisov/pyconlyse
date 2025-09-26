@@ -12,7 +12,7 @@ for p in sys.path:
     print(f"  {p}")
 
 # Add pyconlyse root to path if needed
-pyconlyse_root = Path(__file__).parent
+pyconlyse_root = Path(__file__).parent.parent.parent  # Go up from tests/unit/ to project root
 print(f"\nPyconlyse root: {pyconlyse_root}")
 
 if str(pyconlyse_root) not in sys.path:

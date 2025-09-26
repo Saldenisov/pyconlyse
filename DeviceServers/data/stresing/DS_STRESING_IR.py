@@ -542,3 +542,5 @@ class DS_STRESING_IR(DS_CAMERA_CCD):
 
 if __name__ == "__main__":
     DS_STRESING_IR.run_server()
+
+

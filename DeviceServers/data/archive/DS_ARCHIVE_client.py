@@ -37,3 +37,5 @@ def start_archive_client(instance: str = "Main", vis_type=None, standalone: bool
 
 if __name__ == "__main__":
     sys.exit(start_archive_client())
+
+
