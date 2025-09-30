@@ -68,6 +68,22 @@ function Install-Poetry {
     Write-Status "Poetry installed successfully" -Color $Green
 }
 
+function Configure-Poetry {
+    param([string]$PythonPath)
+    
+    Write-Status "Configuring Poetry to use conda environment..." -Color $Cyan
+    
+    # Configure Poetry to not create virtual environments
+    & $PythonPath -m poetry config virtualenvs.create false
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Status "Warning: Could not configure Poetry virtualenv settings" -Color $Yellow
+    }
+    else {
+        Write-Status "Poetry configured to use conda environment" -Color $Green
+    }
+}
+
 # Main installation process
 try {
     Write-Status "Starting PyConlyse installation..." -Color $Green
@@ -81,6 +97,18 @@ try {
     }
     
     Write-Status "Found conda: $(conda --version)" -Color $Green
+    
+    # Accept conda Terms of Service if needed
+    Write-Status "Ensuring conda Terms of Service are accepted..." -Color $Cyan
+    try {
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main 2>$null
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r 2>$null
+        conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2 2>$null
+        Write-Status "Conda TOS accepted" -Color $Green
+    }
+    catch {
+        Write-Status "Warning: Could not pre-accept conda TOS. Continuing..." -Color $Yellow
+    }
     
     # Check if we're in the right directory
     if (-not (Test-Path "pyproject.toml")) {
@@ -123,6 +151,11 @@ try {
         conda create -n $EnvironmentName python=3.9 --yes
         
         if ($LASTEXITCODE -ne 0) {
+            Write-Status "Failed to create conda environment. This might be due to Terms of Service." -Color $Red
+            Write-Status "Please manually accept conda TOS and try again:" -Color $Yellow
+            Write-Status "    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main" -Color $Yellow
+            Write-Status "    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r" -Color $Yellow
+            Write-Status "    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/msys2" -Color $Yellow
             throw "Failed to create conda environment"
         }
         
@@ -150,56 +183,91 @@ try {
     $poetryInstalled = $false
     
     try {
-        & $pythonPath -m poetry --version | Out-Null
-        $poetryInstalled = $true
-        Write-Status "Poetry is already installed" -Color $Green
+        $poetryVersion = & $pythonPath -m poetry --version 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $poetryInstalled = $true
+            Write-Status "Poetry is already installed: $poetryVersion" -Color $Green
+        }
+        else {
+            throw "Poetry not found"
+        }
     }
     catch {
+        Write-Status "Poetry not found, installing..." -Color $Cyan
         Install-Poetry -PythonPath $pythonPath
-        $poetryInstalled = $true
+        
+        # Verify installation
+        try {
+            $poetryVersion = & $pythonPath -m poetry --version 2>$null
+            if ($LASTEXITCODE -eq 0) {
+                $poetryInstalled = $true
+                Write-Status "Poetry installed successfully: $poetryVersion" -Color $Green
+            }
+            else {
+                throw "Poetry installation verification failed"
+            }
+        }
+        catch {
+            throw "Failed to install or verify Poetry"
+        }
     }
     
     if (-not $poetryInstalled) {
         throw "Failed to install or verify Poetry"
     }
     
-    # Configure Poetry to use conda environment
-    Write-Status "Configuring Poetry to use conda environment..." -Color $Cyan
-    
-    # Set Poetry to use the conda environment
-    & $pythonPath -m poetry env use $pythonPath
-    
-    if ($LASTEXITCODE -ne 0) {
-        Write-Status "Warning: Could not configure Poetry environment. Continuing..." -Color $Yellow
-    }
+    # Configure Poetry to use conda environment directly
+    Configure-Poetry -PythonPath $pythonPath
     
     # Install dependencies using Poetry
     Write-Status "Installing project dependencies with Poetry..." -Color $Cyan
     Write-Status "This may take several minutes..." -Color $Yellow
     
-    # Install dependencies from poetry.lock
-    & $pythonPath -m poetry install --no-dev
+    # Install dependencies from poetry.lock (without dev dependencies, without installing the project itself)
+    & $pythonPath -m poetry install --without dev --no-root
     
     if ($LASTEXITCODE -ne 0) {
-        Write-Status "Warning: Poetry install failed. Trying with pip..." -Color $Yellow
+        Write-Status "Warning: Poetry install failed. Trying alternative approaches..." -Color $Yellow
         
-        # Fallback: Export dependencies and install with pip
-        Write-Status "Exporting dependencies to requirements.txt..." -Color $Cyan
-        & $pythonPath -m poetry export --without-hashes -o requirements.txt
+        # First try: Install with dev dependencies but no root
+        Write-Status "Trying to install with all dependencies..." -Color $Cyan
+        & $pythonPath -m poetry install --no-root
         
-        if ($LASTEXITCODE -eq 0) {
-            Write-Status "Installing dependencies with pip..." -Color $Cyan
-            & $pipPath install -r requirements.txt
+        if ($LASTEXITCODE -ne 0) {
+            Write-Status "Poetry install still failing. Attempting pip fallback..." -Color $Yellow
             
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to install dependencies with pip"
+            # Check if we have a requirements.txt file already
+            if (Test-Path "requirements.txt") {
+                Write-Status "Found existing requirements.txt, using it..." -Color $Cyan
+                & $pipPath install -r requirements.txt
+                
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Status "Pip install from requirements.txt failed. Trying manual installation of key packages..." -Color $Yellow
+                    
+                    # Install key packages manually
+                    $keyPackages = @(
+                        "PyQt5==5.15.11",
+                        "taurus==5.3.1", 
+                        "numpy==1.26.4",
+                        "matplotlib==3.9.4",
+                        "PyTango==10.0.3",
+                        "pyqtgraph==0.13.7"
+                    )
+                    
+                    foreach ($package in $keyPackages) {
+                        Write-Status "Installing $package..." -Color $Cyan
+                        & $pipPath install $package
+                        if ($LASTEXITCODE -ne 0) {
+                            Write-Status "Warning: Failed to install $package" -Color $Yellow
+                        }
+                    }
+                }
             }
-            
-            # Clean up
-            Remove-Item requirements.txt -ErrorAction SilentlyContinue
-        }
-        else {
-            throw "Failed to export dependencies"
+            else {
+                Write-Status "No requirements.txt found and Poetry export not available" -Color $Red
+                Write-Status "Please ensure poetry.lock file is present and valid" -Color $Red
+                throw "Failed to install dependencies"
+            }
         }
     }
     
@@ -219,10 +287,10 @@ print(f"Python version: {sys.version}")
 # Test key packages
 packages_to_test = [
     'PyQt5',
-    'taurus',
+    'taurus', 
     'numpy',
     'matplotlib',
-    'pytango',
+    'PyTango',
     'pyqtgraph'
 ]
 
