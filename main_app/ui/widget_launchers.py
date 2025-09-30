@@ -309,6 +309,35 @@ def start_topdirect_widget(device_name: str, parent=None, vis: str | VisType = "
     return w
 
 
+def start_keysight_widget(device_name: str, parent=None, vis: str | VisType = "FULL"):
+    """Start Keysight 33509B widget."""
+    if OFFLINE_MODE:
+        return _offline_placeholder(
+            "Keysight 33509B (offline)",
+            f"Offline mode is enabled. Not connecting to {device_name}.",
+            parent,
+        )
+    from DeviceServers.instruments.keysight.DS_KEYSIGHT_33509B_Widget import (
+        Keysight_33509B,
+    )
+
+    v = _to_vis(vis)
+    w = Keysight_33509B(device_name, parent, v)
+    try:
+        w.setWindowTitle(f"Keysight 33509B - {device_name}")
+    except Exception:
+        pass
+    try:
+        w.resize(700, 400)
+    except Exception:
+        pass
+    try:
+        w.show()
+    except Exception:
+        pass
+    return w
+
+
 def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = "FULL"):
     """Best-effort launcher based on device name keywords.
 
@@ -319,6 +348,7 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
     - 'basler' or 'camera' -> Basler_camera
     - 'standa' -> Standa_motor
     - 'topdirect' -> TopDirect_Motor
+    - 'keysight' or 'awg' or '33509' -> Keysight_33509B
     """
     name = (device_name or "").lower()
 
@@ -334,6 +364,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
         return start_standa_widget(device_name, parent, vis)
     if "topdirect" in name:
         return start_topdirect_widget(device_name, parent, vis)
+    if "keysight" in name or "awg" in name or "33509" in name:
+        return start_keysight_widget(device_name, parent, vis)
 
     # Fallback: determine by server name via Database.get_device_info (no DeviceProxy)
     if OFFLINE_MODE:
@@ -365,6 +397,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
             return start_standa_widget(device_name, parent, vis)
         if "ds_topdirect_motor" in s or "topdirect" in s:
             return start_topdirect_widget(device_name, parent, vis)
+        if "ds_keysight_33509b" in s or "keysight" in s or "awg" in s:
+            return start_keysight_widget(device_name, parent, vis)
     except Exception:
         pass
 
