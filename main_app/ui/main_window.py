@@ -688,6 +688,13 @@ class PyConlyseMainWindow(QMainWindow):
                 "start_laser_pointing_widget",
                 "icons/laser_pointing.svg",
             ),
+            (
+                "KEYSIGHT",
+                "KEYSIGHT 33509B",
+                ["keysight", "awg", "33509"],
+                "start_keysight_widget",
+                "icons/NETIO.png",
+            ),
         ]
 
     def _build_client_sections(self):
@@ -837,6 +844,7 @@ class PyConlyseMainWindow(QMainWindow):
                 "TOPDIRECT": wl.start_topdirect_widget,
                 "BASLER": wl.start_basler_widget,
                 "LASER_POINTING": wl.start_laser_pointing_widget,
+                "KEYSIGHT": wl.start_keysight_widget,
             }
             vis = (
                 self._client_vis.value if hasattr(self._client_vis, "value") else "FULL"
@@ -846,7 +854,7 @@ class PyConlyseMainWindow(QMainWindow):
             if key == "NETIO":
                 # For NETIO, selection is an instance (V0, VD2, all)
                 w = fn_map[key](instance=selection, parent=None, vis=vis)
-            elif key in ("LASER_POINTING", "BASLER", "STANDA", "TOPDIRECT"):
+            elif key in ("LASER_POINTING", "BASLER", "STANDA", "TOPDIRECT", "KEYSIGHT"):
                 # For these, selection is a device name
                 w = fn_map[key](selection, parent=None, vis=vis)
             elif key == "OWIS":
@@ -1587,6 +1595,8 @@ class PyConlyseMainWindow(QMainWindow):
                 ("owis", "OWIS_motor"),
                 ("standa", "Standa_motor"),
                 ("topdirect", "TopDirect_Motor"),
+                ("keysight", "Keysight_33509B"),
+                ("awg", "Keysight_33509B"),
             ]
 
             # Build reverse index for easier lookup by class __name__
