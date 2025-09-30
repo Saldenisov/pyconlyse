@@ -112,6 +112,13 @@ def client_configs() -> List[Tuple[str, str, List[str], str, str]]:
             "start_laser_pointing_widget",
             "icons/laser_pointing.svg",
         ),
+        (
+            "KEYSIGHT",
+            "KEYSIGHT 33509B",
+            ["keysight", "awg", "33509"],
+            "start_keysight_widget",
+            "icons/NETIO.png",
+        ),
     ]
 
 
@@ -224,6 +231,7 @@ class SimpleMainWindow(QMainWindow):
             "TOPDIRECT": ["VD2", "all"],
             "BASLER": ["V0", "Cam1", "Cam2", "Cam3", "all"],
             "LASER_POINTING": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
+            "KEYSIGHT": ["laser"],
             # Additional clients (not shown in UI rows yet)
             "ANDOR_CCD": [],
             "AVANTES_CCD": [],
@@ -276,6 +284,9 @@ class SimpleMainWindow(QMainWindow):
                 "Cam2": "Pointing Cam2: LaserPointing-Cam2 only",
                 "Cam3": "Pointing Cam3: LaserPointing-Cam3 only",
             },
+            "KEYSIGHT": {
+                "laser": "Keysight 33509B: manip/awg/keysight33509b_laser",
+            },
         }
         # Try to derive instance lists from installed client modules
         self._update_defaults_from_clients()
@@ -295,6 +306,12 @@ class SimpleMainWindow(QMainWindow):
                 "Laser Pointing",
                 self.icons_dir / "laser_pointing.svg",
                 "widget",
+            ),
+            (
+                "KEYSIGHT",
+                "KEYSIGHT 33509B",
+                self.icons_dir / "NETIO.png",
+                "client",
             ),
         ]
 
@@ -830,6 +847,10 @@ class SimpleMainWindow(QMainWindow):
                 "LASER_POINTING": (
                     "DeviceServers\\control\\laser_pointing\\"
                     "DS_LASER_POINTING_client.py"
+                ),
+                "KEYSIGHT": (
+                    "DeviceServers\\instruments\\keysight\\"
+                    "DS_KEYSIGHT_33509B_client.py"
                 ),
                 "ANDOR_CCD": "DeviceServers\\cameras\\andor\\DS_ANDOR_CCD_client.py",
                 "AVANTES_CCD": (
