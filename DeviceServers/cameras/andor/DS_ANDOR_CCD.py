@@ -384,10 +384,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         System not initialized.
         :return:
         """
-        head = ctypes.c_char_p(b"HeadName                     ")
-        res = self.dll.GetHeadModel(head)
-        self.head_name = head
-        return True if res == 20002 else self._error_andor(res)
+        buf = ctypes.create_string_buffer(260)
+        res = self.dll.GetHeadModel(buf)
+        if res == 20002:
+            self.head_name = buf.value.decode('ascii', errors='ignore')
+            return True
+        else:
+            return self._error_andor(res)
 
     @dll_lock
     def _GetNumberPreAmpGains(self):
@@ -407,9 +410,12 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         Acquisition in progress.
         """
         nogains = ctypes.c_int()
-        res = self.dll.GetNumberPreAmpGains(nogains)
-        self.n_gains_max = nogains - 1
-        return True if res == 20002 else self._error_andor(res)
+        res = self.dll.GetNumberPreAmpGains(ctypes.byref(nogains))
+        if res == 20002:
+            self.n_gains_max = nogains.value - 1
+            return True
+        else:
+            return self._error_andor(res)
 
     @dll_lock
     def _GetNumberADChannels(self):
@@ -992,7 +998,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         """
         array = (ctypes.c_int32 * size)()
         array_p = ctypes.cast(array, ctypes.POINTER(ctypes.c_int32))
-        res = self.dll.GetAcquiredData(array_p, ctypes.c_long(size))
+        res = self.dll.GetAcquiredData(array_p, ctypes.c_ulong(size))
         self.array_real = np.array(array[:])
         return True if res == 20002 else self._error_andor(res)
 
@@ -1121,7 +1127,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         print(
             f"Error: {res}, Caller: {inspect.stack()[1].function} : {inspect.stack()[2].function}"
         )
-        return user_def
+        return res
 
 
 if __name__ == "__main__":
