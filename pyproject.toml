@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "pyconlyse"
-version = "0.2.0"
+version = "0.2.1"
 description = "This is PYCONLYSE tango based application for controlling ELYSE experiment."
 authors = ["saldenisov <saldenisov@gmail.com>"]
 license = "MIT License"
