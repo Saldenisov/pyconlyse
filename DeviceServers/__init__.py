@@ -31,6 +31,12 @@ def get_class_match():
         from DeviceServers.motion.topdirect.DS_TOPDIRECT_Widget import TopDirect_Motor
         from DeviceServers.power.netio.DS_Netio_pdu import DS_Netio_pdu
         from DeviceServers.power.netio.DS_NETIO_Widget import Netio_pdu
+        from DeviceServers.instruments.keysight.DS_KEYSIGHT_33509B import (
+            DS_KEYSIGHT_33509B,
+        )
+        from DeviceServers.instruments.keysight.DS_KEYSIGHT_33509B_Widget import (
+            Keysight_33509B,
+        )
 
         return {
             DS_Basler_camera.__name__: Basler_camera,
@@ -38,6 +44,7 @@ def get_class_match():
             DS_OWIS_PS90.__name__: OWIS_motor,
             DS_Standa_Motor.__name__: Standa_motor,
             DS_TopDirect_Motor.__name__: TopDirect_Motor,
+            DS_KEYSIGHT_33509B.__name__: Keysight_33509B,
         }
     except ImportError as e:
         print(f"Warning: Some device classes not available: {e}")
