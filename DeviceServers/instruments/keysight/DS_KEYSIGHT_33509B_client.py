@@ -8,7 +8,7 @@ from typing import Optional
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
-from bin.DS_General_Client import main
+from gui.DS_General_Client import main
 from gui.Panels import GeneralPanel
 from DeviceServers.instruments.keysight.DS_KEYSIGHT_33509B_Widget import Keysight_33509B
 

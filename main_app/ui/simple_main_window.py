@@ -882,10 +882,70 @@ class SimpleMainWindow(QMainWindow):
                 )
                 return
 
-            # Determine python console executable
-            pyexe = Path(sys.executable)
-            py_console = pyexe.with_name("python.exe")
-            python_path = str(py_console if py_console.exists() else pyexe)
+            # Determine python console executable (prefer CONDA env from PYCONLYSE_ENV)
+            import os
+
+            python_path: str | None = None
+            env_name = os.environ.get("PYCONLYSE_ENV", "").strip()
+            if env_name:
+                try:
+                    # Try to resolve conda environment path
+                    # Method 1: Check if it's already a full path
+                    if os.path.isabs(env_name) and os.path.exists(env_name):
+                        env_dir = Path(env_name)
+                    else:
+                        # Method 2: Use conda info --envs to find the environment
+                        result = subprocess.run(
+                            ["conda", "info", "--envs"],
+                            capture_output=True,
+                            text=True,
+                            timeout=10
+                        )
+                        env_dir = None
+                        if result.returncode == 0:
+                            # Parse conda info output to find environment path
+                            for line in result.stdout.splitlines():
+                                if env_name in line and not line.startswith("#"):
+                                    # Line format: "env_name    *    /path/to/env"
+                                    parts = line.split()
+                                    if len(parts) >= 2 and parts[0] == env_name:
+                                        env_path = parts[-1]  # Last part is the path
+                                        if os.path.exists(env_path):
+                                            env_dir = Path(env_path)
+                                            break
+                        
+                        # Method 3: Try common conda paths if not found
+                        if not env_dir:
+                            # Try user conda envs directory
+                            user_envs = Path.home() / ".conda" / "envs" / env_name
+                            if user_envs.exists():
+                                env_dir = user_envs
+                            else:
+                                # Try system conda envs
+                                conda_prefix = os.environ.get("CONDA_PREFIX")
+                                if conda_prefix:
+                                    system_envs = Path(conda_prefix).parent / "envs" / env_name
+                                    if system_envs.exists():
+                                        env_dir = system_envs
+
+                    # Look for python.exe in the environment directory
+                    if env_dir and env_dir.exists():
+                        env_python = env_dir / "python.exe"
+                        if not env_python.exists():
+                            # Fallback: some env layouts might place python under Scripts
+                            alt_python = env_dir / "Scripts" / "python.exe"
+                            if alt_python.exists():
+                                env_python = alt_python
+                        if env_python.exists():
+                            python_path = str(env_python)
+                except Exception:
+                    python_path = None
+
+            if not python_path:
+                # Fallback to interpreter next to current executable, else current executable
+                pyexe = Path(sys.executable)
+                py_console = pyexe.with_name("python.exe")
+                python_path = str(py_console if py_console.exists() else pyexe)
 
             # Build arguments for the new console process
             args = [python_path, str(client_script), selection]

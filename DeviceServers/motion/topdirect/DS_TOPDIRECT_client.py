@@ -4,10 +4,10 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-app_folder = Path(__file__).resolve().parents[2]
+app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
-from bin.DS_General_Client import main
+from gui.DS_General_Client import main
 from gui.Panels import TopDirectPanel
 from DeviceServers.motion.topdirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 
