@@ -338,6 +338,33 @@ def start_keysight_widget(device_name: str, parent=None, vis: str | VisType = "F
     return w
 
 
+def start_itest_widget(device_name: str, parent=None, vis: str | VisType = "FULL"):
+    """Start iTest PSU widget (per-slot controls)."""
+    if OFFLINE_MODE:
+        return _offline_placeholder(
+            "iTest PSU (offline)",
+            f"Offline mode is enabled. Not connecting to {device_name}.",
+            parent,
+        )
+    from DeviceServers.power.iTest.DS_iTest_PSU_Widget import Itest_PSU
+
+    v = _to_vis(vis)
+    w = Itest_PSU(device_name, parent, v)
+    try:
+        w.setWindowTitle(f"iTest PSU - {device_name}")
+    except Exception:
+        pass
+    try:
+        w.resize(900, 500)
+    except Exception:
+        pass
+    try:
+        w.show()
+    except Exception:
+        pass
+    return w
+
+
 def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = "FULL"):
     """Best-effort launcher based on device name keywords.
 
@@ -366,6 +393,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
         return start_topdirect_widget(device_name, parent, vis)
     if "keysight" in name or "awg" in name or "33509" in name:
         return start_keysight_widget(device_name, parent, vis)
+    if "itest" in name or "2819" in name or "be2819" in name or "bilt" in name:
+        return start_itest_widget(device_name, parent, vis)
 
     # Fallback: determine by server name via Database.get_device_info (no DeviceProxy)
     if OFFLINE_MODE:
@@ -399,6 +428,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
             return start_topdirect_widget(device_name, parent, vis)
         if "ds_keysight_33509b" in s or "keysight" in s or "awg" in s:
             return start_keysight_widget(device_name, parent, vis)
+        if "itest" in s or "i_test" in s or "ds_itest_psu" in s or "bilt" in s or "2819" in s:
+            return start_itest_widget(device_name, parent, vis)
     except Exception:
         pass
 
