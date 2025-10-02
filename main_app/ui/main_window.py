@@ -695,6 +695,13 @@ class PyConlyseMainWindow(QMainWindow):
                 "start_keysight_widget",
                 "icons/NETIO.png",
             ),
+            (
+                "ITEST",
+                "iTest PSU",
+                ["itest", "2819", "bilt"],
+                "start_itest_widget",
+                "icons/NETIO.png",
+            ),
         ]
 
     def _build_client_sections(self):

@@ -119,6 +119,13 @@ def client_configs() -> List[Tuple[str, str, List[str], str, str]]:
             "start_keysight_widget",
             "icons/NETIO.png",
         ),
+        (
+            "ITEST",
+            "iTest PSU",
+            ["itest", "2819", "bilt"],
+            "start_itest_widget",
+            "icons/NETIO.png",
+        ),
     ]
 
 
@@ -232,6 +239,7 @@ class SimpleMainWindow(QMainWindow):
             "BASLER": ["V0", "Cam1", "Cam2", "Cam3", "all"],
             "LASER_POINTING": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
             "KEYSIGHT": ["laser"],
+            "ITEST": ["ITestPSU/test"],
             # Additional clients (not shown in UI rows yet)
             "ANDOR_CCD": [],
             "AVANTES_CCD": [],
@@ -287,6 +295,9 @@ class SimpleMainWindow(QMainWindow):
             "KEYSIGHT": {
                 "laser": "Keysight 33509B: manip/awg/keysight33509b_laser",
             },
+            "ITEST": {
+                "ITestPSU/test": "iTest PSU rack (BILT) device",
+            },
         }
         # Try to derive instance lists from installed client modules
         self._update_defaults_from_clients()
@@ -310,6 +321,12 @@ class SimpleMainWindow(QMainWindow):
             (
                 "KEYSIGHT",
                 "KEYSIGHT 33509B",
+                self.icons_dir / "NETIO.png",
+                "client",
+            ),
+            (
+                "ITEST",
+                "iTest PSU",
                 self.icons_dir / "NETIO.png",
                 "client",
             ),
@@ -851,6 +868,10 @@ class SimpleMainWindow(QMainWindow):
                 "KEYSIGHT": (
                     "DeviceServers\\instruments\\keysight\\"
                     "DS_KEYSIGHT_33509B_client.py"
+                ),
+                "ITEST": (
+                    "DeviceServers\\power\\iTest\\"
+                    "DS_iTest_PSU_client.py"
                 ),
                 "ANDOR_CCD": "DeviceServers\\cameras\\andor\\DS_ANDOR_CCD_client.py",
                 "AVANTES_CCD": (

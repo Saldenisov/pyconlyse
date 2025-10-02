@@ -62,12 +62,17 @@ class ITestPSU(Device):
     RackHosts = device_property(dtype=str, doc="Comma-separated host[:port] entries for racks. If empty, Host/Port are used.")
     ChannelsPerRack = device_property(dtype=int, default_value=1)
 
+    # Optional: engineer-friendly aliases for outputs
+    # JSON string mapping slot numbers to alias names, e.g. {"1": "Gate", "7": "Drain"}
+    OutputAliases = device_property(dtype=str, doc="JSON mapping of slot->alias for output names")
+
     # Internal
     _scpi: Optional[SCPISocket] = None  # primary rack for backward compatibility
     _scpis: list[SCPISocket] = []
     _lock: threading.RLock
     _instrument_id: str = ""
     _outputs_info: List[Dict[str, Any]] = []  # [{"slot": int, "model": str, "name": str}]
+    _last_setpoints: Dict[int, float] = {}  # slot -> last requested current [A]
 
     def init_device(self) -> None:
         Device.init_device(self)
@@ -121,6 +126,12 @@ class ITestPSU(Device):
                 except Exception as exc:
                     self.warn_stream(f"Discovery failed, falling back to config outputs: {exc}")
 
+            # Apply aliases if provided
+            try:
+                self._apply_output_aliases()
+            except Exception as exc:
+                self.warn_stream(f"Alias mapping failed: {exc}")
+
             # 2) Fallback to outputs from config
             if not self._output_names:
                 outs = cfg.get("outputs")
@@ -134,6 +145,11 @@ class ITestPSU(Device):
                             self._outputs_info.append({"slot": slot, "model": "", "name": name})
                     except Exception:
                         pass
+                # Apply aliases to configured names as well
+                try:
+                    self._apply_output_aliases()
+                except Exception:
+                    pass
 
             # Identify (use first rack id)
             try:
@@ -244,6 +260,46 @@ class ITestPSU(Device):
                 continue
         self._outputs_info = outs
         self._output_names = names
+
+    def _apply_output_aliases(self) -> None:
+        """If OutputAliases property is provided, rename outputs accordingly.
+        Accepts JSON mapping of slot numbers to alias strings.
+        """
+        mapping: Dict[int, str] = {}
+        try:
+            raw = (self.OutputAliases or "").strip()
+            if not raw:
+                return
+            import json as _json
+            mobj = _json.loads(raw)
+            if isinstance(mobj, dict):
+                for k, v in mobj.items():
+                    try:
+                        sk = int(k)
+                        sv = str(v).strip()
+                        if sv:
+                            mapping[sk] = sv
+                    except Exception:
+                        continue
+        except Exception:
+            return
+        if not mapping or not self._outputs_info:
+            return
+        used = set()
+        for info in self._outputs_info:
+            slot = int(info.get("slot") or 0)
+            if slot in mapping:
+                alias = mapping[slot]
+                # ensure uniqueness
+                cand = alias
+                idx = 1
+                while cand in used:
+                    cand = f"{alias}_{idx}"
+                    idx += 1
+                info["name"] = cand
+                used.add(cand)
+        # Rebuild names list in same order
+        self._output_names = [i.get("name") for i in self._outputs_info if i.get("name")]
 
     def _select_slot(self, slot: int) -> None:
         """Select instrument slot before issuing per-slot commands."""
@@ -456,6 +512,11 @@ class ITestPSU(Device):
         self._select_slot(slot)
         sc = self._with_scpi()
         sc.set_current(float(amps))
+        # Cache value per slot
+        try:
+            self._last_setpoints[slot] = float(amps)
+        except Exception:
+            pass
         # Try readback; if not supported, return requested
         try:
             return sc.get_current_setpoint()
@@ -479,11 +540,18 @@ class ITestPSU(Device):
                 try:
                     cur = sc.get_current_setpoint()
                 except Exception:
-                    # fallback to measured current if setpoint readback not available
-                    cur = sc.measure_current()
+                    # fallback to cached setpoint, else measured current
+                    cur = self._last_setpoints.get(slot, None)
+                    if cur is None:
+                        cur = sc.measure_current()
                 newv = float(cur) + float(delta)
                 self._enforce_safe_current(newv)
                 sc.set_current(newv)
+                # Cache
+                try:
+                    self._last_setpoints[slot] = float(newv)
+                except Exception:
+                    pass
                 try:
                     return sc.get_current_setpoint()
                 except Exception:
@@ -522,7 +590,8 @@ class ITestPSU(Device):
                         try:
                             entry["current_setpoint"] = sc.get_current_setpoint()
                         except Exception:
-                            entry["current_setpoint"] = None
+                            # use cached if available
+                            entry["current_setpoint"] = self._last_setpoints.get(slot)
                         try:
                             entry["measured_current"] = sc.measure_current()
                         except Exception:
