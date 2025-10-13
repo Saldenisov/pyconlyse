@@ -220,6 +220,11 @@ class SimpleMainWindow(QMainWindow):
         act_laser.triggered.connect(lambda: self._launch_client("LASER_POINTING"))
         clients_menu.addAction(act_laser)
 
+        act_itest = QAction("Start iTest PSU", self)
+        act_itest.setShortcut(QKeySequence("Ctrl+I"))
+        act_itest.triggered.connect(lambda: self._launch_client("ITEST"))
+        clients_menu.addAction(act_itest)
+
         clients_menu.addSeparator()
         act_astor = QAction("Start Astor", self)
         act_astor.setShortcut(QKeySequence("Ctrl+A"))
@@ -239,7 +244,7 @@ class SimpleMainWindow(QMainWindow):
             "BASLER": ["V0", "Cam1", "Cam2", "Cam3", "all"],
             "LASER_POINTING": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
             "KEYSIGHT": ["laser"],
-            "ITEST": ["ITestPSU/test"],
+            "ITEST": ["ELYSE", "ITestPSU/test", "ITestPSU/bilt", "ITestPSU/lab", "ITestPSU/main"],
             # Additional clients (not shown in UI rows yet)
             "ANDOR_CCD": [],
             "AVANTES_CCD": [],
@@ -296,7 +301,11 @@ class SimpleMainWindow(QMainWindow):
                 "laser": "Keysight 33509B: manip/awg/keysight33509b_laser",
             },
             "ITEST": {
-                "ITestPSU/test": "iTest PSU rack (BILT) device",
+                "ELYSE": "iTest PSU ELYSE: ELYSE/pdu/iTest (DS_itest_psu/1_iTest)",
+                "ITestPSU/test": "iTest PSU Test Rack (8 slots): test/itest/psu01",
+                "ITestPSU/bilt": "iTest PSU BILT Rack (8 slots): bilt/power/itest_main",
+                "ITestPSU/lab": "iTest PSU Lab Rack (8 slots): lab/itest/psu01",
+                "ITestPSU/main": "iTest PSU Main Rack (8 slots): manip/power/itest_psu01",
             },
         }
         # Try to derive instance lists from installed client modules

@@ -108,11 +108,24 @@ if exist DS_KEYSIGHT_33509B_wrapper.cs (
 )
 
 echo.
+REM Compile iTest PSU wrapper if present
+if exist DS_iTest_PSU_wrapper.cs (
+    echo Compiling DS_iTest_PSU_wrapper.cs...
+    csc /out:DS_iTest_PSU.exe /target:exe DS_iTest_PSU_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_iTest_PSU compilation failed!
+        pause
+        exit /b 1
+    )
+    echo ✓ DS_iTest_PSU.exe created successfully!
+)
+
+echo.
 echo ✓ Compilation successful!
 echo ✓ Created/updated wrappers where sources were present.
 echo.
 echo The executables are now ready for use with Astor.
-echo Example: DS_KEYSIGHT_33509B.exe MAIN
+echo Example: DS_iTest_PSU.exe 1_iTest
 echo.
 
 pause

@@ -6,7 +6,7 @@ import os
 import threading
 from typing import Optional, List, Dict, Any
 
-from tango import DevState, AttrWriteType
+from tango import DevState, AttrWriteType, DispLevel
 from tango.server import Device, attribute, command, device_property, run
 
 # Try multiple import paths for SCPI client
@@ -302,9 +302,10 @@ class ITestPSU(Device):
         self._output_names = [i.get("name") for i in self._outputs_info if i.get("name")]
 
     def _select_slot(self, slot: int) -> None:
-        """Select instrument slot before issuing per-slot commands."""
+        """Select instrument slot before issuing per-slot commands.
+        On this hardware the selection is "I <slot>" (alias of INST <slot>)."""
         scpi = self._with_scpi()
-        scpi.write(f"INST:SEL {int(slot)}")
+        scpi.write(f"I {int(slot)}")
 
     def _find_slot_by_name(self, name: str) -> int:
         for info in self._outputs_info:
@@ -420,6 +421,90 @@ class ITestPSU(Device):
     def InstrumentId(self) -> str:  # type: ignore[override]
         return self._instrument_id or ""
 
+    # ---- DS_PDU-like multi-output attributes for interoperability ----
+    @attribute(
+        label="Outputs names",
+        dtype=[str],
+        max_dim_x=32,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="List of output names (aliases applied if configured)",
+        polling_period=1000,
+    )
+    def names(self) -> List[str]:
+        if getattr(self, "_output_names", None):
+            return list(self._output_names)
+        # Fallback to generic names if discovery/config missing
+        try:
+            ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+        except Exception:
+            ch = 1
+        return [f"slot_{i}" for i in range(1, ch + 1)]
+
+    @attribute(
+        label="Outputs ids",
+        dtype=[int],
+        max_dim_x=32,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="List of output slot indices (1-based)",
+        polling_period=1000,
+    )
+    def ids(self) -> List[int]:
+        if getattr(self, "_outputs_info", None):
+            try:
+                return [int(x.get("slot") or 1) for x in self._outputs_info]
+            except Exception:
+                pass
+        try:
+            ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+        except Exception:
+            ch = 1
+        return list(range(1, ch + 1))
+
+    @attribute(
+        label="Outputs states",
+        dtype=[int],
+        max_dim_x=32,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Output enable states as integers (0=OFF, 1=ON)",
+        polling_period=500,
+    )
+    def states(self) -> List[int]:
+        res: List[int] = []
+        with self._lock:
+            sc = self._with_scpi()
+            if getattr(self, "UseDiscovery", True) and getattr(self, "_outputs_info", None):
+                for info in self._outputs_info:
+                    slot = int(info.get("slot") or 1)
+                    try:
+                        try:
+                            self._select_slot(slot)
+                        except Exception:
+                            pass
+                        on = sc.get_output_state()
+                        res.append(1 if on else 0)
+                    except Exception:
+                        res.append(0)
+            else:
+                # Fallback: use configured channel count
+                try:
+                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+                except Exception:
+                    ch = 1
+                for slot in range(1, ch + 1):
+                    try:
+                        try:
+                            sc.write(f"I {slot}")
+                        except Exception:
+                            pass
+                        on = sc.get_output_state()
+                        res.append(1 if on else 0)
+                    except Exception:
+                        res.append(0)
+        return res
+
     @attribute(dtype=int, access=AttrWriteType.READ, label="Rack Count")
     def RackCount(self) -> int:  # type: ignore[override]
         return len(self._scpis) if hasattr(self, "_scpis") and self._scpis else (1 if self._scpi else 0)
@@ -427,6 +512,135 @@ class ITestPSU(Device):
     @attribute(dtype=int, access=AttrWriteType.READ, label="Channels Per Rack")
     def Channels(self) -> int:  # type: ignore[override]
         return int(self.ChannelsPerRack)
+
+    @attribute(dtype=int, access=AttrWriteType.READ, label="Slot Count")
+    def SlotCount(self) -> int:  # type: ignore[override]
+        try:
+            return len(self._outputs_info) if getattr(self, "_outputs_info", None) else int(self.ChannelsPerRack)
+        except Exception:
+            return int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+
+    @attribute(
+        label="Models",
+        dtype=[str],
+        max_dim_x=64,
+        display_level=DispLevel.EXPERT,
+        access=AttrWriteType.READ,
+        doc="Discovered module models per slot (empty if unknown)",
+        polling_period=2000,
+    )
+    def Models(self) -> List[str]:
+        if getattr(self, "_outputs_info", None):
+            try:
+                return [str(x.get("model") or "") for x in self._outputs_info]
+            except Exception:
+                return []
+        return []
+
+    @attribute(
+        label="Current setpoints per slot",
+        dtype=[float],
+        max_dim_x=64,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        unit="A",
+        polling_period=500,
+    )
+    def CurrentSetpoints(self) -> List[float]:  # type: ignore[override]
+        vals: List[float] = []
+        with self._lock:
+            sc = self._with_scpi()
+            slots: List[int]
+            if getattr(self, "_outputs_info", None):
+                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
+            else:
+                try:
+                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+                except Exception:
+                    ch = 1
+                slots = list(range(1, ch + 1))
+            for slot in slots:
+                try:
+                    try:
+                        self._select_slot(slot)
+                    except Exception:
+                        pass
+                    try:
+                        vals.append(float(sc.get_current_setpoint()))
+                    except Exception:
+                        # Fallback: cached setpoint or measured current
+                        cached = self._last_setpoints.get(slot)
+                        if cached is not None:
+                            vals.append(float(cached))
+                        else:
+                            vals.append(float(sc.measure_current()))
+                except Exception:
+                    vals.append(float("nan"))
+        return vals
+
+    @attribute(
+        label="Measured currents per slot",
+        dtype=[float],
+        max_dim_x=64,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        unit="A",
+        polling_period=500,
+    )
+    def MeasuredCurrents(self) -> List[float]:  # type: ignore[override]
+        vals: List[float] = []
+        with self._lock:
+            sc = self._with_scpi()
+            if getattr(self, "_outputs_info", None):
+                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
+            else:
+                try:
+                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+                except Exception:
+                    ch = 1
+                slots = list(range(1, ch + 1))
+            for slot in slots:
+                try:
+                    try:
+                        self._select_slot(slot)
+                    except Exception:
+                        pass
+                    vals.append(float(sc.measure_current()))
+                except Exception:
+                    vals.append(float("nan"))
+        return vals
+
+    @attribute(
+        label="Measured voltages per slot",
+        dtype=[float],
+        max_dim_x=64,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        unit="V",
+        polling_period=500,
+    )
+    def MeasuredVoltages(self) -> List[float]:  # type: ignore[override]
+        vals: List[float] = []
+        with self._lock:
+            sc = self._with_scpi()
+            if getattr(self, "_outputs_info", None):
+                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
+            else:
+                try:
+                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+                except Exception:
+                    ch = 1
+                slots = list(range(1, ch + 1))
+            for slot in slots:
+                try:
+                    try:
+                        self._select_slot(slot)
+                    except Exception:
+                        pass
+                    vals.append(float(sc.measure_voltage()))
+                except Exception:
+                    vals.append(float("nan"))
+        return vals
 
     # ---- Commands ----
     @command()
@@ -533,31 +747,83 @@ class ITestPSU(Device):
     def BumpOutputCurrent(self, name_delta: tuple) -> float:
         name, delta = name_delta
         with self._lock:
+            slot = self._find_slot_by_name(name)
+            return self._bump_slot_current(slot, float(delta))
+
+    # ---- Slot-index convenience commands ----
+    @command(dtype_in=int, dtype_out=bool)
+    def OutputOnSlot(self, slot: int) -> bool:
+        with self._lock:
             try:
-                slot = self._find_slot_by_name(name)
-                self._select_slot(slot)
-                sc = self._with_scpi()
+                self._select_slot(int(slot))
+                self._with_scpi().output_on()
                 try:
-                    cur = sc.get_current_setpoint()
+                    return bool(int(self._with_scpi().query("OUTP?")))
                 except Exception:
-                    # fallback to cached setpoint, else measured current
-                    cur = self._last_setpoints.get(slot, None)
-                    if cur is None:
-                        cur = sc.measure_current()
-                newv = float(cur) + float(delta)
-                self._enforce_safe_current(newv)
-                sc.set_current(newv)
-                # Cache
+                    return True
+            except Exception:
+                return False
+
+    @command(dtype_in=int, dtype_out=bool)
+    def OutputOffSlot(self, slot: int) -> bool:
+        with self._lock:
+            try:
+                self._select_slot(int(slot))
+                self._with_scpi().output_off()
                 try:
-                    self._last_setpoints[slot] = float(newv)
+                    return not bool(int(self._with_scpi().query("OUTP?")))
                 except Exception:
-                    pass
-                try:
-                    return sc.get_current_setpoint()
-                except Exception:
-                    return newv
-            except Exception as exc:
-                raise
+                    return True
+            except Exception:
+                return False
+
+    def _set_slot_current(self, slot: int, amps: float) -> float:
+        self._enforce_safe_current(amps)
+        self._select_slot(int(slot))
+        sc = self._with_scpi()
+        sc.set_current(float(amps))
+        # Cache and attempt readback
+        try:
+            self._last_setpoints[int(slot)] = float(amps)
+        except Exception:
+            pass
+        try:
+            return sc.get_current_setpoint()
+        except Exception:
+            return float(amps)
+
+    def _bump_slot_current(self, slot: int, delta: float) -> float:
+        sc = self._with_scpi()
+        self._select_slot(int(slot))
+        try:
+            cur = sc.get_current_setpoint()
+        except Exception:
+            cur = self._last_setpoints.get(int(slot), None)
+            if cur is None:
+                cur = sc.measure_current()
+        newv = float(cur) + float(delta)
+        self._enforce_safe_current(newv)
+        sc.set_current(newv)
+        try:
+            self._last_setpoints[int(slot)] = float(newv)
+        except Exception:
+            pass
+        try:
+            return sc.get_current_setpoint()
+        except Exception:
+            return newv
+
+    @command(dtype_in=(int, float), dtype_out=float)
+    def SetSlotCurrent(self, slot_value: tuple) -> float:
+        slot, amps = slot_value
+        with self._lock:
+            return self._set_slot_current(int(slot), float(amps))
+
+    @command(dtype_in=(int, float), dtype_out=float)
+    def BumpSlotCurrent(self, slot_delta: tuple) -> float:
+        slot, delta = slot_delta
+        with self._lock:
+            return self._bump_slot_current(int(slot), float(delta))
 
     @command(dtype_out=str)
     def GetAllOutputs(self) -> str:
@@ -610,7 +876,7 @@ class ITestPSU(Device):
                     entry = {"channel": ch}
                     try:
                         try:
-                            sc.write(f"INST:SEL {ch}")
+                            sc.write(f"I {ch}")
                         except Exception:
                             pass
                         try:
@@ -633,6 +899,50 @@ class ITestPSU(Device):
                         entry["error"] = str(exc)
                     res.append(entry)
         return json.dumps(res)
+
+    # ---- DS_PDU-like batch output control ----
+    @command(
+        dtype_in=[int],
+        doc_in="Set output states in batch order. For discovered outputs, order follows 'names'/ids. Otherwise, slots 1..ChannelsPerRack.",
+    )
+    def set_channels_states(self, outputs: List[int]) -> None:
+        with self._lock:
+            sc = self._with_scpi()
+            try:
+                if getattr(self, "_outputs_info", None):
+                    pairs = list(zip(self._outputs_info, outputs))
+                    for info, val in pairs:
+                        slot = int(info.get("slot") or 1)
+                        try:
+                            self._select_slot(slot)
+                            if int(val):
+                                sc.output_on()
+                            else:
+                                sc.output_off()
+                        except Exception as exc:
+                            self.warn_stream(f"set_channels_states: slot {slot} -> {val} failed: {exc}")
+                else:
+                    # Fallback: use configured channel count
+                    try:
+                        ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else len(outputs)
+                    except Exception:
+                        ch = len(outputs)
+                    for idx, val in enumerate(outputs[: max(0, ch) ]):
+                        slot = idx + 1
+                        try:
+                            try:
+                                sc.write(f"I {slot}")
+                            except Exception:
+                                pass
+                            if int(val):
+                                sc.output_on()
+                            else:
+                                sc.output_off()
+                        except Exception as exc:
+                            self.warn_stream(f"set_channels_states: slot {slot} -> {val} failed: {exc}")
+            finally:
+                # no return value; Tango command completion indicates success unless exception escapes
+                pass
 
     @command()
     def DecCurrentFine(self) -> float:

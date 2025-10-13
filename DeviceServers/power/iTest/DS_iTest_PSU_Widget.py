@@ -1,7 +1,10 @@
 # iTest PSU control widget
+import sys
 import json
+from pathlib import Path
 from typing import Dict, List
 
+import tango
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import QTimer
 from PyQt5.QtGui import QDoubleValidator
@@ -10,15 +13,37 @@ from taurus.external.qt import Qt
 
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
+# Reuse helper utilities like NETIO widget
+fixes_path = Path(__file__).parents[3] / "fixes"
+if str(fixes_path) not in sys.path:
+    sys.path.append(str(fixes_path))
+from taurus_warnings_fix import (
+    suppress_taurus_deprecation_warnings,
+    check_device_connection,
+)
+
 
 class Itest_PSU(DS_General_Widget):
-    """GUI for iTest PSU rack: per-slot on/off, current set, and live readings."""
+    """GUI for iTest PSU rack: per-slot on/off, current set, and live readings.
+
+    Updated to follow NETIO client pattern: use Tango attributes (names/ids/states,
+    CurrentSetpoints/MeasuredCurrents/MeasuredVoltages) and subscribe to state changes.
+    """
 
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
+        suppress_taurus_deprecation_warnings()
         self._rows: Dict[str, Dict] = {}
         self._timer = None
         self._safe_min = -5.0
         self._safe_max = 5.0
+        # Cached arrays
+        self._ids: List[int] = []
+        self._names: List[str] = []
+        self._states: List[int] = []
+        self._csps: List[float] = []
+        self._meas_i: List[float] = []
+        self._meas_v: List[float] = []
+        self._controls_ready = False
         super().__init__(device_name, parent, vis_type)
 
     def before_ds(self):
@@ -37,6 +62,18 @@ class Itest_PSU(DS_General_Widget):
                 self._safe_max = float(props["SafeCurrentMax"][0])
         except Exception:
             pass
+
+        # Initialize arrays from Tango attributes if device is connected
+        try:
+            ds: Device = getattr(self, f"ds_{self.dev_name}")
+            if check_device_connection(ds):
+                self._read_arrays()
+            else:
+                self._ids, self._names, self._states = [], [], []
+                self._csps, self._meas_i, self._meas_v = [], [], []
+        except Exception:
+            self._ids, self._names, self._states = [], [], []
+            self._csps, self._meas_i, self._meas_v = [], [], []
 
     def register_full_layouts(self):
         super().register_full_layouts()
@@ -62,7 +99,14 @@ class Itest_PSU(DS_General_Widget):
         # First refresh builds rows
         self._refresh_table(build_rows=True)
 
-        # Timer for live updates
+        # Subscribe to states change events like NETIO client
+        try:
+            ds: Device = getattr(self, f"ds_{self.dev_name}")
+            ds.subscribe_event("states", tango.EventType.CHANGE_EVENT, self._states_event_listener)
+        except Exception:
+            pass
+
+        # Timer for live updates of measurements/values
         self._timer = QTimer(self)
         self._timer.setInterval(1000)
         self._timer.timeout.connect(lambda: self._refresh_table(build_rows=False))
@@ -96,29 +140,141 @@ class Itest_PSU(DS_General_Widget):
     def set_the_control_value(self, value):
         pass
 
+    # --- Helpers ---
+    def _read_arrays(self):
+        ds: Device = getattr(self, f"ds_{self.dev_name}")
+        # Use attribute access; if fails, fallback to read_attribute
+        try:
+            ids = list(getattr(ds, "ids", []) or [])
+        except Exception:
+            ids = list(ds.read_attribute("ids").value)
+        try:
+            names = list(getattr(ds, "names", []) or [])
+        except Exception:
+            names = list(ds.read_attribute("names").value)
+        try:
+            states = list(getattr(ds, "states", []) or [])
+        except Exception:
+            states = list(ds.read_attribute("states").value)
+        try:
+            csps = list(getattr(ds, "CurrentSetpoints", []) or [])
+        except Exception:
+            try:
+                csps = list(ds.read_attribute("CurrentSetpoints").value)
+            except Exception:
+                csps = []
+        try:
+            mi = list(getattr(ds, "MeasuredCurrents", []) or [])
+        except Exception:
+            try:
+                mi = list(ds.read_attribute("MeasuredCurrents").value)
+            except Exception:
+                mi = []
+        try:
+            mv = list(getattr(ds, "MeasuredVoltages", []) or [])
+        except Exception:
+            try:
+                mv = list(ds.read_attribute("MeasuredVoltages").value)
+            except Exception:
+                mv = []
+        self._ids, self._names, self._states = ids, names, states
+        self._csps, self._meas_i, self._meas_v = csps, mi, mv
+
+    def _states_event_listener(self, event):
+        # Update state buttons quickly on event
+        try:
+            if not self._controls_ready:
+                return
+            ds: Device = getattr(self, f"ds_{self.dev_name}")
+            new_states = []
+            try:
+                new_states = list(getattr(ds, "states", []) or [])
+            except Exception:
+                try:
+                    new_states = list(ds.read_attribute("states").value)
+                except Exception:
+                    return
+            # Preserve ids/names mapping
+            ids = list(self._ids) if self._ids else []
+            names = list(self._names) if self._names else [f"slot_{i}" for i in ids]
+            for idx, sid in enumerate(ids):
+                name = names[idx] if idx < len(names) else f"slot_{sid}"
+                roww = self._rows.get(name)
+                if not roww:
+                    continue
+                try:
+                    on = int(new_states[idx]) == 1 if idx < len(new_states) else None
+                    if on is None:
+                        continue
+                    roww["btn_on"].setEnabled(not on)
+                    roww["btn_off"].setEnabled(on)
+                except Exception:
+                    continue
+            # cache
+            self._states = list(new_states)
+        except Exception:
+            pass
+
     def _update_summary(self):
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
-            data = ds.command_inout("GetAllOutputs")
-            outs = json.loads(data) if isinstance(data, str) else data
-            txt = f"Outputs: {len(outs)}\n"
-            on = sum(1 for o in outs if bool(o.get("output_enabled")))
-            txt += f"ON: {on}, OFF: {len(outs)-on}"
+            # Read attribute arrays
+            ids = list(getattr(ds, "ids", []) or [])
+            states = list(getattr(ds, "states", []) or [])
+            txt = f"Outputs: {len(ids)}\n"
+            on = sum(1 for s in states if int(s) == 1)
+            txt += f"ON: {on}, OFF: {max(0, len(ids)-on)}"
             self._summary.setText(txt)
         except Exception as e:
             self._summary.setText(f"Error: {e}")
 
     def _refresh_table(self, build_rows: bool):
+        # Read arrays from Tango attributes
+        fallback = False
         try:
-            ds: Device = getattr(self, f"ds_{self.dev_name}")
-            raw = ds.command_inout("GetAllOutputs")
-            outs: List[Dict] = json.loads(raw) if isinstance(raw, str) else raw
+            self._read_arrays()
         except Exception as e:
+            fallback = True
+            # Show warning banner but still build full UI
             if build_rows:
-                err = QtWidgets.QLabel(f"Error reading outputs: {e}")
-                err.setStyleSheet("color: red;")
+                err = QtWidgets.QLabel(f"Warning: {e}")
+                err.setStyleSheet("color: orange;")
                 self._table.addWidget(err, 1, 0, 1, 5)
-            return
+            # Prepare placeholder arrays using configured channel count
+            try:
+                ds: Device = getattr(self, f"ds_{self.dev_name}")
+                # Prefer ids length
+                try:
+                    ids_attr = getattr(ds, "ids", None)
+                    count = len(list(ids_attr)) if ids_attr is not None else 0
+                except Exception:
+                    count = 0
+                if not count:
+                    try:
+                        count = int(getattr(ds, "Channels", 0) or 0)
+                    except Exception:
+                        count = 0
+                if not count:
+                    try:
+                        props = ds.get_property("ChannelsPerRack")
+                        count = int(props.get("ChannelsPerRack", [8])[0])
+                    except Exception:
+                        count = 8
+            except Exception:
+                count = 8
+            self._ids = list(range(1, count + 1))
+            self._names = [f"slot_{i}" for i in self._ids]
+            self._states = [0] * count
+            self._csps = [0.0] * count
+            self._meas_i = [None] * count
+            self._meas_v = [None] * count
+
+        ids = list(self._ids)
+        names = list(self._names) if self._names else [f"slot_{i}" for i in ids]
+        states = list(self._states)
+        csps = list(self._csps)
+        meas_i = list(self._meas_i)
+        meas_v = list(self._meas_v)
 
         # Build rows once
         if build_rows:
@@ -133,8 +289,8 @@ class Itest_PSU(DS_General_Widget):
             self._rows.clear()
 
             row = 1
-            for o in outs:
-                name = o.get("name") or (f"ch{int(o.get('channel'))}" if o.get("channel") else f"slot_{o.get('slot', '?')}")
+            for idx, sid in enumerate(ids):
+                name = names[idx] if idx < len(names) else f"slot_{sid}"
                 # Column 0: label
                 lab = QtWidgets.QLabel(name)
                 self._table.addWidget(lab, row, 0)
@@ -154,7 +310,7 @@ class Itest_PSU(DS_General_Widget):
                 sp.setDecimals(4)
                 sp.setSingleStep(0.01)
                 sp.setRange(self._safe_min, self._safe_max)
-                sp.setValue(0.0)
+                sp.setValue(float(csps[idx]) if idx < len(csps) and csps[idx] is not None else 0.0)
                 self._table.addWidget(sp, row, 2)
 
                 # Column 3,4: measured current/voltage labels
@@ -164,12 +320,13 @@ class Itest_PSU(DS_General_Widget):
                 self._table.addWidget(lab_v, row, 4)
 
                 # Wire actions
-                btn_on.clicked.connect(lambda _, n=name: self._set_output_state(n, True))
-                btn_off.clicked.connect(lambda _, n=name: self._set_output_state(n, False))
-                sp.editingFinished.connect(lambda n=name, w=sp: self._set_current(n, w.value()))
+                btn_on.clicked.connect(lambda _, s=sid: self._set_output_state_slot(s, True))
+                btn_off.clicked.connect(lambda _, s=sid: self._set_output_state_slot(s, False))
+                sp.editingFinished.connect(lambda s=sid, w=sp: self._set_current_slot(s, w.value()))
 
                 # Save row widgets
                 self._rows[name] = {
+                    "id": sid,
                     "lab": lab,
                     "btn_on": btn_on,
                     "btn_off": btn_off,
@@ -179,24 +336,26 @@ class Itest_PSU(DS_General_Widget):
                 }
                 row += 1
 
+            self._controls_ready = True
+
         # Update values
-        for o in outs:
-            name = o.get("name") or (f"ch{int(o.get('channel'))}" if o.get("channel") else f"slot_{o.get('slot', '?')}")
+        for idx, sid in enumerate(ids):
+            name = names[idx] if idx < len(names) else f"slot_{sid}"
             roww = self._rows.get(name)
             if not roww:
                 continue
             try:
                 # ON/OFF state -> enable/disable styling
-                on = bool(o.get("output_enabled")) if o.get("output_enabled") is not None else False
+                on = int(states[idx]) == 1 if idx < len(states) else False
                 roww["btn_on"].setEnabled(not on)
                 roww["btn_off"].setEnabled(on)
                 # Measurements
-                mi = o.get("measured_current")
-                mv = o.get("measured_voltage")
+                mi = meas_i[idx] if idx < len(meas_i) else None
+                mv = meas_v[idx] if idx < len(meas_v) else None
                 roww["lab_i"].setText("{:.6f}".format(float(mi)) if mi is not None else "–")
                 roww["lab_v"].setText("{:.4f}".format(float(mv)) if mv is not None else "–")
                 # Update spin from current_setpoint if present (do not fight user ongoing edits)
-                cs = o.get("current_setpoint")
+                cs = csps[idx] if idx < len(csps) else None
                 if cs is not None and not roww["spin"].hasFocus():
                     try:
                         roww["spin"].setValue(float(cs))
@@ -205,17 +364,16 @@ class Itest_PSU(DS_General_Widget):
             except Exception:
                 pass
 
-    def _set_output_state(self, name: str, on: bool):
+    def _set_output_state_slot(self, slot: int, on: bool):
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
-            if on:
-                ds.command_inout("OutputOn", name)
-            else:
-                ds.command_inout("OutputOff", name)
+            # Prefer slot-indexed convenience commands
+            cmd = "OutputOnSlot" if on else "OutputOffSlot"
+            ds.command_inout(cmd, int(slot))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "iTest", f"Failed to set output {name}: {e}")
+            QtWidgets.QMessageBox.warning(self, "iTest", f"Failed to set output for slot {slot}: {e}")
 
-    def _set_current(self, name: str, amps: float):
+    def _set_current_slot(self, slot: int, amps: float):
         if amps < self._safe_min or amps > self._safe_max:
             QtWidgets.QMessageBox.warning(
                 self,
@@ -225,6 +383,6 @@ class Itest_PSU(DS_General_Widget):
             return
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
-            ds.command_inout("SetOutputCurrent", (name, float(amps)))
+            ds.command_inout("SetSlotCurrent", (int(slot), float(amps)))
         except Exception as e:
-            QtWidgets.QMessageBox.warning(self, "iTest", f"Failed to set current on {name}: {e}")
+            QtWidgets.QMessageBox.warning(self, "iTest", f"Failed to set current on slot {slot}: {e}")

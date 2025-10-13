@@ -168,6 +168,7 @@ class DS_Netio_pdu(DS_PDU):
         self.set_state(DevState.OFF)
         return 0
 
+
     def register_variables_for_archive(self):
         from functools import partial
 

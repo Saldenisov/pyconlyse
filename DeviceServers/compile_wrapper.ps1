@@ -124,6 +124,19 @@ Write-Host "✅ Created: DS_Basler_camera.exe" -ForegroundColor Green
             Write-Warning "Failed to compile DS_Netio_pdu_wrapper.cs"
         }
     }
+
+    # Also compile DS_iTest_PSU if wrapper exists
+    $ITestSource = Join-Path $ScriptPath "DS_iTest_PSU_wrapper.cs"
+    $ITestOutput = Join-Path $ScriptPath "DS_iTest_PSU.exe"
+    if (Test-Path $ITestSource) {
+        Write-Host "Compiling DS_iTest_PSU_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$ITestOutput /target:exe $ITestSource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $ITestOutput)) {
+            Write-Host "✅ Created: DS_iTest_PSU.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_iTest_PSU_wrapper.cs"
+        }
+    }
     
     Write-Host ""
     
