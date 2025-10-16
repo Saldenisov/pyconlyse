@@ -338,31 +338,59 @@ def start_keysight_widget(device_name: str, parent=None, vis: str | VisType = "F
     return w
 
 
-def start_itest_widget(device_name: str, parent=None, vis: str | VisType = "FULL"):
-    """Start iTest PSU widget (per-slot controls)."""
+def start_itest_client(instance="ELYSE", parent=None, vis: str | VisType = "FULL"):
+    """Start iTest PSU client with device selection in a separate window.
+
+    This is the new approach that launches a client panel with device selection
+    instead of individual device widgets.
+
+    Example: start_itest_client("ELYSE")
+    """
     if OFFLINE_MODE:
         return _offline_placeholder(
-            "iTest PSU (offline)",
-            f"Offline mode is enabled. Not connecting to {device_name}.",
+            "iTest PSU Client (offline)",
+            f"Offline mode is enabled. iTest client would show instance: {instance}.",
             parent,
         )
-    from DeviceServers.power.iTest.DS_iTest_PSU_Widget import Itest_PSU
 
-    v = _to_vis(vis)
-    w = Itest_PSU(device_name, parent, v)
     try:
-        w.setWindowTitle(f"iTest PSU - {device_name}")
-    except Exception:
-        pass
-    try:
-        w.resize(900, 500)
-    except Exception:
-        pass
-    try:
-        w.show()
-    except Exception:
-        pass
-    return w
+        from DeviceServers.power.iTest.DS_iTest_client import (
+            start_itest_client as _start_client,
+        )
+
+        v = _to_vis(vis)
+        # Start as standalone (separate window)
+        panel = _start_client(instance=instance, vis_type=v, standalone=True)
+        return panel
+
+    except Exception as e:
+        return _offline_placeholder(
+            "iTest PSU Client (error)", f"Failed to start iTest client: {e}", parent
+        )
+
+
+def start_itest_widget(device_name: str, parent=None, vis: str | VisType = "FULL"):
+    """Start iTest PSU widget (per-slot controls) - DEPRECATED.
+    
+    This function is deprecated. Use start_itest_client() instead for separate window operation.
+    """
+    # For backward compatibility, try to determine instance from device name
+    name_lower = device_name.lower()
+    if "elyse" in name_lower:
+        instance = "ELYSE"
+    elif "test" in name_lower:
+        instance = "test"
+    elif "main" in name_lower or "manip" in name_lower:
+        instance = "main"
+    elif "lab" in name_lower:
+        instance = "lab"
+    elif "bilt" in name_lower:
+        instance = "bilt"
+    else:
+        instance = "ELYSE"  # default
+    
+    # Launch client in separate window instead
+    return start_itest_client(instance, parent, vis)
 
 
 def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = "FULL"):

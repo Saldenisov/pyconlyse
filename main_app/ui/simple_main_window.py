@@ -552,6 +552,7 @@ class SimpleMainWindow(QMainWindow):
             ),
             "ARCHIVE": "DeviceServers.data.archive.DS_ARCHIVE_client",
             "EXPERIMENT": "DeviceServers.control.experiment.DS_Experiment_client",
+            "ITEST": "DeviceServers.power.iTest.DS_iTest_client",
         }
         for key, modname in module_map.items():
             try:
@@ -838,6 +839,26 @@ class SimpleMainWindow(QMainWindow):
         fut.add_done_callback(_done)
 
     # ----- Actions -----
+    def _resolve_itest_device(self, config_or_device: str) -> str:
+        """Map selection to Tango device for iTest client.
+        Accepts either a config name (e.g. 'ITestPSU/test') or a full device name.
+        """
+        mapping = {
+            "ELYSE": "ELYSE/pdu/iTest",
+            "ITestPSU/ELYSE": "ELYSE/pdu/iTest",
+            "ITestPSU/test": "test/itest/psu01",
+            "ITestPSU/main": "manip/power/itest_psu01",
+            "ITestPSU/lab": "lab/itest/psu01",
+            "ITestPSU/bilt": "bilt/power/itest_main",
+            "test": "test/itest/psu01",
+            "main": "manip/power/itest_psu01",
+            "lab": "lab/itest/psu01",
+            "bilt": "bilt/power/itest_main",
+        }
+        if "/" in config_or_device and config_or_device not in mapping:
+            return config_or_device
+        return mapping.get(config_or_device, config_or_device)
+
     def _launch_client(self, key: str):
         try:
             import subprocess
@@ -863,6 +884,29 @@ class SimpleMainWindow(QMainWindow):
                 )
                 return
 
+            # If this key is configured as a 'widget', prefer launching in-process widget
+            kind = refs.get("kind") if isinstance(refs, dict) else None
+            if key == "ITEST" and kind == "widget":
+                try:
+                    from main_app.ui.widget_launchers import start_itest_widget
+                except Exception as e:
+                    QMessageBox.critical(self, key, f"Cannot import iTest widget: {e}")
+                    return
+                device_name = self._resolve_itest_device(selection)
+                panel = start_itest_widget(device_name, parent=self, vis=vis)
+                if panel:
+                    try:
+                        self._launched_panels.append(panel)
+                    except Exception:
+                        pass
+                    self.statusBar().showMessage(
+                        f"Started iTest Tab client for {device_name} in this window"
+                    )
+                    return
+                else:
+                    QMessageBox.warning(self, key, f"Failed to start iTest widget for {device_name}")
+                    return
+
             # Map device server keys to client script paths
             client_paths = {
                 "NETIO": "DeviceServers\\power\\netio\\DS_NETIO_client.py",
@@ -880,7 +924,7 @@ class SimpleMainWindow(QMainWindow):
                 ),
                 "ITEST": (
                     "DeviceServers\\power\\iTest\\"
-                    "DS_iTest_PSU_client.py"
+                    "DS_iTest_client.py"
                 ),
                 "ANDOR_CCD": "DeviceServers\\cameras\\andor\\DS_ANDOR_CCD_client.py",
                 "AVANTES_CCD": (

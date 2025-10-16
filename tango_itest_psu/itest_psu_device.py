@@ -6,7 +6,7 @@ import os
 import threading
 from typing import Optional
 
-from tango import DevState
+from tango import DevState, AttrWriteType
 from tango.server import Device, attribute, command, device_property, run
 
 from .scpi_client import SCPISocket, SCPIError
@@ -120,7 +120,7 @@ class ITestPSU(Device):
             return scpi.get_current_setpoint()
 
     # ---- Attributes ----
-    @attribute(dtype=float, rw=True, unit="A", label="Current Setpoint")
+    @attribute(dtype=float, access=AttrWriteType.READ_WRITE, unit="A", label="Current Setpoint")
     def CurrentSetpoint(self) -> float:  # type: ignore[override]
         try:
             val = self._get_current_setpoint_safe()
@@ -137,19 +137,19 @@ class ITestPSU(Device):
             self.error_stream(f"Write CurrentSetpoint failed: {exc}")
             raise
 
-    @attribute(dtype=float, rw=False, unit="A", label="Measured Current")
+    @attribute(dtype=float, access=AttrWriteType.READ, unit="A", label="Measured Current")
     def MeasuredCurrent(self) -> float:  # type: ignore[override]
         with self._lock:
             scpi = self._with_scpi()
             return scpi.measure_current()
 
-    @attribute(dtype=float, rw=False, unit="V", label="Measured Voltage")
+    @attribute(dtype=float, access=AttrWriteType.READ, unit="V", label="Measured Voltage")
     def MeasuredVoltage(self) -> float:  # type: ignore[override]
         with self._lock:
             scpi = self._with_scpi()
             return scpi.measure_voltage()
 
-    @attribute(dtype=bool, rw=True, label="Output Enabled")
+    @attribute(dtype=bool, access=AttrWriteType.READ_WRITE, label="Output Enabled")
     def OutputEnabled(self) -> bool:  # type: ignore[override]
         # Not all PSUs provide OUTP? response consistently; we approximate by success response
         # For deterministic behavior, you can override to read a vendor-specific query.
@@ -164,7 +164,7 @@ class ITestPSU(Device):
             else:
                 scpi.output_off()
 
-    @attribute(dtype=str, rw=False, label="Instrument ID")
+    @attribute(dtype=str, access=AttrWriteType.READ, label="Instrument ID")
     def InstrumentId(self) -> str:  # type: ignore[override]
         return self._instrument_id or ""
 

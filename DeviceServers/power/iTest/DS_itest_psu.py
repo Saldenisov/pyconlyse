@@ -1,972 +1,367 @@
-# SPDX-License-Identifier: MIT
+#!/usr/bin/env python3
+"""
+iTest PSU Tango Device Server (from scratch)
+
+- Device name: elyse/pdu/itest (example)
+- Device property 'Host' defines IP address
+- Attribute 'config' (RW, JSON string) maps slot names to aliases
+- names (RO, str[]) aliases for 8 slots (ordered by slot index 1..8)
+- ids (RO, int[]) 1..8
+- states (RO, int[]) per-slot output states (0/1)
+- currents_setpoint (RO, double[]) last known setpoints
+- currents_meas (RO, double[]) measured currents
+
+Commands:
+- find_device() → connect SCPI
+- get_controller_status() → refresh arrays
+- set_output_state([slotIndex, state]) (state: 0/1)
+- set_current([slotIndex, amps])
+- turn_on() / turn_off() affect all outputs
+
+Notes:
+- Uses easy-scpi via ITestSCPI wrapper
+- Defaults to 8 slots
+"""
 from __future__ import annotations
 
 import json
-import os
-import threading
-from typing import Optional, List, Dict, Any
+from typing import Dict, List, Tuple, Union
 
-from tango import DevState, AttrWriteType, DispLevel
-from tango.server import Device, attribute, command, device_property, run
+from tango import AttrWriteType, DevState, DispLevel
+from tango.server import attribute, command, device_property
 
-# Try multiple import paths for SCPI client
-try:
-    from .scpi_client import SCPISocket, SCPIError  # local package style
-except Exception:
-    try:
-        from tango_itest_psu.scpi_client import SCPISocket, SCPIError  # installed/package style
-    except Exception:
-        # Fallback for direct script execution when path is in sys.path
-        from scpi_client import SCPISocket, SCPIError
+from DeviceServers.base.general import DS_General
+from DeviceServers.power.iTest.scpi_client import ITestSCPI, SCPIError
 
 
-class ITestPSU(Device):
-    """
-    Tango Device Server for controlling an iTest/ITECH-like PSU via SCPI over TCP.
+class DS_iTest_PSU(DS_General):
+    _version_ = "0.1"
+    _model_ = "iTest PSU (BiLT)"
 
-    Device properties:
-      - Host (str): PSU IP address
-      - Port (int, default 5025): SCPI TCP port
-      - StartCurrent (float, default 0.0): starting current setpoint if no ConfigPath is provided
-      - ConfigPath (str, optional): path to JSON file containing {"start_current": <float>}
-      - EnableOutputOnInit (bool, default False): whether to turn output ON at init
-      - EOL (str, default \n): line terminator for SCPI ("\n", "\r\n", or "\r")
-
-    Attributes:
-      - CurrentSetpoint (RW, double): current setpoint in A (SOUR:CURR?)
-      - MeasuredCurrent (RO, double): measured current in A (MEAS:CURR?)
-      - MeasuredVoltage (RO, double): measured voltage in V (MEAS:VOLT?)
-      - OutputEnabled (RW, bool): PS output ON/OFF
-      - InstrumentId (RO, string): *IDN? response
-
-    Commands:
-      - IncCurrentFine / DecCurrentFine: ±0.01 A
-      - IncCurrentCoarse / DecCurrentCoarse: ±0.1 A
-      - Reconnect: reconnect to instrument
-    """
-
-    # Device properties
-    Host = device_property(dtype=str)
+    # Device properties (defaults)
+    NumberOfSlots = device_property(dtype=int, default_value=8)
+    Host = device_property(dtype=str, default_value="")
     Port = device_property(dtype=int, default_value=5025)
-    StartCurrent = device_property(dtype=float, default_value=0.0)
-    ConfigPath = device_property(dtype=str)
-    EnableOutputOnInit = device_property(dtype=bool, default_value=False)
     EOL = device_property(dtype=str, default_value="\n")
+    # Slot alias mapping provided via Tango device property 'config' (JSON string)
+    config = device_property(dtype=str, default_value="")
 
-    # Discovery and safety
-    UseDiscovery = device_property(dtype=bool, default_value=True, doc="If true, discover outputs via INST:LIST? on init")
-    SafeCurrentMin = device_property(dtype=float, default_value=-5.0, doc="Software minimum current limit [A]")
-    SafeCurrentMax = device_property(dtype=float, default_value=5.0, doc="Software maximum current limit [A]")
+    # Runtime state
+    def init_device(self):
+        # Pre-initialize arrays and config map so super().init_device() (which calls find_device()) can use them
+        try:
+            sc = int(getattr(self, "NumberOfSlots", 8) or 8)
+        except Exception:
+            sc = 8
+        self._slot_count = max(1, int(sc))
+        self._ids: List[int] = list(range(1, self._slot_count + 1))
+        self._config_map: Dict[str, str] = {f"S{i}": f"Slot {i}" for i in self._ids}
+        self._names: List[str] = [self._config_map[f"S{i}"] for i in self._ids]
+        self._states: List[int] = [0] * self._slot_count
+        self._currents_sp: List[float] = [0.0] * self._slot_count
+        self._currents_meas: List[float] = [0.0] * self._slot_count
+        self._scpi: ITestSCPI | None = None
 
-    # Multi-rack properties
-    RackHosts = device_property(dtype=str, doc="Comma-separated host[:port] entries for racks. If empty, Host/Port are used.")
-    ChannelsPerRack = device_property(dtype=int, default_value=1)
+        # Let base class init run (sets archive, calls find_device(), etc.)
+        super().init_device()
 
-    # Optional: engineer-friendly aliases for outputs
-    # JSON string mapping slot numbers to alias names, e.g. {"1": "Gate", "7": "Drain"}
-    OutputAliases = device_property(dtype=str, doc="JSON mapping of slot->alias for output names")
+        # Read properties for info (lazy-loaded in find_device too)
+        self._host = (getattr(self, "Host", "") or "").strip()
+        self._port = int(getattr(self, "Port", 5025) or 5025)
+        self._eol = str(getattr(self, "EOL", "\n") or "\n")
 
-    # Internal
-    _scpi: Optional[SCPISocket] = None  # primary rack for backward compatibility
-    _scpis: list[SCPISocket] = []
-    _lock: threading.RLock
-    _instrument_id: str = ""
-    _outputs_info: List[Dict[str, Any]] = []  # [{"slot": int, "model": str, "name": str}]
-    _last_setpoints: Dict[int, float] = {}  # slot -> last requested current [A]
-
-    def init_device(self) -> None:
-        Device.init_device(self)
+        # Initial state/info
         self.set_state(DevState.INIT)
-        self._lock = threading.RLock()
-        try:
-            eol = self.EOL or "\n"
-            # Build rack connections
-            hosts: list[tuple[str, int]] = []
-            if self.RackHosts:
-                parts = [p.strip() for p in str(self.RackHosts).split(",") if p.strip()]
-                for p in parts:
-                    if ":" in p:
-                        h, sp = p.rsplit(":", 1)
-                        try:
-                            hosts.append((h.strip(), int(sp)))
-                        except Exception:
-                            hosts.append((h.strip(), self.Port))
-                    else:
-                        hosts.append((p, self.Port))
-            else:
-                hosts.append((self.Host, self.Port))
-
-            self._scpis = []
-            for h, prt in hosts:
-                sc = SCPISocket(h, prt, timeout=3.0, eol=eol)
-                sc.connect()
-                self._scpis.append(sc)
-
-            # Primary scpi for backward compatibility (rack 1)
-            self._scpi = self._scpis[0]
-
-            # Load templates and output names from config (optional)
-            cfg = self._load_config()
-            templates = cfg.get("commands") or {}
-            if templates:
-                try:
-                    # Not all SCPISocket variants implement templates; ignore if missing
-                    getattr(self._scpi, "configure_templates", lambda _t: None)(templates)
-                except Exception as exc:
-                    self.warn_stream(f"Template configuration warning: {exc}")
-
-            # Initialize outputs list
-            self._output_names: List[str] = []
-            self._outputs_info = []
-
-            # 1) Try discovery via SCPI if enabled
-            if bool(self.UseDiscovery):
-                try:
-                    self._discover_outputs_via_scpi()
-                except Exception as exc:
-                    self.warn_stream(f"Discovery failed, falling back to config outputs: {exc}")
-
-            # Apply aliases if provided
-            try:
-                self._apply_output_aliases()
-            except Exception as exc:
-                self.warn_stream(f"Alias mapping failed: {exc}")
-
-            # 2) Fallback to outputs from config
-            if not self._output_names:
-                outs = cfg.get("outputs")
-                if isinstance(outs, list):
-                    self._output_names = [str(x) for x in outs]
-                    # Build basic outputs_info with unknown model
-                    try:
-                        # When only names exist, try to extract slot numbers (best-effort)
-                        for name in self._output_names:
-                            slot = self._parse_slot_from_name(name)
-                            self._outputs_info.append({"slot": slot, "model": "", "name": name})
-                    except Exception:
-                        pass
-                # Apply aliases to configured names as well
-                try:
-                    self._apply_output_aliases()
-                except Exception:
-                    pass
-
-            # Identify (use first rack id)
-            try:
-                self._instrument_id = self._scpi.idn()
-            except SCPIError:
-                self._instrument_id = ""
-
-            # Determine start current
-            start_current = self._load_start_current()
-            # Apply start current on first configured output, else channel 1
-            if start_current is not None:
-                try:
-                    if self._outputs_info:
-                        self._set_output_current_by_name(self._outputs_info[0]["name"], start_current)
-                    else:
-                        # No discovery/config → try default channel 1 on primary
-                        self._set_current_safe(start_current)
-                except Exception as exc:
-                    self.warn_stream(f"Failed to set start current: {exc}")
-
-            # Optionally enable output on first output
-            if self.EnableOutputOnInit:
-                try:
-                    if self._outputs_info:
-                        self._set_output_state_by_name(self._outputs_info[0]["name"], True)
-                    else:
-                        # Fallback: primary only
-                        self._with_scpi().output_on()
-                except SCPIError as exc:
-                    self.error_stream(f"Failed to enable output on init: {exc}")
-            self.set_status("Initialized and connected")
-            self.set_state(DevState.ON)
-        except Exception as exc:
-            self.error_stream(f"Initialization failed: {exc}")
-            self.set_status(f"Init error: {exc}")
-            self.set_state(DevState.FAULT)
-
-    def delete_device(self) -> None:
-        with self._lock:
-            if self._scpi is not None:
-                self._scpi.close()
-                self._scpi = None
-
-    # ---- Helpers ----
-    def _load_config(self) -> Dict[str, Any]:
-        cfg: Dict[str, Any] = {}
-        if self.ConfigPath:
-            try:
-                path = os.path.expanduser(self.ConfigPath)
-                with open(path, "r", encoding="utf-8") as f:
-                    cfg = json.load(f)
-            except Exception as exc:
-                self.warn_stream(f"Failed reading ConfigPath '{self.ConfigPath}': {exc}; continuing with defaults")
-        return cfg
-
-    def _load_start_current(self) -> Optional[float]:
-        cfg = self._load_config()
-        try:
-            if "start_current" in cfg:
-                return float(cfg.get("start_current"))
-        except Exception:
-            pass
-        # fallback
-        try:
-            return float(self.StartCurrent)
-        except Exception:
-            return None
-
-    def _with_scpi(self) -> SCPISocket:
-        if self._scpi is None:
-            raise SCPIError("SCPI not connected")
-        return self._scpi
-
-    # ---- Discovery helpers ----
-    def _parse_slot_from_name(self, name: str) -> int:
-        try:
-            # Expect names like slot_7_model_2819 or custom names with slot numbers
-            import re
-            m = re.search(r"slot[_-]?([0-9]+)", name.lower())
-            if m:
-                return int(m.group(1))
-        except Exception:
-            pass
-        return 1
-
-    def _discover_outputs_via_scpi(self) -> None:
-        """Populate self._outputs_info and self._output_names using INST:LIST?.
-        Builds names as slot_<n>_model_<id>.
-        """
-        scpi = self._with_scpi()
-        try:
-            raw = scpi.query("INST:LIST?")
-        except Exception as exc:
-            raise SCPIError(f"INST:LIST? failed: {exc}")
-        outs: List[Dict[str, Any]] = []
-        names: List[str] = []
-        for entry in str(raw).split(";"):
-            if not entry.strip():
-                continue
-            try:
-                slot_str, model_str = entry.split(",", 1)
-                slot = int(slot_str.strip())
-                model = model_str.strip()
-                name = f"slot_{slot}_model_{model}"
-                outs.append({"slot": slot, "model": model, "name": name})
-                names.append(name)
-            except Exception:
-                continue
-        self._outputs_info = outs
-        self._output_names = names
-
-    def _apply_output_aliases(self) -> None:
-        """If OutputAliases property is provided, rename outputs accordingly.
-        Accepts JSON mapping of slot numbers to alias strings.
-        """
-        mapping: Dict[int, str] = {}
-        try:
-            raw = (self.OutputAliases or "").strip()
-            if not raw:
-                return
-            import json as _json
-            mobj = _json.loads(raw)
-            if isinstance(mobj, dict):
-                for k, v in mobj.items():
-                    try:
-                        sk = int(k)
-                        sv = str(v).strip()
-                        if sv:
-                            mapping[sk] = sv
-                    except Exception:
-                        continue
-        except Exception:
-            return
-        if not mapping or not self._outputs_info:
-            return
-        used = set()
-        for info in self._outputs_info:
-            slot = int(info.get("slot") or 0)
-            if slot in mapping:
-                alias = mapping[slot]
-                # ensure uniqueness
-                cand = alias
-                idx = 1
-                while cand in used:
-                    cand = f"{alias}_{idx}"
-                    idx += 1
-                info["name"] = cand
-                used.add(cand)
-        # Rebuild names list in same order
-        self._output_names = [i.get("name") for i in self._outputs_info if i.get("name")]
-
-    def _select_slot(self, slot: int) -> None:
-        """Select instrument slot before issuing per-slot commands.
-        On this hardware the selection is "I <slot>" (alias of INST <slot>)."""
-        scpi = self._with_scpi()
-        scpi.write(f"I {int(slot)}")
-
-    def _find_slot_by_name(self, name: str) -> int:
-        for info in self._outputs_info:
-            if info.get("name") == name:
-                return int(info.get("slot") or 1)
-        # fallback best-effort from name
-        return self._parse_slot_from_name(name)
-
-    def _set_output_state_by_name(self, name: str, on: bool) -> bool:
-        slot = self._find_slot_by_name(name)
-        self._select_slot(slot)
-        sc = self._with_scpi()
-        if on:
-            sc.output_on()
-        else:
-            sc.output_off()
-        try:
-            return bool(int(sc.query("OUTP?")))
-        except Exception:
-            return on
-
-    # ---- Safety helpers ----
-    def _in_safe_current_range(self, amps: float) -> bool:
-        try:
-            lo = float(self.SafeCurrentMin)
-            hi = float(self.SafeCurrentMax)
-        except Exception:
-            lo, hi = -5.0, 5.0
-        return (lo <= float(amps) <= hi)
-
-    def _enforce_safe_current(self, amps: float) -> None:
-        if not self._in_safe_current_range(amps):
-            lo = self.SafeCurrentMin
-            hi = self.SafeCurrentMax
-            raise Exception(f"Requested current {amps:.4f} A outside safe range [{lo}, {hi}] A")
-
-    def _get_scpi_for(self, rack: int) -> SCPISocket:
-        if not self._scpis:
-            raise SCPIError("No SCPI connections available")
-        idx = rack - 1
-        if idx < 0 or idx >= len(self._scpis):
-            raise SCPIError(f"Rack index out of range: {rack}")
-        return self._scpis[idx]
-
-    def _set_current_safe(self, amps: float) -> None:
-        # Primary (legacy) path, without selecting slot
-        self._enforce_safe_current(amps)
-        with self._lock:
-            scpi = self._with_scpi()
-            scpi.set_current(amps)
-
-    def _get_current_setpoint_safe(self) -> float:
-        with self._lock:
-            scpi = self._with_scpi()
-            try:
-                return scpi.get_current_setpoint()
-            except Exception:
-                # Some modules do not support readback; return measured current as best-effort
-                try:
-                    return scpi.measure_current()
-                except Exception:
-                    raise
+        self.info(
+            f"iTest PSU initialized. Host property: '{self._host or '(empty)'}'. Call find_device() to connect.")
 
     # ---- Attributes ----
-    @attribute(dtype=float, access=AttrWriteType.READ_WRITE, unit="A", label="Current Setpoint")
-    def CurrentSetpoint(self) -> float:  # type: ignore[override]
+    @attribute(
+        label="Host (property)",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Effective Host loaded from Tango device property",
+    )
+    def host_property(self) -> str:
+        return self._host or ""
+
+    @attribute(
+        label="Port (property)",
+        dtype=int,
+        display_level=DispLevel.EXPERT,
+        access=AttrWriteType.READ,
+    )
+    def port_property(self) -> int:
+        return int(self._port)
+
+    @attribute(
+        label="EOL (property)",
+        dtype=str,
+        display_level=DispLevel.EXPERT,
+        access=AttrWriteType.READ,
+    )
+    def eol_property(self) -> str:
+        return str(self._eol)
+
+    # Helper: apply alias mapping from Tango device property 'config' (JSON string)
+    def _apply_config_property(self):
         try:
-            val = self._get_current_setpoint_safe()
-            return val
+            js = str(getattr(self, "config", "") or "")
+            if not js:
+                return
+            data = json.loads(js)
+            if isinstance(data, dict):
+                updated = dict(self._config_map)
+                for k, v in data.items():
+                    ks = str(k)
+                    if ks.upper().startswith("S"):
+                        try:
+                            idx = int(ks[1:])
+                            if idx in self._ids:
+                                updated[f"S{idx}"] = str(v)
+                        except Exception:
+                            continue
+                self._config_map = updated
+                # Update names for existing ids
+                self._names = [self._config_map.get(f"S{i}", f"Slot {i}") for i in self._ids]
         except Exception as exc:
-            self.error_stream(f"Read CurrentSetpoint failed: {exc}")
-            raise
+            self.error(f"Failed to apply 'config' property: {exc}")
 
-    @CurrentSetpoint.write
-    def CurrentSetpoint(self, value: float) -> None:  # type: ignore[override]
-        try:
-            self._set_current_safe(float(value))
-        except Exception as exc:
-            self.error_stream(f"Write CurrentSetpoint failed: {exc}")
-            raise
-
-    @attribute(dtype=float, access=AttrWriteType.READ, unit="A", label="Measured Current")
-    def MeasuredCurrent(self) -> float:  # type: ignore[override]
-        with self._lock:
-            scpi = self._with_scpi()
-            return scpi.measure_current()
-
-    @attribute(dtype=float, access=AttrWriteType.READ, unit="V", label="Measured Voltage")
-    def MeasuredVoltage(self) -> float:  # type: ignore[override]
-        with self._lock:
-            scpi = self._with_scpi()
-            return scpi.measure_voltage()
-
-    @attribute(dtype=bool, access=AttrWriteType.READ_WRITE, label="Output Enabled")
-    def OutputEnabled(self) -> bool:  # type: ignore[override]
-        # Primary-only output state (for legacy single-output usage)
-        with self._lock:
-            try:
-                return bool(int(self._with_scpi().query("OUTP?")))
-            except Exception:
-                return False
-
-    @OutputEnabled.write
-    def OutputEnabled(self, value: bool) -> None:  # type: ignore[override]
-        with self._lock:
-            scpi = self._with_scpi()
-            if value:
-                scpi.output_on()
-            else:
-                scpi.output_off()
-
-    @attribute(dtype=str, access=AttrWriteType.READ, label="Instrument ID")
-    def InstrumentId(self) -> str:  # type: ignore[override]
-        return self._instrument_id or ""
-
-    # ---- DS_PDU-like multi-output attributes for interoperability ----
     @attribute(
         label="Outputs names",
         dtype=[str],
-        max_dim_x=32,
+        max_dim_x=64,
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
-        doc="List of output names (aliases applied if configured)",
         polling_period=1000,
     )
     def names(self) -> List[str]:
-        if getattr(self, "_output_names", None):
-            return list(self._output_names)
-        # Fallback to generic names if discovery/config missing
-        try:
-            ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-        except Exception:
-            ch = 1
-        return [f"slot_{i}" for i in range(1, ch + 1)]
+        return list(self._names)
 
     @attribute(
         label="Outputs ids",
         dtype=[int],
-        max_dim_x=32,
+        max_dim_x=64,
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
-        doc="List of output slot indices (1-based)",
         polling_period=1000,
     )
     def ids(self) -> List[int]:
-        if getattr(self, "_outputs_info", None):
-            try:
-                return [int(x.get("slot") or 1) for x in self._outputs_info]
-            except Exception:
-                pass
-        try:
-            ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-        except Exception:
-            ch = 1
-        return list(range(1, ch + 1))
+        return list(self._ids)
 
     @attribute(
         label="Outputs states",
         dtype=[int],
-        max_dim_x=32,
+        max_dim_x=64,
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
-        doc="Output enable states as integers (0=OFF, 1=ON)",
         polling_period=500,
     )
     def states(self) -> List[int]:
-        res: List[int] = []
-        with self._lock:
-            sc = self._with_scpi()
-            if getattr(self, "UseDiscovery", True) and getattr(self, "_outputs_info", None):
-                for info in self._outputs_info:
-                    slot = int(info.get("slot") or 1)
-                    try:
-                        try:
-                            self._select_slot(slot)
-                        except Exception:
-                            pass
-                        on = sc.get_output_state()
-                        res.append(1 if on else 0)
-                    except Exception:
-                        res.append(0)
-            else:
-                # Fallback: use configured channel count
-                try:
-                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-                except Exception:
-                    ch = 1
-                for slot in range(1, ch + 1):
-                    try:
-                        try:
-                            sc.write(f"I {slot}")
-                        except Exception:
-                            pass
-                        on = sc.get_output_state()
-                        res.append(1 if on else 0)
-                    except Exception:
-                        res.append(0)
-        return res
-
-    @attribute(dtype=int, access=AttrWriteType.READ, label="Rack Count")
-    def RackCount(self) -> int:  # type: ignore[override]
-        return len(self._scpis) if hasattr(self, "_scpis") and self._scpis else (1 if self._scpi else 0)
-
-    @attribute(dtype=int, access=AttrWriteType.READ, label="Channels Per Rack")
-    def Channels(self) -> int:  # type: ignore[override]
-        return int(self.ChannelsPerRack)
-
-    @attribute(dtype=int, access=AttrWriteType.READ, label="Slot Count")
-    def SlotCount(self) -> int:  # type: ignore[override]
-        try:
-            return len(self._outputs_info) if getattr(self, "_outputs_info", None) else int(self.ChannelsPerRack)
-        except Exception:
-            return int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
+        return list(self._states)
 
     @attribute(
-        label="Models",
-        dtype=[str],
-        max_dim_x=64,
-        display_level=DispLevel.EXPERT,
-        access=AttrWriteType.READ,
-        doc="Discovered module models per slot (empty if unknown)",
-        polling_period=2000,
-    )
-    def Models(self) -> List[str]:
-        if getattr(self, "_outputs_info", None):
-            try:
-                return [str(x.get("model") or "") for x in self._outputs_info]
-            except Exception:
-                return []
-        return []
-
-    @attribute(
-        label="Current setpoints per slot",
+        label="Currents Setpoint (A)",
         dtype=[float],
         max_dim_x=64,
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
-        unit="A",
         polling_period=500,
     )
-    def CurrentSetpoints(self) -> List[float]:  # type: ignore[override]
-        vals: List[float] = []
-        with self._lock:
-            sc = self._with_scpi()
-            slots: List[int]
-            if getattr(self, "_outputs_info", None):
-                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
-            else:
-                try:
-                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-                except Exception:
-                    ch = 1
-                slots = list(range(1, ch + 1))
-            for slot in slots:
-                try:
-                    try:
-                        self._select_slot(slot)
-                    except Exception:
-                        pass
-                    try:
-                        vals.append(float(sc.get_current_setpoint()))
-                    except Exception:
-                        # Fallback: cached setpoint or measured current
-                        cached = self._last_setpoints.get(slot)
-                        if cached is not None:
-                            vals.append(float(cached))
-                        else:
-                            vals.append(float(sc.measure_current()))
-                except Exception:
-                    vals.append(float("nan"))
-        return vals
+    def currents_setpoint(self) -> List[float]:
+        return list(self._currents_sp)
 
     @attribute(
-        label="Measured currents per slot",
+        label="Currents Measured (A)",
         dtype=[float],
         max_dim_x=64,
         display_level=DispLevel.OPERATOR,
         access=AttrWriteType.READ,
-        unit="A",
         polling_period=500,
     )
-    def MeasuredCurrents(self) -> List[float]:  # type: ignore[override]
-        vals: List[float] = []
-        with self._lock:
-            sc = self._with_scpi()
-            if getattr(self, "_outputs_info", None):
-                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
-            else:
-                try:
-                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-                except Exception:
-                    ch = 1
-                slots = list(range(1, ch + 1))
-            for slot in slots:
-                try:
-                    try:
-                        self._select_slot(slot)
-                    except Exception:
-                        pass
-                    vals.append(float(sc.measure_current()))
-                except Exception:
-                    vals.append(float("nan"))
-        return vals
-
-    @attribute(
-        label="Measured voltages per slot",
-        dtype=[float],
-        max_dim_x=64,
-        display_level=DispLevel.OPERATOR,
-        access=AttrWriteType.READ,
-        unit="V",
-        polling_period=500,
-    )
-    def MeasuredVoltages(self) -> List[float]:  # type: ignore[override]
-        vals: List[float] = []
-        with self._lock:
-            sc = self._with_scpi()
-            if getattr(self, "_outputs_info", None):
-                slots = [int(i.get("slot") or 1) for i in self._outputs_info]
-            else:
-                try:
-                    ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-                except Exception:
-                    ch = 1
-                slots = list(range(1, ch + 1))
-            for slot in slots:
-                try:
-                    try:
-                        self._select_slot(slot)
-                    except Exception:
-                        pass
-                    vals.append(float(sc.measure_voltage()))
-                except Exception:
-                    vals.append(float("nan"))
-        return vals
+    def currents_meas(self) -> List[float]:
+        return list(self._currents_meas)
 
     # ---- Commands ----
-    @command()
-    def Reconnect(self) -> None:
-        with self._lock:
-            # Rebuild connections based on properties
-            if hasattr(self, "_scpis") and self._scpis:
-                for sc in self._scpis:
-                    try:
-                        sc.close()
-                    except Exception:
-                        pass
-            self._scpis = []
-            eol = self.EOL or "\n"
-            hosts: list[tuple[str, int]] = []
-            if self.RackHosts:
-                parts = [p.strip() for p in str(self.RackHosts).split(",") if p.strip()]
-                for p in parts:
-                    if ":" in p:
-                        h, sp = p.rsplit(":", 1)
-                        try:
-                            hosts.append((h.strip(), int(sp)))
-                        except Exception:
-                            hosts.append((h.strip(), self.Port))
-                    else:
-                        hosts.append((p, self.Port))
-            else:
-                hosts.append((self.Host, self.Port))
-            for h, prt in hosts:
-                sc = SCPISocket(h, prt, timeout=3.0, eol=eol)
-                sc.connect()
-                self._scpis.append(sc)
-            self._scpi = self._scpis[0]
+    @command
+    def find_device(self):
+        # Lazy-load properties in case superclass init calls this before our fields are set
+        try:
+            if not hasattr(self, "_host") or self._host is None or str(self._host).strip() == "":
+                self._host = (getattr(self, "Host", "") or "").strip()
+            if not hasattr(self, "_port") or self._port is None:
+                self._port = int(getattr(self, "Port", 5025) or 5025)
+            if not hasattr(self, "_eol") or self._eol is None:
+                self._eol = str(getattr(self, "EOL", "\n") or "\n")
+        except Exception:
+            # Fallback defaults if properties not yet available
+            self._host = str(getattr(self, "Host", "") or "").strip()
+            self._port = int(getattr(self, "Port", 5025) or 5025)
+            self._eol = str(getattr(self, "EOL", "\n") or "\n")
+
+        if not self._host:
+            self.error("Host device property is empty; set it in Tango DB and retry.")
+            self.set_state(DevState.FAULT)
+            return
+        try:
+            self.info(f"Connecting to iTest at host={self._host}, port={self._port}, eol={repr(self._eol)}", True)
+            self._scpi = ITestSCPI(self._host, port=self._port, timeout=3.0, eol=self._eol)
+            self._scpi.connect()
+            self.info(f"Connected to iTest at {self._host}", True)
+            # Auto-discover slots and apply aliases from config
             try:
-                self._instrument_id = self._scpi.idn()
-            except Exception:
-                self._instrument_id = ""
+                self.discover_slots()
+            except Exception as exc:
+                self.error(f"Slot discovery failed (continuing): {exc}")
+            self.set_state(DevState.ON)
+            # Initial refresh
+            self.get_controller_status()
+        except Exception as exc:
+            self._scpi = None
+            self.error(f"Connection failed: {exc}")
+            self.set_state(DevState.FAULT)
 
-    def _adjust_current(self, delta: float) -> float:
-        cur = self._get_current_setpoint_safe()
-        new_val = cur + delta
-        # Optional: clamp range if you know limits; left open here
-        self._set_current_safe(new_val)
-        return new_val
-
-    @command()
-    def IncCurrentFine(self) -> float:
-        """Increase current by +0.01 A. Returns the new setpoint."""
-        return self._adjust_current(+0.01)
-
-    # ----- Multi-rack/channel commands -----
-    @command(dtype_in=str, dtype_out=bool)
-    def OutputOn(self, name: str) -> bool:
-        with self._lock:
-            try:
-                slot = self._find_slot_by_name(name)
-                self._select_slot(slot)
-                self._with_scpi().output_on()
-                try:
-                    return bool(int(self._with_scpi().query("OUTP?")))
-                except Exception:
-                    return True
-            except Exception:
-                return False
-
-    @command(dtype_in=str, dtype_out=bool)
-    def OutputOff(self, name: str) -> bool:
-        with self._lock:
-            try:
-                slot = self._find_slot_by_name(name)
-                self._select_slot(slot)
-                self._with_scpi().output_off()
-                try:
-                    return not bool(int(self._with_scpi().query("OUTP?")))
-                except Exception:
-                    return True
-            except Exception:
-                return False
-
-    def _set_output_current_by_name(self, name: str, amps: float) -> float:
-        self._enforce_safe_current(amps)
-        slot = self._find_slot_by_name(name)
-        self._select_slot(slot)
-        sc = self._with_scpi()
-        sc.set_current(float(amps))
-        # Cache value per slot
-        try:
-            self._last_setpoints[slot] = float(amps)
-        except Exception:
-            pass
-        # Try readback; if not supported, return requested
-        try:
-            return sc.get_current_setpoint()
-        except Exception:
-            return float(amps)
-
-    @command(dtype_in=(str, float), dtype_out=float)
-    def SetOutputCurrent(self, name_value: tuple) -> float:
-        name, amps = name_value
-        with self._lock:
-            return self._set_output_current_by_name(name, float(amps))
-
-    @command(dtype_in=(str, float), dtype_out=float)
-    def BumpOutputCurrent(self, name_delta: tuple) -> float:
-        name, delta = name_delta
-        with self._lock:
-            slot = self._find_slot_by_name(name)
-            return self._bump_slot_current(slot, float(delta))
-
-    # ---- Slot-index convenience commands ----
-    @command(dtype_in=int, dtype_out=bool)
-    def OutputOnSlot(self, slot: int) -> bool:
-        with self._lock:
-            try:
-                self._select_slot(int(slot))
-                self._with_scpi().output_on()
-                try:
-                    return bool(int(self._with_scpi().query("OUTP?")))
-                except Exception:
-                    return True
-            except Exception:
-                return False
-
-    @command(dtype_in=int, dtype_out=bool)
-    def OutputOffSlot(self, slot: int) -> bool:
-        with self._lock:
-            try:
-                self._select_slot(int(slot))
-                self._with_scpi().output_off()
-                try:
-                    return not bool(int(self._with_scpi().query("OUTP?")))
-                except Exception:
-                    return True
-            except Exception:
-                return False
-
-    def _set_slot_current(self, slot: int, amps: float) -> float:
-        self._enforce_safe_current(amps)
-        self._select_slot(int(slot))
-        sc = self._with_scpi()
-        sc.set_current(float(amps))
-        # Cache and attempt readback
-        try:
-            self._last_setpoints[int(slot)] = float(amps)
-        except Exception:
-            pass
-        try:
-            return sc.get_current_setpoint()
-        except Exception:
-            return float(amps)
-
-    def _bump_slot_current(self, slot: int, delta: float) -> float:
-        sc = self._with_scpi()
-        self._select_slot(int(slot))
-        try:
-            cur = sc.get_current_setpoint()
-        except Exception:
-            cur = self._last_setpoints.get(int(slot), None)
-            if cur is None:
-                cur = sc.measure_current()
-        newv = float(cur) + float(delta)
-        self._enforce_safe_current(newv)
-        sc.set_current(newv)
-        try:
-            self._last_setpoints[int(slot)] = float(newv)
-        except Exception:
-            pass
-        try:
-            return sc.get_current_setpoint()
-        except Exception:
-            return newv
-
-    @command(dtype_in=(int, float), dtype_out=float)
-    def SetSlotCurrent(self, slot_value: tuple) -> float:
-        slot, amps = slot_value
-        with self._lock:
-            return self._set_slot_current(int(slot), float(amps))
-
-    @command(dtype_in=(int, float), dtype_out=float)
-    def BumpSlotCurrent(self, slot_delta: tuple) -> float:
-        slot, delta = slot_delta
-        with self._lock:
-            return self._bump_slot_current(int(slot), float(delta))
-
-    @command(dtype_out=str)
-    def GetAllOutputs(self) -> str:
-        """Return JSON array of outputs with status and measurements.
-        Uses discovered output names/slots when available.
+    @command
+    def discover_slots(self):
+        """Discover installed slots via SCPI INST:LIST? and update ids/names.
+        Aliases are taken from config (S{slot} -> alias) when available.
         """
-        res: List[Dict[str, Any]] = []
-        with self._lock:
-            sc = self._with_scpi()
-            # Ensure we have discovery results if enabled
-            if self.UseDiscovery and not self._outputs_info:
-                try:
-                    self._discover_outputs_via_scpi()
-                except Exception:
-                    pass
-            if self._outputs_info:
-                for info in self._outputs_info:
-                    slot = int(info.get("slot") or 1)
-                    name = info.get("name") or f"slot_{slot}"
-                    entry: Dict[str, Any] = {"slot": slot, "name": name, "model": info.get("model", "")}
-                    try:
-                        try:
-                            self._select_slot(slot)
-                        except Exception:
-                            pass
-                        try:
-                            entry["output_enabled"] = bool(int(sc.query("OUTP?")))
-                        except Exception:
-                            entry["output_enabled"] = None
-                        try:
-                            entry["current_setpoint"] = sc.get_current_setpoint()
-                        except Exception:
-                            # use cached if available
-                            entry["current_setpoint"] = self._last_setpoints.get(slot)
-                        try:
-                            entry["measured_current"] = sc.measure_current()
-                        except Exception:
-                            entry["measured_current"] = None
-                        try:
-                            entry["measured_voltage"] = sc.measure_voltage()
-                        except Exception:
-                            entry["measured_voltage"] = None
-                    except Exception as exc:
-                        entry["error"] = str(exc)
-                    res.append(entry)
-            else:
-                # Fallback legacy: single/unknown channel count
-                ch_count = int(self.ChannelsPerRack) if self.ChannelsPerRack else 1
-                for ch in range(1, ch_count + 1):
-                    entry = {"channel": ch}
-                    try:
-                        try:
-                            sc.write(f"I {ch}")
-                        except Exception:
-                            pass
-                        try:
-                            entry["output_enabled"] = bool(int(sc.query("OUTP?")))
-                        except Exception:
-                            entry["output_enabled"] = None
-                        try:
-                            entry["current_setpoint"] = sc.get_current_setpoint()
-                        except Exception:
-                            entry["current_setpoint"] = None
-                        try:
-                            entry["measured_current"] = sc.measure_current()
-                        except Exception:
-                            entry["measured_current"] = None
-                        try:
-                            entry["measured_voltage"] = sc.measure_voltage()
-                        except Exception:
-                            entry["measured_voltage"] = None
-                    except Exception as exc:
-                        entry["error"] = str(exc)
-                    res.append(entry)
-        return json.dumps(res)
-
-    # ---- DS_PDU-like batch output control ----
-    @command(
-        dtype_in=[int],
-        doc_in="Set output states in batch order. For discovered outputs, order follows 'names'/ids. Otherwise, slots 1..ChannelsPerRack.",
-    )
-    def set_channels_states(self, outputs: List[int]) -> None:
-        with self._lock:
-            sc = self._with_scpi()
-            try:
-                if getattr(self, "_outputs_info", None):
-                    pairs = list(zip(self._outputs_info, outputs))
-                    for info, val in pairs:
-                        slot = int(info.get("slot") or 1)
-                        try:
-                            self._select_slot(slot)
-                            if int(val):
-                                sc.output_on()
-                            else:
-                                sc.output_off()
-                        except Exception as exc:
-                            self.warn_stream(f"set_channels_states: slot {slot} -> {val} failed: {exc}")
+        if not self._scpi:
+            self.error("Not connected")
+            return
+        try:
+            pairs = self._scpi.list_slots()  # [(slot, model)]
+            if not pairs:
+                self.info("No slots discovered via INST:LIST?", True)
+                return
+            slots = [int(s) for s, _ in pairs]
+            models = {int(s): str(m) for s, m in pairs}
+            self._ids = list(slots)
+            self._slot_count = len(self._ids)
+            # Apply aliases from property first
+            self._apply_config_property()
+            # names from config alias or fallback to Slot N (model)
+            new_names: List[str] = []
+            for s in self._ids:
+                alias = self._config_map.get(f"S{s}")
+                if alias:
+                    new_names.append(str(alias))
                 else:
-                    # Fallback: use configured channel count
-                    try:
-                        ch = int(self.ChannelsPerRack) if self.ChannelsPerRack else len(outputs)
-                    except Exception:
-                        ch = len(outputs)
-                    for idx, val in enumerate(outputs[: max(0, ch) ]):
-                        slot = idx + 1
-                        try:
-                            try:
-                                sc.write(f"I {slot}")
-                            except Exception:
-                                pass
-                            if int(val):
-                                sc.output_on()
-                            else:
-                                sc.output_off()
-                        except Exception as exc:
-                            self.warn_stream(f"set_channels_states: slot {slot} -> {val} failed: {exc}")
-            finally:
-                # no return value; Tango command completion indicates success unless exception escapes
+                    mdl = models.get(s, "?")
+                    new_names.append(f"Slot {s} ({mdl})")
+            self._names = new_names
+            # resize arrays
+            self._states = [0] * self._slot_count
+            self._currents_sp = [0.0] * self._slot_count
+            self._currents_meas = [0.0] * self._slot_count
+            self.info(f"Discovered slots: {self._ids}")
+        except Exception as exc:
+            self.error(f"discover_slots failed: {exc}")
+
+    @command
+    def get_controller_status(self):
+        if not self._scpi:
+            self.set_state(DevState.STANDBY)
+            return
+        try:
+            self._states = self._scpi.read_all_states(self._slot_count)
+            self._currents_meas = self._scpi.measure_all_currents(self._slot_count)
+            self.set_state(DevState.ON)
+        except Exception as exc:
+            self.error(f"Status refresh failed: {exc}")
+
+    @command(dtype_in=[int])
+    def set_output_state(self, args: List[int]):
+        """
+        args = [slotIndex, state]
+        state: 1 = ON, 0 = OFF
+        """
+        if not self._scpi:
+            self.error("Not connected")
+            return
+        if not args or len(args) < 2:
+            self.error("set_output_state expects [slotIndex, state]")
+            return
+        idx = int(args[0])
+        st = 1 if int(args[1]) != 0 else 0
+        try:
+            if st:
+                self._scpi.output_on(idx)
+            else:
+                self._scpi.output_off(idx)
+            self._states[idx - 1] = st
+            self.set_state(DevState.ON)
+        except Exception as exc:
+            self.error(f"set_output_state failed: {exc}")
+
+    @command(dtype_in=[float])
+    def set_current(self, args: List[float]):
+        """
+        args = [slotIndex, amps]
+        """
+        if not self._scpi:
+            self.error("Not connected")
+            return
+        if not args or len(args) < 2:
+            self.error("set_current expects [slotIndex, amps]")
+            return
+        idx = int(args[0])
+        amps = float(args[1])
+        try:
+            self._scpi.set_current(idx, amps)
+            self._currents_sp[idx - 1] = amps
+        except Exception as exc:
+            self.error(f"set_current failed: {exc}")
+
+    @command
+    def turn_on(self):
+        if not self._scpi:
+            self.error("Not connected")
+            return
+        for i in range(1, self._slot_count + 1):
+            try:
+                self._scpi.output_on(i)
+                self._states[i - 1] = 1
+            except Exception:
                 pass
+        self.set_state(DevState.ON)
 
-    @command()
-    def DecCurrentFine(self) -> float:
-        """Decrease current by -0.01 A. Returns the new setpoint."""
-        return self._adjust_current(-0.01)
+    @command
+    def turn_off(self):
+        if not self._scpi:
+            self.error("Not connected")
+            return
+        for i in range(1, self._slot_count + 1):
+            try:
+                self._scpi.output_off(i)
+                self._states[i - 1] = 0
+            except Exception:
+                pass
+        self.set_state(DevState.STANDBY)
 
-    @command()
-    def IncCurrentCoarse(self) -> float:
-        """Increase current by +0.1 A. Returns the new setpoint."""
-        return self._adjust_current(+0.1)
-
-    @command()
-    def DecCurrentCoarse(self) -> float:
-        """Decrease current by -0.1 A. Returns the new setpoint."""
-        return self._adjust_current(-0.1)
-
-
-class DS_iTest_PSU(ITestPSU):
-    """Alias class to match DS_* naming convention used by Astor/DB."""
-    pass
-
-def main() -> None:
-    run((DS_iTest_PSU,))
+    @command
+    def reload_connection(self):
+        """Reload Host/Port/EOL from device properties and reconnect."""
+        # Close existing connection
+        try:
+            if self._scpi:
+                self._scpi.close()
+        except Exception:
+            pass
+        self._scpi = None
+        # Refresh properties
+        try:
+            self._host = (getattr(self, "Host", "") or "").strip()
+            self._port = int(getattr(self, "Port", 5025) or 5025)
+            self._eol = str(getattr(self, "EOL", "\n") or "\n")
+            self.info(f"Reloaded properties: host={self._host}, port={self._port}, eol={repr(self._eol)}")
+        except Exception as exc:
+            self.error(f"Failed to reload properties: {exc}")
+            return
+        # Reconnect
+        self.find_device()
 
 
 if __name__ == "__main__":
-    main()
+    DS_iTest_PSU.run_server()
