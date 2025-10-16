@@ -1,6 +1,7 @@
 from PyQt5 import QtWidgets
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIcon, QKeyEvent
+from PyQt5.QtWidgets import QAction
 
 from DeviceServers.cameras.andor.DS_ANDOR_CCD_Widget import ANDOR_CCD
 from DeviceServers.cameras.avantes.DS_AVANTES_CCD_Widget import AVANTES_CCD
@@ -12,6 +13,7 @@ from DeviceServers.motion.owis.DS_OWIS_widget import OWIS_motor
 from DeviceServers.motion.standa.DS_STANDA_Widget import Standa_motor
 from DeviceServers.motion.topdirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.power.netio.DS_NETIO_Widget import Netio_pdu
+from DeviceServers.power.iTest.DS_iTest_PSU_Tabs import Itest_PSU
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from DeviceServers.spectrographs.avantes.DS_AVANTES_SPECTRO_Widget import (
     AVANTES_SPECTRO,
@@ -65,6 +67,10 @@ class GeneralPanel(QtWidgets.QWidget):
         )
         self.layout_main.addWidget(self.label_active_widget)
         self.setLayout(self.layout_main)
+        
+        # Add fullscreen functionality
+        self.is_fullscreen = False
+        self.setup_fullscreen_actions()
 
     def add_widget(self, name, widget):
         self.widgets[name] = widget
@@ -92,6 +98,39 @@ class GeneralPanel(QtWidgets.QWidget):
 
     def update_active_widget(self):
         self.label_active_widget.setText(self.active_widget)
+    
+    def setup_fullscreen_actions(self):
+        """Setup fullscreen toggle actions"""
+        # F11 key for fullscreen toggle
+        fullscreen_action = QAction(self)
+        fullscreen_action.setShortcut(Qt.Key_F11)
+        fullscreen_action.triggered.connect(self.toggle_fullscreen)
+        self.addAction(fullscreen_action)
+        
+        # Also allow Escape to exit fullscreen
+        escape_action = QAction(self)
+        escape_action.setShortcut(Qt.Key_Escape)
+        escape_action.triggered.connect(self.exit_fullscreen)
+        self.addAction(escape_action)
+    
+    def toggle_fullscreen(self):
+        """Toggle between fullscreen and windowed mode"""
+        if self.is_fullscreen:
+            self.exit_fullscreen()
+        else:
+            self.enter_fullscreen()
+    
+    def enter_fullscreen(self):
+        """Enter fullscreen mode"""
+        if not self.is_fullscreen:
+            self.showFullScreen()
+            self.is_fullscreen = True
+    
+    def exit_fullscreen(self):
+        """Exit fullscreen mode"""
+        if self.is_fullscreen:
+            self.showNormal()
+            self.is_fullscreen = False
 
 
 class StandaPanel(GeneralPanel):
@@ -344,5 +383,21 @@ class ArchivePanel(GeneralPanel):
         **kwargs,
     ):
         if widget_class != Archive:
+            raise Exception(f"Wrong widget class {widget_class} is passed.")
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class ITestPanel(GeneralPanel):
+    def __init__(
+        self,
+        choice,
+        widget_class,
+        title="",
+        icon: QIcon = None,
+        width=1,
+        *args,
+        **kwargs,
+    ):
+        if widget_class != Itest_PSU:
             raise Exception(f"Wrong widget class {widget_class} is passed.")
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)

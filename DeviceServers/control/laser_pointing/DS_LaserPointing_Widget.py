@@ -144,11 +144,8 @@ class LaserPointing(DS_General_Widget):
             scroll = QtWidgets.QScrollArea()
             scroll.setWidget(control_group)
             scroll.setWidgetResizable(True)
-            try:
-                scroll.setFixedHeight(800)
-                scroll.setFixedWidth(700)
-            except Exception:
-                pass
+            # Allow scroll area to resize dynamically
+            scroll.setMinimumSize(400, 300)  # Set minimum size instead of fixed size
             image_group = QtWidgets.QGroupBox("Image")
             image_group.setLayout(lo_image)
             lo_total.addWidget(image_group)
@@ -167,19 +164,19 @@ class LaserPointing(DS_General_Widget):
         except Exception:
             pass
 
+        # Add layouts in proper order: status at top, main content, then states and buttons at bottom
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
-        lo_device.addLayout(lo_buttons)
-        lo_device.addLayout(lo_states)
-        lo_group.addLayout(lo_device)
-
-        # State and status
-        self.set_state_status(False)
-
-        lo_device.addLayout(lo_status)
-        lo_device.addLayout(lo_total)
-        lo_device.addLayout(lo_buttons)
-        lo_device.addLayout(lo_states)
+        
+        # Create a bottom section for states and buttons with proper spacing
+        bottom_section = Qt.QVBoxLayout()
+        bottom_section.addLayout(lo_states)  # States first
+        bottom_section.addLayout(lo_buttons)  # Then buttons
+        
+        # Add some spacing before bottom section
+        lo_device.addSpacing(10)
+        lo_device.addLayout(bottom_section)
+        
         lo_group.addLayout(lo_device)
 
     def register_DS_min(self, group_number=1):
@@ -206,10 +203,19 @@ class LaserPointing(DS_General_Widget):
         lo_states = Qt.QHBoxLayout()
         self.rules: OrderedDict = eval(ds.get_rules)
         group = QtWidgets.QGroupBox("States")
+        
+        # Ensure the States group has a minimum height and proper sizing
+        group.setMinimumHeight(80)
+        group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        
         for state, param in self.rules.items():
             rb = Qt.QRadioButton(text=str(state))
+            rb.setMinimumHeight(30)  # Ensure radio buttons are clickable
             lo_states.addWidget(rb)
             rb.toggled.connect(partial(self.rb_clicked, param))
+        
+        # Add some spacing between radio buttons
+        lo_states.setSpacing(15)
         group.setLayout(lo_states)
         return group
 
