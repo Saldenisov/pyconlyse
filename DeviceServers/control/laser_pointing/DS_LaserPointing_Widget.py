@@ -12,6 +12,7 @@ from taurus.external.qt import Qt
 from DeviceServers import *
 from DeviceServers import get_class_match
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.motion.standa.DS_STANDA_LaserPointing_Widget import Standa_LaserPointing
 
 
 class LaserPointing(DS_General_Widget):
@@ -46,6 +47,11 @@ class LaserPointing(DS_General_Widget):
             try:
                 info = self.db.get_device_info(dev_path)
                 ds_class_name = info.class_name
+                
+                # Use LaserPointing-specific widget for Standa devices
+                if ds_class_name == "DS_Standa_Motor":
+                    return Standa_LaserPointing(dev_path, self, VisType.MIN)
+                
                 ds_class_widget = cm.get(ds_class_name)
                 if not ds_class_widget:
                     return QtWidgets.QLabel(f"Unknown device class: {ds_class_name} for {dev_path}")
@@ -104,25 +110,48 @@ class LaserPointing(DS_General_Widget):
                 def add_widget_loc(lo_group_loc, group_devices):
                     try:
                         if isinstance(group_devices, str):
-                            lo_group_loc.addWidget(self.widgets[group_devices])
-                        if isinstance(group_devices, tuple):
+                            widget = self.widgets[group_devices]
+                            lo_group_loc.addWidget(widget)
+                        elif isinstance(group_devices, tuple):
                             for device_role in group_devices:
-                                lo_group_loc.addWidget(self.widgets[device_role])
+                                widget = self.widgets[device_role]
+                                lo_group_loc.addWidget(widget)
                     except KeyError:
                         pass
 
                 for group_name, group_devices in self.groups.items():
                     group_box = Qt.QGroupBox(group_name)
                     setattr(self, f"groupbox_{group_name}_{self.dev_name}", group_box)
-                    lo_group_loc = Qt.QHBoxLayout()
-                    add_widget_loc(lo_group_loc, group_devices)
-                    try:
-                        hspacer = QtWidgets.QSpacerItem(
-                            0, 40, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
-                        )
-                        lo_group_loc.addSpacerItem(hspacer)
-                    except Exception:
-                        pass
+                    
+                    # Use vertical layout for better space utilization
+                    lo_group_loc = Qt.QVBoxLayout()
+                    
+                    # For multiple devices, create rows with horizontal layouts
+                    if isinstance(group_devices, tuple) and len(group_devices) > 1:
+                        # Create rows of widgets (e.g., 2-3 widgets per row)
+                        widgets_per_row = 2
+                        device_list = list(group_devices)
+                        
+                        for i in range(0, len(device_list), widgets_per_row):
+                            row_layout = Qt.QHBoxLayout()
+                            row_devices = device_list[i:i+widgets_per_row]
+                            
+                            for device_role in row_devices:
+                                try:
+                                    widget = self.widgets[device_role]
+                                    row_layout.addWidget(widget)
+                                except KeyError:
+                                    pass
+                                    
+                            # Add stretch to fill remaining space in row
+                            row_layout.addStretch(1)
+                            lo_group_loc.addLayout(row_layout)
+                    else:
+                        # Single device or string - add normally
+                        add_widget_loc(lo_group_loc, group_devices)
+                    
+                    # Ensure group box expands
+                    group_box.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.MinimumExpanding)
                     group_box.setLayout(lo_group_loc)
                     lo_controls.addWidget(group_box)
             except Exception as e:
@@ -141,15 +170,20 @@ class LaserPointing(DS_General_Widget):
 
             control_group = QtWidgets.QGroupBox("Controls")
             control_group.setLayout(lo_controls)
+            # Ensure control group expands to fill available space
+            control_group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             scroll = QtWidgets.QScrollArea()
             scroll.setWidget(control_group)
             scroll.setWidgetResizable(True)
-            # Allow scroll area to resize dynamically
-            scroll.setMinimumSize(400, 300)  # Set minimum size instead of fixed size
+            # Remove size constraints to allow full expansion
+            scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             image_group = QtWidgets.QGroupBox("Image")
             image_group.setLayout(lo_image)
-            lo_total.addWidget(image_group)
-            lo_total.addWidget(scroll)
+            
+            # Set layout proportions: 1/3 for image, 2/3 for controls
+            # This ensures controls get more space, especially in fullscreen
+            lo_total.addWidget(image_group, 1)  # 1/3 of space
+            lo_total.addWidget(scroll, 2)       # 2/3 of space
         else:
             # Direct mode: if controller is not available, try to create a widget for this device itself
             ds_widget = create_widget_for_device(self.dev_name, prefer_full=True)
