@@ -49,10 +49,15 @@ class DS_iTest_PSU(DS_General):
     # Runtime state
     def init_device(self):
         # Pre-initialize arrays and config map so super().init_device() (which calls find_device()) can use them
+        self.info("=== iTest PSU Device Server Starting Initialization ===", True)
+        
         try:
             sc = int(getattr(self, "NumberOfSlots", 8) or 8)
-        except Exception:
+            self.info(f"NumberOfSlots property: {sc}", True)
+        except Exception as e:
             sc = 8
+            self.info(f"NumberOfSlots property failed, using default: {sc}. Error: {e}", True)
+            
         self._slot_count = max(1, int(sc))
         self._ids: List[int] = list(range(1, self._slot_count + 1))
         self._config_map: Dict[str, str] = {f"S{i}": f"Slot {i}" for i in self._ids}
@@ -61,19 +66,25 @@ class DS_iTest_PSU(DS_General):
         self._currents_sp: List[float] = [0.0] * self._slot_count
         self._currents_meas: List[float] = [0.0] * self._slot_count
         self._scpi: ITestSCPI | None = None
-
-        # Let base class init run (sets archive, calls find_device(), etc.)
-        super().init_device()
+        
+        self.info(f"Initialized with {self._slot_count} slots, IDs: {self._ids}", True)
 
         # Read properties for info (lazy-loaded in find_device too)
         self._host = (getattr(self, "Host", "") or "").strip()
         self._port = int(getattr(self, "Port", 5025) or 5025)
         self._eol = str(getattr(self, "EOL", "\n") or "\n")
+        
+        self.info(f"Device properties loaded: Host='{self._host}', Port={self._port}, EOL={repr(self._eol)}", True)
+
+        # Let base class init run (sets archive, calls find_device(), etc.)
+        self.info("Calling super().init_device() - this will call find_device()", True)
+        super().init_device()
+        self.info("super().init_device() completed", True)
 
         # Initial state/info
         self.set_state(DevState.INIT)
         self.info(
-            f"iTest PSU initialized. Host property: '{self._host or '(empty)'}'. Call find_device() to connect.")
+            f"iTest PSU initialization completed. Current state: {self.get_state()}. Host: '{self._host or '(empty)'}", True)
 
     # ---- Attributes ----
     @attribute(
@@ -186,40 +197,65 @@ class DS_iTest_PSU(DS_General):
     # ---- Commands ----
     @command
     def find_device(self):
+        self.info("=== find_device() called ===", True)
+        
         # Lazy-load properties in case superclass init calls this before our fields are set
+        self.info("Loading device properties...", True)
         try:
             if not hasattr(self, "_host") or self._host is None or str(self._host).strip() == "":
                 self._host = (getattr(self, "Host", "") or "").strip()
+                self.info(f"Loaded Host property: '{self._host}'", True)
             if not hasattr(self, "_port") or self._port is None:
                 self._port = int(getattr(self, "Port", 5025) or 5025)
+                self.info(f"Loaded Port property: {self._port}", True)
             if not hasattr(self, "_eol") or self._eol is None:
                 self._eol = str(getattr(self, "EOL", "\n") or "\n")
-        except Exception:
+                self.info(f"Loaded EOL property: {repr(self._eol)}", True)
+        except Exception as e:
             # Fallback defaults if properties not yet available
+            self.info(f"Property loading failed, using fallbacks. Error: {e}", True)
             self._host = str(getattr(self, "Host", "") or "").strip()
             self._port = int(getattr(self, "Port", 5025) or 5025)
             self._eol = str(getattr(self, "EOL", "\n") or "\n")
+            self.info(f"Fallback values: Host='{self._host}', Port={self._port}, EOL={repr(self._eol)}", True)
 
         if not self._host:
             self.error("Host device property is empty; set it in Tango DB and retry.")
             self.set_state(DevState.FAULT)
+            self.info("find_device() failed: Host property empty", True)
             return
+            
+        self.info(f"Attempting SCPI connection to {self._host}:{self._port} with timeout=3.0s", True)
+        
         try:
-            self.info(f"Connecting to iTest at host={self._host}, port={self._port}, eol={repr(self._eol)}", True)
+            self.info("Creating ITestSCPI instance...", True)
             self._scpi = ITestSCPI(self._host, port=self._port, timeout=3.0, eol=self._eol)
+            self.info("ITestSCPI instance created successfully", True)
+            
+            self.info("Calling _scpi.connect()...", True)
             self._scpi.connect()
-            self.info(f"Connected to iTest at {self._host}", True)
+            self.info(f"SCPI connection established to {self._host}:{self._port}", True)
+            
             # Auto-discover slots and apply aliases from config
+            self.info("Starting slot discovery...", True)
             try:
                 self.discover_slots()
+                self.info("Slot discovery completed successfully", True)
             except Exception as exc:
                 self.error(f"Slot discovery failed (continuing): {exc}")
+                
+            self.info("Setting device state to ON", True)
             self.set_state(DevState.ON)
+            
             # Initial refresh
+            self.info("Getting initial controller status...", True)
             self.get_controller_status()
+            self.info("find_device() completed successfully", True)
+            
         except Exception as exc:
             self._scpi = None
             self.error(f"Connection failed: {exc}")
+            self.info(f"find_device() failed: {exc}", True)
             self.set_state(DevState.FAULT)
 
     @command
@@ -227,49 +263,88 @@ class DS_iTest_PSU(DS_General):
         """Discover installed slots via SCPI INST:LIST? and update ids/names.
         Aliases are taken from config (S{slot} -> alias) when available.
         """
+        self.info("=== discover_slots() called ===", True)
+        
         if not self._scpi:
             self.error("Not connected")
+            self.info("discover_slots() failed: No SCPI connection", True)
             return
+            
         try:
+            self.info("Calling _scpi.list_slots() to discover installed slots...", True)
             pairs = self._scpi.list_slots()  # [(slot, model)]
+            self.info(f"Raw slot discovery result: {pairs}", True)
+            
             if not pairs:
                 self.info("No slots discovered via INST:LIST?", True)
                 return
+                
             slots = [int(s) for s, _ in pairs]
             models = {int(s): str(m) for s, m in pairs}
+            self.info(f"Parsed slots: {slots}, models: {models}", True)
+            
             self._ids = list(slots)
             self._slot_count = len(self._ids)
+            self.info(f"Updated slot count: {self._slot_count}, IDs: {self._ids}", True)
+            
             # Apply aliases from property first
+            self.info("Applying config property aliases...", True)
             self._apply_config_property()
+            
             # names from config alias or fallback to Slot N (model)
             new_names: List[str] = []
             for s in self._ids:
                 alias = self._config_map.get(f"S{s}")
                 if alias:
                     new_names.append(str(alias))
+                    self.info(f"Slot {s}: using alias '{alias}'", True)
                 else:
                     mdl = models.get(s, "?")
-                    new_names.append(f"Slot {s} ({mdl})")
+                    name = f"Slot {s} ({mdl})"
+                    new_names.append(name)
+                    self.info(f"Slot {s}: using default name '{name}'", True)
+                    
             self._names = new_names
+            self.info(f"Final slot names: {self._names}", True)
+            
             # resize arrays
+            self.info("Resizing state and current arrays...", True)
             self._states = [0] * self._slot_count
             self._currents_sp = [0.0] * self._slot_count
             self._currents_meas = [0.0] * self._slot_count
-            self.info(f"Discovered slots: {self._ids}")
+            
+            self.info(f"Slot discovery completed successfully. Discovered {self._slot_count} slots: {self._ids}", True)
+            
         except Exception as exc:
             self.error(f"discover_slots failed: {exc}")
+            self.info(f"discover_slots() failed with exception: {exc}", True)
 
     @command
     def get_controller_status(self):
+        self.info("=== get_controller_status() called ===", True)
+        
         if not self._scpi:
+            self.info("No SCPI connection (_scpi is None) - setting state to STANDBY", True)
             self.set_state(DevState.STANDBY)
             return
+            
+        self.info(f"SCPI connection available - reading status for {self._slot_count} slots", True)
+        
         try:
+            self.info("Reading all slot states...", True)
             self._states = self._scpi.read_all_states(self._slot_count)
+            self.info(f"Slot states: {self._states}", True)
+            
+            self.info("Measuring all slot currents...", True)
             self._currents_meas = self._scpi.measure_all_currents(self._slot_count)
+            self.info(f"Measured currents: {self._currents_meas}", True)
+            
+            self.info("Status refresh completed - setting state to ON", True)
             self.set_state(DevState.ON)
+            
         except Exception as exc:
             self.error(f"Status refresh failed: {exc}")
+            self.info(f"get_controller_status() failed: {exc}", True)
 
     @command(dtype_in=[int])
     def set_output_state(self, args: List[int]):
@@ -285,11 +360,17 @@ class DS_iTest_PSU(DS_General):
             return
         idx = int(args[0])
         st = 1 if int(args[1]) != 0 else 0
+        
+        # Add debug logging
+        self.info(f"Setting slot {idx} output to {'ON' if st else 'OFF'}", True)
+        
         try:
             if st:
                 self._scpi.output_on(idx)
+                self.info(f"Successfully turned ON slot {idx}", True)
             else:
                 self._scpi.output_off(idx)
+                self.info(f"Successfully turned OFF slot {idx}", True)
             self._states[idx - 1] = st
             self.set_state(DevState.ON)
         except Exception as exc:
@@ -308,9 +389,14 @@ class DS_iTest_PSU(DS_General):
             return
         idx = int(args[0])
         amps = float(args[1])
+        
+        # Add debug logging
+        self.info(f"Setting slot {idx} current to {amps:.3f} A", True)
+        
         try:
             self._scpi.set_current(idx, amps)
             self._currents_sp[idx - 1] = amps
+            self.info(f"Successfully set slot {idx} current to {amps:.3f} A", True)
         except Exception as exc:
             self.error(f"set_current failed: {exc}")
 

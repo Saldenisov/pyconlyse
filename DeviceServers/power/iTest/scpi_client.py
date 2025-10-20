@@ -50,8 +50,11 @@ class ITestSCPI:
 
     # ---- lifecycle ----
     def connect(self) -> None:
+        print(f"[ITestSCPI] connect() called for {self._host}:{self._port}")
         if self._inst is not None and getattr(self._inst, "connected", False):
+            print(f"[ITestSCPI] Already connected to {self._host}:{self._port}")
             return
+            
         try:
             resource = f"TCPIP::{self._host}::{self._port}::SOCKET"
             params = {
@@ -59,9 +62,17 @@ class ITestSCPI:
                 "read_termination": self._eol,
                 "write_termination": self._eol,
             }
+            print(f"[ITestSCPI] Creating EasyInstrument with resource='{resource}', params={params}")
+            
             self._inst = EasyInstrument(port=resource, port_match=False, **params)
+            print(f"[ITestSCPI] EasyInstrument created successfully")
+            
+            print(f"[ITestSCPI] Calling _inst.connect()...")
             self._inst.connect()
+            print(f"[ITestSCPI] Successfully connected to {self._host}:{self._port}")
+            
         except Exception as exc:
+            print(f"[ITestSCPI] Connection failed: {exc}")
             raise SCPIError(f"Failed to connect to {self._host}:{self._port}: {exc}") from exc
 
     def close(self) -> None:
@@ -79,14 +90,21 @@ class ITestSCPI:
 
     def _write(self, cmd: str) -> None:
         try:
+            print(f"[ITestSCPI] Writing command: '{cmd}'")
             self._ensure().write(cmd)
+            print(f"[ITestSCPI] Command written successfully")
         except Exception as exc:
+            print(f"[ITestSCPI] Write failed: {exc}")
             raise SCPIError(f"Write failed: {exc}") from exc
 
     def _query(self, cmd: str) -> str:
         try:
-            return self._ensure().query(cmd)
+            print(f"[ITestSCPI] Querying: '{cmd}'")
+            result = self._ensure().query(cmd)
+            print(f"[ITestSCPI] Query result: '{result}'")
+            return result
         except Exception as exc:
+            print(f"[ITestSCPI] Query failed: {exc}")
             raise SCPIError(f"Query failed: {exc}") from exc
 
     # ---- templates ----

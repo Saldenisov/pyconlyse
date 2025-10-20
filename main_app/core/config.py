@@ -48,6 +48,10 @@ DEVICE_SERVER_CONFIGS = {
         "instances": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
         "script": "LASER_POINTING",
     },
+    "ML_STABILITY": {
+        "instances": ["ML_UV1", "all"],
+        "script": "ML_STABILITY",
+    },
 }
 
 # Tango server patterns for device discovery
@@ -67,6 +71,7 @@ SERVER_CLASS_BY_TYPE: Dict[str, str] = {
     "NETIO": "DS_Netio_pdu",
     "TOPDIRECT": "DS_TopDirect_Motor",
     "LASER_POINTING": "DS_LaserPointing",
+    "ML_STABILITY": "DS_ML_Stability",
 }
 
 

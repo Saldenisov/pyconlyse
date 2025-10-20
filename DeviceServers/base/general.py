@@ -213,6 +213,17 @@ class DS_General(Device):
         self._n = 0
         print(error_in)
 
+    def warn(self, warn_in, printing=False):
+        # Log a warning and optionally print
+        try:
+            self.warn_stream(warn_in)
+        except Exception:
+            # Fallback if warn_stream is unavailable
+            self.info_stream(f"WARNING: {warn_in}")
+        self._comment = warn_in
+        if printing:
+            print(warn_in)
+
     def info(self, info_in, printing=False):
         self.info_stream(info_in)
         self._comment = info_in
@@ -391,7 +402,10 @@ class DS_General(Device):
 
     @property
     def device_name(self) -> str:
-        return f"Device {self.device_id} {self.friendly_name}"
+        # Handle None or empty device_id and friendly_name
+        device_id = getattr(self, 'device_id', None) or 'Unknown'
+        friendly_name = getattr(self, 'friendly_name', None) or self.__class__.__name__
+        return f"Device {device_id} {friendly_name}"
 
     @command(polling_period=polling_main)
     def get_controller_status(self):
