@@ -24,13 +24,14 @@ class ITestSCPI:
     - Output ON/OFF via OUTP ON / OUTP OFF and state via OUTP?
     """
 
-    def __init__(self, host: str, port: int = 5025, timeout: float = 3.0, eol: str = "\n") -> None:
+    def __init__(self, host: str, port: int = 5025, timeout: float = 3.0, eol: str = "\n", log_level: int = 0) -> None:
         if eol not in ("\n", "\r\n", "\r"):
             raise ValueError("Unsupported EOL; use \\n, \\r\\n, or \\r")
         self._host = str(host)
         self._port = int(port)
         self._timeout_s = float(timeout)
         self._eol = eol
+        self._log_level = int(log_level)
         self._inst: Optional[EasyInstrument] = None
         self._tmpl: dict[str, str] = {
             # BiLT selection: short form 'I <slot>' preferred; also accepts 'INST <slot>'
@@ -47,11 +48,28 @@ class ITestSCPI:
             "output_off": "OUTP OFF",
             "get_output": "OUTP?",
         }
+    
+    def _log_debug(self, message: str):
+        """Log debug messages only if log level is high enough"""
+        if self._log_level >= 2:  # LOG_MAX equivalent
+            print(f"[ITestSCPI] {message}")
+    
+    def _log_normal(self, message: str):
+        """Log normal messages if log level allows"""
+        if self._log_level >= 1:  # LOG_NORMAL equivalent
+            print(f"[ITestSCPI] {message}")
+    
+    def _log_error(self, message: str):
+        """Always log errors"""
+        print(f"[ITestSCPI] ERROR: {message}")
 
     # ---- lifecycle ----
     def connect(self) -> None:
+        self._log_normal(f"connect() called for {self._host}:{self._port}")
         if self._inst is not None and getattr(self._inst, "connected", False):
+            self._log_debug(f"Already connected to {self._host}:{self._port}")
             return
+            
         try:
             resource = f"TCPIP::{self._host}::{self._port}::SOCKET"
             params = {
@@ -59,9 +77,17 @@ class ITestSCPI:
                 "read_termination": self._eol,
                 "write_termination": self._eol,
             }
+            self._log_debug(f"Creating EasyInstrument with resource='{resource}', params={params}")
+            
             self._inst = EasyInstrument(port=resource, port_match=False, **params)
+            self._log_debug(f"EasyInstrument created successfully")
+            
+            self._log_debug(f"Calling _inst.connect()...")
             self._inst.connect()
+            self._log_normal(f"Successfully connected to {self._host}:{self._port}")
+            
         except Exception as exc:
+            self._log_error(f"Connection failed: {exc}")
             raise SCPIError(f"Failed to connect to {self._host}:{self._port}: {exc}") from exc
 
     def close(self) -> None:
@@ -79,14 +105,21 @@ class ITestSCPI:
 
     def _write(self, cmd: str) -> None:
         try:
+            self._log_debug(f"Writing command: '{cmd}'")
             self._ensure().write(cmd)
+            self._log_debug(f"Command written successfully")
         except Exception as exc:
+            self._log_error(f"Write failed: {exc}")
             raise SCPIError(f"Write failed: {exc}") from exc
 
     def _query(self, cmd: str) -> str:
         try:
-            return self._ensure().query(cmd)
+            self._log_debug(f"Querying: '{cmd}'")
+            result = self._ensure().query(cmd)
+            self._log_debug(f"Query result: '{result}'")
+            return result
         except Exception as exc:
+            self._log_error(f"Query failed: {exc}")
             raise SCPIError(f"Query failed: {exc}") from exc
 
     # ---- templates ----
@@ -147,20 +180,22 @@ class ITestSCPI:
             return 1 if resp.upper() in ("ON", "1", "TRUE") else 0
 
     # ---- batch helpers ----
-    def measure_all_currents(self, slot_count: int) -> list[float]:
+    def measure_all_currents(self, slot_ids: list[int]) -> list[float]:
+        """Measure currents for the provided slot IDs (not sequential range)"""
         out: list[float] = []
-        for i in range(1, slot_count + 1):
+        for slot_id in slot_ids:
             try:
-                out.append(self.measure_current(i))
+                out.append(self.measure_current(slot_id))
             except Exception:
                 out.append(float('nan'))
         return out
 
-    def read_all_states(self, slot_count: int) -> list[int]:
+    def read_all_states(self, slot_ids: list[int]) -> list[int]:
+        """Read states for the provided slot IDs (not sequential range)"""
         out: list[int] = []
-        for i in range(1, slot_count + 1):
+        for slot_id in slot_ids:
             try:
-                out.append(self.get_output_state(i))
+                out.append(self.get_output_state(slot_id))
             except Exception:
                 out.append(0)
         return out

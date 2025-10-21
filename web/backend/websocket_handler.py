@@ -1,6 +1,5 @@
 # websocket_handler.py - WebSocket support for real-time device monitoring
 from flask_socketio import SocketIO, emit, join_room, leave_room
-from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 import threading
 import time
 import tango
@@ -52,13 +51,34 @@ class DeviceMonitor:
             # Read specific attributes based on device type
             try:
                 if 'itest' in device_name.lower() or 'psu' in device_name.lower():
-                    # Power supply attributes
+                    # DS iTest PSU multi-slot attributes
                     try:
-                        data['current_setpoint'] = device.read_attribute('CurrentSetpoint').value
-                        data['measured_current'] = device.read_attribute('MeasuredCurrent').value
-                        data['measured_voltage'] = device.read_attribute('MeasuredVoltage').value
-                    except:
-                        pass
+                        names = list(device.read_attribute('names').value)
+                        states = list(device.read_attribute('states').value)
+                        currents_meas = list(device.read_attribute('currents_meas').value)
+                        currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                        
+                        slots = []
+                        for i in range(len(names)):
+                            slots.append({
+                                'index': i + 1,
+                                'name': names[i] if i < len(names) else f'Slot {i+1}',
+                                'state': bool(states[i]) if i < len(states) else False,
+                                'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
+                                'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
+                            })
+                        
+                        data['slots'] = slots
+                        data['slot_count'] = len(names)
+                    except Exception as e:
+                        logger.error(f"Error reading DS iTest PSU attributes: {e}")
+                        # Fallback to legacy single-slot attributes
+                        try:
+                            data['current_setpoint'] = device.read_attribute('CurrentSetpoint').value
+                            data['measured_current'] = device.read_attribute('MeasuredCurrent').value
+                            data['measured_voltage'] = device.read_attribute('MeasuredVoltage').value
+                        except:
+                            pass
                 
                 elif 'camera' in device_name.lower() or 'basler' in device_name.lower():
                     # Camera attributes
@@ -124,37 +144,20 @@ def init_socketio(app):
     @socketio.on('connect')
     def handle_connect():
         """Handle client connection"""
-        try:
-            # Verify JWT token for WebSocket connection
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            
-            logger.info(f"Client connected: {user_id}")
-            emit('connected', {'status': 'Connected to PYCONLYSE WebSocket'})
-            
-        except Exception as e:
-            logger.error(f"WebSocket connection failed: {e}")
-            emit('error', {'message': 'Authentication failed'})
-            return False
+        logger.info("Client connected to WebSocket")
+        emit('connected', {'status': 'Connected to PYCONLYSE WebSocket'})
     
     @socketio.on('disconnect')
     def handle_disconnect():
         """Handle client disconnection"""
-        try:
-            user_id = get_jwt_identity()
-            logger.info(f"Client disconnected: {user_id}")
-        except:
-            logger.info("Anonymous client disconnected")
+        logger.info("Client disconnected from WebSocket")
     
     @socketio.on('subscribe_device')
     def handle_subscribe_device(data):
         """Subscribe to device monitoring"""
         try:
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            
             device_name = data.get('device')
-            room_id = f"device_{device_name}_{user_id}"
+            room_id = f"device_{device_name}"
             
             if not device_name:
                 emit('error', {'message': 'Device name required'})
@@ -194,7 +197,7 @@ def init_socketio(app):
                 'status': 'Monitoring started'
             })
             
-            logger.info(f"User {user_id} subscribed to device {device_name}")
+            logger.info(f"Client subscribed to device {device_name}")
             
         except Exception as e:
             logger.error(f"Subscribe error: {e}")
@@ -204,11 +207,8 @@ def init_socketio(app):
     def handle_unsubscribe_device(data):
         """Unsubscribe from device monitoring"""
         try:
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            
             device_name = data.get('device')
-            room_id = f"device_{device_name}_{user_id}"
+            room_id = f"device_{device_name}"
             
             if not device_name:
                 emit('error', {'message': 'Device name required'})
@@ -237,7 +237,7 @@ def init_socketio(app):
                 'status': 'Monitoring stopped'
             })
             
-            logger.info(f"User {user_id} unsubscribed from device {device_name}")
+            logger.info(f"Client unsubscribed from device {device_name}")
             
         except Exception as e:
             logger.error(f"Unsubscribe error: {e}")
@@ -247,16 +247,13 @@ def init_socketio(app):
     def handle_get_device_status(data):
         """Get immediate device status"""
         try:
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            
             device_name = data.get('device')
             if not device_name:
                 emit('error', {'message': 'Device name required'})
                 return
             
             # Get device status immediately
-            monitor.monitor_device(device_name, f"temp_{user_id}")
+            monitor.monitor_device(device_name, "temp_status")
             
         except Exception as e:
             logger.error(f"Get status error: {e}")
@@ -266,9 +263,6 @@ def init_socketio(app):
     def handle_execute_command(data):
         """Execute device command via WebSocket"""
         try:
-            verify_jwt_in_request()
-            user_id = get_jwt_identity()
-            
             device_name = data.get('device')
             command_name = data.get('command')
             args = data.get('args')
@@ -292,7 +286,7 @@ def init_socketio(app):
                 'timestamp': datetime.now().isoformat()
             })
             
-            logger.info(f"User {user_id} executed command {command_name} on {device_name}")
+            logger.info(f"Client executed command {command_name} on {device_name}")
             
         except Exception as e:
             logger.error(f"Command execution error: {e}")

@@ -68,13 +68,16 @@ set TOPDIRECT_SCRIPT=DS_TopDirect_Motor.py
 set LASER_POINTING_PATH=%PYCONLYSE%\DeviceServers\LaserPointing
 set LASER_POINTING_SCRIPT=DS_LaserPointing.py
 
+set ML_STABILITY_PATH=%PYCONLYSE%\DeviceServers\data\ml
+set ML_STABILITY_SCRIPT=DS_ML_client.py
+
 REM Set device-specific path and script
 call set DEVICE_PATH=%%!DEVICE_TYPE!_PATH%%
 call set DEVICE_SCRIPT=%%!DEVICE_TYPE!_SCRIPT%%
 
 if "%DEVICE_PATH%"=="" (
     echo ERROR: Unknown device type '%DEVICE_TYPE%'
-    echo Supported types: ANDOR_CCD, BASLER, ARCHIVE, OWIS, STANDA, NETIO, TOPDIRECT, LASER_POINTING
+    echo Supported types: ANDOR_CCD, BASLER, ARCHIVE, OWIS, STANDA, NETIO, TOPDIRECT, LASER_POINTING, ML_STABILITY
     pause
     exit /b 1
 )

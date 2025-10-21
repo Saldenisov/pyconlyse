@@ -2,31 +2,28 @@
 import os
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
-from flask_jwt_extended import JWTManager
 
 from routes import routes        # Your additional API endpoints
 from folder_api import folder_api  # Folder-related endpoints
-from auth import auth            # Authentication endpoints
 from device_api import device_api  # Device control API endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
 app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
 CORS(app)
 
-# Configure JWT settings
-app.config["JWT_SECRET_KEY"] = "your_jwt_secret_key"  # Change this for production!
-app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
-app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # For demo only. Enable CSRF protection in production.
-jwt = JWTManager(app)
-
 # Register blueprints
 app.register_blueprint(routes)
 app.register_blueprint(folder_api)
-app.register_blueprint(auth)
 app.register_blueprint(device_api)  # Add device API
 
 # Initialize WebSocket support
 socketio = init_socketio(app)
+
+# Route for DS iTest PSU test page
+@app.route('/test_ds_itest_psu.html')
+def ds_itest_psu_test():
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_ds_itest_psu.html')
+    return send_from_directory(os.path.dirname(test_page_path), 'test_ds_itest_psu.html')
 
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})
@@ -42,4 +39,5 @@ def serve(path):
 
 if __name__ == '__main__':
     # Use socketio.run instead of app.run for WebSocket support
-    socketio.run(app, debug=True, port=5000, host='0.0.0.0')
+    # Configure for 10.20.30.202 access
+    socketio.run(app, debug=True, port=5000, host='10.20.30.202')

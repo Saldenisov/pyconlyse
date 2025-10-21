@@ -1,6 +1,5 @@
 # device_api.py - Enhanced Tango Device API for Browser Clients
 from flask import Blueprint, jsonify, request
-from flask_jwt_extended import jwt_required, get_jwt_identity
 import tango
 import json
 import traceback
@@ -9,6 +8,23 @@ import threading
 import time
 
 device_api = Blueprint("device_api", __name__)
+
+# Debug endpoint to test WebSocket monitoring
+@device_api.route('/api/debug/monitor/<path:device_name>', methods=['GET'])
+def debug_monitor_device(device_name):
+    """Debug endpoint to manually trigger device monitoring"""
+    try:
+        from websocket_handler import monitor
+        monitor.monitor_device(device_name, "debug_room")
+        return jsonify({
+            'message': f'Manual monitoring triggered for {device_name}',
+            'success': True
+        })
+    except Exception as e:
+        return jsonify({
+            'error': str(e),
+            'success': False
+        }), 500
 
 # Global device proxy cache and monitoring
 device_cache = {}
@@ -100,7 +116,6 @@ class DeviceManager:
             }
 
 @device_api.route('/api/devices', methods=['GET'])
-@jwt_required()
 def list_devices():
     """Get list of all available devices"""
     try:
@@ -133,8 +148,7 @@ def list_devices():
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/<device_name>/info', methods=['GET'])
-@jwt_required()
+@device_api.route('/api/device/<path:device_name>/info', methods=['GET'])
 def get_device_info(device_name):
     """Get detailed device information"""
     try:
@@ -143,8 +157,7 @@ def get_device_info(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/<device_name>/attributes', methods=['GET'])
-@jwt_required()
+@device_api.route('/api/device/<path:device_name>/attributes', methods=['GET'])
 def get_device_attributes(device_name):
     """Get all device attributes"""
     try:
@@ -167,8 +180,7 @@ def get_device_attributes(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/<device_name>/attribute/<attr_name>', methods=['GET', 'POST'])
-@jwt_required()
+@device_api.route('/api/device/<path:device_name>/attribute/<attr_name>', methods=['GET', 'POST'])
 def handle_attribute(device_name, attr_name):
     """Read or write a specific attribute"""
     try:
@@ -206,8 +218,7 @@ def handle_attribute(device_name, attr_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/<device_name>/command/<command_name>', methods=['POST'])
-@jwt_required()
+@device_api.route('/api/device/<path:device_name>/command/<command_name>', methods=['POST'])
 def execute_command(device_name, command_name):
     """Execute a device command"""
     try:
@@ -229,8 +240,7 @@ def execute_command(device_name, command_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/<device_name>/state', methods=['GET'])
-@jwt_required()
+@device_api.route('/api/device/<path:device_name>/state', methods=['GET'])
 def get_device_state(device_name):
     """Get device state and status"""
     try:
@@ -246,10 +256,88 @@ def get_device_state(device_name):
         return jsonify({'error': str(e), 'success': False}), 500
 
 # Device-specific endpoints for common PYCONLYSE devices
-@device_api.route('/api/device/itest/<device_name>/current', methods=['GET', 'POST'])
-@jwt_required()
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slots', methods=['GET'])
+def get_ds_itest_psu_slots(device_name):
+    """Get all DS iTest PSU slot information"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        # Read all slot data
+        names = list(device.read_attribute('names').value)
+        states = list(device.read_attribute('states').value)
+        currents_meas = list(device.read_attribute('currents_meas').value)
+        currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+        
+        slots = []
+        for i in range(len(names)):
+            slots.append({
+                'index': i + 1,
+                'name': names[i] if i < len(names) else f'Slot {i+1}',
+                'state': bool(states[i]) if i < len(states) else False,
+                'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
+                'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
+            })
+        
+        return jsonify({
+            'slots': slots,
+            'slot_count': len(names),
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_index>/current', methods=['POST'])
+def set_ds_itest_psu_current(device_name, slot_index):
+    """Set current for specific DS iTest PSU slot"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        data = request.get_json()
+        current_value = float(data.get('current', 0.0))
+        
+        # Use set_current command with [slot_index, value]
+        device.command_inout('set_current', [float(slot_index), current_value])
+        
+        # Read back the setpoint array to confirm
+        currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+        actual_value = currents_setpoint[slot_index - 1] if slot_index <= len(currents_setpoint) else current_value
+        
+        return jsonify({
+            'slot_index': slot_index,
+            'current_setpoint': actual_value,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_index>/state', methods=['POST'])
+def set_ds_itest_psu_state(device_name, slot_index):
+    """Set output state for specific DS iTest PSU slot"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        data = request.get_json()
+        enabled = bool(data.get('enabled', False))
+        
+        # Use set_output_state command with [slot_index, state]
+        device.command_inout('set_output_state', [int(slot_index), int(1 if enabled else 0)])
+        
+        # Read back the states array to confirm
+        states = list(device.read_attribute('states').value)
+        actual_state = bool(states[slot_index - 1]) if slot_index <= len(states) else enabled
+        
+        return jsonify({
+            'slot_index': slot_index,
+            'state': actual_state,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/itest/<path:device_name>/current', methods=['GET', 'POST'])
 def handle_itest_current(device_name):
-    """Handle iTest PSU current operations"""
+    """Handle iTest PSU current operations (legacy endpoint)"""
     try:
         device = DeviceManager.get_device(device_name)
         
@@ -290,8 +378,7 @@ def handle_itest_current(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/camera/<device_name>/capture', methods=['POST'])
-@jwt_required()
+@device_api.route('/api/device/camera/<path:device_name>/capture', methods=['POST'])
 def camera_capture(device_name):
     """Trigger camera capture"""
     try:

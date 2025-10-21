@@ -132,13 +132,4 @@ def tango_status():
 # For example, if you want to have an API for data treatment or other features,
 # you can add additional /api/ endpoints.
 
-# For all non-API routes, serve the React app's index.html.
-@routes.route('/', defaults={'path': ''})
-@routes.route('/<path:path>')
-def serve_react_app(path):
-    """
-    In production, after building your React app (npm run build),
-    set Flask's static_folder to the React build directory.
-    This route catches all non-API requests and serves index.html.
-    """
-    return send_from_directory(current_app.static_folder, 'index.html')
+# Catch-all route handling is done in app.py

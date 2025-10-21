@@ -137,6 +137,19 @@ Write-Host "✅ Created: DS_Basler_camera.exe" -ForegroundColor Green
             Write-Warning "Failed to compile DS_iTest_PSU_wrapper.cs"
         }
     }
+
+    # Also compile DS_ML_Stability if wrapper exists
+    $MLStabilitySource = Join-Path $ScriptPath "DS_ML_Stability_wrapper.cs"
+    $MLStabilityOutput = Join-Path $ScriptPath "DS_ML_Stability.exe"
+    if (Test-Path $MLStabilitySource) {
+        Write-Host "Compiling DS_ML_Stability_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$MLStabilityOutput /target:exe $MLStabilitySource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $MLStabilityOutput)) {
+            Write-Host "✅ Created: DS_ML_Stability.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_ML_Stability_wrapper.cs"
+        }
+    }
     
     Write-Host ""
     

@@ -52,6 +52,7 @@ class Itest_PSU(DS_General_Widget):
         self.step = 0.01
         self._slot_steps: dict[int, float] = {}
         self._controls: List[dict] = []  # per-slot widgets
+        self._last_setpoint_time: dict[int, float] = {}  # Debouncing timestamps
 
         if check_device_connection(ds):
             try:
@@ -160,7 +161,7 @@ class Itest_PSU(DS_General_Widget):
             btn_plus = QtWidgets.QPushButton("+")
             spin = QtWidgets.QDoubleSpinBox()
             spin.setDecimals(3)
-            spin.setRange(0.0, 50.0)
+            spin.setRange(-50.0, 50.0)  # Allow negative values
             spin.setSingleStep(self.step)
             spin.setValue(0.0)
             chk = QtWidgets.QCheckBox("ON")
@@ -187,6 +188,8 @@ class Itest_PSU(DS_General_Widget):
             btn_minus.clicked.connect(partial(self._nudge, i, -1))
             btn_plus.clicked.connect(partial(self._nudge, i, +1))
             chk.toggled.connect(partial(self._toggle_slot, i))
+            
+            # Only user input triggers setpoint changes
             spin.editingFinished.connect(partial(self._apply_setpoint, i))
 
             h.addWidget(btn_minus)
@@ -248,13 +251,33 @@ class Itest_PSU(DS_General_Widget):
         ctrl = self._controls[index]
         spin: QtWidgets.QDoubleSpinBox = ctrl["spin"]
         step = float(self._slot_steps.get(index, self.step))
-        spin.setValue(max(0.0, spin.value() + direction * step))
+        new_value = spin.value() + direction * step
+        # Clamp to spinbox range instead of forcing >= 0
+        new_value = max(spin.minimum(), min(spin.maximum(), new_value))
+        spin.setValue(new_value)
         self._apply_setpoint(index)
 
     def _apply_setpoint(self, index: int):
+        import time
+        
         ctrl = self._controls[index]
         spin: QtWidgets.QDoubleSpinBox = ctrl["spin"]
         value = float(spin.value())
+        
+        # Debouncing: prevent rapid successive calls
+        current_time = time.time()
+        if index in self._last_setpoint_time:
+            if current_time - self._last_setpoint_time[index] < 0.1:  # 100ms debounce
+                return
+        
+        # Only send if the value actually differs from current setpoint to prevent loops
+        if index < len(self.currents_sp):
+            current_sp = float(self.currents_sp[index])
+            if abs(value - current_sp) < 0.001:  # 1mA tolerance
+                return
+        
+        self._last_setpoint_time[index] = current_time
+        
         # Tango command: set_current([idx+1, value])
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
@@ -295,10 +318,7 @@ class Itest_PSU(DS_General_Widget):
                 ctrl["meas"].setText(f"I_meas: {self.currents_meas[i]:.3f} A")
             if i < len(self.currents_sp):
                 ctrl["setp"].setText(f"I_set: {self.currents_sp[i]:.3f} A")
-                # sync spin to setpoint without triggering commands
-                b2 = ctrl["spin"].blockSignals(True)
-                ctrl["spin"].setValue(float(self.currents_sp[i]))
-                ctrl["spin"].blockSignals(b2)
+                # NOTE: Spin box is NEVER updated by server - only by user input
             if i < len(self.states):
                 # avoid signal feedback loop by blocking
                 b = ctrl["chk"].blockSignals(True)
