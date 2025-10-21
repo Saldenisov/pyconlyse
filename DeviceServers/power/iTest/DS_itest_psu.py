@@ -72,6 +72,7 @@ class DS_iTest_PSU(DS_General):
         self._slot_count = max(1, int(sc))
         self._ids: List[int] = list(range(1, self._slot_count + 1))
         self._config_map: Dict[str, str] = {f"S{i}": f"Slot {i}" for i in self._ids}
+        self._config_limits: Dict[int, Tuple[float, float]] = {}  # slot_id -> (min_limit, max_limit)
         self._names: List[str] = [self._config_map[f"S{i}"] for i in self._ids]
         self._states: List[int] = [0] * self._slot_count
         self._currents_sp: List[float] = [0.0] * self._slot_count
@@ -95,6 +96,10 @@ class DS_iTest_PSU(DS_General):
         
         self._log_normal(f"Device properties loaded: Host='{self._host}', Port={self._port}, EOL={repr(self._eol)}, PollingRate={self._polling_rate}ms", True)
 
+        # Apply config property early to set up names mapping
+        self.info("Applying initial config property...", True)
+        self._apply_config_property()
+        
         # Let base class init run (sets archive, calls find_device(), etc.)
         self.info("Calling super().init_device() - this will call find_device()", True)
         super().init_device()
@@ -151,7 +156,7 @@ class DS_iTest_PSU(DS_General):
     
     def _configure_change_events(self):
         """Configure change events for the relevant attributes"""
-        attributes_to_configure = ['states', 'currents_setpoint', 'currents_meas']
+        attributes_to_configure = ['states', 'currents_setpoint', 'currents_meas', 'names', 'current_limits']
         
         for attr_name in attributes_to_configure:
             try:
@@ -182,24 +187,78 @@ class DS_iTest_PSU(DS_General):
     # Helper: apply alias mapping from Tango device property 'config' (JSON string)
     def _apply_config_property(self):
         try:
+            # Initialize config_limits if not exists
+            if not hasattr(self, '_config_limits'):
+                self._config_limits = {}
+                
             js = str(getattr(self, "config", "") or "")
+            self.info(f"Config property value: '{js[:200]}{'...' if len(js) > 200 else ''}'", True)
+            
             if not js:
+                self.info("No config property set, using default slot names", True)
                 return
+                
             data = json.loads(js)
+            self.info(f"Parsed config data: {data}", True)
+            
             if isinstance(data, dict):
                 updated = dict(self._config_map)
+                self._config_limits = {}
                 for k, v in data.items():
                     ks = str(k)
-                    if ks.upper().startswith("S"):
+                    # Handle both "Slot N" and "SN" formats
+                    slot_num = None
+                    if ks.upper().startswith("SLOT "):
                         try:
-                            idx = int(ks[1:])
-                            if idx in self._ids:
-                                updated[f"S{idx}"] = str(v)
+                            # Extract slot number from "Slot N" or "Slot N (model)"
+                            slot_part = ks.split("(")[0].strip()  # Remove model part if present
+                            slot_num = int(slot_part.split()[-1])
                         except Exception:
                             continue
+                    elif ks.upper().startswith("S"):
+                        try:
+                            slot_num = int(ks[1:])
+                        except Exception:
+                            continue
+                    
+                    if slot_num and slot_num in self._ids:
+                        self.info(f"Processing config for slot {slot_num}: {v}", True)
+                        # Handle tuple format (name, [min_limit, max_limit]) or string format
+                        if isinstance(v, (list, tuple)) and len(v) >= 2:
+                            alias = str(v[0])
+                            limits = v[1] if isinstance(v[1], (list, tuple)) and len(v[1]) >= 2 else [-5.0, 15.0]
+                            updated[f"S{slot_num}"] = alias
+                            self._config_limits[slot_num] = (float(limits[0]), float(limits[1]))
+                            self.info(f"Set slot {slot_num} alias to '{alias}' with limits {limits}", True)
+                        else:
+                            updated[f"S{slot_num}"] = str(v)
+                            self._config_limits[slot_num] = (-5.0, 15.0)  # Default limits
+                            self.info(f"Set slot {slot_num} alias to '{v}' with default limits", True)
+                    else:
+                        self.info(f"Skipping config entry '{k}': slot_num={slot_num}, _ids={self._ids}", True)
+                        
                 self._config_map = updated
                 # Update names for existing ids
+                old_names = self._names.copy() if hasattr(self, '_names') else []
                 self._names = [self._config_map.get(f"S{i}", f"Slot {i}") for i in self._ids]
+                self.info(f"Updated config_map: {self._config_map}", True)
+                self.info(f"Updated slot names: {self._names}", True)
+                self.info(f"Updated config_limits: {self._config_limits}", True)
+                
+                # Push change events if names or limits changed
+                if old_names != self._names:
+                    try:
+                        self.push_change_event("names", self._names)
+                        self.info("Pushed names change event", True)
+                    except Exception as e:
+                        self.info(f"Failed to push names change event: {e}", True)
+                        
+                try:
+                    limits_array = self.current_limits()
+                    self.push_change_event("current_limits", limits_array)
+                    self.info("Pushed current_limits change event", True)
+                except Exception as e:
+                    self.info(f"Failed to push current_limits change event: {e}", True)
         except Exception as exc:
             self.error(f"Failed to apply 'config' property: {exc}")
 
@@ -254,6 +313,22 @@ class DS_iTest_PSU(DS_General):
     )
     def currents_meas(self) -> List[float]:
         return list(self._currents_meas)
+
+    @attribute(
+        label="Current Limits (Min/Max)",
+        dtype=[float],
+        max_dim_x=128,  # pairs of min/max for each slot
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Current limits as [min1, max1, min2, max2, ...] for each slot",
+    )
+    def current_limits(self) -> List[float]:
+        """Return flattened list of [min_limit, max_limit] pairs for each slot"""
+        result = []
+        for slot_id in self._ids:
+            limits = self._config_limits.get(slot_id, (-5.0, 15.0))
+            result.extend([float(limits[0]), float(limits[1])])
+        return result
 
     # ---- Commands ----
     @command

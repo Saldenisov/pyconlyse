@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DS iTest PSU Web Client</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .device-selector {
+            margin-bottom: 10px;
+        }
+        .device-selector label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .device-selector input, .device-selector button {
+            padding: 8px 12px;
+            margin-right: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .device-selector button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .device-selector button:hover {
+            background: #0056b3;
+        }
+        #client-container {
+            min-height: 400px;
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .login-section {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>DS iTest PSU Web Client</h1>
+            <p>Control your DS iTest PSU device remotely from http://10.20.30.202:5000</p>
+            
+            
+            <div class="device-selector">
+                <label for="device-name">Device Name:</label>
+                <input type="text" id="device-name" placeholder="e.g., ELYSE/pdu/iTest" value="ELYSE/pdu/iTest">
+                <button onclick="loadClient()">Load Client</button>
+                <div id="connection-status"></div>
+            </div>
+        </div>
+        
+        <div id="client-container">
+            <p>Enter device name and click "Load Client" to start controlling your DS iTest PSU.</p>
+        </div>
+    </div>
+
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        
+        async function loadClient() {
+            const deviceName = document.getElementById('device-name').value.trim();
+            const statusDiv = document.getElementById('connection-status');
+            const container = document.getElementById('client-container');
+            
+            if (!deviceName) {
+                alert('Please enter a device name');
+                return;
+            }
+            
+            
+            try {
+                statusDiv.innerHTML = '<div class="status">🔄 Connecting to device...</div>';
+                
+                // Test device connection
+                const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slots`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    statusDiv.innerHTML = '<div class="status success">✅ Connected to ' + deviceName + ' (' + data.slot_count + ' slots)</div>';
+                    
+                    // Load the client interface
+                    container.innerHTML = createClientHTML(deviceName, data.slots);
+                    initializeClient(deviceName);
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Connection error:', error);
+                statusDiv.innerHTML = '<div class="status error">❌ Connection failed: ' + error.message + '</div>';
+            }
+        }
+        
+        function createClientHTML(deviceName, slots) {
+            let html = `
+                <div class="ds-itest-client">
+                    <div class="client-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2>DS iTest PSU: ${deviceName}</h2>
+                        <div style="display: flex; gap: 15px; align-items: center;">
+                            <span id="ws-status">🔴 Disconnected</span>
+                            <label>Step: 
+                                <select id="global-step" onchange="updateGlobalStep()" style="margin-left: 5px;">
+                                    <option value="0.001">0.001 A</option>
+                                    <option value="0.01" selected>0.010 A</option>
+                                    <option value="0.1">0.100 A</option>
+                                    <option value="1.0">1.000 A</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+                    <div id="slots-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            `;
+            
+            slots.forEach(slot => {
+                html += createSlotHTML(slot);
+            });
+            
+            html += `
+                    </div>
+                    <div style="background: white; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #17a2b8;">
+                        <small style="color: #6c757d; line-height: 1.4;">
+                            • Click +/- buttons for step adjustments<br/>
+                            • Type values directly in input fields (supports negative values)<br/>
+                            • Toggle switches control output state for each slot
+                        </small>
+                    </div>
+                </div>
+            `;
+            
+            return html;
+        }
+        
+        function createSlotHTML(slot) {
+            return `
+                <div class="slot-control" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 2px solid #e9ecef;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;">
+                        <h4 style="margin: 0; color: #2c3e50;">${slot.name}</h4>
+                        <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                            <input id="state-${slot.index}" type="checkbox" ${slot.state ? 'checked' : ''} onchange="toggleSlot(${slot.index}, this.checked)">
+                            ON
+                        </label>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                        <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                            <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Measured</label>
+                            <span id="measured-${slot.index}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_measured.toFixed(6)} A</span>
+                        </div>
+                        <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
+                            <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Setpoint</label>
+                            <span id="setpoint-${slot.index}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_setpoint.toFixed(6)} A</span>
+                        </div>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <button onclick="nudgeSlot(${slot.index}, -1)" style="width: 35px; height: 35px; border: 1px solid #ffeaa7; background: #fff3cd; color: #856404; border-radius: 4px; cursor: pointer; font-weight: bold;">-</button>
+                        <input type="number" id="input-${slot.index}" value="${slot.current_setpoint.toFixed(3)}" 
+                               onkeypress="handleKeyPress(event, ${slot.index})" onchange="handleInputChange(${slot.index})"
+                               style="flex: 1; padding: 8px 10px; border: 2px solid #ced4da; border-radius: 4px; text-align: center; font-weight: 500;" 
+                               step="0.001" min="-50" max="50">
+                        <button onclick="nudgeSlot(${slot.index}, 1)" style="width: 35px; height: 35px; border: 1px solid #bee5eb; background: #d1ecf1; color: #0c5460; border-radius: 4px; cursor: pointer; font-weight: bold;">+</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        let globalStep = 0.01;
+        let currentDeviceName = null;
+        let socket = null;
+        let pollIntervalId = null;
+        let lastWsUpdateTs = 0;
+        
+        function initializeClient(deviceName) {
+            currentDeviceName = deviceName;
+            
+            // Clear any existing polling
+            if (pollIntervalId) {
+                clearInterval(pollIntervalId);
+                pollIntervalId = null;
+            }
+            
+            // Initialize WebSocket connection
+            if (socket) {
+                try { socket.disconnect(); } catch (e) {}
+            }
+            
+            console.log('Initializing WebSocket connection...');
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Socket.IO connected');
+                document.getElementById('ws-status').innerHTML = '🟢 Connecting...';
+                
+                // Auto-subscribe immediately on connection
+                console.log('Auto-subscribing to device:', deviceName);
+                socket.emit('subscribe_device', {'device': deviceName});
+            });
+            
+            socket.on('connected', function(data) {
+                console.log('WebSocket connected:', data);
+                document.getElementById('ws-status').innerHTML = '🟢 Connected';
+            });
+            
+            socket.on('subscribed', function(data) {
+                console.log('Subscribed to device monitoring:', data);
+                document.getElementById('ws-status').innerHTML = '🟢 Monitoring';
+            });
+            
+            socket.on('device_update', function(data) {
+                console.log('Device update received:', data);
+                if (data.device === deviceName && data.slots) {
+                    lastWsUpdateTs = Date.now();
+                    updateSlotsDisplay(data.slots);
+                } else {
+                    console.log('Update not for our device or no slots data');
+                }
+            });
+            
+            // Start polling fallback: if no WS update in 1500ms, poll REST endpoint
+            pollIntervalId = setInterval(async function() {
+                const now = Date.now();
+                if (now - lastWsUpdateTs < 1500) {
+                    return; // recent WS update, skip poll
+                }
+                try {
+                    const resp = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slots`);
+                    if (resp.ok) {
+                        const json = await resp.json();
+                        if (json && json.slots) {
+                            console.log('Polling fallback update');
+                            updateSlotsDisplay(json.slots);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Polling failed', e);
+                }
+            }, 1000);
+            
+            socket.on('device_error', function(data) {
+                console.error('Device error:', data);
+                document.getElementById('ws-status').innerHTML = '🔴 Device Error';
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('WebSocket disconnected');
+                document.getElementById('ws-status').innerHTML = '🔴 Disconnected';
+            });
+        }
+        
+        function updateSlotsDisplay(slots) {
+            console.log('Updating slots display with:', slots);
+            slots.forEach(function(slot) {
+                console.log(`Updating slot ${slot.index}: measured=${slot.current_measured}, setpoint=${slot.current_setpoint}, state=${slot.state}`);
+                
+                const measuredElement = document.getElementById(`measured-${slot.index}`);
+                const setpointElement = document.getElementById(`setpoint-${slot.index}`);
+                const checkboxElement = document.getElementById(`state-${slot.index}`);
+                
+                if (measuredElement) {
+                    const newValue = Number(slot.current_measured).toFixed(6) + ' A';
+                    console.log(`Setting measured-${slot.index} to ${newValue}`);
+                    measuredElement.textContent = newValue;
+                } else {
+                    console.log(`Element measured-${slot.index} not found`);
+                }
+                
+                if (setpointElement) {
+                    const newValue = Number(slot.current_setpoint).toFixed(6) + ' A';
+                    console.log(`Setting setpoint-${slot.index} to ${newValue}`);
+                    setpointElement.textContent = newValue;
+                } else {
+                    console.log(`Element setpoint-${slot.index} not found`);
+                }
+                
+                if (checkboxElement) {
+                    console.log(`Setting checkbox for slot ${slot.index} to ${slot.state}`);
+                    checkboxElement.checked = slot.state;
+                } else {
+                    console.log(`Checkbox for slot ${slot.index} not found`);
+                }
+            });
+        }
+        
+        function updateGlobalStep() {
+            globalStep = parseFloat(document.getElementById('global-step').value);
+        }
+        
+        async function setSlotCurrent(slotIndex, value) {
+            try {
+                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotIndex}/current`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ current: value })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById(`setpoint-${slotIndex}`).textContent = data.current_setpoint.toFixed(3) + ' A';
+                    document.getElementById(`input-${slotIndex}`).value = data.current_setpoint.toFixed(3);
+                }
+            } catch (error) {
+                console.error('Error setting current:', error);
+            }
+        }
+        
+        async function toggleSlot(slotIndex, enabled) {
+            try {
+                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotIndex}/state`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ enabled })
+                });
+                
+                if (response.ok) {
+                    console.log(`Slot ${slotIndex} ${enabled ? 'enabled' : 'disabled'}`);
+                }
+            } catch (error) {
+                console.error('Error toggling slot:', error);
+            }
+        }
+        
+        function nudgeSlot(slotIndex, direction) {
+            const input = document.getElementById(`input-${slotIndex}`);
+            const currentValue = parseFloat(input.value) || 0;
+            const newValue = Math.max(-50, Math.min(50, currentValue + (direction * globalStep)));
+            setSlotCurrent(slotIndex, newValue);
+        }
+        
+        function handleKeyPress(event, slotIndex) {
+            if (event.key === 'Enter') {
+                const value = parseFloat(event.target.value);
+                if (!isNaN(value)) {
+                    setSlotCurrent(slotIndex, value);
+                }
+            }
+        }
+        
+        function handleInputChange(slotIndex) {
+            const value = parseFloat(document.getElementById(`input-${slotIndex}`).value);
+            if (!isNaN(value)) {
+                setSlotCurrent(slotIndex, value);
+            }
+        }
+    </script>
+</body>
+</html>

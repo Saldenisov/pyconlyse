@@ -49,6 +49,7 @@ class Itest_PSU(DS_General_Widget):
         self.states: List[int] = [0] * self.slot_count
         self.currents_meas: List[float] = [0.0] * self.slot_count
         self.currents_sp: List[float] = [0.0] * self.slot_count
+        self.current_limits: List[float] = []  # [min1, max1, min2, max2, ...]
         self.step = 0.01
         self._slot_steps: dict[int, float] = {}
         self._controls: List[dict] = []  # per-slot widgets
@@ -73,6 +74,10 @@ class Itest_PSU(DS_General_Widget):
                 pass
             try:
                 self.currents_sp = list(ds.currents_setpoint)
+            except Exception:
+                pass
+            try:
+                self.current_limits = list(ds.current_limits)
             except Exception:
                 pass
 
@@ -161,7 +166,9 @@ class Itest_PSU(DS_General_Widget):
             btn_plus = QtWidgets.QPushButton("+")
             spin = QtWidgets.QDoubleSpinBox()
             spin.setDecimals(3)
-            spin.setRange(-50.0, 50.0)  # Allow negative values
+            # Set range from config limits or use default
+            min_val, max_val = self._get_slot_limits(i)
+            spin.setRange(min_val, max_val)
             spin.setSingleStep(self.step)
             spin.setValue(0.0)
             chk = QtWidgets.QCheckBox("ON")
@@ -217,10 +224,28 @@ class Itest_PSU(DS_General_Widget):
         # initialize values
         self._refresh_ui_from_arrays()
 
+    def _get_slot_limits(self, slot_index: int) -> tuple[float, float]:
+        """Get min/max limits for a slot from current_limits array"""
+        if len(self.current_limits) >= (slot_index + 1) * 2:
+            idx = slot_index * 2
+            return float(self.current_limits[idx]), float(self.current_limits[idx + 1])
+        return -5.0, 15.0  # Default limits
+
+    def _update_spinbox_ranges(self):
+        """Update all spinbox ranges when limits change"""
+        for i, ctrl in enumerate(self._controls):
+            min_val, max_val = self._get_slot_limits(i)
+            spin: QtWidgets.QDoubleSpinBox = ctrl["spin"]
+            current_val = spin.value()
+            spin.setRange(min_val, max_val)
+            # Clamp current value to new range
+            if current_val < min_val or current_val > max_val:
+                spin.setValue(max(min_val, min(max_val, current_val)))
+
     def _subscribe_events(self):
         dev_name = self.dev_name
         ds: Device = getattr(self, f"ds_{dev_name}")
-        for attr in ("states", "names", "currents_meas", "currents_setpoint"):
+        for attr in ("states", "names", "currents_meas", "currents_setpoint", "current_limits"):
             try:
                 ds.subscribe_event(attr, tango.EventType.CHANGE_EVENT, self._event_listener)
             except Exception:
@@ -306,6 +331,9 @@ class Itest_PSU(DS_General_Widget):
                 self.currents_meas = list(val)
             elif name == "currents_setpoint":
                 self.currents_sp = list(val)
+            elif name == "current_limits":
+                self.current_limits = list(val)
+                self._update_spinbox_ranges()
             self._refresh_ui_from_arrays()
         except Exception:
             pass

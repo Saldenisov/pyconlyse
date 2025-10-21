@@ -7,8 +7,8 @@ from datetime import datetime
 import json
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging - reduced verbosity
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Global SocketIO instance - will be initialized in app.py
@@ -139,7 +139,7 @@ monitor = DeviceMonitor()
 def init_socketio(app):
     """Initialize SocketIO with the Flask app"""
     global socketio
-    socketio = SocketIO(app, cors_allowed_origins="*", logger=True, engineio_logger=True)
+    socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
     
     @socketio.on('connect')
     def handle_connect():
