@@ -7,6 +7,7 @@ const ITestPSUClient = ({ deviceName }) => {
   const [currentSetpoint, setCurrentSetpoint] = useState(0.0);
   const [measuredCurrent, setMeasuredCurrent] = useState(0.0);
   const [measuredVoltage, setMeasuredVoltage] = useState(0.0);
+  const [currentLimits, setCurrentLimits] = useState({ min: -5.0, max: 15.0 });
   const [connected, setConnected] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
   const [error, setError] = useState(null);
@@ -79,6 +80,9 @@ const ITestPSUClient = ({ deviceName }) => {
         setCurrentSetpoint(data.current_setpoint || 0.0);
         setMeasuredCurrent(data.measured_current || 0.0);
         setMeasuredVoltage(data.measured_voltage || 0.0);
+        if (data.current_limits) {
+          setCurrentLimits(data.current_limits);
+        }
         setError(null);
       } else {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -128,9 +132,18 @@ const ITestPSUClient = ({ deviceName }) => {
 
   const setCurrentValue = () => {
     const value = parseFloat(newSetpointRef.current.value);
-    if (!isNaN(value)) {
-      handleCurrentAction('set', value);
+    if (isNaN(value)) {
+      setError('Please enter a valid number');
+      return;
     }
+    
+    // Client-side validation
+    if (value < currentLimits.min || value > currentLimits.max) {
+      setError(`Current value ${value}A is outside limits [${currentLimits.min}, ${currentLimits.max}]A`);
+      return;
+    }
+    
+    handleCurrentAction('set', value);
   };
 
   if (loading) {
@@ -196,13 +209,18 @@ const ITestPSUClient = ({ deviceName }) => {
         
         <div className="setpoint-control">
           <label>Set Current (A):</label>
+          <div className="limits-info">
+            <small>Limits: {currentLimits.min}A to {currentLimits.max}A</small>
+          </div>
           <div className="input-group">
             <input 
               ref={newSetpointRef}
               type="number" 
               step="0.001" 
+              min={currentLimits.min}
+              max={currentLimits.max}
               defaultValue={currentSetpoint}
-              placeholder="Enter current value"
+              placeholder={`Enter current value (${currentLimits.min} to ${currentLimits.max}A)`}
             />
             <button onClick={setCurrentValue} className="set-btn">Set</button>
           </div>
@@ -247,6 +265,7 @@ const ITestPSUClient = ({ deviceName }) => {
           • Use the bump buttons for quick adjustments<br/>
           • Fine adjustments: ±0.01 A<br/>
           • Coarse adjustments: ±0.1 A<br/>
+          • Current limits: {currentLimits.min}A to {currentLimits.max}A<br/>
           • Real-time monitoring shows live updates when enabled
         </small>
       </div>

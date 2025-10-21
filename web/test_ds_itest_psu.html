@@ -176,29 +176,29 @@
             return `
                 <div class="slot-control" style="background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border: 2px solid #e9ecef;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #e9ecef;">
-                        <h4 style="margin: 0; color: #2c3e50;">${slot.name}</h4>
+                        <h4 style="margin: 0; color: #2c3e50;">${slot.name} (ID: ${slot.id})</h4>
                         <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                            <input id="state-${slot.index}" type="checkbox" ${slot.state ? 'checked' : ''} onchange="toggleSlot(${slot.index}, this.checked)">
+                            <input id="state-${slot.id}" type="checkbox" ${slot.state ? 'checked' : ''} onchange="toggleSlot(${slot.id}, this.checked)">
                             ON
                         </label>
                     </div>
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
                             <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Measured</label>
-                            <span id="measured-${slot.index}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_measured.toFixed(6)} A</span>
+                            <span id="measured-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_measured.toFixed(6)} A</span>
                         </div>
                         <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
                             <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Setpoint</label>
-                            <span id="setpoint-${slot.index}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_setpoint.toFixed(6)} A</span>
+                            <span id="setpoint-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_setpoint.toFixed(6)} A</span>
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 5px;">
-                        <button onclick="nudgeSlot(${slot.index}, -1)" style="width: 35px; height: 35px; border: 1px solid #ffeaa7; background: #fff3cd; color: #856404; border-radius: 4px; cursor: pointer; font-weight: bold;">-</button>
-                        <input type="number" id="input-${slot.index}" value="${slot.current_setpoint.toFixed(3)}" 
-                               onkeypress="handleKeyPress(event, ${slot.index})" onchange="handleInputChange(${slot.index})"
+                        <button onclick="nudgeSlot(${slot.id}, -1)" style="width: 35px; height: 35px; border: 1px solid #ffeaa7; background: #fff3cd; color: #856404; border-radius: 4px; cursor: pointer; font-weight: bold;">-</button>
+                        <input type="number" id="input-${slot.id}" value="${slot.current_setpoint.toFixed(3)}" 
+                               onkeypress="handleKeyPress(event, ${slot.id})" onchange="handleInputChange(${slot.id})"
                                style="flex: 1; padding: 8px 10px; border: 2px solid #ced4da; border-radius: 4px; text-align: center; font-weight: 500;" 
                                step="0.001" min="-50" max="50">
-                        <button onclick="nudgeSlot(${slot.index}, 1)" style="width: 35px; height: 35px; border: 1px solid #bee5eb; background: #d1ecf1; color: #0c5460; border-radius: 4px; cursor: pointer; font-weight: bold;">+</button>
+                        <button onclick="nudgeSlot(${slot.id}, 1)" style="width: 35px; height: 35px; border: 1px solid #bee5eb; background: #d1ecf1; color: #0c5460; border-radius: 4px; cursor: pointer; font-weight: bold;">+</button>
                     </div>
                 </div>
             `;
@@ -290,33 +290,33 @@
         function updateSlotsDisplay(slots) {
             console.log('Updating slots display with:', slots);
             slots.forEach(function(slot) {
-                console.log(`Updating slot ${slot.index}: measured=${slot.current_measured}, setpoint=${slot.current_setpoint}, state=${slot.state}`);
+                console.log(`Updating slot ${slot.id}: measured=${slot.current_measured}, setpoint=${slot.current_setpoint}, state=${slot.state}`);
                 
-                const measuredElement = document.getElementById(`measured-${slot.index}`);
-                const setpointElement = document.getElementById(`setpoint-${slot.index}`);
-                const checkboxElement = document.getElementById(`state-${slot.index}`);
+                const measuredElement = document.getElementById(`measured-${slot.id}`);
+                const setpointElement = document.getElementById(`setpoint-${slot.id}`);
+                const checkboxElement = document.getElementById(`state-${slot.id}`);
                 
                 if (measuredElement) {
                     const newValue = Number(slot.current_measured).toFixed(6) + ' A';
-                    console.log(`Setting measured-${slot.index} to ${newValue}`);
+                    console.log(`Setting measured-${slot.id} to ${newValue}`);
                     measuredElement.textContent = newValue;
                 } else {
-                    console.log(`Element measured-${slot.index} not found`);
+                    console.log(`Element measured-${slot.id} not found`);
                 }
                 
                 if (setpointElement) {
                     const newValue = Number(slot.current_setpoint).toFixed(6) + ' A';
-                    console.log(`Setting setpoint-${slot.index} to ${newValue}`);
+                    console.log(`Setting setpoint-${slot.id} to ${newValue}`);
                     setpointElement.textContent = newValue;
                 } else {
-                    console.log(`Element setpoint-${slot.index} not found`);
+                    console.log(`Element setpoint-${slot.id} not found`);
                 }
                 
                 if (checkboxElement) {
-                    console.log(`Setting checkbox for slot ${slot.index} to ${slot.state}`);
+                    console.log(`Setting checkbox for slot ${slot.id} to ${slot.state}`);
                     checkboxElement.checked = slot.state;
                 } else {
-                    console.log(`Checkbox for slot ${slot.index} not found`);
+                    console.log(`Checkbox for slot ${slot.id} not found`);
                 }
             });
         }
@@ -325,9 +325,9 @@
             globalStep = parseFloat(document.getElementById('global-step').value);
         }
         
-        async function setSlotCurrent(slotIndex, value) {
+        async function setSlotCurrent(slotId, value) {
             try {
-                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotIndex}/current`, {
+                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/current`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -336,17 +336,17 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById(`setpoint-${slotIndex}`).textContent = data.current_setpoint.toFixed(3) + ' A';
-                    document.getElementById(`input-${slotIndex}`).value = data.current_setpoint.toFixed(3);
+                    document.getElementById(`setpoint-${slotId}`).textContent = data.current_setpoint.toFixed(3) + ' A';
+                    document.getElementById(`input-${slotId}`).value = data.current_setpoint.toFixed(3);
                 }
             } catch (error) {
                 console.error('Error setting current:', error);
             }
         }
         
-        async function toggleSlot(slotIndex, enabled) {
+        async function toggleSlot(slotId, enabled) {
             try {
-                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotIndex}/state`, {
+                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/state`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -354,33 +354,33 @@
                 });
                 
                 if (response.ok) {
-                    console.log(`Slot ${slotIndex} ${enabled ? 'enabled' : 'disabled'}`);
+                    console.log(`Slot ${slotId} ${enabled ? 'enabled' : 'disabled'}`);
                 }
             } catch (error) {
                 console.error('Error toggling slot:', error);
             }
         }
         
-        function nudgeSlot(slotIndex, direction) {
-            const input = document.getElementById(`input-${slotIndex}`);
+        function nudgeSlot(slotId, direction) {
+            const input = document.getElementById(`input-${slotId}`);
             const currentValue = parseFloat(input.value) || 0;
             const newValue = Math.max(-50, Math.min(50, currentValue + (direction * globalStep)));
-            setSlotCurrent(slotIndex, newValue);
+            setSlotCurrent(slotId, newValue);
         }
         
-        function handleKeyPress(event, slotIndex) {
+        function handleKeyPress(event, slotId) {
             if (event.key === 'Enter') {
                 const value = parseFloat(event.target.value);
                 if (!isNaN(value)) {
-                    setSlotCurrent(slotIndex, value);
+                    setSlotCurrent(slotId, value);
                 }
             }
         }
         
-        function handleInputChange(slotIndex) {
-            const value = parseFloat(document.getElementById(`input-${slotIndex}`).value);
+        function handleInputChange(slotId) {
+            const value = parseFloat(document.getElementById(`input-${slotId}`).value);
             if (!isNaN(value)) {
-                setSlotCurrent(slotIndex, value);
+                setSlotCurrent(slotId, value);
             }
         }
     </script>

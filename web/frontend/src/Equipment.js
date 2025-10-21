@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ITestPSUClient from './components/ITestPSUClient';
 
 const Equipment = () => {
   // State to track the selected equipment
@@ -13,7 +14,8 @@ const Equipment = () => {
     { id: 3, label: "Cameras", img: "/images/cameras.png" },
     { id: 4, label: "Magnets", img: "/images/magnets.png" },
     { id: 5, label: "Vacuum", img: "/images/vacuum.png" },
-    { id: 6, label: "Pumps", img: "/images/pumps.png" }
+    { id: 6, label: "Pumps", img: "/images/pumps.png" },
+    { id: 7, label: "Itest Client", img: "/images/itest.png" }
   ];
 
   // Update the widget based on the selected equipment
@@ -59,7 +61,9 @@ const Equipment = () => {
           {/* Right Column: Widget */}
           <div className="column column-right">
             <div id="widget-container">
-              {selectedEquipment ? (
+              {selectedEquipment === 7 ? (
+                <ITestPSUClient deviceName="itest/power_supply/01" />
+              ) : selectedEquipment ? (
                 <>
                   <h2>Control Equipment {selectedEquipment}</h2>
                   <button onClick={() => handleClick(selectedEquipment)}>Click Me</button>

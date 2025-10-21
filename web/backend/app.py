@@ -2,19 +2,29 @@
 import os
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
 
 from routes import routes        # Your additional API endpoints
 from folder_api import folder_api  # Folder-related endpoints
 from device_api import device_api  # Device control API endpoints
+from auth import auth            # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
 app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
 CORS(app)
 
+# JWT Configuration
+app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+app.config['JWT_TOKEN_LOCATION'] = ['cookies']
+app.config['JWT_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
+app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # Disable CSRF protection for simplicity
+jwt = JWTManager(app)
+
 # Register blueprints
 app.register_blueprint(routes)
 app.register_blueprint(folder_api)
 app.register_blueprint(device_api)  # Add device API
+app.register_blueprint(auth)        # Add auth API
 
 # Initialize WebSocket support
 socketio = init_socketio(app)

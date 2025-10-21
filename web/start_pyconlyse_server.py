@@ -41,7 +41,7 @@ if __name__ == '__main__':
         # Run the server
         socketio.run(
             app, 
-            debug=False,  # Reduced logging
+            debug=True,   # Enable auto-reload on file changes
             port=5000, 
             host='10.20.30.202',
             allow_unsafe_werkzeug=True  # For development only

@@ -262,17 +262,21 @@ def get_ds_itest_psu_slots(device_name):
     try:
         device = DeviceManager.get_device(device_name)
         
-        # Read all slot data
+        # Read all slot data including real slot IDs
         names = list(device.read_attribute('names').value)
         states = list(device.read_attribute('states').value)
         currents_meas = list(device.read_attribute('currents_meas').value)
         currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+        ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int for JSON serialization
         
         slots = []
         for i in range(len(names)):
+            # Use actual slot ID instead of counter
+            slot_id = ids[i] if i < len(ids) else i + 1
             slots.append({
-                'index': i + 1,
-                'name': names[i] if i < len(names) else f'Slot {i+1}',
+                'id': slot_id,  # Real slot ID
+                'index': i,     # Array index for reference
+                'name': names[i] if i < len(names) else f'Slot {slot_id}',
                 'state': bool(states[i]) if i < len(states) else False,
                 'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
                 'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
@@ -281,29 +285,37 @@ def get_ds_itest_psu_slots(device_name):
         return jsonify({
             'slots': slots,
             'slot_count': len(names),
+            'available_slot_ids': ids,
             'success': True
         })
     
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_index>/current', methods=['POST'])
-def set_ds_itest_psu_current(device_name, slot_index):
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
+def set_ds_itest_psu_current(device_name, slot_id):
     """Set current for specific DS iTest PSU slot"""
     try:
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         current_value = float(data.get('current', 0.0))
         
-        # Use set_current command with [slot_index, value]
-        device.command_inout('set_current', [float(slot_index), current_value])
+        # Use set_current command with [slot_id, value] - slot_id is the real slot ID
+        device.command_inout('set_current', [float(slot_id), current_value])
         
-        # Read back the setpoint array to confirm
+        # Read back the setpoint array to confirm - need to find array index
+        ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int
         currents_setpoint = list(device.read_attribute('currents_setpoint').value)
-        actual_value = currents_setpoint[slot_index - 1] if slot_index <= len(currents_setpoint) else current_value
+        
+        try:
+            array_idx = ids.index(slot_id)
+            actual_value = currents_setpoint[array_idx] if array_idx < len(currents_setpoint) else current_value
+        except ValueError:
+            # Slot ID not found, return the requested value
+            actual_value = current_value
         
         return jsonify({
-            'slot_index': slot_index,
+            'slot_id': slot_id,
             'current_setpoint': actual_value,
             'success': True
         })
@@ -311,23 +323,30 @@ def set_ds_itest_psu_current(device_name, slot_index):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_index>/state', methods=['POST'])
-def set_ds_itest_psu_state(device_name, slot_index):
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/state', methods=['POST'])
+def set_ds_itest_psu_state(device_name, slot_id):
     """Set output state for specific DS iTest PSU slot"""
     try:
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         enabled = bool(data.get('enabled', False))
         
-        # Use set_output_state command with [slot_index, state]
-        device.command_inout('set_output_state', [int(slot_index), int(1 if enabled else 0)])
+        # Use set_output_state command with [slot_id, state] - slot_id is the real slot ID
+        device.command_inout('set_output_state', [int(slot_id), int(1 if enabled else 0)])
         
-        # Read back the states array to confirm
+        # Read back the states array to confirm - need to find array index
+        ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int
         states = list(device.read_attribute('states').value)
-        actual_state = bool(states[slot_index - 1]) if slot_index <= len(states) else enabled
+        
+        try:
+            array_idx = ids.index(slot_id)
+            actual_state = bool(states[array_idx]) if array_idx < len(states) else enabled
+        except ValueError:
+            # Slot ID not found, return the requested state
+            actual_state = enabled
         
         return jsonify({
-            'slot_index': slot_index,
+            'slot_id': slot_id,
             'state': actual_state,
             'success': True
         })
@@ -346,10 +365,22 @@ def handle_itest_current(device_name):
             measured = device.read_attribute('MeasuredCurrent').value
             voltage = device.read_attribute('MeasuredVoltage').value
             
+            # Try to get current limits if available
+            limits = None
+            try:
+                limits_array = device.read_attribute('current_limits').value
+                if limits_array and len(limits_array) >= 2:
+                    # Assuming single channel device, take first pair
+                    limits = {'min': float(limits_array[0]), 'max': float(limits_array[1])}
+            except:
+                # Fallback to default limits if attribute doesn't exist
+                limits = {'min': -5.0, 'max': 15.0}
+            
             return jsonify({
                 'current_setpoint': setpoint,
                 'measured_current': measured,
                 'measured_voltage': voltage,
+                'current_limits': limits,
                 'success': True
             })
         
@@ -357,6 +388,24 @@ def handle_itest_current(device_name):
             data = request.get_json()
             action = data.get('action')
             value = data.get('value')
+            
+            # For set action, validate limits first
+            if action == 'set' and value is not None:
+                try:
+                    limits_array = device.read_attribute('current_limits').value
+                    if limits_array and len(limits_array) >= 2:
+                        min_limit = float(limits_array[0])
+                        max_limit = float(limits_array[1])
+                        
+                        if value < min_limit or value > max_limit:
+                            return jsonify({
+                                'error': f'Current value {value}A is outside limits [{min_limit}, {max_limit}]A',
+                                'limits': {'min': min_limit, 'max': max_limit},
+                                'success': False
+                            }), 400
+                except Exception as e:
+                    # If we can't read limits, log but continue (fallback behavior)
+                    print(f"Warning: Could not read current limits for {device_name}: {e}")
             
             if action == 'set':
                 device.write_attribute('CurrentSetpoint', value)
