@@ -1,3 +1,137 @@
+/* Equipment Page Layout */
+.equipment-page {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 40px 20px;
+}
+
+.equipment-header {
+  text-align: center;
+  margin-bottom: 50px;
+  color: white;
+}
+
+.equipment-header h1 {
+  font-size: 2.5em;
+  margin: 0 0 10px 0;
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.equipment-header p {
+  font-size: 1.2em;
+  margin: 0;
+  opacity: 0.95;
+}
+
+/* Equipment Grid */
+.equipment-grid {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+  padding: 0 20px;
+}
+
+/* Equipment Cards */
+.equipment-card {
+  background: white;
+  border-radius: 20px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.equipment-card:hover {
+  transform: translateY(-10px) scale(1.02);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+.card-image-wrapper {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.card-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.equipment-card:hover .card-image {
+  transform: scale(1.1);
+}
+
+.card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(102, 126, 234, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.equipment-card:hover .card-overlay {
+  opacity: 1;
+}
+
+.card-icon {
+  font-size: 4em;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+.card-content {
+  padding: 25px;
+  text-align: center;
+  background: white;
+}
+
+.card-content h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.5em;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.card-content p {
+  margin: 0;
+  color: #7f8c8d;
+  font-size: 0.95em;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .equipment-header h1 {
+    font-size: 2em;
+  }
+  
+  .equipment-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .card-image-wrapper {
+    height: 220px;
+  }
+}
+
 /* Modal Overlay */
 .modal-overlay {
   position: fixed;

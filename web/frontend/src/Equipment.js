@@ -42,8 +42,11 @@ const Equipment = () => {
   };
 
   return (
-    <div>
-      <h1>Equipment Page</h1>
+    <div className="equipment-page">
+      <div className="equipment-header">
+        <h1>Equipment Control Center</h1>
+        <p>Select equipment to access control interfaces</p>
+      </div>
       
       {/* PDU Modal */}
       {showPDUModal && (
@@ -75,47 +78,25 @@ const Equipment = () => {
         </div>
       )}
       
-      <div className="container">
-        <div className="row">
-          {/* Left Column: Equipment Images */}
-          <div className="column column-left">
-            <div
-              className="grid-container"
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)", // Three columns per row
-                gridTemplateRows: "repeat(2, auto)",   // Two rows
-                gap: "10px"
-              }}
-            >
-              {equipmentItems.map(item => (
-                <div className="grid-item" key={item.id}>
-                  <div
-                    className="image-container"
-                    onClick={() => updateWidget(item.id)}
-                  >
-                    <span className="image-label">{item.label}</span>
-                    <img src={item.img} alt={item.label} />
-                  </div>
-                </div>
-              ))}
+      <div className="equipment-grid">
+        {equipmentItems.map(item => (
+          <div 
+            className="equipment-card" 
+            key={item.id}
+            onClick={() => updateWidget(item.id)}
+          >
+            <div className="card-image-wrapper">
+              <img src={item.img} alt={item.label} className="card-image" />
+              <div className="card-overlay">
+                <span className="card-icon">🔧</span>
+              </div>
+            </div>
+            <div className="card-content">
+              <h3>{item.label}</h3>
+              <p>Click to access controls</p>
             </div>
           </div>
-          {/* Right Column: Widget */}
-          <div className="column column-right">
-            <div id="widget-container">
-              {selectedEquipment ? (
-                <>
-                  <h2>Control Equipment {selectedEquipment}</h2>
-                  <button onClick={() => handleClick(selectedEquipment)}>Click Me</button>
-                  <p>{statusMessage}</p>
-                </>
-              ) : (
-                <h2>Select equipment to control</h2>
-              )}
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
