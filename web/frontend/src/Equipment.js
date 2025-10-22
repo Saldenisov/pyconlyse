@@ -54,9 +54,6 @@ const Equipment = () => {
               <a href="/test_netio_pdu.html" target="_blank" rel="noopener noreferrer" className="modal-link">
                 NETIO Web Client
               </a>
-              <a href="http://10.20.30.202" target="_blank" rel="noopener noreferrer" className="modal-link">
-                NETIO Direct Access
-              </a>
             </div>
             <button onClick={() => setShowPDUModal(false)} className="modal-close">Close</button>
           </div>
