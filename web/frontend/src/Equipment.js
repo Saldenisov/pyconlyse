@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 import ITestPSUClient from './components/ITestPSUClient';
+import './Equipment.css';
 
 const Equipment = () => {
   // State to track the selected equipment
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   // State to hold the status message from the button click
   const [statusMessage, setStatusMessage] = useState("");
+  // State to control PDU modal
+  const [showPDUModal, setShowPDUModal] = useState(false);
+  // State to control Magnets modal
+  const [showMagnetsModal, setShowMagnetsModal] = useState(false);
 
   // Array of equipment items with id, label, and image path
   const equipmentItems = [
@@ -14,14 +19,21 @@ const Equipment = () => {
     { id: 3, label: "Cameras", img: "/images/cameras.png" },
     { id: 4, label: "Magnets", img: "/images/magnets.png" },
     { id: 5, label: "Vacuum", img: "/images/vacuum.png" },
-    { id: 6, label: "Pumps", img: "/images/pumps.png" },
-    { id: 7, label: "Itest Client", img: "/images/itest.png" }
+    { id: 6, label: "Pumps", img: "/images/pumps.png" }
   ];
 
   // Update the widget based on the selected equipment
   const updateWidget = (equipmentId) => {
-    setSelectedEquipment(equipmentId);
-    setStatusMessage(""); // Reset the status message
+    if (equipmentId === 1) {
+      // For PDU, open modal with NETIO link
+      setShowPDUModal(true);
+    } else if (equipmentId === 4) {
+      // For Magnets, open modal with Itest link
+      setShowMagnetsModal(true);
+    } else {
+      setSelectedEquipment(equipmentId);
+      setStatusMessage(""); // Reset the status message
+    }
   };
 
   // Handle button click within the widget
@@ -32,6 +44,40 @@ const Equipment = () => {
   return (
     <div>
       <h1>Equipment Page</h1>
+      
+      {/* PDU Modal */}
+      {showPDUModal && (
+        <div className="modal-overlay" onClick={() => setShowPDUModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>PDU - NETIO Clients</h2>
+            <div className="modal-links">
+              <a href="/test_netio_pdu.html" target="_blank" rel="noopener noreferrer" className="modal-link">
+                NETIO Web Client
+              </a>
+              <a href="http://10.20.30.202" target="_blank" rel="noopener noreferrer" className="modal-link">
+                NETIO Direct Access
+              </a>
+            </div>
+            <button onClick={() => setShowPDUModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Magnets Modal */}
+      {showMagnetsModal && (
+        <div className="modal-overlay" onClick={() => setShowMagnetsModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Magnets - Itest</h2>
+            <div className="modal-links">
+              <a href="/test_ds_itest_psu.html" target="_blank" rel="noopener noreferrer" className="modal-link">
+                Itest
+              </a>
+            </div>
+            <button onClick={() => setShowMagnetsModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+      
       <div className="container">
         <div className="row">
           {/* Left Column: Equipment Images */}
@@ -61,9 +107,7 @@ const Equipment = () => {
           {/* Right Column: Widget */}
           <div className="column column-right">
             <div id="widget-container">
-              {selectedEquipment === 7 ? (
-                <ITestPSUClient deviceName="itest/power_supply/01" />
-              ) : selectedEquipment ? (
+              {selectedEquipment ? (
                 <>
                   <h2>Control Equipment {selectedEquipment}</h2>
                   <button onClick={() => handleClick(selectedEquipment)}>Click Me</button>

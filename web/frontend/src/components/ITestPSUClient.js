@@ -12,13 +12,15 @@ const ITestPSUClient = ({ deviceName }) => {
   const [monitoring, setMonitoring] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [selectedSlot, setSelectedSlot] = useState(1);
+  const [availableSlots, setAvailableSlots] = useState([]);
   
   const socketRef = useRef(null);
   const newSetpointRef = useRef();
 
   useEffect(() => {
     if (deviceName) {
-      fetchCurrentReadings();
+      fetchAvailableSlots();
       initializeWebSocket();
     }
 
@@ -28,6 +30,12 @@ const ITestPSUClient = ({ deviceName }) => {
       }
     };
   }, [deviceName]);
+
+  useEffect(() => {
+    if (deviceName && selectedSlot) {
+      fetchCurrentReadings();
+    }
+  }, [deviceName, selectedSlot]);
 
   const initializeWebSocket = () => {
     const token = getCookie('access_token_cookie');
@@ -68,10 +76,35 @@ const ITestPSUClient = ({ deviceName }) => {
     return null;
   };
 
+  const fetchAvailableSlots = async () => {
+    try {
+      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slots`, {
+        credentials: 'include'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        const slotIds = data.available_slot_ids || [];
+        setAvailableSlots(slotIds);
+        if (slotIds.length > 0 && !slotIds.includes(selectedSlot)) {
+          setSelectedSlot(slotIds[0]);
+        }
+      } else {
+        console.warn('Could not fetch available slots, using default slot 1');
+        setAvailableSlots([1]);
+        setSelectedSlot(1);
+      }
+    } catch (err) {
+      console.warn('Could not fetch available slots:', err);
+      setAvailableSlots([1]);
+      setSelectedSlot(1);
+    }
+  };
+
   const fetchCurrentReadings = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/device/itest/${deviceName}/current`, {
+      const response = await fetch(`/api/device/itest/${deviceName}/slot/${selectedSlot}/current`, {
         credentials: 'include'
       });
       
@@ -111,7 +144,7 @@ const ITestPSUClient = ({ deviceName }) => {
       const body = { action };
       if (value !== null) body.value = value;
       
-      const response = await fetch(`/api/device/itest/${deviceName}/current`, {
+      const response = await fetch(`/api/device/itest/${deviceName}/slot/${selectedSlot}/current`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -123,7 +156,8 @@ const ITestPSUClient = ({ deviceName }) => {
         setCurrentSetpoint(data.current_setpoint);
         setError(null);
       } else {
-        throw new Error(`Failed to execute ${action}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || `Failed to execute ${action}`);
       }
     } catch (err) {
       setError(err.message);
@@ -168,6 +202,24 @@ const ITestPSUClient = ({ deviceName }) => {
         </div>
       </div>
 
+      <div className="slot-selection">
+        <h3>Slot Selection</h3>
+        <div className="slot-selector">
+          <label>Active Slot:</label>
+          <select 
+            value={selectedSlot} 
+            onChange={(e) => setSelectedSlot(parseInt(e.target.value))}
+            className="slot-dropdown"
+          >
+            {availableSlots.map(slotId => (
+              <option key={slotId} value={slotId}>
+                Slot {slotId}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {error && (
         <div className="error-alert">
           <strong>Error:</strong> {error}
@@ -176,7 +228,7 @@ const ITestPSUClient = ({ deviceName }) => {
       )}
 
       <div className="measurements-section">
-        <h3>Current Measurements</h3>
+        <h3>Current Measurements - Slot {selectedSlot}</h3>
         <div className="measurements-grid">
           <div className="measurement-item">
             <label>Current Setpoint</label>
@@ -205,7 +257,7 @@ const ITestPSUClient = ({ deviceName }) => {
       </div>
 
       <div className="control-section">
-        <h3>Current Control</h3>
+        <h3>Current Control - Slot {selectedSlot}</h3>
         
         <div className="setpoint-control">
           <label>Set Current (A):</label>

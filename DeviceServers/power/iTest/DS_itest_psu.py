@@ -600,6 +600,17 @@ class DS_iTest_PSU(DS_General):
             self.error(f"Slot {idx} not found in discovered slots {self._ids}")
             return
         
+        # Validate current limits before setting
+        limits = self._config_limits.get(idx)
+        if limits:
+            min_limit, max_limit = limits
+            if amps < min_limit or amps > max_limit:
+                self.error(f"Current value {amps:.3f}A is outside limits [{min_limit}, {max_limit}]A for slot {idx}")
+                return
+            self._log_min(f"Current {amps:.3f}A is within limits [{min_limit}, {max_limit}]A for slot {idx}", True)
+        else:
+            self._log_normal(f"No limits configured for slot {idx}, allowing {amps:.3f}A", True)
+        
         try:
             self._scpi.set_current(idx, amps)
             old_setpoints = self._currents_sp.copy()

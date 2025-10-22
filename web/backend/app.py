@@ -35,6 +35,12 @@ def ds_itest_psu_test():
     test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_ds_itest_psu.html')
     return send_from_directory(os.path.dirname(test_page_path), 'test_ds_itest_psu.html')
 
+# Route for NETIO PDU test page
+@app.route('/test_netio_pdu.html')
+def netio_pdu_test():
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_netio_pdu.html')
+    return send_from_directory(os.path.dirname(test_page_path), 'test_netio_pdu.html')
+
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

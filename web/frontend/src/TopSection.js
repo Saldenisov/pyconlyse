@@ -1,6 +1,6 @@
 // TopSection.js
 import React, { useEffect, useRef } from 'react';
-import SplitPane from 'react-split-pane';
+import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import Plotly from 'plotly.js-dist';
 import './css/TopSection.css';
 
@@ -72,30 +72,29 @@ const SpectrumPlot = () => {
   return <div className="xy-plot spectrum-plot" ref={ref}></div>;
 };
 
-// TopSection component using SplitPane for resizable columns
+// TopSection component using react-resizable-panels for resizable columns
 const TopSection = () => {
   return (
     <div className="top-section-container">
-      <SplitPane
-        split="vertical"
-        defaultSize="60%"
-        minSize={200} /* minimum pane size in pixels */
-        resizerStyle={{ cursor: 'col-resize', background: '#ccc', width: '5px' }}
-        style={{ height: '100%' }} /* ensure SplitPane fills the container */
-      >
-        <div className="left-column">
-          {/* The imshow graph is wrapped so that its size is constrained */}
-          <div className="imshow-wrapper">
-            <ImshowGraph />
+      <PanelGroup direction="horizontal" style={{ height: '100%' }}>
+        <Panel defaultSize={60} minSize={20}>
+          <div className="left-column">
+            {/* The imshow graph is wrapped so that its size is constrained */}
+            <div className="imshow-wrapper">
+              <ImshowGraph />
+            </div>
           </div>
-        </div>
-        <div className="right-column">
-          <div className="vertical-layout">
-            <KineticsPlot />
-            <SpectrumPlot />
+        </Panel>
+        <PanelResizeHandle style={{ width: '5px', background: '#ccc', cursor: 'col-resize' }} />
+        <Panel minSize={20}>
+          <div className="right-column">
+            <div className="vertical-layout">
+              <KineticsPlot />
+              <SpectrumPlot />
+            </div>
           </div>
-        </div>
-      </SplitPane>
+        </Panel>
+      </PanelGroup>
     </div>
   );
 };

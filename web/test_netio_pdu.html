@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NETIO PDU Web Client</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        
+        .device-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        
+        .device-selector h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        
+        .device-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        
+        .device-input-group input {
+            flex: 1;
+            min-width: 250px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .device-input-group button {
+            padding: 8px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .device-input-group button:hover {
+            background: #0056b3;
+        }
+        
+        .quick-load {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .quick-load button {
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9em;
+        }
+        
+        .quick-load button:hover {
+            background: #218838;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        #client-container {
+            min-height: 400px;
+        }
+        
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .device-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 2px solid #e9ecef;
+        }
+        
+        .device-card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            border-color: #007bff;
+        }
+        
+        .device-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .device-header h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.1em;
+            word-break: break-all;
+        }
+        
+        .device-controls {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .device-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .device-btn.all-on {
+            background: #28a745;
+            color: white;
+        }
+        
+        .device-btn.all-on:hover {
+            background: #218838;
+        }
+        
+        .device-btn.all-off {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .device-btn.all-off:hover {
+            background: #c82333;
+        }
+        
+        .outputs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+        
+        .output-control {
+            background: #f8f9fa;
+            border-radius: 6px;
+            padding: 12px;
+            border: 1px solid #dee2e6;
+        }
+        
+        .output-control:hover {
+            background: #e9ecef;
+        }
+        
+        .output-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .output-label {
+            font-weight: 500;
+            color: #495057;
+            font-size: 0.95em;
+        }
+        
+        .output-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .toggle-switch {
+            width: 40px;
+            height: 20px;
+            background: #dc3545;
+            border-radius: 10px;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .toggle-switch::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .toggle-switch.on {
+            background: #28a745;
+        }
+        
+        .toggle-switch.on::before {
+            left: 22px;
+        }
+        
+        .state-label {
+            min-width: 35px;
+            text-align: center;
+        }
+        
+        .state-label.on {
+            color: #28a745;
+        }
+        
+        .state-label.off {
+            color: #dc3545;
+        }
+        
+        .info-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #17a2b8;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 768px) {
+            .devices-grid {
+                grid-template-columns: 1fr;
+            }
+            .outputs-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>NETIO PDU Web Client</h1>
+            <p>Control your NETIO PDU devices remotely from http://10.20.30.202:5000</p>
+            
+            <div class="device-selector">
+                <h3>Load Device(s):</h3>
+                <div class="device-input-group">
+                    <input type="text" id="device-name" placeholder="Enter device name (e.g., elyse/pdu/netio1)">
+                    <button onclick="loadSingleDevice()">Load Single Device</button>
+                </div>
+                
+                <div class="quick-load">
+                    <strong style="align-self: center;">Quick Load:</strong>
+                    <button onclick="loadAllDevices()">Load All 5 NETIO Devices</button>
+                    <button onclick="loadCustomDevices()">Load Custom List</button>
+                </div>
+                
+                <div id="connection-status"></div>
+            </div>
+        </div>
+        
+        <div id="client-container">
+            <div class="status info">
+                Enter a device name and click "Load Single Device", or use "Load All 5 NETIO Devices" to load all configured devices at once.
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        // Configuration: Change these to match your device names
+        const DEFAULT_DEVICES = [
+            'elyse/pdu/netio1',
+            'elyse/pdu/netio2',
+            'elyse/pdu/netio3',
+            'elyse/pdu/netio4',
+            'elyse/pdu/netio5'
+        ];
+        
+        let devicesData = {};
+        let socket = null;
+        
+        async function loadSingleDevice() {
+            const deviceName = document.getElementById('device-name').value.trim();
+            if (!deviceName) {
+                alert('Please enter a device name');
+                return;
+            }
+            await loadDevices([deviceName]);
+        }
+        
+        async function loadAllDevices() {
+            await loadDevices(DEFAULT_DEVICES);
+        }
+        
+        async function loadCustomDevices() {
+            const deviceList = prompt('Enter device names separated by commas:', DEFAULT_DEVICES.join(', '));
+            if (deviceList) {
+                const devices = deviceList.split(',').map(d => d.trim()).filter(d => d);
+                await loadDevices(devices);
+            }
+        }
+        
+        async function loadDevices(deviceNames) {
+            const statusDiv = document.getElementById('connection-status');
+            const container = document.getElementById('client-container');
+            
+            statusDiv.innerHTML = '<div class="status">🔄 Loading devices...</div>';
+            container.innerHTML = '';
+            devicesData = {};
+            
+            let successCount = 0;
+            let errorCount = 0;
+            
+            for (const deviceName of deviceNames) {
+                try {
+                    const response = await fetch(`/api/device/${deviceName}/attributes`, {
+                        credentials: 'include'
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        devicesData[deviceName] = parseDeviceAttributes(deviceName, data.attributes);
+                        successCount++;
+                    } else {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                } catch (error) {
+                    console.error(`Error loading ${deviceName}:`, error);
+                    devicesData[deviceName] = {
+                        name: deviceName,
+                        outputs: [],
+                        error: error.message
+                    };
+                    errorCount++;
+                }
+            }
+            
+            statusDiv.innerHTML = `<div class="status success">✅ Loaded ${successCount} device(s)` + 
+                                  (errorCount > 0 ? ` (${errorCount} failed)` : '') + '</div>';
+            
+            renderDevices();
+            initializeWebSocket();
+        }
+        
+        function parseDeviceAttributes(deviceName, attributes) {
+            const outputs = [];
+            const ids = attributes.ids?.value || [];
+            const names = attributes.names?.value || [];
+            const states = attributes.states?.value || [];
+            
+            for (let i = 0; i < Math.max(ids.length, 4); i++) {
+                outputs.push({
+                    id: ids[i] || (i + 1),
+                    name: names[i] || `Output ${i + 1}`,
+                    state: states[i] || 0
+                });
+            }
+            
+            return {
+                name: deviceName,
+                outputs: outputs
+            };
+        }
+        
+        function renderDevices() {
+            const container = document.getElementById('client-container');
+            
+            let html = '<div class="devices-grid">';
+            
+            for (const deviceName in devicesData) {
+                const device = devicesData[deviceName];
+                html += renderDevice(device);
+            }
+            
+            html += '</div>';
+            
+            html += `
+                <div class="info-section">
+                    <small style="color: #6c757d; line-height: 1.6;">
+                        • Each NETIO device controls 4 outputs (PDU outlets)<br/>
+                        • Toggle individual outputs with ON/OFF switches<br/>
+                        • Use "All ON" / "All OFF" buttons to control all outputs of a device<br/>
+                        • Changes are applied immediately
+                    </small>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        function renderDevice(device) {
+            let html = `
+                <div class="device-card">
+                    <div class="device-header">
+                        <h3>${device.name}</h3>
+                        <div class="device-controls">
+                            <button class="device-btn all-on" onclick="setAllOutputs('${device.name}', true)">All ON</button>
+                            <button class="device-btn all-off" onclick="setAllOutputs('${device.name}', false)">All OFF</button>
+                        </div>
+                    </div>
+            `;
+            
+            if (device.error) {
+                html += `<div class="status error">Error: ${device.error}</div>`;
+            }
+            
+            html += '<div class="outputs-grid">';
+            
+            device.outputs.forEach(output => {
+                html += `
+                    <div class="output-control">
+                        <div class="output-header">
+                            <span class="output-label">${output.id}. ${output.name}</span>
+                            <div class="output-toggle" onclick="toggleOutput('${device.name}', ${output.id})">
+                                <div id="toggle-${device.name}-${output.id}" class="toggle-switch ${output.state === 1 ? 'on' : ''}"></div>
+                                <span id="label-${device.name}-${output.id}" class="state-label ${output.state === 1 ? 'on' : 'off'}">
+                                    ${output.state === 1 ? 'ON' : 'OFF'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            html += '</div></div>';
+            return html;
+        }
+        
+        async function toggleOutput(deviceName, outputId) {
+            const device = devicesData[deviceName];
+            if (!device) return;
+            
+            // Find current state and toggle it
+            const output = device.outputs.find(o => o.id === outputId);
+            if (!output) return;
+            
+            const newState = output.state === 1 ? 0 : 1;
+            
+            // Build states array for all outputs
+            const states = device.outputs.map(o => 
+                o.id === outputId ? newState : o.state
+            );
+            
+            try {
+                const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: states })
+                });
+                
+                if (response.ok) {
+                    // Update local state
+                    output.state = newState;
+                    updateOutputDisplay(deviceName, outputId, newState);
+                } else {
+                    alert(`Failed to toggle output ${outputId}`);
+                }
+            } catch (error) {
+                console.error('Error toggling output:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function setAllOutputs(deviceName, state) {
+            const device = devicesData[deviceName];
+            if (!device) return;
+            
+            const stateValue = state ? 1 : 0;
+            const states = device.outputs.map(() => stateValue);
+            
+            try {
+                const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: states })
+                });
+                
+                if (response.ok) {
+                    // Update local state
+                    device.outputs.forEach(output => {
+                        output.state = stateValue;
+                        updateOutputDisplay(deviceName, output.id, stateValue);
+                    });
+                } else {
+                    alert('Failed to set all outputs');
+                }
+            } catch (error) {
+                console.error('Error setting all outputs:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function updateOutputDisplay(deviceName, outputId, state) {
+            const toggleEl = document.getElementById(`toggle-${deviceName}-${outputId}`);
+            const labelEl = document.getElementById(`label-${deviceName}-${outputId}`);
+            
+            if (toggleEl) {
+                if (state === 1) {
+                    toggleEl.classList.add('on');
+                } else {
+                    toggleEl.classList.remove('on');
+                }
+            }
+            
+            if (labelEl) {
+                labelEl.textContent = state === 1 ? 'ON' : 'OFF';
+                labelEl.className = `state-label ${state === 1 ? 'on' : 'off'}`;
+            }
+        }
+        
+        function initializeWebSocket() {
+            if (socket) {
+                try { socket.disconnect(); } catch (e) {}
+            }
+            
+            console.log('Initializing WebSocket connection...');
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Socket.IO connected');
+                
+                // Subscribe to all loaded devices
+                for (const deviceName in devicesData) {
+                    console.log('Subscribing to device:', deviceName);
+                    socket.emit('subscribe_device', {'device': deviceName});
+                }
+            });
+            
+            socket.on('device_update', function(data) {
+                console.log('Device update received:', data);
+                if (data.device && devicesData[data.device] && data.outputs) {
+                    // Update local data and display
+                    data.outputs.forEach((output, index) => {
+                        if (devicesData[data.device].outputs[index]) {
+                            devicesData[data.device].outputs[index].state = output.state;
+                            updateOutputDisplay(data.device, output.id, output.state);
+                        }
+                    });
+                }
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('WebSocket disconnected');
+            });
+        }
+    </script>
+</body>
+</html>

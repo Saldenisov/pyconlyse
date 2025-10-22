@@ -228,6 +228,54 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
+.slot-selection {
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #28a745;
+}
+
+.slot-selection h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #28a745;
+  font-size: 1.1em;
+}
+
+.slot-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.slot-selector label {
+  font-weight: 500;
+  color: #495057;
+  min-width: 80px;
+}
+
+.slot-dropdown {
+  padding: 8px 12px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  background: white;
+  font-size: 14px;
+  color: #495057;
+  cursor: pointer;
+  transition: border-color 0.15s ease-in-out;
+}
+
+.slot-dropdown:focus {
+  outline: none;
+  border-color: #28a745;
+  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.25);
+}
+
+.slot-dropdown:hover {
+  border-color: #28a745;
+}
+
 .info-section {
   background: #e9ecef;
   padding: 15px;

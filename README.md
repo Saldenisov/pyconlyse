@@ -6,6 +6,40 @@
 
 PYCONLYSE is a comprehensive client-server-service application written in pure Python for controlling and managing scientific instruments in the ELYSE experiment. The system provides a distributed architecture using PyTango framework for device communication, data acquisition, and real-time experiment control.
 
+## 🌐 Web Component
+
+PYCONLYSE includes a modern web-based control interface that provides remote access to scientific instruments through a browser. The web component consists of:
+
+### Architecture
+- **Flask Backend**: RESTful API server providing device control endpoints, authentication, and WebSocket support
+- **Socket.IO Integration**: Real-time bidirectional communication for live device monitoring and updates
+- **React Frontend**: Modern single-page application for interactive device control
+- **Device-Specific Interfaces**: Specialized HTML/JavaScript clients for individual device types (e.g., DS iTest PSU)
+
+### Key Features
+- **Remote Access**: Control instruments from anywhere on the network via web browser
+- **Real-time Monitoring**: Live updates of device states, measurements, and parameters via WebSocket
+- **RESTful API**: Programmatic access to device commands and attributes
+- **Authentication**: JWT-based security for protected device operations
+- **Responsive Design**: Modern, mobile-friendly interface for controlling equipment
+
+### Web Backend (Flask)
+The Flask application in `web/backend/` provides:
+- `app.py`: Main Flask application with CORS and JWT configuration
+- `device_api.py`: Device control API endpoints for Tango devices
+- `auth.py`: Authentication and authorization handling
+- `websocket_handler.py`: Socket.IO event handlers for real-time updates
+- `routes.py`: Additional API routes
+- `folder_api.py`: File system and data access endpoints
+
+### Web Clients
+The web component includes specialized interfaces:
+- **DS iTest PSU Client** (`test_ds_itest_psu.html`): Web-based power supply controller with real-time current monitoring, slot control, and live WebSocket updates
+- **React Dashboard**: Full-featured control panel with device monitoring and data visualization
+
+### Network Configuration
+The web server is configured to run on `10.20.30.202:5000`, providing network-wide access to the PYCONLYSE control system. All device operations are proxied through the Flask backend to the Tango device servers.
+
 ## 🏗️ Architecture
 
 PYCONLYSE follows a distributed client-server architecture with multiple components:

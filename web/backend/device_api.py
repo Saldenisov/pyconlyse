@@ -294,21 +294,44 @@ def get_ds_itest_psu_slots(device_name):
 
 @device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
 def set_ds_itest_psu_current(device_name, slot_id):
-    """Set current for specific DS iTest PSU slot"""
+    """Set current for specific DS iTest PSU slot with limit validation"""
     try:
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         current_value = float(data.get('current', 0.0))
         
+        # Get slot array index for validation
+        ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int
+        try:
+            array_idx = ids.index(slot_id)
+        except ValueError:
+            return jsonify({'error': f'Slot {slot_id} not found', 'success': False}), 404
+        
+        # Validate current limits before setting
+        try:
+            limits_array = list(device.read_attribute('current_limits').value)
+            if limits_array and len(limits_array) >= (array_idx + 1) * 2:
+                limits_idx = array_idx * 2
+                min_limit = float(limits_array[limits_idx])
+                max_limit = float(limits_array[limits_idx + 1])
+                
+                if current_value < min_limit or current_value > max_limit:
+                    return jsonify({
+                        'error': f'Current value {current_value}A is outside limits [{min_limit}, {max_limit}]A for slot {slot_id}',
+                        'limits': {'min': min_limit, 'max': max_limit},
+                        'slot_id': slot_id,
+                        'success': False
+                    }), 400
+        except Exception as e:
+            print(f"Warning: Could not read current limits for {device_name} slot {slot_id}: {e}")
+        
         # Use set_current command with [slot_id, value] - slot_id is the real slot ID
         device.command_inout('set_current', [float(slot_id), current_value])
         
-        # Read back the setpoint array to confirm - need to find array index
-        ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int
+        # Read back the setpoint array to confirm
         currents_setpoint = list(device.read_attribute('currents_setpoint').value)
         
         try:
-            array_idx = ids.index(slot_id)
             actual_value = currents_setpoint[array_idx] if array_idx < len(currents_setpoint) else current_value
         except ValueError:
             # Slot ID not found, return the requested value
@@ -423,6 +446,134 @@ def handle_itest_current(device_name):
             # Read back current value
             setpoint = device.read_attribute('CurrentSetpoint').value
             return jsonify({'current_setpoint': setpoint, 'success': True})
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/current', methods=['GET', 'POST'])
+def handle_itest_slot_current(device_name, slot_id):
+    """Handle iTest PSU current operations for specific slot with proper limits"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        if request.method == 'GET':
+            # Read multi-slot arrays
+            ids = [int(x) for x in device.read_attribute('ids').value]
+            currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+            currents_meas = list(device.read_attribute('currents_meas').value)
+            
+            # Try to read voltage (may not be available on all devices)
+            voltage = 0.0
+            try:
+                voltages = list(device.read_attribute('voltages_meas').value)
+                array_idx = ids.index(slot_id)
+                voltage = float(voltages[array_idx]) if array_idx < len(voltages) else 0.0
+            except:
+                voltage = 0.0  # Default if voltage not available
+            
+            # Find array index for this slot
+            try:
+                array_idx = ids.index(slot_id)
+            except ValueError:
+                return jsonify({'error': f'Slot {slot_id} not found', 'success': False}), 404
+            
+            # Get current values for this slot
+            current_setpoint = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+            measured_current = float(currents_meas[array_idx]) if array_idx < len(currents_meas) else 0.0
+            
+            # Get current limits for this slot
+            limits = {'min': -5.0, 'max': 15.0}  # Default
+            try:
+                limits_array = list(device.read_attribute('current_limits').value)
+                if limits_array and len(limits_array) >= (array_idx + 1) * 2:
+                    # Limits are stored as [min1, max1, min2, max2, ...]
+                    limits_idx = array_idx * 2
+                    limits = {
+                        'min': float(limits_array[limits_idx]),
+                        'max': float(limits_array[limits_idx + 1])
+                    }
+            except Exception as e:
+                print(f"Warning: Could not read current limits for {device_name} slot {slot_id}: {e}")
+            
+            return jsonify({
+                'slot_id': slot_id,
+                'current_setpoint': current_setpoint,
+                'measured_current': measured_current,
+                'measured_voltage': voltage,
+                'current_limits': limits,
+                'success': True
+            })
+        
+        elif request.method == 'POST':
+            data = request.get_json()
+            action = data.get('action')
+            value = data.get('value')
+            
+            # Get slot array index
+            ids = [int(x) for x in device.read_attribute('ids').value]
+            try:
+                array_idx = ids.index(slot_id)
+            except ValueError:
+                return jsonify({'error': f'Slot {slot_id} not found', 'success': False}), 404
+            
+            # For set action, validate limits first
+            if action == 'set' and value is not None:
+                try:
+                    limits_array = list(device.read_attribute('current_limits').value)
+                    if limits_array and len(limits_array) >= (array_idx + 1) * 2:
+                        limits_idx = array_idx * 2
+                        min_limit = float(limits_array[limits_idx])
+                        max_limit = float(limits_array[limits_idx + 1])
+                        
+                        if value < min_limit or value > max_limit:
+                            return jsonify({
+                                'error': f'Current value {value}A is outside limits [{min_limit}, {max_limit}]A for slot {slot_id}',
+                                'limits': {'min': min_limit, 'max': max_limit},
+                                'slot_id': slot_id,
+                                'success': False
+                            }), 400
+                except Exception as e:
+                    print(f"Warning: Could not read current limits for {device_name} slot {slot_id}: {e}")
+            
+            if action == 'set':
+                # Use set_current command with [slot_id, value]
+                device.command_inout('set_current', [float(slot_id), float(value)])
+            elif action == 'inc_fine':
+                # Get current setpoint and increment by 0.01A
+                currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                current_val = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+                new_val = current_val + 0.01
+                device.command_inout('set_current', [float(slot_id), new_val])
+            elif action == 'dec_fine':
+                # Get current setpoint and decrement by 0.01A
+                currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                current_val = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+                new_val = current_val - 0.01
+                device.command_inout('set_current', [float(slot_id), new_val])
+            elif action == 'inc_coarse':
+                # Get current setpoint and increment by 0.1A
+                currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                current_val = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+                new_val = current_val + 0.1
+                device.command_inout('set_current', [float(slot_id), new_val])
+            elif action == 'dec_coarse':
+                # Get current setpoint and decrement by 0.1A
+                currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                current_val = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+                new_val = current_val - 0.1
+                device.command_inout('set_current', [float(slot_id), new_val])
+            else:
+                return jsonify({'error': 'Unknown action', 'success': False}), 400
+            
+            # Read back current value for this slot
+            currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+            current_setpoint = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+            
+            return jsonify({
+                'slot_id': slot_id,
+                'current_setpoint': current_setpoint,
+                'success': True
+            })
     
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
