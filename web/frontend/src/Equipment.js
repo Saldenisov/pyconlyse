@@ -74,6 +74,9 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Motorized Stages</h2>
             <div className="modal-links">
+              <a href="/test_standa_motors.html" target="_blank" rel="noopener noreferrer" className="modal-link">
+                Standa Motors Client
+              </a>
               <a href="/test_owis_ps90.html" target="_blank" rel="noopener noreferrer" className="modal-link">
                 OWIS PS90 Controller
               </a>

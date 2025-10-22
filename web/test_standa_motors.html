@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Standa Motors Client</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f7fa;
+            padding: 20px;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .page-header h1 {
+            margin: 0 0 10px 0;
+            font-size: 2em;
+        }
+
+        .client-header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+
+        .config-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: #e8f4f8;
+            border-radius: 6px;
+            border: 2px solid #3498db;
+        }
+
+        .config-selector label {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .config-selector select {
+            padding: 6px 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+            min-width: 200px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status {
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .monitor-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #6c757d;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .monitor-btn:hover:not(:disabled) {
+            background: #5a6268;
+        }
+
+        .monitor-btn.active {
+            background: #28a745;
+        }
+
+        .monitor-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .motors-grid {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .motor-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #95a5a6;
+        }
+
+        .motor-card.on {
+            border-left-color: #28a745;
+        }
+
+        .motor-card.moving {
+            border-left-color: #ffc107;
+        }
+
+        .motor-card.fault {
+            border-left-color: #dc3545;
+        }
+
+        .motor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .motor-header h3 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 1.2em;
+        }
+
+        .state-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .state-badge.on {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .state-badge.moving {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .state-badge.fault {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .position-display {
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .position-value {
+            font-size: 1.4em;
+            font-weight: 700;
+            color: #2c3e50;
+            font-family: 'Courier New', monospace;
+        }
+
+        .motor-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+
+        .motor-btn {
+            padding: 10px 16px;
+            border: 2px solid #3498db;
+            border-radius: 6px;
+            background: white;
+            color: #3498db;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .motor-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        .position-input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 1em;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+        }
+
+        .step-selector {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .step-selector select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #bdc3c7;
+            border-radius: 4px;
+            background: white;
+        }
+
+        .action-btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .action-btn.on {
+            background: #28a745;
+            color: white;
+        }
+
+        .action-btn.stop {
+            background: #dc3545;
+            color: white;
+        }
+
+        .error-alert {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 200px;
+            font-size: 1.2em;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="page-header">
+        <h1>Standa Motorized Stages Control</h1>
+        <p>Web-based control interface for Standa motorized linear stages</p>
+    </div>
+
+    <div class="client-header">
+        <h2>Configuration</h2>
+        <div class="header-controls">
+            <div class="config-selector">
+                <label>Layout:</label>
+                <select id="configSelect" onchange="loadConfiguration()">
+                    <option value="V0_short">V0_short (2 motors)</option>
+                    <option value="ELYSE">ELYSE (8 motors)</option>
+                    <option value="V0">V0 (16 motors)</option>
+                    <option value="alignment">alignment (16 motors)</option>
+                    <option value="OPA">OPA (2 motors)</option>
+                    <option value="test">test (2 motors)</option>
+                </select>
+            </div>
+
+            <div class="connection-status">
+                <span id="connectionStatus" class="status disconnected">🔴 Disconnected</span>
+                <button id="monitorBtn" class="monitor-btn" onclick="toggleMonitoring()" disabled>
+                    Start Monitoring
+                </button>
+            </div>
+
+            <div style="margin-left: auto;">
+                <span id="motorCount">Loading...</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="errorContainer"></div>
+    <div id="motorsContainer" class="motors-grid"></div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const MOTOR_CONFIGS = {
+            "ELYSE": {
+                selection: ["elyse/motorized_devices/de1", "manip/V0/F1", "elyse/motorized_devices/mme_x", 
+                           "elyse/motorized_devices/mme_y", "elyse/motorized_devices/mm1_x", 
+                           "elyse/motorized_devices/mm1_y", "elyse/motorized_devices/mm2_x", 
+                           "elyse/motorized_devices/mm2_y"],
+                width: 4
+            },
+            "V0": {
+                selection: ["manip/V0/mm3_x", "manip/V0/mm3_y", "manip/V0/mm4_x", "manip/V0/mm4_y",
+                           "manip/V0/dv01", "manip/V0/dv02", "manip/V0/dv03", "manip/V0/dv04",
+                           "manip/V0/s1", "manip/V0/s2", "manip/V0/s3", "manip/V0/L-2_1",
+                           "manip/V0/opa_x", "manip/V0/opa_y", "manip/v0/ts_sc_m", "manip/v0/ts_opa_m"],
+                width: 4
+            },
+            "V0_short": {
+                selection: ["manip/V0/dv04", "manip/V0/L-2_1"],
+                width: 2
+            },
+            "alignment": {
+                selection: ["elyse/motorized_devices/de1", "elyse/motorized_devices/de2", "manip/V0/dv01",
+                           "manip/V0/dv02", "elyse/motorized_devices/mm1_x", "elyse/motorized_devices/mm1_y",
+                           "elyse/motorized_devices/mm2_x", "elyse/motorized_devices/mm2_y", "manip/V0/mm3_x",
+                           "manip/V0/mm3_y", "manip/V0/mm4_x", "manip/V0/mm4_y", "manip/V0/s1",
+                           "manip/V0/s2", "manip/V0/L-2_1", "manip/V0/dv03"],
+                width: 4
+            },
+            "OPA": {
+                selection: ["manip/v0/opa_x", "manip/v0/opa_y"],
+                width: 2
+            },
+            "test": {
+                selection: ["elyse/motorized_devices/mm1_x", "elyse/motorized_devices/mm1_y"],
+                width: 4
+            }
+        };
+
+        let socket = null;
+        let motors = {};
+        let monitoring = false;
+        let currentConfig = 'V0_short';
+
+        async function loadConfiguration() {
+            currentConfig = document.getElementById('configSelect').value;
+            const config = MOTOR_CONFIGS[currentConfig];
+            
+            document.getElementById('motorsContainer').innerHTML = '<div class="loading">Loading motors...</div>';
+            document.getElementById('motorCount').textContent = `${config.selection.length} motors`;
+            
+            // Set grid columns
+            document.getElementById('motorsContainer').style.gridTemplateColumns = `repeat(${config.width}, 1fr)`;
+            
+            motors = {};
+            for (const motorName of config.selection) {
+                await fetchMotorData(motorName);
+            }
+            
+            renderMotors();
+        }
+
+        async function fetchMotorData(motorName) {
+            try {
+                const posResponse = await fetch(`/api/device/${motorName}/attribute/position`);
+                const position = posResponse.ok ? (await posResponse.json()).value : 0;
+                
+                const stateResponse = await fetch(`/api/device/${motorName}/state`);
+                const state = stateResponse.ok ? (await stateResponse.json()).state : 'UNKNOWN';
+                
+                const propsResponse = await fetch(`/api/device/${motorName}/properties`);
+                const props = propsResponse.ok ? await propsResponse.json() : {};
+                
+                motors[motorName] = {
+                    name: motorName,
+                    friendlyName: props.friendly_name?.[0] || motorName.split('/').pop(),
+                    position: position,
+                    state: state,
+                    unit: props.unit?.[0] || 'mm',
+                    limitMin: parseFloat(props.limit_min?.[0] || -100),
+                    limitMax: parseFloat(props.limit_max?.[0] || 100),
+                    presetPositions: (props.preset_pos || []).map(p => parseFloat(p)),
+                    step: 1
+                };
+            } catch (err) {
+                console.error(`Error fetching ${motorName}:`, err);
+                motors[motorName] = {
+                    name: motorName,
+                    friendlyName: motorName.split('/').pop(),
+                    position: 0,
+                    state: 'FAULT',
+                    unit: 'mm',
+                    limitMin: -100,
+                    limitMax: 100,
+                    presetPositions: [],
+                    step: 1,
+                    error: err.message
+                };
+            }
+        }
+
+        function renderMotors() {
+            const container = document.getElementById('motorsContainer');
+            container.innerHTML = '';
+            
+            for (const [motorName, motor] of Object.entries(motors)) {
+                const stateClass = motor.state === 'ON' ? 'on' : 
+                                  motor.state === 'MOVING' ? 'moving' : 
+                                  motor.state === 'FAULT' ? 'fault' : 'off';
+                
+                const card = document.createElement('div');
+                card.className = `motor-card ${stateClass}`;
+                card.innerHTML = `
+                    <div class="motor-header">
+                        <h3>${motor.friendlyName}</h3>
+                        <span class="state-badge ${stateClass}">${motor.state}</span>
+                    </div>
+                    
+                    <div class="position-display">
+                        <span class="position-value">${motor.position.toFixed(3)}</span>
+                        <span>${motor.unit}</span>
+                    </div>
+                    
+                    <small style="display: block; margin-bottom: 15px; color: #6c757d;">
+                        Limits: ${motor.limitMin} to ${motor.limitMax} ${motor.unit}
+                    </small>
+                    
+                    <div class="motor-controls">
+                        <button class="motor-btn" onclick="moveRelative('${motorName}', -1)">◄◄</button>
+                        <input type="number" class="position-input" value="${motor.position.toFixed(3)}" 
+                               onchange="moveAbsolute('${motorName}', this.value)">
+                        <button class="motor-btn" onclick="moveRelative('${motorName}', 1)">►►</button>
+                    </div>
+                    
+                    <div class="step-selector">
+                        <label>Step:</label>
+                        <select onchange="setStep('${motorName}', this.value)">
+                            <option value="0.1">0.1 ${motor.unit}</option>
+                            <option value="0.5">0.5 ${motor.unit}</option>
+                            <option value="1" selected>1 ${motor.unit}</option>
+                            <option value="2">2 ${motor.unit}</option>
+                            <option value="5">5 ${motor.unit}</option>
+                            <option value="10">10 ${motor.unit}</option>
+                        </select>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; margin-top: 15px;">
+                        <button class="action-btn on" onclick="turnOn('${motorName}')">ON</button>
+                        <button class="action-btn stop" onclick="stopMotor('${motorName}')">STOP</button>
+                    </div>
+                    
+                    <small style="display: block; margin-top: 10px; color: #6c757d; text-align: center;">
+                        ${motorName}
+                    </small>
+                `;
+                container.appendChild(card);
+            }
+        }
+
+        async function moveAbsolute(motorName, position) {
+            try {
+                const response = await fetch(`/api/device/${motorName}/command/move_axis_abs`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ args: [parseFloat(position)] })
+                });
+                if (response.ok) {
+                    motors[motorName].position = parseFloat(position);
+                    renderMotors();
+                }
+            } catch (err) {
+                showError(`Error moving ${motorName}: ${err.message}`);
+            }
+        }
+
+        function moveRelative(motorName, direction) {
+            const motor = motors[motorName];
+            const newPos = motor.position + (motor.step * direction);
+            const clampedPos = Math.max(motor.limitMin, Math.min(motor.limitMax, newPos));
+            moveAbsolute(motorName, clampedPos);
+        }
+
+        async function turnOn(motorName) {
+            try {
+                await fetch(`/api/device/${motorName}/command/turn_on`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ args: [] })
+                });
+            } catch (err) {
+                showError(`Error turning on ${motorName}: ${err.message}`);
+            }
+        }
+
+        async function stopMotor(motorName) {
+            try {
+                await fetch(`/api/device/${motorName}/command/stop_movement`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ args: [] })
+                });
+            } catch (err) {
+                showError(`Error stopping ${motorName}: ${err.message}`);
+            }
+        }
+
+        function setStep(motorName, step) {
+            motors[motorName].step = parseFloat(step);
+        }
+
+        function toggleMonitoring() {
+            // WebSocket monitoring implementation
+            console.log('Monitoring toggle not yet implemented');
+        }
+
+        function showError(message) {
+            const container = document.getElementById('errorContainer');
+            container.innerHTML = `<div class="error-alert">${message}</div>`;
+            setTimeout(() => container.innerHTML = '', 5000);
+        }
+
+        // Initialize on page load
+        window.onload = function() {
+            loadConfiguration();
+        };
+    </script>
+</body>
+</html>

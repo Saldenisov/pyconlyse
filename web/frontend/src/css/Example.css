@@ -1,0 +1,192 @@
+/* Example.css - Styling for example/demo pages */
+
+.example-page {
+  padding: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding: 30px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 12px;
+  color: white;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.page-header h1 {
+  margin: 0 0 10px 0;
+  font-size: 2.5em;
+  font-weight: 700;
+}
+
+.page-header .subtitle {
+  margin: 0;
+  font-size: 1.2em;
+  opacity: 0.95;
+}
+
+/* Info Panels */
+.info-panel,
+.features-panel,
+.usage-panel,
+.api-info-panel {
+  background: white;
+  padding: 25px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  margin-bottom: 20px;
+}
+
+.info-panel h2,
+.features-panel h2,
+.usage-panel h2,
+.api-info-panel h2 {
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+  font-size: 1.5em;
+  border-bottom: 2px solid #3498db;
+  padding-bottom: 10px;
+}
+
+/* Config List */
+.config-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.config-item {
+  padding: 12px 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: #f8f9fa;
+}
+
+.config-item:hover {
+  border-color: #3498db;
+  background: #e8f4f8;
+  transform: translateX(5px);
+}
+
+.config-item.selected {
+  border-color: #3498db;
+  background: #d6eaf8;
+  font-weight: 500;
+}
+
+.config-item strong {
+  color: #2c3e50;
+  margin-right: 8px;
+}
+
+/* Features List */
+.features-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.features-panel li {
+  padding: 10px 0;
+  border-bottom: 1px solid #e9ecef;
+  line-height: 1.6;
+}
+
+.features-panel li:last-child {
+  border-bottom: none;
+}
+
+.features-panel li strong {
+  color: #3498db;
+  margin-right: 5px;
+}
+
+/* Usage Panel */
+.usage-panel ol {
+  margin: 15px 0;
+  padding-left: 25px;
+}
+
+.usage-panel li {
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.usage-panel ul {
+  margin-top: 8px;
+  padding-left: 20px;
+}
+
+.usage-panel ul li {
+  margin-bottom: 6px;
+}
+
+.usage-panel strong {
+  color: #2c3e50;
+}
+
+/* API Info Panel */
+.api-info-panel ul {
+  list-style: none;
+  padding: 0;
+  margin: 15px 0;
+}
+
+.api-info-panel li {
+  padding: 8px 0;
+  font-family: 'Courier New', monospace;
+  font-size: 0.95em;
+}
+
+.api-info-panel code {
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 4px;
+  color: #e74c3c;
+  font-weight: 500;
+  border: 1px solid #e9ecef;
+}
+
+.api-info-panel p {
+  margin: 10px 0;
+  color: #495057;
+  font-weight: 500;
+}
+
+/* Client Container */
+.client-container {
+  margin: 30px 0;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .page-header h1 {
+    font-size: 2em;
+  }
+  
+  .page-header .subtitle {
+    font-size: 1em;
+  }
+  
+  .example-page {
+    padding: 10px;
+  }
+  
+  .info-panel,
+  .features-panel,
+  .usage-panel,
+  .api-info-panel {
+    padding: 15px;
+  }
+}

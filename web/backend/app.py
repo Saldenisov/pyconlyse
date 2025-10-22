@@ -57,16 +57,32 @@ def owis_ps90_test():
     response.headers['Expires'] = '0'
     return response
 
+# Route for Standa Motors test page
+@app.route('/test_standa_motors.html')
+def standa_motors_test():
+    from flask import make_response
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_standa_motors.html')
+    response = make_response(send_from_directory(os.path.dirname(test_page_path), 'test_standa_motors.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    # Optionally, block API paths that didn't match a defined endpoint.
-    if path.startswith("api"):
+    # Block API paths that didn't match a defined endpoint
+    if path.startswith("api/"):
         return jsonify({"msg": "API endpoint not found"}), 404
-
-    if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-        return send_from_directory(app.static_folder, path)
+    
+    # If it's a static file (has extension) and exists, serve it
+    if path != "" and "." in path:
+        file_path = os.path.join(app.static_folder, path)
+        if os.path.exists(file_path):
+            return send_from_directory(app.static_folder, path)
+    
+    # For all other paths (including React routes), serve index.html
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':

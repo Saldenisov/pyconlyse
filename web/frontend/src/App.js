@@ -9,6 +9,7 @@ import Equipment from './Equipment';
 import Tango from './Tango';
 import Elyse from "./Elyse";
 import DataTreatment from "./DataTreatment";
+import StandaMotorsExample from './StandaMotorsExample';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
           <Route path="/datatreatment" element={<DataTreatment />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/standa-motors" element={<StandaMotorsExample />} />
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
