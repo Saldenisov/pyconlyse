@@ -410,7 +410,7 @@
                     id: axisId,
                     name: friendlyNames[axisId] || `Axis ${axisId}`,
                     state: states[axisId] || 0,
-                    position: positions[axisId] || 0,
+                    position: parseFloat(positions[axisId]) || 0.0,
                     presets: [] // Will be populated from device properties if available
                 }))
             };
@@ -459,6 +459,7 @@
         
         function renderAxis(axis) {
             const stateOn = axis.state === 6; // DevState.ON = 6
+            const position = parseFloat(axis.position) || 0.0;
             
             return `
                 <div class="axis-card" id="axis-${axis.id}">
@@ -474,11 +475,11 @@
                     
                     <div class="position-display">
                         <label>Current Position</label>
-                        <div class="position-value" id="pos-value-${axis.id}">${axis.position.toFixed(3)}</div>
+                        <div class="position-value" id="pos-value-${axis.id}">${position.toFixed(3)}</div>
                     </div>
                     
                     <div class="position-controls">
-                        <input type="number" id="pos-input-${axis.id}" placeholder="Position" step="0.001" value="${axis.position.toFixed(3)}">
+                        <input type="number" id="pos-input-${axis.id}" placeholder="Position" step="0.001" value="${position.toFixed(3)}">
                         <button class="btn-move" onclick="moveAxis(${axis.id})">Move</button>
                         <button class="btn-stop" onclick="stopAxis(${axis.id})">STOP</button>
                     </div>
@@ -654,19 +655,20 @@
         }
         
         function updatePositionDisplay(axisId, position) {
+            const pos = parseFloat(position) || 0.0;
             const axis = deviceData.axes.find(a => a.id === axisId);
             if (axis) {
-                axis.position = position;
+                axis.position = pos;
             }
             
             const valueEl = document.getElementById(`pos-value-${axisId}`);
             if (valueEl) {
-                valueEl.textContent = position.toFixed(3);
+                valueEl.textContent = pos.toFixed(3);
             }
             
             const inputEl = document.getElementById(`pos-input-${axisId}`);
             if (inputEl) {
-                inputEl.value = position.toFixed(3);
+                inputEl.value = pos.toFixed(3);
             }
         }
         
