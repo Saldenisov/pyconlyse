@@ -6,8 +6,23 @@ import traceback
 from datetime import datetime
 import threading
 import time
+import numpy as np
 
 device_api = Blueprint("device_api", __name__)
+
+# Helper function to convert numpy arrays to lists for JSON serialization
+def make_json_safe(value):
+    """Convert numpy arrays and other non-JSON-serializable types to safe types"""
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    elif isinstance(value, (np.int64, np.int32, np.int16, np.int8)):
+        return int(value)
+    elif isinstance(value, (np.float64, np.float32)):
+        return float(value)
+    elif isinstance(value, (list, tuple)):
+        return [make_json_safe(item) for item in value]
+    else:
+        return value
 
 # Debug endpoint to test WebSocket monitoring
 @device_api.route('/api/debug/monitor/<path:device_name>', methods=['GET'])
@@ -168,8 +183,10 @@ def get_device_attributes(device_name):
         for attr_name in attr_list:
             try:
                 attr = device.read_attribute(attr_name)
+                # Convert value to JSON-safe format
+                value = attr.value if hasattr(attr, 'value') else None
                 attributes[attr_name] = {
-                    'value': attr.value if hasattr(attr, 'value') else None,
+                    'value': make_json_safe(value),
                     'quality': str(attr.quality),
                     'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None
                 }

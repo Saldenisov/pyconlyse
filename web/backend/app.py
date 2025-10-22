@@ -38,8 +38,13 @@ def ds_itest_psu_test():
 # Route for NETIO PDU test page
 @app.route('/test_netio_pdu.html')
 def netio_pdu_test():
+    from flask import make_response
     test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_netio_pdu.html')
-    return send_from_directory(os.path.dirname(test_page_path), 'test_netio_pdu.html')
+    response = make_response(send_from_directory(os.path.dirname(test_page_path), 'test_netio_pdu.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})

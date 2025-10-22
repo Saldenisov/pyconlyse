@@ -297,16 +297,29 @@
             <p>Control your NETIO PDU devices remotely from http://10.20.30.202:5000</p>
             
             <div class="device-selector">
-                <h3>Load Device(s):</h3>
+                <h3>Select Device(s) to Load:</h3>
+                
                 <div class="device-input-group">
-                    <input type="text" id="device-name" placeholder="Enter device name (e.g., elyse/pdu/netio1)">
-                    <button onclick="loadSingleDevice()">Load Single Device</button>
+                    <label for="device-dropdown" style="font-weight: 500; margin-right: 10px;">Select:</label>
+                    <select id="device-dropdown" multiple size="6" style="flex: 1; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 0.9em;">
+                        <option value="manip/V0/PDU_VO">V0 - manip/V0/PDU_VO</option>
+                        <option value="manip/VD2/PDU_VD2">VD2 - manip/VD2/PDU_VD2</option>
+                        <option value="manip/SD1/PDU_SD1">SD1 - manip/SD1/PDU_SD1</option>
+                        <option value="manip/SD2/PDU_SD2">SD2 - manip/SD2/PDU_SD2</option>
+                        <option value="manip/ELYSE/PDU_ELYSE">ELYSE - manip/ELYSE/PDU_ELYSE</option>
+                    </select>
+                    <button onclick="loadSelectedDevices()" style="padding: 8px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Load Selected</button>
                 </div>
                 
                 <div class="quick-load">
                     <strong style="align-self: center;">Quick Load:</strong>
-                    <button onclick="loadAllDevices()">Load All 5 NETIO Devices</button>
-                    <button onclick="loadCustomDevices()">Load Custom List</button>
+                    <button onclick="selectAllInDropdown()">Select All</button>
+                    <button onclick="clearDropdownSelection()">Clear Selection</button>
+                    <button onclick="loadAllDevices()">Load All 5 Devices</button>
+                </div>
+                
+                <div style="margin-top: 10px; padding: 10px; background: #e7f3ff; border-radius: 4px; font-size: 0.85em; color: #004085;">
+                    <strong>Tip:</strong> Hold Ctrl (or Cmd on Mac) to select multiple devices from the list
                 </div>
                 
                 <div id="connection-status"></div>
@@ -315,7 +328,7 @@
         
         <div id="client-container">
             <div class="status info">
-                Enter a device name and click "Load Single Device", or use "Load All 5 NETIO Devices" to load all configured devices at once.
+                Select one or more devices from the dropdown list and click "Load Selected", or use "Load All 5 Devices" to load all at once.
             </div>
         </div>
     </div>
@@ -325,35 +338,45 @@
     <script>
         // Configuration: Change these to match your device names
         const DEFAULT_DEVICES = [
-            'elyse/pdu/netio1',
-            'elyse/pdu/netio2',
-            'elyse/pdu/netio3',
-            'elyse/pdu/netio4',
-            'elyse/pdu/netio5'
+            'manip/V0/PDU_VO',
+            'manip/VD2/PDU_VD2',
+            'manip/SD1/PDU_SD1',
+            'manip/SD2/PDU_SD2',
+            'manip/ELYSE/PDU_ELYSE'
         ];
         
         let devicesData = {};
         let socket = null;
         
-        async function loadSingleDevice() {
-            const deviceName = document.getElementById('device-name').value.trim();
-            if (!deviceName) {
-                alert('Please enter a device name');
+        function loadSelectedDevices() {
+            const dropdown = document.getElementById('device-dropdown');
+            const selected = Array.from(dropdown.selectedOptions).map(option => option.value);
+            
+            if (selected.length === 0) {
+                alert('Please select at least one device from the list');
                 return;
             }
-            await loadDevices([deviceName]);
+            
+            loadDevices(selected);
+        }
+        
+        function selectAllInDropdown() {
+            const dropdown = document.getElementById('device-dropdown');
+            for (let option of dropdown.options) {
+                option.selected = true;
+            }
+        }
+        
+        function clearDropdownSelection() {
+            const dropdown = document.getElementById('device-dropdown');
+            for (let option of dropdown.options) {
+                option.selected = false;
+            }
         }
         
         async function loadAllDevices() {
+            selectAllInDropdown();
             await loadDevices(DEFAULT_DEVICES);
-        }
-        
-        async function loadCustomDevices() {
-            const deviceList = prompt('Enter device names separated by commas:', DEFAULT_DEVICES.join(', '));
-            if (deviceList) {
-                const devices = deviceList.split(',').map(d => d.trim()).filter(d => d);
-                await loadDevices(devices);
-            }
         }
         
         async function loadDevices(deviceNames) {
