@@ -88,6 +88,51 @@ class DeviceMonitor:
                     except:
                         pass
                 
+                elif 'owis' in device_name.lower() or 'ps90' in device_name.lower():
+                    # OWIS multi-axis controller attributes
+                    try:
+                        print(f"[OWIS] Reading attributes for {device_name}")
+                        # These attributes return Python dict as string, need to parse them
+                        states_str = device.read_attribute('states').value
+                        positions_str = device.read_attribute('positions').value
+                        print(f"[OWIS] Raw states: {states_str}")
+                        print(f"[OWIS] Raw positions: {positions_str}")
+                        
+                        # Parse string dicts to Python dicts
+                        # The string format is like: "{'1': <DevState.ON: 6>, '2': 0}"
+                        import re
+                        
+                        def parse_python_dict_str(dict_str):
+                            """Parse Python dict string to dict, handling DevState enums"""
+                            if not dict_str:
+                                return {}
+                            try:
+                                # Replace DevState enums with their numeric values
+                                dict_str = re.sub(r'<DevState\.[A-Z]+: (\d+)>', r'\1', dict_str)
+                                # Use eval to parse the dict (safe since it's from Tango attribute)
+                                return eval(dict_str)
+                            except Exception as e:
+                                print(f"[OWIS] Parse error: {e}")
+                                logger.warning(f"Failed to parse dict string: {dict_str}, error: {e}")
+                                return {}
+                        
+                        states_dict = parse_python_dict_str(states_str)
+                        positions_dict = parse_python_dict_str(positions_str)
+                        print(f"[OWIS] Parsed states: {states_dict}")
+                        print(f"[OWIS] Parsed positions: {positions_dict}")
+                        
+                        # Convert to proper format for frontend
+                        data['states'] = {int(k): int(v) for k, v in states_dict.items()}
+                        data['positions'] = {int(k): float(v) for k, v in positions_dict.items()}
+                        print(f"[OWIS] Final data['states']: {data['states']}")
+                        print(f"[OWIS] Final data['positions']: {data['positions']}")
+                        
+                    except Exception as e:
+                        print(f"[OWIS] ERROR: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        logger.error(f"Error reading OWIS attributes: {e}")
+                
                 elif 'motor' in device_name.lower() or 'standa' in device_name.lower():
                     # Motor attributes
                     try:
@@ -139,7 +184,15 @@ monitor = DeviceMonitor()
 def init_socketio(app):
     """Initialize SocketIO with the Flask app"""
     global socketio
-    socketio = SocketIO(app, cors_allowed_origins="*", logger=False, engineio_logger=False)
+    socketio = SocketIO(
+        app, 
+        cors_allowed_origins="*", 
+        logger=False, 
+        engineio_logger=False,
+        async_mode='threading',  # Use threading mode explicitly
+        ping_timeout=60,  # Increase ping timeout
+        ping_interval=25  # Increase ping interval
+    )
     
     @socketio.on('connect')
     def handle_connect():

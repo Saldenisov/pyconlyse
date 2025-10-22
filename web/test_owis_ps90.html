@@ -374,31 +374,105 @@
             
             try {
                 // Fetch device attributes
+                statusDiv.innerHTML = '<div class="status">🔄 Loading device attributes...</div>';
                 const response = await fetch(`/api/device/${deviceName}/attributes`, {
                     credentials: 'include'
                 });
                 
-                if (response.ok) {
-                    const data = await response.json();
-                    deviceData = parseDeviceData(deviceName, data.attributes);
-                    currentDevice = deviceName;
-                    
-                    statusDiv.innerHTML = '<div class="status success">✅ Connected to ' + deviceName + '</div>';
-                    renderDevice();
-                    initializeWebSocket();
-                } else {
+                if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
+                
+                const data = await response.json();
+                
+                // Try to fetch delay_lines_parameters property from Tango DB
+                // This is optional - if it fails, we'll use attribute values
+                let delayLinesParams = null;
+                try {
+                    statusDiv.innerHTML = '<div class="status">🔄 Loading device properties...</div>';
+                    const propsResponse = await fetch(`/api/device/${deviceName}/info`, {
+                        credentials: 'include',
+                        signal: AbortSignal.timeout(5000)  // 5 second timeout
+                    });
+                    if (propsResponse.ok) {
+                        const infoData = await propsResponse.json();
+                        // Parse delay_lines_parameters from device properties (not attributes)
+                        if (infoData.device_info && infoData.device_info.properties) {
+                            const delayParamProp = infoData.device_info.properties.delay_lines_parameters;
+                            if (delayParamProp && Array.isArray(delayParamProp) && delayParamProp.length > 0) {
+                                try {
+                                    // The property value is stored as a Python dict string in the Tango DB
+                                    // Format: {1: {'key': 'value', ...}, 2: {...}}
+                                    const paramStr = delayParamProp[0];
+                                    console.log('Raw delay_lines_parameters string:', paramStr.substring(0, 200) + '...');
+                                    
+                                    // Convert Python dict to JSON:
+                                    // 1. Add quotes around integer keys: {1: -> {"1":
+                                    // 2. Replace single quotes with double quotes
+                                    // 3. Handle Python booleans: True/False -> true/false
+                                    let jsonStr = paramStr
+                                        .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')  // Integer keys to string keys
+                                        .replace(/'/g, '"')  // Single to double quotes
+                                        .replace(/\bTrue\b/g, 'true')  // Python True
+                                        .replace(/\bFalse\b/g, 'false')  // Python False
+                                        .replace(/\bNone\b/g, 'null');  // Python None
+                                    
+                                    delayLinesParams = JSON.parse(jsonStr);
+                                    console.log('✅ Parsed delay_lines_parameters:', delayLinesParams);
+                                    console.log('Example axis 1 friendly_name:', delayLinesParams['1']?.friendly_name);
+                                } catch (e) {
+                                    console.error('❌ Failed to parse delay_lines_parameters:', e);
+                                    console.error('Original string:', paramStr);
+                                }
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Could not fetch device properties (will use attributes instead):', e);
+                }
+                
+                deviceData = parseDeviceData(deviceName, data.attributes, delayLinesParams);
+                currentDevice = deviceName;
+                
+                statusDiv.innerHTML = '<div class="status success">✅ Connected to ' + deviceName + '</div>';
+                renderDevice();
+                
+                // Initialize WebSocket AFTER setting currentDevice
+                initializeWebSocket();
             } catch (error) {
                 console.error('Connection error:', error);
                 statusDiv.innerHTML = '<div class="status error">❌ Connection failed: ' + error.message + '</div>';
             }
         }
         
-        function parseDeviceData(deviceName, attributes) {
-            const states = attributes.states?.value || {};
-            const positions = attributes.positions?.value || {};
-            const friendlyNames = attributes.friendly_names?.value || {};
+        function parseDeviceData(deviceName, attributes, delayLinesParams) {
+            // Parse string dict attributes to JavaScript objects
+            // These attributes return Python dict as string, e.g., "{'1': value, '2': value}"
+            const parseStringDict = (strDict) => {
+                if (!strDict || typeof strDict !== 'string') return {};
+                try {
+                    // Convert Python dict string to JSON: replace single quotes with double quotes
+                    // and handle DevState enum values like "<DevState.ON: 6>" -> 6
+                    let jsonStr = strDict
+                        .replace(/tango\._tango\.DevState\.\w+/g, '0')  // Handle tango._tango.DevState.INIT
+                        .replace(/<DevState\.[A-Z]+: (\d+)>/g, '$1')  // Handle DevState enums
+                        .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')  // Integer keys to string keys {1: -> {"1":
+                        .replace(/'/g, '"')  // Single quotes to double quotes
+                        .replace(/\bTrue\b/g, 'true')  // Python True to JS true
+                        .replace(/\bFalse\b/g, 'false')  // Python False to JS false
+                        .replace(/\bNone\b/g, 'null');  // Python None to JS null
+                    return JSON.parse(jsonStr);
+                } catch (e) {
+                    console.warn('Failed to parse string dict:', strDict, e);
+                    return {};
+                }
+            };
+            
+            const states = parseStringDict(attributes.states?.value);
+            const positions = parseStringDict(attributes.positions?.value);
+            const friendlyNames = parseStringDict(attributes.friendly_names?.value);
+            
+            console.log('Parsed attributes:', { states, positions, friendlyNames });
             
             // Get delay lines parameters from device properties (if available)
             const axes = [1, 2, 3, 4];
@@ -406,13 +480,22 @@
             return {
                 name: deviceName,
                 state: attributes.State?.value || 0,
-                axes: axes.map(axisId => ({
-                    id: axisId,
-                    name: friendlyNames[axisId] || `Axis ${axisId}`,
-                    state: states[axisId] || 0,
-                    position: parseFloat(positions[axisId]) || 0.0,
-                    presets: [] // Will be populated from device properties if available
-                }))
+                axes: axes.map(axisId => {
+                    // JSON.parse creates string keys, so we need to use String(axisId)
+                    const axisParams = delayLinesParams ? (delayLinesParams[axisId] || delayLinesParams[String(axisId)]) : null;
+                    // Same for friendlyNames parsed from attribute string
+                    const friendlyName = friendlyNames[axisId] || friendlyNames[String(axisId)];
+                    
+                    return {
+                        id: axisId,
+                        name: axisParams?.friendly_name || friendlyName || `Axis ${axisId}`,
+                        state: states[axisId] || states[String(axisId)] || 0,
+                        position: parseFloat(positions[axisId] || positions[String(axisId)]) || 0.0,
+                        presets: axisParams?.preset_positions || [0, 10, 50, 100],
+                        limitMin: axisParams?.limit_min || -1000,
+                        limitMax: axisParams?.limit_max || 1000
+                    };
+                })
             };
         }
         
@@ -492,10 +575,7 @@
                     <div class="preset-positions">
                         <h4>Preset Positions</h4>
                         <div class="preset-grid" id="presets-${axis.id}">
-                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 0)">0.0</button>
-                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 10)">10.0</button>
-                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 50)">50.0</button>
-                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 100)">100.0</button>
+                            ${axis.presets.map(pos => `<button class="preset-btn" onclick="moveToPreset(${axis.id}, ${pos})">${pos.toFixed(1)}</button>`).join('')}
                         </div>
                     </div>
                 </div>
@@ -681,27 +761,30 @@
             socket = io();
             
             socket.on('connect', function() {
-                console.log('Socket.IO connected');
                 if (currentDevice) {
                     socket.emit('subscribe_device', {'device': currentDevice});
                 }
             });
             
             socket.on('device_update', function(data) {
-                console.log('Device update received:', data);
                 if (data.device === currentDevice) {
                     // Update positions and states
+                    // Note: JSON keys are always strings, so we need to check both numeric and string keys
                     if (data.positions) {
                         deviceData.axes.forEach(axis => {
-                            if (data.positions[axis.id] !== undefined) {
-                                updatePositionDisplay(axis.id, data.positions[axis.id]);
+                            // Try both numeric and string keys since JSON serializes keys as strings
+                            const position = data.positions[axis.id] ?? data.positions[String(axis.id)];
+                            if (position !== undefined) {
+                                updatePositionDisplay(axis.id, position);
                             }
                         });
                     }
                     if (data.states) {
                         deviceData.axes.forEach(axis => {
-                            if (data.states[axis.id] !== undefined) {
-                                axis.state = data.states[axis.id];
+                            // Try both numeric and string keys since JSON serializes keys as strings
+                            const state = data.states[axis.id] ?? data.states[String(axis.id)];
+                            if (state !== undefined) {
+                                axis.state = state;
                                 updateAxisDisplay(axis.id);
                             }
                         });
@@ -709,8 +792,12 @@
                 }
             });
             
-            socket.on('disconnect', function() {
-                console.log('WebSocket disconnected');
+            socket.on('disconnect', function(reason) {
+                // Silently handle disconnections and let Socket.IO auto-reconnect
+            });
+            
+            socket.on('connect_error', function(error) {
+                console.error('WebSocket connection error:', error);
             });
         }
     </script>

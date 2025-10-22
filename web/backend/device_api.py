@@ -76,6 +76,23 @@ class DeviceManager:
                 'timestamp': datetime.now().isoformat()
             }
             
+            # Get device properties from Tango database
+            properties = {}
+            try:
+                db = tango.Database()
+                prop_list = db.get_device_property_list(device_name, '*')
+                for prop_name in prop_list:
+                    try:
+                        prop_values = db.get_device_property(device_name, prop_name)
+                        if prop_name in prop_values:
+                            properties[prop_name] = prop_values[prop_name]
+                    except Exception as e:
+                        properties[prop_name] = {'error': str(e)}
+            except Exception as e:
+                info['properties_error'] = str(e)
+            
+            info['properties'] = properties
+            
             # Get attributes
             attributes = {}
             try:

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Parsing</title>
+</head>
+<body>
+    <h1>Test delay_lines_parameters Parsing</h1>
+    <div id="output"></div>
+    
+    <script>
+        // Your exact property string
+        const testString = "{1: {'device_name': 'manip/VD2/DLs_VD2', 'friendly_name': 'Sample holder VD2', 'drive_current': 2.5, 'hold_current': 0.5, 'keep_on': False, 'gear_ratio': 1, 'pitch': 1, 'speed': 6, 'revolution': 200, 'limit_min': -40.0, 'limit_max': 260.0, 'real_pos': 30.0, 'wait_time': 5, 'preset_positions': [0, 12.9, 24.8, 38.7, 51.6, 83.0], 'relative_shift': 1.0}, 2: {'device_name': 'manip/V0/DLl1_V0', 'friendly_name': 'Delay line for SC', 'drive_current': 2.5, 'hold_current': 0.5, 'keep_on': True, 'gear_ratio': 1, 'pitch': 5.0, 'speed': 30.0, 'revolution': 200.0, 'limit_min': -900.0, 'limit_max': 100.0, 'real_pos': -100.0, 'wait_time': 5, 'preset_positions': [0.0, 75.0, -100.0, -800.0], 'relative_shift': 1.0}, 3: {'device_name': 'manip/V0/DLs_V0', 'friendly_name': 'Sample holder V0', 'drive_current': 2.5, 'hold_current': 0.5, 'keep_on': False, 'gear_ratio': 1.0, 'pitch': 1.0, 'speed': 6.0, 'revolution': 200.0, 'limit_min': -13.0, 'limit_max': 150.0, 'real_pos': 30.0, 'wait_time': 5, 'preset_positions': [155.0, 125.1, 101.8, 70.5, 46.8, 23.3, 0.0, 90.0], 'relative_shift': 1.0}, 4: {'device_name': 'manip/V0/DLl2_V0', 'friendly_name': 'Delay line for OPA', 'drive_current': 2.5, 'hold_current': 0.5, 'keep_on': True, 'gear_ratio': 1.0, 'pitch': 5.0, 'speed': 30.0, 'revolution': 200, 'limit_min': -900.0, 'limit_max': 100.0, 'real_pos': -100.0, 'wait_time': 5, 'preset_positions': [0, 75.0, -100.0, -250.0, -500.0, -800.0], 'relative_shift': 1.0}}";
+        
+        const output = document.getElementById('output');
+        
+        try {
+            console.log('Original string:', testString);
+            
+            // Apply transformations
+            let jsonStr = testString
+                .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')  // Integer keys to string keys
+                .replace(/'/g, '"')  // Single to double quotes
+                .replace(/\bTrue\b/g, 'true')  // Python True
+                .replace(/\bFalse\b/g, 'false')  // Python False
+                .replace(/\bNone\b/g, 'null');  // Python None
+            
+            console.log('Transformed string (first 500 chars):', jsonStr.substring(0, 500));
+            
+            const parsed = JSON.parse(jsonStr);
+            
+            output.innerHTML = `
+                <h2>✅ Parsing Successful!</h2>
+                <h3>Axis 1:</h3>
+                <pre>${JSON.stringify(parsed['1'], null, 2)}</pre>
+                <h3>Friendly Names:</h3>
+                <ul>
+                    <li>Axis 1: ${parsed['1']?.friendly_name}</li>
+                    <li>Axis 2: ${parsed['2']?.friendly_name}</li>
+                    <li>Axis 3: ${parsed['3']?.friendly_name}</li>
+                    <li>Axis 4: ${parsed['4']?.friendly_name}</li>
+                </ul>
+                <h3>Access tests:</h3>
+                <ul>
+                    <li>parsed[1] = ${parsed[1] ? 'exists' : 'undefined'}</li>
+                    <li>parsed['1'] = ${parsed['1'] ? 'exists' : 'undefined'}</li>
+                    <li>parsed['1'].friendly_name = ${parsed['1']?.friendly_name}</li>
+                </ul>
+            `;
+            
+            console.log('✅ Parsed successfully:', parsed);
+            
+        } catch (e) {
+            output.innerHTML = `
+                <h2>❌ Parsing Failed!</h2>
+                <p>Error: ${e.message}</p>
+                <pre>${e.stack}</pre>
+            `;
+            console.error('❌ Parsing failed:', e);
+        }
+    </script>
+</body>
+</html>
