@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OWIS PS90 Web Client</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        
+        .device-selector {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        
+        .device-selector h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        
+        .device-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        
+        .device-input-group label {
+            font-weight: 500;
+        }
+        
+        .device-input-group input {
+            flex: 1;
+            min-width: 250px;
+            padding: 8px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+        
+        .device-input-group button {
+            padding: 8px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .device-input-group button:hover {
+            background: #0056b3;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        
+        #client-container {
+            min-height: 400px;
+        }
+        
+        .client-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .global-controls button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .global-controls .btn-on {
+            background: #28a745;
+            color: white;
+        }
+        
+        .global-controls .btn-off {
+            background: #dc3545;
+            color: white;
+        }
+        
+        .axes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+        }
+        
+        .axis-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border: 2px solid #e9ecef;
+        }
+        
+        .axis-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        
+        .axis-header h3 {
+            margin: 0;
+            color: #2c3e50;
+        }
+        
+        .axis-toggle label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .toggle-switch {
+            width: 40px;
+            height: 20px;
+            background: #dc3545;
+            border-radius: 10px;
+            position: relative;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .toggle-switch::before {
+            content: '';
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            transition: all 0.3s ease;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        
+        .toggle-switch.on {
+            background: #28a745;
+        }
+        
+        .toggle-switch.on::before {
+            left: 22px;
+        }
+        
+        .state-label {
+            min-width: 35px;
+            font-weight: bold;
+        }
+        
+        .state-label.on {
+            color: #28a745;
+        }
+        
+        .state-label.off {
+            color: #dc3545;
+        }
+        
+        .position-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .position-display label {
+            display: block;
+            font-size: 0.85em;
+            color: #6c757d;
+            margin-bottom: 5px;
+        }
+        
+        .position-value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .position-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .position-controls input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .position-controls button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .btn-move {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-stop {
+            background: #ffc107;
+            color: #000;
+        }
+        
+        .btn-set {
+            background: #17a2b8;
+            color: white;
+        }
+        
+        .preset-positions {
+            margin-top: 15px;
+        }
+        
+        .preset-positions h4 {
+            font-size: 0.95em;
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+        }
+        
+        .preset-btn {
+            padding: 8px;
+            background: #e9ecef;
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        
+        .preset-btn:hover {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+        
+        .info-section {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #17a2b8;
+            margin-top: 20px;
+        }
+        
+        @media (max-width: 1200px) {
+            .axes-grid {
+                grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .axes-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>OWIS PS90 Motorized Stages Control</h1>
+            <p>Control OWIS PS90 4-axis motorized delay lines</p>
+            
+            <div class="device-selector">
+                <h3>Device Selection:</h3>
+                <div class="device-input-group">
+                    <label for="device-name">Device:</label>
+                    <input type="text" id="device-name" placeholder="manip/general/DS_OWIS_PS90" value="manip/general/DS_OWIS_PS90">
+                    <button onclick="loadDevice()">Load Device</button>
+                    <label>
+                        <input type="checkbox" id="axes-selector" value="1,2,3,4" checked> All 4 Axes
+                    </label>
+                </div>
+                <div id="connection-status"></div>
+            </div>
+        </div>
+        
+        <div id="client-container">
+            <div class="status info">
+                Enter device name and click "Load Device" to start controlling the OWIS motorized stages.
+            </div>
+        </div>
+    </div>
+
+    <!-- Socket.IO Client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        let deviceData = null;
+        let socket = null;
+        let currentDevice = null;
+        
+        async function loadDevice() {
+            const deviceName = document.getElementById('device-name').value.trim();
+            if (!deviceName) {
+                alert('Please enter a device name');
+                return;
+            }
+            
+            const statusDiv = document.getElementById('connection-status');
+            const container = document.getElementById('client-container');
+            
+            statusDiv.innerHTML = '<div class="status">🔄 Connecting to device...</div>';
+            
+            try {
+                // Fetch device attributes
+                const response = await fetch(`/api/device/${deviceName}/attributes`, {
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    deviceData = parseDeviceData(deviceName, data.attributes);
+                    currentDevice = deviceName;
+                    
+                    statusDiv.innerHTML = '<div class="status success">✅ Connected to ' + deviceName + '</div>';
+                    renderDevice();
+                    initializeWebSocket();
+                } else {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+            } catch (error) {
+                console.error('Connection error:', error);
+                statusDiv.innerHTML = '<div class="status error">❌ Connection failed: ' + error.message + '</div>';
+            }
+        }
+        
+        function parseDeviceData(deviceName, attributes) {
+            const states = attributes.states?.value || {};
+            const positions = attributes.positions?.value || {};
+            const friendlyNames = attributes.friendly_names?.value || {};
+            
+            // Get delay lines parameters from device properties (if available)
+            const axes = [1, 2, 3, 4];
+            
+            return {
+                name: deviceName,
+                state: attributes.State?.value || 0,
+                axes: axes.map(axisId => ({
+                    id: axisId,
+                    name: friendlyNames[axisId] || `Axis ${axisId}`,
+                    state: states[axisId] || 0,
+                    position: positions[axisId] || 0,
+                    presets: [] // Will be populated from device properties if available
+                }))
+            };
+        }
+        
+        function renderDevice() {
+            if (!deviceData) return;
+            
+            const container = document.getElementById('client-container');
+            
+            let html = `
+                <div class="client-header">
+                    <div>
+                        <h2>${deviceData.name}</h2>
+                        <span>4-Axis OWIS PS90 Controller</span>
+                    </div>
+                    <div class="global-controls">
+                        <button class="btn-on" onclick="globalControl(true)">Turn All ON</button>
+                        <button class="btn-off" onclick="globalControl(false)">Turn All OFF</button>
+                    </div>
+                </div>
+                
+                <div class="axes-grid">
+            `;
+            
+            deviceData.axes.forEach(axis => {
+                html += renderAxis(axis);
+            });
+            
+            html += `
+                </div>
+                
+                <div class="info-section">
+                    <small style="color: #6c757d; line-height: 1.6;">
+                        • Toggle ON/OFF for each axis independently<br/>
+                        • Enter position and click Move to move axis<br/>
+                        • Click Stop to halt axis movement<br/>
+                        • Click Set Position to define current position<br/>
+                        • Use preset positions for quick moves
+                    </small>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+        }
+        
+        function renderAxis(axis) {
+            const stateOn = axis.state === 6; // DevState.ON = 6
+            
+            return `
+                <div class="axis-card" id="axis-${axis.id}">
+                    <div class="axis-header">
+                        <h3>${axis.name}</h3>
+                        <div class="axis-toggle">
+                            <label>
+                                <div class="toggle-switch ${stateOn ? 'on' : ''}" onclick="toggleAxis(${axis.id})"></div>
+                                <span class="state-label ${stateOn ? 'on' : 'off'}" id="state-${axis.id}">${stateOn ? 'ON' : 'OFF'}</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="position-display">
+                        <label>Current Position</label>
+                        <div class="position-value" id="pos-value-${axis.id}">${axis.position.toFixed(3)}</div>
+                    </div>
+                    
+                    <div class="position-controls">
+                        <input type="number" id="pos-input-${axis.id}" placeholder="Position" step="0.001" value="${axis.position.toFixed(3)}">
+                        <button class="btn-move" onclick="moveAxis(${axis.id})">Move</button>
+                        <button class="btn-stop" onclick="stopAxis(${axis.id})">STOP</button>
+                    </div>
+                    
+                    <div class="position-controls">
+                        <input type="number" id="set-input-${axis.id}" placeholder="Set position" step="0.001">
+                        <button class="btn-set" onclick="setPosition(${axis.id})">Set Position</button>
+                    </div>
+                    
+                    <div class="preset-positions">
+                        <h4>Preset Positions</h4>
+                        <div class="preset-grid" id="presets-${axis.id}">
+                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 0)">0.0</button>
+                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 10)">10.0</button>
+                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 50)">50.0</button>
+                            <button class="preset-btn" onclick="moveToPreset(${axis.id}, 100)">100.0</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        async function toggleAxis(axisId) {
+            if (!currentDevice) return;
+            
+            const axis = deviceData.axes.find(a => a.id === axisId);
+            if (!axis) return;
+            
+            const currentState = axis.state === 6; // DevState.ON
+            const command = currentState ? 'turn_off_axis' : 'turn_on_axis';
+            
+            try {
+                const response = await fetch(`/api/device/${currentDevice}/command/${command}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: axisId })
+                });
+                
+                if (response.ok) {
+                    axis.state = currentState ? 0 : 6;
+                    updateAxisDisplay(axisId);
+                }
+            } catch (error) {
+                console.error('Error toggling axis:', error);
+            }
+        }
+        
+        async function moveAxis(axisId) {
+            if (!currentDevice) return;
+            
+            const input = document.getElementById(`pos-input-${axisId}`);
+            const position = parseFloat(input.value);
+            
+            if (isNaN(position)) {
+                alert('Please enter a valid position');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/device/${currentDevice}/command/move_axis`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: [axisId, position] })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to move axis');
+                }
+            } catch (error) {
+                console.error('Error moving axis:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function stopAxis(axisId) {
+            if (!currentDevice) return;
+            
+            try {
+                const response = await fetch(`/api/device/${currentDevice}/command/stop_axis`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: axisId })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to stop axis');
+                }
+            } catch (error) {
+                console.error('Error stopping axis:', error);
+            }
+        }
+        
+        async function setPosition(axisId) {
+            if (!currentDevice) return;
+            
+            const input = document.getElementById(`set-input-${axisId}`);
+            const position = parseFloat(input.value);
+            
+            if (isNaN(position)) {
+                alert('Please enter a valid position');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/device/${currentDevice}/command/define_position_axis`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ args: [axisId, position] })
+                });
+                
+                if (response.ok) {
+                    input.value = '';
+                }
+            } catch (error) {
+                console.error('Error setting position:', error);
+            }
+        }
+        
+        async function moveToPreset(axisId, position) {
+            const input = document.getElementById(`pos-input-${axisId}`);
+            input.value = position.toFixed(3);
+            await moveAxis(axisId);
+        }
+        
+        async function globalControl(turnOn) {
+            if (!currentDevice) return;
+            
+            const command = turnOn ? 'turn_on' : 'turn_off';
+            
+            try {
+                const response = await fetch(`/api/device/${currentDevice}/command/${command}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    // Update all axes states
+                    deviceData.axes.forEach(axis => {
+                        axis.state = turnOn ? 6 : 0;
+                        updateAxisDisplay(axis.id);
+                    });
+                }
+            } catch (error) {
+                console.error('Error with global control:', error);
+            }
+        }
+        
+        function updateAxisDisplay(axisId) {
+            const axis = deviceData.axes.find(a => a.id === axisId);
+            if (!axis) return;
+            
+            const stateOn = axis.state === 6;
+            const toggleEl = document.querySelector(`#axis-${axisId} .toggle-switch`);
+            const labelEl = document.getElementById(`state-${axisId}`);
+            
+            if (toggleEl) {
+                if (stateOn) {
+                    toggleEl.classList.add('on');
+                } else {
+                    toggleEl.classList.remove('on');
+                }
+            }
+            
+            if (labelEl) {
+                labelEl.textContent = stateOn ? 'ON' : 'OFF';
+                labelEl.className = `state-label ${stateOn ? 'on' : 'off'}`;
+            }
+        }
+        
+        function updatePositionDisplay(axisId, position) {
+            const axis = deviceData.axes.find(a => a.id === axisId);
+            if (axis) {
+                axis.position = position;
+            }
+            
+            const valueEl = document.getElementById(`pos-value-${axisId}`);
+            if (valueEl) {
+                valueEl.textContent = position.toFixed(3);
+            }
+            
+            const inputEl = document.getElementById(`pos-input-${axisId}`);
+            if (inputEl) {
+                inputEl.value = position.toFixed(3);
+            }
+        }
+        
+        function initializeWebSocket() {
+            if (socket) {
+                try { socket.disconnect(); } catch (e) {}
+            }
+            
+            console.log('Initializing WebSocket connection...');
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Socket.IO connected');
+                if (currentDevice) {
+                    socket.emit('subscribe_device', {'device': currentDevice});
+                }
+            });
+            
+            socket.on('device_update', function(data) {
+                console.log('Device update received:', data);
+                if (data.device === currentDevice) {
+                    // Update positions and states
+                    if (data.positions) {
+                        deviceData.axes.forEach(axis => {
+                            if (data.positions[axis.id] !== undefined) {
+                                updatePositionDisplay(axis.id, data.positions[axis.id]);
+                            }
+                        });
+                    }
+                    if (data.states) {
+                        deviceData.axes.forEach(axis => {
+                            if (data.states[axis.id] !== undefined) {
+                                axis.state = data.states[axis.id];
+                                updateAxisDisplay(axis.id);
+                            }
+                        });
+                    }
+                }
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('WebSocket disconnected');
+            });
+        }
+    </script>
+</body>
+</html>

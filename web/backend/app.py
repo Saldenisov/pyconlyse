@@ -46,6 +46,17 @@ def netio_pdu_test():
     response.headers['Expires'] = '0'
     return response
 
+# Route for OWIS PS90 test page
+@app.route('/test_owis_ps90.html')
+def owis_ps90_test():
+    from flask import make_response
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_owis_ps90.html')
+    response = make_response(send_from_directory(os.path.dirname(test_page_path), 'test_owis_ps90.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')

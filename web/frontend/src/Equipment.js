@@ -11,6 +11,8 @@ const Equipment = () => {
   const [showPDUModal, setShowPDUModal] = useState(false);
   // State to control Magnets modal
   const [showMagnetsModal, setShowMagnetsModal] = useState(false);
+  // State to control Motorized Stages modal
+  const [showMotorizedModal, setShowMotorizedModal] = useState(false);
 
   // Array of equipment items with id, label, and image path
   const equipmentItems = [
@@ -27,6 +29,9 @@ const Equipment = () => {
     if (equipmentId === 1) {
       // For PDU, open modal with NETIO link
       setShowPDUModal(true);
+    } else if (equipmentId === 2) {
+      // For Motorized Stages, open modal with OWIS link
+      setShowMotorizedModal(true);
     } else if (equipmentId === 4) {
       // For Magnets, open modal with Itest link
       setShowMagnetsModal(true);
@@ -59,6 +64,21 @@ const Equipment = () => {
               </a>
             </div>
             <button onClick={() => setShowPDUModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Motorized Stages Modal */}
+      {showMotorizedModal && (
+        <div className="modal-overlay" onClick={() => setShowMotorizedModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Motorized Stages</h2>
+            <div className="modal-links">
+              <a href="/test_owis_ps90.html" target="_blank" rel="noopener noreferrer" className="modal-link">
+                OWIS PS90 Controller
+              </a>
+            </div>
+            <button onClick={() => setShowMotorizedModal(false)} className="modal-close">Close</button>
           </div>
         </div>
       )}
