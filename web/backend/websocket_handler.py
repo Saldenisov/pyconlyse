@@ -57,12 +57,16 @@ class DeviceMonitor:
                         states = list(device.read_attribute('states').value)
                         currents_meas = list(device.read_attribute('currents_meas').value)
                         currents_setpoint = list(device.read_attribute('currents_setpoint').value)
+                        ids = [int(x) for x in device.read_attribute('ids').value]  # Get actual slot IDs
                         
                         slots = []
                         for i in range(len(names)):
+                            # Use actual slot ID instead of array index + 1
+                            slot_id = ids[i] if i < len(ids) else i + 1
                             slots.append({
-                                'index': i + 1,
-                                'name': names[i] if i < len(names) else f'Slot {i+1}',
+                                'id': slot_id,  # Real slot ID for element targeting
+                                'index': i,     # Array index for reference
+                                'name': names[i] if i < len(names) else f'Slot {slot_id}',
                                 'state': bool(states[i]) if i < len(states) else False,
                                 'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
                                 'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0

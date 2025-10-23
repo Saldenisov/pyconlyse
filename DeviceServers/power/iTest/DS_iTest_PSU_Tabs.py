@@ -45,6 +45,7 @@ class Itest_PSU(DS_General_Widget):
         dev_name = self.dev_name
         ds: Device = getattr(self, f"ds_{dev_name}")
         self.slot_count = 8
+        self.slot_ids: List[int] = list(range(1, 9))  # Default: [1, 2, 3, 4, 5, 6, 7, 8]
         self.names: List[str] = [f"Slot {i}" for i in range(1, self.slot_count + 1)]
         self.states: List[int] = [0] * self.slot_count
         self.currents_meas: List[float] = [0.0] * self.slot_count
@@ -57,7 +58,9 @@ class Itest_PSU(DS_General_Widget):
 
         if check_device_connection(ds):
             try:
-                self.slot_count = len(list(ds.ids))
+                ids = list(ds.ids)
+                self.slot_ids = ids
+                self.slot_count = len(ids)
             except Exception:
                 pass
             try:
@@ -192,12 +195,13 @@ class Itest_PSU(DS_General_Widget):
             make_context(btn_minus, i)
             make_context(btn_plus, i)
 
-            btn_minus.clicked.connect(partial(self._nudge, i, -1))
-            btn_plus.clicked.connect(partial(self._nudge, i, +1))
-            chk.toggled.connect(partial(self._toggle_slot, i))
+            # Use lambdas to capture 'i' by value instead of reference
+            btn_minus.clicked.connect(lambda checked=False, idx=i: self._nudge(idx, -1))
+            btn_plus.clicked.connect(lambda checked=False, idx=i: self._nudge(idx, +1))
+            chk.toggled.connect(lambda checked, idx=i: self._toggle_slot(idx, checked))
             
             # Only user input triggers setpoint changes
-            spin.editingFinished.connect(partial(self._apply_setpoint, i))
+            spin.editingFinished.connect(lambda idx=i: self._apply_setpoint(idx))
 
             h.addWidget(btn_minus)
             h.addWidget(spin)
@@ -303,17 +307,21 @@ class Itest_PSU(DS_General_Widget):
         
         self._last_setpoint_time[index] = current_time
         
-        # Tango command: set_current([idx+1, value])
+        # Tango command: set_current([slot_id, value])
+        # Map UI index to actual slot ID
+        slot_id = self.slot_ids[index] if index < len(self.slot_ids) else index + 1
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
-            ds.command_inout("set_current", [float(index + 1), float(value)])
+            ds.command_inout("set_current", [float(slot_id), float(value)])
         except Exception:
             pass
 
     def _toggle_slot(self, index: int, checked: bool):
+        # Map UI index to actual slot ID
+        slot_id = self.slot_ids[index] if index < len(self.slot_ids) else index + 1
         try:
             ds: Device = getattr(self, f"ds_{self.dev_name}")
-            ds.command_inout("set_output_state", [int(index + 1), int(1 if checked else 0)])
+            ds.command_inout("set_output_state", [int(slot_id), int(1 if checked else 0)])
         except Exception:
             pass
 

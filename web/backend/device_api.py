@@ -326,6 +326,144 @@ def get_ds_itest_psu_slots(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
+@device_api.route('/api/device/ds_itest_psu/<path:device_name>/tab_config', methods=['GET'])
+def get_ds_itest_psu_tab_config(device_name):
+    """Get tab configuration from Tango DB property 'tab_config'"""
+    try:
+        db = tango.Database()
+        
+        # Default configuration
+        default_config = {
+            'VD': {'slots': [], 'defaults': {}, 'enabled': True},
+            'VD2': {'slots': [], 'defaults': {}, 'enabled': True},
+            'RF': {'slots': [], 'defaults': {}, 'enabled': True},
+            'ALL': {'slots': [], 'defaults': {}, 'enabled': True}
+        }
+        
+        try:
+            # Read tab_config property from Tango DB
+            # Expected format: JSON string like:
+            # {
+            #   "VD": {"slots": [1, 2, 3], "defaults": {"1": 0.5, "2": 1.0}},
+            #   "VD2": {"slots": [4, 5], "defaults": {"4": 2.0}},
+            #   "RF": {"slots": [6, 7, 8], "defaults": {"6": 0.1}}
+            # }
+            prop_values = db.get_device_property(device_name, 'tab_config')
+            
+            if 'tab_config' in prop_values and prop_values['tab_config']:
+                # Handle both single-line and multi-line property values
+                raw_value = prop_values['tab_config']
+                if isinstance(raw_value, (list, tuple)) or hasattr(raw_value, '__iter__'):
+                    try:
+                        # Multi-line property: join all lines (works for list, tuple, StdStringVector)
+                        config_str = ''.join(line for line in raw_value)
+                    except (TypeError, AttributeError):
+                        config_str = str(raw_value)
+                else:
+                    config_str = str(raw_value)
+                
+                if config_str:
+                    tab_config = json.loads(config_str)
+                    # Merge with defaults to ensure all tabs exist
+                    for tab_name in default_config:
+                        if tab_name not in tab_config:
+                            tab_config[tab_name] = default_config[tab_name]
+                    return jsonify({'tab_configs': tab_config, 'success': True})
+        except Exception as e:
+            print(f"Warning: Could not read tab_config property: {e}")
+        
+        # Return default config if property doesn't exist or is invalid
+        return jsonify({'tab_configs': default_config, 'success': True})
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/itest/<path:device_name>/all_slots', methods=['GET'])
+def get_itest_all_slots(device_name):
+    """Get all slot data for iTest PSU device"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        # Read all attributes
+        ids = make_json_safe(device.read_attribute('ids').value)
+        names = make_json_safe(device.read_attribute('names').value)
+        states = make_json_safe(device.read_attribute('states').value)
+        currents_setpoint = make_json_safe(device.read_attribute('currents_setpoint').value)
+        currents_meas = make_json_safe(device.read_attribute('currents_meas').value)
+        current_limits = make_json_safe(device.read_attribute('current_limits').value)
+        
+        return jsonify({
+            'ids': ids,
+            'names': names,
+            'states': states,
+            'currents_setpoint': currents_setpoint,
+            'currents_meas': currents_meas,
+            'current_limits': current_limits,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/output', methods=['POST'])
+def set_itest_slot_output(device_name, slot_id):
+    """Set output state for specific iTest PSU slot"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        data = request.get_json()
+        state = int(data.get('state', 0))
+        
+        # Use set_output_state command with [slot_id, state]
+        device.command_inout('set_output_state', [int(slot_id), state])
+        
+        return jsonify({
+            'slot_id': slot_id,
+            'state': state,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
+def set_itest_slot_current(device_name, slot_id):
+    """Set current for specific iTest PSU slot"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        data = request.get_json()
+        value = float(data.get('value', 0.0))
+        
+        # Validate limits
+        try:
+            limits_array = make_json_safe(device.read_attribute('current_limits').value)
+            ids = make_json_safe(device.read_attribute('ids').value)
+            
+            if slot_id in ids:
+                array_idx = ids.index(slot_id)
+                if limits_array and len(limits_array) >= (array_idx + 1) * 2:
+                    min_limit = float(limits_array[array_idx * 2])
+                    max_limit = float(limits_array[array_idx * 2 + 1])
+                    
+                    if value < min_limit or value > max_limit:
+                        return jsonify({
+                            'error': f'Current {value}A outside limits [{min_limit}, {max_limit}]A',
+                            'success': False
+                        }), 400
+        except Exception as e:
+            print(f"Warning: Could not validate limits: {e}")
+        
+        # Use set_current command with [slot_id, value]
+        device.command_inout('set_current', [float(slot_id), value])
+        
+        return jsonify({
+            'slot_id': slot_id,
+            'current': value,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
 @device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
 def set_ds_itest_psu_current(device_name, slot_id):
     """Set current for specific DS iTest PSU slot with limit validation"""

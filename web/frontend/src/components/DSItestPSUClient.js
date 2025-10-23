@@ -99,9 +99,9 @@ const DSItestPSUClient = ({ deviceName }) => {
     }
   };
 
-  const setSlotCurrent = async (slotIndex, currentValue) => {
+  const setSlotCurrent = async (slotId, currentValue) => {
     try {
-      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotIndex}/current`, {
+      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/current`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -113,23 +113,23 @@ const DSItestPSUClient = ({ deviceName }) => {
         // Update local state
         setSlots(prevSlots => 
           prevSlots.map(slot => 
-            slot.index === slotIndex 
+            slot.id === slotId 
               ? { ...slot, current_setpoint: data.current_setpoint }
               : slot
           )
         );
         setError(null);
       } else {
-        throw new Error(`Failed to set current for slot ${slotIndex}`);
+        throw new Error(`Failed to set current for slot ${slotId}`);
       }
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const setSlotState = async (slotIndex, enabled) => {
+  const setSlotState = async (slotId, enabled) => {
     try {
-      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotIndex}/state`, {
+      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/state`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -141,61 +141,61 @@ const DSItestPSUClient = ({ deviceName }) => {
         // Update local state
         setSlots(prevSlots => 
           prevSlots.map(slot => 
-            slot.index === slotIndex 
+            slot.id === slotId 
               ? { ...slot, state: data.state }
               : slot
           )
         );
         setError(null);
       } else {
-        throw new Error(`Failed to set state for slot ${slotIndex}`);
+        throw new Error(`Failed to set state for slot ${slotId}`);
       }
     } catch (err) {
       setError(err.message);
     }
   };
 
-  const nudgeSlot = (slotIndex, direction) => {
-    const slot = slots.find(s => s.index === slotIndex);
+  const nudgeSlot = (slotId, direction) => {
+    const slot = slots.find(s => s.id === slotId);
     if (!slot) return;
     
     const newValue = slot.current_setpoint + (direction * globalStep);
     // Clamp to reasonable range (-50A to +50A)
     const clampedValue = Math.max(-50, Math.min(50, newValue));
     
-    setSlotCurrent(slotIndex, clampedValue);
+    setSlotCurrent(slotId, clampedValue);
   };
 
-  const handleInputKeyPress = (e, slotIndex) => {
+  const handleInputKeyPress = (e, slotId) => {
     if (e.key === 'Enter') {
       const value = parseFloat(e.target.value);
       if (!isNaN(value)) {
-        setSlotCurrent(slotIndex, value);
+        setSlotCurrent(slotId, value);
       }
     }
   };
 
-  const handleInputChange = (e, slotIndex) => {
+  const handleInputChange = (e, slotId) => {
     const value = parseFloat(e.target.value);
     if (!isNaN(value) && e.target.value !== '') {
       // Real-time update (debounced)
-      clearTimeout(inputRefs.current[slotIndex]);
-      inputRefs.current[slotIndex] = setTimeout(() => {
-        setSlotCurrent(slotIndex, value);
+      clearTimeout(inputRefs.current[slotId]);
+      inputRefs.current[slotId] = setTimeout(() => {
+        setSlotCurrent(slotId, value);
       }, 500);
     }
   };
 
   const renderSlot = (slot) => {
     return (
-      <div key={slot.index} className="slot-control">
+      <div key={slot.id} className="slot-control">
         <div className="slot-header">
-          <h4>{slot.name}</h4>
+          <h4>{slot.name} (ID: {slot.id})</h4>
           <label className="slot-toggle">
             <input
               type="checkbox"
               checked={slot.state}
-              onChange={(e) => setSlotState(slot.index, e.target.checked)}
+              onChange={(e) => setSlotState(slot.id, e.target.checked)}
             />
             <span className="toggle-switch"></span>
             ON
@@ -216,14 +216,14 @@ const DSItestPSUClient = ({ deviceName }) => {
         <div className="slot-controls">
           <button 
             className="nudge-btn dec coarse"
-            onClick={() => nudgeSlot(slot.index, -10)}
+            onClick={() => nudgeSlot(slot.id, -10)}
             title={`-${(globalStep * 10).toFixed(3)} A`}
           >
             --
           </button>
           <button 
             className="nudge-btn dec"
-            onClick={() => nudgeSlot(slot.index, -1)}
+            onClick={() => nudgeSlot(slot.id, -1)}
             title={`-${globalStep.toFixed(3)} A`}
           >
             -
@@ -236,21 +236,21 @@ const DSItestPSUClient = ({ deviceName }) => {
             min="-50"
             max="50"
             value={slot.current_setpoint.toFixed(3)}
-            onChange={(e) => handleInputChange(e, slot.index)}
-            onKeyPress={(e) => handleInputKeyPress(e, slot.index)}
+            onChange={(e) => handleInputChange(e, slot.id)}
+            onKeyPress={(e) => handleInputKeyPress(e, slot.id)}
             placeholder="Current (A)"
           />
           
           <button 
             className="nudge-btn inc"
-            onClick={() => nudgeSlot(slot.index, 1)}
+            onClick={() => nudgeSlot(slot.id, 1)}
             title={`+${globalStep.toFixed(3)} A`}
           >
             +
           </button>
           <button 
             className="nudge-btn inc coarse"
-            onClick={() => nudgeSlot(slot.index, 10)}
+            onClick={() => nudgeSlot(slot.id, 10)}
             title={`+${(globalStep * 10).toFixed(3)} A`}
           >
             ++

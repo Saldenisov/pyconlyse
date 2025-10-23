@@ -72,6 +72,63 @@
             background: #f8d7da;
             color: #721c24;
         }
+        .tab-navigation {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            border-bottom: 2px solid #dee2e6;
+        }
+        .tab-btn {
+            padding: 10px 24px;
+            border: none;
+            border-bottom: 3px solid transparent;
+            background: transparent;
+            color: #6c757d;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            color: #343a40;
+            background: #f8f9fa;
+        }
+        .tab-btn.active {
+            color: #007bff;
+            border-bottom-color: #007bff;
+            background: white;
+        }
+        .tab-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #dee2e6;
+        }
+        .btn-load-defaults {
+            padding: 8px 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .btn-load-defaults:hover {
+            background-color: #218838;
+        }
+        .toggle-all-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 0;
+        }
     </style>
 </head>
 <body>
@@ -133,7 +190,17 @@
             }
         }
         
+        let tabConfigs = {
+            VD: { slots: [], defaults: {} },
+            VD2: { slots: [], defaults: {} },
+            RF: { slots: [], defaults: {} },
+            ALL: { slots: [], defaults: {} }
+        };
+        let activeTab = 'VD';
+        let allSlots = [];
+        
         function createClientHTML(deviceName, slots) {
+            allSlots = slots;
             let html = `
                 <div class="ds-itest-client">
                     <div class="client-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -150,6 +217,24 @@
                             </label>
                         </div>
                     </div>
+                    
+                    <!-- Tab Navigation -->
+                    <div class="tab-navigation">
+                        <button class="tab-btn active" onclick="switchTab('VD')">VD</button>
+                        <button class="tab-btn" onclick="switchTab('VD2')">VD2</button>
+                        <button class="tab-btn" onclick="switchTab('RF')">RF</button>
+                        <button class="tab-btn" onclick="switchTab('ALL')">ALL</button>
+                    </div>
+                    
+                    <!-- Tab Controls -->
+                    <div class="tab-controls">
+                        <button class="btn-load-defaults" onclick="loadTabDefaults()">Load Defaults</button>
+                        <label class="toggle-all-label">
+                            <input type="checkbox" id="toggle-all" onchange="toggleAllSlots(this.checked)">
+                            <span>Enable All Slots</span>
+                        </label>
+                    </div>
+                    
                     <div id="slots-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
             `;
             
@@ -210,8 +295,96 @@
         let pollIntervalId = null;
         let lastWsUpdateTs = 0;
         
+        async function loadTabConfig(deviceName) {
+            try {
+                const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.tab_configs) {
+                        tabConfigs = data.tab_configs;
+                        console.log('Loaded tab configuration:', tabConfigs);
+                        renderTabSlots();
+                    }
+                }
+            } catch (err) {
+                console.warn('Could not load tab configuration:', err);
+            }
+        }
+        
+        function switchTab(tabName) {
+            activeTab = tabName;
+            // Update button states
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            renderTabSlots();
+        }
+        
+        function renderTabSlots() {
+            const config = tabConfigs[activeTab];
+            const slotsGrid = document.getElementById('slots-grid');
+            if (!slotsGrid) return;
+            
+            slotsGrid.innerHTML = '';
+            
+            if (!config || !config.slots || config.slots.length === 0) {
+                slotsGrid.innerHTML = '<p style="padding: 20px; color: #6c757d;">No slots configured for this tab. Configure via Tango DB property "tab_config".</p>';
+                return;
+            }
+            
+            // Render only slots assigned to this tab, in order
+            config.slots.forEach(slotId => {
+                const slot = allSlots.find(s => s.id === slotId);
+                if (slot) {
+                    slotsGrid.innerHTML += createSlotHTML(slot);
+                }
+            });
+            
+            updateToggleAllState();
+        }
+        
+        async function loadTabDefaults() {
+            const config = tabConfigs[activeTab];
+            if (!config || !config.defaults) return;
+            
+            for (const [slotId, defaultValue] of Object.entries(config.defaults)) {
+                await setSlotCurrent(parseInt(slotId), defaultValue);
+            }
+        }
+        
+        async function toggleAllSlots(enabled) {
+            const config = tabConfigs[activeTab];
+            if (!config || !config.slots) return;
+            
+            for (const slotId of config.slots) {
+                await toggleSlot(slotId, enabled);
+                const checkbox = document.getElementById(`state-${slotId}`);
+                if (checkbox) checkbox.checked = enabled;
+            }
+        }
+        
+        function updateToggleAllState() {
+            const config = tabConfigs[activeTab];
+            const toggleAll = document.getElementById('toggle-all');
+            if (!toggleAll || !config || !config.slots) return;
+            
+            const allEnabled = config.slots.every(slotId => {
+                const checkbox = document.getElementById(`state-${slotId}`);
+                return checkbox && checkbox.checked;
+            });
+            
+            toggleAll.checked = allEnabled;
+        }
+        
         function initializeClient(deviceName) {
             currentDeviceName = deviceName;
+            
+            // Load tab configuration
+            loadTabConfig(deviceName);
             
             // Clear any existing polling
             if (pollIntervalId) {
@@ -289,6 +462,7 @@
         
         function updateSlotsDisplay(slots) {
             console.log('Updating slots display with:', slots);
+            allSlots = slots;
             slots.forEach(function(slot) {
                 console.log(`Updating slot ${slot.id}: measured=${slot.current_measured}, setpoint=${slot.current_setpoint}, state=${slot.state}`);
                 
@@ -319,6 +493,8 @@
                     console.log(`Checkbox for slot ${slot.id} not found`);
                 }
             });
+            
+            updateToggleAllState();
         }
         
         function updateGlobalStep() {
