@@ -82,24 +82,25 @@ if ($starterExists) {
 Write-Host "================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Start pyconlyse server if this is the everest host
+# Start pyconlyse PRODUCTION server if this is the everest host
 if ($HostName.ToLower() -eq "everest") {
     Write-Host ""
-    Write-Host "Starting pyconlyse server (everest host only)..." -ForegroundColor Yellow
+    Write-Host "Starting pyconlyse PRODUCTION server (everest host only)..." -ForegroundColor Yellow
     
-    # Check if pyconlyse server script exists
-    $pyconlyseScriptPath = "C:\dev\pyconlyse\web\start_pyconlyse_server.py"
+    # Check if pyconlyse production server script exists
+    $pyconlyseScriptPath = "C:\dev\pyconlyse\web\start_production.py"
     if (Test-Path $pyconlyseScriptPath) {
-        # Start pyconlyse server in separate PowerShell window
+        # Start pyconlyse PRODUCTION server in separate PowerShell window
         $pyconlyseArgs = @(
             "-NoExit",
             "-Command",
-            "cd 'C:\dev\pyconlyse\web'; python start_pyconlyse_server.py"
+            "cd 'C:\dev\pyconlyse\web'; python start_production.py"
         )
         Start-Process powershell -ArgumentList $pyconlyseArgs -WindowStyle Normal
-        Write-Host "Pyconlyse server: Started in separate window" -ForegroundColor Green
+        Write-Host "Pyconlyse PRODUCTION server: Started on port 5000" -ForegroundColor Green
+        Write-Host "URL: http://10.20.30.202:5000" -ForegroundColor Green
     } else {
-        Write-Host "WARNING: Pyconlyse server script not found at $pyconlyseScriptPath" -ForegroundColor Yellow
+        Write-Host "WARNING: Pyconlyse production server script not found at $pyconlyseScriptPath" -ForegroundColor Yellow
     }
 } else {
     Write-Host ""

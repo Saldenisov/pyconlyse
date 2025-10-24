@@ -14,10 +14,11 @@ app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
 CORS(app)
 
 # JWT Configuration
-app.config['JWT_SECRET_KEY'] = 'your-secret-key-change-this-in-production'
+# PRODUCTION: Consider using environment variable for secret key
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'Elys3!icp2025')
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-app.config['JWT_COOKIE_SECURE'] = False  # Set to True in production with HTTPS
-app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # Disable CSRF protection for simplicity
+app.config['JWT_COOKIE_SECURE'] = True  # PRODUCTION: Requires HTTPS
+app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # PRODUCTION: Consider enabling CSRF protection
 jwt = JWTManager(app)
 
 # Register blueprints
@@ -86,6 +87,7 @@ def serve(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
+    # DEVELOPMENT MODE ONLY
+    # For production, use start_production.py which sets debug=False
     # Use socketio.run instead of app.run for WebSocket support
-    # Configure for 10.20.30.202 access
     socketio.run(app, debug=True, port=5000, host='10.20.30.202')
