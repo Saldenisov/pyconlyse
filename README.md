@@ -185,8 +185,9 @@ pyconlyse/
    # Start camera server
    bin/start_deviceserver.cmd BASLER Cam1 FULL
    
-   # Start motion control
+   # Start motion control (multiple instances launch immediately)
    bin/start_deviceserver.cmd STANDA alignment FULL
+   bin/start_deviceserver.cmd OWIS 1 FULL
    
    # Start power management  
    bin/start_deviceserver.cmd NETIO all FULL

@@ -58,19 +58,9 @@ string title = "DS_OWIS_PS90 [" + instanceName + "]";
 string activatePath = Path.Combine(anaconda, @"Scripts\activate.bat");
 string innerCmd = "cmd /k \"call \"" + activatePath + "\" " + pyconlyseEnv +
                   " && echo Starting DS_OWIS_PS90 device server... && python DS_OWIS_PS90.py " + instanceName + "\"";
-
-// Add startup delay to prevent concurrent device conflicts  
-int startupDelay = GetStartupDelay("owis");
                 
 Console.WriteLine("Starting Python device server in new terminal...");
 Console.WriteLine("Instance: " + instanceName);
-if (startupDelay > 0)
-{
-    Console.WriteLine("Startup delay: " + startupDelay + " seconds (to avoid device conflicts)");
-    Console.WriteLine("Waiting for staggered startup...");
-    System.Threading.Thread.Sleep(startupDelay * 1000);
-    Console.WriteLine("Delay complete, proceeding with launch.");
-}
 Console.WriteLine("Terminal will remain open for monitoring and manual control.");
 Console.WriteLine("=====================================================");
 
@@ -135,51 +125,6 @@ return 0;
                 Console.WriteLine("EXCEPTION: " + ex.Message);
                 Console.WriteLine("Stack Trace: " + ex.StackTrace);
                 return 1;
-            }
-        }
-        
-        static int GetStartupDelay(string deviceType)
-        {
-            try
-            {
-                // Simple counter file approach for Windows
-                string tempDir = System.IO.Path.GetTempPath();
-                string counterFile = System.IO.Path.Combine(tempDir, "pyconlyse_" + deviceType + "_startup_counter.txt");
-                
-                int counter = 0;
-                
-                // Try to read existing counter with retry logic
-                for (int attempt = 0; attempt < 10; attempt++)
-                {
-                    try
-                    {
-                        if (System.IO.File.Exists(counterFile))
-                        {
-                            string content = System.IO.File.ReadAllText(counterFile);
-                            int.TryParse(content, out counter);
-                        }
-                        
-                        // Write incremented counter
-                        System.IO.File.WriteAllText(counterFile, (counter + 1).ToString());
-                        break;
-                    }
-                    catch
-                    {
-                        // File in use, wait and retry
-                        System.Threading.Thread.Sleep(100 + attempt * 50);
-                    }
-                }
-                
-                int delaySeconds = counter * 5; // 5 seconds per instance
-                Console.WriteLine("[Startup Coordinator] This is " + deviceType + " instance #" + (counter + 1));
-                Console.WriteLine("[Startup Coordinator] Calculated delay: " + delaySeconds + " seconds");
-                
-                return delaySeconds;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("[Startup Coordinator] Error calculating delay: " + ex.Message);
-                return 0; // Default to no delay on error
             }
         }
     }
