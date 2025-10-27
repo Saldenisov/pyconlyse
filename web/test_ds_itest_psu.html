@@ -190,13 +190,9 @@
             }
         }
         
-        let tabConfigs = {
-            VD: { slots: [], defaults: {} },
-            VD2: { slots: [], defaults: {} },
-            RF: { slots: [], defaults: {} },
-            ALL: { slots: [], defaults: {} }
-        };
-        let activeTab = 'VD';
+        let tabConfigs = {};
+        let tabNames = [];  // Order of tabs
+        let activeTab = null;
         let allSlots = [];
         
         function createClientHTML(deviceName, slots) {
@@ -219,11 +215,8 @@
                     </div>
                     
                     <!-- Tab Navigation -->
-                    <div class="tab-navigation">
-                        <button class="tab-btn active" onclick="switchTab('VD')">VD</button>
-                        <button class="tab-btn" onclick="switchTab('VD2')">VD2</button>
-                        <button class="tab-btn" onclick="switchTab('RF')">RF</button>
-                        <button class="tab-btn" onclick="switchTab('ALL')">ALL</button>
+                    <div id="tab-navigation" class="tab-navigation">
+                        <!-- Tabs will be loaded dynamically from Tango DB -->
                     </div>
                     
                     <!-- Tab Controls -->
@@ -304,22 +297,81 @@
                     const data = await response.json();
                     if (data.tab_configs) {
                         tabConfigs = data.tab_configs;
+                        
+                        // Extract tab names from the configuration
+                        tabNames = Object.keys(tabConfigs).sort((a, b) => {
+                            // Custom sort: V0, VD2, REF, then others, then ALL last
+                            const order = {'V0': 0, 'VD2': 1, 'REF': 2, 'ALL': 999};
+                            const aOrder = order[a] !== undefined ? order[a] : 50;
+                            const bOrder = order[b] !== undefined ? order[b] : 50;
+                            if (aOrder !== bOrder) return aOrder - bOrder;
+                            return a.localeCompare(b);
+                        });
+                        
+                        // Set first tab as active if none selected
+                        if (!activeTab && tabNames.length > 0) {
+                            activeTab = tabNames[0];
+                        }
+                        
                         console.log('Loaded tab configuration:', tabConfigs);
+                        console.log('Tab names:', tabNames);
+                        
+                        // Render tab buttons
+                        renderTabButtons();
+                        
+                        // Render slots for active tab
                         renderTabSlots();
                     }
+                } else {
+                    console.warn('Failed to load tab config, using default tabs');
+                    useDefaultTabs();
                 }
             } catch (err) {
                 console.warn('Could not load tab configuration:', err);
+                useDefaultTabs();
             }
+        }
+        
+        function useDefaultTabs() {
+            // Fallback if tab config not available
+            tabNames = ['V0', 'VD2', 'REF', 'ALL'];
+            tabConfigs = {
+                'V0': { slots: [], defaults: {} },
+                'VD2': { slots: [], defaults: {} },
+                'REF': { slots: [], defaults: {} },
+                'ALL': { slots: [], defaults: {} }
+            };
+            if (!activeTab) {
+                activeTab = 'V0';
+            }
+            renderTabButtons();
+        }
+        
+        function renderTabButtons() {
+            const tabNav = document.getElementById('tab-navigation');
+            if (!tabNav) return;
+            
+            tabNav.innerHTML = '';
+            tabNames.forEach((tabName, index) => {
+                const button = document.createElement('button');
+                button.className = 'tab-btn' + (tabName === activeTab ? ' active' : '');
+                button.textContent = tabName;
+                button.onclick = () => switchTab(tabName);
+                tabNav.appendChild(button);
+            });
         }
         
         function switchTab(tabName) {
             activeTab = tabName;
+            
             // Update button states
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                btn.classList.remove('active');
+                if (btn.textContent === tabName) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
             });
-            event.target.classList.add('active');
             
             renderTabSlots();
         }

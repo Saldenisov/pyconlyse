@@ -94,7 +94,7 @@ if ($HostName.ToLower() -eq "everest") {
         $pyconlyseArgs = @(
             "-NoExit",
             "-Command",
-            "cd 'C:\dev\pyconlyse\web'; python start_production.py"
+            "conda activate pyconlyse39; cd 'C:\dev\pyconlyse\web'; python start_production.py"
         )
         Start-Process powershell -ArgumentList $pyconlyseArgs -WindowStyle Normal
         Write-Host "Pyconlyse PRODUCTION server: Started on port 5000" -ForegroundColor Green

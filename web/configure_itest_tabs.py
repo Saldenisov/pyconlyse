@@ -3,7 +3,7 @@
 Configure iTest PSU Tab Layout in Tango DB
 
 This script sets up the tab_config property for the iTest PSU device,
-which defines which slots appear in each tab (VD, VD2, RF) and their default values.
+which defines which slots appear in each tab (V0, VD2, REF) and their default values.
 
 Usage:
     python configure_itest_tabs.py
@@ -39,12 +39,12 @@ if __name__ == "__main__":
     DEVICE_NAME = "ELYSE/pdu/iTest"
     
     # Example configuration:
-    # - VD tab shows slots 1, 2, 3 with default currents
+    # - V0 tab shows slots 1, 2, 3 with default currents
     # - VD2 tab shows slots 4, 5 with default currents
-    # - RF tab shows slots 6, 7, 8 with default currents
+    # - REF tab shows slots 6, 7, 8 with default currents
     
     config = {
-        "VD": {
+        "V0": {
             "slots": [1, 2, 3],
             "defaults": {
                 "1": 0.5,
@@ -59,7 +59,7 @@ if __name__ == "__main__":
                 "5": 1.5
             }
         },
-        "RF": {
+        "REF": {
             "slots": [6, 7, 8],
             "defaults": {
                 "6": 0.1,

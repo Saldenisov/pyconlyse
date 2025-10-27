@@ -334,9 +334,9 @@ def get_ds_itest_psu_tab_config(device_name):
         
         # Default configuration
         default_config = {
-            'VD': {'slots': [], 'defaults': {}, 'enabled': True},
+            'V0': {'slots': [], 'defaults': {}, 'enabled': True},
             'VD2': {'slots': [], 'defaults': {}, 'enabled': True},
-            'RF': {'slots': [], 'defaults': {}, 'enabled': True},
+            'REF': {'slots': [], 'defaults': {}, 'enabled': True},
             'ALL': {'slots': [], 'defaults': {}, 'enabled': True}
         }
         
@@ -344,9 +344,9 @@ def get_ds_itest_psu_tab_config(device_name):
             # Read tab_config property from Tango DB
             # Expected format: JSON string like:
             # {
-            #   "VD": {"slots": [1, 2, 3], "defaults": {"1": 0.5, "2": 1.0}},
+            #   "V0": {"slots": [1, 2, 3], "defaults": {"1": 0.5, "2": 1.0}},
             #   "VD2": {"slots": [4, 5], "defaults": {"4": 2.0}},
-            #   "RF": {"slots": [6, 7, 8], "defaults": {"6": 0.1}}
+            #   "REF": {"slots": [6, 7, 8], "defaults": {"6": 0.1}}
             # }
             prop_values = db.get_device_property(device_name, 'tab_config')
             

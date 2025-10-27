@@ -72,6 +72,97 @@
             min-width: 200px;
         }
 
+        .device-selector {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .device-selector h3 {
+            margin-bottom: 15px;
+            color: #2c3e50;
+        }
+
+        .device-list {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-bottom: 15px;
+        }
+
+        .device-item {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            margin-bottom: 5px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .device-item:hover {
+            background: #f8f9fa;
+        }
+
+        .device-item input[type="checkbox"] {
+            margin-right: 10px;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .device-item label {
+            flex: 1;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+        }
+
+        .selection-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .selection-btn {
+            padding: 8px 16px;
+            border: 1px solid #3498db;
+            border-radius: 4px;
+            background: white;
+            color: #3498db;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .selection-btn:hover {
+            background: #3498db;
+            color: white;
+        }
+
+        .apply-btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: #28a745;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .apply-btn:hover {
+            background: #218838;
+        }
+
+        .apply-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+
         .connection-status {
             display: flex;
             align-items: center;
@@ -306,6 +397,7 @@
                     <option value="alignment">alignment (16 motors)</option>
                     <option value="OPA">OPA (2 motors)</option>
                     <option value="test">test (2 motors)</option>
+                    <option value="custom">Custom Selection</option>
                 </select>
             </div>
 
@@ -320,6 +412,19 @@
                 <span id="motorCount">Loading...</span>
             </div>
         </div>
+    </div>
+
+    <div id="deviceSelector" class="device-selector" style="display: none;">
+        <h3>Select Standa Devices from Tango DB</h3>
+        <div class="selection-controls">
+            <button class="selection-btn" onclick="selectAllDevices()">Select All</button>
+            <button class="selection-btn" onclick="deselectAllDevices()">Deselect All</button>
+            <span id="selectionCount" style="margin-left: auto; color: #6c757d;">0 devices selected</span>
+        </div>
+        <div id="deviceList" class="device-list">
+            <div style="text-align: center; color: #6c757d; padding: 20px;">Loading devices...</div>
+        </div>
+        <button class="apply-btn" onclick="applyCustomSelection()" id="applyBtn" disabled>Apply Selection</button>
     </div>
 
     <div id="errorContainer"></div>
@@ -368,9 +473,22 @@
         let motors = {};
         let monitoring = false;
         let currentConfig = 'V0_short';
+        let availableDevices = [];
+        let selectedDevices = [];
 
         async function loadConfiguration() {
             currentConfig = document.getElementById('configSelect').value;
+            
+            if (currentConfig === 'custom') {
+                // Show device selector and fetch devices from Tango DB
+                document.getElementById('deviceSelector').style.display = 'block';
+                document.getElementById('motorsContainer').innerHTML = '';
+                await fetchAvailableDevices();
+                return;
+            } else {
+                document.getElementById('deviceSelector').style.display = 'none';
+            }
+            
             const config = MOTOR_CONFIGS[currentConfig];
             
             document.getElementById('motorsContainer').innerHTML = '<div class="loading">Loading motors...</div>';
@@ -381,6 +499,85 @@
             
             motors = {};
             for (const motorName of config.selection) {
+                await fetchMotorData(motorName);
+            }
+            
+            renderMotors();
+        }
+
+        async function fetchAvailableDevices() {
+            try {
+                const response = await fetch('/api/devices?server=*Standa*');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch devices');
+                }
+                const devices = await response.json();
+                availableDevices = devices.devices || [];
+                renderDeviceList();
+            } catch (err) {
+                console.error('Error fetching devices:', err);
+                document.getElementById('deviceList').innerHTML = 
+                    '<div style="text-align: center; color: #dc3545; padding: 20px;">Error loading devices. Please check the connection.</div>';
+            }
+        }
+
+        function renderDeviceList() {
+            const listContainer = document.getElementById('deviceList');
+            
+            if (availableDevices.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; color: #6c757d; padding: 20px;">No Standa devices found in Tango DB</div>';
+                return;
+            }
+            
+            listContainer.innerHTML = '';
+            availableDevices.forEach(device => {
+                const item = document.createElement('div');
+                item.className = 'device-item';
+                const deviceId = `device_${device.replace(/\//g, '_')}`;
+                item.innerHTML = `
+                    <input type="checkbox" id="${deviceId}" value="${device}" onchange="updateSelection()">
+                    <label for="${deviceId}">${device}</label>
+                `;
+                listContainer.appendChild(item);
+            });
+        }
+
+        function selectAllDevices() {
+            document.querySelectorAll('#deviceList input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
+            updateSelection();
+        }
+
+        function deselectAllDevices() {
+            document.querySelectorAll('#deviceList input[type="checkbox"]').forEach(cb => {
+                cb.checked = false;
+            });
+            updateSelection();
+        }
+
+        function updateSelection() {
+            selectedDevices = [];
+            document.querySelectorAll('#deviceList input[type="checkbox"]:checked').forEach(cb => {
+                selectedDevices.push(cb.value);
+            });
+            
+            document.getElementById('selectionCount').textContent = `${selectedDevices.length} device${selectedDevices.length !== 1 ? 's' : ''} selected`;
+            document.getElementById('applyBtn').disabled = selectedDevices.length === 0;
+        }
+
+        async function applyCustomSelection() {
+            if (selectedDevices.length === 0) return;
+            
+            document.getElementById('motorsContainer').innerHTML = '<div class="loading">Loading motors...</div>';
+            document.getElementById('motorCount').textContent = `${selectedDevices.length} motors`;
+            
+            // Calculate grid width based on number of devices
+            const gridWidth = selectedDevices.length <= 2 ? 2 : selectedDevices.length <= 8 ? 4 : 4;
+            document.getElementById('motorsContainer').style.gridTemplateColumns = `repeat(${gridWidth}, 1fr)`;
+            
+            motors = {};
+            for (const motorName of selectedDevices) {
                 await fetchMotorData(motorName);
             }
             

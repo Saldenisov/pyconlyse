@@ -245,6 +245,7 @@ class SimpleMainWindow(QMainWindow):
             "LASER_POINTING": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
             "KEYSIGHT": ["laser"],
             "ITEST": ["ELYSE", "ITestPSU/test", "ITestPSU/bilt", "ITestPSU/lab", "ITestPSU/main"],
+            "DAQMX_ZMQ": ["DAQMX_ZMQ_1"],
             # Additional clients (not shown in UI rows yet)
             "ANDOR_CCD": [],
             "AVANTES_CCD": [],
@@ -307,6 +308,9 @@ class SimpleMainWindow(QMainWindow):
                 "ITestPSU/lab": "iTest PSU Lab Rack (8 slots): lab/itest/psu01",
                 "ITestPSU/main": "iTest PSU Main Rack (8 slots): manip/power/itest_psu01",
             },
+            "DAQMX_ZMQ": {
+                "DAQMX_ZMQ_1": "DAQmx ZMQ Reader: control/DAQ/DAQMX_ZMQ_1 (receives from LabVIEW PSP)",
+            },
         }
         # Try to derive instance lists from installed client modules
         self._update_defaults_from_clients()
@@ -339,6 +343,12 @@ class SimpleMainWindow(QMainWindow):
                 self.icons_dir / "NETIO.png",
                 "client",
             ),
+            (
+                "DAQMX_ZMQ",
+                "DAQmx ZMQ",
+                self.icons_dir / "NETIO.png",
+                "client",
+            ),
         ]
 
         self.client_rows: Dict[str, Dict[str, QWidget]] = {}
@@ -362,9 +372,15 @@ class SimpleMainWindow(QMainWindow):
         vis_layout.addStretch()
         self.clients_layout.addWidget(vis_group)
 
-        # DS rows
-        for key, display, icon, kind in self._ds_rows_def:
-            row = QHBoxLayout()
+        # DS rows - 2 column grid layout
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(10)
+        grid.setVerticalSpacing(5)
+        
+        for idx, (key, display, icon, kind) in enumerate(self._ds_rows_def):
+            row = idx // 2
+            col = idx % 2
+            
             # Use TaurusCommandButton like legacy
             btn = TaurusCommandButton(text=display, parent=self.clients_tab)
             try:
@@ -390,19 +406,20 @@ class SimpleMainWindow(QMainWindow):
                     f"No {display} instances configured. Use Config menu to add."
                 )
 
-            # Layout
-            row.addWidget(btn)
-            row.addWidget(combo)
-            row.addStretch()
-            cont = QWidget()
-            cont.setLayout(row)
-            self.clients_layout.addWidget(cont)
+            # Add to grid: button in first column, combo in second column of each pair
+            grid.addWidget(btn, row, col * 2)
+            grid.addWidget(combo, row, col * 2 + 1)
 
             # Store refs
             self.client_rows[key] = {"button": btn, "combo": combo, "kind": kind}
 
             # Connect
             btn.clicked.connect(lambda _, k=key: self._launch_client(k))
+        
+        # Add grid to layout
+        grid_container = QWidget()
+        grid_container.setLayout(grid)
+        self.clients_layout.addWidget(grid_container)
 
         # Add Astor button at the end
         astor_row = QHBoxLayout()
@@ -937,6 +954,9 @@ class SimpleMainWindow(QMainWindow):
                 "ARCHIVE": "DeviceServers\\data\\archive\\DS_ARCHIVE_client.py",
                 "EXPERIMENT": (
                     "DeviceServers\\control\\experiment\\DS_Experiment_client.py"
+                ),
+                "DAQMX_ZMQ": (
+                    "DeviceServers\\control\\daqmx\\DS_DAQmx_zmq_client.py"
                 ),
             }
 
