@@ -741,15 +741,13 @@
                 axis.position = pos;
             }
             
+            // Update the displayed position (read-only display)
             const valueEl = document.getElementById(`pos-value-${axisId}`);
             if (valueEl) {
                 valueEl.textContent = pos.toFixed(3);
             }
             
-            const inputEl = document.getElementById(`pos-input-${axisId}`);
-            if (inputEl) {
-                inputEl.value = pos.toFixed(3);
-            }
+            // Input field is NEVER automatically updated - only by user input
         }
         
         function initializeWebSocket() {
