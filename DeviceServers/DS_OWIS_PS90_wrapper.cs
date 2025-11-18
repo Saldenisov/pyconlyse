@@ -64,58 +64,27 @@ Console.WriteLine("Instance: " + instanceName);
 Console.WriteLine("Terminal will remain open for monitoring and manual control.");
 Console.WriteLine("=====================================================");
 
-// Try Windows Terminal tab first
-bool launched = false;
-try
-{
-    ProcessStartInfo psiWT = new ProcessStartInfo();
-    psiWT.FileName = "wt.exe";
-    psiWT.Arguments = "-w 0 nt --title \"" + title + "\" -d \"" + deviceDir + "\" " + innerCmd;
-    psiWT.UseShellExecute = true;
-    psiWT.CreateNoWindow = false;
-    psiWT.WindowStyle = ProcessWindowStyle.Normal;
+// Launch directly in cmd.exe (faster than trying Windows Terminal first)
+ProcessStartInfo psi = new ProcessStartInfo();
+psi.FileName = "cmd.exe";
+psi.Arguments = "/k \"title " + title + " && cd /d \"" + deviceDir + "\" && \"" + activatePath + "\" " + pyconlyseEnv +
+               " && python DS_OWIS_PS90.py " + instanceName + "\"";
+psi.UseShellExecute = true;
+psi.CreateNoWindow = false;
+psi.WindowStyle = ProcessWindowStyle.Normal;
 
-    Console.WriteLine("Attempting to launch in Windows Terminal tab...");
-    var pwt = Process.Start(psiWT);
-    if (pwt != null)
-    {
-        Console.WriteLine("Launched in Windows Terminal tab.");
-        launched = true;
-    }
+Console.WriteLine("Starting device server in terminal...");
+var process = Process.Start(psi);
+if (process != null)
+{
+    Console.WriteLine("Device server started!");
+    Console.WriteLine("Process ID: " + process.Id);
+    return 0;
 }
-catch (Exception ex)
+else
 {
-    Console.WriteLine("Windows Terminal launch failed: " + ex.Message);
-}
-
-if (!launched)
-{
-    // Fallback to separate Command Prompt window
-    ProcessStartInfo psiCmd = new ProcessStartInfo();
-    psiCmd.FileName = "cmd.exe";
-    psiCmd.Arguments = "/k \"title " + title + " && cd /d \"" + deviceDir + "\" && \"" + activatePath + "\" " + pyconlyseEnv +
-                       " && echo Starting DS_OWIS_PS90 device server... && python DS_OWIS_PS90.py " + instanceName + "\"";
-    psiCmd.UseShellExecute = true;
-    psiCmd.CreateNoWindow = false;
-    psiCmd.WindowStyle = ProcessWindowStyle.Normal;
-
-    Console.WriteLine("Starting in a separate terminal window as fallback...");
-    var process = Process.Start(psiCmd);
-    if (process != null)
-    {
-        Console.WriteLine("Device server started successfully!");
-        Console.WriteLine("Process ID: " + process.Id);
-        Console.WriteLine("Terminal window title: " + title);
-        Console.WriteLine("");
-        Console.WriteLine("The device server is now running in a terminal.");
-        Console.WriteLine("You can monitor its output and close it manually.");
-        return 0;
-    }
-    else
-    {
-        Console.WriteLine("ERROR: Failed to start the Python device server process!");
-        return 1;
-    }
+    Console.WriteLine("ERROR: Failed to start the device server!");
+    return 1;
 }
 
 return 0;
