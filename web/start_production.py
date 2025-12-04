@@ -27,7 +27,7 @@ sys.path.insert(0, str(backend_dir))
 # Import and run the Flask application from backend directory
 original_cwd = os.getcwd()
 try:
-    os.chdir(backend_dir)
+    os.chdir(str(backend_dir))
     from app import socketio, app
 finally:
     os.chdir(original_cwd)
