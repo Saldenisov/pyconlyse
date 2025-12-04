@@ -1,11 +1,15 @@
 from typing import Union, List
 
+import logging
 import numpy as np
 
 from treatment_gui.views.matplotlib_canvas.MyMplCanvases import MyMplCanvas, AverageCanvas
 from gui.controllers.openers import (H5Opener, ASCIIOpener, HamamatsuFileOpener, CriticalInfoHamamatsu,
                                      Opener, OpenersTypes, OPENER_ACCRODANCE, CriticalInfo)
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement, Cursors2D
+
+
+module_logger = logging.getLogger(__name__)
 
 
 class KineticsCanvas(MyMplCanvas):
@@ -40,19 +44,15 @@ class KineticsCanvas(MyMplCanvas):
     def _form_average_data(self) -> Union[np.array, np.ndarray]:
         """Return kinetics: intensity vs time averaged over wavelength range.
 
-        ``measurement.data`` has shape (timedelays, wavelengths). The cursor x1/x2
-        indices select a wavelength *range*, so we slice along axis=1 and then
-        average over that axis to get a vector with length equal to the number of
-        time delays.
+        For Hamamatsu/H5 data we use ``Measurement.data`` with shape
+        (wavelengths, timedelays). The cursor x1/x2 indices select a wavelength
+        *range* along axis 0, so we slice that axis and average over it to get a
+        vector with length equal to the number of time delays.
         """
         beginning = self.cursors.x1[0]
         end = self.cursors.x2[0]
-
-        # Slice wavelength range on axis=1 → shape: (timedelays, selected_wavelengths)
-        data = self.measurement.data[:, beginning:end]
-
-        # Average over wavelengths → shape: (timedelays,)
-        return np.mean(data, axis=1)
+        data = self.measurement.data[beginning:end]
+        return np.mean(data, axis=0)
 
     def new_data(self, measurement: Measurement, cursors: Cursors2D, external_call=True):
         if measurement:
@@ -64,9 +64,48 @@ class KineticsCanvas(MyMplCanvas):
         if len(lines) > 1:
             for _ in range(len(lines) - 3):
                 self.axis.lines[-1].remove()
-        x, y = self._get_x_values(), self._form_average_data()
-        self.axis.plot(x, y, color='red', marker='o', markersize=4,
-                       linewidth=2.5)
+
+        x = self._get_x_values()
+        y = self._form_average_data()
+
+        # Detailed logging to diagnose potential dimension mismatches
+        try:
+            if len(x) != len(y):
+                module_logger.error(
+                    "KineticsCanvas: x/y length mismatch before plot: "
+                    "len(x)=%d, len(y)=%d, data.shape=%s, "
+                    "timedelays.shape=%s, wavelengths.shape=%s, "
+                    "cursors=%s, measurement.type=%s, time_scale=%s",
+                    len(x),
+                    len(y),
+                    getattr(self.measurement.data, "shape", None),
+                    getattr(self.measurement.timedelays, "shape", None),
+                    getattr(self.measurement.wavelengths, "shape", None),
+                    getattr(self, "cursors", None),
+                    getattr(self.measurement, "type", None),
+                    getattr(self.measurement, "time_scale", None),
+                )
+
+            self.axis.plot(x, y, color='red', marker='o', markersize=4,
+                           linewidth=2.5)
+        except ValueError:
+            module_logger.exception(
+                "KineticsCanvas: matplotlib ValueError during plot. "
+                "x.shape=%s, y.shape=%s, data.shape=%s, "
+                "timedelays.shape=%s, wavelengths.shape=%s, "
+                "cursors=%s, measurement.type=%s, time_scale=%s",
+                np.shape(x),
+                np.shape(y),
+                getattr(self.measurement.data, "shape", None),
+                getattr(self.measurement.timedelays, "shape", None),
+                getattr(self.measurement.wavelengths, "shape", None),
+                getattr(self, "cursors", None),
+                getattr(self.measurement, "type", None),
+                getattr(self.measurement, "time_scale", None),
+            )
+            # Re-raise so the caller still sees the error, but with extra context in logs
+            raise
+
         self.axis.set_xlabel(f'{self._x_text}, {self.measurement.time_scale}', fontsize=16)
 
         self.update_limits()
@@ -110,16 +149,15 @@ class KineticsAverage(AverageCanvas):
     def _form_data(self) -> Union[np.array, np.ndarray]:
         """Prepare kinetics data for a set of measurements.
 
-        Each measurement.data has shape (timedelays, wavelengths).
-        We average over the wavelength axis (axis=2) so that every entry in
-        ``self.measurements_formed`` is a kinetics trace: intensity vs time.
+        Each measurement.data has shape (wavelengths, timedelays). We average
+        over the *wavelength* axis (axis=1 in the stacked array) so that each
+        row in ``self.measurements_formed`` is a kinetics trace: intensity vs time.
         """
         self.timedelays = self.measurements[0].timedelays
         maps = np.array([map.data for map in self.measurements])
-
-        # maps.shape -> (n_maps, timedelays, wavelengths)
+        # maps.shape -> (n_maps, wavelengths, timedelays)
         # Average over wavelengths → (n_maps, timedelays)
-        self.measurements_formed = np.mean(maps, axis=2)
+        self.measurements_formed = np.mean(maps, axis=1)
         self.average_surface = np.sum(np.mean(self.measurements_formed, axis=0))
 
     def _form_average_data(self) -> Union[np.array, np.ndarray]:
