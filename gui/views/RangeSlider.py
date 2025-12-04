@@ -13,24 +13,47 @@ QRangeSlider * {
     padding: 0px;
 }
 QRangeSlider #Head {
-    background: #222;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #2c3e50, stop:1 #34495e);
+    border-radius: 3px;
 }
 QRangeSlider #Span {
-    background: #393;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #3498db, stop:1 #2980b9);
+    border-radius: 3px;
+    border: 1px solid #2471a3;
 }
 QRangeSlider #Span:active {
-    background: #282;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #5dade2, stop:1 #3498db);
 }
 QRangeSlider #Tail {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 #2c3e50, stop:1 #34495e);
+    border-radius: 3px;
 }
 QRangeSlider > QSplitter::handle {
-    background: #950;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #ecf0f1, stop:0.5 #bdc3c7, stop:1 #95a5a6);
+    border: 2px solid #34495e;
+    border-radius: 5px;
+    width: 12px;
 }
 QRangeSlider > QSplitter::handle:vertical {
-    height: 5px;
+    height: 20px;
+}
+QRangeSlider > QSplitter::handle:horizontal {
+    width: 12px;
+}
+QRangeSlider > QSplitter::handle:hover {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #ffffff, stop:0.5 #d5dbdb, stop:1 #aab7b8);
+    border: 2px solid #2980b9;
 }
 QRangeSlider > QSplitter::handle:pressed {
-    background: #ca5;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                                stop:0 #f39c12, stop:0.5 #e67e22, stop:1 #d35400);
+    border: 2px solid #c0392b;
 }
 
 """
@@ -50,9 +73,10 @@ class Ui_Form(object):
 
     def setupUi(self, Form, size_pixels):
         Form.setObjectName(_fromUtf8("QRangeSlider"))
-        Form.resize(size_pixels, 10)
+        Form.resize(size_pixels, 30)
         Form.setStyleSheet(_fromUtf8(DEFAULT_CSS))
         Form.setStyleSheet(DEFAULT_CSS)
+        Form.setMinimumHeight(30)
 
         self.layout = QtWidgets.QHBoxLayout(Form)
 
@@ -62,10 +86,13 @@ class Ui_Form(object):
         self.splitter.setOrientation(QtCore.Qt.Horizontal)
 
         self._head = QtWidgets.QGroupBox(self.splitter)
+        self._head.setObjectName("Head")
 
         self._handle = QtWidgets.QGroupBox(self.splitter)
+        self._handle.setObjectName("Span")
 
         self._tail = QtWidgets.QGroupBox(self.splitter)
+        self._tail.setObjectName("Tail")
 
         self.layout.addWidget(self.splitter)
 
@@ -116,8 +143,8 @@ class Head(Element):
 
     def drawText(self, event, qp):
         qp.setPen(self.textColor())
-        qp.setFont(QtGui.QFont('Arial', 10))
-        qp.drawText(event.rect(), QtCore.Qt.AlignLeft, str(self.main.min()))
+        qp.setFont(QtGui.QFont('Arial', 8))
+        qp.drawText(event.rect(), QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(self.main.min()))
 
 
 class Tail(Element):
@@ -128,8 +155,8 @@ class Tail(Element):
 
     def drawText(self, event, qp):
         qp.setPen(self.textColor())
-        qp.setFont(QtGui.QFont('Arial', 10))
-        qp.drawText(event.rect(), QtCore.Qt.AlignRight, str(self.main.max()))
+        qp.setFont(QtGui.QFont('Arial', 8))
+        qp.drawText(event.rect(), QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter, str(self.main.max()))
 
 
 class Handle(Element):
@@ -140,9 +167,13 @@ class Handle(Element):
 
     def drawText(self, event, qp):
         qp.setPen(self.textColor())
-        qp.setFont(QtGui.QFont('Arial', 10))
-        qp.drawText(event.rect(), QtCore.Qt.AlignLeft, str(self.main.start()))
-        qp.drawText(event.rect(), QtCore.Qt.AlignRight, str(self.main.end()))
+        qp.setFont(QtGui.QFont('Arial', 9, QtGui.QFont.Bold))
+        # Draw left value with some padding
+        left_rect = event.rect().adjusted(5, 0, 0, 0)
+        qp.drawText(left_rect, QtCore.Qt.AlignLeft | QtCore.Qt.AlignVCenter, str(self.main.start()))
+        # Draw right value with some padding
+        right_rect = event.rect().adjusted(0, 0, -5, 0)
+        qp.drawText(right_rect, QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter, str(self.main.end()))
 
     def mouseMoveEvent(self, event):
         event.accept()
@@ -267,10 +298,10 @@ class QRangeSlider(QtWidgets.QWidget, Ui_Form):
         # handle layout
         self._handle_layout = QtWidgets.QHBoxLayout()
         self._handle_layout.setSpacing(0)
-        self._handle_layout.setContentsMargins(0, 10, 0, 0)
+        self._handle_layout.setContentsMargins(0, 0, 0, 0)
         self._handle.setLayout(self._handle_layout)
         self.handle = Handle(self._handle, main=self)
-        self.handle.setTextColor((150, 255, 150))
+        self.handle.setTextColor((255, 255, 255))
         self._handle_layout.addWidget(self.handle)
 
         # defaults

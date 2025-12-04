@@ -375,26 +375,14 @@ class Ui_GraphWindow:
         maxY, maxX = self.datacanvas.measurement.data.shape
 
         self.kinetics_slider = RangeSlider.QRangeSlider(min=0.0, max=maxY, start=10, end=50, size_pixels=1000)
-        self.kinetics_slider.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                'stop:0 #222, stop:1 #333);')
-        self.kinetics_slider.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                  'stop:0 #282, stop:1 #393);')
 
         self.spectrum_slider = RangeSlider.QRangeSlider(min=0.0, max=maxX, start=10, end=50, size_pixels=1300)
-        self.spectrum_slider.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                'stop:0 #222, stop:1 #333);')
-        self.spectrum_slider.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                  'stop:0 #282, stop:1 #393);')
 
         self.data_colorbar_slider = RangeSlider.QRangeSlider(min=self.datacanvas.minv / 2,
                                                              max=self.datacanvas.maxv,
                                                              start=self.datacanvas.minv,
                                                              end=self.datacanvas.maxv,
                                                              size_pixels=500)
-        self.data_colorbar_slider.setBackgroundStyle('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                     'stop:0 #222, stop:1 #333);')
-        self.data_colorbar_slider.handle.setStyleSheet('background: qlineargradient(x1:0, y1:0, x2:0, y2:1, '
-                                                       'stop:0 #282, stop:1 #393);')
 
 
 class Ui_GraphVD2Window_(object):
