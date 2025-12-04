@@ -1,6 +1,7 @@
 #!/usr/bin/python3 -u
 import os
 import sys
+import time
 from pathlib import Path
 
 import cv2
@@ -131,13 +132,13 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.camera.OffsetX()
 
     def set_offsetX(self, value: int):
-        self.camera.OffsetX = value
+        self.camera.OffsetX.SetValue(value)
 
     def get_offsetY(self) -> int:
         return self.camera.OffsetY()
 
     def set_offsetY(self, value: int):
-        self.camera.OffsetY = value
+        self.camera.OffsetY.SetValue(value)
 
     def set_format_pixel(self, value: str):
         was_grabbing = False
@@ -340,7 +341,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         if not self.grabbing:
             self.start_grabbing()
 
-    def calc_cg(self, image, threshold=50):
+    def calc_cg(self, image):
         # apply thresholding
         cX, cY = 1024, 1024
         img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
@@ -409,7 +410,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                         dtype="uint8",
                     )
                     self.calc_cg(image)
-                    # data = self.form_acrhive_data(image, f'image', dt='uint8')
+                    # data = self.form_archive_data(image, f'image', dt='uint8')
                     # self.write_to_archive(data)
                     # Convert 3D array to 2D for Tango to transfer it
                     image2D = image.transpose(2, 0, 1).reshape(-1, image.shape[1])
@@ -425,8 +426,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.error("Too many grabbing errors, stopping grabbing thread")
                     break
                 # Small delay before retrying
-                import time
-
                 time.sleep(0.1)
 
         # Clean exit
