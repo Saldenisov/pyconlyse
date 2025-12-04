@@ -1,0 +1,274 @@
+.camera-client {
+  padding: 20px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.camera-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.camera-header h2 {
+  margin: 0;
+  color: #333;
+}
+
+.camera-select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+  min-width: 300px;
+}
+
+.camera-select:hover {
+  border-color: #007bff;
+}
+
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.error-message button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #721c24;
+  cursor: pointer;
+  padding: 0 5px;
+}
+
+.camera-content {
+  display: grid;
+  grid-template-columns: 450px 1fr;
+  gap: 20px;
+}
+
+.camera-info-panel {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.camera-info-panel h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 8px;
+}
+
+.info-grid {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  background: white;
+  border-radius: 4px;
+}
+
+.info-label {
+  font-weight: bold;
+  color: #555;
+}
+
+.info-value {
+  color: #333;
+}
+
+.state-on {
+  color: #28a745;
+  font-weight: bold;
+}
+
+.state-off {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.state-running {
+  color: #007bff;
+  font-weight: bold;
+}
+
+.controls-panel {
+  background: white;
+  padding: 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.control-buttons {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.control-buttons button {
+  flex: 1;
+  padding: 12px;
+  font-size: 14px;
+  font-weight: bold;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-start {
+  background-color: #28a745;
+  color: white;
+}
+
+.btn-start:hover:not(:disabled) {
+  background-color: #218838;
+}
+
+.btn-stop {
+  background-color: #dc3545;
+  color: white;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.btn-trigger {
+  background-color: #007bff;
+  color: white;
+}
+
+.btn-trigger:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.control-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.parameters {
+  display: grid;
+  gap: 15px;
+}
+
+.param-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.param-group label {
+  font-weight: bold;
+  color: #555;
+  font-size: 13px;
+}
+
+.param-group input {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.param-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.1);
+}
+
+.param-range {
+  font-size: 11px;
+  color: #888;
+}
+
+.cg-info {
+  background: white;
+  padding: 15px;
+  border-radius: 4px;
+  margin-top: 20px;
+}
+
+.cg-info h4 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.cg-info p {
+  margin: 0;
+  font-family: monospace;
+  color: #666;
+}
+
+.camera-preview-panel {
+  background: #f8f9fa;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.camera-preview-panel h3 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  color: #333;
+  border-bottom: 2px solid #007bff;
+  padding-bottom: 8px;
+}
+
+.preview-container {
+  flex: 1;
+  background: #000;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  position: relative;
+}
+
+.camera-canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.no-image {
+  color: #888;
+  font-size: 16px;
+  text-align: center;
+  padding: 20px;
+}
+
+@media (max-width: 1200px) {
+  .camera-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .camera-preview-panel {
+    min-height: 500px;
+  }
+}

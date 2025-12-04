@@ -7,6 +7,8 @@ const Equipment = () => {
   const [showPDUModal, setShowPDUModal] = useState(false);
   const [showMagnetsModal, setShowMagnetsModal] = useState(false);
   const [showMotorizedModal, setShowMotorizedModal] = useState(false);
+  // State to control Cameras modal
+  const [showCamerasModal, setShowCamerasModal] = useState(false);
 
   const equipmentItems = [
     { id: 1, label: "PDU", img: "/images/pdu.png" },
@@ -27,6 +29,9 @@ const Equipment = () => {
     } else if (equipmentId === 2) {
       setStatusMessage("Open the motorized stages clients in dedicated tabs.");
       setShowMotorizedModal(true);
+    } else if (equipmentId === 3) {
+      // For Cameras, open camera control interface
+      setShowCamerasModal(true);
     } else if (equipmentId === 4) {
       setStatusMessage("Open the iTest client in a dedicated tab.");
       setShowMagnetsModal(true);
@@ -79,6 +84,21 @@ const Equipment = () => {
               </a>
             </div>
             <button onClick={() => setShowMotorizedModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Cameras Modal */}
+      {showCamerasModal && (
+        <div className="modal-overlay" onClick={() => setShowCamerasModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Cameras - Camera Controllers</h2>
+            <div className="modal-links">
+              <a href="/basler_camera.html" target="_blank" rel="noopener noreferrer" className="modal-link">
+                Basler Cameras
+              </a>
+            </div>
+            <button onClick={() => setShowCamerasModal(false)} className="modal-close">Close</button>
           </div>
         </div>
       )}

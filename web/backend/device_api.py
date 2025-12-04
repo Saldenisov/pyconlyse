@@ -796,6 +796,236 @@ def camera_capture(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
+# Camera-specific endpoints
+@device_api.route('/api/cameras', methods=['GET'])
+def list_cameras():
+    """Get list of all available camera devices - fast query from Tango DB"""
+    try:
+        db = tango.Database()
+        
+        # Query Tango DB for camera device classes directly (much faster!)
+        camera_classes = ['DS_Basler_camera', 'DS_ANDOR_CCD', 'DS_AVANTES_CCD']
+        camera_list = []
+        
+        for dev_class in camera_classes:
+            try:
+                # Get all devices of this class from Tango DB
+                device_list = db.get_device_name('*', dev_class)
+                
+                for device_name in device_list:
+                    try:
+                        device = tango.DeviceProxy(device_name)
+                        state = str(device.state())
+                        
+                        camera_info = {
+                            'name': device_name,
+                            'state': state,
+                            'class': dev_class,
+                            'available': True
+                        }
+                        
+                        # Try to get camera-specific info (non-blocking)
+                        try:
+                            camera_info['serial_number'] = str(device.read_attribute('camera_serial_number').value)
+                        except:
+                            pass
+                        
+                        try:
+                            camera_info['model_name'] = str(device.read_attribute('camera_model_name').value)
+                        except:
+                            pass
+                        
+                        try:
+                            camera_info['friendly_name'] = str(device.read_attribute('device_friendly_name').value)
+                        except:
+                            pass
+                        
+                        camera_list.append(camera_info)
+                    except Exception as e:
+                        # Device exists in DB but may not be running
+                        camera_list.append({
+                            'name': device_name,
+                            'state': 'UNKNOWN',
+                            'class': dev_class,
+                            'available': False,
+                            'error': str(e)
+                        })
+            except Exception as e:
+                # Class not found or other error
+                print(f"No devices found for class {dev_class}: {e}")
+        
+        return jsonify({'cameras': camera_list, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/camera/<path:device_name>/info', methods=['GET'])
+def get_camera_info(device_name):
+    """Get detailed camera information"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        info = {
+            'name': device_name,
+            'state': str(device.state()),
+            'status': device.status(),
+        }
+        
+        # Camera-specific attributes
+        camera_attrs = [
+            'camera_serial_number', 'camera_model_name', 'device_friendly_name',
+            'exposure_time', 'exposure_min', 'exposure_max',
+            'gain', 'gain_min', 'gain_max',
+            'width', 'width_min', 'width_max',
+            'height', 'height_min', 'height_max',
+            'offsetX', 'offsetY',
+            'format_pixel', 'framerate', 'isgrabbing',
+            'binning_horizontal', 'binning_vertical',
+            'trigger_mode', 'trigger_delay',
+            'cg'
+        ]
+        
+        for attr_name in camera_attrs:
+            try:
+                attr = device.read_attribute(attr_name)
+                info[attr_name] = make_json_safe(attr.value)
+            except:
+                pass
+        
+        return jsonify({'camera_info': info, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/camera/<path:device_name>/parameters', methods=['GET', 'POST'])
+def handle_camera_parameters(device_name):
+    """Get or set camera parameters"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        if request.method == 'GET':
+            parameters = {}
+            param_names = ['exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY', 
+                          'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal', 'binning_vertical']
+            
+            for param in param_names:
+                try:
+                    attr = device.read_attribute(param)
+                    parameters[param] = make_json_safe(attr.value)
+                except:
+                    pass
+            
+            return jsonify({'parameters': parameters, 'success': True})
+        
+        elif request.method == 'POST':
+            data = request.get_json()
+            results = {}
+            
+            for param_name, param_value in data.items():
+                try:
+                    device.write_attribute(param_name, param_value)
+                    # Read back to confirm
+                    attr = device.read_attribute(param_name)
+                    results[param_name] = {'success': True, 'value': make_json_safe(attr.value)}
+                except Exception as e:
+                    results[param_name] = {'success': False, 'error': str(e)}
+            
+            return jsonify({'results': results, 'success': True})
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/camera/<path:device_name>/grabbing', methods=['GET', 'POST'])
+def handle_camera_grabbing(device_name):
+    """Control camera grabbing (start/stop)"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        if request.method == 'GET':
+            is_grabbing = bool(device.read_attribute('isgrabbing').value)
+            return jsonify({
+                'grabbing': is_grabbing,
+                'success': True
+            })
+        
+        elif request.method == 'POST':
+            data = request.get_json()
+            action = data.get('action')  # 'start' or 'stop'
+            
+            if action == 'start':
+                device.command_inout('start_grabbing')
+                message = 'Grabbing started'
+            elif action == 'stop':
+                device.command_inout('stop_grabbing')
+                message = 'Grabbing stopped'
+            else:
+                return jsonify({'error': 'Invalid action. Use "start" or "stop"', 'success': False}), 400
+            
+            # Read back status
+            is_grabbing = bool(device.read_attribute('isgrabbing').value)
+            
+            return jsonify({
+                'message': message,
+                'grabbing': is_grabbing,
+                'success': True
+            })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/camera/<path:device_name>/image', methods=['GET'])
+def get_camera_image(device_name):
+    """Get the last captured image from camera"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        # Read image attribute
+        image_attr = device.read_attribute('image')
+        image_data = image_attr.value
+        
+        if image_data is None:
+            return jsonify({'error': 'No image available', 'success': False}), 404
+        
+        # Get center of gravity if available
+        cg_position = None
+        try:
+            cg_str = str(device.read_attribute('cg').value)
+            import ast
+            cg_position = ast.literal_eval(cg_str)
+        except:
+            pass
+        
+        return jsonify({
+            'image': make_json_safe(image_data),
+            'cg_position': cg_position,
+            'timestamp': image_attr.time.tv_sec if hasattr(image_attr, 'time') else None,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/camera/<path:device_name>/trigger', methods=['POST'])
+def trigger_camera(device_name):
+    """Trigger camera software trigger"""
+    try:
+        device = DeviceManager.get_device(device_name)
+        
+        # Execute software trigger if supported
+        try:
+            device.command_inout('TriggerSoftware')
+            message = 'Software trigger executed'
+        except:
+            # Fallback to generic trigger
+            device.command_inout('Trigger')
+            message = 'Trigger executed'
+        
+        return jsonify({
+            'message': message,
+            'success': True
+        })
+    
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
 # Error handling
 @device_api.errorhandler(Exception)
 def handle_device_error(error):

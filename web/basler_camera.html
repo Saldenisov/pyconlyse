@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basler Camera Control</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            gap: 0;
+            min-height: calc(100vh - 200px);
+        }
+
+        .sidebar {
+            background: #f8f9fa;
+            padding: 30px;
+            border-right: 1px solid #e0e0e0;
+        }
+
+        .sidebar h2 {
+            margin-bottom: 20px;
+            color: #333;
+            font-size: 1.5em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .camera-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .camera-item {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .camera-item:hover {
+            border-color: #667eea;
+            transform: translateX(5px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+
+        .camera-item.active {
+            border-color: #667eea;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .camera-item-name {
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-bottom: 5px;
+        }
+
+        .camera-item-info {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .main-panel {
+            padding: 30px;
+        }
+
+        .main-panel h2 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 1.8em;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .no-selection {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            font-size: 1.3em;
+        }
+
+        .no-selection-icon {
+            font-size: 5em;
+            margin-bottom: 20px;
+            opacity: 0.3;
+        }
+
+        .camera-controls {
+            display: grid;
+            gap: 20px;
+        }
+
+        .control-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .control-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 8px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            background: white;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #555;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .state-on {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .state-off {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: bold;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-start {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .btn-start:hover:not(:disabled) {
+            background-color: #218838;
+        }
+
+        .btn-stop {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .btn-stop:hover:not(:disabled) {
+            background-color: #c82333;
+        }
+
+        .btn-trigger {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .btn-trigger:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+
+        .param-group {
+            margin-bottom: 15px;
+        }
+
+        .param-group label {
+            display: block;
+            font-weight: bold;
+            color: #555;
+            margin-bottom: 5px;
+        }
+
+        .param-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .param-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .param-range {
+            font-size: 12px;
+            color: #888;
+            margin-top: 3px;
+        }
+
+        .preview-container {
+            background: #000;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+        }
+
+        canvas {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 6px;
+        }
+
+        .no-image {
+            color: #888;
+            font-size: 1.2em;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 12px 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid #dc3545;
+        }
+
+        .cg-info {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+        }
+
+        .cg-info h4 {
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .cg-info p {
+            font-family: 'Courier New', monospace;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 Basler Camera Control</h1>
+            <p>Select a camera to view controls and live preview</p>
+        </div>
+
+        <div class="content">
+            <div class="sidebar">
+                <h2>Available Cameras</h2>
+                <div id="cameraList" class="camera-list">
+                    <div style="text-align: center; padding: 20px; color: #999;">
+                        <div class="loading"></div>
+                        <p style="margin-top: 10px;">Loading cameras...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="main-panel">
+                <div id="noSelection" class="no-selection">
+                    <div class="no-selection-icon">📷</div>
+                    <p>Select a camera from the list to begin</p>
+                </div>
+
+                <div id="cameraControls" style="display: none;">
+                    <h2 id="cameraTitle">Camera Control</h2>
+
+                    <div id="errorMessage" class="error-message" style="display: none;"></div>
+
+                    <div class="control-section">
+                        <h3>Camera Information</h3>
+                        <div class="info-grid" id="cameraInfo">
+                            <!-- Dynamic info will be inserted here -->
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Grabbing Control</h3>
+                        <div class="button-group">
+                            <button id="btnStartGrabbing" class="btn-start" onclick="handleStartGrabbing()">
+                                Start Grabbing
+                            </button>
+                            <button id="btnStopGrabbing" class="btn-stop" onclick="handleStopGrabbing()" style="display: none;">
+                                Stop Grabbing
+                            </button>
+                            <button id="btnTrigger" class="btn-trigger" onclick="handleTrigger()">
+                                Software Trigger
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Camera Parameters</h3>
+                        <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
+                            <div class="param-group">
+                                <label>Exposure Time (µs)</label>
+                                <input type="number" id="exposureTime" onchange="setParameter('exposure_time', this.value)">
+                                <div class="param-range" id="exposureRange"></div>
+                            </div>
+                            <div class="param-group">
+                                <label>Gain</label>
+                                <input type="number" id="gain" onchange="setParameter('gain', this.value)">
+                                <div class="param-range" id="gainRange"></div>
+                            </div>
+                            <div class="param-group">
+                                <label>Width (px)</label>
+                                <input type="number" id="width" onchange="setParameter('width', this.value)">
+                                <div class="param-range" id="widthRange"></div>
+                            </div>
+                            <div class="param-group">
+                                <label>Height (px)</label>
+                                <input type="number" id="height" onchange="setParameter('height', this.value)">
+                                <div class="param-range" id="heightRange"></div>
+                            </div>
+                        </div>
+                        <div id="cgInfo" class="cg-info" style="display: none;">
+                            <h4>Center of Gravity</h4>
+                            <p id="cgPosition">X: 0, Y: 0</p>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Live Preview</h3>
+                        <div class="preview-container">
+                            <canvas id="imageCanvas"></canvas>
+                            <div id="noImage" class="no-image">Start grabbing to see live preview</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://10.20.30.202:5001/api';
+        let selectedCamera = null;
+        let updateInterval = null;
+
+        // Load cameras on page load
+        window.addEventListener('load', () => {
+            loadCameras();
+        });
+
+        async function loadCameras() {
+            try {
+                const response = await fetch(`${API_BASE}/cameras`);
+                const data = await response.json();
+                
+                if (data.success && data.cameras && data.cameras.length > 0) {
+                    displayCameras(data.cameras);
+                } else {
+                    document.getElementById('cameraList').innerHTML = '<p style="text-align: center; color: #999;">No cameras found</p>';
+                }
+            } catch (err) {
+                document.getElementById('cameraList').innerHTML = `<p style="text-align: center; color: #dc3545;">Error loading cameras: ${err.message}</p>`;
+            }
+        }
+
+        function displayCameras(cameras) {
+            const listHtml = cameras.map(cam => `
+                <div class="camera-item" onclick="selectCamera('${cam.name}')">
+                    <div class="camera-item-name">${cam.friendly_name || cam.name}</div>
+                    <div class="camera-item-info">
+                        ${cam.model_name || ''}<br>
+                        Serial: ${cam.serial_number || 'N/A'}<br>
+                        State: <span class="state-${cam.state.toLowerCase()}">${cam.state}</span>
+                    </div>
+                </div>
+            `).join('');
+            
+            document.getElementById('cameraList').innerHTML = listHtml;
+        }
+
+        async function selectCamera(cameraName) {
+            selectedCamera = cameraName;
+            
+            // Update UI
+            document.querySelectorAll('.camera-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            event.target.closest('.camera-item').classList.add('active');
+            
+            document.getElementById('noSelection').style.display = 'none';
+            document.getElementById('cameraControls').style.display = 'block';
+            document.getElementById('cameraTitle').textContent = cameraName;
+            
+            // Load camera info
+            await loadCameraInfo();
+            
+            // Start update interval
+            if (updateInterval) clearInterval(updateInterval);
+            updateInterval = setInterval(updateCameraStatus, 1000);
+        }
+
+        async function loadCameraInfo() {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/info`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    const info = data.camera_info;
+                    
+                    // Display camera info
+                    document.getElementById('cameraInfo').innerHTML = `
+                        <div class="info-item"><span class="info-label">Model:</span><span class="info-value">${info.camera_model_name || 'N/A'}</span></div>
+                        <div class="info-item"><span class="info-label">Serial:</span><span class="info-value">${info.camera_serial_number || 'N/A'}</span></div>
+                        <div class="info-item"><span class="info-label">State:</span><span class="info-value state-${info.state.toLowerCase()}">${info.state}</span></div>
+                        <div class="info-item"><span class="info-label">Frame Rate:</span><span class="info-value">${info.framerate?.toFixed(2) || '0.00'} fps</span></div>
+                    `;
+                    
+                    // Set parameter values and ranges
+                    document.getElementById('exposureTime').value = info.exposure_time || 0;
+                    document.getElementById('exposureRange').textContent = `(${info.exposure_min} - ${info.exposure_max})`;
+                    
+                    document.getElementById('gain').value = info.gain || 0;
+                    document.getElementById('gainRange').textContent = `(${info.gain_min} - ${info.gain_max})`;
+                    
+                    document.getElementById('width').value = info.width || 0;
+                    document.getElementById('widthRange').textContent = `(${info.width_min} - ${info.width_max})`;
+                    
+                    document.getElementById('height').value = info.height || 0;
+                    document.getElementById('heightRange').textContent = `(${info.height_min} - ${info.height_max})`;
+                    
+                    // Update grabbing buttons
+                    updateGrabbingButtons(info.isgrabbing);
+                }
+            } catch (err) {
+                showError('Failed to load camera info: ' + err.message);
+            }
+        }
+
+        async function updateCameraStatus() {
+            if (!selectedCamera) return;
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateGrabbingButtons(data.grabbing);
+                    
+                    if (data.grabbing) {
+                        await getImage();
+                    }
+                }
+            } catch (err) {
+                console.error('Status update error:', err);
+            }
+        }
+
+        function updateGrabbingButtons(isGrabbing) {
+            document.getElementById('btnStartGrabbing').style.display = isGrabbing ? 'none' : 'block';
+            document.getElementById('btnStopGrabbing').style.display = isGrabbing ? 'block' : 'none';
+            document.getElementById('btnTrigger').disabled = !isGrabbing;
+        }
+
+        async function handleStartGrabbing() {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'start' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateGrabbingButtons(data.grabbing);
+                } else {
+                    showError(data.error);
+                }
+            } catch (err) {
+                showError('Failed to start grabbing: ' + err.message);
+            }
+        }
+
+        async function handleStopGrabbing() {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stop' })
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    updateGrabbingButtons(data.grabbing);
+                } else {
+                    showError(data.error);
+                }
+            } catch (err) {
+                showError('Failed to stop grabbing: ' + err.message);
+            }
+        }
+
+        async function handleTrigger() {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                
+                if (!data.success) {
+                    showError(data.error);
+                }
+            } catch (err) {
+                showError('Failed to trigger: ' + err.message);
+            }
+        }
+
+        async function setParameter(paramName, value) {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [paramName]: parseFloat(value) })
+                });
+                const data = await response.json();
+                
+                if (!data.success) {
+                    showError(data.error);
+                }
+            } catch (err) {
+                showError('Failed to set parameter: ' + err.message);
+            }
+        }
+
+        async function getImage() {
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
+                const data = await response.json();
+                
+                if (data.success && data.image) {
+                    drawImage(data.image, data.cg_position);
+                    
+                    if (data.cg_position) {
+                        document.getElementById('cgInfo').style.display = 'block';
+                        document.getElementById('cgPosition').textContent = `X: ${data.cg_position.X}, Y: ${data.cg_position.Y}`;
+                    }
+                }
+            } catch (err) {
+                console.error('Image fetch error:', err);
+            }
+        }
+
+        function drawImage(imageArray, cg) {
+            const canvas = document.getElementById('imageCanvas');
+            const noImage = document.getElementById('noImage');
+            
+            if (!imageArray || imageArray.length === 0) return;
+            
+            const ctx = canvas.getContext('2d');
+            const height = Math.floor(imageArray.length / 3);
+            const width = imageArray[0].length;
+            
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.display = 'block';
+            noImage.style.display = 'none';
+            
+            const imgData = ctx.createImageData(width, height);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    imgData.data[idx] = imageArray[y][x];
+                    imgData.data[idx + 1] = imageArray[y + height][x];
+                    imgData.data[idx + 2] = imageArray[y + height * 2][x];
+                    imgData.data[idx + 3] = 255;
+                }
+            }
+            
+            ctx.putImageData(imgData, 0, 0);
+            
+            // Draw center of gravity
+            if (cg && cg.X && cg.Y) {
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cg.X, cg.Y, 10, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.moveTo(cg.X - 15, cg.Y);
+                ctx.lineTo(cg.X + 15, cg.Y);
+                ctx.moveTo(cg.X, cg.Y - 15);
+                ctx.lineTo(cg.X, cg.Y + 15);
+                ctx.stroke();
+            }
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

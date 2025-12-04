@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera API Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button.danger {
+            background-color: #dc3545;
+        }
+        button.danger:hover {
+            background-color: #c82333;
+        }
+        button.success {
+            background-color: #28a745;
+        }
+        button.success:hover {
+            background-color: #218838;
+        }
+        #output {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        select, input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .param-group {
+            display: inline-flex;
+            flex-direction: column;
+            margin: 10px;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        canvas {
+            border: 2px solid #333;
+            background: #000;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera API Test Page</h1>
+    
+    <div class="section">
+        <h2>1. List Cameras</h2>
+        <button onclick="listCameras()" class="success">List All Cameras</button>
+        <select id="cameraSelect" onchange="updateSelectedCamera()">
+            <option value="">-- Select Camera --</option>
+        </select>
+    </div>
+    
+    <div class="section">
+        <h2>2. Camera Info</h2>
+        <button onclick="getCameraInfo()">Get Camera Info</button>
+    </div>
+    
+    <div class="section">
+        <h2>3. Camera Parameters</h2>
+        <button onclick="getParameters()">Get Parameters</button>
+        <div class="param-group">
+            <label>Exposure Time (µs):</label>
+            <input type="number" id="exposureTime" value="1000">
+            <button onclick="setParameter('exposure_time')">Set Exposure</button>
+        </div>
+        <div class="param-group">
+            <label>Gain:</label>
+            <input type="number" id="gain" value="0">
+            <button onclick="setParameter('gain')">Set Gain</button>
+        </div>
+    </div>
+    
+    <div class="section">
+        <h2>4. Grabbing Control</h2>
+        <button onclick="startGrabbing()" class="success">Start Grabbing</button>
+        <button onclick="stopGrabbing()" class="danger">Stop Grabbing</button>
+        <button onclick="checkGrabbingStatus()">Check Status</button>
+        <button onclick="triggerCamera()">Software Trigger</button>
+    </div>
+    
+    <div class="section">
+        <h2>5. Image Preview</h2>
+        <button onclick="getImage()">Get Last Image</button>
+        <button onclick="toggleAutoRefresh()">Toggle Auto-Refresh</button>
+        <span id="autoRefreshStatus">Auto-refresh: OFF</span>
+        <br><br>
+        <canvas id="imageCanvas" width="640" height="480"></canvas>
+    </div>
+    
+    <div class="section">
+        <h2>API Response</h2>
+        <button onclick="clearOutput()">Clear</button>
+        <div id="output">Waiting for API calls...</div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://10.20.30.202:5000/api';
+        let selectedCamera = null;
+        let autoRefreshInterval = null;
+        let autoRefreshEnabled = false;
+
+        function log(message) {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent = `[${timestamp}] ${message}\n\n${output.textContent}`;
+        }
+
+        function clearOutput() {
+            document.getElementById('output').textContent = 'Output cleared.';
+        }
+
+        function updateSelectedCamera() {
+            const select = document.getElementById('cameraSelect');
+            selectedCamera = select.value;
+            log(`Selected camera: ${selectedCamera}`);
+        }
+
+        async function listCameras() {
+            try {
+                const response = await fetch(`${API_BASE}/cameras`);
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+                
+                if (data.success && data.cameras) {
+                    const select = document.getElementById('cameraSelect');
+                    select.innerHTML = '<option value="">-- Select Camera --</option>';
+                    data.cameras.forEach(cam => {
+                        const option = document.createElement('option');
+                        option.value = cam.name;
+                        option.textContent = `${cam.friendly_name || cam.name} (${cam.state})`;
+                        select.appendChild(option);
+                    });
+                    
+                    if (data.cameras.length > 0) {
+                        select.value = data.cameras[0].name;
+                        updateSelectedCamera();
+                    }
+                }
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function getCameraInfo() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/info`);
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function getParameters() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`);
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function setParameter(paramName) {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            let value;
+            if (paramName === 'exposure_time') {
+                value = parseFloat(document.getElementById('exposureTime').value);
+            } else if (paramName === 'gain') {
+                value = parseInt(document.getElementById('gain').value);
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ [paramName]: value })
+                });
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function startGrabbing() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'start' })
+                });
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function stopGrabbing() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: 'stop' })
+                });
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function checkGrabbingStatus() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`);
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function triggerCamera() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/trigger`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                const data = await response.json();
+                log(JSON.stringify(data, null, 2));
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        async function getImage() {
+            if (!selectedCamera) {
+                log('Please select a camera first');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
+                const data = await response.json();
+                
+                if (data.success && data.image) {
+                    log(`Image received. CG: ${JSON.stringify(data.cg_position)}`);
+                    drawImage(data.image, data.cg_position);
+                } else {
+                    log(JSON.stringify(data, null, 2));
+                }
+            } catch (err) {
+                log(`Error: ${err.message}`);
+            }
+        }
+
+        function drawImage(imageArray, cg) {
+            const canvas = document.getElementById('imageCanvas');
+            const ctx = canvas.getContext('2d');
+            
+            if (!imageArray || imageArray.length === 0) {
+                log('No image data to display');
+                return;
+            }
+            
+            // Image is stored as 2D array [channels*height, width] for RGB
+            const height = Math.floor(imageArray.length / 3);
+            const width = imageArray[0].length;
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            const imgData = ctx.createImageData(width, height);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = (y * width + x) * 4;
+                    imgData.data[idx] = imageArray[y][x];           // R
+                    imgData.data[idx + 1] = imageArray[y + height][x]; // G
+                    imgData.data[idx + 2] = imageArray[y + height * 2][x]; // B
+                    imgData.data[idx + 3] = 255;                    // A
+                }
+            }
+            
+            ctx.putImageData(imgData, 0, 0);
+            
+            // Draw center of gravity marker
+            if (cg && cg.X && cg.Y) {
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(cg.X, cg.Y, 10, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Draw crosshair
+                ctx.beginPath();
+                ctx.moveTo(cg.X - 15, cg.Y);
+                ctx.lineTo(cg.X + 15, cg.Y);
+                ctx.moveTo(cg.X, cg.Y - 15);
+                ctx.lineTo(cg.X, cg.Y + 15);
+                ctx.stroke();
+            }
+        }
+
+        function toggleAutoRefresh() {
+            autoRefreshEnabled = !autoRefreshEnabled;
+            const status = document.getElementById('autoRefreshStatus');
+            
+            if (autoRefreshEnabled) {
+                status.textContent = 'Auto-refresh: ON';
+                autoRefreshInterval = setInterval(getImage, 1000);
+                log('Auto-refresh enabled (1s interval)');
+            } else {
+                status.textContent = 'Auto-refresh: OFF';
+                if (autoRefreshInterval) {
+                    clearInterval(autoRefreshInterval);
+                    autoRefreshInterval = null;
+                }
+                log('Auto-refresh disabled');
+            }
+        }
+
+        // Load cameras on page load
+        window.addEventListener('load', () => {
+            listCameras();
+        });
+    </script>
+</body>
+</html>

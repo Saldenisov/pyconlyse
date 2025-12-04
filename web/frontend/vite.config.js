@@ -6,7 +6,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: true
+    open: true,
+    proxy: {
+      '/api': {
+        target: 'http://10.20.30.202:5001',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     outDir: 'build',

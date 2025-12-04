@@ -9,6 +9,7 @@ from folder_api import folder_api  # Folder-related endpoints
 from device_api import device_api  # Device control API endpoints
 from treatment_api import treatment_api  # Treatment workflow API
 from auth import auth            # Authentication endpoints
+from treatment_api import treatment_api  # Data treatment endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
 app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
@@ -28,6 +29,7 @@ app.register_blueprint(folder_api)
 app.register_blueprint(device_api)  # Add device API
 app.register_blueprint(treatment_api)  # Add treatment API
 app.register_blueprint(auth)        # Add auth API
+app.register_blueprint(treatment_api)  # Add treatment API
 
 # Initialize WebSocket support
 socketio = init_socketio(app)
@@ -71,6 +73,28 @@ def standa_motors_test():
     response.headers['Expires'] = '0'
     return response
 
+# Route for Camera API test page
+@app.route('/test_camera_api.html')
+def camera_api_test():
+    from flask import make_response
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_camera_api.html')
+    response = make_response(send_from_directory(os.path.dirname(test_page_path), 'test_camera_api.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
+# Route for Basler Camera control page
+@app.route('/basler_camera.html')
+def basler_camera():
+    from flask import make_response
+    test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'basler_camera.html')
+    response = make_response(send_from_directory(os.path.dirname(test_page_path), 'basler_camera.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 # Catch-all route to serve your React app.
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -85,8 +109,13 @@ def serve(path):
         if os.path.exists(file_path):
             return send_from_directory(app.static_folder, path)
     
-    # For all other paths (including React routes), serve index.html
-    return send_from_directory(app.static_folder, 'index.html')
+    # For all other paths (including React routes), serve index.html with no-cache headers
+    from flask import make_response
+    response = make_response(send_from_directory(app.static_folder, 'index.html'))
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 if __name__ == '__main__':
     # DEVELOPMENT MODE ONLY
