@@ -36,14 +36,30 @@ module_logger = logging.getLogger(__name__)
 class TreatmentController:
 
     def __init__(self, in_model: TreatmentModel):
-        self.logger = logging.getLogger("VD2Treatment")
-        self.name = "VD2TreatmentModel:controller"
-        info_msg(self, "INITIALIZING")
-        self.model = in_model
-        self.view = TreatmentView(self)
-        self.view.show()
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("="*60)
+        self.logger.info("TreatmentController initialization starting")
+        self.logger.info("="*60)
+        
+        try:
+            self.name = "VD2TreatmentModel:controller"
+            info_msg(self, "INITIALIZING")
+            
+            self.logger.info("Creating TreatmentView...")
+            self.model = in_model
+            self.view = TreatmentView(self)
+            self.logger.info("TreatmentView created successfully")
+            
+            self.logger.info("Showing main window...")
+            self.view.show()
+            self.logger.info("Main window displayed")
 
-        info_msg(self, "INITIALIZED")
+            info_msg(self, "INITIALIZED")
+            self.logger.info("TreatmentController initialization complete")
+        except Exception as e:
+            self.logger.error("CRITICAL: Failed to initialize TreatmentController")
+            self.logger.exception(f"Initialization error: {e}")
+            raise  # Re-raise to prevent running with broken controller
 
     def average_noise(self) -> None:
         res, comments = self.model.average_noise()
@@ -53,25 +69,52 @@ class TreatmentController:
             error_dialog.exec_()
 
     def calc_abs(self) -> None:
-        self.view.ui.progressbar_calc.setValue(0)
-        exp = TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
-        if self.view.ui.radiobutton_individual.isChecked():
-            how = "individual"
-        elif self.view.ui.radiobutton_averaged.isChecked():
-            how = "averaged"
-        else:
-            how = "individual"
+        module_logger.info("Starting absorption calculation")
+        try:
+            self.view.ui.progressbar_calc.setValue(0)
+            
+            exp = TreatmentModel.ExpDataStruct(self.view.ui.combobox_type_exp.currentText())
+            module_logger.info(f"Experiment type: {exp.value}")
+            
+            if self.view.ui.radiobutton_individual.isChecked():
+                how = "individual"
+            elif self.view.ui.radiobutton_averaged.isChecked():
+                how = "averaged"
+            else:
+                how = "individual"
+            module_logger.info(f"Calculation mode: {how}")
 
-        first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
-        self.model.calc_abs(exp, how, first_map_with_electrons)
+            first_map_with_electrons: bool = self.view.ui.checkbox_first_img_with_pulse.isChecked()
+            module_logger.info(f"First map with electrons: {first_map_with_electrons}")
+            
+            module_logger.info("Calling model.calc_abs...")
+            self.model.calc_abs(exp, how, first_map_with_electrons)
+            module_logger.info("Absorption calculation complete")
+        except Exception as e:
+            module_logger.error(f"Absorption calculation failed: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.calc_abs, f"Failed to calculate absorption: {str(e)}")
 
     def combobox_files_changed(self) -> None:
-        file_path = Path(self.view.ui.combobox_files_selected.currentText())
-        if file_path.is_file():
-            if self.view.ui.data_slider.value() != 0:
-                self.view.ui.data_slider.setValue(0)
+        try:
+            file_path = Path(self.view.ui.combobox_files_selected.currentText())
+            module_logger.info(f"File selection changed: {file_path}")
+            
+            if file_path.is_file():
+                module_logger.debug(f"File is valid, loading data")
+                if self.view.ui.data_slider.value() != 0:
+                    module_logger.debug("Resetting slider to 0")
+                    self.view.ui.data_slider.setValue(0)
+                else:
+                    module_logger.debug("Reading data from file (map 0)")
+                    self.model.read_data(file_path, 0, new=True)
+                module_logger.info("File loaded successfully")
             else:
-                self.model.read_data(file_path, 0, new=True)
+                module_logger.warning(f"Selected file is not valid: {file_path}")
+        except Exception as e:
+            module_logger.error(f"Failed to load file: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.combobox_files_changed, f"Error loading file: {str(e)}")
 
     def data_cursor_update(self, eclick, erelease) -> None:
         """Legacy method for RectangleSelector (kept for compatibility)."""
@@ -176,44 +219,137 @@ class TreatmentController:
         error_dialog.exec_()
 
     def calc_sam(self) -> None:
+        module_logger.info("Starting SAM (Spectral Angle Mapping) calculation")
+        
+        try:
+            def spectral_angle_mapping(pixel_spectrum, reference_spectrum):
+                pixel_spectrum /= np.linalg.norm(pixel_spectrum)
+                reference_spectrum /= np.linalg.norm(reference_spectrum)
+                dot_product = np.dot(pixel_spectrum, reference_spectrum)
+                spectral_angle_radians = np.arccos(np.clip(dot_product, -1.0, 1.0))
+                spectral_angle_degrees = np.degrees(spectral_angle_radians)
+                return spectral_angle_degrees
 
-        def spectral_angle_mapping(pixel_spectrum, reference_spectrum):
-            pixel_spectrum /= np.linalg.norm(pixel_spectrum)
-            reference_spectrum /= np.linalg.norm(reference_spectrum)
-            dot_product = np.dot(pixel_spectrum, reference_spectrum)
-            spectral_angle_radians = np.arccos(np.clip(dot_product, -1.0, 1.0))
-            spectral_angle_degrees = np.degrees(spectral_angle_radians)
-            return spectral_angle_degrees
+            data = self.view.ui.kinetics_average_canvas.measurements_formed[:]
+            if len(data) == 0:
+                module_logger.warning("No measurements available for SAM calculation")
+                self.show_error(self.calc_sam, "No measurements loaded. Please load data first.")
+                return
+                
+            module_logger.info(f"Processing {len(data)} measurements")
+            
+            ref_array = np.mean(data, axis=0)
+            module_logger.debug(f"Reference array shape: {ref_array.shape}")
+            
+            spectral_angles = []
+            for i, pixel_spectrum in enumerate(data):
+                sam_value = spectral_angle_mapping(pixel_spectrum, ref_array)
+                spectral_angles.append(sam_value)
+                if (i + 1) % 100 == 0:
+                    module_logger.debug(f"Processed {i + 1}/{len(data)} measurements")
 
-        data = self.view.ui.kinetics_average_canvas.measurements_formed[:]
-        ref_array = np.mean(data, axis=0)
-        spectral_angles = []
-        for pixel_spectrum in data:
-            sam_value = spectral_angle_mapping(pixel_spectrum, ref_array)
-            spectral_angles.append(sam_value)
+            spectral_angles = np.array(spectral_angles)
+            module_logger.info(f"SAM calculation complete. Angle range: [{spectral_angles.min():.3f}, {spectral_angles.max():.3f}] degrees")
+            module_logger.info(f"Mean angle: {spectral_angles.mean():.3f}°, Std dev: {spectral_angles.std():.3f}°")
 
-        spectral_angles = np.array(spectral_angles)
-
-        self.view.ui.sam_values.setText(str(spectral_angles))
-        self.view.ui.kinetics_average_canvas.spectral_angles = spectral_angles
+            self.view.ui.sam_values.setText(str(spectral_angles))
+            self.view.ui.kinetics_average_canvas.spectral_angles = spectral_angles
+        except AttributeError as e:
+            module_logger.error(f"SAM calculation failed - missing data: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.calc_sam, "Cannot calculate SAM: No data loaded in canvas")
+        except ValueError as e:
+            module_logger.error(f"SAM calculation failed - invalid data: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.calc_sam, f"SAM calculation error: {str(e)}")
+        except Exception as e:
+            module_logger.error(f"Unexpected error in SAM calculation: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.calc_sam, f"Unexpected error: {str(e)}")
 
     def clean_his_sam(self) -> None:
-        threshold = self.view.ui.spinbox_set_angle.value()
-        self.calc_sam()
-        spectral_angles = self.view.ui.kinetics_average_canvas.spectral_angles
-        measurements = self.view.ui.kinetics_average_canvas.measurements
-        measurements_cleaned: List[Measurement] = []
-        for angle, measurement in zip(spectral_angles, measurements):
-            if angle <= threshold:
-                surface = np.sum(np.mean(measurement.data, axis=0))
-                max_surface = self.view.ui.kinetics_average_canvas.average_surface
-                diff = np.abs((max_surface - surface) / max_surface * 100)
-                if diff < self.view.ui.spinbox_set_surface.value():
-                    measurements_cleaned.append(measurement)
+        """Apply SAM-based cleaning to the currently loaded measurements.
 
-        if measurements_cleaned:
-            self.view.ui.kinetics_average_canvas.new_data(measurements=measurements_cleaned)
-            self.view.ui.kinetics_average_canvas_copy.new_data(measurements=measurements_cleaned)
+        Each click cleans the *current* state, so repeated clicks further
+        filter the already-cleaned data. The original data on disk is not
+        modified; use :meth:`reset_his_sam` to restore from file.
+        """
+        module_logger.info("Starting SAM-based data cleaning")
+        
+        try:
+            angle_threshold = self.view.ui.spinbox_set_angle.value()
+            surface_threshold = self.view.ui.spinbox_set_surface.value()
+            module_logger.info(f"Angle threshold: {angle_threshold}°")
+            module_logger.info(f"Surface threshold: {surface_threshold}%")
+            
+            self.calc_sam()
+            spectral_angles = self.view.ui.kinetics_average_canvas.spectral_angles
+            measurements = self.view.ui.kinetics_average_canvas.measurements
+            initial_count = len(measurements)
+            module_logger.info(f"Initial measurement count: {initial_count}")
+            
+            measurements_cleaned: List[Measurement] = []
+            for i, (angle, measurement) in enumerate(zip(spectral_angles, measurements)):
+                if angle <= angle_threshold:
+                    surface = np.sum(np.mean(measurement.data, axis=0))
+                    max_surface = self.view.ui.kinetics_average_canvas.average_surface
+                    diff = np.abs((max_surface - surface) / max_surface * 100)
+                    if diff < surface_threshold:
+                        measurements_cleaned.append(measurement)
+                    else:
+                        module_logger.debug(f"Measurement {i} rejected: surface diff {diff:.2f}% > {surface_threshold}%")
+                else:
+                    module_logger.debug(f"Measurement {i} rejected: angle {angle:.3f}° > {angle_threshold}°")
+
+            cleaned_count = len(measurements_cleaned)
+            removed_count = initial_count - cleaned_count
+            module_logger.info(f"Cleaning complete: {cleaned_count} measurements retained, {removed_count} removed")
+            module_logger.info(f"Retention rate: {(cleaned_count/initial_count*100):.1f}%")
+        
+            if measurements_cleaned:
+                module_logger.info("Updating canvases with cleaned data")
+                self.view.ui.kinetics_average_canvas.new_data(measurements=measurements_cleaned)
+                self.view.ui.kinetics_average_canvas_copy.new_data(measurements=measurements_cleaned)
+            else:
+                module_logger.warning("No measurements passed filtering criteria!")
+                self.show_error(self.clean_his_sam, "No measurements passed the filtering criteria. Try relaxing the thresholds.")
+        except AttributeError as e:
+            module_logger.error(f"SAM cleaning failed - missing data: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.clean_his_sam, "Cannot clean data: No measurements loaded. Use 'Calculate SAM' first.")
+        except Exception as e:
+            module_logger.error(f"Unexpected error during SAM cleaning: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.clean_his_sam, f"Cleaning failed: {str(e)}")
+
+    def reset_his_sam(self) -> None:
+        """Reset SAM cleaning to the initial state loaded from the file.
+
+        This reloads all original measurements from disk using the stored
+        ``critical_info`` of the kinetics-average canvas, so the Clean
+        button can be applied again starting from the untouched data.
+        """
+        module_logger.info("Resetting SAM cleaning - reloading original data from file")
+        
+        try:
+            # Clear any displayed SAM angle values
+            self.view.ui.sam_values.clear()
+
+            critical_info = getattr(self.view.ui.kinetics_average_canvas, "critical_info", None)
+            if critical_info is None:
+                module_logger.warning("No critical_info found - nothing to reset")
+                self.show_error(self.reset_his_sam, "No data to reset. Please load a file first.")
+                return
+            
+            module_logger.info(f"Reloading from file: {critical_info.file_path}")
+            # Reload original measurements from file for both canvases
+            self.view.ui.kinetics_average_canvas.new_data(critical_info=critical_info)
+            self.view.ui.kinetics_average_canvas_copy.new_data(critical_info=critical_info)
+            module_logger.info("Data reset complete - original measurements restored")
+        except Exception as e:
+            module_logger.error(f"Failed to reset data: {e}")
+            module_logger.exception("Full traceback:")
+            self.show_error(self.reset_his_sam, f"Failed to reset data: {str(e)}")
 
     def open_config_file(self) -> None:
         """Open the Treatment/config.json file in an in-app editor dialog.
