@@ -23,9 +23,10 @@ class KineticsCanvas(MyMplCanvas):
         self.axis.grid(True, alpha=0.3)
         self.axis.plot(self._get_x_values(), self._form_average_data(), color='red', marker='o', 
                       linewidth=2.5, markersize=5)
-        self.axis.set_xlabel(f'{self._x_text}, {self.measurement.time_scale}', fontsize=16)
-        self.axis.set_ylabel('Intensity', fontsize=16)
-        self.axis.set_title(self._title, fontsize=18)
+        self.axis.set_xlabel(f'{self._x_text}, {self.measurement.time_scale}', fontsize=10)
+        self.axis.set_ylabel('Intensity', fontsize=10)
+        self.axis.set_title(self._title, fontsize=11)
+        self.axis.tick_params(labelsize=9)
         self.draw()
 
     def _get_x_values(self) -> np.array:
@@ -106,7 +107,8 @@ class KineticsCanvas(MyMplCanvas):
             # Re-raise so the caller still sees the error, but with extra context in logs
             raise
 
-        self.axis.set_xlabel(f'{self._x_text}, {self.measurement.time_scale}', fontsize=16)
+        self.axis.set_xlabel(f'{self._x_text}, {self.measurement.time_scale}', fontsize=10)
+        self.axis.tick_params(labelsize=9)
 
         self.update_limits()
 
@@ -137,9 +139,10 @@ class KineticsAverage(AverageCanvas):
             self.axis.plot(t, data, linewidth=1.5, alpha=0.7)
         self.axis.plot(self._get_x_values(), self._form_average_data(), color='red', marker='o', 
                       linewidth=3, markersize=5)
-        self.axis.set_xlabel(f'{self._x_text}, {self.measurements[0].time_scale}', fontsize=16)
-        self.axis.set_ylabel('Intensity', fontsize=16)
-        self.axis.set_title(f'{self._title}: {self.measurements_formed.shape}', fontsize=18)
+        self.axis.set_xlabel(f'{self._x_text}, {self.measurements[0].time_scale}', fontsize=10)
+        self.axis.set_ylabel('Intensity', fontsize=10)
+        self.axis.set_title(f'{self._title}: {self.measurements_formed.shape}', fontsize=11)
+        self.axis.tick_params(labelsize=9)
         self.axis.set_yscale('log')
         self.draw()
 
