@@ -54,18 +54,25 @@ class Ui_GraphWindow:
         self.tree.setRootIndex(self.tree_model.index(root))
 
     def main_settings(self):
-        # Buttons
-        self.button_calc = QPushButton("Calculate Abs")
-        self.button_calc.setMaximumWidth(100)
+        # Buttons - more compact
+        self.button_calc = QPushButton("Calc Abs")
+        self.button_calc.setMaximumWidth(90)
         self.button_save_result = QPushButton("Save")
-        self.button_save_result.setMaximumWidth(100)
-        self.button_average_noise = QPushButton("Average Noise")
+        self.button_save_result.setMaximumWidth(70)
+        self.button_average_noise = QPushButton("Avg Noise")
+        self.button_average_noise.setMaximumWidth(100)
         self.button_left = QPushButton("<")
+        self.button_left.setMaximumWidth(40)
         self.button_right = QPushButton(">")
+        self.button_right.setMaximumWidth(40)
         self.button_play = QPushButton("Play")
-        self.button_set_folder = QPushButton("Set Main Folder")
+        self.button_play.setMaximumWidth(60)
+        self.button_set_folder = QPushButton("Set Folder")
+        self.button_set_folder.setMaximumWidth(100)
         self.button_get_kinetics = QPushButton("Get Kinetics")
+        self.button_get_kinetics.setMaximumWidth(110)
         self.button_get_spectra = QPushButton("Get Spectra")
+        self.button_get_spectra.setMaximumWidth(110)
 
         # Comboboxes
         self.combobox_type_exp = QComboBox()
@@ -87,7 +94,9 @@ class Ui_GraphWindow:
 
         # GroupBoxes
         groupbox_control_buttons = QGroupBox()
+        groupbox_control_buttons.setMaximumWidth(350)  # Compact width for controls
         groupbox_tree_files = QGroupBox()
+        groupbox_tree_files.setMaximumWidth(400)  # Compact width for file tree
 
         # LineEdit
         self.lineedit_data_set = QLineEdit()
@@ -127,7 +136,7 @@ class Ui_GraphWindow:
 
         # Tabs
         self.tabs = QTabWidget()
-        self.tabs.setMinimumSize(500, 250)
+        self.tabs.setMinimumSize(400, 250)  # Reduced minimum width
         self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         cleaing_tab = QWidget()
         cleaing_tab.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -145,7 +154,7 @@ class Ui_GraphWindow:
         self.tabs.addTab(info_tab, "Info")
         self.tabs.addTab(selection_tab, "Selection Tab")
 
-        # Tree
+        # Tree - compact view with only name column visible
         root = str(self.data_folder)
         self.tree_model = QtWidgets.QFileSystemModel()
         self.tree = QtWidgets.QTreeView()
@@ -154,6 +163,10 @@ class Ui_GraphWindow:
         self.tree.setRootIndex(self.tree_model.index(root))
         self.tree.setSelectionMode(QtWidgets.QTreeView.ExtendedSelection)
         self.tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        # Hide size, type, and date columns to make tree more compact
+        self.tree.setColumnHidden(1, True)  # Size
+        self.tree.setColumnHidden(2, True)  # Type
+        self.tree.setColumnHidden(3, True)  # Date Modified
 
         # Layouts
         layout_play_button = QtWidgets.QHBoxLayout()
@@ -267,11 +280,11 @@ class Ui_GraphWindow:
         layout_selection.addLayout(layout_selection_spectra)
         selection_tab.setLayout(layout_selection)
 
-        # FILES
+        # FILES - More compact layout with expanding canvas
         layout_files = QHBoxLayout()
-        layout_files.addWidget(groupbox_control_buttons)
-        layout_files.addWidget(groupbox_tree_files)
-        layout_files.addWidget(self.kinetics_average_canvas_copy)
+        layout_files.addWidget(groupbox_control_buttons, stretch=0)  # Fixed width
+        layout_files.addWidget(groupbox_tree_files, stretch=0)  # Fixed width
+        layout_files.addWidget(self.kinetics_average_canvas_copy, stretch=1)  # Expands to fill space
         files_tab.setLayout(layout_files)
 
         layout_data_slider = QtWidgets.QHBoxLayout()
@@ -320,6 +333,9 @@ class Ui_GraphWindow:
         self.splitter_data_graphs_horizontal.addWidget(
             self.splitter_between_graphs
         )
+        # Set stretch factors: DATA gets 40%, kinetics/spectrum get 60%
+        self.splitter_data_graphs_horizontal.setStretchFactor(0, 4)
+        self.splitter_data_graphs_horizontal.setStretchFactor(1, 6)
 
         self.splitter_main_vertical = QSplitter(self.main_widget)
         self.splitter_main_vertical.setMinimumSize(QtCore.QSize(0, 0))
@@ -329,6 +345,9 @@ class Ui_GraphWindow:
         self.splitter_main_vertical.setOrientation(QtCore.Qt.Vertical)
         self.splitter_main_vertical.addWidget(self.splitter_data_graphs_horizontal)
         self.splitter_main_vertical.addWidget(self.groupbox_Control)
+        # Set stretch factors: graphs get 70%, control panel gets 30%
+        self.splitter_main_vertical.setStretchFactor(0, 7)
+        self.splitter_main_vertical.setStretchFactor(1, 3)
 
         self.layout_FORM.addWidget(self.datacanvas.toolbar)
         self.layout_FORM.addWidget(self.splitter_main_vertical)
@@ -365,9 +384,9 @@ class Ui_GraphWindow:
             canvas_parent=self.main_widget,
         )
         self.kinetics_average_canvas_copy = KineticsAverage(
-            width=7,
-            height=5,
-            dpi=40,
+            width=12,  # Increased from 7 to use more horizontal space
+            height=6,   # Increased from 5 for better visibility
+            dpi=50,     # Increased DPI for sharper rendering
             canvas_parent=self.main_widget,
         )
 
