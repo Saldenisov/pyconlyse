@@ -234,10 +234,20 @@ class TreatmentView(QMainWindow):
         index = self.ui.tree.indexAt(point)
         if not index.isValid():
             return
+        
+        # Get file path and extension
+        file_path = Path(self.ui.tree.model().filePath(index))
+        is_cleanable = file_path.suffix.lower() in ['.h5', '.his', '.img']
 
         menu = QMenu()
         action_set_ABS = action_set_BASE = action_set_NOISE = action_set_DATA_HIS = action_set_DATA_NOISE_HIS = None
+        action_clean_sam = None
         action_plus = menu.addAction("Add file")
+        
+        # Add SAM cleaning option for .h5 and .his/.img files
+        if is_cleanable:
+            action_clean_sam = menu.addAction("Clean with SAM (Spectral Angle Mapping)")
+            menu.addSeparator()
         if ExpDataStruct(self.ui.combobox_type_exp.currentText()) is ExpDataStruct.ABS_BASE_NOISE:
             action_set_ABS = menu.addAction("set ABS HIS or IMG")
             action_set_BASE = menu.addAction("set BASE HIS or IMG")
@@ -251,7 +261,9 @@ class TreatmentView(QMainWindow):
         action = menu.exec_(self.ui.tree.mapToGlobal(point))
 
         if action:
-            if action == action_set_NOISE:
+            if action == action_clean_sam:
+                self.controller.clean_file_with_sam(index)
+            elif action == action_set_NOISE:
                 self.controller.set_path(index, DataTypes.NOISE)
             elif action == action_set_ABS:
                 self.controller.set_path(index, DataTypes.ABS)

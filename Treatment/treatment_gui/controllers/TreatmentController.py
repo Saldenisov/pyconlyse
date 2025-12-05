@@ -295,6 +295,120 @@ class TreatmentController:
 
         dialog.exec_()
 
+    def clean_file_with_sam(self, index: QModelIndex) -> None:
+        """Clean a .h5 or .his file using SAM filtering from right-click menu."""
+        try:
+            file_path = Path(self.view.ui.tree.model().filePath(index))
+            if not file_path.is_file() or file_path.suffix.lower() not in ['.h5', '.his', '.img']:
+                self.show_error(self.clean_file_with_sam, "Selected file is not a .h5, .his, or .img file")
+                return
+            
+            # Get threshold values from UI
+            angle_threshold = self.view.ui.spinbox_set_angle.value()
+            surface_threshold = self.view.ui.spinbox_set_surface.value()
+            
+            # Show progress message
+            QMessageBox.information(
+                self.view,
+                "SAM Cleaning",
+                f"Cleaning {file_path.name}\n\nAngle threshold: {angle_threshold}°\nSurface threshold: {surface_threshold}%\n\nThis may take a moment...",
+            )
+            
+            # Load all measurements from the file
+            from gui.controllers.openers import H5Opener, HamamatsuFileOpener
+            
+            if file_path.suffix == '.h5':
+                opener = H5Opener()
+            else:  # .his or .img
+                opener = HamamatsuFileOpener()
+            
+            # Get critical info
+            res, comments = opener.fill_critical_info(file_path)
+            if not res:
+                self.show_error(self.clean_file_with_sam, f"Could not read file: {comments}")
+                return
+            
+            critical_info = opener.paths[file_path]
+            measurements = list(opener.give_all_maps(file_path))
+            
+            if not measurements:
+                self.show_error(self.clean_file_with_sam, "No measurements found in file")
+                return
+            
+            # Calculate SAM for all measurements
+            data_array = np.array([m.data for m in measurements])
+            measurements_formed = np.mean(data_array, axis=1)
+            
+            # Calculate spectral angles
+            def spectral_angle_mapping(pixel_spectrum, reference_spectrum):
+                pixel_spectrum = pixel_spectrum / np.linalg.norm(pixel_spectrum)
+                reference_spectrum = reference_spectrum / np.linalg.norm(reference_spectrum)
+                dot_product = np.dot(pixel_spectrum, reference_spectrum)
+                spectral_angle_radians = np.arccos(np.clip(dot_product, -1.0, 1.0))
+                return np.degrees(spectral_angle_radians)
+            
+            ref_array = np.mean(measurements_formed, axis=0)
+            spectral_angles = []
+            for pixel_spectrum in measurements_formed:
+                sam_value = spectral_angle_mapping(pixel_spectrum, ref_array)
+                spectral_angles.append(sam_value)
+            
+            spectral_angles = np.array(spectral_angles)
+            average_surface = np.sum(np.mean(measurements_formed, axis=0))
+            
+            # Filter measurements based on thresholds
+            measurements_cleaned = []
+            for angle, measurement, formed_data in zip(spectral_angles, measurements, measurements_formed):
+                if angle <= angle_threshold:
+                    surface = np.sum(np.mean(formed_data))
+                    diff = np.abs((average_surface - surface) / average_surface * 100)
+                    if diff < surface_threshold:
+                        measurements_cleaned.append(measurement)
+            
+            if not measurements_cleaned:
+                self.show_error(
+                    self.clean_file_with_sam,
+                    f"No measurements passed the filtering criteria.\n\nOriginal: {len(measurements)} measurements\nCleaned: 0 measurements"
+                )
+                return
+            
+            # Save cleaned data to new .h5 file
+            output_path = file_path.with_name(f"{file_path.stem}_cleaned.h5")
+            
+            data_cleaned = np.array([m.data for m in measurements_cleaned])
+            
+            with h5py.File(output_path, "w") as f:
+                metadata_group = f.create_group("metadata")
+                f.create_dataset("timedelays", data=critical_info.timedelays)
+                f.create_dataset("wavelengths", data=critical_info.wavelengths)
+                f.create_dataset(
+                    "raw_data",
+                    data=data_cleaned,
+                    compression="gzip",
+                    compression_opts=4,
+                )
+                metadata_group.attrs["description"] = critical_info.header.replace("\0", "").encode("utf-8")
+                metadata_group.attrs["sam_angle_threshold"] = angle_threshold
+                metadata_group.attrs["sam_surface_threshold"] = surface_threshold
+                metadata_group.attrs["original_file"] = str(file_path)
+                metadata_group.attrs["original_measurements"] = len(measurements)
+                metadata_group.attrs["cleaned_measurements"] = len(measurements_cleaned)
+            
+            # Show success message
+            QMessageBox.information(
+                self.view,
+                "SAM Cleaning Complete",
+                f"Successfully cleaned {file_path.name}\n\n"
+                f"Original: {len(measurements)} measurements\n"
+                f"Cleaned: {len(measurements_cleaned)} measurements\n"
+                f"Removed: {len(measurements) - len(measurements_cleaned)} measurements\n\n"
+                f"Saved to: {output_path.name}",
+            )
+            
+        except Exception as e:  # noqa: BLE001
+            error_logger(self, self.clean_file_with_sam, f"Error cleaning file: {e}")
+            self.show_error(self.clean_file_with_sam, f"Error cleaning file:\n{e}")
+    
     def save_clean_h5(self) -> None:
 
         def dataset_update(h5_file: h5py.File, dataset_name: str, data, comments: str = "") -> None:  # noqa: ARG001
