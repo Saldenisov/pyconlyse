@@ -58,10 +58,10 @@ if not exist "C:\dev\pyconlyse\LOG" (
     mkdir "C:\dev\pyconlyse\LOG"
 )
 
-REM Change to the gui directory (where Treatment.py is located)
-cd /d "C:\dev\pyconlyse\gui"
+REM Change to the Treatment directory (where main.py is located)
+cd /d "C:\dev\pyconlyse\Treatment"
 
-REM Determine interpreter and run Treatment.py
+REM Determine interpreter and run main.py
 if not defined ACTIVATED_WITH_CONDA (
     set "ENV_PY="
     if defined ANACONDA if exist "%ANACONDA%\envs\%TARGET_ENV%\python.exe" set "ENV_PY=%ANACONDA%\envs\%TARGET_ENV%\python.exe"
@@ -78,18 +78,18 @@ if not defined ACTIVATED_WITH_CONDA (
     )
 )
 
-echo Running Treatment.py...
+echo Running Treatment main.py...
 if defined ACTIVATED_WITH_CONDA (
-    python Treatment.py
+    python main.py
 ) else (
     echo Using interpreter: "%ENV_PY%"
-    "%ENV_PY%" Treatment.py
+    "%ENV_PY%" main.py
 )
 
 REM Pause to see any error messages if the application closes unexpectedly
 if errorlevel 1 (
     echo.
-    echo An error occurred while running Treatment.py
+    echo An error occurred while running Treatment main.py
     pause
 )
 
