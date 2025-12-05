@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from _functools import partial
+from pathlib import Path
 
 from PyQt5.QtGui import QIcon
 from PyQt5.QtWidgets import QMainWindow, QCheckBox, QLineEdit, QProgressBar, QMenu
@@ -42,7 +43,6 @@ class TreatmentView(QMainWindow):
         # Window icon: use the existing streak_camera.jpg located at
         #   Treatment/treatment_gui/resources/streak_camera.jpg
         try:
-            from pathlib import Path
 
             # This file lives in Treatment/treatment_gui/views/ClientsGUIViews,
             # so parents[3] is Treatment/ and resources/ is directly below that.
@@ -213,6 +213,7 @@ class TreatmentView(QMainWindow):
         self.ui.combobox_files_selected.currentIndexChanged.connect(self.controller.combobox_files_changed)
         self.ui.button_calc_sam.clicked.connect(self.controller.calc_sam)
         self.ui.button_clean_sam.clicked.connect(self.controller.clean_his_sam)
+        self.ui.button_reset_sam.clicked.connect(self.controller.reset_his_sam)
         self.ui.button_save_clean.clicked.connect(self.controller.save_clean_h5)
         info_msg(self, "INITIALIZED")
 
