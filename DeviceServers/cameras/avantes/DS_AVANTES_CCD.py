@@ -23,6 +23,19 @@ from tango.server import AttrWriteType, attribute, device_property
 
 from DeviceServers.base.DS_Camera import DS_CAMERA_CCD
 
+# Import parallel measurement support
+# This module enables true simultaneous readout of multiple Avantes spectrometers
+try:
+    from DeviceServers.cameras.avantes.avantes_parallel import (
+        parallel_poll_and_get_data,
+        parallel_measure,
+        parallel_prepare_measure
+    )
+    PARALLEL_SUPPORT = True
+except ImportError:
+    PARALLEL_SUPPORT = False
+    print("Warning: avantes_parallel module not found. Falling back to sequential mode.")
+
 
 class DS_AVANTES_CCD(DS_CAMERA_CCD):
     RULES = {**DS_CAMERA_CCD.RULES}
@@ -241,6 +254,11 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             self.start_grabbing()
 
     def wait(self, timeout=0):
+        """Wait for measurement completion with improved non-blocking poll.
+        
+        This method has been optimized for better parallel operation support.
+        The polling loop now uses shorter intervals and better timeout handling.
+        """
         try:
             self.status_real = 1
             while self.abort is not True and self.camera:
@@ -259,10 +277,12 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                 self.camera.measure(self.n_kinetics)
                 finished = True
                 i = 0
+                # Optimized polling loop with shorter sleep for better responsiveness
+                # in multi-device scenarios
                 while not self.camera.poll_scan():
-                    sleep(0.01)
+                    sleep(0.001)  # Reduced from 0.01 to 0.001 for better parallel performance
                     i += 1
-                    if i > 100:
+                    if i > 10000:  # Adjusted counter for shorter sleep interval
                         finished = False
                         break
                 if finished:

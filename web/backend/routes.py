@@ -110,7 +110,8 @@ def tango_status():
     tango_statuses = []
     for starter in starters:
         state = check_tango_device(starter)
-        if state in (tango.DevState.ON, tango.DevState.MOVING, tango.DevState.STANDBY):
+        is_running = state in (tango.DevState.ON, tango.DevState.MOVING, tango.DevState.STANDBY)
+        if is_running:
             downtime['tango'][starter] = {'status': True, 'last_checked': now, 'downtime_start': None}
         else:
             if starter not in downtime['tango'] or downtime['tango'][starter]['downtime_start'] is None:
@@ -120,7 +121,7 @@ def tango_status():
         downtime_seconds = 0
         if downtime['tango'][starter]['downtime_start']:
             downtime_seconds = (now - downtime['tango'][starter]['downtime_start']).total_seconds()
-        tango_statuses.append((starter, starter, state, downtime_seconds))
+        tango_statuses.append((starter, starter, is_running, downtime_seconds))
 
     return jsonify(
         mysql_status=tango_db_status,
@@ -128,8 +129,147 @@ def tango_status():
         tango_statuses=tango_statuses
     )
 
+@routes.route('/api/jive/classes')
+def jive_classes():
+    """Get list of device classes from Tango database"""
+    global db
+    if db is None:
+        return jsonify({'error': 'Tango Database not available'}), 503
+    
+    try:
+        # Get all device classes
+        class_list = db.get_class_list('*')
+        classes = []
+        for i in range(0, len(class_list), 2):
+            server_name = class_list[i]
+            class_name = class_list[i + 1]
+            classes.append({
+                'server': server_name,
+                'class': class_name
+            })
+        return jsonify(classes=classes)
+    except Exception as e:
+        print(f"Error getting class list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@routes.route('/api/jive/servers')
+def jive_servers():
+    """Get list of device servers from Tango database"""
+    global db
+    if db is None:
+        return jsonify({'error': 'Tango Database not available'}), 503
+    
+    try:
+        # Get all server instances
+        server_list = db.get_server_list('*')
+        servers = []
+        for server in server_list:
+            try:
+                # Get devices for this server
+                devices = db.get_device_class_list(server)
+                server_devices = []
+                for i in range(0, len(devices), 2):
+                    device_name = devices[i]
+                    device_class = devices[i + 1]
+                    server_devices.append({
+                        'name': device_name,
+                        'class': device_class
+                    })
+                servers.append({
+                    'name': server,
+                    'devices': server_devices
+                })
+            except Exception as e:
+                print(f"Error getting devices for server {server}: {e}")
+                servers.append({
+                    'name': server,
+                    'devices': []
+                })
+        return jsonify(servers=servers)
+    except Exception as e:
+        print(f"Error getting server list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@routes.route('/api/jive/devices')
+def jive_devices():
+    """Get list of all devices from Tango database"""
+    global db
+    if db is None:
+        return jsonify({'error': 'Tango Database not available'}), 503
+    
+    try:
+        # Get all exported devices
+        device_list = db.get_device_exported('*')
+        devices = []
+        for device_name in device_list:
+            try:
+                # Get device info
+                info = db.get_device_info(device_name)
+                devices.append({
+                    'name': device_name,
+                    'class': info.class_name,
+                    'server': info.ds_full_name,
+                    'exported': True
+                })
+            except Exception as e:
+                print(f"Error getting info for device {device_name}: {e}")
+                devices.append({
+                    'name': device_name,
+                    'class': 'Unknown',
+                    'server': 'Unknown',
+                    'exported': True
+                })
+        return jsonify(devices=devices)
+    except Exception as e:
+        print(f"Error getting device list: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@routes.route('/api/jive/device/<path:device_name>')
+def jive_device_details(device_name):
+    """Get detailed information about a specific device"""
+    global db
+    if db is None:
+        return jsonify({'error': 'Tango Database not available'}), 503
+    
+    try:
+        # Get device info
+        info = db.get_device_info(device_name)
+        
+        # Get device properties
+        properties = {}
+        try:
+            prop_list = db.get_device_property_list(device_name, '*')
+            for prop_name in prop_list:
+                prop_value = db.get_device_property(device_name, prop_name)
+                if prop_name in prop_value:
+                    properties[prop_name] = prop_value[prop_name]
+        except Exception as e:
+            print(f"Error getting properties for {device_name}: {e}")
+        
+        # Try to get device state
+        state = 'UNKNOWN'
+        try:
+            device_proxy = tango.DeviceProxy(device_name)
+            state = str(device_proxy.state())
+        except Exception as e:
+            print(f"Could not get state for {device_name}: {e}")
+        
+        return jsonify(
+            name=device_name,
+            device_class=info.class_name,
+            server=info.ds_full_name,
+            host=info.host,
+            state=state,
+            exported=info.exported,
+            properties=properties
+        )
+    except Exception as e:
+        print(f"Error getting device details for {device_name}: {e}")
+        return jsonify({'error': str(e)}), 500
+
 # Other API endpoints can be defined here if needed
 # For example, if you want to have an API for data treatment or other features,
 # you can add additional /api/ endpoints.
 
 # Catch-all route handling is done in app.py
+

@@ -1,0 +1,357 @@
+/* Tango Page Styles - Astor & Jive Interface */
+
+.tango-page {
+  padding: 20px;
+  color: #d4d8de;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.tango-page h1 {
+  color: #c4a853;
+  text-shadow: 0 0 10px rgba(74, 158, 255, 0.5);
+  margin-bottom: 10px;
+  font-size: 2rem;
+}
+
+.tango-page .subtitle {
+  color: #8a9aaa;
+  margin-bottom: 20px;
+  font-size: 0.95rem;
+}
+
+/* Tab Navigation */
+.tango-tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #5a6a7a;
+}
+
+.tango-tab {
+  padding: 12px 30px;
+  background: linear-gradient(180deg, #4a5563 0%, #3a4451 100%);
+  color: #c4a853;
+  border: 2px solid #5a6a7a;
+  border-bottom: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  position: relative;
+}
+
+.tango-tab:hover {
+  background: linear-gradient(180deg, #5a6573 0%, #4a5563 100%);
+  color: #ddb863;
+}
+
+.tango-tab.active {
+  background: linear-gradient(180deg, #55606e 0%, #4a5563 100%);
+  border-color: #4a9eff #4a9eff #55606e;
+  color: #f0c060;
+  box-shadow: 0 0 15px rgba(74, 158, 255, 0.3);
+  font-weight: bold;
+}
+
+.tango-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #4a9eff, transparent);
+}
+
+/* Tab Content */
+.tango-tab-content {
+  background: linear-gradient(135deg, #3f4651 0%, #4a5563 100%);
+  border: 2px solid #5a6a7a;
+  border-top: 3px solid #4a9eff;
+  padding: 20px;
+  box-shadow: inset 0 0 20px rgba(74, 158, 255, 0.1);
+}
+
+/* Database Status Section */
+.db-status-section {
+  background: linear-gradient(135deg, #2a2e35 0%, #3f4651 100%);
+  border: 2px solid #5a6a7a;
+  border-left: 4px solid #4a9eff;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.db-status-section h2 {
+  color: #4a9eff;
+  font-size: 1.3rem;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.db-status-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* Lamp Indicators */
+.lamp {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  border: 2px solid #333;
+  transition: all 0.3s ease;
+}
+
+.lamp.green {
+  background: radial-gradient(circle at 30% 30%, #4eff4e, #00cc00);
+  box-shadow: 0 0 20px rgba(0, 255, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.lamp.red {
+  background: radial-gradient(circle at 30% 30%, #ff4e4e, #cc0000);
+  box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.lamp.yellow {
+  background: radial-gradient(circle at 30% 30%, #ffff4e, #cccc00);
+  box-shadow: 0 0 20px rgba(255, 255, 0, 0.6), inset 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+.lamp.gray {
+  background: radial-gradient(circle at 30% 30%, #888888, #555555);
+  box-shadow: 0 0 10px rgba(100, 100, 100, 0.3);
+}
+
+.lamp-small {
+  width: 24px;
+  height: 24px;
+}
+
+/* Starters Grid */
+.starters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.starter-card {
+  background: linear-gradient(135deg, #2a2e35 0%, #3a4451 100%);
+  border: 2px solid #5a6a7a;
+  border-left: 4px solid #4a9eff;
+  padding: 15px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.starter-card:hover {
+  border-left-color: #6ab9ff;
+  box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
+  transform: translateY(-2px);
+}
+
+.starter-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #5a6a7a;
+}
+
+.starter-card h3 {
+  color: #c4a853;
+  font-size: 1.1rem;
+  margin: 0;
+  flex-grow: 1;
+}
+
+.starter-host {
+  color: #8a9aaa;
+  font-size: 0.85rem;
+  margin-top: 5px;
+}
+
+.starter-downtime {
+  color: #ff6666;
+  font-size: 0.9rem;
+  margin-top: 5px;
+  font-weight: 500;
+}
+
+/* Jive Database Browser */
+.jive-container {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 20px;
+  height: 600px;
+}
+
+.jive-tree {
+  background: linear-gradient(135deg, #2a2e35 0%, #3a4451 100%);
+  border: 2px solid #5a6a7a;
+  padding: 15px;
+  overflow-y: auto;
+}
+
+.jive-tree h3 {
+  color: #4a9eff;
+  font-size: 1.1rem;
+  margin-bottom: 15px;
+}
+
+.jive-tree-item {
+  padding: 8px 12px;
+  margin: 4px 0;
+  background: rgba(74, 158, 255, 0.05);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #d4d8de;
+}
+
+.jive-tree-item:hover {
+  background: rgba(74, 158, 255, 0.15);
+  border-color: #4a9eff;
+}
+
+.jive-tree-item.selected {
+  background: rgba(74, 158, 255, 0.25);
+  border-color: #4a9eff;
+  color: #f0c060;
+  font-weight: 500;
+}
+
+.jive-details {
+  background: linear-gradient(135deg, #2a2e35 0%, #3a4451 100%);
+  border: 2px solid #5a6a7a;
+  border-left: 4px solid #4a9eff;
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.jive-details h3 {
+  color: #c4a853;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+}
+
+.jive-property {
+  background: rgba(74, 158, 255, 0.05);
+  border: 1px solid #5a6a7a;
+  padding: 10px;
+  margin: 8px 0;
+}
+
+.jive-property-name {
+  color: #4a9eff;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.jive-property-value {
+  color: #d4d8de;
+  font-family: 'Courier New', monospace;
+  padding-left: 15px;
+}
+
+/* Status Text */
+.status-text {
+  color: #d4d8de;
+  font-size: 1rem;
+}
+
+.status-text.connected {
+  color: #4eff4e;
+  font-weight: 500;
+}
+
+.status-text.disconnected {
+  color: #ff6666;
+  font-weight: 500;
+}
+
+/* Scrollbar Styling */
+.jive-tree::-webkit-scrollbar,
+.jive-details::-webkit-scrollbar {
+  width: 8px;
+}
+
+.jive-tree::-webkit-scrollbar-track,
+.jive-details::-webkit-scrollbar-track {
+  background: #2a2e35;
+}
+
+.jive-tree::-webkit-scrollbar-thumb,
+.jive-details::-webkit-scrollbar-thumb {
+  background: #5a6a7a;
+  border-radius: 4px;
+}
+
+.jive-tree::-webkit-scrollbar-thumb:hover,
+.jive-details::-webkit-scrollbar-thumb:hover {
+  background: #6a7a8a;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #8a9aaa;
+}
+
+.empty-state-icon {
+  font-size: 3rem;
+  margin-bottom: 15px;
+  opacity: 0.5;
+}
+
+/* Loading State */
+.loading {
+  text-align: center;
+  padding: 40px;
+  color: #8a9aaa;
+}
+
+.loading::after {
+  content: '...';
+  animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+  0% { content: '.'; }
+  33% { content: '..'; }
+  66% { content: '...'; }
+}
+
+/* Jive View Buttons */
+.jive-view-btn {
+  padding: 10px 20px;
+  background: linear-gradient(180deg, #4a5563 0%, #3a4451 100%);
+  color: #c4a853;
+  border: 2px solid #5a6a7a;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.jive-view-btn:hover {
+  background: linear-gradient(180deg, #5a6573 0%, #4a5563 100%);
+  border-color: #6a7a8a;
+  color: #ddb863;
+}
+
+.jive-view-btn.active {
+  background: linear-gradient(180deg, #55606e 0%, #4a5563 100%);
+  border-color: #4a9eff;
+  color: #f0c060;
+  box-shadow: 0 0 10px rgba(74, 158, 255, 0.3);
+  font-weight: bold;
+}
