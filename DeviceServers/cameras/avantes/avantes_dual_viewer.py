@@ -896,12 +896,12 @@ class AvantesDualViewer(QMainWindow):
             self.statusBar().showMessage("Continuous readout stopped")
         else:
             # Start continuous mode
-            self.continuous_timer.start(200)
+            self.continuous_timer.start(50)  # 50ms polling for 10Hz Arduino triggers
             self.continuous_mode = True
             self._measurement_count = 0
             self.continuous_btn.setText("Stop Continuous")
             self.continuous_btn.setStyleSheet("background-color: #d32f2f; color: white; font-weight: bold;")
-            self.logger.info("CONTINUOUS: Started (200ms interval)")
+            self.logger.info("CONTINUOUS: Started (50ms polling interval)")
             self.statusBar().showMessage("Continuous readout active")
     
     def stop_measurement(self):
@@ -947,7 +947,7 @@ class AvantesDualViewer(QMainWindow):
         
         # Start continuous mode to collect measurements
         if not self.continuous_mode:
-            self.continuous_timer.start(200)
+            self.continuous_timer.start(50)  # 50ms polling for 10Hz Arduino triggers
             self.continuous_mode = True
         self._measurement_count = 0
     
@@ -972,7 +972,7 @@ class AvantesDualViewer(QMainWindow):
         
         # Start continuous mode to collect measurements
         if not self.continuous_mode:
-            self.continuous_timer.start(200)
+            self.continuous_timer.start(50)  # 50ms polling for 10Hz Arduino triggers
             self.continuous_mode = True
         self._measurement_count = 0
     
@@ -1456,12 +1456,12 @@ class AvantesDualViewer(QMainWindow):
             self.arduino_status_label.setStyleSheet("color: red; font-weight: bold;")
         
         # Start continuous mode
-        self.continuous_timer.start(200)
+        self.continuous_timer.start(50)  # 50ms polling for 10Hz Arduino triggers
         self.continuous_mode = True
         self._measurement_count = 0
         
         self.statusBar().showMessage("Continuous readout active (auto-started)")
-        self.logger.info("AUTO-START: Continuous readout active (200ms interval)")
+        self.logger.info("AUTO-START: Continuous readout active (50ms polling interval)")
     
     def closeEvent(self, event):
         """Handle window close event."""
