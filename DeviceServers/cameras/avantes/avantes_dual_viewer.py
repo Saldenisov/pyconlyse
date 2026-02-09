@@ -750,6 +750,25 @@ class AvantesDualViewer(QMainWindow):
         panel.setLayout(layout)
         return panel
     
+    def update_od_axis_limits(self):
+        """Update OD plot axis limits based on auto/manual settings."""
+        # Enable/disable manual controls based on auto checkboxes
+        self.od_x_min_spin.setEnabled(not self.od_x_auto_check.isChecked())
+        self.od_x_max_spin.setEnabled(not self.od_x_auto_check.isChecked())
+        self.od_y_min_spin.setEnabled(not self.od_y_auto_check.isChecked())
+        self.od_y_max_spin.setEnabled(not self.od_y_auto_check.isChecked())
+        
+        # Apply limits
+        if not self.od_x_auto_check.isChecked():
+            self.plot_od.setXRange(self.od_x_min_spin.value(), self.od_x_max_spin.value(), padding=0)
+        else:
+            self.plot_od.enableAutoRange(axis='x')
+        
+        if not self.od_y_auto_check.isChecked():
+            self.plot_od.setYRange(self.od_y_min_spin.value(), self.od_y_max_spin.value(), padding=0)
+        else:
+            self.plot_od.enableAutoRange(axis='y')
+    
     def single_measurement(self):
         """Perform a single parallel measurement."""
         if self.measurement_thread and self.measurement_thread.isRunning():
