@@ -836,13 +836,7 @@ class AvantesDualViewer(QMainWindow):
         wait_for_thermalization : bool
             If True, wait 1 second after enabling lamp for thermalization
         """
-        # Check if already in correct mode to avoid unnecessary switching
-        lamp_on, avantes_on = self.arduino.get_state()
-        if lamp_on and avantes_on:
-            self.logger.info("ARDUINO: Already in Lamp + Avantes mode, no switch needed")
-            return True
-        
-        # Switch to Lamp + Avantes mode
+        # Always send command to ensure mode is set correctly
         if self.arduino.set_mode("LAMP AND AVANTES"):
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -867,12 +861,7 @@ class AvantesDualViewer(QMainWindow):
     
     def set_avantes_only(self):
         """Set Arduino to trigger only Avantes (no lamp)."""
-        # Check if already in correct mode to avoid unnecessary switching
-        lamp_on, avantes_on = self.arduino.get_state()
-        if not lamp_on and avantes_on:
-            self.logger.info("ARDUINO: Already in Avantes Only mode, no switch needed")
-            return True
-        
+        # Always send command to ensure mode is set correctly
         if self.arduino.set_mode("ONLY AVANTES"):
             self.arduino_status_label.setText("Status: Avantes Only")
             self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
