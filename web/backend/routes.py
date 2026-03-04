@@ -5,8 +5,12 @@ import tango
 import os
 from datetime import datetime
 
-# Set the Tango host environment variable
-os.environ["TANGO_HOST"] = "everest:10000"
+# Respect the caller's TANGO_HOST if already set. Otherwise, fall back to the
+# same lab default used by the local Mac dev launcher.
+os.environ.setdefault(
+    "TANGO_HOST",
+    os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),
+)
 
 # Try to initialize the global Tango Database connection
 try:

@@ -33,13 +33,16 @@ finally:
     os.chdir(original_cwd)
 
 if __name__ == '__main__':
+    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1')
+    web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
     print("=" * 60)
     print("PYCONLYSE Web Server - PRODUCTION MODE")
     print("=" * 60)
-    print("Server starting on: http://10.20.30.202:5000")
-    print("Main page:        http://10.20.30.202:5000/")
-    print("iTest PSU page:   http://10.20.30.202:5000/test_ds_itest_psu.html")
-    print("API devices:      http://10.20.30.202:5000/api/devices")
+    print(f"Server starting on: http://{web_host}:{web_port}")
+    print(f"Main page:        http://{web_host}:{web_port}/")
+    print(f"iTest PSU page:   http://{web_host}:{web_port}/test_ds_itest_psu.html")
+    print(f"API devices:      http://{web_host}:{web_port}/api/devices")
+    print(f"TANGO_HOST:       {os.environ.get('TANGO_HOST', os.environ.get('PYCONLYSE_TANGO_HOST', '10.20.30.202:10000'))}")
     print("=" * 60)
     print("Production settings:")
     print("  - Debug mode: OFF")
@@ -53,8 +56,8 @@ if __name__ == '__main__':
         socketio.run(
             app,
             debug=False,          # PRODUCTION: Debug mode OFF
-            port=5000,
-            host='10.20.30.202',
+            port=web_port,
+            host=web_host,
             use_reloader=False    # PRODUCTION: No auto-reload
         )
     except KeyboardInterrupt:

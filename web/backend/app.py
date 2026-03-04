@@ -1,5 +1,19 @@
-# app.py
 import os
+
+
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+# Default to the lab Tango DB, but never overwrite an explicit shell setting.
+os.environ.setdefault(
+    "TANGO_HOST",
+    os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),
+)
+
 from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -19,7 +33,7 @@ CORS(app)
 # PRODUCTION: Consider using environment variable for secret key
 app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'Elys3!icp2025')
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-app.config['JWT_COOKIE_SECURE'] = True  # PRODUCTION: Requires HTTPS
+app.config['JWT_COOKIE_SECURE'] = _env_bool('PYCONLYSE_JWT_COOKIE_SECURE', False)
 app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # PRODUCTION: Consider enabling CSRF protection
 jwt = JWTManager(app)
 
@@ -121,4 +135,10 @@ if __name__ == '__main__':
     # DEVELOPMENT MODE ONLY
     # For production, use start_production.py which sets debug=False
     # Use socketio.run instead of app.run for WebSocket support
-    socketio.run(app, debug=True, port=5000, host='10.20.30.202')
+    socketio.run(
+        app,
+        debug=_env_bool('PYCONLYSE_WEB_DEBUG', True),
+        port=int(os.environ.get('PYCONLYSE_WEB_PORT', '5000')),
+        host=os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1'),
+        allow_unsafe_werkzeug=True,
+    )

@@ -30,13 +30,16 @@ finally:
     os.chdir(original_cwd)
 
 if __name__ == '__main__':
+    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1')
+    web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5001'))
     print("=" * 60)
     print("PYCONLYSE Web Server - DEVELOPMENT MODE")
     print("=" * 60)
-    print("Server will start on: http://10.20.30.202:5001")
-    print("Main page:        http://10.20.30.202:5001/")
-    print("iTest PSU page:   http://10.20.30.202:5001/test_ds_itest_psu.html")
-    print("API devices:      http://10.20.30.202:5001/api/devices")
+    print(f"Server will start on: http://{web_host}:{web_port}")
+    print(f"Main page:        http://{web_host}:{web_port}/")
+    print(f"iTest PSU page:   http://{web_host}:{web_port}/test_ds_itest_psu.html")
+    print(f"API devices:      http://{web_host}:{web_port}/api/devices")
+    print(f"TANGO_HOST:       {os.environ.get('TANGO_HOST', os.environ.get('PYCONLYSE_TANGO_HOST', '10.20.30.202:10000'))}")
     print("=" * 60)
     print("WARNING: Running in DEVELOPMENT mode (debug=True)")
     print("For production, use: python start_production.py")
@@ -47,8 +50,8 @@ if __name__ == '__main__':
         socketio.run(
             app, 
             debug=True,   # Enable auto-reload on file changes
-            port=5001, 
-            host='10.20.30.202',
+            port=web_port, 
+            host=web_host,
             allow_unsafe_werkzeug=True  # For development only
         )
     except KeyboardInterrupt:
