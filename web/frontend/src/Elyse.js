@@ -54,7 +54,8 @@ const Elyse = () => {
           const lowerTab = tab.toLowerCase();
           return (
             <li className="nav-item" role="presentation" key={tab}>
-              <a
+              <button
+                type="button"
                 className={`nav-link ${activeTab === tab ? "active" : ""}`}
                 id={`${lowerTab}-tab`}
                 onClick={() => handleTabClick(tab)}
@@ -64,7 +65,7 @@ const Elyse = () => {
                 style={{ cursor: "pointer" }}
               >
                 {tab}
-              </a>
+              </button>
             </li>
           );
         })}

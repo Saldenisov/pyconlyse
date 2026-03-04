@@ -1,11 +1,16 @@
 # folder_api.py
-from flask import Blueprint, jsonify, request
 import os
+
+from flask import Blueprint, jsonify, request
 
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
-# Define the allowed root folder (only allow browsing within E:\ICP_notebooks)
+# Default root for browsing treatment data. Can be overridden per deployment.
 ALLOWED_ROOT = r'E:\\ICP_notebooks'
+
+
+def get_allowed_root():
+    return os.environ.get("PYCONLYSE_ALLOWED_ROOT", ALLOWED_ROOT)
 
 def build_folder_tree(root_path, include_files=False):
     """
@@ -44,7 +49,7 @@ def get_folder_structure():
     Returns a JSON tree of allowed folders starting at ALLOWED_ROOT.
     Used for folder selection.
     """
-    folder_tree = build_folder_tree(ALLOWED_ROOT)
+    folder_tree = build_folder_tree(get_allowed_root())
     return jsonify(folder_tree)
 
 @folder_api.route('/folder-contents', methods=['GET'])
@@ -57,8 +62,10 @@ def get_folder_contents():
     if not folder:
         return jsonify({"error": "Folder parameter is missing"}), 400
 
-    # Validate that the requested folder is within ALLOWED_ROOT
-    if not os.path.abspath(folder).startswith(os.path.abspath(ALLOWED_ROOT)):
+    allowed_root = get_allowed_root()
+
+    # Validate that the requested folder is within the configured root
+    if not os.path.abspath(folder).startswith(os.path.abspath(allowed_root)):
         return jsonify({"error": "Invalid folder"}), 403
 
     # Build the tree for the selected folder. Here we include files.

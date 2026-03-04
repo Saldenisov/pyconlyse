@@ -1,5 +1,7 @@
+from functools import partial
+
 from PyQt5 import QtWidgets
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QIcon, QKeyEvent
 from PyQt5.QtWidgets import QAction
 
@@ -35,6 +37,7 @@ class GeneralPanel(QtWidgets.QWidget):
         super().__init__(*args, **kwargs)
         self.vis_type = vis_type
         self.widgets = {}
+        self._widget_slots = {}
 
         if title:
             self.setWindowTitle(title)
@@ -72,6 +75,84 @@ class GeneralPanel(QtWidgets.QWidget):
         self.is_fullscreen = False
         self.setup_fullscreen_actions()
 
+    def _build_unavailable_widget(self, dev_name: str, error_text: str):
+        return UnavailableDeviceWidget(
+            dev_name,
+            error_text,
+            retry_callback=partial(self._retry_device_widget, dev_name),
+            parent=self,
+        )
+
+    def _replace_widget(self, dev_name: str, widget):
+        slot = self._widget_slots[dev_name]
+        layout: QtWidgets.QLayout = slot["layout"]
+        old_widget = slot["widget"]
+        index = layout.indexOf(old_widget)
+
+        try:
+            layout.removeWidget(old_widget)
+        except Exception:
+            pass
+
+        if index >= 0:
+            layout.insertWidget(index, widget)
+        else:
+            layout.addWidget(widget)
+
+        try:
+            old_widget.hide()
+            old_widget.setParent(None)
+            old_widget.deleteLater()
+        except Exception:
+            pass
+
+        slot["widget"] = widget
+        setattr(self, f"{dev_name}", widget)
+        self.add_widget(dev_name, widget)
+
+    def _retry_device_widget(self, dev_name: str):
+        slot = self._widget_slots.get(dev_name)
+        if not slot:
+            return False
+
+        try:
+            widget = slot["factory"]()
+        except Exception as e:
+            current_widget = slot["widget"]
+            if isinstance(current_widget, UnavailableDeviceWidget):
+                current_widget.set_error_text(str(e))
+            return False
+
+        self._replace_widget(dev_name, widget)
+        return True
+
+    def _add_device_widget(self, dev_name: str, layout, factory, add_spacer: bool = True):
+        try:
+            widget = factory()
+        except Exception as e:
+            widget = self._build_unavailable_widget(dev_name, str(e))
+
+        self._widget_slots[dev_name] = {
+            "layout": layout,
+            "factory": factory,
+            "widget": widget,
+        }
+
+        setattr(self, f"{dev_name}", widget)
+        self.add_widget(dev_name, widget)
+        layout.addWidget(widget)
+
+        if add_spacer:
+            hspacer = QtWidgets.QSpacerItem(
+                20,
+                40,
+                QtWidgets.QSizePolicy.Expanding,
+                QtWidgets.QSizePolicy.Minimum,
+            )
+            layout.addSpacerItem(hspacer)
+
+        return widget
+
     def add_widget(self, name, widget):
         self.widgets[name] = widget
 
@@ -81,19 +162,13 @@ class GeneralPanel(QtWidgets.QWidget):
             group_number = i // self.width
             if dev_name:
                 lo: Qt.QLayout = getattr(self, f"lo_DS_widget_{group_number}")
-                setattr(
-                    self, f"{dev_name}", widget_class(dev_name, self, self.vis_type)
+                self._add_device_widget(
+                    dev_name,
+                    lo,
+                    lambda dev_name=dev_name: widget_class(
+                        dev_name, self, self.vis_type
+                    ),
                 )
-                s_m = getattr(self, f"{dev_name}")
-                self.add_widget(f"{dev_name}", s_m)
-                hspacer = QtWidgets.QSpacerItem(
-                    20,
-                    40,
-                    QtWidgets.QSizePolicy.Expanding,
-                    QtWidgets.QSizePolicy.Minimum,
-                )
-                lo.addWidget(s_m)
-                lo.addSpacerItem(hspacer)
             i += 1
 
     def update_active_widget(self):
@@ -245,14 +320,14 @@ class OWISPanel(GeneralPanel):
             group_number = i // self.width
             if dev_name:
                 lo: Qt.QLayout = getattr(self, f"lo_DS_widget_{group_number}")
-                setattr(
-                    self,
-                    f"{dev_name}",
-                    widget_class(dev_name, axes, self, self.vis_type),
+                self._add_device_widget(
+                    dev_name,
+                    lo,
+                    lambda dev_name=dev_name, axes=axes: widget_class(
+                        dev_name, axes, self, self.vis_type
+                    ),
+                    add_spacer=False,
                 )
-                s_m = getattr(self, f"{dev_name}")
-                self.add_widget(f"{dev_name}", s_m)
-                lo.addWidget(s_m)
             i += 1
 
     def context_menu(self):
@@ -401,3 +476,46 @@ class ITestPanel(GeneralPanel):
         if widget_class != Itest_PSU:
             raise Exception(f"Wrong widget class {widget_class} is passed.")
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class UnavailableDeviceWidget(QtWidgets.QFrame):
+    def __init__(
+        self,
+        dev_name: str,
+        error_text: str,
+        retry_callback=None,
+        parent=None,
+        retry_interval_ms: int = 5000,
+    ):
+        super().__init__(parent)
+        self._retry_callback = retry_callback
+        self.setFrameShape(QtWidgets.QFrame.StyledPanel)
+
+        layout = QtWidgets.QVBoxLayout(self)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        title = QtWidgets.QLabel(f"Unavailable: {dev_name}")
+        title.setWordWrap(True)
+        layout.addWidget(title)
+
+        self._details = QtWidgets.QLabel()
+        self._details.setWordWrap(True)
+        layout.addWidget(self._details)
+        self.set_error_text(error_text)
+
+        if retry_callback is not None:
+            retry_button = QtWidgets.QPushButton("Retry")
+            retry_button.clicked.connect(retry_callback)
+            layout.addWidget(retry_button)
+
+            self._retry_timer = QTimer(self)
+            self._retry_timer.setInterval(retry_interval_ms)
+            self._retry_timer.timeout.connect(retry_callback)
+            self._retry_timer.start()
+
+    def set_error_text(self, error_text: str):
+        self._details.setText(
+            "The device widget could not be created.\n"
+            f"Last error: {error_text}"
+        )

@@ -5,7 +5,7 @@ from typing import Dict, List, Union
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, command, device_property
 
-from DeviceServers.General.DS_general import DS_General, GeneralOrderInfo
+from DeviceServers.base.general import DS_General, GeneralOrderInfo
 from utilities.myfunc import ping
 
 
@@ -175,14 +175,14 @@ class DS_GPIO(DS_General):
         pass
 
     def give_order_local(self, name):
-        res = 0
-        if name in self.orders:
-            order: OrderPulsesInfo = self.orders[name]
-            order.ready_to_delete = True
-            res = order.pulses_done
-        del self._blocking_pins[order.pin]
-        del self.orders[name]
-        return res
+        order = self.orders.get(name)
+        if order is None:
+            return -1
+
+        order.ready_to_delete = True
+        self._blocking_pins.pop(order.pin, None)
+        self.orders.pop(name, None)
+        return order.pulses_done
 
     @abstractmethod
     def set_pin_state_local(self, pin_id_value: List[int]) -> Union[int, str]:

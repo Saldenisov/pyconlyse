@@ -1,20 +1,13 @@
 import React, { useState } from 'react';
-import ITestPSUClient from './components/ITestPSUClient';
 import './Equipment.css';
 
 const Equipment = () => {
-  // State to track the selected equipment
   const [selectedEquipment, setSelectedEquipment] = useState(null);
-  // State to hold the status message from the button click
   const [statusMessage, setStatusMessage] = useState("");
-  // State to control PDU modal
   const [showPDUModal, setShowPDUModal] = useState(false);
-  // State to control Magnets modal
   const [showMagnetsModal, setShowMagnetsModal] = useState(false);
-  // State to control Motorized Stages modal
   const [showMotorizedModal, setShowMotorizedModal] = useState(false);
 
-  // Array of equipment items with id, label, and image path
   const equipmentItems = [
     { id: 1, label: "PDU", img: "/images/pdu.png" },
     { id: 2, label: "Motorized Stages", img: "/images/motorized_stages2.png" },
@@ -24,26 +17,24 @@ const Equipment = () => {
     { id: 6, label: "Pumps", img: "/images/pumps.png" }
   ];
 
-  // Update the widget based on the selected equipment
   const updateWidget = (equipmentId) => {
+    const equipment = equipmentItems.find((item) => item.id === equipmentId);
+    setSelectedEquipment(equipmentId);
+
     if (equipmentId === 1) {
-      // For PDU, open modal with NETIO link
+      setStatusMessage("Open the NETIO web client in a dedicated tab.");
       setShowPDUModal(true);
     } else if (equipmentId === 2) {
-      // For Motorized Stages, open modal with OWIS link
+      setStatusMessage("Open the motorized stages clients in dedicated tabs.");
       setShowMotorizedModal(true);
     } else if (equipmentId === 4) {
-      // For Magnets, open modal with Itest link
+      setStatusMessage("Open the iTest client in a dedicated tab.");
       setShowMagnetsModal(true);
     } else {
-      setSelectedEquipment(equipmentId);
-      setStatusMessage(""); // Reset the status message
+      setStatusMessage(
+        `${equipment?.label || 'This equipment'} page is not wired yet.`
+      );
     }
-  };
-
-  // Handle button click within the widget
-  const handleClick = (equipmentId) => {
-    setStatusMessage(`Equipment ${equipmentId} button clicked!`);
   };
 
   return (
@@ -52,6 +43,12 @@ const Equipment = () => {
         <h1>Equipment Control Center</h1>
         <p>Select equipment to access control interfaces</p>
       </div>
+
+      {statusMessage && (
+        <div className="equipment-status">
+          <strong>Status:</strong> {statusMessage}
+        </div>
+      )}
       
       {/* PDU Modal */}
       {showPDUModal && (
@@ -104,7 +101,7 @@ const Equipment = () => {
       <div className="equipment-grid">
         {equipmentItems.map(item => (
           <div 
-            className="equipment-card" 
+            className={`equipment-card ${selectedEquipment === item.id ? 'selected' : ''}`}
             key={item.id}
             onClick={() => updateWidget(item.id)}
           >

@@ -4,16 +4,15 @@ import DataWindowVD2 from './DataWindowVD2'; // Adjust the path if necessary
 import './css/datatreatment.css';
 
 const DataTreatment = () => {
-  // State to toggle between basic view and full VD2 treatment view.
-  const [showVD2Window, setShowVD2Window] = useState(false);
-  const [statusLabel, setStatusLabel] = useState("");
+  const [showVD2Window, setShowVD2Window] = useState(true);
+  const [statusLabel, setStatusLabel] = useState("VD2 web treatment is active.");
 
   const buttonClicked = (buttonId) => {
     if (buttonId === 'V0') {
-      setStatusLabel(`Button ${buttonId} is clicked.`);
+      setStatusLabel('Basic treatment placeholder is selected.');
       setShowVD2Window(false);
     } else if (buttonId === 'VD2') {
-      setStatusLabel("Switching to full VD2 treatment view...");
+      setStatusLabel("VD2 web treatment is active.");
       setShowVD2Window(true);
     }
   };
@@ -32,8 +31,7 @@ const DataTreatment = () => {
         <DataWindowVD2 />
       ) : (
         <div>
-          {/* Basic view or placeholder content */}
-          <p>Basic data treatment view. Click VD2 to load full VD2 treatment.</p>
+          <p>Basic data treatment placeholder. Use VD2 for the active workflow.</p>
         </div>
       )}
     </div>

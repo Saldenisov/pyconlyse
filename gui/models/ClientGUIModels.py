@@ -53,8 +53,9 @@ class TreatmentModel(QObject):
         self.measurements_observers = []
         self.ui_observers = []
         self.openers = {OpenersTypes.Hamamatsu: HamamatsuFileOpener(logger=self.logger),
-                        OpenersTypes.ASCII: ASCIIOpener(logger=self.logger),
-                        OpenersTypes.H5Opener: H5Opener(logger=self.logger)}
+                        OpenersTypes.ASCII: ASCIIOpener(logger=self.logger)}
+        if H5Opener is not None:
+            self.openers[OpenersTypes.H5Opener] = H5Opener(logger=self.logger)
 
         self.paths: Dict[TreatmentModel.DataTypes, Path] = {}
         self.noise_averaged_data: np.ndarray = np.zeros(shape=(1, 1))
@@ -401,4 +402,3 @@ class TreatmentModel(QObject):
             cursors = Cursors2D((x1, waves[x1]), (x2, waves[x2]), (y1, times[y1]), (y2, times[y2]))
             self.cursors_data = cursors
             self.notify_measurement_observers(cursors=cursors)
-

@@ -3,6 +3,58 @@ import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import './ITestPSUClient.css';
 
+const getCookie = (name) => {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop().split(';').shift();
+  }
+  return null;
+};
+
+async function fetchItestTabConfig(deviceName) {
+  const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function fetchItestSlotData(deviceName) {
+  const response = await fetch(`/api/device/itest/${deviceName}/all_slots`, {
+    credentials: 'include'
+  });
+
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+function normalizeItestSlotData(data) {
+  const ids = data.ids || [];
+  const names = data.names || [];
+  const states = data.states || [];
+  const setpoints = data.currents_setpoint || [];
+  const measuredCurrents = data.currents_meas || [];
+  const limitsArray = data.current_limits || [];
+  const limits = {};
+
+  ids.forEach((id, idx) => {
+    limits[id] = {
+      min: limitsArray[idx * 2] || -5.0,
+      max: limitsArray[idx * 2 + 1] || 15.0
+    };
+  });
+
+  return { ids, names, states, setpoints, measuredCurrents, limits };
+}
+
 const ITestPSUClient = ({ deviceName }) => {
   // Tab configuration
   const [activeTab, setActiveTab] = useState('VD');
@@ -25,74 +77,108 @@ const ITestPSUClient = ({ deviceName }) => {
   const [monitoring, setMonitoring] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [availableSlots, setAvailableSlots] = useState([]);
   
   const socketRef = useRef(null);
-  const newSetpointRef = useRef();
 
   useEffect(() => {
+    let disposed = false;
+
+    const loadInitialData = async () => {
+      if (!deviceName) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const [configData, slotData] = await Promise.all([
+          fetchItestTabConfig(deviceName),
+          fetchItestSlotData(deviceName),
+        ]);
+
+        if (disposed) {
+          return;
+        }
+
+        setTabConfigs((current) => configData.tab_configs || current);
+        const normalized = normalizeItestSlotData(slotData);
+        setSlotIds(normalized.ids);
+        setSlotNames(normalized.names);
+        setSlotStates(normalized.states);
+        setSlotSetpoints(normalized.setpoints);
+        setSlotMeasuredCurrents(normalized.measuredCurrents);
+        setSlotLimits(normalized.limits);
+        setError(null);
+      } catch (err) {
+        if (!disposed) {
+          setError(err.message);
+        }
+      } finally {
+        if (!disposed) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadInitialData();
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
     if (deviceName) {
-      fetchTabConfiguration();
-      fetchSlotData();
-      initializeWebSocket();
+      const token = getCookie('access_token_cookie');
+      const socket = io('/', {
+        transports: ['websocket'],
+        auth: { token }
+      });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        setConnected(true);
+      });
+
+      socket.on('disconnect', () => {
+        setConnected(false);
+        setMonitoring(false);
+      });
+
+      socket.on('device_update', (data) => {
+        if (data.device !== deviceName || !Array.isArray(data.slots)) {
+          return;
+        }
+
+        setSlotIds(data.slots.map((slot) => slot.id));
+        setSlotNames(data.slots.map((slot) => slot.name));
+        setSlotStates(data.slots.map((slot) => (slot.state ? 1 : 0)));
+        setSlotSetpoints(data.slots.map((slot) => slot.current_setpoint || 0));
+        setSlotMeasuredCurrents(data.slots.map((slot) => slot.current_measured || 0));
+      });
+
+      socket.on('device_error', (data) => {
+        if (data.device === deviceName) {
+          setError(data.error);
+        }
+      });
+    } else {
+      setConnected(false);
+      setMonitoring(false);
     }
 
     return () => {
+      disposed = true;
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
   }, [deviceName]);
 
-  const initializeWebSocket = () => {
-    const token = getCookie('access_token_cookie');
-    
-    socketRef.current = io('/', {
-      transports: ['websocket'],
-      auth: { token: token }
-    });
-
-    socketRef.current.on('connect', () => {
-      setConnected(true);
-    });
-
-    socketRef.current.on('disconnect', () => {
-      setConnected(false);
-      setMonitoring(false);
-    });
-
-    socketRef.current.on('device_update', (data) => {
-      if (data.device === deviceName) {
-        if (data.states !== undefined) setSlotStates(data.states);
-        if (data.currents_setpoint !== undefined) setSlotSetpoints(data.currents_setpoint);
-        if (data.currents_meas !== undefined) setSlotMeasuredCurrents(data.currents_meas);
-      }
-    });
-
-    socketRef.current.on('device_error', (data) => {
-      if (data.device === deviceName) {
-        setError(data.error);
-      }
-    });
-  };
-
-  const getCookie = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-  };
-
   const fetchTabConfiguration = async () => {
     try {
-      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setTabConfigs(data.tab_configs || tabConfigs);
-      }
+      const data = await fetchItestTabConfig(deviceName);
+      setTabConfigs((current) => data.tab_configs || current);
     } catch (err) {
       console.warn('Could not fetch tab configuration:', err);
     }
@@ -101,33 +187,15 @@ const ITestPSUClient = ({ deviceName }) => {
   const fetchSlotData = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`/api/device/itest/${deviceName}/all_slots`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setSlotIds(data.ids || []);
-        setSlotNames(data.names || []);
-        setSlotStates(data.states || []);
-        setSlotSetpoints(data.currents_setpoint || []);
-        setSlotMeasuredCurrents(data.currents_meas || []);
-        
-        // Parse limits array [min1, max1, min2, max2, ...] into object
-        const limitsObj = {};
-        const limitsArray = data.current_limits || [];
-        (data.ids || []).forEach((id, idx) => {
-          limitsObj[id] = {
-            min: limitsArray[idx * 2] || -5.0,
-            max: limitsArray[idx * 2 + 1] || 15.0
-          };
-        });
-        setSlotLimits(limitsObj);
-        setAvailableSlots(data.ids || []);
-        setError(null);
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+      const data = await fetchItestSlotData(deviceName);
+      const normalized = normalizeItestSlotData(data);
+      setSlotIds(normalized.ids);
+      setSlotNames(normalized.names);
+      setSlotStates(normalized.states);
+      setSlotSetpoints(normalized.setpoints);
+      setSlotMeasuredCurrents(normalized.measuredCurrents);
+      setSlotLimits(normalized.limits);
+      setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -239,6 +307,12 @@ const ITestPSUClient = ({ deviceName }) => {
 
   const currentTabConfig = tabConfigs[activeTab] || { slots: [], defaults: {}, enabled: true };
   const currentSlots = currentTabConfig.slots.filter(id => slotIds.includes(id));
+  const allCurrentSlotsEnabled =
+    currentSlots.length > 0 &&
+    currentSlots.every((id) => {
+      const idx = slotIds.indexOf(id);
+      return idx >= 0 && slotStates[idx] === 1;
+    });
 
   return (
     <div className="itest-client">
@@ -282,10 +356,7 @@ const ITestPSUClient = ({ deviceName }) => {
         <label className="toggle-all">
           <input 
             type="checkbox"
-            checked={currentSlots.every(id => {
-              const idx = slotIds.indexOf(id);
-              return idx >= 0 && slotStates[idx] === 1;
-            })}
+            checked={allCurrentSlotsEnabled}
             onChange={(e) => toggleTabOutputs(activeTab, e.target.checked)}
           />
           <span>Enable All Slots</span>

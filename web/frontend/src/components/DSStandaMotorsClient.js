@@ -77,6 +77,97 @@ const MOTOR_CONFIGS = {
   },
 };
 
+const getCookie = (name) => {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop().split(';').shift();
+  }
+  return null;
+};
+
+async function fetchMotorDetails(motorNames) {
+  const motorsData = {};
+  const stepsData = {};
+
+  for (const motorName of motorNames) {
+    try {
+      const posResponse = await fetch(`/api/device/${motorName}/attribute/position`, {
+        credentials: 'include'
+      });
+
+      let position = 0;
+      let state = 'UNKNOWN';
+      let unit = 'mm';
+      let limitMin = -100;
+      let limitMax = 100;
+      let friendlyName = motorName.split('/').pop();
+      let presetPositions = [];
+
+      if (posResponse.ok) {
+        const posData = await posResponse.json();
+        position = posData.value || 0;
+      }
+
+      try {
+        const stateResponse = await fetch(`/api/device/${motorName}/state`, {
+          credentials: 'include'
+        });
+        if (stateResponse.ok) {
+          const stateData = await stateResponse.json();
+          state = stateData.state || 'UNKNOWN';
+        }
+      } catch (_err) {
+        console.warn(`Could not fetch state for ${motorName}`);
+      }
+
+      try {
+        const propsResponse = await fetch(`/api/device/${motorName}/properties`, {
+          credentials: 'include'
+        });
+        if (propsResponse.ok) {
+          const propsData = await propsResponse.json();
+          unit = propsData.unit?.[0] || 'mm';
+          limitMin = parseFloat(propsData.limit_min?.[0] || -100);
+          limitMax = parseFloat(propsData.limit_max?.[0] || 100);
+          friendlyName = propsData.friendly_name?.[0] || friendlyName;
+          presetPositions = (propsData.preset_pos || []).map((value) => parseFloat(value));
+        }
+      } catch (_err) {
+        console.warn(`Could not fetch properties for ${motorName}`);
+      }
+
+      motorsData[motorName] = {
+        name: motorName,
+        friendlyName,
+        position,
+        state,
+        unit,
+        limitMin,
+        limitMax,
+        presetPositions
+      };
+      stepsData[motorName] = 1;
+    } catch (err) {
+      console.error(`Error fetching ${motorName}:`, err);
+      motorsData[motorName] = {
+        name: motorName,
+        friendlyName: motorName.split('/').pop(),
+        position: 0,
+        state: 'FAULT',
+        unit: 'mm',
+        limitMin: -100,
+        limitMax: 100,
+        presetPositions: [],
+        error: err.message
+      };
+      stepsData[motorName] = 1;
+    }
+  }
+
+  return { motorsData, stepsData };
+}
+
 const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
   const [selectedConfig, setSelectedConfig] = useState(defaultConfig);
   const [motors, setMotors] = useState({});
@@ -92,151 +183,104 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
   const currentMotorNames = MOTOR_CONFIGS[selectedConfig]?.selection || [];
 
   useEffect(() => {
-    if (currentMotorNames.length > 0) {
-      fetchAllMotorsData();
-      initializeWebSocket();
+    const motorNames = MOTOR_CONFIGS[selectedConfig]?.selection || [];
+    let disposed = false;
+
+    setMonitoring(false);
+
+    const refreshInitialData = async () => {
+      if (motorNames.length === 0) {
+        setMotors({});
+        setRelativeSteps({});
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const { motorsData, stepsData } = await fetchMotorDetails(motorNames);
+        if (!disposed) {
+          setMotors(motorsData);
+          setRelativeSteps(stepsData);
+          setError(null);
+        }
+      } catch (err) {
+        if (!disposed) {
+          setError(err.message);
+        }
+      } finally {
+        if (!disposed) {
+          setLoading(false);
+        }
+      }
+    };
+
+    refreshInitialData();
+
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+    }
+
+    if (motorNames.length > 0) {
+      const token = getCookie('access_token_cookie');
+      const socket = io('/', {
+        transports: ['websocket'],
+        auth: { token }
+      });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        setConnected(true);
+      });
+
+      socket.on('disconnect', () => {
+        setConnected(false);
+        setMonitoring(false);
+      });
+
+      socket.on('device_update', (data) => {
+        setMotors((prev) => {
+          if (!data.device || !prev[data.device]) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [data.device]: {
+              ...prev[data.device],
+              position: data.position !== undefined ? data.position : prev[data.device].position,
+              state: data.state || prev[data.device].state
+            }
+          };
+        });
+      });
+
+      socket.on('device_error', (data) => {
+        if (data.device && motorNames.includes(data.device)) {
+          setError(`${data.device}: ${data.error}`);
+        }
+      });
+    } else {
+      setConnected(false);
     }
 
     return () => {
+      disposed = true;
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
-      // Clear any pending timers
-      Object.values(updateTimers.current).forEach(timer => clearTimeout(timer));
+      const pendingTimers = updateTimers.current;
+      Object.values(pendingTimers).forEach((timer) => clearTimeout(timer));
+      updateTimers.current = {};
     };
   }, [selectedConfig]);
-
-  const initializeWebSocket = () => {
-    const token = getCookie('access_token_cookie');
-    
-    socketRef.current = io('/', {
-      transports: ['websocket'],
-      auth: { token: token }
-    });
-
-    socketRef.current.on('connect', () => {
-      setConnected(true);
-    });
-
-    socketRef.current.on('disconnect', () => {
-      setConnected(false);
-      setMonitoring(false);
-    });
-
-    socketRef.current.on('device_update', (data) => {
-      if (data.device && motors[data.device]) {
-        setMotors(prev => ({
-          ...prev,
-          [data.device]: {
-            ...prev[data.device],
-            position: data.position !== undefined ? data.position : prev[data.device].position,
-            state: data.state || prev[data.device].state
-          }
-        }));
-      }
-    });
-
-    socketRef.current.on('device_error', (data) => {
-      if (data.device && motors[data.device]) {
-        setError(`${data.device}: ${data.error}`);
-      }
-    });
-  };
-
-  const getCookie = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-  };
 
   const fetchAllMotorsData = async () => {
     try {
       setLoading(true);
-      const motorsData = {};
-      const stepsData = {};
-      
-      for (const motorName of currentMotorNames) {
-        try {
-          // Fetch position
-          const posResponse = await fetch(`/api/device/${motorName}/attribute/position`, {
-            credentials: 'include'
-          });
-          
-          let position = 0;
-          let state = 'UNKNOWN';
-          let unit = 'mm';
-          let limitMin = -100;
-          let limitMax = 100;
-          let friendlyName = motorName.split('/').pop();
-          let presetPositions = [];
-
-          if (posResponse.ok) {
-            const posData = await posResponse.json();
-            position = posData.value || 0;
-          }
-
-          // Fetch state
-          try {
-            const stateResponse = await fetch(`/api/device/${motorName}/state`, {
-              credentials: 'include'
-            });
-            if (stateResponse.ok) {
-              const stateData = await stateResponse.json();
-              state = stateData.state || 'UNKNOWN';
-            }
-          } catch (err) {
-            console.warn(`Could not fetch state for ${motorName}`);
-          }
-
-          // Fetch properties
-          try {
-            const propsResponse = await fetch(`/api/device/${motorName}/properties`, {
-              credentials: 'include'
-            });
-            if (propsResponse.ok) {
-              const propsData = await propsResponse.json();
-              unit = propsData.unit?.[0] || 'mm';
-              limitMin = parseFloat(propsData.limit_min?.[0] || -100);
-              limitMax = parseFloat(propsData.limit_max?.[0] || 100);
-              friendlyName = propsData.friendly_name?.[0] || friendlyName;
-              presetPositions = (propsData.preset_pos || []).map(p => parseFloat(p));
-            }
-          } catch (err) {
-            console.warn(`Could not fetch properties for ${motorName}`);
-          }
-
-          motorsData[motorName] = {
-            name: motorName,
-            friendlyName,
-            position,
-            state,
-            unit,
-            limitMin,
-            limitMax,
-            presetPositions
-          };
-
-          // Default step size is 1
-          stepsData[motorName] = 1;
-
-        } catch (err) {
-          console.error(`Error fetching ${motorName}:`, err);
-          motorsData[motorName] = {
-            name: motorName,
-            friendlyName: motorName.split('/').pop(),
-            position: 0,
-            state: 'FAULT',
-            unit: 'mm',
-            limitMin: -100,
-            limitMax: 100,
-            presetPositions: [],
-            error: err.message
-          };
-          stepsData[motorName] = 1;
-        }
-      }
-      
+      const { motorsData, stepsData } = await fetchMotorDetails(currentMotorNames);
       setMotors(motorsData);
       setRelativeSteps(stepsData);
       setError(null);

@@ -7,6 +7,7 @@ from flask_jwt_extended import JWTManager
 from routes import routes        # Your additional API endpoints
 from folder_api import folder_api  # Folder-related endpoints
 from device_api import device_api  # Device control API endpoints
+from treatment_api import treatment_api  # Treatment workflow API
 from auth import auth            # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
@@ -25,6 +26,7 @@ jwt = JWTManager(app)
 app.register_blueprint(routes)
 app.register_blueprint(folder_api)
 app.register_blueprint(device_api)  # Add device API
+app.register_blueprint(treatment_api)  # Add treatment API
 app.register_blueprint(auth)        # Add auth API
 
 # Initialize WebSocket support

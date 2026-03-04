@@ -289,6 +289,26 @@ def get_device_state(device_name):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
+@device_api.route('/api/device/<path:device_name>/properties', methods=['GET'])
+def get_device_properties(device_name):
+    """Get raw Tango device properties as a flat JSON object."""
+    try:
+        db = tango.Database()
+        prop_list = db.get_device_property_list(device_name, '*')
+        properties = {}
+
+        for prop_name in prop_list:
+            try:
+                prop_values = db.get_device_property(device_name, prop_name)
+                properties[prop_name] = make_json_safe(prop_values.get(prop_name, []))
+            except Exception as e:
+                properties[prop_name] = {'error': str(e)}
+
+        properties['success'] = True
+        return jsonify(properties)
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
 # Device-specific endpoints for common PYCONLYSE devices
 @device_api.route('/api/device/ds_itest_psu/<path:device_name>/slots', methods=['GET'])
 def get_ds_itest_psu_slots(device_name):

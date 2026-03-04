@@ -494,7 +494,7 @@ class DS_General(Device):
                 data.astype(dt)
             data_s = Array(value=data.tobytes(), shape=data.shape, dtype=dt)
 
-        if not time_stamp:
+        if time_stamp is None:
             time_stamp = time.time()
 
         archive_data = ArchiveData(
@@ -550,12 +550,11 @@ class DS_General(Device):
         doc_out="0 if Ok -1 if order is not present in orders",
     )
     def stop_order(self, name):
-        order = self.orders[name]
-        res = -1
-        if name in self.orders:
-            order.order_done = True
-            res = 0
-        return res
+        order = self.orders.get(name)
+        if order is None:
+            return -1
+        order.order_done = True
+        return 0
 
     def give_order_local(self, name) -> Any:
         pass

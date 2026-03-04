@@ -67,6 +67,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     _version_ = "0.5"
     _model_ = "STANDA step motor"
     polling_local = 1500
+    recovery_fault_threshold = 10
 
     unit = device_property(dtype=str, default_value="")
     conversion = device_property(dtype=float, default_value=1.0)
@@ -248,6 +249,25 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self.set_state(DevState.FAULT)
         return f"Could NOT turn on {self.device_name}: {res}."
 
+    def _attempt_recover_connection(self) -> bool:
+        self.info(f"Attempting STANDA recovery for {self.device_name}.", True)
+        self.set_state(DevState.FAULT)
+        self._device_id_internal = -1
+        self._uri = ""
+        try:
+            res = self.turn_on_local()
+        except Exception as e:
+            self.error(f"Recovery attempt failed for {self.device_name}: {e}")
+            return False
+
+        if res == 0:
+            self._status_check_fault = 0
+            self.info(f"STANDA recovery succeeded for {self.device_name}.", True)
+            return True
+
+        self.error(f"STANDA recovery failed for {self.device_name}: {res}")
+        return False
+
     def turn_off_local(self) -> Union[int, str]:
         arg = ctypes.cast(self._device_id_internal, ctypes.POINTER(ctypes.c_int))
         result = lib.close_device(ctypes.byref(arg))
@@ -299,13 +319,13 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._power_voltage = x_status.Upwr / 100.0
             self._power_status = self.POWER_STATES[x_status.PWRSts]
 
-            self._status_check_fault = min(self._status_check_fault, 0)
+            self._status_check_fault = 0
             return super().get_controller_status_local()
         self._status_check_fault += 1
-        if self._status_check_fault > 10:
-            self.set_state(DevState.FAULT)
+        if self._status_check_fault > self.recovery_fault_threshold:
             self._status_check_fault = 0
-            self.init_device()
+            if self._attempt_recover_connection():
+                return 0
         return f"Could not get controller status of {self.device_name}: {result}: N {self._status_check_fault}."
 
 

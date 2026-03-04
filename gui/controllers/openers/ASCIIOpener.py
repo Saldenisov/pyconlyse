@@ -47,7 +47,8 @@ class ASCIIOpener(Opener):
                 timedelays = data[0][1:]
                 wavelength = data[:,0][1:]
                 return CriticalInfo(file_path, number_maps=number_of_maps, timedelays_length=len(timedelays),
-                                    wavelengths_length=len(wavelength), timedelays=timedelays, wavelengths=wavelength)
+                                    wavelengths_length=len(wavelength), timedelays=timedelays,
+                                    wavelengths=wavelength, scaling_yunit='??')
             elif file_path.suffix == '.raw':
                 raise Exception(f'Do not know how to handle {file_path.suffix} data file type.')  # !!!.raw files
             else:
@@ -83,3 +84,11 @@ class ASCIIOpener(Opener):
                 yield self.read_map(file_path, map_index)[0]
         else:
             return res, comments
+
+    def average_map(self, file_path: Path, call_back_func=None):
+        measurement, comments = self.read_map(file_path, 0)
+        if measurement is False:
+            raise ValueError(comments)
+        if call_back_func:
+            call_back_func(1, 1)
+        return measurement.data

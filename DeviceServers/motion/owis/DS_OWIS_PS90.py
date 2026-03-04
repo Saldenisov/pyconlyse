@@ -56,6 +56,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     _version_ = "0.3"
     _model_ = "OWIS controller PS90 multi-axes 4 axes"
+    recovery_fault_threshold = 3
 
     @attribute(
         label="Axis 1 pos",
@@ -210,6 +211,25 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self.set_state(DevState.FAULT)
         return comments
 
+    def _attempt_recover_connection(self) -> bool:
+        self.info(f"Attempting OWIS recovery for {self.device_name}.", True)
+        self.set_state(DevState.FAULT)
+        self._device_id_internal = -1
+        self._uri = b""
+        try:
+            res = self.turn_on_local()
+        except Exception as e:
+            self.error(f"Recovery attempt failed for {self.device_name}: {e}")
+            return False
+
+        if res == 0:
+            self._status_check_fault = 0
+            self.info(f"OWIS recovery succeeded for {self.device_name}.", True)
+            return True
+
+        self.error(f"OWIS recovery failed for {self.device_name}: {res}")
+        return False
+
     def is_ensure_on_allowed(self):
         return self.get_state() in self.RULES.get("ensure_on", [])
 
@@ -229,9 +249,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def get_controller_status_local(self) -> Union[int, str]:
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if ser_num < 0:
-            print(ser_num)
+            self._status_check_fault += 1
+            if self._status_check_fault > self.recovery_fault_threshold:
+                self._status_check_fault = 0
+                if self._attempt_recover_connection():
+                    return 0
             self.set_state(DevState.FAULT)
             return "Connection with PS90 is lost"
+        self._status_check_fault = 0
         for axis in self._delay_lines_parameters.keys():
             self.get_status_axis_local(axis)
             self.read_position_axis_local(axis)

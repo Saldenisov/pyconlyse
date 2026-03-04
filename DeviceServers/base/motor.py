@@ -13,7 +13,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
         "write_position": [DevState.ON],
         "define_position": [DevState.ON],
         "move_axis": [DevState.ON, DevState.STANDBY],
-        "stop_axis": [DevState.MOVING, DevState.ON, DevState.STANDBY],
+        "stop_movement": [DevState.MOVING, DevState.ON, DevState.STANDBY],
         **DS_General.RULES,
     }
 
@@ -160,7 +160,7 @@ class DS_MOTORIZED_MONO_AXIS(DS_General):
     @command
     def stop_movement(self):
         self.info(f"Stopping axis movement of device {self.device_name}.")
-        state_ok = self.check_func_allowance(self.move_axis_abs)
+        state_ok = self.check_func_allowance(self.stop_movement)
         if state_ok == 1:
             self.stop_movement_local()
             self.get_controller_status()
@@ -466,6 +466,8 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                 self.error(
                     f"Could not move axis {args[0]} of {self.device_name}: {res}"
                 )
+        else:
+            res = f"check_func_allowance of {self.move_axis} did not work. Check {self.RULES}."
         return str(res)
 
     @command(dtype_in=float, doc_in="Input is axis_id: int and then position value.")

@@ -1,6 +1,5 @@
 // TopSection.js
 import React, { useEffect, useRef } from 'react';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import Plotly from 'plotly.js-dist';
 import './css/TopSection.css';
 
@@ -72,29 +71,29 @@ const SpectrumPlot = () => {
   return <div className="xy-plot spectrum-plot" ref={ref}></div>;
 };
 
-// TopSection component using react-resizable-panels for resizable columns
 const TopSection = () => {
   return (
     <div className="top-section-container">
-      <PanelGroup direction="horizontal" style={{ height: '100%' }}>
-        <Panel defaultSize={60} minSize={20}>
-          <div className="left-column">
-            {/* The imshow graph is wrapped so that its size is constrained */}
-            <div className="imshow-wrapper">
-              <ImshowGraph />
-            </div>
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          height: '100%',
+          width: '100%',
+        }}
+      >
+        <div className="left-column" style={{ flex: 3 }}>
+          <div className="imshow-wrapper">
+            <ImshowGraph />
           </div>
-        </Panel>
-        <PanelResizeHandle style={{ width: '5px', background: '#ccc', cursor: 'col-resize' }} />
-        <Panel minSize={20}>
-          <div className="right-column">
-            <div className="vertical-layout">
-              <KineticsPlot />
-              <SpectrumPlot />
-            </div>
+        </div>
+        <div className="right-column" style={{ flex: 2 }}>
+          <div className="vertical-layout">
+            <KineticsPlot />
+            <SpectrumPlot />
           </div>
-        </Panel>
-      </PanelGroup>
+        </div>
+      </div>
     </div>
   );
 };
