@@ -78,7 +78,7 @@ names_param = {
     "1": [
         "manip/general/DS_OWIS_PS90",
         {
-            "baudrate": 9600,
+            "baudrate": 115200,  # Use 115200 for fast, reliable communication
             "com_port": 7,
             "interface": 0,
             "control_unit_id": 1,
@@ -86,6 +86,8 @@ names_param = {
             "serial_number": 15110070,
             "dll_path": "C:/dev/pyconlyse/DeviceServers/motion/owis/drivers/ps90_64.dll",
             "delay_lines_parameters": str(delay_lines),
+            "max_retries": 3,  # Retry up to 3 times on communication errors
+            "retry_delay": 1.0,  # Wait 1 second between retries
         },
     ]
 }
