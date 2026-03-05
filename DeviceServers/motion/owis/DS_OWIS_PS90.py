@@ -31,6 +31,302 @@ except ModuleNotFoundError:
     from base.motor import DS_MOTORIZED_MULTI_AXES
 
 
+class _PS90TcpAdapter:
+    """Minimal DLL-like adapter for OWIS PS90 direct TCP access."""
+
+    def __init__(self, host: str, port: int = 8777, timeout: float = 5.0):
+        from owis_ps90_tcp import OwisPS90TCP
+
+        self._controller = OwisPS90TCP(ip=host, port=port, timeout=timeout)
+        self._last_error = 0
+        self._target_modes = {}
+        self._stage_attrs = {}
+        self._limits = {}
+        self._microsteps = {}
+
+    @staticmethod
+    def _to_int(value) -> int:
+        if hasattr(value, "value"):
+            value = value.value
+        return int(value)
+
+    @staticmethod
+    def _to_float(value) -> float:
+        if hasattr(value, "value"):
+            value = value.value
+        return float(value)
+
+    def _ok(self) -> int:
+        self._last_error = 0
+        return 0
+
+    def _fail(self, code: int = -2) -> int:
+        self._last_error = int(code)
+        return int(code)
+
+    def _ensure_connected(self) -> None:
+        if self._controller.connected:
+            return
+        if not self._controller.connect():
+            raise ConnectionError(
+                f"Cannot connect to OWIS controller at {self._controller.ip}:{self._controller.port}"
+            )
+
+    def _axis_params(self, axis: int) -> tuple[float, float, float]:
+        pitch, inc_rev, gear_ratio = self._stage_attrs.get(axis, (1.0, 200.0, 1.0))
+        pitch = float(pitch) if pitch else 1.0
+        inc_rev = float(inc_rev) if inc_rev else 200.0
+        gear_ratio = float(gear_ratio) if gear_ratio else 1.0
+        return pitch, inc_rev, gear_ratio
+
+    def _microstep_factor(self, axis: int) -> float:
+        cached = self._microsteps.get(axis)
+        if cached and cached > 0:
+            return float(cached)
+        try:
+            resp = self._controller.query(f"?MCSTP{axis}")
+            val = int(str(resp).strip())
+            if val > 0:
+                self._microsteps[axis] = val
+                return float(val)
+        except Exception:
+            pass
+        self._microsteps[axis] = 1
+        return 1.0
+
+    def _units_per_mm(self, axis: int) -> float:
+        pitch, inc_rev, gear_ratio = self._axis_params(axis)
+        microstep = self._microstep_factor(axis)
+        denom = pitch if pitch else 1.0
+        units = (inc_rev * gear_ratio * microstep) / denom
+        return units if units else 1.0
+
+    def _mm_to_counts(self, axis: int, mm: float) -> int:
+        units = self._units_per_mm(axis)
+        return int(round(mm * units))
+
+    def _counts_to_mm(self, axis: int, counts: float) -> float:
+        units = self._units_per_mm(axis)
+        return float(counts) / units if units else float(counts)
+
+    # ---------- DLL-like methods ----------
+    def PS90_Connect(self, *_args):
+        try:
+            self._ensure_connected()
+            return self._ok()
+        except Exception:
+            # DLL convention: positive connection errors (caller flips sign)
+            self._last_error = -5
+            return 5
+
+    def PS90_Disconnect(self, *_args):
+        try:
+            self._controller.disconnect()
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_GetReadError(self, *_args):
+        return int(self._last_error)
+
+    def PS90_GetSerNumber(self, _control_unit, buf, length):
+        try:
+            self._ensure_connected()
+            serial = (self._controller.get_serial_number() or "").strip()
+            if not serial:
+                serial = "0"
+            max_len = max(0, self._to_int(length) - 1)
+            encoded = serial.encode("utf-8", errors="ignore")[:max_len]
+            buf.value = encoded
+            self._ok()
+            return len(encoded)
+        except Exception:
+            try:
+                buf.value = b""
+            except Exception:
+                pass
+            return self._fail(-1)
+
+    def PS90_GetAxisState(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            state = int(self._controller.get_axis_state(axis_i))
+            if state < 0:
+                return self._fail(-2)
+            self._ok()
+            return state
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_GetPosition(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            counts = self._controller.get_position(axis_i)
+            mm = self._counts_to_mm(axis_i, counts)
+            pitch, _inc_rev, _ratio = self._axis_params(axis_i)
+            value = int(round((mm * 10000.0) / pitch))
+            self._ok()
+            return value
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_GetTargetEx(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            counts = self._controller.get_target(axis_i)
+            mm = self._counts_to_mm(axis_i, counts)
+            value = int(round(mm * 10000.0))
+            self._ok()
+            return value
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_GetTargetMode(self, _control_unit, axis):
+        try:
+            axis_i = self._to_int(axis)
+            self._ok()
+            return int(self._target_modes.get(axis_i, 1))
+        except Exception:
+            return self._fail(-1)
+
+    def PS90_GoTarget(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            ok = self._controller.go_target(axis_i)
+            return self._ok() if ok else self._fail(-4)
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_MotorInit(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            self._controller.send_command(f"AXIS{axis_i}=1", expect_response=False)
+            ok = self._controller.motor_init(axis_i)
+            return self._ok() if ok else self._fail(-4)
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_MotorOn(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            ok = self._controller.motor_on(self._to_int(axis))
+            return self._ok() if ok else self._fail(-4)
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_MotorOff(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            ok = self._controller.motor_off(self._to_int(axis))
+            return self._ok() if ok else self._fail(-4)
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_Stop(self, _control_unit, axis):
+        try:
+            self._ensure_connected()
+            self._controller.stop(self._to_int(axis))
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetLimitMinEx(self, _control_unit, axis, value):
+        try:
+            axis_i = self._to_int(axis)
+            self._limits.setdefault(axis_i, {})["min"] = self._to_float(value)
+            return self._ok()
+        except Exception:
+            return self._fail(-1)
+
+    def PS90_SetLimitMaxEx(self, _control_unit, axis, value):
+        try:
+            axis_i = self._to_int(axis)
+            self._limits.setdefault(axis_i, {})["max"] = self._to_float(value)
+            return self._ok()
+        except Exception:
+            return self._fail(-1)
+
+    def PS90_SetPositionEx(self, _control_unit, axis, pos):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            pos_mm = self._to_float(pos)
+            counts = self._mm_to_counts(axis_i, pos_mm)
+            self._controller.set_position(axis_i, counts)
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetPosMode(self, *_args):
+        return self._ok()
+
+    def PS90_SetPosFEx(self, _control_unit, axis, value):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            speed_mm_s = self._to_float(value)
+            speed_counts = max(1, int(round(abs(self._mm_to_counts(axis_i, speed_mm_s)))))
+            self._controller.set_velocity(axis_i, speed_counts)
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetStageAttributes(self, _control_unit, axis, pitch, inc_rev, gear_ratio):
+        try:
+            axis_i = self._to_int(axis)
+            self._stage_attrs[axis_i] = (
+                self._to_float(pitch),
+                self._to_float(inc_rev),
+                self._to_float(gear_ratio),
+            )
+            return self._ok()
+        except Exception:
+            return self._fail(-1)
+
+    def PS90_SetTargetMode(self, _control_unit, axis, mode):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            mode_i = self._to_int(mode)
+            self._target_modes[axis_i] = mode_i
+            self._controller.send_command(
+                f"ABSOL{axis_i}={mode_i}", expect_response=False
+            )
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetTarget(self, _control_unit, axis, value):
+        try:
+            self._ensure_connected()
+            self._controller.set_target(self._to_int(axis), self._to_int(value))
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetTargetEx(self, _control_unit, axis, value):
+        try:
+            self._ensure_connected()
+            axis_i = self._to_int(axis)
+            target_mm = self._to_float(value)
+            counts = self._mm_to_counts(axis_i, target_mm)
+            self._controller.set_target(axis_i, counts)
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
+
+    def PS90_SetDriveCurrent(self, *_args):
+        return self._ok()
+
+    def PS90_SetHoldCurrent(self, *_args):
+        return self._ok()
+
+
 class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     """ "
     Device Server (Tango) which controls the OWIS delay lines using ps90.dll
@@ -53,6 +349,9 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     interface = device_property(dtype=int, default_value=0)
     control_unit_id = device_property(dtype=int, default_value=1)
     serial_number = device_property(dtype=int)
+    transport = device_property(dtype=str, default_value="dll")
+    controller_ip = device_property(dtype=str, default_value="")
+    controller_port = device_property(dtype=int, default_value=8777)
 
     _version_ = "0.3"
     _model_ = "OWIS controller PS90 multi-axes 4 axes"
@@ -105,9 +404,15 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         polling_period=DS_MOTORIZED_MULTI_AXES.polling,
     )
     def pos4(self):
+        # Some installations use only 3 axes for this device instance.
+        if 4 not in self._delay_lines_parameters:
+            return float("nan")
         return self._delay_lines_parameters[4]["position"]
 
     def write_pos4(self, pos):
+        if 4 not in self._delay_lines_parameters:
+            self.error(f"{self.device_name} has no axis 4 configured.")
+            return
         self.move_axis([4, pos])
 
     def get_pos(self, axis):
@@ -135,45 +440,63 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b""
         if state_ok:
-            # Resolve DLL path robustly: prefer valid device property, else fall back to local drivers dir
-            dll_candidate = None
-            try:
-                cfg_path = str(self.dll_path).strip()
-            except Exception:
-                cfg_path = ""
-            if cfg_path:
-                p = Path(cfg_path)
-                if p.exists():
-                    dll_candidate = p
+            transport = str(getattr(self, "transport", "dll")).strip().lower()
+            use_tcp_backend = transport in {"tcp", "ip", "ethernet"} or not hasattr(
+                ctypes, "WinDLL"
+            )
 
-            if dll_candidate is None:
-                drivers_dir = Path(__file__).resolve().parent / "drivers"
-                # Prefer arch-specific DLL name; fall back to generic
-                arch_name = "ps90_64.dll" if sys.maxsize > 2**32 else "ps90_32.dll"
-                for name in (arch_name, "ps90.dll"):
-                    cand = drivers_dir / name
-                    if cand.exists():
-                        dll_candidate = cand
-                        break
+            if use_tcp_backend:
+                ip = str(getattr(self, "controller_ip", "")).strip()
+                port = int(getattr(self, "controller_port", 8777))
+                if not ip:
+                    self.error(
+                        "OWIS TCP backend requires 'controller_ip' device property."
+                    )
+                    self.set_state(DevState.FAULT)
+                    self._device_id_internal, self._uri = -1, b""
+                    return
+                self.info(f"Using OWIS TCP backend: {ip}:{port}", True)
+                self.lib = _PS90TcpAdapter(ip, port=port)
+            else:
+                # Resolve DLL path robustly: prefer valid device property, else fall back to local drivers dir
+                dll_candidate = None
+                try:
+                    cfg_path = str(self.dll_path).strip()
+                except Exception:
+                    cfg_path = ""
+                if cfg_path:
+                    p = Path(cfg_path)
+                    if p.exists():
+                        dll_candidate = p
 
-            if dll_candidate is None:
-                self.error(
-                    f"OWIS DLL not found. Checked property path '{cfg_path}' and drivers dir '{drivers_dir}'."
-                )
-                self.set_state(DevState.FAULT)
-                self._device_id_internal, self._uri = -1, b""
-                return
+                if dll_candidate is None:
+                    drivers_dir = Path(__file__).resolve().parent / "drivers"
+                    # Prefer arch-specific DLL name; fall back to generic
+                    arch_name = "ps90_64.dll" if sys.maxsize > 2**32 else "ps90_32.dll"
+                    for name in (arch_name, "ps90.dll"):
+                        cand = drivers_dir / name
+                        if cand.exists():
+                            dll_candidate = cand
+                            break
 
-            # Ensure Windows can locate any adjacent DLL dependencies (Python 3.8+)
-            try:
-                if hasattr(os, "add_dll_directory"):
-                    os.add_dll_directory(str(dll_candidate.parent))
-            except Exception as e:
-                self.info(f"add_dll_directory failed: {e}", True)
+                if dll_candidate is None:
+                    self.error(
+                        f"OWIS DLL not found. Checked property path '{cfg_path}' and drivers dir '{drivers_dir}'."
+                    )
+                    self.set_state(DevState.FAULT)
+                    self._device_id_internal, self._uri = -1, b""
+                    return
 
-            self.dll_path = dll_candidate
-            self.info(f"Using OWIS DLL: {self.dll_path}", True)
-            self.lib = ctypes.WinDLL(str(self.dll_path))
+                # Ensure Windows can locate any adjacent DLL dependencies (Python 3.8+)
+                try:
+                    if hasattr(os, "add_dll_directory"):
+                        os.add_dll_directory(str(dll_candidate.parent))
+                except Exception as e:
+                    self.info(f"add_dll_directory failed: {e}", True)
+
+                self.dll_path = dll_candidate
+                self.info(f"Using OWIS DLL: {self.dll_path}", True)
+                self.lib = ctypes.WinDLL(str(self.dll_path))
             res, comments = self._connect_ps90(
                 self.control_unit_id,
                 interface=self.interface,
@@ -331,15 +654,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
         res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
         res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
-        # res5, com5 = self._set_drive_current_ex_ps90(self.control_unit_id, axis, drive_current)
+        res5, com5 = self._set_drive_current_ex_ps90(
+            self.control_unit_id, axis, drive_current
+        )
         res6, com6 = self._set_hold_current_ex_ps90(
             self.control_unit_id, axis, hold_current
         )
 
-        if all([res1, res2, res3, res4, res6]):
+        if all([res1, res2, res3, res4, res5, res6]):
             result = 0
         else:
-            result = f"ERROR: {com1}:{com2}:{com3}:{com4}"
+            result = f"ERROR: {com1}:{com2}:{com3}:{com4}:{com5}:{com6}"
             self.error(result)
         return result
 
@@ -356,8 +681,13 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     def turn_off_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_off_ps90(self.control_unit_id, axis)
         if not res:
-            result = f"ERROR: Device {self.device_name} turn_off_axis for axis {axis} func did NOT work {comments}."
-            self.error(result)
+            # OWIS may report "axis is in wrong state" when it's already effectively off.
+            if isinstance(comments, str) and "wrong state" in comments.lower():
+                self._delay_lines_parameters[axis]["state"] = DevState.OFF
+                result = 0
+            else:
+                result = f"ERROR: Device {self.device_name} turn_off_axis for axis {axis} func did NOT work {comments}."
+                self.error(result)
         else:
             self._delay_lines_parameters[axis]["state"] = DevState.OFF
             result = 0
