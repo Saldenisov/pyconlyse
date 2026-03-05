@@ -497,12 +497,24 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.dll_path = dll_candidate
                 self.info(f"Using OWIS DLL: {self.dll_path}", True)
                 self.lib = ctypes.WinDLL(str(self.dll_path))
-            res, comments = self._connect_ps90(
-                self.control_unit_id,
-                interface=self.interface,
-                port=self.com_port,
-                baudrate=self.baudrate,
-            )
+            # Use DLL over Ethernet if controller_ip is set, else COM/USB
+            _eth_ip = str(getattr(self, "controller_ip", "")).strip()
+            if _eth_ip:
+                _eth_port = int(getattr(self, "controller_port", 8777))
+                self.info(
+                    f"Using OWIS DLL over Ethernet: {_eth_ip}:{_eth_port}", True
+                )
+                res, comments = self._connect_simple_ps90(
+                    self.control_unit_id,
+                    ser_num=f"net:{_eth_ip}:{_eth_port}".encode("ascii"),
+                )
+            else:
+                res, comments = self._connect_ps90(
+                    self.control_unit_id,
+                    interface=self.interface,
+                    port=self.com_port,
+                    baudrate=self.baudrate,
+                )
             if res:
                 self.set_state(DevState.STANDBY)
                 argreturn = self.control_unit_id, f"{self.serial_number}".encode()
