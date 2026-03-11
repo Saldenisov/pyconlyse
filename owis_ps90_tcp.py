@@ -212,11 +212,26 @@ class OwisPS90TCP:
         self.send_command(f"STOP{axis}", expect_response=False)
     
     def is_moving(self, axis: int) -> bool:
-        """Check if axis is moving."""
+        """Check if axis is moving.
+
+        Primary path uses ?ASTAT because some firmware variants do not answer
+        ?MPTSx and cause long socket timeouts.
+        """
+        # Preferred: parse axis character from global ASTAT string.
+        # Observed mapping: 'T' => moving/transition, 'R' => ready.
+        try:
+            astat = (self.query("?ASTAT") or "").strip()
+            idx = int(axis) - 1
+            if idx >= 0 and idx < len(astat):
+                return astat[idx].upper() == "T"
+        except Exception:
+            pass
+
+        # Fallback for controllers that support MPTS.
         resp = self.query(f"?MPTS{axis}")
         try:
             return int(resp) > 0
-        except:
+        except Exception:
             return False
     
     def go_reference(self, axis: int, mode: int = 4):

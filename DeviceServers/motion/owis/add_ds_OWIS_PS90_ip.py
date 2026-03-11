@@ -88,7 +88,7 @@ def main() -> None:
         "server_id": args.server_id,
         "friendly_name": args.friendly_name,
         "serial_number": args.serial_number,
-        "control_unit_id": 1,
+        "control_unit_id": 2,
         "interface": 0,
         "com_port": -1,
         "baudrate": 115200,

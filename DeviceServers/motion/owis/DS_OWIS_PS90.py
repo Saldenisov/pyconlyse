@@ -14,7 +14,7 @@ sys.path.append(str(app_folder1))
 import ctypes
 from threading import Thread
 from time import sleep
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, device_property, command
@@ -108,6 +108,45 @@ class _PS90TcpAdapter:
     def _counts_to_mm(self, axis: int, counts: float) -> float:
         units = self._units_per_mm(axis)
         return float(counts) / units if units else float(counts)
+
+    def _get_current_level(self, axis: int) -> Optional[int]:
+        """Return current level from controller (0=low, 1=high), or None if unknown."""
+        try:
+            resp = self._controller.query(f"?AMPSHNT{axis}")
+            level = int(str(resp).strip())
+            return level if level in (0, 1) else None
+        except Exception:
+            return None
+
+    def _set_current_level(self, axis: int, level: int) -> None:
+        self._controller.send_command(f"AMPSHNT{axis}={int(level)}", expect_response=False)
+
+    def _normalize_current_to_percent(self, axis: int, value) -> int:
+        """Accept either percent (0-100) or amperes (~0-6A) and return controller percent."""
+        v = abs(self._to_float(value))
+        # Legacy/expected controller format
+        if v > 10.0:
+            return max(0, min(100, int(round(v))))
+
+        # Ampere mode: convert using current level.
+        level = self._get_current_level(axis)
+        if level is None:
+            # Fallback when level cannot be queried: treat as legacy percent-like value.
+            return max(0, min(100, int(round(v))))
+
+        # If requested current exceeds low range, switch to high range automatically.
+        if v > 2.4 and level == 0:
+            self._set_current_level(axis, 1)
+            level = 1
+
+        # Conversion basis from SDK docs:
+        # low level max = 2.4 A (100%), high level max = 5.45 A (capped at 66% ~= 3.6 A).
+        if level == 0:
+            pct = int(round((v / 2.4) * 100.0))
+            return max(0, min(100, pct))
+
+        pct = int(round((v / 5.45) * 100.0))
+        return max(0, min(66, pct))
 
     # ---------- DLL-like methods ----------
     def PS90_Connect(self, *_args):
@@ -321,10 +360,26 @@ class _PS90TcpAdapter:
             return self._fail(-2)
 
     def PS90_SetDriveCurrent(self, *_args):
-        return self._ok()
+        try:
+            self._ensure_connected()
+            _control_unit, axis, value = _args[:3]
+            axis_i = self._to_int(axis)
+            pct = self._normalize_current_to_percent(axis_i, value)
+            self._controller.send_command(f"DRICUR{axis_i}={pct}", expect_response=False)
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
 
     def PS90_SetHoldCurrent(self, *_args):
-        return self._ok()
+        try:
+            self._ensure_connected()
+            _control_unit, axis, value = _args[:3]
+            axis_i = self._to_int(axis)
+            pct = self._normalize_current_to_percent(axis_i, value)
+            self._controller.send_command(f"HOLCUR{axis_i}={pct}", expect_response=False)
+            return self._ok()
+        except Exception:
+            return self._fail(-2)
 
 
 class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
@@ -441,8 +496,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         argreturn = -1, b""
         if state_ok:
             transport = str(getattr(self, "transport", "dll")).strip().lower()
-            use_tcp_backend = transport in {"tcp", "ip", "ethernet"} or not hasattr(
-                ctypes, "WinDLL"
+            use_tcp_backend = transport in {"tcp", "ip"} or (
+                not hasattr(ctypes, "WinDLL") and transport != "dll"
             )
 
             if use_tcp_backend:
