@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 
+import ast
 import os
 import sys
 from pathlib import Path
@@ -34,15 +35,38 @@ except ModuleNotFoundError:
 class _PS90TcpAdapter:
     """Minimal DLL-like adapter for OWIS PS90 direct TCP access."""
 
-    def __init__(self, host: str, port: int = 8777, timeout: float = 5.0):
+    def __init__(
+        self,
+        host: str,
+        port: int = 8777,
+        timeout: float = 5.0,
+        command_delay: float = 0.005,
+        velocity_scale: float = 16.0,
+        velocity_scale_map: Optional[dict[int, float]] = None,
+    ):
         from owis_ps90_tcp import OwisPS90TCP
 
         self._controller = OwisPS90TCP(ip=host, port=port, timeout=timeout)
+        self._controller.command_delay = max(0.0, float(command_delay))
         self._last_error = 0
         self._target_modes = {}
         self._stage_attrs = {}
         self._limits = {}
         self._microsteps = {}
+        self._velocity_scale = max(0.01, float(velocity_scale))
+        self._velocity_scale_map = {}
+        if isinstance(velocity_scale_map, dict):
+            for axis, scale in velocity_scale_map.items():
+                try:
+                    axis_i = int(axis)
+                    scale_f = float(scale)
+                except Exception:
+                    continue
+                if axis_i > 0 and scale_f > 0:
+                    self._velocity_scale_map[axis_i] = scale_f
+
+    def _velocity_scale_for_axis(self, axis: int) -> float:
+        return float(self._velocity_scale_map.get(int(axis), self._velocity_scale))
 
     @staticmethod
     def _to_int(value) -> int:
@@ -309,7 +333,20 @@ class _PS90TcpAdapter:
             self._ensure_connected()
             axis_i = self._to_int(axis)
             speed_mm_s = self._to_float(value)
-            speed_counts = max(1, int(round(abs(self._mm_to_counts(axis_i, speed_mm_s)))))
+            axis_scale = self._velocity_scale_for_axis(axis_i)
+            # On the tested PS90 TCP firmware, PVEL behaves as if values are
+            # expected in ~1/16 increments/s units. Keep the factor configurable.
+            speed_counts = max(
+                1,
+                int(
+                    round(
+                        abs(
+                            self._mm_to_counts(axis_i, speed_mm_s)
+                            * axis_scale
+                        )
+                    )
+                ),
+            )
             self._controller.set_velocity(axis_i, speed_counts)
             return self._ok()
         except Exception:
@@ -404,9 +441,13 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     interface = device_property(dtype=int, default_value=0)
     control_unit_id = device_property(dtype=int, default_value=1)
     serial_number = device_property(dtype=int)
-    transport = device_property(dtype=str, default_value="dll")
+    transport = device_property(dtype=str, default_value="tcp")
     controller_ip = device_property(dtype=str, default_value="")
     controller_port = device_property(dtype=int, default_value=8777)
+    tcp_timeout = device_property(dtype=float, default_value=5.0)
+    tcp_command_delay = device_property(dtype=float, default_value=0.005)
+    tcp_velocity_scale = device_property(dtype=float, default_value=16.0)
+    tcp_velocity_scale_map = device_property(dtype=str, default_value="")
 
     _version_ = "0.3"
     _model_ = "OWIS controller PS90 multi-axes 4 axes"
@@ -495,14 +536,39 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b""
         if state_ok:
-            transport = str(getattr(self, "transport", "dll")).strip().lower()
-            use_tcp_backend = transport in {"tcp", "ip"} or (
-                not hasattr(ctypes, "WinDLL") and transport != "dll"
-            )
+            transport = str(getattr(self, "transport", "tcp")).strip().lower()
+            ip = str(getattr(self, "controller_ip", "")).strip()
+            port = int(getattr(self, "controller_port", 8777))
+            tcp_aliases = {"tcp", "ip", "ethernet", "socket"}
+            dll_aliases = {"dll", "windll"}
+
+            if transport in tcp_aliases:
+                use_tcp_backend = True
+            elif transport in dll_aliases:
+                use_tcp_backend = False
+            else:
+                use_tcp_backend = bool(ip)
+                fallback = "TCP" if use_tcp_backend else "DLL"
+                self.info(
+                    f"Unknown transport '{transport}', fallback to {fallback}.", True
+                )
+
+            if not hasattr(ctypes, "WinDLL") and not use_tcp_backend:
+                if ip:
+                    self.info(
+                        "ctypes.WinDLL is unavailable on this platform; forcing TCP backend.",
+                        True,
+                    )
+                    use_tcp_backend = True
+                else:
+                    self.error(
+                        "DLL transport requested on non-Windows platform without controller_ip."
+                    )
+                    self.set_state(DevState.FAULT)
+                    self._device_id_internal, self._uri = -1, b""
+                    return
 
             if use_tcp_backend:
-                ip = str(getattr(self, "controller_ip", "")).strip()
-                port = int(getattr(self, "controller_port", 8777))
                 if not ip:
                     self.error(
                         "OWIS TCP backend requires 'controller_ip' device property."
@@ -510,8 +576,50 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                     self.set_state(DevState.FAULT)
                     self._device_id_internal, self._uri = -1, b""
                     return
-                self.info(f"Using OWIS TCP backend: {ip}:{port}", True)
-                self.lib = _PS90TcpAdapter(ip, port=port)
+                timeout = float(getattr(self, "tcp_timeout", 5.0))
+                command_delay = float(getattr(self, "tcp_command_delay", 0.005))
+                velocity_scale = float(getattr(self, "tcp_velocity_scale", 16.0))
+                velocity_scale_map_raw = str(
+                    getattr(self, "tcp_velocity_scale_map", "")
+                ).strip()
+                velocity_scale_map = {}
+                if velocity_scale_map_raw:
+                    try:
+                        parsed = ast.literal_eval(velocity_scale_map_raw)
+                        if isinstance(parsed, dict):
+                            for axis, scale in parsed.items():
+                                axis_i = int(axis)
+                                scale_f = float(scale)
+                                if axis_i > 0 and scale_f > 0:
+                                    velocity_scale_map[axis_i] = scale_f
+                        else:
+                            self.error(
+                                "tcp_velocity_scale_map must be a dict, "
+                                f"got {type(parsed).__name__}"
+                            )
+                    except Exception as e:
+                        self.error(
+                            f"Invalid tcp_velocity_scale_map '{velocity_scale_map_raw}': {e}"
+                        )
+                self.info(
+                    f"Using OWIS TCP backend: {ip}:{port} "
+                    f"(timeout={timeout}s, command_delay={command_delay}s, "
+                    f"velocity_scale={velocity_scale})",
+                    True,
+                )
+                if velocity_scale_map:
+                    self.info(
+                        f"TCP velocity scale overrides by axis: {velocity_scale_map}",
+                        True,
+                    )
+                self.lib = _PS90TcpAdapter(
+                    ip,
+                    port=port,
+                    timeout=timeout,
+                    command_delay=command_delay,
+                    velocity_scale=velocity_scale,
+                    velocity_scale_map=velocity_scale_map,
+                )
                 # TCP adapter: connect via PS90_Connect (supported by _PS90TcpAdapter)
                 res, comments = self._connect_ps90(
                     self.control_unit_id,

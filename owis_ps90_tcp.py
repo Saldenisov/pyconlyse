@@ -39,6 +39,7 @@ class OwisPS90TCP:
         self.ip = ip
         self.port = port
         self.timeout = timeout
+        self.command_delay = float(self.COMMAND_DELAY)
         self._socket: Optional[socket.socket] = None
         
     @property
@@ -94,7 +95,8 @@ class OwisPS90TCP:
         cmd_bytes = (command + "\r").encode("ascii")
         self._socket.sendall(cmd_bytes)
         
-        time.sleep(self.COMMAND_DELAY)
+        if self.command_delay > 0:
+            time.sleep(self.command_delay)
         
         if not expect_response:
             return ""
@@ -137,22 +139,22 @@ class OwisPS90TCP:
     def motor_init(self, axis: int) -> bool:
         """
         Initialize axis motor.
-        
+
         Args:
             axis: Axis number (1-9)
         """
-        resp = self.query(f"INIT{axis}")
-        return "OK" in resp.upper() or resp == ""
+        self.send_command(f"INIT{axis}", expect_response=False)
+        return True
     
     def motor_on(self, axis: int) -> bool:
         """Switch axis motor on."""
-        resp = self.query(f"MON{axis}")
-        return "OK" in resp.upper() or resp == ""
+        self.send_command(f"MON{axis}", expect_response=False)
+        return True
     
     def motor_off(self, axis: int) -> bool:
         """Switch axis motor off."""
-        resp = self.query(f"MOFF{axis}")
-        return "OK" in resp.upper() or resp == ""
+        self.send_command(f"MOFF{axis}", expect_response=False)
+        return True
     
     def get_axis_state(self, axis: int) -> int:
         """
@@ -203,9 +205,13 @@ class OwisPS90TCP:
         self.send_command(f"ABSOL{axis}={mode}", expect_response=False)
     
     def go_target(self, axis: int) -> bool:
-        """Start movement to target."""
-        resp = self.query(f"PGO{axis}")
-        return "OK" in resp.upper() or resp == ""
+        """Start movement to target.
+
+        Some PS90 TCP firmware variants execute PGO without sending a reply.
+        Using fire-and-forget avoids waiting for full socket timeout per move.
+        """
+        self.send_command(f"PGO{axis}", expect_response=False)
+        return True
     
     def stop(self, axis: int):
         """Stop axis movement."""

@@ -27,8 +27,12 @@ OFFSET_MM = 5.0
 NUM_CYCLES = 5
 POSITION_TOL_MM = 0.5
 MOVE_TIMEOUT = 30.0
-CHECK_INTERVAL = 0.2
-SPEED_MM_S = 5.0
+CHECK_INTERVAL = 0.03
+PROGRESS_LOG_INTERVAL = 0.3
+# Fast profile validated on this controller over direct TCP:
+# PVEL1=960000 gives ~1.0-1.3 s for a 5 mm move.
+PVEL_COUNTS_S = 960000
+SPEED_MM_S = None
 DRIVE_CURRENT_A = 2.5
 HOLD_CURRENT_A = 0.5
 
@@ -81,6 +85,7 @@ def main():
     log("=" * 62)
 
     ctrl = OwisPS90TCP(ip=IP, port=PORT, timeout=5)
+    ctrl.command_delay = 0.005
     if not ctrl.connect():
         log("FATAL: could not connect")
         return
@@ -113,7 +118,13 @@ def main():
 
     tol_counts = mm_to_counts(POSITION_TOL_MM)
     delta_counts = mm_to_counts(OFFSET_MM)
-    vel_counts_s = max(1, mm_to_counts(SPEED_MM_S))
+    current_vel_counts_s = max(1, to_int(ctrl.query(f"?PVEL{AXIS}"), default=1))
+    if PVEL_COUNTS_S is not None:
+        vel_counts_s = max(1, int(PVEL_COUNTS_S))
+    elif SPEED_MM_S is not None:
+        vel_counts_s = max(1, mm_to_counts(SPEED_MM_S))
+    else:
+        vel_counts_s = current_vel_counts_s
     log(
         f"Conversion: microstep={microstep:.0f}, units/mm={units_per_mm:.1f}, "
         f"delta={delta_counts} counts",
@@ -145,9 +156,23 @@ def main():
     ctrl.send_command(f"DRICUR{AXIS}={drive_pct}", expect_response=False)
     ctrl.send_command(f"HOLCUR{AXIS}={hold_pct}", expect_response=False)
 
+    if PVEL_COUNTS_S is not None:
+        speed_msg = (
+            f"Speed set (direct PVEL): {vel_counts_s} counts/s, "
+            f"controller was {current_vel_counts_s} counts/s"
+        )
+    elif SPEED_MM_S is not None:
+        speed_msg = (
+            f"Speed set: {SPEED_MM_S:.2f} mm/s ({vel_counts_s} counts/s), "
+            f"controller was {counts_to_mm(current_vel_counts_s):.2f} mm/s "
+            f"({current_vel_counts_s} counts/s)"
+        )
+    else:
+        speed_msg = (
+            f"Speed keep controller profile: {current_vel_counts_s} counts/s"
+        )
     log(
-        f"Speed set: {SPEED_MM_S:.2f} mm/s ({vel_counts_s} counts/s), "
-        f"current level={current_level}, drive={drive_pct}%, hold={hold_pct}%",
+        f"{speed_msg}, current level={current_level}, drive={drive_pct}%, hold={hold_pct}%",
         1,
     )
     log(f"Axis state after init: {ctrl.get_axis_state(AXIS)} (3=ON)", 1)
@@ -175,17 +200,23 @@ def main():
             raise RuntimeError("go_target returned False")
 
         t0 = time.time()
+        t_last_log = t0
         while time.time() - t0 < MOVE_TIMEOUT:
-            pos = to_int(ctrl.query(f"?CNT{AXIS}"))
-            err = abs(pos - target_counts)
             moving = ctrl.is_moving(AXIS)
-            log(
-                f"pos={pos} ({counts_to_mm(pos):.3f} mm), "
-                f"err={err} counts, moving={moving}",
-                2,
-            )
             if not moving:
+                pos = to_int(ctrl.query(f"?CNT{AXIS}"))
+                err = abs(pos - target_counts)
                 return pos, err, time.time() - t0
+            now = time.time()
+            if now - t_last_log >= PROGRESS_LOG_INTERVAL:
+                pos = to_int(ctrl.query(f"?CNT{AXIS}"))
+                err = abs(pos - target_counts)
+                log(
+                    f"progress pos={pos} ({counts_to_mm(pos):.3f} mm), "
+                    f"err={err} counts",
+                    2,
+                )
+                t_last_log = now
             time.sleep(CHECK_INTERVAL)
         raise TimeoutError(f"move timeout {MOVE_TIMEOUT}s")
 

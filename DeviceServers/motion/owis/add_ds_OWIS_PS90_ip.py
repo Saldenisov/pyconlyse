@@ -63,7 +63,7 @@ def _delay_lines() -> dict[int, dict]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Register DS_OWIS_PS90_IP — OWIS PS90 Tango DS using DLL over Ethernet."
+        description="Register DS_OWIS_PS90_IP — OWIS PS90 Tango DS over direct TCP/IP."
     )
     parser.add_argument("--device-name", default="manip/general/DS_OWIS_PS90_IP")
     parser.add_argument("--instance", default="IP")
@@ -92,9 +92,7 @@ def main() -> None:
         "interface": 0,
         "com_port": -1,
         "baudrate": 115200,
-        # transport="dll" + controller_ip set → DLL connects over Ethernet
-        # via PS90_SimpleConnect("net:IP:PORT")
-        "transport": "dll",
+        "transport": "tcp",
         "controller_ip": args.controller_ip,
         "controller_port": args.controller_port,
         "delay_lines_parameters": str(_delay_lines()),
@@ -106,7 +104,7 @@ def main() -> None:
     print(f"Registered device : {args.device_name}")
     print(f"Server instance   : DS_OWIS_PS90/{args.instance}")
     print(f"Controller        : {args.controller_ip}:{args.controller_port}")
-    print(f"Transport         : dll (Ethernet via PS90_SimpleConnect net:IP:PORT)")
+    print("Transport         : tcp (direct socket, no DLL)")
 
 
 if __name__ == "__main__":
