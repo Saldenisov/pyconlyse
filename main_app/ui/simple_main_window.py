@@ -263,9 +263,15 @@ class SimpleMainWindow(QMainWindow):
                 "ELYSE": "ELYSE PDU only",
             },
             "OWIS": {
-                "V0": "V0 Delay Line: axes 2,3,4 (manip/general/DS_OWIS_PS90)",
-                "VD2": "VD2 Delay Line: axis 1 (manip/general/DS_OWIS_PS90)",
-                "all": "All Delay Lines: axes 1,2,3,4 (manip/general/DS_OWIS_PS90)",
+                "V0": (
+                    "V0 Delay Lines: axes 2,3 from DS_OWIS_PS90_IP + axis 4 "
+                    "from DS_OWIS_PS90"
+                ),
+                "VD2": "VD2 Delay Line: axis 1 (preferred DS_OWIS_PS90_IP)",
+                "all": (
+                    "All Delay Lines: axes 1,2,3 from DS_OWIS_PS90_IP + axis 4 "
+                    "from DS_OWIS_PS90"
+                ),
             },
             "STANDA": {
                 "ELYSE": "ELYSE Motors: DE1, F1, MME_X/Y, MM1_X/Y, MM2_X/Y (8 motors)",

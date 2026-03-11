@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """OWIS Client using general DS panel framework"""
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -11,11 +12,25 @@ from gui.DS_General_Client import main
 from gui.Panels import OWISPanel
 from DeviceServers.motion.owis.DS_OWIS_widget import OWIS_motor
 
-# Layouts from legacy
+OWIS_DEVICE_IP = os.environ.get("OWIS_DEVICE_IP", "manip/general/DS_OWIS_PS90_IP")
+OWIS_DEVICE_LEGACY = os.environ.get(
+    "OWIS_DEVICE_LEGACY", "manip/general/DS_OWIS_PS90"
+)
+
+
 layouts = {
-    "V0": {"selection": [("manip/general/DS_OWIS_PS90", [2, 3, 4])], "width": 1},
-    "VD2": {"selection": [("manip/general/DS_OWIS_PS90", [1])], "width": 1},
-    "all": {"selection": [("manip/general/DS_OWIS_PS90", [1, 2, 3, 4])], "width": 1},
+    # Current OWIS split:
+    # - Ethernet controller (PS90_IP): axes 1,2,3
+    # - Legacy controller (PS90): long stage axis 4
+    "V0": {
+        "selection": [(OWIS_DEVICE_IP, [2, 3]), (OWIS_DEVICE_LEGACY, [4])],
+        "width": 1,
+    },
+    "VD2": {"selection": [(OWIS_DEVICE_IP, [1])], "width": 1},
+    "all": {
+        "selection": [(OWIS_DEVICE_IP, [1, 2, 3]), (OWIS_DEVICE_LEGACY, [4])],
+        "width": 1,
+    },
 }
 
 

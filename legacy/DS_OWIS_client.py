@@ -5,13 +5,8 @@ app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 from bin.DS_General_Client import main
 from DeviceServers.motion.owis.DS_OWIS_widget import OWIS_motor
+from DeviceServers.motion.owis.DS_OWIS_client import layouts
 from gui.Panels import OWISPanel
-
-layouts = {
-    "V0": {"selection": [("manip/general/DS_OWIS_PS90", [2, 3, 4])], "width": 1},
-    "VD2": {"selection": [("manip/general/DS_OWIS_PS90", [1])], "width": 1},
-    "all": {"selection": [("manip/general/DS_OWIS_PS90", [1, 2, 3, 4])], "width": 1},
-}
 
 
 if __name__ == "__main__":

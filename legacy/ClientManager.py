@@ -24,6 +24,7 @@ app_folder = Path(__file__).resolve().parents[1]
 sys.path.append(str(app_folder))
 
 from DeviceServers.shared.DS_Widget import VisType
+from DeviceServers.motion.owis.DS_OWIS_client import layouts as owis_layouts
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -223,17 +224,7 @@ class ClientRegistry:
         "OWIS": {
             "title": "OWIS Motion Control",
             "icon": "icons/OWIS.png",
-            "layouts": {
-                "V0": {
-                    "selection": [("manip/general/DS_OWIS_PS90", [2, 3, 4])],
-                    "width": 1,
-                },
-                "VD2": {"selection": [("manip/general/DS_OWIS_PS90", [1])], "width": 1},
-                "all": {
-                    "selection": [("manip/general/DS_OWIS_PS90", [1, 2, 3, 4])],
-                    "width": 1,
-                },
-            },
+            "layouts": owis_layouts,
         },
         "LASER_POINTING": {
             "title": "Laser Pointing Control",
