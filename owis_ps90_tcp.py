@@ -76,6 +76,30 @@ class OwisPS90TCP:
                 pass
             self._socket = None
             print("Disconnected.")
+
+    def _drain_socket(self, max_reads: int = 8):
+        """Best-effort discard of pending bytes in RX buffer.
+
+        This avoids stale 'OK' replies from fire-and-forget commands being read
+        as the answer to the next query command.
+        """
+        if not self.connected:
+            return
+        sock = self._socket
+        prev_timeout = sock.gettimeout()
+        try:
+            sock.setblocking(False)
+            for _ in range(max_reads):
+                try:
+                    chunk = sock.recv(4096)
+                except (BlockingIOError, InterruptedError, socket.timeout):
+                    break
+                except OSError:
+                    break
+                if not chunk:
+                    break
+        finally:
+            sock.settimeout(prev_timeout)
     
     def send_command(self, command: str, expect_response: bool = True) -> str:
         """
@@ -91,6 +115,11 @@ class OwisPS90TCP:
         if not self.connected:
             raise RuntimeError("Not connected. Call connect() first.")
             
+        # For query commands, first flush stale unsolicited replies from prior
+        # fire-and-forget commands.
+        if expect_response:
+            self._drain_socket()
+
         # Send command with CR terminator
         cmd_bytes = (command + "\r").encode("ascii")
         self._socket.sendall(cmd_bytes)
@@ -99,6 +128,9 @@ class OwisPS90TCP:
             time.sleep(self.command_delay)
         
         if not expect_response:
+            # Some firmware variants still send "OK" for action commands.
+            # Discard available bytes so next query gets its own response.
+            self._drain_socket()
             return ""
             
         # Read response

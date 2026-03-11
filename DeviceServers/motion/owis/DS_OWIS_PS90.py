@@ -259,8 +259,16 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
+            self._controller.clear_error()
             ok = self._controller.go_target(axis_i)
-            return self._ok() if ok else self._fail(-4)
+            if not ok:
+                return self._fail(-4)
+            err = self._controller.get_error()
+            if err == -1:
+                return self._fail(-2)
+            if err != 0:
+                return self._fail(-4)
+            return self._ok()
         except Exception:
             return self._fail(-2)
 
@@ -523,14 +531,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         from functools import partial
 
         super().register_variables_for_archive()
-        self.archive_state.update(
-            {
-                "position_axis_1": (partial(self.get_pos, 1), "float16"),
-                "position_axis_2": (partial(self.get_pos, 2), "float16"),
-                "position_axis_3": (partial(self.get_pos, 3), "float16"),
-                "position_axis_4": (partial(self.get_pos, 4), "float16"),
-            }
-        )
+        archive_items = {}
+        for axis in sorted(self._delay_lines_parameters.keys()):
+            archive_items[f"position_axis_{axis}"] = (partial(self.get_pos, axis), "float16")
+        self.archive_state.update(archive_items)
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -881,8 +885,13 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         pos: float = args[1]
 
         if self._delay_lines_parameters[axis]["state"] != DevState.ON:
-            self.turn_on_axis(axis)
+            turn_on_res = self.turn_on_axis(axis)
             sleep(0.05)
+            if turn_on_res != "0":
+                return (
+                    f"ERROR: Device {self.device_name} axis {axis} could not be turned on: "
+                    f"{turn_on_res}"
+                )
 
         res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
         if not res:
@@ -901,7 +910,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 )
                 if axis not in self.follow:
                     self.follow[axis] = Thread(
-                        target=self.follow_after_moving, args=(axis,)
+                        target=self.follow_after_moving, args=(axis,), daemon=True
                     )
                     self.follow[axis].start()
                 result = 0
@@ -911,17 +920,32 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.error(result)
         return result
 
-    def follow_after_moving(self, axis, wait=2):
-        i = 0
-        while True:
-            pos_prev = self._delay_lines_parameters[axis]["position"]
-            sleep(wait)
-            if self._delay_lines_parameters[axis]["position"] == pos_prev:
-                i += 1
-                if i == 5:
-                    self.turn_off_axis(axis)
+    def follow_after_moving(self, axis, wait=1.0, stable_needed=5, eps=1e-4, max_wait_s=180.0):
+        stable = 0
+        checks = 0
+        max_checks = max(1, int(max_wait_s / wait))
+        try:
+            while checks < max_checks:
+                if axis not in self._delay_lines_parameters:
                     break
-        del self.follow[axis]
+                pos_prev = float(self._delay_lines_parameters[axis]["position"])
+                sleep(wait)
+                pos_now = float(self._delay_lines_parameters[axis]["position"])
+                if abs(pos_now - pos_prev) <= eps:
+                    stable += 1
+                    if stable >= stable_needed:
+                        self.turn_off_axis(axis)
+                        break
+                else:
+                    stable = 0
+                checks += 1
+            if checks >= max_checks:
+                self.info(
+                    f"follow_after_moving timeout for axis {axis}, leaving motor state unchanged.",
+                    True,
+                )
+        finally:
+            self.follow.pop(axis, None)
 
     def stop_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._stop_axis_ps90(self.control_unit_id, axis)
@@ -1805,10 +1829,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             -9: "OWISid chip is not found",
             -10: "OWISid parameter is empty (not defined)",
         }
-        if code > 0 or (code not in errors_connections or code not in errors_functions):
+        if code > 0:
             return "Wrong code number"
         if type not in [0, 1]:
             return "Wrong type of error"
+        if type == 0 and code not in errors_connections:
+            return "Wrong code number"
+        if type == 1 and code not in errors_functions:
+            return "Wrong code number"
         if code != 0:
             return errors_connections[code] if type == 0 else errors_functions[code]
         return user_def
