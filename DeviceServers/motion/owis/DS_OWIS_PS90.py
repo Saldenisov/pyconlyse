@@ -13,6 +13,7 @@ app_folder1 = Path(p).resolve().parents[3]
 sys.path.append(str(app_folder1))
 
 import ctypes
+import time
 from threading import Thread
 from time import sleep
 from typing import Optional, Tuple, Union
@@ -442,6 +443,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             DevState.INIT,
             DevState.ON,
         ],
+        # Keep status polling active in FAULT so reconnection logic can self-heal.
+        "get_controller_status": [
+            DevState.ON,
+            DevState.MOVING,
+            DevState.RUNNING,
+            DevState.INIT,
+            DevState.FAULT,
+        ],
     }
 
     baudrate = device_property(dtype=int, default_value=9600)
@@ -456,6 +465,9 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     tcp_command_delay = device_property(dtype=float, default_value=0.005)
     tcp_velocity_scale = device_property(dtype=float, default_value=16.0)
     tcp_velocity_scale_map = device_property(dtype=str, default_value="")
+    recovery_connect_attempts = device_property(dtype=int, default_value=3)
+    recovery_attempt_delay_seconds = device_property(dtype=float, default_value=1.0)
+    recovery_pause_seconds = device_property(dtype=float, default_value=8.0)
 
     _version_ = "0.3"
     _model_ = "OWIS controller PS90 multi-axes 4 axes"
@@ -524,6 +536,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     def init_device(self):
         super().init_device()
+        self._next_recovery_attempt_ts = 0.0
+        self._last_recovery_wait_log_ts = 0.0
         self.follow = {}
         self.turn_on()
 
@@ -722,22 +736,49 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         return comments
 
     def _attempt_recover_connection(self) -> bool:
-        self.info(f"Attempting OWIS recovery for {self.device_name}.", True)
+        attempts = max(1, int(getattr(self, "recovery_connect_attempts", 3)))
+        retry_delay = max(
+            0.1, float(getattr(self, "recovery_attempt_delay_seconds", 1.0))
+        )
+        self.info(
+            f"Attempting OWIS recovery for {self.device_name} "
+            f"(attempts={attempts}, delay={retry_delay}s).",
+            True,
+        )
         self.set_state(DevState.FAULT)
         self._device_id_internal = -1
         self._uri = b""
-        try:
-            res = self.turn_on_local()
-        except Exception as e:
-            self.error(f"Recovery attempt failed for {self.device_name}: {e}")
-            return False
 
-        if res == 0:
-            self._status_check_fault = 0
-            self.info(f"OWIS recovery succeeded for {self.device_name}.", True)
-            return True
+        for attempt in range(1, attempts + 1):
+            try:
+                # Best effort cleanup of stale session before reconnecting.
+                self._disconnect_ps90(self.control_unit_id)
+            except Exception:
+                pass
 
-        self.error(f"OWIS recovery failed for {self.device_name}: {res}")
+            try:
+                res = self.turn_on_local()
+            except Exception as e:
+                self.error(
+                    f"Recovery attempt {attempt}/{attempts} failed for "
+                    f"{self.device_name}: {e}"
+                )
+                res = None
+
+            if res == 0:
+                self._status_check_fault = 0
+                self._next_recovery_attempt_ts = 0.0
+                self._last_recovery_wait_log_ts = 0.0
+                self.info(f"OWIS recovery succeeded for {self.device_name}.", True)
+                return True
+
+            self.error(
+                f"Recovery attempt {attempt}/{attempts} did not recover "
+                f"{self.device_name}: {res}"
+            )
+            if attempt < attempts:
+                sleep(retry_delay)
+
         return False
 
     def is_ensure_on_allowed(self):
@@ -757,16 +798,47 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.info(f"{self.device_name} already ON; ensure_on is a no-op.", True)
 
     def get_controller_status_local(self) -> Union[int, str]:
+        now = time.monotonic()
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if ser_num < 0:
             self._status_check_fault += 1
-            if self._status_check_fault > self.recovery_fault_threshold:
-                self._status_check_fault = 0
-                if self._attempt_recover_connection():
-                    return 0
             self.set_state(DevState.FAULT)
-            return "Connection with PS90 is lost"
+            if self._status_check_fault <= self.recovery_fault_threshold:
+                return "Connection with PS90 is lost"
+
+            if now < self._next_recovery_attempt_ts:
+                remaining = max(0.0, self._next_recovery_attempt_ts - now)
+                # Throttle repetitive logs while status is polled frequently.
+                if now - self._last_recovery_wait_log_ts >= 1.0:
+                    self.info(
+                        f"Recovery cooldown for {self.device_name}: "
+                        f"next attempt in {remaining:.1f}s.",
+                        True,
+                    )
+                    self._last_recovery_wait_log_ts = now
+                return (
+                    "Connection with PS90 is lost; "
+                    f"waiting {remaining:.1f}s before next reconnect attempt"
+                )
+
+            if self._attempt_recover_connection():
+                return 0
+
+            pause = max(1.0, float(getattr(self, "recovery_pause_seconds", 8.0)))
+            self._next_recovery_attempt_ts = time.monotonic() + pause
+            self.info(
+                f"Recovery paused for {pause:.1f}s for {self.device_name}. "
+                "Will retry automatically.",
+                True,
+            )
+            return (
+                "Connection with PS90 is lost; "
+                f"recovery will retry in {pause:.1f}s"
+            )
+
         self._status_check_fault = 0
+        self._next_recovery_attempt_ts = 0.0
+        self._last_recovery_wait_log_ts = 0.0
         for axis in self._delay_lines_parameters.keys():
             self.get_status_axis_local(axis)
             self.read_position_axis_local(axis)
@@ -1192,10 +1264,18 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
         """
         buf = ctypes.create_string_buffer(25)
-        control_unit = ctypes.c_long(control_unit)
-        res = self.lib.PS90_GetSerNumber(control_unit, buf, 25)
-        result = buf.value.decode("utf-8")
-        return int(result)
+        control_unit_c = ctypes.c_long(control_unit)
+        try:
+            self.lib.PS90_GetSerNumber(control_unit_c, buf, 25)
+            error = self.__get_read_error_ps90(control_unit)
+            if error != 0:
+                return -1
+            result = buf.value.decode("utf-8", errors="ignore").strip()
+            if not result:
+                return -1
+            return int(result)
+        except Exception:
+            return -1
 
     @development_mode(dev=dev_mode, with_return=(3, "DEV MODE"))
     def _get_axis_state_ps90(
