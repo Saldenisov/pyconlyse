@@ -97,6 +97,19 @@ class _PS90TcpAdapter:
                 f"Cannot connect to OWIS controller at {self._controller.ip}:{self._controller.port}"
             )
 
+    def _wait_axis_state(self, axis: int, expected: set[int], timeout_s: float = 1.5, poll_s: float = 0.05) -> bool:
+        deadline = time.monotonic() + max(0.05, float(timeout_s))
+        while True:
+            try:
+                state = int(self._controller.get_axis_state(axis))
+            except Exception:
+                state = -1
+            if state in expected:
+                return True
+            if time.monotonic() >= deadline:
+                return False
+            time.sleep(max(0.01, float(poll_s)))
+
     def _axis_params(self, axis: int) -> tuple[float, float, float]:
         pitch, inc_rev, gear_ratio = self._stage_attrs.get(axis, (1.0, 200.0, 1.0))
         pitch = float(pitch) if pitch else 1.0
@@ -260,6 +273,9 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
+            axis_state = int(self._controller.get_axis_state(axis_i))
+            if axis_state != 3:
+                return self._fail(-4)
             self._controller.clear_error()
             ok = self._controller.go_target(axis_i)
             if not ok:
@@ -278,24 +294,35 @@ class _PS90TcpAdapter:
             self._ensure_connected()
             axis_i = self._to_int(axis)
             self._controller.send_command(f"AXIS{axis_i}=1", expect_response=False)
+            self._controller.clear_error()
             ok = self._controller.motor_init(axis_i)
-            return self._ok() if ok else self._fail(-4)
+            if not ok:
+                return self._fail(-4)
+            return self._ok() if self._wait_axis_state(axis_i, {2, 3}, timeout_s=3.0) else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
     def PS90_MotorOn(self, _control_unit, axis):
         try:
             self._ensure_connected()
-            ok = self._controller.motor_on(self._to_int(axis))
-            return self._ok() if ok else self._fail(-4)
+            axis_i = self._to_int(axis)
+            self._controller.clear_error()
+            ok = self._controller.motor_on(axis_i)
+            if not ok:
+                return self._fail(-4)
+            return self._ok() if self._wait_axis_state(axis_i, {3}) else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
     def PS90_MotorOff(self, _control_unit, axis):
         try:
             self._ensure_connected()
-            ok = self._controller.motor_off(self._to_int(axis))
-            return self._ok() if ok else self._fail(-4)
+            axis_i = self._to_int(axis)
+            self._controller.clear_error()
+            ok = self._controller.motor_off(axis_i)
+            if not ok:
+                return self._fail(-4)
+            return self._ok() if self._wait_axis_state(axis_i, {1, 2}) else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
@@ -927,14 +954,84 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.error(result)
         return result
 
+    def _axis_state_name(self, state) -> str:
+        names = {
+            DevState.ON: "ON",
+            DevState.OFF: "OFF",
+            DevState.INIT: "INIT",
+            DevState.STANDBY: "STANDBY",
+            DevState.FAULT: "FAULT",
+            DevState.MOVING: "MOVING",
+            DevState.RUNNING: "RUNNING",
+        }
+        return names.get(state, str(state))
+
+    def _refresh_axis_state(self, axis: int):
+        res = self.get_status_axis_local(axis)
+        if res != 0:
+            return None
+        return self._delay_lines_parameters[axis]["state"]
+
+    def _ensure_axis_ready_for_motion(self, axis: int, force_reinit: bool = False) -> Union[int, str]:
+        state = self._refresh_axis_state(axis)
+        if state is None:
+            return f"ERROR: Device {self.device_name} could not read state for axis {axis}."
+
+        if state == DevState.ON and not force_reinit:
+            return 0
+
+        if not force_reinit:
+            turn_on_res = self.turn_on_axis_local(axis)
+            if turn_on_res == 0:
+                sleep(0.05)
+                state = self._refresh_axis_state(axis)
+                if state == DevState.ON:
+                    return 0
+
+        self.info(
+            f"{self.device_name} axis {axis} is not ready for motion "
+            f"(state={self._axis_state_name(state)}), reinitializing axis.",
+            True,
+        )
+        init_res = self.init_axis_local(axis)
+        if init_res != 0:
+            return (
+                f"ERROR: Device {self.device_name} axis {axis} reinit failed: "
+                f"{init_res}"
+            )
+
+        turn_on_res = self.turn_on_axis_local(axis)
+        if turn_on_res != 0:
+            return (
+                f"ERROR: Device {self.device_name} axis {axis} could not be turned on "
+                f"after reinit: {turn_on_res}"
+            )
+
+        sleep(0.05)
+        state = self._refresh_axis_state(axis)
+        if state != DevState.ON:
+            return (
+                f"ERROR: Device {self.device_name} axis {axis} is still "
+                f"{self._axis_state_name(state)} after reinit."
+            )
+        return 0
+
     def turn_on_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_on_ps90(self.control_unit_id, axis)
         if not res:
             result = f"ERROR: Device {self.device_name} turn_on_axis for axis {axis} func did NOT work {comments}."
             self.error(result)
         else:
-            self._delay_lines_parameters[axis]["state"] = DevState.ON
-            result = 0
+            sleep(0.05)
+            axis_state = self._refresh_axis_state(axis)
+            if axis_state == DevState.ON:
+                result = 0
+            else:
+                result = (
+                    f"ERROR: Device {self.device_name} axis {axis} turn_on did not "
+                    f"reach ON state (state={self._axis_state_name(axis_state)})."
+                )
+                self.error(result)
         return result
 
     def turn_off_axis_local(self, axis: int) -> Union[int, str]:
@@ -956,40 +1053,55 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         axis = int(args[0])
         pos: float = args[1]
 
-        if self._delay_lines_parameters[axis]["state"] != DevState.ON:
-            turn_on_res = self.turn_on_axis(axis)
-            sleep(0.05)
-            if turn_on_res != "0":
-                return (
-                    f"ERROR: Device {self.device_name} axis {axis} could not be turned on: "
-                    f"{turn_on_res}"
-                )
+        ready_res = self._ensure_axis_ready_for_motion(axis)
+        if ready_res != 0:
+            return ready_res
 
-        res, comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
-        if not res:
+        set_res, set_comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
+        if not set_res:
             result = (
                 f"ERROR: Device {self.device_name} set_target_ex to {pos} for axis {axis} "
-                f"did NOT work {comments}."
+                f"did NOT work {set_comments}."
             )
             self.error(result)
-        else:
-            res, comments = self._go_target_ps90(self.control_unit_id, axis)
+            return result
 
-            if res:
-                self.info(
-                    f"Device {self.device_name} axis {axis} started moving to {pos}.",
-                    True,
-                )
-                if axis not in self.follow:
-                    self.follow[axis] = Thread(
-                        target=self.follow_after_moving, args=(axis,), daemon=True
+        res, comments = self._go_target_ps90(self.control_unit_id, axis)
+        if (not res) and isinstance(comments, str) and ("wrong state" in comments.lower()):
+            self.info(
+                f"{self.device_name} axis {axis} reported wrong state on go_target; "
+                "retrying once after reinit.",
+                True,
+            )
+            ready_res = self._ensure_axis_ready_for_motion(axis, force_reinit=True)
+            if ready_res == 0:
+                set_res, set_comments = self._set_target_ex_ps90(self.control_unit_id, axis, pos)
+                if not set_res:
+                    result = (
+                        f"ERROR: Device {self.device_name} set_target_ex retry to {pos} "
+                        f"for axis {axis} did NOT work {set_comments}."
                     )
-                    self.follow[axis].start()
-                result = 0
+                    self.error(result)
+                    return result
+                res, comments = self._go_target_ps90(self.control_unit_id, axis)
             else:
-                self.turn_off_axis(axis)
-                result = f"ERROR: Device {self.device_name} axis {axis} did NOT start moving: {comments}."
-                self.error(result)
+                return ready_res
+
+        if res:
+            self.info(
+                f"Device {self.device_name} axis {axis} started moving to {pos}.",
+                True,
+            )
+            if axis not in self.follow:
+                self.follow[axis] = Thread(
+                    target=self.follow_after_moving, args=(axis,), daemon=True
+                )
+                self.follow[axis].start()
+            result = 0
+        else:
+            self.turn_off_axis(axis)
+            result = f"ERROR: Device {self.device_name} axis {axis} did NOT start moving: {comments}."
+            self.error(result)
         return result
 
     def follow_after_moving(self, axis, wait=1.0, stable_needed=5, eps=1e-4, max_wait_s=180.0):
