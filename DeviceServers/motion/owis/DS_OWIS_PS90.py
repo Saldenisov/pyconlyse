@@ -44,6 +44,7 @@ class _PS90TcpAdapter:
         command_delay: float = 0.005,
         velocity_scale: float = 16.0,
         velocity_scale_map: Optional[dict[int, float]] = None,
+        allow_high_current_level: bool = True,
     ):
         from owis_ps90_tcp import OwisPS90TCP
 
@@ -54,8 +55,10 @@ class _PS90TcpAdapter:
         self._stage_attrs = {}
         self._limits = {}
         self._microsteps = {}
+        self._target_counts = {}
         self._velocity_scale = max(0.01, float(velocity_scale))
         self._velocity_scale_map = {}
+        self._allow_high_current_level = bool(allow_high_current_level)
         if isinstance(velocity_scale_map, dict):
             for axis, scale in velocity_scale_map.items():
                 try:
@@ -97,25 +100,19 @@ class _PS90TcpAdapter:
                 f"Cannot connect to OWIS controller at {self._controller.ip}:{self._controller.port}"
             )
 
-    def _wait_axis_state(self, axis: int, expected: set[int], timeout_s: float = 1.5, poll_s: float = 0.05) -> bool:
-        deadline = time.monotonic() + max(0.05, float(timeout_s))
-        while True:
-            try:
-                state = int(self._controller.get_axis_state(axis))
-            except Exception:
-                state = -1
-            if state in expected:
-                return True
-            if time.monotonic() >= deadline:
-                return False
-            time.sleep(max(0.01, float(poll_s)))
-
     def _axis_params(self, axis: int) -> tuple[float, float, float]:
         pitch, inc_rev, gear_ratio = self._stage_attrs.get(axis, (1.0, 200.0, 1.0))
         pitch = float(pitch) if pitch else 1.0
         inc_rev = float(inc_rev) if inc_rev else 200.0
         gear_ratio = float(gear_ratio) if gear_ratio else 1.0
         return pitch, inc_rev, gear_ratio
+
+    def _astat_axis_char(self, axis: int) -> str:
+        astat = (self._controller.query("?ASTAT") or "").strip().upper()
+        idx = int(axis) - 1
+        if 0 <= idx < len(astat):
+            return astat[idx]
+        return ""
 
     def _microstep_factor(self, axis: int) -> float:
         cached = self._microsteps.get(axis)
@@ -172,8 +169,8 @@ class _PS90TcpAdapter:
             # Fallback when level cannot be queried: treat as legacy percent-like value.
             return max(0, min(100, int(round(v))))
 
-        # If requested current exceeds low range, switch to high range automatically.
-        if v > 2.4 and level == 0:
+        # Switch to high range automatically when requested current exceeds low range.
+        if self._allow_high_current_level and v > 2.4 and level == 0:
             self._set_current_level(axis, 1)
             level = 1
 
@@ -228,9 +225,19 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
+            # On some PS90 TCP firmware, ?AXISx reports 1 even while the axis moves.
+            # Use ASTAT first as the effective runtime indicator.
+            ch = self._astat_axis_char(axis_i)
+            if ch in ("R", "T", "M"):
+                self._ok()
+                return 3
+            if ch in ("O", "L"):
+                self._ok()
+                return 2
+            if ch == "U":
+                self._ok()
+                return 1
             state = int(self._controller.get_axis_state(axis_i))
-            if state < 0:
-                return self._fail(-2)
             self._ok()
             return state
         except Exception:
@@ -273,18 +280,25 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
-            axis_state = int(self._controller.get_axis_state(axis_i))
-            if axis_state != 3:
-                return self._fail(-4)
-            self._controller.clear_error()
+            pos_before = float(self._controller.get_position(axis_i))
             ok = self._controller.go_target(axis_i)
             if not ok:
                 return self._fail(-4)
-            err = self._controller.get_error()
-            if err == -1:
-                return self._fail(-2)
-            if err != 0:
-                return self._fail(-4)
+            target = self._target_counts.get(axis_i)
+
+            # Confirm movement start (or immediate target reach) to avoid false "success".
+            deadline = time.monotonic() + 1.5
+            while time.monotonic() < deadline:
+                ch = self._astat_axis_char(axis_i)
+                pos_now = float(self._controller.get_position(axis_i))
+                if ch == "T":
+                    return self._ok()
+                if target is not None and abs(pos_now - float(target)) <= 2.0:
+                    return self._ok()
+                if abs(pos_now - pos_before) >= 2.0:
+                    return self._ok()
+                time.sleep(0.05)
+            return self._fail(-4)
             return self._ok()
         except Exception:
             return self._fail(-2)
@@ -294,11 +308,8 @@ class _PS90TcpAdapter:
             self._ensure_connected()
             axis_i = self._to_int(axis)
             self._controller.send_command(f"AXIS{axis_i}=1", expect_response=False)
-            self._controller.clear_error()
             ok = self._controller.motor_init(axis_i)
-            if not ok:
-                return self._fail(-4)
-            return self._ok() if self._wait_axis_state(axis_i, {2, 3}, timeout_s=3.0) else self._fail(-4)
+            return self._ok() if ok else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
@@ -306,11 +317,8 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
-            self._controller.clear_error()
             ok = self._controller.motor_on(axis_i)
-            if not ok:
-                return self._fail(-4)
-            return self._ok() if self._wait_axis_state(axis_i, {3}) else self._fail(-4)
+            return self._ok() if ok else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
@@ -318,11 +326,8 @@ class _PS90TcpAdapter:
         try:
             self._ensure_connected()
             axis_i = self._to_int(axis)
-            self._controller.clear_error()
             ok = self._controller.motor_off(axis_i)
-            if not ok:
-                return self._fail(-4)
-            return self._ok() if self._wait_axis_state(axis_i, {1, 2}) else self._fail(-4)
+            return self._ok() if ok else self._fail(-4)
         except Exception:
             return self._fail(-2)
 
@@ -416,7 +421,10 @@ class _PS90TcpAdapter:
     def PS90_SetTarget(self, _control_unit, axis, value):
         try:
             self._ensure_connected()
-            self._controller.set_target(self._to_int(axis), self._to_int(value))
+            axis_i = self._to_int(axis)
+            target = self._to_int(value)
+            self._controller.set_target(axis_i, target)
+            self._target_counts[axis_i] = target
             return self._ok()
         except Exception:
             return self._fail(-2)
@@ -428,6 +436,7 @@ class _PS90TcpAdapter:
             target_mm = self._to_float(value)
             counts = self._mm_to_counts(axis_i, target_mm)
             self._controller.set_target(axis_i, counts)
+            self._target_counts[axis_i] = counts
             return self._ok()
         except Exception:
             return self._fail(-2)
@@ -492,6 +501,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     tcp_command_delay = device_property(dtype=float, default_value=0.005)
     tcp_velocity_scale = device_property(dtype=float, default_value=16.0)
     tcp_velocity_scale_map = device_property(dtype=str, default_value="")
+    allow_high_current_level = device_property(dtype=bool, default_value=True)
     recovery_connect_attempts = device_property(dtype=int, default_value=3)
     recovery_attempt_delay_seconds = device_property(dtype=float, default_value=1.0)
     recovery_pause_seconds = device_property(dtype=float, default_value=8.0)
@@ -664,6 +674,9 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                     command_delay=command_delay,
                     velocity_scale=velocity_scale,
                     velocity_scale_map=velocity_scale_map,
+                    allow_high_current_level=bool(
+                        getattr(self, "allow_high_current_level", True)
+                    ),
                 )
                 # TCP adapter: connect via PS90_Connect (supported by _PS90TcpAdapter)
                 res, comments = self._connect_ps90(
@@ -931,8 +944,6 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         speed = param["speed"]
         limit_min = param["limit_min"]
         limit_max = param["limit_max"]
-        drive_current = param["drive_current"]
-        hold_current = param["hold_current"]
 
         res1, com1 = self._set_stage_attributes_ps90(
             self.control_unit_id, axis, pitch, revolution, gear_ratio
@@ -940,19 +951,33 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
         res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
         res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
-        res5, com5 = self._set_drive_current_ex_ps90(
-            self.control_unit_id, axis, drive_current
-        )
-        res6, com6 = self._set_hold_current_ex_ps90(
-            self.control_unit_id, axis, hold_current
-        )
+        currents_res = self._apply_axis_currents_local(axis)
 
-        if all([res1, res2, res3, res4, res5, res6]):
+        if all([res1, res2, res3, res4]) and currents_res == 0:
             result = 0
         else:
-            result = f"ERROR: {com1}:{com2}:{com3}:{com4}:{com5}:{com6}"
+            result = f"ERROR: {com1}:{com2}:{com3}:{com4}:{currents_res}"
             self.error(result)
         return result
+
+    def _apply_axis_currents_local(self, axis: int) -> Union[int, str]:
+        param = self._delay_lines_parameters[axis]
+        drive_current = float(param["drive_current"])
+        hold_current = float(param["hold_current"])
+
+        res_drive, com_drive = self._set_drive_current_ex_ps90(
+            self.control_unit_id, axis, drive_current
+        )
+        res_hold, com_hold = self._set_hold_current_ex_ps90(
+            self.control_unit_id, axis, hold_current
+        )
+        if res_drive and res_hold:
+            return 0
+
+        return (
+            f"ERROR: Device {self.device_name} could not apply currents for axis {axis}: "
+            f"drive={drive_current}A ({com_drive}), hold={hold_current}A ({com_hold})"
+        )
 
     def _axis_state_name(self, state) -> str:
         names = {
