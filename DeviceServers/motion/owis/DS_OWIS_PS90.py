@@ -45,6 +45,12 @@ class _PS90TcpAdapter:
         velocity_scale: float = 16.0,
         velocity_scale_map: Optional[dict[int, float]] = None,
         allow_high_current_level: bool = True,
+        strict_ovis_init_profile: bool = True,
+        ovis_init_current_level: int = 0,
+        ovis_init_hold_current_percent: int = 38,
+        ovis_init_drive_current_percent: int = 50,
+        ovis_init_ready_timeout: float = 6.0,
+        ovis_init_poll_interval: float = 0.05,
     ):
         from owis_ps90_tcp import OwisPS90TCP
 
@@ -59,6 +65,12 @@ class _PS90TcpAdapter:
         self._velocity_scale = max(0.01, float(velocity_scale))
         self._velocity_scale_map = {}
         self._allow_high_current_level = bool(allow_high_current_level)
+        self._strict_ovis_init_profile = bool(strict_ovis_init_profile)
+        self._ovishnt_level = 0 if int(ovis_init_current_level) <= 0 else 1
+        self._ovihold = max(0, min(100, int(round(ovis_init_hold_current_percent))))
+        self._ovidrive = max(0, min(100, int(round(ovis_init_drive_current_percent))))
+        self._ovi_ready_timeout = max(0.5, float(ovis_init_ready_timeout))
+        self._ovi_poll_interval = max(0.01, float(ovis_init_poll_interval))
         if isinstance(velocity_scale_map, dict):
             for axis, scale in velocity_scale_map.items():
                 try:
@@ -155,6 +167,68 @@ class _PS90TcpAdapter:
 
     def _set_current_level(self, axis: int, level: int) -> None:
         self._controller.send_command(f"AMPSHNT{axis}={int(level)}", expect_response=False)
+
+    def _query_int(self, command: str) -> int:
+        resp = self._controller.query(command)
+        return int(str(resp).strip())
+
+    def _set_and_verify_int(
+        self,
+        set_command: str,
+        query_command: str,
+        expected: int,
+        retries: int = 3,
+    ) -> bool:
+        expected_i = int(expected)
+        for _ in range(max(1, int(retries))):
+            self._controller.send_command(set_command, expect_response=False)
+            time.sleep(self._ovi_poll_interval)
+            try:
+                if self._query_int(query_command) == expected_i:
+                    return True
+            except Exception:
+                pass
+        return False
+
+    def _wait_axis_ready(self, axis: int) -> bool:
+        deadline = time.monotonic() + self._ovi_ready_timeout
+        while time.monotonic() < deadline:
+            ch = self._astat_axis_char(axis)
+            if ch == "R":
+                return True
+            time.sleep(self._ovi_poll_interval)
+        return False
+
+    @property
+    def strict_ovis_init_profile(self) -> bool:
+        return bool(self._strict_ovis_init_profile)
+
+    def apply_ovis_current_profile(self, axis: int) -> tuple[bool, str]:
+        """Apply OVIS-like current sequence with readback verification."""
+        try:
+            self._ensure_connected()
+            axis_i = int(axis)
+            if not self._set_and_verify_int(
+                f"AMPSHNT{axis_i}={self._ovishnt_level}",
+                f"?AMPSHNT{axis_i}",
+                self._ovishnt_level,
+            ):
+                return False, f"AMPSHNT{axis_i} readback mismatch"
+            if not self._set_and_verify_int(
+                f"HOLCUR{axis_i}={self._ovihold}",
+                f"?HOLCUR{axis_i}",
+                self._ovihold,
+            ):
+                return False, f"HOLCUR{axis_i} readback mismatch"
+            if not self._set_and_verify_int(
+                f"DRICUR{axis_i}={self._ovidrive}",
+                f"?DRICUR{axis_i}",
+                self._ovidrive,
+            ):
+                return False, f"DRICUR{axis_i} readback mismatch"
+            return True, "ok"
+        except Exception as e:
+            return False, str(e)
 
     def _normalize_current_to_percent(self, axis: int, value) -> int:
         """Accept either percent (0-100) or amperes (~0-6A) and return controller percent."""
@@ -308,8 +382,16 @@ class _PS90TcpAdapter:
             self._ensure_connected()
             axis_i = self._to_int(axis)
             self._controller.send_command(f"AXIS{axis_i}=1", expect_response=False)
+            if self._strict_ovis_init_profile:
+                ok_profile, _ = self.apply_ovis_current_profile(axis_i)
+                if not ok_profile:
+                    return self._fail(-4)
             ok = self._controller.motor_init(axis_i)
-            return self._ok() if ok else self._fail(-4)
+            if not ok:
+                return self._fail(-4)
+            if self._strict_ovis_init_profile and not self._wait_axis_ready(axis_i):
+                return self._fail(-4)
+            return self._ok()
         except Exception:
             return self._fail(-2)
 
@@ -501,7 +583,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     tcp_command_delay = device_property(dtype=float, default_value=0.005)
     tcp_velocity_scale = device_property(dtype=float, default_value=16.0)
     tcp_velocity_scale_map = device_property(dtype=str, default_value="")
-    allow_high_current_level = device_property(dtype=bool, default_value=True)
+    allow_high_current_level = device_property(dtype=bool, default_value=False)
+    ovis_tcp_strict_init_profile = device_property(dtype=bool, default_value=True)
+    ovis_tcp_current_level = device_property(dtype=int, default_value=0)
+    ovis_tcp_hold_current_percent = device_property(dtype=int, default_value=38)
+    ovis_tcp_drive_current_percent = device_property(dtype=int, default_value=50)
+    ovis_tcp_init_ready_timeout = device_property(dtype=float, default_value=6.0)
+    ovis_tcp_init_poll_interval = device_property(dtype=float, default_value=0.05)
+    ovis_tcp_keep_motor_on = device_property(dtype=bool, default_value=True)
     recovery_connect_attempts = device_property(dtype=int, default_value=3)
     recovery_attempt_delay_seconds = device_property(dtype=float, default_value=1.0)
     recovery_pause_seconds = device_property(dtype=float, default_value=8.0)
@@ -659,7 +748,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.info(
                     f"Using OWIS TCP backend: {ip}:{port} "
                     f"(timeout={timeout}s, command_delay={command_delay}s, "
-                    f"velocity_scale={velocity_scale})",
+                    f"velocity_scale={velocity_scale}, "
+                    f"strict_ovis_init={bool(getattr(self, 'ovis_tcp_strict_init_profile', True))})",
                     True,
                 )
                 if velocity_scale_map:
@@ -675,7 +765,25 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                     velocity_scale=velocity_scale,
                     velocity_scale_map=velocity_scale_map,
                     allow_high_current_level=bool(
-                        getattr(self, "allow_high_current_level", True)
+                        getattr(self, "allow_high_current_level", False)
+                    ),
+                    strict_ovis_init_profile=bool(
+                        getattr(self, "ovis_tcp_strict_init_profile", True)
+                    ),
+                    ovis_init_current_level=int(
+                        getattr(self, "ovis_tcp_current_level", 0)
+                    ),
+                    ovis_init_hold_current_percent=int(
+                        getattr(self, "ovis_tcp_hold_current_percent", 38)
+                    ),
+                    ovis_init_drive_current_percent=int(
+                        getattr(self, "ovis_tcp_drive_current_percent", 50)
+                    ),
+                    ovis_init_ready_timeout=float(
+                        getattr(self, "ovis_tcp_init_ready_timeout", 6.0)
+                    ),
+                    ovis_init_poll_interval=float(
+                        getattr(self, "ovis_tcp_init_poll_interval", 0.05)
                     ),
                 )
                 # TCP adapter: connect via PS90_Connect (supported by _PS90TcpAdapter)
@@ -884,6 +992,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.read_position_axis_local(axis)
         return 0
 
+    def _is_tcp_backend_active(self) -> bool:
+        return isinstance(getattr(self, "lib", None), _PS90TcpAdapter)
+
+    def _keep_motor_powered(self, axis: int) -> bool:
+        if self._is_tcp_backend_active() and bool(
+            getattr(self, "ovis_tcp_keep_motor_on", True)
+        ):
+            return True
+        param = self._delay_lines_parameters.get(axis, {})
+        return bool(param.get("keep_on", False))
+
     def init_axis_local(self, axis: int) -> Union[int, str]:
         res, comments = self._motor_init_ps90(self.control_unit_id, axis)
         if not res:
@@ -905,7 +1024,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                     result = 0
                 else:
                     result = res
-            self._motor_off_ps90(self.control_unit_id, axis)
+            if not self._keep_motor_powered(axis):
+                self._motor_off_ps90(self.control_unit_id, axis)
         return result
 
     def get_status_axis_local(self, axis: int) -> Union[int, str]:
@@ -949,18 +1069,50 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             self.control_unit_id, axis, pitch, revolution, gear_ratio
         )
         res2, com2 = self._set_pos_velocity_ps90(self.control_unit_id, axis, speed)
+        res_acc, com_acc = self._set_axis_acceleration_local(axis)
         res3, com3 = self._set_limit_min_ps90(self.control_unit_id, axis, limit_min)
         res4, com4 = self._set_limit_max_ps90(self.control_unit_id, axis, limit_max)
         currents_res = self._apply_axis_currents_local(axis)
 
-        if all([res1, res2, res3, res4]) and currents_res == 0:
+        if all([res1, res2, res_acc, res3, res4]) and currents_res == 0:
             result = 0
         else:
-            result = f"ERROR: {com1}:{com2}:{com3}:{com4}:{currents_res}"
+            result = f"ERROR: {com1}:{com2}:{com_acc}:{com3}:{com4}:{currents_res}"
             self.error(result)
         return result
 
+    def _set_axis_acceleration_local(self, axis: int) -> Tuple[bool, str]:
+        param = self._delay_lines_parameters[axis]
+        acceleration = param.get("acceleration")
+        if acceleration is None:
+            return True, "No acceleration override"
+
+        controller = getattr(self.lib, "_controller", None)
+        if controller is None:
+            # DLL backend path currently has no dedicated acceleration hook here.
+            return True, "Acceleration override skipped for DLL backend"
+
+        try:
+            acc_value = max(1, int(round(float(acceleration))))
+            controller.set_acceleration(axis, acc_value)
+            return True, f"Axis {axis} acceleration set to {acc_value}"
+        except Exception as e:
+            return False, f"Axis {axis} acceleration set failed: {e}"
+
     def _apply_axis_currents_local(self, axis: int) -> Union[int, str]:
+        if (
+            self._is_tcp_backend_active()
+            and bool(getattr(self, "ovis_tcp_strict_init_profile", True))
+            and hasattr(self.lib, "apply_ovis_current_profile")
+        ):
+            ok, comment = self.lib.apply_ovis_current_profile(axis)
+            if ok:
+                return 0
+            return (
+                f"ERROR: Device {self.device_name} could not apply OVIS TCP current "
+                f"profile for axis {axis}: {comment}"
+            )
+
         param = self._delay_lines_parameters[axis]
         drive_current = float(param["drive_current"])
         hold_current = float(param["hold_current"])
@@ -1124,7 +1276,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.follow[axis].start()
             result = 0
         else:
-            self.turn_off_axis(axis)
+            if not self._keep_motor_powered(axis):
+                self.turn_off_axis(axis)
             result = f"ERROR: Device {self.device_name} axis {axis} did NOT start moving: {comments}."
             self.error(result)
         return result
@@ -1143,7 +1296,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 if abs(pos_now - pos_prev) <= eps:
                     stable += 1
                     if stable >= stable_needed:
-                        self.turn_off_axis(axis)
+                        if not self._keep_motor_powered(axis):
+                            self.turn_off_axis(axis)
                         break
                 else:
                     stable = 0
