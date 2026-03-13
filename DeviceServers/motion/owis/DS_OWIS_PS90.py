@@ -373,7 +373,6 @@ class _PS90TcpAdapter:
                     return self._ok()
                 time.sleep(0.05)
             return self._fail(-4)
-            return self._ok()
         except Exception:
             return self._fail(-2)
 
@@ -607,9 +606,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         polling_period=DS_MOTORIZED_MULTI_AXES.polling,
     )
     def pos1(self):
+        if 1 not in self._delay_lines_parameters:
+            return float("nan")
         return self._delay_lines_parameters[1]["position"]
 
     def write_pos1(self, pos):
+        if 1 not in self._delay_lines_parameters:
+            self.error(f"{self.device_name} has no axis 1 configured.")
+            return
         self.move_axis([1, pos])
 
     @attribute(
@@ -620,9 +624,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         polling_period=DS_MOTORIZED_MULTI_AXES.polling,
     )
     def pos2(self):
+        if 2 not in self._delay_lines_parameters:
+            return float("nan")
         return self._delay_lines_parameters[2]["position"]
 
     def write_pos2(self, pos):
+        if 2 not in self._delay_lines_parameters:
+            self.error(f"{self.device_name} has no axis 2 configured.")
+            return
         self.move_axis([2, pos])
 
     @attribute(
@@ -633,9 +642,14 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         polling_period=DS_MOTORIZED_MULTI_AXES.polling,
     )
     def pos3(self):
+        if 3 not in self._delay_lines_parameters:
+            return float("nan")
         return self._delay_lines_parameters[3]["position"]
 
     def write_pos3(self, pos):
+        if 3 not in self._delay_lines_parameters:
+            self.error(f"{self.device_name} has no axis 3 configured.")
+            return
         self.move_axis([3, pos])
 
     @attribute(
@@ -869,9 +883,22 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             return f"Could NOT turn on {self.device_name}: Device could not be found."
 
         self.set_state(DevState.ON)
-
-        for axis in self._delay_lines_parameters.keys():
-            self.init_axis(axis)
+        init_errors = []
+        for axis in sorted(self._delay_lines_parameters.keys()):
+            try:
+                res = self.init_axis_local(int(axis))
+            except Exception as e:
+                res = f"exception during init: {e}"
+            if res != 0:
+                err = f"axis {axis} init failed: {res}"
+                init_errors.append(err)
+                self.error(f"{self.device_name} {err}")
+        if init_errors:
+            self.set_state(DevState.FAULT)
+            return (
+                f"Could NOT turn on {self.device_name}: "
+                + "; ".join(init_errors)
+            )
         return 0
 
     def turn_off_local(self) -> Union[int, str]:

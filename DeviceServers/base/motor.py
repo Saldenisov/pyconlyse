@@ -1,3 +1,4 @@
+import ast
 from abc import abstractmethod
 from typing import Any, Dict, Union
 
@@ -261,9 +262,12 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                 "real_pos": float,
                 "preset_positions": list,
             }
-            self._delay_lines_parameters: Dict[str, Dict[Any]] = eval(
-                self.delay_lines_parameters
-            )
+            parsed = ast.literal_eval(self.delay_lines_parameters)
+            if not isinstance(parsed, dict):
+                raise TypeError(
+                    f"delay_lines_parameters must be a dict, got {type(parsed).__name__}"
+                )
+            self._delay_lines_parameters: Dict[str, Dict[Any]] = parsed
             for ds_id, ds_param in self._delay_lines_parameters.items():
                 for param_name, param_type in must_have.items():
                     if param_name not in ds_param.keys():
@@ -279,11 +283,11 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                 ds_param["position"] = 0.0
                 ds_param["state"] = DevState.OFF
 
-        except SyntaxError:
+        except (SyntaxError, ValueError) as e:
             self.set_state(DevState.FAULT)
             self.error(
-                f"{self.device_name} could not eval delay_lines_parameters from DB: "
-                f"{self.delay_lines_parameters}"
+                f"{self.device_name} could not parse delay_lines_parameters from DB: "
+                f"{self.delay_lines_parameters}. Error: {e}"
             )
         except KeyError as e:
             self.set_state(DevState.FAULT)
