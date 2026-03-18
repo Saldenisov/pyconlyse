@@ -1,6 +1,6 @@
 # DS_PSP (minimal receiver)
 
-This device server is intentionally minimal.
+This device server receives PSP strings and keeps FIFO history.
 
 - Device name: `manip/general/PSP`
 - Server: `DS_PSP/1_PSP`
@@ -8,8 +8,8 @@ This device server is intentionally minimal.
 
 ## Purpose
 
-Receive string payloads from LabVIEW and expose the latest data via Tango
-attributes for the web/backend.
+Receive string payloads from LabVIEW, keep FIFO history (global + per group),
+and expose latest values/history to backend/frontend.
 
 No Python bridge script is required in this workflow.
 
@@ -34,6 +34,23 @@ python DS_PSP.py 1_PSP
 - `messages_received`
 - `last_sender` (RW)
 - `last_payload_json`
+- `fifo_size` (RW)
+- `fifo_total_cached`
+- `group_counts_json`
+
+## History / latest commands
+
+- `get_group_history_json("vacuum|1800|5000")`
+  Returns JSON with last 30 minutes (`1800` seconds) of `vacuum` group,
+  capped to `5000` samples.
+- `get_history_json(seconds)`
+  Returns JSON list of global FIFO items in the requested time window.
+- `get_latest_values_json()`
+  Returns JSON map `{channel: latest_value}` and counters.
+- `get_groups_json()`
+  Returns JSON with group names and current FIFO counts.
+- `clear_fifo("all")` or `clear_fifo("vacuum")`
+  Clears all FIFO or one specific group.
 
 ## LabVIEW-side contract
 

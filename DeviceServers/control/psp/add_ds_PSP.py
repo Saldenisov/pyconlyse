@@ -31,6 +31,7 @@ def register_device():
             "server_id": 1,
             "always_on": 1,
             "archive_enabled": 0,
+            "fifo_size": "5000",
         },
     )
     print(f"✓ Set properties for: {device_name}")
