@@ -1,7 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './Equipment.css';
 
 const Equipment = () => {
+  const navigate = useNavigate();
+
   const [selectedEquipment, setSelectedEquipment] = useState(null);
   const [statusMessage, setStatusMessage] = useState("");
   const [showPDUModal, setShowPDUModal] = useState(false);
@@ -9,14 +12,38 @@ const Equipment = () => {
   const [showMotorizedModal, setShowMotorizedModal] = useState(false);
   // State to control Cameras modal
   const [showCamerasModal, setShowCamerasModal] = useState(false);
+  const [showDAQmxModal, setShowDAQmxModal] = useState(false);
+  const [showVacuumModal, setShowVacuumModal] = useState(false);
+
+  const openRoute = (path) => {
+    navigate(path);
+    setShowPDUModal(false);
+    setShowMotorizedModal(false);
+    setShowCamerasModal(false);
+    setShowMagnetsModal(false);
+    setShowDAQmxModal(false);
+    setShowVacuumModal(false);
+  };
+
+  const openBackendPage = (path) => {
+    const backendUrl = `${window.location.protocol}//${window.location.hostname}:5000${path}`;
+    window.open(backendUrl, '_blank', 'noopener,noreferrer');
+    setShowPDUModal(false);
+    setShowMotorizedModal(false);
+    setShowCamerasModal(false);
+    setShowMagnetsModal(false);
+    setShowDAQmxModal(false);
+    setShowVacuumModal(false);
+  };
 
   const equipmentItems = [
     { id: 1, label: "PDU", img: "/images/pdu.png" },
     { id: 2, label: "Motorized Stages", img: "/images/motorized_stages2.png" },
     { id: 3, label: "Cameras", img: "/images/cameras.png" },
     { id: 4, label: "Magnets", img: "/images/magnets.png" },
-    { id: 5, label: "Vacuum", img: "/images/vacuum.png" },
-    { id: 6, label: "Pumps", img: "/images/pumps.png" }
+    { id: 5, label: "DAQmx", img: "/images/pumps.png" },
+    { id: 6, label: "Vacuum", img: "/images/vacuum.png" },
+    { id: 7, label: "Pumps", img: "/images/pumps.png" }
   ];
 
   const updateWidget = (equipmentId) => {
@@ -35,6 +62,12 @@ const Equipment = () => {
     } else if (equipmentId === 4) {
       setStatusMessage("Open the iTest client in a dedicated tab.");
       setShowMagnetsModal(true);
+    } else if (equipmentId === 5) {
+      setStatusMessage("Open DAQmx / Supervision client in a dedicated tab.");
+      setShowDAQmxModal(true);
+    } else if (equipmentId === 6) {
+      setStatusMessage("Open the Vacuum real-time monitor in a dedicated tab.");
+      setShowVacuumModal(true);
     } else {
       setStatusMessage(
         `${equipment?.label || 'This equipment'} page is not wired yet.`
@@ -54,6 +87,36 @@ const Equipment = () => {
           <strong>Status:</strong> {statusMessage}
         </div>
       )}
+
+      {/* DAQmx Modal */}
+      {showDAQmxModal && (
+        <div className="modal-overlay" onClick={() => setShowDAQmxModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>DAQmx - Supervision</h2>
+            <div className="modal-links">
+              <button type="button" className="modal-link" onClick={() => openRoute("/daqmx-clients")}>
+                Open DAQmx Clients
+              </button>
+            </div>
+            <button onClick={() => setShowDAQmxModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
+
+      {/* Vacuum Modal */}
+      {showVacuumModal && (
+        <div className="modal-overlay" onClick={() => setShowVacuumModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h2>Vacuum Monitoring</h2>
+            <div className="modal-links">
+              <button type="button" className="modal-link" onClick={() => openRoute("/vacuum-clients")}>
+                Open Vacuum Clients
+              </button>
+            </div>
+            <button onClick={() => setShowVacuumModal(false)} className="modal-close">Close</button>
+          </div>
+        </div>
+      )}
       
       {/* PDU Modal */}
       {showPDUModal && (
@@ -61,9 +124,9 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>PDU - NETIO Clients</h2>
             <div className="modal-links">
-              <a href="/test_netio_pdu.html" target="_blank" rel="noopener noreferrer" className="modal-link">
-                NETIO Web Client
-              </a>
+              <button type="button" className="modal-link" onClick={() => openRoute("/pdu-clients")}>
+                Open PDU Clients
+              </button>
             </div>
             <button onClick={() => setShowPDUModal(false)} className="modal-close">Close</button>
           </div>
@@ -76,12 +139,12 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Motorized Stages</h2>
             <div className="modal-links">
-              <a href="/test_standa_motors.html" target="_blank" rel="noopener noreferrer" className="modal-link">
-                Standa Motors Client
-              </a>
-              <a href="/test_owis_ps90.html" target="_blank" rel="noopener noreferrer" className="modal-link">
-                OWIS PS90 Controller
-              </a>
+              <button type="button" className="modal-link" onClick={() => openRoute("/standa-motors")}>
+                Standa Motors Control
+              </button>
+              <button type="button" className="modal-link" onClick={() => openBackendPage("/owis_ps90.html")}>
+                OWIS PS90 Control
+              </button>
             </div>
             <button onClick={() => setShowMotorizedModal(false)} className="modal-close">Close</button>
           </div>
@@ -94,9 +157,9 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Cameras - Camera Controllers</h2>
             <div className="modal-links">
-              <a href="/basler_camera.html" target="_blank" rel="noopener noreferrer" className="modal-link">
-                Basler Cameras
-              </a>
+              <button type="button" className="modal-link" onClick={() => openRoute("/cameras-clients")}>
+                Open Basler Cameras
+              </button>
             </div>
             <button onClick={() => setShowCamerasModal(false)} className="modal-close">Close</button>
           </div>
@@ -109,9 +172,9 @@ const Equipment = () => {
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <h2>Magnets - Itest</h2>
             <div className="modal-links">
-              <a href="/test_ds_itest_psu.html" target="_blank" rel="noopener noreferrer" className="modal-link">
-                Itest
-              </a>
+              <button type="button" className="modal-link" onClick={() => openRoute("/magnets-clients")}>
+                Open Magnets Clients
+              </button>
             </div>
             <button onClick={() => setShowMagnetsModal(false)} className="modal-close">Close</button>
           </div>

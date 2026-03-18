@@ -1,0 +1,138 @@
+import importlib
+import json
+import sys
+import types
+from pathlib import Path
+
+from flask import Flask
+
+
+def _install_tango_stub():
+    if "tango" in sys.modules:
+        return
+
+    tango = types.ModuleType("tango")
+
+    class AttrWriteType:
+        READ = 0
+        READ_WRITE = 1
+
+    tango.AttrWriteType = AttrWriteType
+    tango.Database = lambda: None
+    tango.DeviceProxy = lambda _name: None
+    sys.modules["tango"] = tango
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "web" / "backend"
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+_install_tango_stub()
+
+device_api_module = importlib.import_module("device_api")
+
+
+class FakePSPDevice:
+    def __init__(self):
+        self.calls = []
+
+    def state(self):
+        return "ON"
+
+    def get_command_list(self):
+        return ["get_group_history_json", "get_history_json"]
+
+    def command_inout(self, name, arg=None):
+        self.calls.append((name, arg))
+        if str(name).lower() == "get_group_history_json":
+            query = str(arg or "")
+            group = query.split("|")[0] if "|" in query else query
+            if group == "vacuum":
+                payload = {
+                    "history": [
+                        {
+                            "id": 11,
+                            "payload": "elyse/vacuum/HF/measurement:-1.1e-08:1.0",
+                            "group": "vacuum",
+                            "channel": "elyse/vacuum/HF/measurement",
+                            "value": -1.1e-08,
+                            "source_ts": 1.0,
+                            "recv_ts": 1.1,
+                        },
+                        {
+                            "id": 12,
+                            "payload": "elyse/vacuum/section/measurement:-4.6e-09:2.0",
+                            "group": "vacuum",
+                            "channel": "elyse/vacuum/section/measurement",
+                            "value": -4.6e-09,
+                            "source_ts": 2.0,
+                            "recv_ts": 2.1,
+                        },
+                    ]
+                }
+            else:
+                payload = {"history": []}
+            return json.dumps(payload)
+
+        if str(name).lower() == "get_history_json":
+            return json.dumps([])
+        return json.dumps({})
+
+
+class FakeDatabase:
+    def get_device_name(self, _wildcard, class_name):
+        if class_name == "DS_PSP":
+            return ["manip/general/PSP"]
+        return []
+
+
+def _make_client(monkeypatch):
+    importlib.reload(device_api_module)
+    device_api_module.device_cache.clear()
+
+    fake_device = FakePSPDevice()
+    fake_db = FakeDatabase()
+
+    monkeypatch.setattr(device_api_module.tango, "Database", lambda: fake_db)
+    monkeypatch.setattr(device_api_module.DeviceManager, "get_device", lambda _name: fake_device)
+
+    app = Flask(__name__)
+    app.register_blueprint(device_api_module.device_api)
+    return app.test_client(), fake_device
+
+
+def test_list_psp_devices(monkeypatch):
+    client, _ = _make_client(monkeypatch)
+    response = client.get("/api/psp/devices?probe_state=1")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["devices"] == [
+        {
+            "available": True,
+            "class": "DS_PSP",
+            "name": "manip/general/PSP",
+            "state": "ON",
+        }
+    ]
+
+
+def test_get_vacuum_group_history(monkeypatch):
+    client, fake_device = _make_client(monkeypatch)
+    response = client.get(
+        "/api/psp/device/manip%2Fgeneral%2FPSP/group/vacuum/history?seconds=1800&limit=5000"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["group"] == "vacuum"
+    assert payload["sample_count"] == 2
+    assert payload["channel_count"] == 2
+    assert "elyse/vacuum/HF/measurement" in payload["series"]
+    assert payload["latest_by_channel"]["elyse/vacuum/HF/measurement"]["value"] == -1.1e-08
+
+    assert fake_device.calls
+    assert fake_device.calls[0][0].lower() == "get_group_history_json"

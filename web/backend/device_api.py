@@ -1,12 +1,15 @@
 # device_api.py - Enhanced Tango Device API for Browser Clients
 from flask import Blueprint, jsonify, request
+import os
 import tango
 import json
 import traceback
 from datetime import datetime
 import threading
 import time
+import math
 import numpy as np
+from flask_jwt_extended import verify_jwt_in_request
 
 device_api = Blueprint("device_api", __name__)
 
@@ -14,15 +17,483 @@ device_api = Blueprint("device_api", __name__)
 def make_json_safe(value):
     """Convert numpy arrays and other non-JSON-serializable types to safe types"""
     if isinstance(value, np.ndarray):
-        return value.tolist()
+        return [make_json_safe(item) for item in value.tolist()]
+    elif isinstance(value, (float, np.float64, np.float32)):
+        if math.isnan(float(value)) or math.isinf(float(value)):
+            return None
+        return float(value)
     elif isinstance(value, (np.int64, np.int32, np.int16, np.int8)):
         return int(value)
-    elif isinstance(value, (np.float64, np.float32)):
-        return float(value)
+    elif isinstance(value, dict):
+        return {key: make_json_safe(item) for key, item in value.items()}
     elif isinstance(value, (list, tuple)):
         return [make_json_safe(item) for item in value]
+    elif isinstance(value, (set, frozenset)):
+        return [make_json_safe(item) for item in sorted(value)]
+    elif hasattr(value, "__iter__") and not isinstance(value, (str, bytes, bytearray)):
+        # Tango DB can return custom iterable containers (e.g. StdStringVector).
+        try:
+            return [make_json_safe(item) for item in list(value)]
+        except Exception:
+            return str(value)
     else:
         return value
+
+
+def _read_attr_sequence(device, attr_name):
+    """Best-effort read of an attribute as a Python list."""
+    try:
+        value = make_json_safe(device.read_attribute(attr_name).value)
+    except Exception:
+        return []
+
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    return [value]
+
+
+def _as_int(value, fallback=0):
+    try:
+        return int(float(value))
+    except Exception:
+        return fallback
+
+
+def _coerce_binary_state_args(args):
+    """Return list[int] of 0/1 states when args is a scalar/list of numbers; otherwise None."""
+    if isinstance(args, np.ndarray):
+        args = args.tolist()
+    if not isinstance(args, (list, tuple)):
+        return None
+
+    normalized = []
+    for value in args:
+        if isinstance(value, (list, tuple, dict)):
+            return None
+        try:
+            normalized.append(1 if int(float(value)) else 0)
+        except Exception:
+            return None
+    return normalized
+
+
+def _read_pdu_states(device):
+    states = _read_attr_sequence(device, "states")
+    if not states:
+        states = _read_attr_sequence(device, "output_statuses")
+    return [1 if _as_int(raw_state, 0) else 0 for raw_state in states]
+
+
+def _wait_for_pdu_states(device, expected_states, attempts=6, delay=0.25):
+    """Poll PDU state and confirm that readback matches requested states."""
+    expected = [1 if _as_int(value, 0) else 0 for value in expected_states]
+    if not expected:
+        return True, []
+
+    observed = []
+    for _ in range(max(1, attempts)):
+        observed = _read_pdu_states(device)
+        if observed[: len(expected)] == expected:
+            return True, observed
+        time.sleep(delay)
+    return False, observed
+
+
+def _as_bool(value, default=False):
+    """Convert Tango/numpy/scalar values to bool in a predictable way."""
+    if value is None:
+        return default
+
+    if isinstance(value, np.ndarray):
+        if value.size == 0:
+            return default
+        if value.size == 1:
+            return _as_bool(value.item(), default)
+        return _as_bool(value.flat[0], default)
+
+    if isinstance(value, (list, tuple)):
+        if not value:
+            return default
+        return _as_bool(value[0], default)
+
+    if isinstance(value, (bool, np.bool_)):
+        return bool(value)
+
+    if isinstance(value, (int, float, np.integer, np.floating)):
+        return bool(int(value))
+
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in ("1", "true", "yes", "y", "on", "running"):
+            return True
+        if normalized in ("0", "false", "no", "n", "off", "stopped"):
+            return False
+        return default
+
+    return bool(value)
+
+
+def _read_camera_is_grabbing(device):
+    try:
+        raw_value = device.read_attribute("isgrabbing").value
+    except Exception:
+        return False
+    return _as_bool(raw_value, False)
+
+
+def _wait_for_camera_grabbing(device, expected_state, attempts=10, delay=0.2):
+    """Poll camera grabbing status and return observed state + whether target was reached."""
+    observed = _read_camera_is_grabbing(device)
+    expected = bool(expected_state)
+
+    for _ in range(max(1, attempts)):
+        observed = _read_camera_is_grabbing(device)
+        if observed == expected:
+            return observed, True
+        time.sleep(delay)
+    return observed, False
+
+
+def _resolve_command_name(device, candidates):
+    """Find first available command name from a candidate list, case-insensitive."""
+    try:
+        available = {str(cmd_name).lower(): str(cmd_name) for cmd_name in device.get_command_list()}
+    except Exception:
+        available = {}
+
+    for candidate in candidates:
+        matched = available.get(str(candidate).lower())
+        if matched:
+            return matched
+
+    # Fallback: try candidate names as-is even if command list failed.
+    return str(candidates[0]) if candidates else None
+
+
+DAQMX_DEVICE_CLASSES = (
+    "DS_DAQmx_ZMQ",
+    "DS_PSP_SUPERVISION",
+    "DS_PSP_Supervision",
+    "DS_PSP",
+)
+
+PSP_GROUPS = (
+    "timestamp",
+    "cooling",
+    "hf",
+    "ht",
+    "modulator",
+    "vacuum",
+    "magnets",
+    "other",
+)
+
+
+def _safe_json_loads(value, default=None):
+    if default is None:
+        default = {}
+    if value is None:
+        return default
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(str(value))
+    except Exception:
+        return default
+
+
+def _to_scalar_value(value):
+    safe_value = make_json_safe(value)
+    if isinstance(safe_value, list):
+        if len(safe_value) == 1:
+            return safe_value[0]
+        return safe_value
+    if isinstance(safe_value, dict):
+        return safe_value
+    return safe_value
+
+
+def _list_device_commands_lower(device):
+    try:
+        return {str(name).lower(): str(name) for name in device.get_command_list()}
+    except Exception:
+        return {}
+
+
+def _read_daqmx_latest_payload(device):
+    command_candidates = [
+        "get_latest_values_json",
+        "GetLatestValuesJson",
+    ]
+    attr_candidates = [
+        "latest_values_json",
+        "LatestValuesJson",
+    ]
+
+    for command_name in command_candidates:
+        try:
+            raw = device.command_inout(command_name)
+            payload = _safe_json_loads(raw, default={})
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+
+    for attr_name in attr_candidates:
+        try:
+            raw = device.read_attribute(attr_name).value
+            payload = _safe_json_loads(raw, default={})
+            if isinstance(payload, dict):
+                return payload
+        except Exception:
+            pass
+
+    return {}
+
+
+def _normalize_daqmx_channels(payload):
+    if not isinstance(payload, dict):
+        return []
+
+    data = payload.get("data", payload if isinstance(payload, dict) else {})
+    if not isinstance(data, dict):
+        return []
+
+    channels = []
+    for channel_name, channel_value in data.items():
+        channels.append({
+            "name": str(channel_name),
+            "value": _to_scalar_value(channel_value),
+        })
+    channels.sort(key=lambda item: item["name"])
+    return channels
+
+
+def _to_float_or_none(value):
+    try:
+        return float(str(value))
+    except Exception:
+        return None
+
+
+def _normalize_psp_group(group_name):
+    normalized = str(group_name or "").strip().lower()
+    aliases = {
+        "high_tension": "ht",
+        "hightension": "ht",
+        "magnet": "magnets",
+        "time": "timestamp",
+    }
+    normalized = aliases.get(normalized, normalized)
+    return normalized if normalized in PSP_GROUPS else "other"
+
+
+def _parse_psp_payload(raw_payload):
+    payload = str(raw_payload or "")
+    first_colon = payload.find(":")
+    second_colon = payload.find(":", first_colon + 1) if first_colon >= 0 else -1
+
+    if first_colon < 0:
+        channel = payload
+        value_raw = ""
+        source_ts = None
+    elif second_colon < 0:
+        channel = payload[:first_colon]
+        value_raw = payload[first_colon + 1 :]
+        source_ts = None
+    else:
+        channel = payload[:first_colon]
+        value_raw = payload[first_colon + 1 : second_colon]
+        source_ts = _to_float_or_none(payload[second_colon + 1 :])
+
+    parts = [part for part in str(channel).split("/") if part]
+    group_raw = parts[1] if len(parts) >= 2 else ""
+    group = _normalize_psp_group(group_raw)
+
+    value_number = _to_float_or_none(value_raw)
+    value = value_number if value_number is not None else value_raw
+
+    return {
+        "payload": payload,
+        "channel": str(channel),
+        "group": group,
+        "value_raw": str(value_raw),
+        "value": value,
+        "source_ts": source_ts,
+    }
+
+
+def _normalize_psp_entry(raw_entry):
+    if isinstance(raw_entry, dict):
+        item = make_json_safe(raw_entry)
+    else:
+        item = {"payload": str(raw_entry)}
+
+    payload = str(item.get("payload", ""))
+    parsed = _parse_psp_payload(payload)
+
+    channel = str(item.get("channel", parsed["channel"]))
+    group = _normalize_psp_group(item.get("group", parsed["group"]))
+    source_ts = item.get("source_ts", parsed["source_ts"])
+    source_ts = _to_float_or_none(source_ts)
+    recv_ts = _to_float_or_none(item.get("recv_ts"))
+    msg_id = item.get("id")
+    msg_id = _as_int(msg_id, 0) if msg_id is not None else None
+
+    value = item.get("value", parsed["value"])
+    if isinstance(value, (dict, list)):
+        value = make_json_safe(value)
+    else:
+        value_number = _to_float_or_none(value)
+        value = value_number if value_number is not None else str(value)
+
+    return {
+        "id": msg_id,
+        "payload": payload,
+        "channel": channel,
+        "group": group,
+        "value_raw": str(item.get("value_raw", parsed["value_raw"])),
+        "value": value,
+        "source_ts": source_ts,
+        "recv_ts": recv_ts,
+    }
+
+
+def _build_psp_series(history):
+    channel_series = {}
+    latest_by_channel = {}
+
+    for item in history:
+        channel = str(item.get("channel", "")).strip()
+        if not channel:
+            continue
+
+        ts = _to_float_or_none(item.get("source_ts"))
+        if ts is None:
+            ts = _to_float_or_none(item.get("recv_ts"))
+        if ts is None:
+            continue
+
+        value = _to_float_or_none(item.get("value"))
+        if value is None:
+            continue
+
+        point = {
+            "ts": ts,
+            "value": value,
+            "id": item.get("id"),
+        }
+        channel_series.setdefault(channel, []).append(point)
+        latest_by_channel[channel] = {
+            "value": value,
+            "ts": ts,
+            "id": item.get("id"),
+        }
+
+    for points in channel_series.values():
+        points.sort(key=lambda point: point["ts"])
+
+    return channel_series, latest_by_channel
+
+
+def _read_psp_group_history(device, group_name, seconds, limit):
+    group = _normalize_psp_group(group_name)
+    commands = _list_device_commands_lower(device)
+    history_raw = []
+
+    get_group_cmd = commands.get("get_group_history_json")
+    if get_group_cmd:
+        query = f"{group}|{max(0.0, float(seconds))}|{max(0, int(limit))}"
+        raw = device.command_inout(get_group_cmd, query)
+        payload = _safe_json_loads(raw, default={})
+        if isinstance(payload, dict):
+            history_raw = payload.get("history", [])
+        elif isinstance(payload, list):
+            history_raw = payload
+
+    if not history_raw:
+        get_history_cmd = commands.get("get_history_json")
+        if get_history_cmd:
+            raw = device.command_inout(get_history_cmd, max(0.0, float(seconds)))
+            payload = _safe_json_loads(raw, default=[])
+            if isinstance(payload, list):
+                history_raw = payload
+
+    normalized = [_normalize_psp_entry(item) for item in history_raw]
+    normalized = [item for item in normalized if item.get("group") == group]
+    if limit > 0:
+        normalized = normalized[-int(limit) :]
+    return normalized
+
+
+def _write_daqmx_channel(device, channel, value):
+    """
+    Attempt to write DAQmx/PSP variable using any supported command signature.
+    Raises Exception when no supported write command is found.
+    """
+    commands = _list_device_commands_lower(device)
+    channel = str(channel)
+    scalar_value = _to_scalar_value(value)
+
+    json_payload_name_value = json.dumps({"name": channel, "value": scalar_value})
+    json_payload_channel_value = json.dumps({"channel": channel, "value": scalar_value})
+    eq_payload = f"{channel}={scalar_value}"
+
+    if "write_variable_json" in commands:
+        return device.command_inout(commands["write_variable_json"], json_payload_name_value)
+    if "set_variable_value_json" in commands:
+        return device.command_inout(commands["set_variable_value_json"], json_payload_name_value)
+    if "set_channel_value_json" in commands:
+        return device.command_inout(commands["set_channel_value_json"], json_payload_channel_value)
+
+    if "write_variable" in commands:
+        cmd = commands["write_variable"]
+        try:
+            return device.command_inout(cmd, [channel, scalar_value])
+        except Exception:
+            return device.command_inout(cmd, json_payload_name_value)
+
+    if "set_variable_value" in commands:
+        cmd = commands["set_variable_value"]
+        try:
+            return device.command_inout(cmd, [channel, scalar_value])
+        except Exception:
+            return device.command_inout(cmd, eq_payload)
+
+    if "set_channel_value" in commands:
+        cmd = commands["set_channel_value"]
+        try:
+            return device.command_inout(cmd, [channel, scalar_value])
+        except Exception:
+            return device.command_inout(cmd, eq_payload)
+
+    raise Exception(
+        "Device does not expose a supported write command "
+        "(expected one of: write_variable*, set_variable_value*, set_channel_value*)"
+    )
+
+
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _query_bool(name, default=False):
+    value = request.args.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _maybe_require_auth():
+    if _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", False):
+        verify_jwt_in_request()
 
 # Debug endpoint to test WebSocket monitoring
 @device_api.route('/api/debug/monitor/<path:device_name>', methods=['GET'])
@@ -45,6 +516,7 @@ def debug_monitor_device(device_name):
 device_cache = {}
 monitoring_threads = {}
 monitoring_active = {}
+_device_list_cache = {}
 
 class DeviceManager:
     """Manages Tango device connections and operations"""
@@ -58,125 +530,247 @@ class DeviceManager:
             except Exception as e:
                 raise Exception(f"Could not connect to device {device_name}: {str(e)}")
         return device_cache[device_name]
-    
+
     @staticmethod
-    def get_device_info(device_name):
-        """Get comprehensive device information"""
+    def get_device_summary(device_name):
+        device = DeviceManager.get_device(device_name)
+        device_info = device.info()
+        return {
+            'name': device_name,
+            'state': str(device.state()),
+            'status': device.status(),
+            'info': getattr(device_info, 'dev_class', ''),
+            'server': getattr(device_info, 'server_id', ''),
+            'connected': True,
+            'timestamp': datetime.now().isoformat()
+        }
+
+    @staticmethod
+    def get_device_properties(device_name):
+        properties = {}
+        db = tango.Database()
+        prop_list = db.get_device_property_list(device_name, '*')
+        for prop_name in prop_list:
+            try:
+                prop_values = db.get_device_property(device_name, prop_name)
+                properties[prop_name] = make_json_safe(prop_values.get(prop_name, []))
+            except Exception as e:
+                properties[prop_name] = {'error': str(e)}
+        return properties
+
+    @staticmethod
+    def get_device_attributes(device):
+        attributes = {}
+        attr_list = device.get_attribute_list()
+        for attr_name in attr_list:
+            try:
+                attr = device.read_attribute(attr_name)
+                attr_config = device.get_attribute_config(attr_name)
+                value = attr.value if hasattr(attr, 'value') else None
+                attributes[attr_name] = {
+                    'value': make_json_safe(value),
+                    'quality': str(attr.quality),
+                    'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
+                    'writable': attr_config.writable != tango.AttrWriteType.READ,
+                    'data_type': str(attr_config.data_type),
+                    'unit': attr_config.unit if hasattr(attr_config, 'unit') else '',
+                    'description': attr_config.description if hasattr(attr_config, 'description') else ''
+                }
+            except Exception as e:
+                attributes[attr_name] = {'error': str(e)}
+        return attributes
+
+    @staticmethod
+    def get_device_commands(device):
+        commands = {}
+        cmd_list = device.get_command_list()
+        for cmd_name in cmd_list:
+            try:
+                cmd_config = device.get_command_config(cmd_name)
+                commands[cmd_name] = {
+                    'in_type': str(cmd_config.in_type),
+                    'out_type': str(cmd_config.out_type),
+                    'in_type_desc': cmd_config.in_type_desc,
+                    'out_type_desc': cmd_config.out_type_desc
+                }
+            except Exception as e:
+                commands[cmd_name] = {'error': str(e)}
+        return commands
+
+
+def _get_starter_devices():
+    db = tango.Database()
+    devices = list(db.get_device_exported("*"))
+    return [device_name for device_name in devices if str(device_name).startswith("tango/admin/")]
+
+
+def _get_starter_server_lists(starter_name):
+    starter = tango.DeviceProxy(starter_name)
+    running = set(starter.command_inout('DevGetRunningServers', False))
+    stopped = set(starter.command_inout('DevGetStopServers', False))
+    return starter, running, stopped
+
+
+def _find_starter_for_server(server_name):
+    for starter_name in _get_starter_devices():
         try:
-            device = DeviceManager.get_device(device_name)
-            
-            # Get basic device info
-            info = {
-                'name': device_name,
-                'state': str(device.state()),
-                'status': device.status(),
-                'info': device.info().dev_class,
-                'server': device.info().server_id,
-                'connected': True,
-                'timestamp': datetime.now().isoformat()
-            }
-            
-            # Get device properties from Tango database
-            properties = {}
-            try:
-                db = tango.Database()
-                prop_list = db.get_device_property_list(device_name, '*')
-                for prop_name in prop_list:
-                    try:
-                        prop_values = db.get_device_property(device_name, prop_name)
-                        if prop_name in prop_values:
-                            properties[prop_name] = prop_values[prop_name]
-                    except Exception as e:
-                        properties[prop_name] = {'error': str(e)}
-            except Exception as e:
-                info['properties_error'] = str(e)
-            
-            info['properties'] = properties
-            
-            # Get attributes
-            attributes = {}
-            try:
-                attr_list = device.get_attribute_list()
-                for attr_name in attr_list:
-                    try:
-                        attr = device.read_attribute(attr_name)
-                        attr_config = device.get_attribute_config(attr_name)
-                        
-                        attributes[attr_name] = {
-                            'value': attr.value if hasattr(attr, 'value') else None,
-                            'quality': str(attr.quality),
-                            'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None,
-                            'writable': attr_config.writable != tango.AttrWriteType.READ,
-                            'data_type': str(attr_config.data_type),
-                            'unit': attr_config.unit if hasattr(attr_config, 'unit') else '',
-                            'description': attr_config.description if hasattr(attr_config, 'description') else ''
-                        }
-                    except Exception as e:
-                        attributes[attr_name] = {'error': str(e)}
-            except Exception as e:
-                info['attributes_error'] = str(e)
-            
-            info['attributes'] = attributes
-            
-            # Get commands
-            commands = {}
-            try:
-                cmd_list = device.get_command_list()
-                for cmd_name in cmd_list:
-                    try:
-                        cmd_config = device.get_command_config(cmd_name)
-                        commands[cmd_name] = {
-                            'in_type': str(cmd_config.in_type),
-                            'out_type': str(cmd_config.out_type),
-                            'in_type_desc': cmd_config.in_type_desc,
-                            'out_type_desc': cmd_config.out_type_desc
-                        }
-                    except Exception as e:
-                        commands[cmd_name] = {'error': str(e)}
-            except Exception as e:
-                info['commands_error'] = str(e)
-            
-            info['commands'] = commands
-            return info
-            
-        except Exception as e:
-            return {
-                'name': device_name,
-                'connected': False,
-                'error': str(e),
-                'timestamp': datetime.now().isoformat()
-            }
+            starter, running, stopped = _get_starter_server_lists(starter_name)
+        except Exception:
+            continue
+        if server_name in running or server_name in stopped:
+            return starter_name, starter, running, stopped
+    raise Exception(f"No Starter manages server {server_name}")
+
+
+def _resolve_server_name(device_name):
+    db = tango.Database()
+    try:
+        return DeviceManager.get_device(device_name).info().server_id
+    except Exception:
+        info = db.get_device_info(device_name)
+        server_name = getattr(info, 'ds_full_name', None) or getattr(info, 'server', None)
+        if not server_name:
+            raise Exception(f"Could not resolve server for device {device_name}")
+        return str(server_name)
 
 @device_api.route('/api/devices', methods=['GET'])
 def list_devices():
     """Get list of all available devices"""
     try:
+        probe_state = _query_bool('probe_state', False)
+        include_dserver = _query_bool('include_dserver', True)
+        include_admin = _query_bool('include_admin', False)
+        refresh = _query_bool('refresh', False)
+        cache_ttl_s = float(os.environ.get('PYCONLYSE_DEVICE_LIST_CACHE_TTL', '4.0'))
+        cache_key = (probe_state, include_dserver, include_admin)
+
+        now = time.time()
+        cached_entry = _device_list_cache.get(cache_key)
+        if (
+            not refresh
+            and cached_entry
+            and (now - cached_entry.get('ts', 0)) <= max(cache_ttl_s, 0.0)
+        ):
+            return jsonify({
+                'devices': cached_entry.get('devices', []),
+                'success': True,
+                'cached': True,
+                'probe_state': probe_state,
+            })
+
         db = tango.Database()
         devices = db.get_device_exported("*")
-        
+
         device_list = []
         for device_name in devices:
+            device_name = str(device_name)
+            lower_name = device_name.lower()
+            if not include_dserver and lower_name.startswith('dserver/'):
+                continue
+            if not include_admin and lower_name.startswith('tango/admin/'):
+                continue
+
+            server_name = None
+            dev_class = None
+            state = 'UNKNOWN'
+            available = True
+
             try:
-                # Quick state check
-                device = tango.DeviceProxy(device_name)
-                state = str(device.state())
-                server = device.info().server_id
-                dev_class = device.info().dev_class
-                
-                device_list.append({
-                    'name': device_name,
-                    'state': state,
-                    'server': server,
-                    'class': dev_class,
-                    'available': True
-                })
+                info = db.get_device_info(device_name)
+                server_name = getattr(info, 'ds_full_name', None) or getattr(info, 'server', None)
+                dev_class = getattr(info, 'class_name', None)
             except Exception:
-                device_list.append({
-                    'name': device_name,
-                    'available': False
-                })
-        
-        return jsonify({'devices': device_list, 'success': True})
+                pass
+
+            if probe_state:
+                try:
+                    device = tango.DeviceProxy(device_name)
+                    state = str(device.state())
+                    if not server_name or not dev_class:
+                        info = device.info()
+                        server_name = server_name or getattr(info, 'server_id', None)
+                        dev_class = dev_class or getattr(info, 'dev_class', None)
+                except Exception:
+                    available = False
+
+            device_list.append({
+                'name': device_name,
+                'state': state,
+                'server': server_name,
+                'class': dev_class,
+                'available': available
+            })
+
+        device_list.sort(key=lambda item: str(item.get('name', '')))
+        _device_list_cache[cache_key] = {'ts': now, 'devices': device_list}
+
+        return jsonify({
+            'devices': device_list,
+            'success': True,
+            'cached': False,
+            'probe_state': probe_state,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/server/control', methods=['POST'])
+def control_server():
+    """Control a device server through its Starter."""
+    try:
+        _maybe_require_auth()
+        data = request.get_json() or {}
+        action = str(data.get('action', '')).strip().lower()
+        server_name = data.get('server_name')
+        device_name = data.get('device_name')
+
+        if not server_name and device_name:
+            server_name = _resolve_server_name(str(device_name))
+
+        if not server_name:
+            return jsonify({'error': 'server_name or device_name is required', 'success': False}), 400
+
+        server_name = str(server_name)
+        if action not in {'start', 'restart', 'hard_kill'}:
+            return jsonify({'error': 'Unsupported action', 'success': False}), 400
+
+        starter_name, starter, running_before, stopped_before = _find_starter_for_server(server_name)
+
+        if action == 'start':
+            if server_name not in running_before:
+                starter.command_inout('DevStart', server_name)
+                time.sleep(2)
+        elif action == 'hard_kill':
+            starter.command_inout('HardKillServer', server_name)
+            time.sleep(2)
+        elif action == 'restart':
+            if server_name in running_before:
+                try:
+                    starter.command_inout('DevStop', server_name)
+                    time.sleep(2)
+                except Exception:
+                    pass
+
+                _, running_after_stop, _ = _get_starter_server_lists(starter_name)
+                if server_name in running_after_stop:
+                    starter.command_inout('HardKillServer', server_name)
+                    time.sleep(2)
+
+            starter.command_inout('DevStart', server_name)
+            time.sleep(2)
+
+        _, running_after, stopped_after = _get_starter_server_lists(starter_name)
+
+        return jsonify({
+            'success': True,
+            'action': action,
+            'server_name': server_name,
+            'starter': starter_name,
+            'running': server_name in running_after,
+            'stopped': server_name in stopped_after,
+            'running_count': len(running_after),
+            'stopped_count': len(stopped_after),
+        })
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -184,8 +778,62 @@ def list_devices():
 def get_device_info(device_name):
     """Get detailed device information"""
     try:
-        info = DeviceManager.get_device_info(device_name)
+        include_properties = _query_bool('include_properties', True)
+        include_attributes = _query_bool('include_attributes', True)
+        include_commands = _query_bool('include_commands', True)
+
+        info = DeviceManager.get_device_summary(device_name)
+        device = DeviceManager.get_device(device_name)
+
+        if include_properties:
+            try:
+                info['properties'] = DeviceManager.get_device_properties(device_name)
+            except Exception as e:
+                info['properties_error'] = str(e)
+
+        if include_attributes:
+            try:
+                info['attributes'] = DeviceManager.get_device_attributes(device)
+            except Exception as e:
+                info['attributes_error'] = str(e)
+
+        if include_commands:
+            try:
+                info['commands'] = DeviceManager.get_device_commands(device)
+            except Exception as e:
+                info['commands_error'] = str(e)
+
         return jsonify({'device_info': info, 'success': True})
+    except Exception as e:
+        return jsonify({
+            'device_info': {
+                'name': device_name,
+                'connected': False,
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            },
+            'error': str(e),
+            'success': False
+        }), 500
+
+
+@device_api.route('/api/device/<path:device_name>/summary', methods=['GET'])
+def get_device_summary(device_name):
+    """Get fast device summary for lazy UI loading."""
+    try:
+        summary = DeviceManager.get_device_summary(device_name)
+        return jsonify({'device_info': summary, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/device/<path:device_name>/commands', methods=['GET'])
+def get_device_commands(device_name):
+    """Get device command list and input/output metadata."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        commands = DeviceManager.get_device_commands(device)
+        return jsonify({'commands': commands, 'success': True})
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -194,21 +842,7 @@ def get_device_attributes(device_name):
     """Get all device attributes"""
     try:
         device = DeviceManager.get_device(device_name)
-        attributes = {}
-        
-        attr_list = device.get_attribute_list()
-        for attr_name in attr_list:
-            try:
-                attr = device.read_attribute(attr_name)
-                # Convert value to JSON-safe format
-                value = attr.value if hasattr(attr, 'value') else None
-                attributes[attr_name] = {
-                    'value': make_json_safe(value),
-                    'quality': str(attr.quality),
-                    'timestamp': attr.time.tv_sec if hasattr(attr, 'time') else None
-                }
-            except Exception as e:
-                attributes[attr_name] = {'error': str(e)}
+        attributes = DeviceManager.get_device_attributes(device)
         
         return jsonify({'attributes': attributes, 'success': True})
     except Exception as e:
@@ -231,6 +865,7 @@ def handle_attribute(device_name, attr_name):
             })
         
         elif request.method == 'POST':
+            _maybe_require_auth()
             data = request.get_json()
             value = data.get('value')
             
@@ -256,6 +891,7 @@ def handle_attribute(device_name, attr_name):
 def execute_command(device_name, command_name):
     """Execute a device command"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         data = request.get_json() or {}
         args = data.get('args')
@@ -264,10 +900,31 @@ def execute_command(device_name, command_name):
             result = device.command_inout(command_name, args)
         else:
             result = device.command_inout(command_name)
+
+        # DS_Netio_pdu can return "success" even when hardware state does not change.
+        # For set_channels_states, verify readback and surface mismatch as an API error.
+        verified_states = None
+        if str(command_name).lower() == "set_channels_states":
+            requested_states = _coerce_binary_state_args(args)
+            if requested_states is not None:
+                matched, observed_states = _wait_for_pdu_states(device, requested_states)
+                if not matched:
+                    return jsonify({
+                        'error': (
+                            f"Command {command_name} executed, but readback states do not "
+                            "match requested values."
+                        ),
+                        'command': command_name,
+                        'requested_states': requested_states,
+                        'observed_states': observed_states,
+                        'success': False
+                    }), 409
+                verified_states = observed_states
         
         return jsonify({
             'command': command_name,
             'result': result,
+            'verified_states': verified_states,
             'success': True
         })
     
@@ -293,19 +950,53 @@ def get_device_state(device_name):
 def get_device_properties(device_name):
     """Get raw Tango device properties as a flat JSON object."""
     try:
-        db = tango.Database()
-        prop_list = db.get_device_property_list(device_name, '*')
-        properties = {}
-
-        for prop_name in prop_list:
-            try:
-                prop_values = db.get_device_property(device_name, prop_name)
-                properties[prop_name] = make_json_safe(prop_values.get(prop_name, []))
-            except Exception as e:
-                properties[prop_name] = {'error': str(e)}
+        properties = DeviceManager.get_device_properties(device_name)
 
         properties['success'] = True
         return jsonify(properties)
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/device/<path:device_name>/pdu/outputs', methods=['GET'])
+def get_pdu_outputs(device_name):
+    """Read NETIO/PDU output table using normalized output objects."""
+    try:
+        device = DeviceManager.get_device(device_name)
+
+        ids = _read_attr_sequence(device, 'ids')
+        names = _read_attr_sequence(device, 'names')
+        states = _read_attr_sequence(device, 'states')
+        if not states:
+            states = _read_attr_sequence(device, 'output_statuses')
+
+        output_count = max(len(ids), len(names), len(states), 4)
+        if not ids:
+            ids = list(range(1, output_count + 1))
+
+        outputs = []
+        for idx in range(output_count):
+            raw_id = ids[idx] if idx < len(ids) else idx + 1
+            output_id = _as_int(raw_id, idx + 1)
+            output_name = (
+                str(names[idx])
+                if idx < len(names) and names[idx] not in (None, "")
+                else f"Output {output_id}"
+            )
+            raw_state = states[idx] if idx < len(states) else 0
+            output_state = 1 if _as_int(raw_state, 0) else 0
+            outputs.append({
+                'id': output_id,
+                'name': output_name,
+                'state': output_state,
+            })
+
+        return jsonify({
+            'device': device_name,
+            'state': str(device.state()),
+            'outputs': outputs,
+            'success': True,
+        })
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -332,8 +1023,8 @@ def get_ds_itest_psu_slots(device_name):
                 'index': i,     # Array index for reference
                 'name': names[i] if i < len(names) else f'Slot {slot_id}',
                 'state': bool(states[i]) if i < len(states) else False,
-                'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
-                'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
+                'current_measured': make_json_safe(currents_meas[i]) if i < len(currents_meas) else 0.0,
+                'current_setpoint': make_json_safe(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
             })
         
         return jsonify({
@@ -359,6 +1050,14 @@ def get_ds_itest_psu_tab_config(device_name):
             'REF': {'slots': [], 'defaults': {}, 'enabled': True},
             'ALL': {'slots': [], 'defaults': {}, 'enabled': True}
         }
+        key_aliases = {
+            'V0': 'V0',
+            'VD': 'V0',
+            'VD2': 'VD2',
+            'REF': 'REF',
+            'RF': 'REF',
+            'ALL': 'ALL',
+        }
         
         try:
             # Read tab_config property from Tango DB
@@ -383,12 +1082,39 @@ def get_ds_itest_psu_tab_config(device_name):
                     config_str = str(raw_value)
                 
                 if config_str:
-                    tab_config = json.loads(config_str)
-                    # Merge with defaults to ensure all tabs exist
-                    for tab_name in default_config:
-                        if tab_name not in tab_config:
-                            tab_config[tab_name] = default_config[tab_name]
-                    return jsonify({'tab_configs': tab_config, 'success': True})
+                    raw_config = json.loads(config_str)
+                    normalized = {
+                        tab_name: {
+                            'slots': [],
+                            'defaults': {},
+                            'enabled': default_config[tab_name]['enabled'],
+                        }
+                        for tab_name in default_config
+                    }
+
+                    for raw_tab_name, tab_payload in raw_config.items():
+                        canonical = key_aliases.get(str(raw_tab_name).upper())
+                        if not canonical or not isinstance(tab_payload, dict):
+                            continue
+
+                        slots = []
+                        for slot_id in tab_payload.get('slots', []):
+                            parsed_slot = _as_int(slot_id, None)
+                            if parsed_slot is not None and parsed_slot not in slots:
+                                slots.append(parsed_slot)
+
+                        defaults = {}
+                        for slot_key, slot_value in (tab_payload.get('defaults', {}) or {}).items():
+                            normalized_key = str(_as_int(slot_key, slot_key))
+                            defaults[normalized_key] = slot_value
+
+                        normalized[canonical] = {
+                            'slots': slots,
+                            'defaults': defaults,
+                            'enabled': bool(tab_payload.get('enabled', True)),
+                        }
+
+                    return jsonify({'tab_configs': normalized, 'success': True})
         except Exception as e:
             print(f"Warning: Could not read tab_config property: {e}")
         
@@ -429,6 +1155,7 @@ def get_itest_all_slots(device_name):
 def set_itest_slot_output(device_name, slot_id):
     """Set output state for specific iTest PSU slot"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         state = int(data.get('state', 0))
@@ -445,49 +1172,11 @@ def set_itest_slot_output(device_name, slot_id):
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
-@device_api.route('/api/device/itest/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
-def set_itest_slot_current(device_name, slot_id):
-    """Set current for specific iTest PSU slot"""
-    try:
-        device = DeviceManager.get_device(device_name)
-        data = request.get_json()
-        value = float(data.get('value', 0.0))
-        
-        # Validate limits
-        try:
-            limits_array = make_json_safe(device.read_attribute('current_limits').value)
-            ids = make_json_safe(device.read_attribute('ids').value)
-            
-            if slot_id in ids:
-                array_idx = ids.index(slot_id)
-                if limits_array and len(limits_array) >= (array_idx + 1) * 2:
-                    min_limit = float(limits_array[array_idx * 2])
-                    max_limit = float(limits_array[array_idx * 2 + 1])
-                    
-                    if value < min_limit or value > max_limit:
-                        return jsonify({
-                            'error': f'Current {value}A outside limits [{min_limit}, {max_limit}]A',
-                            'success': False
-                        }), 400
-        except Exception as e:
-            print(f"Warning: Could not validate limits: {e}")
-        
-        # Use set_current command with [slot_id, value]
-        device.command_inout('set_current', [float(slot_id), value])
-        
-        return jsonify({
-            'slot_id': slot_id,
-            'current': value,
-            'success': True
-        })
-    
-    except Exception as e:
-        return jsonify({'error': str(e), 'success': False}), 500
-
 @device_api.route('/api/device/ds_itest_psu/<path:device_name>/slot/<int:slot_id>/current', methods=['POST'])
 def set_ds_itest_psu_current(device_name, slot_id):
     """Set current for specific DS iTest PSU slot with limit validation"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         current_value = float(data.get('current', 0.0))
@@ -542,6 +1231,7 @@ def set_ds_itest_psu_current(device_name, slot_id):
 def set_ds_itest_psu_state(device_name, slot_id):
     """Set output state for specific DS iTest PSU slot"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         data = request.get_json()
         enabled = bool(data.get('enabled', False))
@@ -592,14 +1282,15 @@ def handle_itest_current(device_name):
                 limits = {'min': -5.0, 'max': 15.0}
             
             return jsonify({
-                'current_setpoint': setpoint,
-                'measured_current': measured,
-                'measured_voltage': voltage,
+                'current_setpoint': make_json_safe(setpoint),
+                'measured_current': make_json_safe(measured),
+                'measured_voltage': make_json_safe(voltage),
                 'current_limits': limits,
                 'success': True
             })
         
         elif request.method == 'POST':
+            _maybe_require_auth()
             data = request.get_json()
             action = data.get('action')
             value = data.get('value')
@@ -659,7 +1350,7 @@ def handle_itest_slot_current(device_name, slot_id):
             try:
                 voltages = list(device.read_attribute('voltages_meas').value)
                 array_idx = ids.index(slot_id)
-                voltage = float(voltages[array_idx]) if array_idx < len(voltages) else 0.0
+                voltage = make_json_safe(voltages[array_idx]) if array_idx < len(voltages) else 0.0
             except:
                 voltage = 0.0  # Default if voltage not available
             
@@ -670,8 +1361,8 @@ def handle_itest_slot_current(device_name, slot_id):
                 return jsonify({'error': f'Slot {slot_id} not found', 'success': False}), 404
             
             # Get current values for this slot
-            current_setpoint = float(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
-            measured_current = float(currents_meas[array_idx]) if array_idx < len(currents_meas) else 0.0
+            current_setpoint = make_json_safe(currents_setpoint[array_idx]) if array_idx < len(currents_setpoint) else 0.0
+            measured_current = make_json_safe(currents_meas[array_idx]) if array_idx < len(currents_meas) else 0.0
             
             # Get current limits for this slot
             limits = {'min': -5.0, 'max': 15.0}  # Default
@@ -691,15 +1382,20 @@ def handle_itest_slot_current(device_name, slot_id):
                 'slot_id': slot_id,
                 'current_setpoint': current_setpoint,
                 'measured_current': measured_current,
-                'measured_voltage': voltage,
+                'measured_voltage': make_json_safe(voltage),
                 'current_limits': limits,
                 'success': True
             })
         
         elif request.method == 'POST':
-            data = request.get_json()
+            _maybe_require_auth()
+            data = request.get_json() or {}
             action = data.get('action')
             value = data.get('value')
+            if value is None and data.get('current') is not None:
+                value = data.get('current')
+            if action is None and value is not None:
+                action = 'set'
             
             # Get slot array index
             ids = [int(x) for x in device.read_attribute('ids').value]
@@ -710,6 +1406,10 @@ def handle_itest_slot_current(device_name, slot_id):
             
             # For set action, validate limits first
             if action == 'set' and value is not None:
+                try:
+                    value = float(value)
+                except (TypeError, ValueError):
+                    return jsonify({'error': 'value must be numeric', 'success': False}), 400
                 try:
                     limits_array = list(device.read_attribute('current_limits').value)
                     if limits_array and len(limits_array) >= (array_idx + 1) * 2:
@@ -774,6 +1474,7 @@ def handle_itest_slot_current(device_name, slot_id):
 def camera_capture(device_name):
     """Trigger camera capture"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         data = request.get_json() or {}
         
@@ -793,6 +1494,189 @@ def camera_capture(device_name):
             'success': True
         })
     
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+# DAQmx / Supervision endpoints
+@device_api.route('/api/daqmx/devices', methods=['GET'])
+def list_daqmx_devices():
+    """List DAQmx-related Tango devices (ZMQ reader and PSP supervision readers)."""
+    try:
+        db = tango.Database()
+        seen = set()
+        devices = []
+        probe_state = _query_bool('probe_state', True)
+
+        for class_name in DAQMX_DEVICE_CLASSES:
+            try:
+                class_devices = db.get_device_name('*', class_name)
+            except Exception:
+                continue
+
+            for device_name in class_devices:
+                device_name = str(device_name)
+                if device_name in seen:
+                    continue
+                seen.add(device_name)
+
+                state = 'UNKNOWN'
+                available = True
+                if probe_state:
+                    try:
+                        state = str(DeviceManager.get_device(device_name).state())
+                    except Exception:
+                        available = False
+
+                devices.append({
+                    'name': device_name,
+                    'class': class_name,
+                    'state': state,
+                    'available': available,
+                })
+
+        devices.sort(key=lambda item: item['name'])
+        return jsonify({'devices': devices, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/psp/devices', methods=['GET'])
+def list_psp_devices():
+    """List DS_PSP devices available in Tango DB."""
+    try:
+        db = tango.Database()
+        probe_state = _query_bool('probe_state', True)
+        names = []
+        try:
+            names = db.get_device_name('*', 'DS_PSP')
+        except Exception:
+            names = []
+
+        devices = []
+        for device_name in names:
+            device_name = str(device_name)
+            state = 'UNKNOWN'
+            available = True
+            if probe_state:
+                try:
+                    state = str(DeviceManager.get_device(device_name).state())
+                except Exception:
+                    available = False
+
+            devices.append({
+                'name': device_name,
+                'class': 'DS_PSP',
+                'state': state,
+                'available': available,
+            })
+
+        devices.sort(key=lambda item: item['name'])
+        return jsonify({'devices': devices, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/psp/device/<path:device_name>/group/<group_name>/history', methods=['GET'])
+def get_psp_group_history(device_name, group_name):
+    """Read PSP FIFO history for one group and return graph-ready series."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        seconds = max(0.0, float(request.args.get('seconds', 1800.0)))
+        limit = max(1, int(request.args.get('limit', 5000)))
+        group = _normalize_psp_group(group_name)
+
+        history = _read_psp_group_history(device, group, seconds, limit)
+        series, latest = _build_psp_series(history)
+
+        return jsonify({
+            'device': device_name,
+            'group': group,
+            'seconds': seconds,
+            'limit': limit,
+            'sample_count': len(history),
+            'channel_count': len(series),
+            'history': history,
+            'series': series,
+            'latest_by_channel': latest,
+            'success': True,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/daqmx/device/<path:device_name>/latest', methods=['GET'])
+def get_daqmx_latest(device_name):
+    """Get latest DAQmx/PSP data payload and normalized channel list."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        payload = _read_daqmx_latest_payload(device)
+        channels = _normalize_daqmx_channels(payload)
+
+        return jsonify({
+            'device': device_name,
+            'state': str(device.state()),
+            'latest': payload,
+            'channels': channels,
+            'channel_count': len(channels),
+            'success': True,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/daqmx/device/<path:device_name>/history', methods=['GET'])
+def get_daqmx_history(device_name):
+    """Get DAQmx history if the device supports get_history_json(seconds)."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        seconds = float(request.args.get('seconds', 10.0))
+        commands = _list_device_commands_lower(device)
+        cmd = commands.get('get_history_json')
+        if not cmd:
+            return jsonify({
+                'error': 'History is not supported by this device',
+                'success': False,
+            }), 400
+
+        raw = device.command_inout(cmd, seconds)
+        history = _safe_json_loads(raw, default=[])
+        if not isinstance(history, list):
+            history = []
+
+        return jsonify({
+            'device': device_name,
+            'seconds': seconds,
+            'history': history,
+            'sample_count': len(history),
+            'success': True,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/daqmx/device/<path:device_name>/write', methods=['POST'])
+def write_daqmx_channel(device_name):
+    """Write one channel/variable value via DAQmx/PSP write command."""
+    try:
+        _maybe_require_auth()
+        device = DeviceManager.get_device(device_name)
+        data = request.get_json() or {}
+        channel = data.get('channel') or data.get('name') or data.get('variable')
+        value = data.get('value')
+
+        if channel in (None, ''):
+            return jsonify({'error': 'channel is required', 'success': False}), 400
+        if value is None:
+            return jsonify({'error': 'value is required', 'success': False}), 400
+
+        result = _write_daqmx_channel(device, channel, value)
+        return jsonify({
+            'device': device_name,
+            'channel': str(channel),
+            'value': _to_scalar_value(value),
+            'result': make_json_safe(result),
+            'success': True,
+        })
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -916,6 +1800,7 @@ def handle_camera_parameters(device_name):
             return jsonify({'parameters': parameters, 'success': True})
         
         elif request.method == 'POST':
+            _maybe_require_auth()
             data = request.get_json()
             results = {}
             
@@ -940,31 +1825,47 @@ def handle_camera_grabbing(device_name):
         device = DeviceManager.get_device(device_name)
         
         if request.method == 'GET':
-            is_grabbing = bool(device.read_attribute('isgrabbing').value)
+            is_grabbing = _read_camera_is_grabbing(device)
             return jsonify({
                 'grabbing': is_grabbing,
                 'success': True
             })
         
         elif request.method == 'POST':
+            _maybe_require_auth()
             data = request.get_json()
             action = data.get('action')  # 'start' or 'stop'
             
             if action == 'start':
-                device.command_inout('start_grabbing')
-                message = 'Grabbing started'
+                command_name = _resolve_command_name(
+                    device,
+                    ['start_grabbing', 'startgrabbing', 'StartGrabbing', 'start', 'on']
+                )
+                device.command_inout(command_name)
+                expected_grabbing = True
+                message = f'Grabbing start command sent ({command_name})'
             elif action == 'stop':
-                device.command_inout('stop_grabbing')
-                message = 'Grabbing stopped'
+                command_name = _resolve_command_name(
+                    device,
+                    ['stop_grabbing', 'stopgrabbing', 'StopGrabbing', 'stop', 'off']
+                )
+                device.command_inout(command_name)
+                expected_grabbing = False
+                message = f'Grabbing stop command sent ({command_name})'
             else:
                 return jsonify({'error': 'Invalid action. Use "start" or "stop"', 'success': False}), 400
             
-            # Read back status
-            is_grabbing = bool(device.read_attribute('isgrabbing').value)
+            # Confirm status with short polling to avoid stale immediate readback.
+            is_grabbing, state_confirmed = _wait_for_camera_grabbing(
+                device,
+                expected_state=expected_grabbing,
+            )
             
             return jsonify({
                 'message': message,
                 'grabbing': is_grabbing,
+                'expected_grabbing': expected_grabbing,
+                'state_confirmed': state_confirmed,
                 'success': True
             })
     
@@ -1007,6 +1908,7 @@ def get_camera_image(device_name):
 def trigger_camera(device_name):
     """Trigger camera software trigger"""
     try:
+        _maybe_require_auth()
         device = DeviceManager.get_device(device_name)
         
         # Execute software trigger if supported
