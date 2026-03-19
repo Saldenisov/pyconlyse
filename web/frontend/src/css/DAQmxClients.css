@@ -1,0 +1,125 @@
+.daqmx-clients-page .daqmx-panel {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px;
+  background: #ffffff;
+  color: #111827;
+}
+
+.daqmx-clients-page .daqmx-top-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.daqmx-clients-page .daqmx-top-actions select {
+  min-width: 340px;
+  max-width: 100%;
+}
+
+.daqmx-clients-page .daqmx-meta {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.daqmx-clients-page .daqmx-meta input[type="number"] {
+  width: 72px;
+  margin: 0 6px;
+}
+
+.daqmx-clients-page .inline-checkbox {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.daqmx-clients-page .daqmx-write-panel {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: #f8f9fb;
+}
+
+.daqmx-clients-page .daqmx-write-panel h3 {
+  margin: 0 0 8px;
+}
+
+.daqmx-clients-page .daqmx-write-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.daqmx-clients-page .daqmx-write-row input[type="text"] {
+  min-width: 220px;
+}
+
+.daqmx-clients-page .daqmx-write-result {
+  margin-top: 8px;
+  font-family: monospace;
+}
+
+.daqmx-clients-page .daqmx-channels-panel {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.daqmx-clients-page .daqmx-channels-header {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.daqmx-clients-page .daqmx-channels-header h3 {
+  margin: 0;
+}
+
+.daqmx-clients-page .daqmx-channels-header input[type="text"] {
+  min-width: 260px;
+}
+
+.daqmx-clients-page .daqmx-table-wrap {
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.daqmx-clients-page .daqmx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: "Courier New", monospace;
+  font-size: 13px;
+}
+
+.daqmx-clients-page .daqmx-table th,
+.daqmx-clients-page .daqmx-table td {
+  border: 1px solid #e4e7ec;
+  padding: 6px 8px;
+  text-align: left;
+  color: #111827;
+}
+
+.daqmx-clients-page .daqmx-table thead th {
+  background: #f2f4f7;
+  position: sticky;
+  top: 0;
+}
+
+@media (max-width: 900px) {
+  .daqmx-clients-page .daqmx-top-actions select {
+    min-width: 220px;
+  }
+
+  .daqmx-clients-page .daqmx-write-row input[type="text"] {
+    min-width: 160px;
+  }
+}

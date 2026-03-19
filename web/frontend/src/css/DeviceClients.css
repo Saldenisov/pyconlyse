@@ -1,0 +1,46 @@
+.device-clients-page {
+  padding: 24px;
+  color: #111827;
+}
+
+.device-clients-page .page-header {
+  margin-bottom: 16px;
+}
+
+.device-clients-page .page-header h1 {
+  margin: 0 0 8px 0;
+}
+
+.device-clients-page .page-header p {
+  margin: 0;
+  color: #475467;
+}
+
+.device-clients-page button,
+.device-clients-page input,
+.device-clients-page select,
+.device-clients-page textarea {
+  color: #111827;
+}
+
+.device-clients-page input,
+.device-clients-page select,
+.device-clients-page textarea {
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+}
+
+.device-clients-page table,
+.device-clients-page th,
+.device-clients-page td {
+  color: #111827;
+}
+
+.device-clients-page .page-footer {
+  margin-top: 20px;
+  color: #475467;
+}
+
+.device-clients-page .help-section h4 {
+  margin: 0 0 8px 0;
+}

@@ -36,12 +36,22 @@ device_api_module = importlib.import_module("device_api")
 class FakePSPDevice:
     def __init__(self):
         self.calls = []
+        self.pending = [
+            {"id": 1, "channel": "elyse/hf/attenuator/set", "value": 0.3, "status": "queued"},
+            {"id": 2, "channel": "elyse/modulator/power/set", "value": 1.1, "status": "queued"},
+        ]
 
     def state(self):
         return "ON"
 
     def get_command_list(self):
-        return ["get_group_history_json", "get_history_json"]
+        return [
+            "get_group_history_json",
+            "get_history_json",
+            "get_pending_commands_json",
+            "pop_pending_commands_json",
+            "acknowledge_command_json",
+        ]
 
     def command_inout(self, name, arg=None):
         self.calls.append((name, arg))
@@ -77,6 +87,19 @@ class FakePSPDevice:
 
         if str(name).lower() == "get_history_json":
             return json.dumps([])
+        if str(name).lower() == "get_pending_commands_json":
+            limit = int(arg or 0)
+            items = list(self.pending[-limit:]) if limit > 0 else list(self.pending)
+            return json.dumps({"pending_count": len(self.pending), "items": items})
+        if str(name).lower() == "pop_pending_commands_json":
+            limit = int(arg or 1)
+            popped = []
+            for _ in range(min(limit, len(self.pending))):
+                popped.append(self.pending.pop(0))
+            return json.dumps({"pending_count": len(self.pending), "items": popped})
+        if str(name).lower() == "acknowledge_command_json":
+            payload = json.loads(str(arg or "{}"))
+            return json.dumps({"success": True, "ack": payload})
         return json.dumps({})
 
 
@@ -136,3 +159,38 @@ def test_get_vacuum_group_history(monkeypatch):
 
     assert fake_device.calls
     assert fake_device.calls[0][0].lower() == "get_group_history_json"
+
+
+def test_pending_commands_and_ack(monkeypatch):
+    client, fake_device = _make_client(monkeypatch)
+
+    pending = client.get(
+        "/api/psp/device/manip%2Fgeneral%2FPSP/commands/pending?limit=1&pop=0"
+    )
+    pending_payload = pending.get_json()
+    assert pending.status_code == 200
+    assert pending_payload["success"] is True
+    assert pending_payload["pending_count"] == 2
+    assert len(pending_payload["items"]) == 1
+
+    popped = client.get(
+        "/api/psp/device/manip%2Fgeneral%2FPSP/commands/pending?limit=1&pop=1"
+    )
+    popped_payload = popped.get_json()
+    assert popped.status_code == 200
+    assert popped_payload["success"] is True
+    assert popped_payload["popped"] is True
+    assert popped_payload["pending_count"] == 1
+    assert len(popped_payload["items"]) == 1
+
+    ack = client.post(
+        "/api/psp/device/manip%2Fgeneral%2FPSP/commands/ack",
+        json={"id": 1, "ok": True, "message": "done"},
+    )
+    ack_payload = ack.get_json()
+    assert ack.status_code == 200
+    assert ack_payload["success"] is True
+    assert ack_payload["ack"]["id"] == 1
+
+    # Queue actually shrank in fake after pop
+    assert len(fake_device.pending) == 1

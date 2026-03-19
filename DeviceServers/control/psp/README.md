@@ -52,6 +52,39 @@ python DS_PSP.py 1_PSP
 - `clear_fifo("all")` or `clear_fifo("vacuum")`
   Clears all FIFO or one specific group.
 
+## Outbound control commands (stub write path)
+
+Because Python DS on macOS cannot directly write NI PSP variables, the server now
+acts as a command mailbox for LabVIEW:
+
+- Web/API writes command to DS queue
+- LabVIEW polls DS queue and executes command on PSP side
+- LabVIEW sends back ack/result
+
+Supported enqueue commands:
+
+- `write_variable_json('{"name":"elyse/hf/attenuator/set","value":0.25}')`
+- `set_variable_value_json(...)`
+- `set_channel_value_json(...)`
+- `write_variable("channel=value")` (fallback)
+
+Queue / ack commands:
+
+- `get_pending_commands_json(limit)`
+- `pop_pending_commands_json(limit)`
+- `acknowledge_command_json('{"id":123,"ok":true,"message":"done"}')`
+- `get_command_history_json(limit)`
+- `clear_pending_commands()`
+
+Related attributes:
+
+- `pending_commands_count`
+- `commands_received_total`
+- `commands_ack_total`
+- `last_command_json`
+- `last_command_ack_json`
+- `command_fifo_size` (RW)
+
 ## LabVIEW-side contract
 
 LabVIEW should call Tango command:

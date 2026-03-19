@@ -30,6 +30,7 @@ class DS_PSP(DS_General):
     _model_ = "PSP String Receiver"
     polling = 500
     _DEFAULT_FIFO_SIZE = 5000
+    _DEFAULT_COMMAND_FIFO_SIZE = 5000
     _KNOWN_GROUPS = (
         "timestamp",
         "cooling",
@@ -48,12 +49,22 @@ class DS_PSP(DS_General):
         self._messages_received = 0
         self._last_sender = ""
         self._last_error = ""
-        self._fifo_size = self._read_fifo_size_property()
+        self._fifo_size = self._read_int_property("fifo_size", self._DEFAULT_FIFO_SIZE, 1000)
         self._fifo_all = deque(maxlen=self._fifo_size)
         self._fifo_by_group = {
             group_name: deque(maxlen=self._fifo_size) for group_name in self._KNOWN_GROUPS
         }
         self._latest_by_channel = {}
+        self._command_fifo_size = self._read_int_property(
+            "command_fifo_size", self._DEFAULT_COMMAND_FIFO_SIZE, 100
+        )
+        self._pending_commands = deque(maxlen=self._command_fifo_size)
+        self._command_history = deque(maxlen=self._command_fifo_size)
+        self._command_seq = 0
+        self._commands_received_total = 0
+        self._commands_ack_total = 0
+        self._last_command = {}
+        self._last_command_ack = {}
         super().init_device()
         self.turn_on()
 
@@ -76,17 +87,16 @@ class DS_PSP(DS_General):
         self.set_state(DevState.OFF)
         return 0
 
-    def _read_fifo_size_property(self) -> int:
-        fallback = self._DEFAULT_FIFO_SIZE
+    def _read_int_property(self, prop_name: str, fallback: int, min_value: int) -> int:
         try:
-            props = self.get_device_properties("fifo_size")
-            raw = props.get("fifo_size")
+            props = self.get_device_properties(prop_name)
+            raw = props.get(prop_name)
             if isinstance(raw, list) and raw:
                 value = int(float(raw[0]))
-                return max(1000, value)
+                return max(min_value, value)
             if raw not in (None, ""):
                 value = int(float(raw))
-                return max(1000, value)
+                return max(min_value, value)
         except Exception:
             pass
         return fallback
@@ -183,6 +193,73 @@ class DS_PSP(DS_General):
                     items[-self._fifo_size :], maxlen=self._fifo_size
                 )
 
+    def _resize_command_fifo(self, new_size: int):
+        with self._lock:
+            old_pending = list(self._pending_commands)
+            old_history = list(self._command_history)
+            self._command_fifo_size = int(max(100, new_size))
+            self._pending_commands = deque(
+                old_pending[-self._command_fifo_size :], maxlen=self._command_fifo_size
+            )
+            self._command_history = deque(
+                old_history[-self._command_fifo_size :], maxlen=self._command_fifo_size
+            )
+
+    @staticmethod
+    def _coerce_write_payload(raw_payload):
+        if isinstance(raw_payload, dict):
+            payload = raw_payload
+        else:
+            payload = {}
+            try:
+                payload = json.loads(str(raw_payload))
+                if not isinstance(payload, dict):
+                    payload = {}
+            except Exception:
+                payload = {}
+
+        if not payload:
+            text = str(raw_payload or "").strip()
+            if "=" in text:
+                left, right = text.split("=", 1)
+                payload = {"name": left.strip(), "value": right.strip()}
+
+        channel = payload.get("channel")
+        if not channel:
+            channel = payload.get("name")
+        if not channel:
+            channel = payload.get("variable")
+
+        value = payload.get("value")
+        if value is None and "setpoint" in payload:
+            value = payload.get("setpoint")
+
+        channel = str(channel or "").strip()
+        return channel, value
+
+    def _enqueue_command(self, channel, value, origin="tango"):
+        channel = str(channel or "").strip()
+        if not channel:
+            raise ValueError("channel/name is required")
+
+        with self._lock:
+            self._command_seq += 1
+            cmd_id = int(self._command_seq)
+            now_ts = time.time()
+            command = {
+                "id": cmd_id,
+                "channel": channel,
+                "value": value,
+                "created_ts": now_ts,
+                "status": "queued",
+                "origin": str(origin),
+            }
+            self._pending_commands.append(command)
+            self._command_history.append(command)
+            self._commands_received_total += 1
+            self._last_command = command
+        return command
+
     @attribute(
         label="Last Payload",
         dtype=str,
@@ -242,6 +319,66 @@ class DS_PSP(DS_General):
         return json.dumps(self._snapshot_group_counts(), ensure_ascii=False)
 
     @attribute(
+        label="Command FIFO Size",
+        dtype=int,
+        access=AttrWriteType.READ_WRITE,
+        doc="Max commands kept in pending/history FIFO.",
+    )
+    def command_fifo_size(self):
+        return int(self._command_fifo_size)
+
+    def write_command_fifo_size(self, value):
+        self._resize_command_fifo(int(value))
+
+    @attribute(
+        label="Pending Commands Count",
+        dtype=int,
+        access=AttrWriteType.READ,
+        doc="Number of queued commands waiting for LabVIEW side.",
+    )
+    def pending_commands_count(self):
+        with self._lock:
+            return int(len(self._pending_commands))
+
+    @attribute(
+        label="Commands Received Total",
+        dtype=int,
+        access=AttrWriteType.READ,
+        doc="Total write commands accepted by this device server.",
+    )
+    def commands_received_total(self):
+        return int(self._commands_received_total)
+
+    @attribute(
+        label="Commands Ack Total",
+        dtype=int,
+        access=AttrWriteType.READ,
+        doc="Total commands acknowledged by LabVIEW bridge.",
+    )
+    def commands_ack_total(self):
+        return int(self._commands_ack_total)
+
+    @attribute(
+        label="Last Command JSON",
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="Last enqueued command payload.",
+    )
+    def last_command_json(self):
+        with self._lock:
+            return json.dumps(self._last_command or {}, ensure_ascii=False)
+
+    @attribute(
+        label="Last Command Ack JSON",
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="Last acknowledgment payload received from LabVIEW side.",
+    )
+    def last_command_ack_json(self):
+        with self._lock:
+            return json.dumps(self._last_command_ack or {}, ensure_ascii=False)
+
+    @attribute(
         label="Last Sender",
         dtype=str,
         access=AttrWriteType.READ_WRITE,
@@ -269,6 +406,9 @@ class DS_PSP(DS_General):
             "fifo_total_cached": len(self._fifo_all),
             "fifo_size": self._fifo_size,
             "group_counts": self._snapshot_group_counts(),
+            "pending_commands_count": len(self._pending_commands),
+            "commands_received_total": self._commands_received_total,
+            "commands_ack_total": self._commands_ack_total,
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -374,9 +514,108 @@ class DS_PSP(DS_General):
                 "fifo_size": self._fifo_size,
                 "cached": len(self._fifo_all),
                 "group_counts": self._snapshot_group_counts(),
+                "pending_commands_count": len(self._pending_commands),
+                "commands_received_total": self._commands_received_total,
+                "commands_ack_total": self._commands_ack_total,
                 "data": latest_data,
             }
         return json.dumps(payload, ensure_ascii=False)
+
+    @command(dtype_in=str, dtype_out=str)
+    def write_variable_json(self, payload: str):
+        """Queue outbound command (stub write path for LabVIEW bridge)."""
+        try:
+            channel, value = self._coerce_write_payload(payload)
+            command = self._enqueue_command(channel, value, origin="write_variable_json")
+            return json.dumps({"success": True, "queued": command}, ensure_ascii=False)
+        except Exception as exc:
+            return json.dumps({"success": False, "error": str(exc)}, ensure_ascii=False)
+
+    @command(dtype_in=str, dtype_out=str)
+    def set_variable_value_json(self, payload: str):
+        return self.write_variable_json(payload)
+
+    @command(dtype_in=str, dtype_out=str)
+    def set_channel_value_json(self, payload: str):
+        return self.write_variable_json(payload)
+
+    @command(dtype_in=str, dtype_out=str)
+    def write_variable(self, payload: str):
+        return self.write_variable_json(payload)
+
+    @command(dtype_in=str, dtype_out=str)
+    def set_variable_value(self, payload: str):
+        return self.write_variable_json(payload)
+
+    @command(dtype_in=str, dtype_out=str)
+    def set_channel_value(self, payload: str):
+        return self.write_variable_json(payload)
+
+    @command(dtype_in=int, dtype_out=str)
+    def get_pending_commands_json(self, limit: int):
+        max_items = max(0, int(limit))
+        with self._lock:
+            items = list(self._pending_commands)
+            if max_items > 0:
+                items = items[-max_items:]
+            payload = {
+                "pending_count": len(self._pending_commands),
+                "items": items,
+            }
+        return json.dumps(payload, ensure_ascii=False)
+
+    @command(dtype_in=int, dtype_out=str)
+    def pop_pending_commands_json(self, limit: int):
+        max_items = max(1, int(limit))
+        popped = []
+        with self._lock:
+            for _ in range(min(max_items, len(self._pending_commands))):
+                popped.append(self._pending_commands.popleft())
+            payload = {
+                "pending_count": len(self._pending_commands),
+                "items": popped,
+            }
+        return json.dumps(payload, ensure_ascii=False)
+
+    @command(dtype_in=str, dtype_out=str)
+    def acknowledge_command_json(self, payload: str):
+        try:
+            data = json.loads(str(payload or "{}"))
+            if not isinstance(data, dict):
+                data = {}
+        except Exception:
+            data = {}
+
+        cmd_id = int(data.get("id", 0) or 0)
+        now_ts = time.time()
+        ack = {
+            "id": cmd_id,
+            "ok": bool(data.get("ok", False)),
+            "status": str(data.get("status") or ("done" if data.get("ok") else "failed")),
+            "message": str(data.get("message") or ""),
+            "result": data.get("result"),
+            "acked_ts": now_ts,
+        }
+        with self._lock:
+            self._last_command_ack = ack
+            self._commands_ack_total += 1
+            self._command_history.append({"ack": ack, "type": "ack", "ts": now_ts})
+        return json.dumps({"success": True, "ack": ack}, ensure_ascii=False)
+
+    @command(dtype_in=int, dtype_out=str)
+    def get_command_history_json(self, limit: int):
+        max_items = max(0, int(limit))
+        with self._lock:
+            items = list(self._command_history)
+            if max_items > 0:
+                items = items[-max_items:]
+        return json.dumps(items, ensure_ascii=False)
+
+    @command(dtype_out=str)
+    def clear_pending_commands(self):
+        with self._lock:
+            self._pending_commands.clear()
+        return "OK"
 
     @command(dtype_in=str, dtype_out=str)
     def clear_fifo(self, group_name: str):

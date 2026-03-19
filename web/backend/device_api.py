@@ -1604,6 +1604,62 @@ def get_psp_group_history(device_name, group_name):
         return jsonify({'error': str(e), 'success': False}), 500
 
 
+@device_api.route('/api/psp/device/<path:device_name>/commands/pending', methods=['GET'])
+def get_psp_pending_commands(device_name):
+    """Read pending outbound commands queued for LabVIEW bridge."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        commands = _list_device_commands_lower(device)
+        limit = max(1, int(request.args.get('limit', 200)))
+        pop = _query_bool('pop', False)
+
+        cmd_name = commands.get('pop_pending_commands_json') if pop else commands.get('get_pending_commands_json')
+        if not cmd_name:
+            return jsonify({'error': 'Device does not support pending command queue', 'success': False}), 400
+
+        raw = device.command_inout(cmd_name, limit)
+        payload = _safe_json_loads(raw, default={})
+        if not isinstance(payload, dict):
+            payload = {}
+
+        items = payload.get('items', [])
+        if not isinstance(items, list):
+            items = []
+        pending_count = _as_int(payload.get('pending_count'), len(items))
+
+        return jsonify({
+            'device': device_name,
+            'pending_count': pending_count,
+            'items': make_json_safe(items),
+            'popped': bool(pop),
+            'success': True,
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/psp/device/<path:device_name>/commands/ack', methods=['POST'])
+def acknowledge_psp_command(device_name):
+    """Store LabVIEW execution acknowledgment for one queued command."""
+    try:
+        _maybe_require_auth()
+        device = DeviceManager.get_device(device_name)
+        commands = _list_device_commands_lower(device)
+        cmd_name = commands.get('acknowledge_command_json')
+        if not cmd_name:
+            return jsonify({'error': 'Device does not support command acknowledgments', 'success': False}), 400
+
+        data = request.get_json() or {}
+        raw = device.command_inout(cmd_name, json.dumps(data))
+        payload = _safe_json_loads(raw, default={})
+        if not isinstance(payload, dict):
+            payload = {'raw': make_json_safe(raw)}
+
+        return jsonify({'device': device_name, **make_json_safe(payload), 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
 @device_api.route('/api/daqmx/device/<path:device_name>/latest', methods=['GET'])
 def get_daqmx_latest(device_name):
     """Get latest DAQmx/PSP data payload and normalized channel list."""

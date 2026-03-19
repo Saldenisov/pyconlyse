@@ -49,6 +49,7 @@
   border-radius: 10px;
   background: #ffffff;
   padding: 10px;
+  color: #111827;
 }
 
 .vacuum-clients-page .vacuum-card h3 {
@@ -86,6 +87,7 @@
   border-radius: 10px;
   background: #ffffff;
   padding: 6px;
+  color: #111827;
 }
 
 .vacuum-clients-page .vacuum-plot {
@@ -109,6 +111,7 @@
   border: 1px solid #e4e7ec;
   padding: 5px 6px;
   text-align: left;
+  color: #111827;
 }
 
 .vacuum-clients-page .vacuum-table thead th {
