@@ -1,5 +1,11 @@
 from flask import Blueprint, jsonify, send_from_directory, current_app, g
-import sqlite3
+try:
+    import sqlite3
+except Exception:  # pragma: no cover - fallback for broken stdlib sqlite bindings
+    try:
+        import pysqlite3 as sqlite3
+    except Exception:
+        sqlite3 = None
 import socket
 import tango
 import os
@@ -34,6 +40,8 @@ DATABASE = os.path.join(BASE_DIR, '../pyconlyse.db')
 
 def get_db():
     """Get SQLite database connection (if needed elsewhere)"""
+    if sqlite3 is None:
+        raise RuntimeError("sqlite3 module is not available in this runtime")
     db_conn = getattr(g, '_database', None)
     if db_conn is None:
         db_conn = g._database = sqlite3.connect(DATABASE)
@@ -89,6 +97,32 @@ def check_tango_device(address):
         print(f"Error checking device {address}: {e}")
         return "DOWN"
 
+
+def _normalize_state_label(state):
+    if isinstance(state, str):
+        return state
+
+    label = str(state)
+    if "." in label:
+        label = label.split(".")[-1]
+    return label
+
+
+def _starter_host_name(starter_name):
+    parts = str(starter_name).split("/")
+    return parts[-1] if parts else str(starter_name)
+
+
+def _starter_server_lists(starter_name):
+    try:
+        starter = tango.DeviceProxy(starter_name)
+        running = list(starter.command_inout('DevGetRunningServers', False))
+        stopped = list(starter.command_inout('DevGetStopServers', False))
+    except Exception as e:
+        print(f"Error retrieving starter server lists for {starter_name}: {e}")
+        return [], []
+    return running, stopped
+
 @routes.route('/api/tango_status')
 def tango_status():
     """Check the status of the Tango database and Tango starter devices"""
@@ -112,8 +146,10 @@ def tango_status():
         print("No Tango Database connection available.")
 
     tango_statuses = []
+    starters_payload = []
     for starter in starters:
         state = check_tango_device(starter)
+        state_label = _normalize_state_label(state)
         is_running = state in (tango.DevState.ON, tango.DevState.MOVING, tango.DevState.STANDBY)
         if is_running:
             downtime['tango'][starter] = {'status': True, 'last_checked': now, 'downtime_start': None}
@@ -125,12 +161,27 @@ def tango_status():
         downtime_seconds = 0
         if downtime['tango'][starter]['downtime_start']:
             downtime_seconds = (now - downtime['tango'][starter]['downtime_start']).total_seconds()
-        tango_statuses.append((starter, starter, is_running, downtime_seconds))
+        starter_host = _starter_host_name(starter)
+        running_servers, stopped_servers = _starter_server_lists(starter)
+        tango_statuses.append((starter, starter_host, state_label, downtime_seconds))
+        starters_payload.append({
+            'name': starter,
+            'host': starter_host,
+            'state': state_label,
+            'healthy': is_running,
+            'downtime_seconds': downtime_seconds,
+            'running_servers': running_servers,
+            'running_count': len(running_servers),
+            'stopped_servers': stopped_servers,
+            'stopped_count': len(stopped_servers),
+        })
 
     return jsonify(
         mysql_status=tango_db_status,
         mysql_downtime_seconds=tango_db_downtime_seconds,
-        tango_statuses=tango_statuses
+        tango_statuses=tango_statuses,
+        starters=starters_payload,
+        tango_host=os.environ.get("TANGO_HOST", ""),
     )
 
 @routes.route('/api/jive/classes')
@@ -276,4 +327,3 @@ def jive_device_details(device_name):
 # you can add additional /api/ endpoints.
 
 # Catch-all route handling is done in app.py
-
