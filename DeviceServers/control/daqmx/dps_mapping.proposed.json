@@ -1,0 +1,238 @@
+{
+  "card": "DPS",
+  "purpose": "Raw-to-canonical mapping for DPS based on the visible companion-state panel. Raw labels are preserved exactly as they arrive from the live dump, including mojibake when present.",
+  "entries": [
+    {
+      "raw_name": "Marche refroidissement X",
+      "canonical_name": "elyse/dps/cooling/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start cooling"
+    },
+    {
+      "raw_name": "Arret refroidissement X",
+      "canonical_name": "elyse/dps/cooling/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop cooling"
+    },
+    {
+      "raw_name": "X Marche GENERAL Mod.",
+      "canonical_name": "elyse/dps/modulator_general/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start general modulator"
+    },
+    {
+      "raw_name": "X ArrÃªt GENERAL Mod.",
+      "canonical_name": "elyse/dps/modulator_general/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop general modulator"
+    },
+    {
+      "raw_name": "X Marche CHAUFFAGE Mod.",
+      "canonical_name": "elyse/dps/modulator_heating/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start modulator heating"
+    },
+    {
+      "raw_name": "X ArrÃªt CHAUFFAGE Mod.",
+      "canonical_name": "elyse/dps/modulator_heating/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop modulator heating"
+    },
+    {
+      "raw_name": "X Marche PREMA Mod. ",
+      "canonical_name": "elyse/dps/modulator_prema/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start modulator prema"
+    },
+    {
+      "raw_name": "X ArrÃªt PREMA Mod.",
+      "canonical_name": "elyse/dps/modulator_prema/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop modulator prema"
+    },
+    {
+      "raw_name": "X Marche RELAIS HT Mod.",
+      "canonical_name": "elyse/dps/modulator_relay_ht/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start modulator HT relay"
+    },
+    {
+      "raw_name": "X ArrÃªt RELAIS HT Mod.",
+      "canonical_name": "elyse/dps/modulator_relay_ht/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop modulator HT relay"
+    },
+    {
+      "raw_name": "X Marche FOCALE Mod.",
+      "canonical_name": "elyse/dps/modulator_focale/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start modulator focale"
+    },
+    {
+      "raw_name": "X ArrÃªt FOCALE Mod.",
+      "canonical_name": "elyse/dps/modulator_focale/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop modulator focale"
+    },
+    {
+      "raw_name": "X RESET Mod.",
+      "canonical_name": "elyse/dps/modulator/reset",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: reset modulator"
+    },
+    {
+      "raw_name": "X Marche Att DÃ©ph",
+      "canonical_name": "elyse/dps/hf_att_deph/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start attenuator/dephaser"
+    },
+    {
+      "raw_name": "X Arret Att DÃ©ph",
+      "canonical_name": "elyse/dps/hf_att_deph/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop attenuator/dephaser"
+    },
+    {
+      "raw_name": "X Marche alimentation HT",
+      "canonical_name": "elyse/dps/ht_power/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start HT power"
+    },
+    {
+      "raw_name": "X Reset alimentation HT",
+      "canonical_name": "elyse/dps/ht_power/reset",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: reset HT power"
+    },
+    {
+      "raw_name": "X ArrÃªt alimentation HT",
+      "canonical_name": "elyse/dps/ht_power/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop HT power"
+    },
+    {
+      "raw_name": "X Marche impulsion mod",
+      "canonical_name": "elyse/dps/modulator_impulse/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start modulator pulse"
+    },
+    {
+      "raw_name": "X Arret impulsion mod",
+      "canonical_name": "elyse/dps/modulator_impulse/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop modulator pulse"
+    },
+    {
+      "raw_name": "X Marche alimentation aimant",
+      "canonical_name": "elyse/dps/magnets_power/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: start magnets power"
+    },
+    {
+      "raw_name": "X Alimentation aimant = 0V",
+      "canonical_name": "elyse/dps/magnets_power/zero_v",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: magnets power equals 0V"
+    },
+    {
+      "raw_name": "X Alimentation aimant = PT",
+      "canonical_name": "elyse/dps/magnets_power/pt",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: magnets power equals PT"
+    },
+    {
+      "raw_name": "X ArrÃªt alimentation aimant",
+      "canonical_name": "elyse/dps/magnets_power/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS companion state: stop magnets power"
+    },
+    {
+      "raw_name": "X Tempo 1s",
+      "canonical_name": "elyse/dps/timing/1s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS timing state 1s"
+    },
+    {
+      "raw_name": "X Tempo 5s",
+      "canonical_name": "elyse/dps/timing/5s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS timing state 5s"
+    },
+    {
+      "raw_name": "X Tempo 30s",
+      "canonical_name": "elyse/dps/timing/30s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS timing state 30s"
+    },
+    {
+      "raw_name": "X FREQ. ELYSE",
+      "canonical_name": "elyse/dps/freq_elyse",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS frequency state for ELYSE"
+    },
+    {
+      "raw_name": "Libre X",
+      "canonical_name": "elyse/dps/free",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPS free companion state"
+    }
+  ]
+}

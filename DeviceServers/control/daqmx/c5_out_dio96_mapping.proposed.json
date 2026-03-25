@@ -1,0 +1,326 @@
+{
+  "card": "C5_OUT_DIO96",
+  "purpose": "Raw-to-canonical mapping for C5_OUT_DIO96 based on the full visible inventory screenshots. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 CPB0 b81 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "01 CPB1 b79 Alimentation moteur",
+      "canonical_name": "elyse/motor/power",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "motor power command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "02 CPB2 b77 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "03 CPB3 b75 M/A CamÃ©ra chambre de prÃ©paration",
+      "canonical_name": "elyse/cameras/preparation_chamber/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "preparation chamber camera toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "04 CPB4 b73 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "05 CPB5 b71 M/A CamÃ©ra Miroir",
+      "canonical_name": "elyse/cameras/mirror/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "mirror camera toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "06 CPB6 b69 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "07 CPB7 b67 M/A Eclairage Ecran 1",
+      "canonical_name": "elyse/screens/1/light/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 1 light toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "08 CPC0 b65 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "09 CPC1 b63 M/A CamÃ©ra Ecran 1",
+      "canonical_name": "elyse/cameras/screen1/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 1 camera toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "10 CPC2 b61 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "11 CPC3 b59 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "12 CPC4 b57 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "13 CPC5 b55 M/A Eclairage Ecran 2",
+      "canonical_name": "elyse/screens/2/light/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 2 light toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "14 CPC6 b53 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "15 CPC7 b51 M/A CamÃ©ra Ecran 2",
+      "canonical_name": "elyse/cameras/screen2/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 2 camera toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "16 DPA0 b98 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "17 DPA1 b96 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "18 DPA2 b94 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "19 DPA3 b92 M/A Eclairage Ecran 3",
+      "canonical_name": "elyse/screens/3/light/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 3 light toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "20 DPA4 b90 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "21 DPA5 b88 M/A CamÃ©ra Ecran 3",
+      "canonical_name": "elyse/cameras/screen3/toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screen 3 camera toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "22 DPA6 b86 Cmd Miroir LASER EN",
+      "canonical_name": "elyse/laser/mirror/in",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "laser mirror insert command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "23 DPA7 b84 Cmd Faraday 1 EN",
+      "canonical_name": "elyse/faraday/1/in_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 1 insert command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "24 DPB0 b82 Cmd Faraday 2 EN",
+      "canonical_name": "elyse/faraday/2/in_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 2 insert command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "25 DPB1 b80 Cmd Faraday 3 EN",
+      "canonical_name": "elyse/faraday/3/in_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 3 insert command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "26 DPB2 b78 Cmd Miroir LASER HORS",
+      "canonical_name": "elyse/laser/mirror/out",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "laser mirror retract command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "27 DPB3 b76 M/A alimentation Fente H",
+      "canonical_name": "elyse/slit/h/power_toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "horizontal slit power toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "28 DPB4 b74 Cmd Faraday 1 HORS",
+      "canonical_name": "elyse/faraday/1/out_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 1 retract command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "29 DPB5 b72 Cmd Faraday 2 HORS",
+      "canonical_name": "elyse/faraday/2/out_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 2 retract command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "30 DPB6 b70 Cmd Faraday 3 HORS",
+      "canonical_name": "elyse/faraday/3/out_cmd",
+      "functional_group": "diagnostics",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "Faraday 3 retract command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "31 DPB7 b68 M/A Alimentation Ecrans",
+      "canonical_name": "elyse/screens/power_toggle",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "screens power toggle from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "32 DPC0 b66 LASER Marche",
+      "canonical_name": "elyse/laser/start",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "laser start command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "33 DPC1 b64 LASER ArrÃªt",
+      "canonical_name": "elyse/laser/stop",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "laser stop command from C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "34 DPC2 b62 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "35 DPC3 b60 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "36 DPC4 b58 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "37 DPC5 b56 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "38 DPC6 b54 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    },
+    {
+      "raw_name": "39 DPC7 b52 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": "reserve entry on C5_OUT_DIO96"
+    }
+  ]
+}

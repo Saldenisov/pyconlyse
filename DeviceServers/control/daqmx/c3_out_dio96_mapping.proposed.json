@@ -1,0 +1,96 @@
+{
+  "card": "C3_OUT_DIO96",
+  "purpose": "Partial raw-to-canonical mapping for C3_OUT_DIO96 based on the visible upper portion of the panel. Raw labels are preserved; canonical names are internal Python DS names.",
+  "partial": true,
+  "visible_range": "00..10",
+  "entries": [
+    {
+      "raw_name": "00 CPB0 b81 Marche Reffroidissement Canon",
+      "canonical_name": "elyse/cooling/canon/start",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from partial C3_OUT_DIO96 panel; canon cooling start command"
+    },
+    {
+      "raw_name": "01 CPB1 b79 ArrÃªt Reffroidissement Canon",
+      "canonical_name": null,
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "visible in partial C3_OUT_DIO96 panel"
+    },
+    {
+      "raw_name": "02 CPB2 b77 RAZ Reffroidissement Canon",
+      "canonical_name": "elyse/cooling/canon/reset",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from partial C3_OUT_DIO96 panel; canon cooling reset command"
+    },
+    {
+      "raw_name": "03 CPB3 b75 Marche Reffroidissement Section",
+      "canonical_name": "elyse/cooling/section/start",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from partial C3_OUT_DIO96 panel; section cooling start command"
+    },
+    {
+      "raw_name": "04 CPB4 b73 ArrÃªt Reffroidissement Section",
+      "canonical_name": null,
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "visible in partial C3_OUT_DIO96 panel"
+    },
+    {
+      "raw_name": "05 CPB5 b71 RAZ Reffroidissement Section",
+      "canonical_name": "elyse/cooling/section/reset",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from partial C3_OUT_DIO96 panel; section cooling reset command"
+    },
+    {
+      "raw_name": "06 CPB6 b69 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C3_OUT_DIO96"
+    },
+    {
+      "raw_name": "07 CPB7 b67 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C3_OUT_DIO96"
+    },
+    {
+      "raw_name": "08 CPC0 b65 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C3_OUT_DIO96"
+    },
+    {
+      "raw_name": "09 CPC1 b63 Marche Triplet 1-1",
+      "canonical_name": "elyse/magnets/triplet1-1/start",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from partial C3_OUT_DIO96 panel; likely run/start command for triplet1-1"
+    },
+    {
+      "raw_name": "10 CPC2 b61 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "reserve entry on C3_OUT_DIO96"
+    }
+  ]
+}

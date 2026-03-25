@@ -1,0 +1,102 @@
+{
+  "card": "EPC",
+  "purpose": "Raw-to-canonical mapping for EPC based on the visible state panel. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "TIR OK",
+      "canonical_name": "elyse/epc/tir/ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; tir ok"
+    },
+    {
+      "raw_name": "PRETIR OK",
+      "canonical_name": "elyse/epc/pretir/ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; pretir ok"
+    },
+    {
+      "raw_name": "VEILLE OK",
+      "canonical_name": "elyse/epc/veille/ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; veille ok"
+    },
+    {
+      "raw_name": "ARRET OK",
+      "canonical_name": "elyse/epc/arret/ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; arret ok"
+    },
+    {
+      "raw_name": "ARRET <> VEILLE",
+      "canonical_name": "elyse/epc/arret_to_veille",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC transition state from panel; arret to veille"
+    },
+    {
+      "raw_name": "TIR ED",
+      "canonical_name": "elyse/epc/tir/ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; tir ed"
+    },
+    {
+      "raw_name": "PRETIR ED",
+      "canonical_name": "elyse/epc/pretir/ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; pretir ed"
+    },
+    {
+      "raw_name": "VEILLE ED",
+      "canonical_name": "elyse/epc/veille/ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; veille ed"
+    },
+    {
+      "raw_name": "VEILLE ED 2",
+      "canonical_name": "elyse/epc/veille/ed2",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC state from panel; veille ed 2"
+    },
+    {
+      "raw_name": "PRETIR <> VEILLE",
+      "canonical_name": "elyse/epc/pretir_to_veille",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC transition state from panel; pretir to veille"
+    },
+    {
+      "raw_name": "TIR <> PRETIR",
+      "canonical_name": "elyse/epc/tir_to_pretir",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPC transition state from panel; tir to pretir"
+    },
+    {
+      "raw_name": "Procédure combiné EC",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": null,
+      "notes": "visible on panel but not currently present as explicit raw key in clean live dump"
+    }
+  ]
+}

@@ -1,0 +1,262 @@
+{
+  "card": "C4_OUT_DIO96",
+  "purpose": "Raw-to-canonical mapping for the visible C4_OUT_DIO96 panel. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 CPC0 b65 Marche modulateur Bas Niveau",
+      "canonical_name": "elyse/modulator/low_level/start",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; low-level modulator start command"
+    },
+    {
+      "raw_name": "01 CPC1 b63 ArrÃªt modulateur Bas Niveau",
+      "canonical_name": "elyse/modulator/low_level/stop",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; low-level modulator stop command"
+    },
+    {
+      "raw_name": "02 CPC2 b61 RAZ modulateur Bas Niveau",
+      "canonical_name": "elyse/modulator/low_level/reset",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; low-level modulator reset command"
+    },
+    {
+      "raw_name": "03 CPC3 b59 Marche Chauffage",
+      "canonical_name": "elyse/modulator/heating/start",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; heating start command"
+    },
+    {
+      "raw_name": "04 CPC4 b57 ArrÃªt Chauffage",
+      "canonical_name": "elyse/modulator/heating/stop",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; heating stop command"
+    },
+    {
+      "raw_name": "05 CPC5 b55 Marche prÃ©magnÃ©tisation",
+      "canonical_name": "elyse/modulator/paramagnetization/start",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; premagnetization start command"
+    },
+    {
+      "raw_name": "06 CPC6 b53 ArrÃªt prÃ©magnÃ©tisation",
+      "canonical_name": "elyse/modulator/paramagnetization/stop",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; premagnetization stop command"
+    },
+    {
+      "raw_name": "07 CPC7 b51 Marche focale Klystron",
+      "canonical_name": "elyse/modulator/klystron_focale/start",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; klystron focale start command"
+    },
+    {
+      "raw_name": "08 DPA0 b98 ArrÃªt focale Klystron",
+      "canonical_name": "elyse/modulator/klystron_focale/stop",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; klystron focale stop command"
+    },
+    {
+      "raw_name": "09 DPA1 b96 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "10 DPA2 b94 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "11 DPA3 b92 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "12 DPA4 b90 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "13 DPA5 b88 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "14 DPA6 b86 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "15 DPA7 b84 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "16 DPB0 b82 Marche relais HT 1",
+      "canonical_name": "elyse/HT/relay1/start",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; HT relay 1 start command"
+    },
+    {
+      "raw_name": "17 DPB1 b80 ArrÃªt relais HT 1",
+      "canonical_name": "elyse/HT/relay1/stop",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; HT relay 1 stop command"
+    },
+    {
+      "raw_name": "18 DPB2 b78 Marche alimentation HT",
+      "canonical_name": "elyse/HT/power/start",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; HT power start command"
+    },
+    {
+      "raw_name": "19 DPB3 b76 ArrÃªt alimentation HT",
+      "canonical_name": "elyse/HT/power/stop",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; HT power stop command"
+    },
+    {
+      "raw_name": "20 DPB4 b74 RAZ alimentation HT",
+      "canonical_name": "elyse/HT/power/reset",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; HT power reset command"
+    },
+    {
+      "raw_name": "21 DPB5 b72 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "22 DPB6 b70 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "23 DPB7 b68 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "24 DPC0 b66 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "25 DPC1 b64 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "26 DPC2 b62 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "27 DPC3 b60 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "28 DPC4 b58 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "29 DPC5 b56 M/A alimentation Att. et Deph.",
+      "canonical_name": "elyse/HF/attenuator_dephaser/power_toggle",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from full visible C4_OUT_DIO96 panel; combined power toggle for attenuator and dephaser"
+    },
+    {
+      "raw_name": "30 DPC6 b54 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    },
+    {
+      "raw_name": "31 DPC7 b52 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": null,
+      "live_value": 0.0,
+      "notes": ""
+    }
+  ]
+}

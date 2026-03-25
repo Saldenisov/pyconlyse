@@ -1,0 +1,89 @@
+{
+  "card": "C6NI6703",
+  "purpose": "Raw-to-canonical mapping for C6NI6703 based on the full inventory screenshot. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 OUT00 b01 Cmd Guidage H1",
+      "canonical_name": "elyse/magnets/Cor_H1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "01 OUT01 b05 Cmd Guidage V1",
+      "canonical_name": "elyse/magnets/Cor_V1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "02 OUT02 b09 Cmd Guidage H2",
+      "canonical_name": "elyse/magnets/Cor_H2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "03 OUT03 b13 Cmd Guidage V2",
+      "canonical_name": "elyse/magnets/Cor_V2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "04 OUT04 b17 Cmd Guidage H3",
+      "canonical_name": "elyse/magnets/Cor_H3/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "05 OUT05 b21 Cmd Guidage V3",
+      "canonical_name": "elyse/magnets/Cor_V3/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "06 OUT06 b25 Cmd Guidage H4",
+      "canonical_name": "elyse/magnets/Cor_H4/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "07 OUT07 b29 Cmd Guidage V4",
+      "canonical_name": "elyse/magnets/Cor_V4/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    },
+    {
+      "raw_name": "08 OUT08 b33 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C6NI6703; Cor_H5 remains unresolved and is not assigned to this raw channel"
+    },
+    {
+      "raw_name": "09 OUT09 b37 Cmd Guidage V5",
+      "canonical_name": "elyse/magnets/Cor_V5/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C6NI6703 full inventory"
+    }
+  ],
+  "unresolved": [
+    "elyse/magnets/Cor_H5/set_value"
+  ]
+}

@@ -1,0 +1,86 @@
+{
+  "card": "C7NI6703",
+  "purpose": "Raw-to-canonical mapping for C7NI6703 based on the full inventory screenshot. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 OUT00 b01 Cmd I Triplet 1-1",
+      "canonical_name": "elyse/magnets/triplet1-1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    },
+    {
+      "raw_name": "01 OUT01 b05 Cmd I Triplet 1-2",
+      "canonical_name": "elyse/magnets/triplet1-2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    },
+    {
+      "raw_name": "02 OUT02 b09 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C7NI6703"
+    },
+    {
+      "raw_name": "03 OUT03 b13 Cmd I Triplet 2-1",
+      "canonical_name": "elyse/magnets/triplet2-1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    },
+    {
+      "raw_name": "04 OUT04 b17 Cmd I Triplet 2-2",
+      "canonical_name": "elyse/magnets/triplet2-2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    },
+    {
+      "raw_name": "05 OUT05 b21 Cmd I SolÃ©noÃ¯de",
+      "canonical_name": "elyse/magnets/focale/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory; focale implemented via solenoid current command"
+    },
+    {
+      "raw_name": "06 OUT06 b25 Cmd I Quad 1",
+      "canonical_name": "elyse/magnets/qudrupole1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory; spelling preserved as already used in mapping"
+    },
+    {
+      "raw_name": "07 OUT07 b29 Cmd I Quad 2",
+      "canonical_name": "elyse/magnets/qudrupole2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory; spelling preserved as already used in mapping"
+    },
+    {
+      "raw_name": "08 OUT08 b33 Cmd I DipÃ´le 1",
+      "canonical_name": "elyse/magnets/dipole1/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    },
+    {
+      "raw_name": "09 OUT09 b37 Cmd I DipÃ´le 2",
+      "canonical_name": "elyse/magnets/dipole2/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from C7NI6703 full inventory"
+    }
+  ]
+}

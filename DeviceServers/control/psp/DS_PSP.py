@@ -22,6 +22,8 @@ try:
 except ModuleNotFoundError:
     from DeviceServers.base.general import DS_General
 
+from DeviceServers.control.daqmx.supervision_channel_mapper import SupervisionChannelMapper
+
 
 class DS_PSP(DS_General):
     """PSP receiver DS: stores latest payload and grouped FIFO history."""
@@ -65,6 +67,8 @@ class DS_PSP(DS_General):
         self._commands_ack_total = 0
         self._last_command = {}
         self._last_command_ack = {}
+        self._channel_mapper = SupervisionChannelMapper()
+        self._channel_mapper_stats = self._channel_mapper.stats()
         super().init_device()
         self.turn_on()
 
@@ -165,15 +169,27 @@ class DS_PSP(DS_General):
 
     def _build_message(self, payload: str, recv_ts: float):
         parsed = self._parse_payload(payload)
+        mapping = self._channel_mapper.resolve(parsed["channel"])
+        canonical_channel = str(mapping.get("canonical_name") or parsed["channel"] or "")
+
+        channel_parts = [part for part in canonical_channel.split("/") if part]
+        canonical_group_raw = channel_parts[1].lower() if len(channel_parts) >= 2 else ""
+        group = self._normalize_group_name(canonical_group_raw) if canonical_group_raw else parsed["group"]
+
         return {
             "id": int(self._messages_received),
             "payload": str(payload),
             "recv_ts": float(recv_ts),
-            "channel": parsed["channel"],
-            "group": parsed["group"],
+            "channel": canonical_channel,
+            "raw_channel": str(parsed["channel"]),
+            "normalized_raw_channel": str(mapping.get("normalized_raw_name") or ""),
+            "channel_match_key": str(mapping.get("match_key") or ""),
+            "group": group,
             "value_raw": parsed["value_raw"],
             "value": parsed["value"],
             "source_ts": parsed["source_ts"],
+            "mapped": bool(mapping.get("mapped")),
+            "mapping_match_type": str(mapping.get("match_type") or "unmapped"),
         }
 
     def _snapshot_group_counts(self):
@@ -409,6 +425,7 @@ class DS_PSP(DS_General):
             "pending_commands_count": len(self._pending_commands),
             "commands_received_total": self._commands_received_total,
             "commands_ack_total": self._commands_ack_total,
+            "channel_mapper": self._channel_mapper_stats,
         }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -466,6 +483,7 @@ class DS_PSP(DS_General):
                 "counts": self._snapshot_group_counts(),
                 "fifo_size": self._fifo_size,
                 "messages_received": self._messages_received,
+                "channel_mapper": self._channel_mapper_stats,
             }
         return json.dumps(payload, ensure_ascii=False)
 
@@ -517,6 +535,7 @@ class DS_PSP(DS_General):
                 "pending_commands_count": len(self._pending_commands),
                 "commands_received_total": self._commands_received_total,
                 "commands_ack_total": self._commands_ack_total,
+                "channel_mapper": self._channel_mapper_stats,
                 "data": latest_data,
             }
         return json.dumps(payload, ensure_ascii=False)

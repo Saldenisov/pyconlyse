@@ -1,0 +1,383 @@
+{
+  "card": "C2NI6071E",
+  "panel_title": "C2NI6071E 2",
+  "purpose": "Readback-side raw-to-canonical mapping for C2NI6071E based on the full inventory screenshot. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 ACH00 b03 Mes V Chauffage Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/voltages/heating/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 0.0160546875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "01 ACH01 b05 Mes V Chauffage Klystron",
+      "canonical_name": "elyse/modulator/klystron/voltages/heating/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 0.00703125,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "02 ACH02 b07 Mes I D'Qing",
+      "canonical_name": "elyse/modulator/deqing/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 0.0009765625,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "04 ACH04 b11 Mes I PrÃ©magnÃ©tisation",
+      "canonical_name": "elyse/modulator/paramagnetization/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.02830078125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "05 ACH05 b13 Mes I Focalisateur 1",
+      "canonical_name": "elyse/modulator/focale1/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.00591796875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "06 ACH06 b15 Mes I Focalisateur 3",
+      "canonical_name": "elyse/modulator/focale3/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.019873046875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "07 ACH07 b17 Mes V alimentation HT",
+      "canonical_name": "elyse/HT/voltage/value",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 0.00357421875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "08 ACH08 b04 Mes I Chauffage Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/currents/heating/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 0.082421875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "09 ACH09 b06 Mes I  Chauffage Klystron",
+      "canonical_name": "elyse/modulator/klystron/currents/heating/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 0.0462890625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "10 ACH10 b08 Mes I RÃ©servoir Thyratron",
+      "canonical_name": "elyse/modulator/thyratron_reservoir/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.019140625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "11 ACH11 b10 Mes I Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/currents/power/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.00078125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "12 ACH12 b12 Mes I fin de Ligne",
+      "canonical_name": "elyse/modulator/line_end/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.078125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "13 ACH13 b14 Mes I Focalisateur 2",
+      "canonical_name": "elyse/modulator/focale2/current/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.010791015625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "15 ACH15 b18 Mes I alimentation HT",
+      "canonical_name": "elyse/HT/current/value",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": -0.00021484375,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "16 ACH16 b51 Mes V Klystron",
+      "canonical_name": "elyse/modulator/klystron/voltages/power/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -3.486328125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "17 ACH17 b53 Mes V LAR",
+      "canonical_name": "elyse/modulator/LAR/voltage/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.067075195313,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "18 ACH18 b55 Mes HF directe Canon",
+      "canonical_name": "elyse/HF/canon/value",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": -0.01171875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "19 ACH19 b57 Mes I Faraday 1",
+      "canonical_name": "elyse/faraday/1/current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.02197265625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "20 ACH20 b59 Mes I Faraday 3",
+      "canonical_name": "elyse/faraday/3/current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": -0.01025390625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "21 ACH21 b61 Mes WCM 1B",
+      "canonical_name": "elyse/wcm/1b/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.0146484375,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "22 ACH22 b63 Mes WCM 1D",
+      "canonical_name": "elyse/wcm/1d/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.00439453125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "23 ACH23 b65 Mes WCM 2B",
+      "canonical_name": "elyse/wcm/2b/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.130055573574,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "24 ACH24 b52 Mes I Klystron",
+      "canonical_name": "elyse/modulator/klystron/currents/power/value",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": -0.322265625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "26 ACH26 b56 Mes HF directe Section",
+      "canonical_name": "elyse/HF/section/value",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 0.025,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "27 ACH27 b58 Mes I Faraday 2",
+      "canonical_name": "elyse/faraday/2/current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.09375,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "28 ACH28 b60 Mes WCM 1H",
+      "canonical_name": "elyse/wcm/1h/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.01806640625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "29 ACH29 b62 Mes WCM 1G",
+      "canonical_name": "elyse/wcm/1g/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.03515625,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "30 ACH30 b64 Mes WCM 2H",
+      "canonical_name": "elyse/wcm/2h/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.130994575977,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "31 ACH31 b66 Mes WCM 2G",
+      "canonical_name": "elyse/wcm/2g/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.130055573574,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "32 ACH32 b67 Mes WCM 2D",
+      "canonical_name": "elyse/wcm/2d/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.130994575977,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "33 ACH33 b69 Mes WCM 4",
+      "canonical_name": "elyse/wcm/4/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.130330978877,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "34 ACH34 b71 Mes Fente H position mors D",
+      "canonical_name": "elyse/slit/h/jaw_d/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 2.4734609375,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "35 ACH35 b73 Mes Fente V position mors H",
+      "canonical_name": "elyse/slit/v/jaw_h/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 26.268676757812,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "36 ACH36 b77 Mes position Ecran 1",
+      "canonical_name": "elyse/screens/1/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 21.009457519531,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "37 ACH37 b79 Mes position Ecran 3",
+      "canonical_name": "elyse/screens/3/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 21.323626953125,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "38 ACH38 b81 Mes I obcs Faraday 2",
+      "canonical_name": "elyse/faraday/2/obcs_current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 4.15234375,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "40 ACH40 b68 Mes WCM 3",
+      "canonical_name": "elyse/wcm/3/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": -15.71316043293,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "41 ACH41 b70 Mes WCM 5",
+      "canonical_name": "elyse/wcm/5/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 0.390330966074,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "42 ACH42 b72 Mes Fente H position mors G",
+      "canonical_name": "elyse/slit/h/jaw_g/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": -2.548263183594,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "43 ACH43 b74 Mes Fente V position mors B",
+      "canonical_name": "elyse/slit/v/jaw_b/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 1.091674804687,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "44 ACH44 b78 Mes position Ecran 2",
+      "canonical_name": "elyse/screens/2/position/value",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 21.338587402344,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "45 ACH45 b80 Mes I obcs Faraday 1",
+      "canonical_name": "elyse/faraday/1/obcs_current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 4.2060546875,
+      "notes": "confirmed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "46 ACH46 b82 Mes I obcs Faraday 3",
+      "canonical_name": "elyse/faraday/3/obcs_current/value",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "live_value": 4.1884765625,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "47 ACH47 b84 Mes position Miroir X",
+      "canonical_name": "elyse/laser/mirror/x/position/value",
+      "functional_group": "laser",
+      "direction": "read",
+      "live_value": 19.2392578125,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "48 ACH48 b85 Mes position Miroir Y",
+      "canonical_name": "elyse/laser/mirror/y/position/value",
+      "functional_group": "laser",
+      "direction": "read",
+      "live_value": 18.67236328125,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "49 ACH49 b87 Signal laser 2",
+      "canonical_name": "elyse/laser/signal2/value",
+      "functional_group": "laser",
+      "direction": "read",
+      "live_value": 41.81640625,
+      "notes": "proposed from C2NI6071E full inventory"
+    },
+    {
+      "raw_name": "56 ACH56 b86 Signal laser 1",
+      "canonical_name": "elyse/laser/signal1/value",
+      "functional_group": "laser",
+      "direction": "read",
+      "live_value": 41.865234375,
+      "notes": "proposed from C2NI6071E full inventory"
+    }
+  ]
+}

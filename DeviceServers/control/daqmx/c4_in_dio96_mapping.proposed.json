@@ -1,0 +1,518 @@
+{
+  "card": "C4_IN_DIO96",
+  "purpose": "Raw-to-canonical mapping for C4_IN_DIO96 based on the full inventory screenshots. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 APA0 b47 Eau corps Klystron",
+      "canonical_name": "elyse/modulator/klystron/body_water",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron body water status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "01 APA1 b45 Eau collecteur Klystron",
+      "canonical_name": "elyse/modulator/klystron/collector_water",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron collector water status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "02 APA2 b43 Eau cuve Klystron",
+      "canonical_name": "elyse/modulator/klystron/tank_water",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron tank water status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "03 APA3 b41 Vide Klystron",
+      "canonical_name": "elyse/modulator/klystron/vacuum_ok",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron vacuum status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "04 APA4 b39 Ventilation Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/ventilation",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron ventilation status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "05 APA5 b37 Niveau d'huile cuve Klystron",
+      "canonical_name": "elyse/modulator/klystron/tank_oil_level",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron tank oil level status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "06 APA6 b35 V chauffage Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/voltages/heating/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron heating voltage status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "07 APA7 b33 I chauffage Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/currents/heating/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron heating current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "08 APB0 b31 V chauffage Klystron",
+      "canonical_name": "elyse/modulator/klystron/voltages/heating/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron heating voltage status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "09 APB1 b29 I chauffage Klystron",
+      "canonical_name": "elyse/modulator/klystron/currents/heating/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron heating current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "10 APB2 b27 I De QING",
+      "canonical_name": "elyse/modulator/deqing/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "deqing current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "11 APB3 b25 I rÃ©servoir Thyratron",
+      "canonical_name": "elyse/modulator/thyratron_reservoir/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron reservoir current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "12 APB4 b23 SÃ©curitÃ© Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/safety",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron safety interlock from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "13 APB5 b21 Pression SF6",
+      "canonical_name": "elyse/ht_hf/sf6_pressure",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "SF6 pressure status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "14 APB6 b19 I prÃ©magnÃ©tisation",
+      "canonical_name": "elyse/modulator/paramagnetization/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "premagnetization current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "15 APB7 b17 Contact porte",
+      "canonical_name": "elyse/safety/door/contact",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "general door contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "16 APC0 b15 Contact perche",
+      "canonical_name": "elyse/safety/probe/contact",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "probe contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "17 APC1 b13 Contact capot cuve",
+      "canonical_name": "elyse/modulator/klystron/tank_cover/contact",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "tank cover contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "18 APC2 b11 Fin Tempo",
+      "canonical_name": "elyse/modulator/timer/end",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "timer end status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "19 APC3 b09 DÃ©bit eau Canon",
+      "canonical_name": "elyse/cooling/canon/water_flow",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "canon water flow status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "20 APC4 b07 Eau focale Klystron",
+      "canonical_name": "elyse/modulator/klystron_focale/water",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron focale water status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "21 APC5 b05 I Focale 1",
+      "canonical_name": "elyse/modulator/focale1/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale1 current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "22 APC6 b03 I Focale 2",
+      "canonical_name": "elyse/modulator/focale2/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale2 current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "23 APC7 b01 I Focale 3",
+      "canonical_name": "elyse/modulator/focale3/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale3 current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "24 BPA0 b48 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "25 BPA1 b46 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "26 BPA2 b44 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "27 BPA3 b42 DÃ©phaseur butÃ©e MIN",
+      "canonical_name": "elyse/HF/dephaser/min_limit",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dephaser minimum limit from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "28 BPA4 b40 DÃ©phaseur butÃ©e MAX",
+      "canonical_name": "elyse/HF/dephaser/max_limit",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dephaser maximum limit from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "29 BPA5 b38 AttÃ©nuateur butÃ©e MIN",
+      "canonical_name": "elyse/HF/attenuator/min_limit",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "attenuator minimum limit from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "30 BPA6 b36 AttÃ©nuateur butÃ©e MAX",
+      "canonical_name": "elyse/HF/attenuator/max_limit",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "attenuator maximum limit from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "31 BPA7 b34 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "32 BPB0 b32 Relais 2 ouvert",
+      "canonical_name": "elyse/HT/relay2/open",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "relay2 open status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "33 BPB1 b30 HF incident Canon",
+      "canonical_name": "elyse/HF/canon/incident",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "incident HF canon status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "34 BPB2 b28 HF incident Section",
+      "canonical_name": "elyse/HF/section/incident",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "incident HF section status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "35 BPB3 b26 V alimentation HT",
+      "canonical_name": "elyse/HT/voltage/status",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "HT voltage status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "36 BPB4 b24 I alimentation HT",
+      "canonical_name": "elyse/HT/current/status",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "HT current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "37 BPB5 b22 Relais 1 ouvert",
+      "canonical_name": "elyse/HT/relay1/open",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "relay1 open status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "38 BPB6 b20 DÃ©bit eau Section",
+      "canonical_name": "elyse/cooling/section/water_flow/status",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "section water flow status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "39 BPB7 b18 RÃ©sistivitÃ©",
+      "canonical_name": "elyse/cooling/water/resistivity",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "water resistivity status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "40 BPC0 b16 Vide Injection",
+      "canonical_name": "elyse/vacuum/injection/status",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "injection vacuum status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "41 BPC1 b14 I Thyratron",
+      "canonical_name": "elyse/modulator/thyratron/currents/power/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "thyratron current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "42 BPC2 b12 I fin de ligne",
+      "canonical_name": "elyse/modulator/line_end/current/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "line end current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "43 BPC3 b10 V LAR",
+      "canonical_name": "elyse/modulator/LAR/voltage/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "LAR voltage status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "44 BPC4 b08 V Klystron",
+      "canonical_name": "elyse/modulator/klystron/voltages/power/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron power voltage status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "45 BPC5 b06 I Klystron",
+      "canonical_name": "elyse/modulator/klystron/currents/power/status",
+      "functional_group": "modulator",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "klystron power current status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "46 BPC6 b04 Radioprotection 1, coupure HT",
+      "canonical_name": "elyse/safety/radioprotection1/ht_cutoff",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "radioprotection 1 HT cutoff from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "47 BPC7 b02 Radioprotection 2, coupure HF",
+      "canonical_name": "elyse/safety/radioprotection2/hf_cutoff",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "radioprotection 2 HF cutoff from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "48 CPA0 b97 Alimentation HT en marche",
+      "canonical_name": "elyse/HT/power/running",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "HT power running status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "49 CPA1 b95 Alimentation HT en dÃ©faut",
+      "canonical_name": "elyse/HT/power/fault",
+      "functional_group": "ht_hf",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "HT power fault status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "50 CPA2 b93 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "51 CPA3 b91 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C4_IN_DIO96"
+    },
+    {
+      "raw_name": "52 CPA4 b89 Contact porte lÃ©gÃ¨re fermÃ©e",
+      "canonical_name": "elyse/safety/door/light/closed",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "light door closed contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "53 CPA5 b87 Contact porte lourde fermÃ©e",
+      "canonical_name": "elyse/safety/door/heavy/closed",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "heavy door closed contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "54 CPA6 b85 Contact porte secours fermÃ©e",
+      "canonical_name": "elyse/safety/door/emergency/closed",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "emergency door closed contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "55 CPA7 b83 Contact porte laser fermÃ©e",
+      "canonical_name": "elyse/safety/door/laser/closed",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "laser door closed contact from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "56 CPB0 b81 Totalisation des AU",
+      "canonical_name": "elyse/safety/emergency_stop/totalized",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "totalized emergency stop signal from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "57 CPB1 b79 Rondier 1",
+      "canonical_name": "elyse/safety/roundier/1",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "roundier 1 status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "58 CPB2 b77 Rondier 2",
+      "canonical_name": "elyse/safety/roundier/2",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "roundier 2 status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "59 CPB3 b75 Rondier 3",
+      "canonical_name": "elyse/safety/roundier/3",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "roundier 3 status from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "60 CPB4 b73 Totalisation des rondiers",
+      "canonical_name": "elyse/safety/roundier/totalized",
+      "functional_group": "safety",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "totalized roundier signal from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "61 CPB5 b71 Position BACO PA / MOD",
+      "canonical_name": "elyse/motion/baco/pa_mod/position",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "BACO PA/MOD position from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "62 CPB6 b69 Position BACO de TIR",
+      "canonical_name": "elyse/motion/baco/fire_position",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "BACO firing position from C4_IN_DIO96"
+    },
+    {
+      "raw_name": "63 CPB7 b67 Position occulteur LASER",
+      "canonical_name": "elyse/laser/occulter/position",
+      "functional_group": "motion",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "laser occulter position from C4_IN_DIO96"
+    }
+  ]
+}

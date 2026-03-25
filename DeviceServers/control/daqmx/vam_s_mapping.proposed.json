@@ -1,0 +1,191 @@
+{
+  "card": "VAM-S",
+  "purpose": "Partial raw-to-canonical mapping for VAM-S based on the visible panel. Raw labels are preserved; canonical names are internal Python DS names.",
+  "partial": true,
+  "entries": [
+    {
+      "raw_name": "00 SUP VidÃ©o",
+      "canonical_name": "elyse/supervision/video",
+      "functional_group": "supervision",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "VAM-S supervision summary channel: video"
+    },
+    {
+      "raw_name": "01 SUP Variables",
+      "canonical_name": "elyse/supervision/variables",
+      "functional_group": "supervision",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "VAM-S supervision summary channel: variables"
+    },
+    {
+      "raw_name": "02 SUP Evenement",
+      "canonical_name": "elyse/supervision/events",
+      "functional_group": "supervision",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "VAM-S supervision summary channel: events"
+    },
+    {
+      "raw_name": "03",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "04",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "05",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "06",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "07",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "08",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "09",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "10",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "11",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "12",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "13",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "14",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "15",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "16",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "17",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "18",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "19",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "20",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "21",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    },
+    {
+      "raw_name": "22",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "placeholder/index helper from LabVIEW cluster payload"
+    }
+  ]
+}

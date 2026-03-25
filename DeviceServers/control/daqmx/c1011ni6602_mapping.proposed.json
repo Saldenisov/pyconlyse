@@ -1,0 +1,270 @@
+{
+  "card": "C1011NI6602",
+  "purpose": "Raw-to-canonical mapping for C1011NI6602 based on the sync VI screenshots. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 OUT00 b05 C10 Delais",
+      "canonical_name": "elyse/sync/NI6071E/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "01 OUT00 b05 C10 Largeur",
+      "canonical_name": "elyse/sync/NI6071E/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 1.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "02 OUT01 b09 C10 Delais",
+      "canonical_name": "elyse/sync/frequency/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "03 OUT01 b09 C10 Largeur",
+      "canonical_name": "elyse/sync/frequency/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 81000.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "04 OUT02 b32 C10 Delais",
+      "canonical_name": "elyse/sync/WCM/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "05 OUT02 b32 C10 Largeur",
+      "canonical_name": "elyse/sync/WCM/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 10.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "06 OUT03 b29 C10 Delais",
+      "canonical_name": "elyse/sync/modulator/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "07 OUT03 b29 C10 Largeur",
+      "canonical_name": "elyse/sync/modulator/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 3.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "08 OUT04 b26 C10 Delais",
+      "canonical_name": "elyse/sync/HF/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "09 OUT04 b26 C10 Largeur",
+      "canonical_name": "elyse/sync/HF/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 3.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "10 OUT05 b23 C10 Delais",
+      "canonical_name": "elyse/sync/Faraday/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "11 OUT05 b23 C10 Largeur",
+      "canonical_name": "elyse/sync/Faraday/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 100.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "12 OUT06 b53 C10 Delais",
+      "canonical_name": "elyse/sync/Oscilloscope/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "13 OUT06 b53 C10 Largeur",
+      "canonical_name": "elyse/sync/Oscilloscope/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 2.8,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "14 OUT07 b16 C10 Delais",
+      "canonical_name": "elyse/sync/50Hz_20MHz/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "15 OUT07 b16 C10 Largeur",
+      "canonical_name": "elyse/sync/50Hz_20MHz/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 5000.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "16 OUT00 b05 C11 Delais",
+      "canonical_name": "elyse/sync/laser_HF/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "17 OUT00 b05 C11 Largeur",
+      "canonical_name": "elyse/sync/laser_HF/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 0.35,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "18 OUT01 b09 C11 Delais",
+      "canonical_name": "elyse/sync/IMAC/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "19 OUT01 b09 C11 Largeur",
+      "canonical_name": "elyse/sync/IMAC/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 100.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "20 OUT02 b32 C11 Delais",
+      "canonical_name": "elyse/sync/laser/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "21 OUT02 b32 C11 Largeur",
+      "canonical_name": "elyse/sync/laser/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 10.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "22 OUT03 b29 C11 Delais",
+      "canonical_name": "elyse/sync/oscilloscope1/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "23 OUT03 b29 C11 Largeur",
+      "canonical_name": "elyse/sync/oscilloscope1/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 10.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "24 OUT04 b26 C11 Delais",
+      "canonical_name": "elyse/sync/oscilloscope2/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "25 OUT04 b26 C11 Largeur",
+      "canonical_name": "elyse/sync/oscilloscope2/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 100.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "26 OUT05 b23 C11 Delais",
+      "canonical_name": "elyse/sync/detection1/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "27 OUT05 b23 C11 Largeur",
+      "canonical_name": "elyse/sync/detection1/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 500.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "28 OUT06 b53 C11 Delais",
+      "canonical_name": "elyse/sync/detection2/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=medium; The screenshot strongly suggests detection2/delay, but the text should be rechecked in LabVIEW."
+    },
+    {
+      "raw_name": "29 OUT06 b53 C11 Largeur",
+      "canonical_name": "elyse/sync/detection2/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 10.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "30 OUT07 b16 C11 Delais",
+      "canonical_name": "elyse/sync/machine/delay",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "31 OUT07 b16 C11 Largeur",
+      "canonical_name": "elyse/sync/machine/width",
+      "functional_group": "sync",
+      "direction": "write",
+      "live_value": 100.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "N du compteur",
+      "canonical_name": "elyse/sync/n_selection",
+      "functional_group": "sync",
+      "direction": "read",
+      "live_value": null,
+      "notes": "confidence=medium; Visible as an exported channel in the VI, but the screenshot alone does not prove whether this should be writable."
+    }
+  ]
+}

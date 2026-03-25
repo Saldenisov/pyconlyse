@@ -1,0 +1,47 @@
+{
+  "card": "DPC",
+  "purpose": "Partial raw-to-canonical mapping for DPC based on the visible state panel. Raw labels are preserved; canonical names are internal Python DS names.",
+  "partial": true,
+  "entries": [
+    {
+      "raw_name": "TIR X",
+      "canonical_name": "elyse/sequence/tir/active",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPC state from panel; tir active"
+    },
+    {
+      "raw_name": "PRETIR X",
+      "canonical_name": "elyse/sequence/pretir/active",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPC state from panel; pretir active"
+    },
+    {
+      "raw_name": "VEILLE X",
+      "canonical_name": "elyse/sequence/veille/active",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPC state from panel; veille active"
+    },
+    {
+      "raw_name": "ARRET X",
+      "canonical_name": "elyse/sequence/arret/active",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPC state from panel; arret active"
+    },
+    {
+      "raw_name": "QUIT X",
+      "canonical_name": "elyse/sequence/quit/active",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "DPC state from panel; quit active"
+    }
+  ]
+}

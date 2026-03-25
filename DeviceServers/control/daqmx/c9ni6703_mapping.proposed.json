@@ -1,0 +1,86 @@
+{
+  "card": "C9NI6703",
+  "purpose": "Proposed raw-to-canonical mapping for C9NI6703. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 OUT00 b01 Cmd alimentation HT",
+      "canonical_name": "elyse/HT/voltage/set_value",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 6.5,
+      "notes": "confirmed from earlier VI mapping"
+    },
+    {
+      "raw_name": "01 OUT01 b05 Cmd DeQing",
+      "canonical_name": "elyse/modulator/deqing/set_value",
+      "functional_group": "modulator",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from C9NI6703 full inventory"
+    },
+    {
+      "raw_name": "02 OUT02 b09 Cmd position fente HG",
+      "canonical_name": "elyse/slit/jaw_hg/set_value",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 4.755,
+      "notes": "proposed from C9NI6703 full inventory; horizontal left slit jaw position command"
+    },
+    {
+      "raw_name": "03 OUT03 b13 Cmd position fente HD",
+      "canonical_name": "elyse/slit/jaw_hd/set_value",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 4.755,
+      "notes": "proposed from C9NI6703 full inventory; horizontal right slit jaw position command"
+    },
+    {
+      "raw_name": "04 OUT04 b17 Cmd position translateur Ecran 1",
+      "canonical_name": "elyse/screens/1/translator/set_value",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 2.126,
+      "notes": "proposed from C9NI6703 full inventory; paired with elyse/screens/1/translator/fault"
+    },
+    {
+      "raw_name": "05 OUT05 b21 Cmd position translateur Ecran 2",
+      "canonical_name": "elyse/screens/2/translator/set_value",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 2.126,
+      "notes": "proposed from C9NI6703 full inventory; paired with elyse/screens/2/translator/fault"
+    },
+    {
+      "raw_name": "06 OUT06 b25 Cmd position translateur Ecran 3",
+      "canonical_name": "elyse/screens/3/translator/set_value",
+      "functional_group": "motion",
+      "direction": "write",
+      "live_value": 2.126,
+      "notes": "proposed from C9NI6703 full inventory; paired with elyse/screens/3/translator/fault"
+    },
+    {
+      "raw_name": "07 OUT07 b29 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C9NI6703"
+    },
+    {
+      "raw_name": "08 OUT08 b33 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C9NI6703"
+    },
+    {
+      "raw_name": "09 OUT09 b37 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C9NI6703"
+    }
+  ]
+}

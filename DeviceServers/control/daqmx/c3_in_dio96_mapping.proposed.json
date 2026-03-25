@@ -1,0 +1,454 @@
+{
+  "card": "C3_IN_DIO96",
+  "purpose": "Raw-to-canonical mapping for C3_IN_DIO96 based on the full inventory screenshots. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 APA0 b47 Reffroidissement Canon marche",
+      "canonical_name": "elyse/cooling/canon/running",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling canon running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "01 APA1 b45 Reffroidissement Canon dÃ©faut",
+      "canonical_name": "elyse/cooling/canon/fault",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling canon fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "02 APA2 b43 Vanne Reffroidissement Canon fermÃ©e",
+      "canonical_name": "elyse/cooling/canon/valve/closed",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling canon valve closed status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "03 APA3 b41 Vanne Reffroidissement Canon ouverte",
+      "canonical_name": "elyse/cooling/canon/valve/open",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "cooling canon valve open status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "04 APA4 b39 DÃ©bit Reffroidissement Canon dÃ©faut",
+      "canonical_name": "elyse/cooling/canon/flow/fault",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling canon flow fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "05 APA5 b37 Local / Distance Canon (local=0V)",
+      "canonical_name": "elyse/cooling/canon/local_distance",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling canon local/distance selector input from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "06 APA6 b35 Reffroidissement Section marche",
+      "canonical_name": "elyse/cooling/section/running",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling section running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "07 APA7 b33 Reffroidissement Section dÃ©faut",
+      "canonical_name": "elyse/cooling/section/fault",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling section fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "08 APB0 b31 Vanne Reffroidissement Section fermÃ©e",
+      "canonical_name": "elyse/cooling/section/valve/closed",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling section valve closed status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "09 APB1 b29 Vanne Reffroidissement Section ouverte",
+      "canonical_name": "elyse/cooling/section/valve/open",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "cooling section valve open status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "10 APB2 b27 DÃ©bit eau Reffroidissement Section",
+      "canonical_name": "elyse/cooling/section/water_flow",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling section water flow status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "11 APB3 b25 Loc/dist. Reffr. Section (local=0V)",
+      "canonical_name": "elyse/cooling/section/local_distance",
+      "functional_group": "cooling",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "cooling section local/distance selector input from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "12 APB4 b23 Triplet 1-1 en marche",
+      "canonical_name": "elyse/magnets/triplet1-1/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet1-1 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "13 APB5 b21 Triplet 1-1 en dÃ©faut",
+      "canonical_name": "elyse/magnets/triplet1-1/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet1-1 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "14 APB6 b19 Triplet 1-2 en marche",
+      "canonical_name": "elyse/magnets/triplet1-2/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet1-2 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "15 APB7 b17 Triplet 1-2 en dÃ©faut",
+      "canonical_name": "elyse/magnets/triplet1-2/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet1-2 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "16 APC0 b15 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "17 APC1 b13 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "18 APC2 b11 Triplet 2-1 en marche",
+      "canonical_name": "elyse/magnets/triplet2-1/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet2-1 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "19 APC3 b09 Triplet 2-1 en dÃ©faut",
+      "canonical_name": "elyse/magnets/triplet2-1/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "triplet2-1 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "20 APC4 b07 Triplet 2-2 en marche",
+      "canonical_name": "elyse/magnets/triplet2-2/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "triplet2-2 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "21 APC5 b05 Triplet 2-2 en dÃ©faut",
+      "canonical_name": "elyse/magnets/triplet2-2/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "triplet2-2 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "22 APC6 b03 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "23 APC7 b01 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "24 BPA0 b48 QuadripÃ´le 1 en marche",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": null,
+      "notes": "not currently present in live dump"
+    },
+    {
+      "raw_name": "25 BPA1 b46 QuadripÃ´le 1 en dÃ©faut",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": null,
+      "notes": "not currently present in live dump"
+    },
+    {
+      "raw_name": "26 BPA2 b44 QuadripÃ´le 2 en marche",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": null,
+      "notes": "not currently present in live dump"
+    },
+    {
+      "raw_name": "27 BPA3 b42 QuadripÃ´le 2 en dÃ©faut",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": null,
+      "notes": "not currently present in live dump"
+    },
+    {
+      "raw_name": "28 BPA4 b40 Focale injection en marche",
+      "canonical_name": "elyse/magnets/focale/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "29 BPA5 b38 Focale injection en dÃ©faut",
+      "canonical_name": "elyse/magnets/focale/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "30 BPA6 b36 eau focale injection en dÃ©faut",
+      "canonical_name": "elyse/magnets/focale/water_fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "focale water fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "31 BPA7 b34 DipÃ´le 1 en marche",
+      "canonical_name": "elyse/magnets/dipole1/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dipole1 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "32 BPB0 b32 DipÃ´le 1 en dÃ©faut",
+      "canonical_name": "elyse/magnets/dipole1/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dipole1 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "33 BPB1 b30 DipÃ´le 2 en marche",
+      "canonical_name": "elyse/magnets/dipole2/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dipole2 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "34 BPB2 b28 DipÃ´le 2 en dÃ©faut",
+      "canonical_name": "elyse/magnets/dipole2/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "dipole2 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "35 BPB3 b26 Guidage H 1 en marche",
+      "canonical_name": "elyse/magnets/Cor_H1/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H1 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "36 BPB4 b24 Guidage H 1 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_H1/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H1 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "37 BPB5 b22 Guidage V 1 en marche",
+      "canonical_name": "elyse/magnets/Cor_V1/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V1 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "38 BPB6 b20 Guidage V 1 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_V1/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V1 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "39 BPB7 b18 Guidage H 2 en marche",
+      "canonical_name": "elyse/magnets/Cor_H2/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H2 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "40 BPC0 b16 Guidage H 2 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_H2/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "Cor_H2 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "41 BPC1 b14 Guidage V 2 en marche",
+      "canonical_name": "elyse/magnets/Cor_V2/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V2 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "42 BPC2 b12 Guidage V 2 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_V2/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "Cor_V2 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "43 BPC3 b10 Guidage H 3 en marche",
+      "canonical_name": "elyse/magnets/Cor_H3/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H3 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "44 BPC4 b08 Guidage H 3 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_H3/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H3 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "45 BPC5 b06 Guidage V 3 en marche",
+      "canonical_name": "elyse/magnets/Cor_V3/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V3 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "46 BPC6 b04 Guidage V 3 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_V3/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "Cor_V3 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "47 BPC7 b02 Guidage H 4 en marche",
+      "canonical_name": "elyse/magnets/Cor_H4/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H4 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "48 CPA0 b97 Guidage H 4 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_H4/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_H4 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "49 CPA1 b95 Guidage V 4 en marche",
+      "canonical_name": "elyse/magnets/Cor_V4/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V4 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "50 CPA2 b93 Guidage V 4 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_V4/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "Cor_V4 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "51 CPA3 b91 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "52 CPA4 b89 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    },
+    {
+      "raw_name": "53 CPA5 b87 Guidage V 5 en marche",
+      "canonical_name": "elyse/magnets/Cor_V5/running",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "Cor_V5 running status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "54 CPA6 b85 Guidage V 5 en dÃ©faut",
+      "canonical_name": "elyse/magnets/Cor_V5/fault",
+      "functional_group": "magnets",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "Cor_V5 fault status from C3_IN_DIO96"
+    },
+    {
+      "raw_name": "55 CPA7 b83 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "live_value": 1.0,
+      "notes": "reserve entry on C3_IN_DIO96"
+    }
+  ]
+}

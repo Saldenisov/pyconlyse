@@ -1,0 +1,86 @@
+{
+  "card": "C8NI6703",
+  "purpose": "Proposed raw-to-canonical mapping for C8NI6703. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "00 OUT00 b01 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C8NI6703"
+    },
+    {
+      "raw_name": "01 OUT01 b05 Cmd Temp. Canon",
+      "canonical_name": "elyse/cooling/canon/temperature/set_value",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 21.0,
+      "notes": "proposed from C8NI6703 full inventory; paired with elyse/cooling/canon/temperature/measurement"
+    },
+    {
+      "raw_name": "02 OUT02 b09 Cmd Temp. Section",
+      "canonical_name": "elyse/cooling/section/temperature/set_value",
+      "functional_group": "cooling",
+      "direction": "write",
+      "live_value": 27.9,
+      "notes": "proposed from C8NI6703 full inventory; paired with elyse/cooling/section/temperature/measurement"
+    },
+    {
+      "raw_name": "03 OUT03 b13 Cmd Pos. DÃ©phaseur",
+      "canonical_name": "elyse/HF/dephaser/set_value",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from C8NI6703 full inventory; paired with elyse/HF/dephaser/value"
+    },
+    {
+      "raw_name": "04 OUT04 b17 Cmd Pos. AttÃ©nuateur",
+      "canonical_name": "elyse/HF/attenuator/set_value",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from C8NI6703 full inventory; paired with elyse/HF/attenuator/value"
+    },
+    {
+      "raw_name": "05 OUT05 b21 Cmd dÃ©phasage HF/LASER",
+      "canonical_name": "elyse/magnets/phase_HF_laser/set_value",
+      "functional_group": "magnets",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "confirmed from earlier VI mapping"
+    },
+    {
+      "raw_name": "06 OUT06 b25 Cmd amplitude HF prÃ©ampli",
+      "canonical_name": "elyse/preamplifier/set_value",
+      "functional_group": "ht_hf",
+      "direction": "write",
+      "live_value": 360.0,
+      "notes": "confirmed from earlier VI mapping"
+    },
+    {
+      "raw_name": "07 OUT07 b29 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": "placeholder",
+      "direction": "ignore",
+      "live_value": 0.0,
+      "notes": "reserve entry on C8NI6703"
+    },
+    {
+      "raw_name": "08 OUT08 b33 Cmd position Miroir X",
+      "canonical_name": "elyse/laser/mirror/x/set_value",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from C8NI6703 full inventory; X axis command for mirror position"
+    },
+    {
+      "raw_name": "09 OUT09 b37 Cmd position Miroir Y",
+      "canonical_name": "elyse/laser/mirror/y/set_value",
+      "functional_group": "laser",
+      "direction": "write",
+      "live_value": 0.0,
+      "notes": "proposed from C8NI6703 full inventory; Y axis command for mirror position"
+    }
+  ]
+}

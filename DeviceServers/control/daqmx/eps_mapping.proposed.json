@@ -1,0 +1,614 @@
+{
+  "card": "EPS",
+  "purpose": "Raw-to-canonical mapping for EPS based on the visible state panel. Raw labels are preserved; canonical names are internal Python DS names. X-prefixed companion states seen in the live dump are intentionally excluded from this first-pass panel mapping.",
+  "entries": [
+    {
+      "raw_name": "Alimentation aimant = 0V",
+      "canonical_name": "elyse/eps/magnets_power/zero_v",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals 0V"
+    },
+    {
+      "raw_name": "Alimentation aimant = 0V ED",
+      "canonical_name": "elyse/eps/magnets_power/zero_v_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals 0V ED"
+    },
+    {
+      "raw_name": "Alimentation aimant = 0V OK",
+      "canonical_name": "elyse/eps/magnets_power/zero_v_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals 0V OK"
+    },
+    {
+      "raw_name": "Alimentation aimant = PT",
+      "canonical_name": "elyse/eps/magnets_power/pt",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals PT"
+    },
+    {
+      "raw_name": "Alimentation aimant = PT ED",
+      "canonical_name": "elyse/eps/magnets_power/pt_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals PT ED"
+    },
+    {
+      "raw_name": "Alimentation aimant = PT OK",
+      "canonical_name": "elyse/eps/magnets_power/pt_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power equals PT OK"
+    },
+    {
+      "raw_name": "Arret Att DÃ©ph ED",
+      "canonical_name": "elyse/eps/hf_att_deph/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF stop ED"
+    },
+    {
+      "raw_name": "Arret Att DÃ©ph OK",
+      "canonical_name": "elyse/eps/hf_att_deph/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF stop OK"
+    },
+    {
+      "raw_name": "Arret alimentation HT ED",
+      "canonical_name": "elyse/eps/ht_power/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power stop ED"
+    },
+    {
+      "raw_name": "Arret alimentation HT OK",
+      "canonical_name": "elyse/eps/ht_power/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power stop OK"
+    },
+    {
+      "raw_name": "Arret alimentation aimant ED",
+      "canonical_name": "elyse/eps/magnets_power/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power stop ED"
+    },
+    {
+      "raw_name": "Arret alimentation aimant OK",
+      "canonical_name": "elyse/eps/magnets_power/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power stop OK"
+    },
+    {
+      "raw_name": "Arret impulsion mod ED",
+      "canonical_name": "elyse/eps/modulator_impulse/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse stop ED"
+    },
+    {
+      "raw_name": "Arret impulsion mod OK",
+      "canonical_name": "elyse/eps/modulator_impulse/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse stop OK"
+    },
+    {
+      "raw_name": "Arret refroidissement ED",
+      "canonical_name": "elyse/eps/cooling/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: stop cooling ED"
+    },
+    {
+      "raw_name": "ArrÃªt Att et DÃ©ph HF",
+      "canonical_name": "elyse/eps/hf_att_deph/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF stop"
+    },
+    {
+      "raw_name": "ArrÃªt CHAUFFAGE Mod.",
+      "canonical_name": "elyse/eps/modulator_heating/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating stop"
+    },
+    {
+      "raw_name": "ArrÃªt CHAUFFAGE Mod. ED",
+      "canonical_name": "elyse/eps/modulator_heating/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating stop ED"
+    },
+    {
+      "raw_name": "ArrÃªt CHAUFFAGE Mod. OK",
+      "canonical_name": "elyse/eps/modulator_heating/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating stop OK"
+    },
+    {
+      "raw_name": "ArrÃªt FOCALE Mod.",
+      "canonical_name": "elyse/eps/modulator_focale/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale stop"
+    },
+    {
+      "raw_name": "ArrÃªt FOCALE Mod. ED",
+      "canonical_name": "elyse/eps/modulator_focale/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale stop ED"
+    },
+    {
+      "raw_name": "ArrÃªt FOCALE Mod. OK",
+      "canonical_name": "elyse/eps/modulator_focale/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale stop OK"
+    },
+    {
+      "raw_name": "ArrÃªt GENERAL Mod.",
+      "canonical_name": "elyse/eps/modulator_general/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator stop"
+    },
+    {
+      "raw_name": "ArrÃªt GENERAL Mod. ED",
+      "canonical_name": "elyse/eps/modulator_general/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator stop ED"
+    },
+    {
+      "raw_name": "ArrÃªt GENERAL Mod. OK",
+      "canonical_name": "elyse/eps/modulator_general/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator stop OK"
+    },
+    {
+      "raw_name": "ArrÃªt PREMA Mod.",
+      "canonical_name": "elyse/eps/modulator_prema/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization stop"
+    },
+    {
+      "raw_name": "ArrÃªt PREMA Mod. ED",
+      "canonical_name": "elyse/eps/modulator_prema/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization stop ED"
+    },
+    {
+      "raw_name": "ArrÃªt PREMA Mod. OK",
+      "canonical_name": "elyse/eps/modulator_prema/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization stop OK"
+    },
+    {
+      "raw_name": "ArrÃªt RELAIS HT Mod.",
+      "canonical_name": "elyse/eps/modulator_relay_ht/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay stop"
+    },
+    {
+      "raw_name": "ArrÃªt RELAIS HT Mod. ED",
+      "canonical_name": "elyse/eps/modulator_relay_ht/stop_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay stop ED"
+    },
+    {
+      "raw_name": "ArrÃªt RELAIS HT Mod. OK",
+      "canonical_name": "elyse/eps/modulator_relay_ht/stop_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay stop OK"
+    },
+    {
+      "raw_name": "ArrÃªt alimentation HT",
+      "canonical_name": "elyse/eps/ht_power/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power stop"
+    },
+    {
+      "raw_name": "ArrÃªt alimentation aimants",
+      "canonical_name": "elyse/eps/magnets_power/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power stop"
+    },
+    {
+      "raw_name": "ArrÃªt impulsion modulateur",
+      "canonical_name": "elyse/eps/modulator_impulse/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse stop"
+    },
+    {
+      "raw_name": "ArrÃªt refroidissement",
+      "canonical_name": "elyse/eps/cooling/stop",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: stop cooling"
+    },
+    {
+      "raw_name": "FREQ. ELYSE",
+      "canonical_name": "elyse/eps/freq_elyse",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS frequency state ELYSE"
+    },
+    {
+      "raw_name": "FREQ. ELYSE ED",
+      "canonical_name": "elyse/eps/freq_elyse_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS frequency state ELYSE ED"
+    },
+    {
+      "raw_name": "FREQ. ELYSE OK",
+      "canonical_name": "elyse/eps/freq_elyse_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS frequency state ELYSE OK"
+    },
+    {
+      "raw_name": "Libre",
+      "canonical_name": "elyse/eps/free",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS free state"
+    },
+    {
+      "raw_name": "Libre ED",
+      "canonical_name": "elyse/eps/free_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS free state ED"
+    },
+    {
+      "raw_name": "Libre OK",
+      "canonical_name": "elyse/eps/free_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS free state OK"
+    },
+    {
+      "raw_name": "Marche Att DÃ©ph ED",
+      "canonical_name": "elyse/eps/hf_att_deph/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF start ED"
+    },
+    {
+      "raw_name": "Marche Att DÃ©ph OK",
+      "canonical_name": "elyse/eps/hf_att_deph/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF start OK"
+    },
+    {
+      "raw_name": "Marche Att et DÃ©ph HF",
+      "canonical_name": "elyse/eps/hf_att_deph/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: attenuator and dephaser HF start"
+    },
+    {
+      "raw_name": "Marche CHAUFFAGE Mod.",
+      "canonical_name": "elyse/eps/modulator_heating/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating start"
+    },
+    {
+      "raw_name": "Marche CHAUFFAGE Mod. ED",
+      "canonical_name": "elyse/eps/modulator_heating/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating start ED"
+    },
+    {
+      "raw_name": "Marche CHAUFFAGE Mod. OK",
+      "canonical_name": "elyse/eps/modulator_heating/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator heating start OK"
+    },
+    {
+      "raw_name": "Marche FOCALE Mod.",
+      "canonical_name": "elyse/eps/modulator_focale/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale start"
+    },
+    {
+      "raw_name": "Marche FOCALE Mod. ED",
+      "canonical_name": "elyse/eps/modulator_focale/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale start ED"
+    },
+    {
+      "raw_name": "Marche FOCALE Mod. OK",
+      "canonical_name": "elyse/eps/modulator_focale/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: focale start OK"
+    },
+    {
+      "raw_name": "Marche GENERAL Mod.",
+      "canonical_name": "elyse/eps/modulator_general/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator start"
+    },
+    {
+      "raw_name": "Marche GENERAL Mod. ED",
+      "canonical_name": "elyse/eps/modulator_general/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator start ED"
+    },
+    {
+      "raw_name": "Marche GENERAL Mod. OK",
+      "canonical_name": "elyse/eps/modulator_general/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: general modulator start OK"
+    },
+    {
+      "raw_name": "Marche PREMA Mod.",
+      "canonical_name": "elyse/eps/modulator_prema/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization start"
+    },
+    {
+      "raw_name": "Marche PREMA Mod. ED",
+      "canonical_name": "elyse/eps/modulator_prema/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization start ED"
+    },
+    {
+      "raw_name": "Marche PREMA Mod. OK",
+      "canonical_name": "elyse/eps/modulator_prema/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: premagnetization start OK"
+    },
+    {
+      "raw_name": "Marche RELAIS HT Mod.",
+      "canonical_name": "elyse/eps/modulator_relay_ht/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay start"
+    },
+    {
+      "raw_name": "Marche RELAIS HT Mod. ED",
+      "canonical_name": "elyse/eps/modulator_relay_ht/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay start ED"
+    },
+    {
+      "raw_name": "Marche RELAIS HT Mod. OK",
+      "canonical_name": "elyse/eps/modulator_relay_ht/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT relay start OK"
+    },
+    {
+      "raw_name": "Marche alimentation HT",
+      "canonical_name": "elyse/eps/ht_power/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power start"
+    },
+    {
+      "raw_name": "Marche alimentation HT ED",
+      "canonical_name": "elyse/eps/ht_power/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power start ED"
+    },
+    {
+      "raw_name": "Marche alimentation HT OK",
+      "canonical_name": "elyse/eps/ht_power/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power start OK"
+    },
+    {
+      "raw_name": "Marche alimentation aimant ED",
+      "canonical_name": "elyse/eps/magnets_power/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power start ED"
+    },
+    {
+      "raw_name": "Marche alimentation aimant OK",
+      "canonical_name": "elyse/eps/magnets_power/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power start OK"
+    },
+    {
+      "raw_name": "Marche alimentation aimants",
+      "canonical_name": "elyse/eps/magnets_power/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: magnets power start"
+    },
+    {
+      "raw_name": "Marche impulsion mod ED",
+      "canonical_name": "elyse/eps/modulator_impulse/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse start ED"
+    },
+    {
+      "raw_name": "Marche impulsion mod OK",
+      "canonical_name": "elyse/eps/modulator_impulse/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse start OK"
+    },
+    {
+      "raw_name": "Marche impulsion modulateur",
+      "canonical_name": "elyse/eps/modulator_impulse/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator impulse start"
+    },
+    {
+      "raw_name": "Marche refroidissement",
+      "canonical_name": "elyse/eps/cooling/start",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: start cooling"
+    },
+    {
+      "raw_name": "Marche refroidissement ED",
+      "canonical_name": "elyse/eps/cooling/start_ed",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: start cooling ED"
+    },
+    {
+      "raw_name": "Marche refroidissement OK",
+      "canonical_name": "elyse/eps/cooling/start_ok",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: start cooling OK"
+    },
+    {
+      "raw_name": "RESET Mod.",
+      "canonical_name": "elyse/eps/modulator/reset",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: modulator reset"
+    },
+    {
+      "raw_name": "Reset alimentation HT",
+      "canonical_name": "elyse/eps/ht_power/reset",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS sequence state: HT power reset"
+    },
+    {
+      "raw_name": "Tempo 1s",
+      "canonical_name": "elyse/eps/timing/1s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS timing state 1s"
+    },
+    {
+      "raw_name": "Tempo 30s",
+      "canonical_name": "elyse/eps/timing/30s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS timing state 30s"
+    },
+    {
+      "raw_name": "Tempo 5s",
+      "canonical_name": "elyse/eps/timing/5s",
+      "functional_group": "sequence",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "EPS timing state 5s"
+    }
+  ]
+}

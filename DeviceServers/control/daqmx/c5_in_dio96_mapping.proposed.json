@@ -1,0 +1,454 @@
+{
+  "card": "C5_IN_DIO96",
+  "purpose": "Strict full-inventory raw-to-canonical mapping for C5_IN_DIO96 only. Raw LabVIEW labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "index": 0,
+      "raw_name": "00 APA0 b47 Vide chambre prÃ©paratoire en marche",
+      "canonical_name": "elyse/vacuum/preparation_chamber/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/preparation_chamber/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 1,
+      "raw_name": "01 APA1 b45 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 2,
+      "raw_name": "02 APA2 b43 Vide sas guide HF en marche",
+      "canonical_name": "elyse/vacuum/hf_guide/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/HF/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 3,
+      "raw_name": "03 APA3 b41 Vide sas guide HF en dÃ©faut",
+      "canonical_name": "elyse/vacuum/hf_guide/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/HF/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 4,
+      "raw_name": "04 APA4 b39 Vide Canon (PIQ 12) en marche",
+      "canonical_name": "elyse/vacuum/canon/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/canon/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 5,
+      "raw_name": "05 APA5 b37 Vide Canon (PIQ 12) en dÃ©faut",
+      "canonical_name": "elyse/vacuum/canon/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/canon/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 6,
+      "raw_name": "06 APA6 b35 Vide Section (PIQ 16) en marche",
+      "canonical_name": "elyse/vacuum/section/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/section/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 7,
+      "raw_name": "07 APA7 b33 Vide Section (PIQ 16) en dÃ©faut",
+      "canonical_name": "elyse/vacuum/section/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/section/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 8,
+      "raw_name": "08 APB0 b31 Vide Miroir (PIQ 21) en marche",
+      "canonical_name": "elyse/vacuum/mirror/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/mirror/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 9,
+      "raw_name": "09 APB1 b29 Vide Miroir (PIQ 21) en dÃ©faut",
+      "canonical_name": "elyse/vacuum/mirror/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/mirror/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 10,
+      "raw_name": "10 APB2 b27 Vide DipÃ´le 1 (PIQ 27+33) en marche",
+      "canonical_name": "elyse/vacuum/dipole1/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/dipole1/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 11,
+      "raw_name": "11 APB3 b25 Vide DipÃ´le 1 (PIQ 27+33) en dÃ©faut",
+      "canonical_name": "elyse/vacuum/dipole1/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/dipole1/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 12,
+      "raw_name": "12 APB4 b23 Vide Ecran 1 (PIQ 53+63) en marche",
+      "canonical_name": "elyse/vacuum/screen1/running",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/screen1/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 13,
+      "raw_name": "13 APB5 b21 Vide Ecran 1 (PIQ 53+63) en dÃ©faut",
+      "canonical_name": "elyse/vacuum/screen1/fault",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/screen1/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 14,
+      "raw_name": "14 APB6 b19 Vanne Cathode (VIC 01) ouverte",
+      "canonical_name": "elyse/vacuum/valves/cathode/open",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/valves/cathode/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 15,
+      "raw_name": "15 APB7 b17 Vanne Cathode (VIC 01) fermÃ©e",
+      "canonical_name": "elyse/vacuum/valves/cathode/closed",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/valves/cathode/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 16,
+      "raw_name": "16 APC0 b15 Vanne Injection (VSC 17) ouverte",
+      "canonical_name": "elyse/vacuum/valves/injection/open",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/valves/injection/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 17,
+      "raw_name": "17 APC1 b13 Vanne Injection (VSC 17) fermÃ©e",
+      "canonical_name": "elyse/vacuum/valves/injection/closed",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "contributes_to=elyse/vacuum/valves/injection/state; proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 18,
+      "raw_name": "18 APC2 b11 Vanne directe ouverte",
+      "canonical_name": "elyse/vacuum/valves/direct/open",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 19,
+      "raw_name": "19 APC3 b09 Vanne directe fermÃ©e",
+      "canonical_name": "elyse/vacuum/valves/direct/closed",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 20,
+      "raw_name": "20 APC4 b07 Vanne DÃ©viation 1 ouverte",
+      "canonical_name": "elyse/vacuum/valves/deviation1/open",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 21,
+      "raw_name": "21 APC5 b05 Vanne DÃ©viation 1 fermÃ©e",
+      "canonical_name": "elyse/vacuum/valves/deviation1/closed",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 22,
+      "raw_name": "22 APC6 b03 Vanne DÃ©viation 2 ouverte",
+      "canonical_name": "elyse/vacuum/valves/deviation2/open",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 23,
+      "raw_name": "23 APC7 b01 Vanne DÃ©viation 2 fermÃ©e",
+      "canonical_name": "elyse/vacuum/valves/deviation2/closed",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 24,
+      "raw_name": "24 BPA0 b48 LASER en marche",
+      "canonical_name": "elyse/laser/running",
+      "functional_group": "laser",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 25,
+      "raw_name": "25 BPA1 b46 LASER eb dÃ©faut",
+      "canonical_name": "elyse/laser/eb_fault",
+      "functional_group": "laser",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 26,
+      "raw_name": "26 BPA2 b44 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 27,
+      "raw_name": "27 BPA3 b42 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 28,
+      "raw_name": "28 BPA4 b40 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 29,
+      "raw_name": "29 BPA5 b38 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 30,
+      "raw_name": "30 BPA6 b36 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 31,
+      "raw_name": "31 BPA7 b34 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 32,
+      "raw_name": "32 BPB0 b32 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 33,
+      "raw_name": "33 BPB1 b30 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 34,
+      "raw_name": "34 BPB2 b28 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 35,
+      "raw_name": "35 BPB3 b26 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 36,
+      "raw_name": "36 BPB4 b24 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 37,
+      "raw_name": "37 BPB5 b22 Faraday 1 EN",
+      "canonical_name": "elyse/faraday/1/in",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 38,
+      "raw_name": "38 BPB6 b20 Faraday 1 HORS",
+      "canonical_name": "elyse/faraday/1/out",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 39,
+      "raw_name": "39 BPB7 b18 Faraday 2 EN",
+      "canonical_name": "elyse/faraday/2/in",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 40,
+      "raw_name": "40 BPC0 b16 Faraday 2 HORS",
+      "canonical_name": "elyse/faraday/2/out",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 41,
+      "raw_name": "41 BPC1 b14 Faraday 3 HORS",
+      "canonical_name": "elyse/faraday/3/out",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 42,
+      "raw_name": "42 BPC2 b12 Faraday 3 EN",
+      "canonical_name": "elyse/faraday/3/in",
+      "functional_group": "diagnostics",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 43,
+      "raw_name": "43 BPC3 b10 Position Miroir LASER EN",
+      "canonical_name": "elyse/laser/mirror/in",
+      "functional_group": "laser",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 44,
+      "raw_name": "44 BPC4 b08 Position Miroir LASER HORS",
+      "canonical_name": "elyse/laser/mirror/out",
+      "functional_group": "laser",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 45,
+      "raw_name": "45 BPC5 b06 Fente H butÃ©e MIN",
+      "canonical_name": "elyse/slit/h/min_limit",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 46,
+      "raw_name": "46 BPC6 b04 Mors HG butÃ©e HORS",
+      "canonical_name": "elyse/slit/jaw_hg/out_limit",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 47,
+      "raw_name": "47 BPC7 b02 Mors HD butÃ©e HORS",
+      "canonical_name": "elyse/slit/jaw_hd/out_limit",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 48,
+      "raw_name": "48 CPA0 b97 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 49,
+      "raw_name": "49 CPA1 b95 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 50,
+      "raw_name": "50 CPA2 b93 Translateur Ã©cran 1 en dÃ©faut",
+      "canonical_name": "elyse/screens/1/translator/fault",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 51,
+      "raw_name": "51 CPA3 b91 Translateur Ã©cran 2 en dÃ©faut",
+      "canonical_name": "elyse/screens/2/translator/fault",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 52,
+      "raw_name": "52 CPA4 b89 Translateur Ã©cran 3 en dÃ©faut",
+      "canonical_name": "elyse/screens/3/translator/fault",
+      "functional_group": "motion",
+      "direction": "read",
+      "notes": "proposed from full C5_IN_DIO96 inventory"
+    },
+    {
+      "index": 53,
+      "raw_name": "53 CPA5 b87 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 54,
+      "raw_name": "54 CPA6 b85 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    },
+    {
+      "index": 55,
+      "raw_name": "55 CPA7 b83 RÃ©serve",
+      "canonical_name": null,
+      "functional_group": null,
+      "direction": "read",
+      "notes": ""
+    }
+  ]
+}

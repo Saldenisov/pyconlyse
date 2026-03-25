@@ -1,0 +1,70 @@
+{
+  "card": "VAM-A",
+  "purpose": "Raw-to-canonical mapping for VAM-A based on the vacuum VI screenshots. Raw labels are preserved; canonical names are internal Python DS names.",
+  "entries": [
+    {
+      "raw_name": "20 ACQ Vide TPG300 PIQ63",
+      "canonical_name": "elyse/vacuum/tpg300_section/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "confidence=high; contributes_to=elyse/vacuum/tpg300_section/state"
+    },
+    {
+      "raw_name": "11 ACQ Vide Chambre",
+      "canonical_name": "elyse/vacuum/preparation_chamber/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.0,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "12 ACQ Vide PI Guide HF",
+      "canonical_name": "elyse/vacuum/HF/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.005614480097,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "13 ACQ Vide Canon PIQ12",
+      "canonical_name": "elyse/vacuum/canon/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.005400019054,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "14 ACQ Vide Section PIQ16",
+      "canonical_name": "elyse/vacuum/section/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.005401673996,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "15 ACQ Vide Miroir PIQ21",
+      "canonical_name": "elyse/vacuum/mirror/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.005563793435,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "16 ACQ Vide Dip PIQ27/33",
+      "canonical_name": "elyse/vacuum/dipole1/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": null,
+      "notes": "confidence=high"
+    },
+    {
+      "raw_name": "17 ACQ Vide Ecran PIQ53/63",
+      "canonical_name": "elyse/vacuum/screen1/measurement",
+      "functional_group": "vacuum",
+      "direction": "read",
+      "live_value": 0.004590687408,
+      "notes": "confidence=high"
+    }
+  ]
+}
