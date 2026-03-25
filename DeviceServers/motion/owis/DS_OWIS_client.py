@@ -22,11 +22,16 @@ layouts = {
     # Current OWIS split:
     # - Ethernet controller (PS90_IP): axes 1,2,3
     # - Legacy controller (PS90): long stage axis 4
+    # Requested mapping:
+    # - V0: axis 1 + 3 (IP) and axis 4 (legacy)
+    # - VDIV2/VD2: axis 2 (IP)
+    # - all: axes 1/2/3 (IP) and axis 4 (legacy)
     "V0": {
-        "selection": [(OWIS_DEVICE_IP, [2, 3]), (OWIS_DEVICE_LEGACY, [4])],
+        "selection": [(OWIS_DEVICE_IP, [1, 3]), (OWIS_DEVICE_LEGACY, [4])],
         "width": 1,
     },
-    "VD2": {"selection": [(OWIS_DEVICE_IP, [1])], "width": 1},
+    "VDIV2": {"selection": [(OWIS_DEVICE_IP, [2])], "width": 1},
+    "VD2": {"selection": [(OWIS_DEVICE_IP, [2])], "width": 1},
     "all": {
         "selection": [(OWIS_DEVICE_IP, [1, 2, 3]), (OWIS_DEVICE_LEGACY, [4])],
         "width": 1,

@@ -263,16 +263,16 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
                         <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
                             <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Measured</label>
-                            <span id="measured-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_measured.toFixed(6)} A</span>
+                            <span id="measured-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${formatCurrent(slot.current_measured, 6)}</span>
                         </div>
                         <div style="text-align: center; padding: 10px; background: #f8f9fa; border-radius: 4px;">
                             <label style="display: block; font-size: 0.8em; color: #6c757d; margin-bottom: 5px;">Setpoint</label>
-                            <span id="setpoint-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${slot.current_setpoint.toFixed(6)} A</span>
+                            <span id="setpoint-${slot.id}" style="font-size: 1.1em; font-weight: bold; color: #2c3e50;">${formatCurrent(slot.current_setpoint, 6)}</span>
                         </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 5px;">
                         <button onclick="nudgeSlot(${slot.id}, -1)" style="width: 35px; height: 35px; border: 1px solid #ffeaa7; background: #fff3cd; color: #856404; border-radius: 4px; cursor: pointer; font-weight: bold;">-</button>
-                        <input type="number" id="input-${slot.id}" value="${slot.current_setpoint.toFixed(3)}" 
+                        <input type="number" id="input-${slot.id}" value="${formatCurrentInput(slot.current_setpoint, 3)}" 
                                onkeypress="handleKeyPress(event, ${slot.id})" onchange="handleInputChange(${slot.id})"
                                style="flex: 1; padding: 8px 10px; border: 2px solid #ced4da; border-radius: 4px; text-align: center; font-weight: 500;" 
                                step="0.001" min="-50" max="50">
@@ -282,6 +282,22 @@
             `;
         }
         
+        function formatCurrent(value, digits = 6) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) {
+                return 'N/A';
+            }
+            return numeric.toFixed(digits) + ' A';
+        }
+
+        function formatCurrentInput(value, digits = 3) {
+            const numeric = Number(value);
+            if (!Number.isFinite(numeric)) {
+                return '0.000';
+            }
+            return numeric.toFixed(digits);
+        }
+
         let globalStep = 0.01;
         let currentDeviceName = null;
         let socket = null;
@@ -523,7 +539,7 @@
                 const checkboxElement = document.getElementById(`state-${slot.id}`);
                 
                 if (measuredElement) {
-                    const newValue = Number(slot.current_measured).toFixed(6) + ' A';
+                    const newValue = formatCurrent(slot.current_measured, 6);
                     console.log(`Setting measured-${slot.id} to ${newValue}`);
                     measuredElement.textContent = newValue;
                 } else {
@@ -531,7 +547,7 @@
                 }
                 
                 if (setpointElement) {
-                    const newValue = Number(slot.current_setpoint).toFixed(6) + ' A';
+                    const newValue = formatCurrent(slot.current_setpoint, 6);
                     console.log(`Setting setpoint-${slot.id} to ${newValue}`);
                     setpointElement.textContent = newValue;
                 } else {
@@ -564,8 +580,8 @@
                 
                 if (response.ok) {
                     const data = await response.json();
-                    document.getElementById(`setpoint-${slotId}`).textContent = data.current_setpoint.toFixed(3) + ' A';
-                    document.getElementById(`input-${slotId}`).value = data.current_setpoint.toFixed(3);
+                    document.getElementById(`setpoint-${slotId}`).textContent = formatCurrent(data.current_setpoint, 3);
+                    document.getElementById(`input-${slotId}`).value = formatCurrentInput(data.current_setpoint, 3);
                 }
             } catch (error) {
                 console.error('Error setting current:', error);

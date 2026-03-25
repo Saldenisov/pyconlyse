@@ -3,6 +3,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import './DSItestPSUClient.css';
 
+const formatCurrent = (value, digits = 3) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 'N/A';
+  }
+  return `${numeric.toFixed(digits)} A`;
+};
+
+const formatCurrentInput = (value, digits = 3) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return (0).toFixed(digits);
+  }
+  return numeric.toFixed(digits);
+};
+
 const DSItestPSUClient = ({ deviceName }) => {
   const [slots, setSlots] = useState([]);
   const [slotCount, setSlotCount] = useState(0);
@@ -32,7 +48,7 @@ const DSItestPSUClient = ({ deviceName }) => {
     const token = getCookie('access_token_cookie');
     
     socketRef.current = io('/', {
-      transports: ['websocket'],
+      withCredentials: true,
       auth: { token: token }
     });
 
@@ -205,11 +221,11 @@ const DSItestPSUClient = ({ deviceName }) => {
         <div className="slot-measurements">
           <div className="measurement">
             <label>Measured</label>
-            <span className="value">{slot.current_measured.toFixed(3)} A</span>
+            <span className="value">{formatCurrent(slot.current_measured, 3)}</span>
           </div>
           <div className="measurement">
             <label>Setpoint</label>
-            <span className="value">{slot.current_setpoint.toFixed(3)} A</span>
+            <span className="value">{formatCurrent(slot.current_setpoint, 3)}</span>
           </div>
         </div>
         
@@ -235,7 +251,7 @@ const DSItestPSUClient = ({ deviceName }) => {
             step="0.001"
             min="-50"
             max="50"
-            value={slot.current_setpoint.toFixed(3)}
+            value={formatCurrentInput(slot.current_setpoint, 3)}
             onChange={(e) => handleInputChange(e, slot.id)}
             onKeyPress={(e) => handleInputKeyPress(e, slot.id)}
             placeholder="Current (A)"

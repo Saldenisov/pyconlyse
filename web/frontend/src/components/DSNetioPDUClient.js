@@ -14,6 +14,30 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
   
   const socketRef = useRef(null);
 
+  const devicePath = (deviceName) => encodeURI(String(deviceName));
+  const asInt = (value, fallback = 0) => {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? fallback : parsed;
+  };
+  const normalizeOutput = (output, index) => ({
+    id: asInt(output?.id, index + 1),
+    name: String(output?.name || `Output ${index + 1}`),
+    state: asInt(output?.state, 0) ? 1 : 0,
+  });
+
+  const parseJsonOrThrow = async (response, fallbackMessage) => {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_error) {
+      payload = null;
+    }
+    if (!response.ok || payload?.success === false) {
+      throw new Error(payload?.error || fallbackMessage || `Request failed (${response.status})`);
+    }
+    return payload;
+  };
+
   useEffect(() => {
     if (deviceNames && deviceNames.length > 0) {
       setSelectedDevices(deviceNames);
@@ -32,7 +56,7 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
     const token = getCookie('access_token_cookie');
     
     socketRef.current = io('/', {
-      transports: ['websocket'],
+      withCredentials: true,
       auth: { token: token }
     });
 
@@ -46,15 +70,18 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
     });
 
     socketRef.current.on('device_update', (data) => {
-      if (data.device && devices[data.device]) {
-        setDevices(prev => ({
+      if (!data.device) return;
+      setDevices(prev => {
+        if (!prev[data.device]) return prev;
+        return {
           ...prev,
           [data.device]: {
             ...prev[data.device],
-            outputs: data.outputs || prev[data.device].outputs
+            outputs: data.outputs || prev[data.device].outputs,
+            state: data.state || prev[data.device].state
           }
-        }));
-      }
+        };
+      });
     });
 
     socketRef.current.on('device_error', (data) => {
@@ -78,7 +105,7 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
       
       for (const deviceName of deviceNames) {
         try {
-          const response = await fetch(`/api/device/${deviceName}/pdu/outputs`, {
+          const response = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
             credentials: 'include'
           });
           
@@ -86,12 +113,12 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
             const data = await response.json();
             devicesData[deviceName] = {
               name: deviceName,
-              outputs: data.outputs || [],
+              outputs: (data.outputs || []).map(normalizeOutput),
               state: data.state || 'UNKNOWN'
             };
           } else {
             // Try alternative API endpoint
-            const altResponse = await fetch(`/api/device/${deviceName}/attributes`, {
+            const altResponse = await fetch(`/api/device/${devicePath(deviceName)}/attributes`, {
               credentials: 'include'
             });
             
@@ -124,15 +151,15 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
     const outputs = [];
     const ids = attributes.ids?.value || [];
     const names = attributes.names?.value || [];
-    const states = attributes.states?.value || [];
+    const states = attributes.states?.value || attributes.output_statuses?.value || [];
     
-    for (let i = 0; i < Math.max(ids.length, 4); i++) {
-      outputs.push({
-        id: ids[i] || (i + 1),
-        name: names[i] || `Output ${i + 1}`,
-        state: states[i] || 0
-      });
-    }
+      for (let i = 0; i < Math.max(ids.length, 4); i++) {
+        outputs.push({
+        id: asInt(ids[i], i + 1),
+        name: String(names[i] || `Output ${i + 1}`),
+        state: asInt(states[i], 0) ? 1 : 0
+        });
+      }
     
     return {
       name: deviceName,
@@ -168,28 +195,38 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
         output.id === outputId ? (state ? 1 : 0) : output.state
       );
       
-      const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+      const response = await fetch(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
       });
-      
-      if (response.ok) {
-        // Update local state
-        setDevices(prev => ({
-          ...prev,
-          [deviceName]: {
-            ...prev[deviceName],
-            outputs: prev[deviceName].outputs.map(output =>
-              output.id === outputId ? { ...output, state: state ? 1 : 0 } : output
-            )
-          }
-        }));
-        setError(null);
-      } else {
-        throw new Error(`Failed to set output ${outputId} for ${deviceName}`);
+
+      await parseJsonOrThrow(response, `Failed to set output ${outputId} for ${deviceName}`);
+
+      const verify = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
+        credentials: 'include',
+      });
+      const verifyPayload = await parseJsonOrThrow(
+        verify,
+        `Failed to verify output ${outputId} state for ${deviceName}`
+      );
+      const normalizedOutputs = (verifyPayload.outputs || []).map(normalizeOutput);
+      const updatedOutput = normalizedOutputs.find((output) => output.id === outputId);
+      if (updatedOutput && updatedOutput.state !== (state ? 1 : 0)) {
+        throw new Error(
+          `Output ${outputId} on ${deviceName} did not change state. Check device-side permissions/rules.`
+        );
       }
+      setDevices((prev) => ({
+        ...prev,
+        [deviceName]: {
+          ...prev[deviceName],
+          state: verifyPayload.state || prev[deviceName].state,
+          outputs: normalizedOutputs,
+        },
+      }));
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
@@ -202,25 +239,31 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
       
       const states = device.outputs.map(() => state ? 1 : 0);
       
-      const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+      const response = await fetch(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
       });
-      
-      if (response.ok) {
-        setDevices(prev => ({
-          ...prev,
-          [deviceName]: {
-            ...prev[deviceName],
-            outputs: prev[deviceName].outputs.map(output => ({ ...output, state: state ? 1 : 0 }))
-          }
-        }));
-        setError(null);
-      } else {
-        throw new Error(`Failed to set all outputs for ${deviceName}`);
-      }
+
+      await parseJsonOrThrow(response, `Failed to set all outputs for ${deviceName}`);
+
+      const verify = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
+        credentials: 'include',
+      });
+      const verifyPayload = await parseJsonOrThrow(
+        verify,
+        `Failed to verify outputs state for ${deviceName}`
+      );
+      setDevices((prev) => ({
+        ...prev,
+        [deviceName]: {
+          ...prev[deviceName],
+          state: verifyPayload.state || prev[deviceName].state,
+          outputs: (verifyPayload.outputs || []).map(normalizeOutput),
+        },
+      }));
+      setError(null);
     } catch (err) {
       setError(err.message);
     }
@@ -323,7 +366,7 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
         <div className="header-controls">
           <div className="connection-status">
             <span className={`status ${connected ? 'connected' : 'disconnected'}`}>
-              {connected ? '🟢 Connected' : '🔴 Disconnected'}
+              {connected ? '🟢 Realtime Connected' : '🔴 Realtime Disconnected'}
             </span>
             <button 
               className={`monitor-btn ${monitoring ? 'active' : ''}`}

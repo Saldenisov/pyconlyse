@@ -1,11 +1,8 @@
 // Login.js
 import React, { useState } from 'react';
 import { Helmet } from 'react-helmet';
-import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  // You can still use useNavigate if needed elsewhere, but here we'll force a reload.
-  // const navigate = useNavigate();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);

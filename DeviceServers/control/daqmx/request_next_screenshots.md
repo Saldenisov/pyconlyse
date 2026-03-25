@@ -1,0 +1,277 @@
+# Next Screenshot Requests
+
+These raw variables are still missing canonical names in the clean live PSP dictionary.
+
+## ht_hf
+
+- `03 OUT03 b13 Cmd Pos. DÃ©phaseur`
+- `04 OUT04 b17 Cmd Pos. AttÃ©nuateur`
+- `16 DPB0 b82 Marche relais HT 1`
+- `17 DPB1 b80 ArrÃªt relais HT 1`
+- `18 DPB2 b78 Marche alimentation HT`
+- `19 DPB3 b76 ArrÃªt alimentation HT`
+- `20 DPB4 b74 RAZ alimentation HT`
+- `27 BPA3 b42 DÃ©phaseur butÃ©e MIN`
+- `28 BPA4 b40 DÃ©phaseur butÃ©e MAX`
+- `29 BPA5 b38 AttÃ©nuateur butÃ©e MIN`
+- `30 BPA6 b36 AttÃ©nuateur butÃ©e MAX`
+- `33 BPB1 b30 HF incident Canon`
+- `34 BPB2 b28 HF incident Section`
+- `35 BPB3 b26 V alimentation HT`
+- `36 BPB4 b24 I alimentation HT`
+- `38 ACH38 b81 Mesure phase HF2`
+- `46 BPC6 b04 Radioprotection 1, coupure HT`
+- `47 BPC7 b02 Radioprotection 2, coupure HF`
+- `48 CPA0 b97 Alimentation HT en marche`
+- `49 CPA1 b95 Alimentation HT en dÃ©faut`
+- `Arret alimentation HT ED`
+- `Arret alimentation HT OK`
+- `ArrÃªt Att et DÃ©ph HF`
+- `ArrÃªt RELAIS HT Mod.`
+- `ArrÃªt RELAIS HT Mod. ED`
+- `ArrÃªt RELAIS HT Mod. OK`
+- `ArrÃªt alimentation HT`
+- `Marche Att et DÃ©ph HF`
+- `Marche RELAIS HT Mod.`
+- `Marche RELAIS HT Mod. ED`
+- `Marche RELAIS HT Mod. OK`
+- `Marche alimentation HT`
+- `Marche alimentation HT ED`
+- `Marche alimentation HT OK`
+- `Reset alimentation HT`
+- `X ArrÃªt RELAIS HT Mod.`
+- `X ArrÃªt alimentation HT`
+- `X Marche RELAIS HT Mod.`
+- `X Marche alimentation HT`
+- `X Reset alimentation HT`
+
+## cooling
+
+- `00 APA0 b47 Reffroidissement Canon marche`
+- `00 CPB0 b81 Marche Reffroidissement Canon`
+- `00 CPC0 b65 Marche modulateur Bas Niveau`
+- `01 APA1 b45 Reffroidissement Canon dÃ©faut`
+- `01 CPB1 b79 ArrÃªt Reffroidissement Canon`
+- `01 CPC1 b63 ArrÃªt modulateur Bas Niveau`
+- `02 CPB2 b77 RAZ Reffroidissement Canon`
+- `02 CPC2 b61 RAZ modulateur Bas Niveau`
+- `03 CPB3 b75 Marche Reffroidissement Section`
+- `04 APA4 b39 DÃ©bit Reffroidissement Canon dÃ©faut`
+- `04 CPB4 b73 ArrÃªt Reffroidissement Section`
+- `05 CPB5 b71 RAZ Reffroidissement Section`
+- `06 APA6 b35 Reffroidissement Section marche`
+- `07 APA7 b33 Reffroidissement Section dÃ©faut`
+- `10 APB2 b27 DÃ©bit eau Reffroidissement Section`
+- `19 APC3 b09 DÃ©bit eau Canon`
+- `30 BPA6 b36 eau focale injection en dÃ©faut`
+- `38 BPB6 b20 DÃ©bit eau Section`
+
+## vacuum
+
+- `00 APA0 b47 Vide chambre prÃ©paratoire en marche`
+- `00 SUP VidÃ©o`
+- `01 ACH01 b05 Mes Vide Chambre de prÃ©paration`
+- `02 ACH02 b07 Mes Vide Canon (PIQ 12)`
+- `02 APA2 b43 Vanne Reffroidissement Canon fermÃ©e`
+- `02 APA2 b43 Vide sas guide HF en marche`
+- `03 ACH03 b09 Mes Vide Miroir (PIQ 21)`
+- `03 APA3 b41 Vanne Reffroidissement Canon ouverte`
+- `03 APA3 b41 Vide Klystron`
+- `03 APA3 b41 Vide sas guide HF en dÃ©faut`
+- `04 ACH04 b11 Mes Vide Ecran 1 (PIQ 53-63)`
+- `04 APA4 b39 Vide Canon (PIQ 12) en marche`
+- `04 OUT04 b17 Cmd position translateur Ecran 1`
+- `05 APA5 b37 Vide Canon (PIQ 12) en dÃ©faut`
+- `05 OUT05 b21 Cmd position translateur Ecran 2`
+- `06 APA6 b35 Vide Section (PIQ 16) en marche`
+- `06 OUT06 b25 Cmd position translateur Ecran 3`
+- `07 APA7 b33 Vide Section (PIQ 16) en dÃ©faut`
+- `08 APB0 b31 Vanne Reffroidissement Section fermÃ©e`
+- `08 APB0 b31 Vide Miroir (PIQ 21) en marche`
+- `09 ACH09 b06 Mes Vide SAS guide HF`
+- `09 APB1 b29 Vanne Reffroidissement Section ouverte`
+- `09 APB1 b29 Vide Miroir (PIQ 21) en dÃ©faut`
+- `10 ACH10 b08 Mes Vide Section (PIQ 16)`
+- `10 ACQ Vide Section`
+- `10 APB2 b27 Vide DipÃ´le 1 (PIQ 27+33) en marche`
+- `11 ACH11 b10 Mes Vide DIP 1 (PIQ27 + 33)`
+- `11 APB3 b25 Vide DipÃ´le 1 (PIQ 27+33) en dÃ©faut`
+- `12 ACH12 b12 Mes Vide jauge canon`
+- `12 APB4 b23 Vide Ecran 1 (PIQ 53+63) en marche`
+- `13 APB5 b21 Vide Ecran 1 (PIQ 53+63) en dÃ©faut`
+- `14 APB6 b19 Vanne Cathode (VIC 01) ouverte`
+- `15 APB7 b17 Vanne Cathode (VIC 01) fermÃ©e`
+- `16 APC0 b15 Vanne Injection (VSC 17) ouverte`
+- `17 APC1 b13 Vanne Injection (VSC 17) fermÃ©e`
+- `18 APC2 b11 Vanne directe ouverte`
+- `19 ACH19 b57 Mes I Faraday 1`
+- `19 APC3 b09 Vanne directe fermÃ©e`
+- `20 ACH20 b59 Mes I Faraday 3`
+- `20 APC4 b07 Vanne DÃ©viation 1 ouverte`
+- `21 APC5 b05 Vanne DÃ©viation 1 fermÃ©e`
+- `22 APC6 b03 Vanne DÃ©viation 2 ouverte`
+- `22 DPA6 b86 Cmd Miroir LASER EN`
+- `23 APC7 b01 Vanne DÃ©viation 2 fermÃ©e`
+- `23 DPA7 b84 Cmd Faraday 1 EN`
+- `24 BPA0 b48 LASER en marche`
+- `24 DPB0 b82 Cmd Faraday 2 EN`
+- `25 BPA1 b46 LASER eb dÃ©faut`
+- `25 DPB1 b80 Cmd Faraday 3 EN`
+- `26 DPB2 b78 Cmd Miroir LASER HORS`
+- `27 ACH27 b58 Mes I Faraday 2`
+- `28 DPB4 b74 Cmd Faraday 1 HORS`
+- `29 DPB5 b72 Cmd Faraday 2 HORS`
+- `30 DPB6 b70 Cmd Faraday 3 HORS`
+- `32 DPC0 b66 LASER Marche`
+- `33 DPC1 b64 LASER ArrÃªt`
+- `37 BPB5 b22 Faraday 1 EN`
+- `38 ACH38 b81 Mes I obcs Faraday 2`
+- `38 BPB6 b20 Faraday 1 HORS`
+- `39 BPB7 b18 Faraday 2 EN`
+
+## modulator
+
+- `00 APA0 b47 Eau corps Klystron`
+- `01 ACH01 b05 Mes V Chauffage Klystron`
+- `01 APA1 b45 Eau collecteur Klystron`
+- `01 OUT01 b05 Cmd DeQing`
+- `02 APA2 b43 Eau cuve Klystron`
+- `04 APA4 b39 Ventilation Thyratron`
+- `05 APA5 b37 Niveau d'huile cuve Klystron`
+- `05 CPC5 b55 Marche prÃ©magnÃ©tisation`
+- `06 APA6 b35 V chauffage Thyratron`
+- `06 CPC6 b53 ArrÃªt prÃ©magnÃ©tisation`
+- `07 APA7 b33 I chauffage Thyratron`
+- `07 CPC7 b51 Marche focale Klystron`
+- `08 APB0 b31 V chauffage Klystron`
+- `08 DPA0 b98 ArrÃªt focale Klystron`
+- `09 APB1 b29 I chauffage Klystron`
+- `11 APB3 b25 I rÃ©servoir Thyratron`
+- `12 APB4 b23 SÃ©curitÃ© Thyratron`
+- `14 APB6 b19 I prÃ©magnÃ©tisation`
+- `20 APC4 b07 Eau focale Klystron`
+- `41 BPC1 b14 I Thyratron`
+- `42 BPC2 b12 I fin de ligne`
+- `43 BPC3 b10 V LAR`
+- `44 BPC4 b08 V Klystron`
+- `45 BPC5 b06 I Klystron`
+
+## magnets
+
+- `09 CPC1 b63 Marche Triplet 1-1`
+- `11 CPC3 b59 Marche Triplet 1-2`
+- `12 APB4 b23 Triplet 1-1 en marche`
+- `13 APB5 b21 Triplet 1-1 en dÃ©faut`
+- `14 APB6 b19 Triplet 1-2 en marche`
+- `15 APB7 b17 Triplet 1-2 en dÃ©faut`
+- `15 CPC7 b51 Marche Triplet 2-1`
+- `17 DPA1 b96 Marche Triplet 2-2`
+- `18 APC2 b11 Triplet 2-1 en marche`
+- `19 APC3 b09 Triplet 2-1 en dÃ©faut`
+- `20 APC4 b07 Triplet 2-2 en marche`
+- `21 APC5 b05 Triplet 2-2 en dÃ©faut`
+- `21 DPA5 b88 M/A QuadripÃ´ple 1`
+- `23 DPA7 b84 M/A QuadripÃ´ple 2`
+- `24 BPA0 b48 QuadripÃ´ple 1 en marche`
+- `25 BPA1 b46 QuadripÃ´ple 1 en dÃ©faut`
+- `26 BPA2 b44 QuadripÃ´ple 2 en marche`
+- `27 BPA3 b42 QuadripÃ´ple 2 en dÃ©faut`
+- `27 DPB3 b76 M/A DipÃ´le 1`
+- `29 DPB5 b72 M/A DipÃ´le 2`
+- `31 BPA7 b34 DipÃ´le 1 en marche`
+- `31 DPB7 b68 M/A Guidage H1`
+- `32 BPB0 b32 DipÃ´le 1 en dÃ©faut`
+- `32 DPC0 b66 M/A Guidage V1`
+- `33 BPB1 b30 DipÃ´le 2 en marche`
+- `33 DPC1 b64 M/A Guidage H2`
+- `34 BPB2 b28 DipÃ´le 2 en dÃ©faut`
+- `34 DPC2 b62 M/A Guidage V2`
+- `35 ACH35 b73 Mes champ DipÃ´le 2`
+- `35 BPB3 b26 Guidage H 1 en marche`
+- `35 DPC3 b60 M/A Guidage H3`
+- `36 BPB4 b24 Guidage H 1 en dÃ©faut`
+- `36 DPC4 b58 M/A Guidage V3`
+- `37 BPB5 b22 Guidage V 1 en marche`
+- `37 DPC5 b56 M/A Guidage H4`
+- `38 BPB6 b20 Guidage V 1 en dÃ©faut`
+- `38 DPC6 b54 M/A Guidage V4`
+- `39 BPB7 b18 Guidage H 2 en marche`
+- `39 DPC7 b52 M/A Guidage V5`
+- `40 BPC0 b16 Guidage H 2 en dÃ©faut`
+- `41 BPC1 b14 Guidage V 2 en marche`
+- `42 ACH42 b72 Mes champ DipÃ´le 2`
+- `42 BPC2 b12 Guidage V 2 en dÃ©faut`
+- `43 BPC3 b10 Guidage H 3 en marche`
+- `44 BPC4 b08 Guidage H 3 en dÃ©faut`
+- `45 BPC5 b06 Guidage V 3 en marche`
+- `46 BPC6 b04 Guidage V 3 en dÃ©faut`
+- `47 BPC7 b02 Guidage H 4 en marche`
+- `48 CPA0 b97 Guidage H 4 en dÃ©faut`
+- `49 CPA1 b95 Guidage V 4 en marche`
+- `50 CPA2 b93 Guidage V 4 en dÃ©faut`
+- `53 CPA5 b87 Guidage V 5 en marche`
+- `54 CPA6 b85 Guidage V 5 en dÃ©faut`
+
+## none
+
+- `00 ACQ Auxiliare`
+- `00 CPB0 b81 RÃ©serve`
+- `00 OUT00 b01 RÃ©serve`
+- `01 ACQ Variables`
+- `01 APA1 b45 RÃ©serve`
+- `01 CPB1 b79 Alimentation moteur`
+- `01 OUT01 b05 Cmd Temp. Canon`
+- `01 SUP Variables`
+- `02 ACH02 b07 Mes I D'Qing`
+- `02 ACQ EvÃ©nement`
+- `02 CPB2 b77 RÃ©serve`
+- `02 OUT02 b09 Cmd Temp. Section`
+- `02 OUT02 b09 Cmd position fente HG`
+- `02 OUT02 b09 RÃ©serve`
+- `02 SUP Evenement`
+- `03 ACH03 b09 RÃ©servÃ©`
+- `03 CPB3 b75 M/A CamÃ©ra chambre de prÃ©paration`
+- `03 CPC3 b59 Marche Chauffage`
+- `03 OUT03 b13 Cmd position fente HD`
+- `04 CPB4 b73 RÃ©serve`
+- `04 CPC4 b57 ArrÃªt Chauffage`
+- `05 ACH05 b13 Libre ?`
+- `05 APA5 b37 Local / Distance Canon (local=0V)`
+- `05 CPB5 b71 M/A CamÃ©ra Miroir`
+- `06 ACH06 b15 Libre ?`
+- `06 CPB6 b69 RÃ©serve`
+- `07 ACH07 b17 Libre ?`
+- `07 CPB7 b67 M/A Eclairage Ecran 1`
+- `07 CPB7 b67 RÃ©serve`
+- `07 OUT07 b29 RÃ©serve`
+- `08 CPC0 b65 RÃ©serve`
+- `08 OUT08 b33 Cmd position Miroir X`
+- `09 CPC1 b63 M/A CamÃ©ra Ecran 1`
+- `09 DPA1 b96 RÃ©serve`
+- `09 OUT09 b37 Cmd position Miroir Y`
+- `09 OUT09 b37 RÃ©serve`
+- `10 APB2 b27 I De QING`
+- `10 CPC2 b61 RÃ©serve`
+- `10 DPA2 b94 RÃ©serve`
+- `11 APB3 b25 Loc/dist. Reffr. Section (local=0V)`
+- `11 CPC3 b59 RÃ©serve`
+- `11 DPA3 b92 RÃ©serve`
+- `12 CPC4 b57 RÃ©serve`
+- `12 DPA4 b90 RÃ©serve`
+- `13 ACH13 b14 Libre ?`
+- `13 APB5 b21 Pression SF6`
+- `13 CPC5 b55 M/A Eclairage Ecran 2`
+- `13 CPC5 b55 RÃ©serve`
+- `13 DPA5 b88 RÃ©serve`
+- `14 ACH14 b16 Libre ?`
+- `14 CPC6 b53 RÃ©serve`
+- `14 DPA6 b86 RÃ©serve`
+- `15 ACH15 b18 Libre ?`
+- `15 APB7 b17 Contact porte`
+- `15 CPC7 b51 M/A CamÃ©ra Ecran 2`
+- `15 DPA7 b84 RÃ©serve`
+- `16 APC0 b15 Contact perche`
+- `16 APC0 b15 RÃ©serve`
+- `16 DPA0 b98 RÃ©serve`
+- `17 ACH17 b53 RÃ©servÃ©`
+

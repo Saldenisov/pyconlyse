@@ -25,10 +25,31 @@
   margin: 0 auto;
 }
 
+.selection-heatmap-shell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 /* The imshow-graph fills its wrapper */
 .imshow-graph {
   width: 100%;
   height: 100%;
+}
+
+.selection-overlay {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.selection-rect {
+  position: absolute;
+  border: 2px solid rgba(220, 38, 38, 0.95);
+  background: rgba(220, 38, 38, 0.14);
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
 /* Right column: contains the XY plots */

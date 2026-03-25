@@ -1,5 +1,5 @@
 .camera-client {
-  padding: 20px;
+  padding: 14px;
   max-width: 1600px;
   margin: 0 auto;
 }
@@ -8,24 +8,25 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #e0e0e0;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e0e0e0;
 }
 
 .camera-header h2 {
   margin: 0;
   color: #333;
+  font-size: 20px;
 }
 
 .camera-select {
-  padding: 8px 12px;
-  font-size: 14px;
+  padding: 6px 10px;
+  font-size: 13px;
   border: 1px solid #ccc;
   border-radius: 4px;
   background-color: white;
   cursor: pointer;
-  min-width: 300px;
+  min-width: 260px;
 }
 
 .camera-select:hover {
@@ -54,37 +55,42 @@
 
 .camera-content {
   display: grid;
-  grid-template-columns: 450px 1fr;
-  gap: 20px;
+  grid-template-columns: minmax(300px, 1fr) minmax(540px, 2fr);
+  gap: 12px;
+  align-items: start;
 }
 
 .camera-info-panel {
   background: #f8f9fa;
-  padding: 20px;
+  padding: 12px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .camera-info-panel h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
   color: #333;
-  border-bottom: 2px solid #007bff;
-  padding-bottom: 8px;
+  border-bottom: 1px solid #d0d5dd;
+  padding-bottom: 6px;
+  font-size: 15px;
 }
 
 .info-grid {
   display: grid;
-  gap: 10px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 10px;
 }
 
 .info-item {
   display: flex;
   justify-content: space-between;
-  padding: 8px;
+  padding: 6px 8px;
   background: white;
   border-radius: 4px;
+  font-size: 12px;
+  gap: 8px;
 }
 
 .info-label {
@@ -113,21 +119,22 @@
 
 .controls-panel {
   background: white;
-  padding: 15px;
+  padding: 10px;
   border-radius: 4px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
 }
 
 .control-buttons {
   display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
 }
 
 .control-buttons button {
-  flex: 1;
-  padding: 12px;
-  font-size: 14px;
+  flex: 1 1 130px;
+  padding: 8px 10px;
+  font-size: 13px;
   font-weight: bold;
   border: none;
   border-radius: 4px;
@@ -169,26 +176,27 @@
 
 .parameters {
   display: grid;
-  gap: 15px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .param-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .param-group label {
   font-weight: bold;
   color: #555;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .param-group input {
-  padding: 8px;
+  padding: 6px;
   border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .param-group input:focus {
@@ -200,30 +208,33 @@
 .param-range {
   font-size: 11px;
   color: #888;
+  line-height: 1.2;
 }
 
 .cg-info {
   background: white;
-  padding: 15px;
+  padding: 10px;
   border-radius: 4px;
-  margin-top: 20px;
+  margin-top: 8px;
 }
 
 .cg-info h4 {
   margin-top: 0;
-  margin-bottom: 10px;
+  margin-bottom: 6px;
   color: #333;
+  font-size: 14px;
 }
 
 .cg-info p {
   margin: 0;
   font-family: monospace;
   color: #666;
+  font-size: 12px;
 }
 
 .camera-preview-panel {
   background: #f8f9fa;
-  padding: 20px;
+  padding: 12px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   display: flex;
@@ -232,10 +243,11 @@
 
 .camera-preview-panel h3 {
   margin-top: 0;
-  margin-bottom: 15px;
+  margin-bottom: 8px;
   color: #333;
-  border-bottom: 2px solid #007bff;
-  padding-bottom: 8px;
+  border-bottom: 1px solid #d0d5dd;
+  padding-bottom: 6px;
+  font-size: 15px;
 }
 
 .preview-container {
@@ -245,7 +257,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 400px;
+  min-height: 520px;
   position: relative;
 }
 
@@ -265,10 +277,28 @@
 
 @media (max-width: 1200px) {
   .camera-content {
+    grid-template-columns: minmax(260px, 1fr) minmax(420px, 2fr);
+  }
+
+  .preview-container {
+    min-height: 420px;
+  }
+}
+
+@media (max-width: 900px) {
+  .camera-content {
     grid-template-columns: 1fr;
   }
-  
-  .camera-preview-panel {
-    min-height: 500px;
+
+  .parameters {
+    grid-template-columns: 1fr;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .preview-container {
+    min-height: 320px;
   }
 }

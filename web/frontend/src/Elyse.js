@@ -21,11 +21,28 @@ const tabs = [
   "Experiment"
 ];
 
+const TEST_ONLY_MESSAGE =
+  "Automatic sending is disabled here. This web panel is for UI testing only. Send data and commands manually.";
+
 const Elyse = () => {
   const [activeTab, setActiveTab] = useState(tabs[0]);
+  const [actionMessage, setActionMessage] = useState(TEST_ONLY_MESSAGE);
 
   const handleTabClick = (tab) => {
     setActiveTab(tab);
+  };
+
+  const handleTestOnlyAction = (event) => {
+    const button = event.target.closest('button');
+    if (!button) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    setActionMessage(
+      `Sending is unavailable in test mode (${activeTab}). ${TEST_ONLY_MESSAGE}`
+    );
   };
 
   // Render the content for the active tab.
@@ -49,6 +66,19 @@ const Elyse = () => {
   return (
     <div>
       <h1>ELYSE Control Panel</h1>
+      <div
+        style={{
+          margin: '12px 0 16px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          border: '1px solid #c53030',
+          backgroundColor: '#fff5f5',
+          color: '#742a2a',
+          fontWeight: 600,
+        }}
+      >
+        {actionMessage}
+      </div>
       <ul className="nav nav-tabs" id="elyseTabs" role="tablist">
         {tabs.map((tab) => {
           const lowerTab = tab.toLowerCase();
@@ -70,7 +100,11 @@ const Elyse = () => {
           );
         })}
       </ul>
-      <div className="tab-content" id="elyseTabsContent">
+      <div
+        className="tab-content"
+        id="elyseTabsContent"
+        onClickCapture={handleTestOnlyAction}
+      >
         {tabs.map((tab) => {
           const lowerTab = tab.toLowerCase();
           return (

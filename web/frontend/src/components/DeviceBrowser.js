@@ -2,6 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import DeviceControl from './DeviceControl';
 import ITestPSUClient from './ITestPSUClient';
+import CameraClient from './CameraClient';
+import DSNetioPDUClient from './DSNetioPDUClient';
+import DSStandaMotorsClient from './DSStandaMotorsClient';
+import { resolveDeviceFamily } from '../utils/deviceFamily';
 import './DeviceBrowser.css';
 
 const DeviceBrowser = () => {
@@ -19,7 +23,7 @@ const DeviceBrowser = () => {
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/devices', {
+      const response = await fetch('/api/devices?probe_state=0&include_dserver=0', {
         credentials: 'include'
       });
       
@@ -39,18 +43,7 @@ const DeviceBrowser = () => {
   };
 
   const getDeviceType = (deviceName, deviceClass = '') => {
-    const name = deviceName.toLowerCase();
-    const cls = deviceClass.toLowerCase();
-    
-    if (name.includes('itest') || name.includes('psu') || cls.includes('itest')) {
-      return 'itest_psu';
-    } else if (name.includes('camera') || name.includes('basler') || name.includes('andor')) {
-      return 'camera';
-    } else if (name.includes('motor') || name.includes('standa') || name.includes('owis')) {
-      return 'motor';
-    } else {
-      return 'generic';
-    }
+    return resolveDeviceFamily(deviceName, deviceClass);
   };
 
   const getDeviceIcon = (deviceType, state) => {
@@ -59,6 +52,8 @@ const DeviceBrowser = () => {
     switch (deviceType) {
       case 'itest_psu':
         return `⚡ ${stateColor}`;
+      case 'netio':
+        return `🔌 ${stateColor}`;
       case 'camera':
         return `📷 ${stateColor}`;
       case 'motor':
@@ -71,13 +66,7 @@ const DeviceBrowser = () => {
   const selectDevice = (device) => {
     setSelectedDevice(device);
     const deviceType = getDeviceType(device.name, device.class);
-    
-    // Set appropriate client type
-    if (deviceType === 'itest_psu') {
-      setClientType('itest_psu');
-    } else {
-      setClientType('generic');
-    }
+    setClientType(deviceType === 'generic' ? 'generic' : deviceType);
   };
 
   const filteredDevices = devices.filter(device => 
@@ -95,10 +84,52 @@ const DeviceBrowser = () => {
     switch (clientType) {
       case 'itest_psu':
         return <ITestPSUClient deviceName={selectedDevice.name} />;
+      case 'camera':
+        return <CameraClient initialCamera={selectedDevice.name} />;
+      case 'netio':
+        return <DSNetioPDUClient deviceNames={[selectedDevice.name]} />;
+      case 'motor':
+        return <DSStandaMotorsClient defaultConfig="test" motorOverride={[selectedDevice.name]} />;
       default:
         return <DeviceControl deviceName={selectedDevice.name} deviceType={clientType} />;
     }
   };
+
+  const clientOptions = (() => {
+    const selectedType = selectedDevice
+      ? getDeviceType(selectedDevice.name, selectedDevice.class)
+      : 'generic';
+
+    if (selectedType === 'itest_psu') {
+      return [
+        { value: 'itest_psu', label: 'iTest PSU' },
+        { value: 'generic', label: 'Generic Control' },
+      ];
+    }
+
+    if (selectedType === 'camera') {
+      return [
+        { value: 'camera', label: 'Camera Client' },
+        { value: 'generic', label: 'Generic Control' },
+      ];
+    }
+
+    if (selectedType === 'motor') {
+      return [
+        { value: 'motor', label: 'Motor Client' },
+        { value: 'generic', label: 'Generic Control' },
+      ];
+    }
+
+    if (selectedType === 'netio') {
+      return [
+        { value: 'netio', label: 'NETIO PDU' },
+        { value: 'generic', label: 'Generic Control' },
+      ];
+    }
+
+    return [{ value: 'generic', label: 'Generic Control' }];
+  })();
 
   if (loading) {
     return (
@@ -194,8 +225,11 @@ const DeviceBrowser = () => {
               onChange={(e) => setClientType(e.target.value)}
               className="client-type-select"
             >
-              <option value="generic">Generic Control</option>
-              <option value="itest_psu">iTest PSU</option>
+              {clientOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
         )}

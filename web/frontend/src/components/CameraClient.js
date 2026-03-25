@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './CameraClient.css';
 
-const CameraClient = () => {
+const CameraClient = ({
+  initialCamera = null,
+  lockCameraName = null,
+  hideSelector = false,
+  panelTitle = 'Camera Control',
+}) => {
   const [cameras, setCameras] = useState([]);
   const [selectedCamera, setSelectedCamera] = useState(null);
   const [cameraInfo, setCameraInfo] = useState(null);
@@ -13,12 +18,37 @@ const CameraClient = () => {
   const [cgPosition, setCgPosition] = useState(null);
   const canvasRef = useRef(null);
 
-  const API_BASE = 'http://10.20.30.202:5000/api';
+  const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
+  const toBoolean = (value) => {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    if (typeof value === 'number') {
+      return value !== 0;
+    }
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (['1', 'true', 'yes', 'on', 'running'].includes(normalized)) {
+        return true;
+      }
+      if (['0', 'false', 'no', 'off', 'stopped'].includes(normalized)) {
+        return false;
+      }
+    }
+    return Boolean(value);
+  };
+
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   // Load cameras on mount
   useEffect(() => {
     loadCameras();
   }, []);
+
+  useEffect(() => {
+    setImageData(null);
+    setCgPosition(null);
+  }, [selectedCamera]);
 
   // Poll camera status when selected
   useEffect(() => {
@@ -40,8 +70,24 @@ const CameraClient = () => {
       const data = await response.json();
       if (data.success) {
         setCameras(data.cameras);
+
+        if (lockCameraName) {
+          const lockedCamera = data.cameras.find((cam) => cam.name === lockCameraName);
+          if (lockedCamera) {
+            setSelectedCamera(lockCameraName);
+            setError(null);
+          } else {
+            setSelectedCamera(null);
+            setError(`Locked camera ${lockCameraName} is not available`);
+          }
+          return;
+        }
+
         if (data.cameras.length > 0 && !selectedCamera) {
-          setSelectedCamera(data.cameras[0].name);
+          const preferredCamera = initialCamera
+            ? data.cameras.find((cam) => cam.name === initialCamera)
+            : null;
+          setSelectedCamera(preferredCamera ? preferredCamera.name : data.cameras[0].name);
         }
       }
     } catch (err) {
@@ -65,11 +111,37 @@ const CameraClient = () => {
           offsetX: data.camera_info.offsetX,
           offsetY: data.camera_info.offsetY,
         });
-        setIsGrabbing(data.camera_info.isgrabbing || false);
+        setIsGrabbing(toBoolean(data.camera_info.isgrabbing));
       }
     } catch (err) {
       console.error('Failed to load camera info:', err);
     }
+  };
+
+  const pollGrabbingState = async (expectedState, attempts = 6, delayMs = 250) => {
+    let latestState = null;
+
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      try {
+        const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`);
+        const data = await response.json();
+        if (data.success) {
+          latestState = toBoolean(data.grabbing);
+          if (latestState === expectedState) {
+            return latestState;
+          }
+        }
+      } catch (err) {
+        // Ignore transient errors while polling, we keep latest known state.
+      }
+
+      await sleep(delayMs);
+    }
+
+    if (latestState === null) {
+      return expectedState;
+    }
+    return latestState;
   };
 
   const loadImage = async () => {
@@ -145,14 +217,22 @@ const CameraClient = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setIsGrabbing(data.grabbing);
+        const confirmedState = await pollGrabbingState(true);
+        setIsGrabbing(confirmedState);
+        if (!confirmedState) {
+          setError('Start command sent, but camera still reports grabbing OFF.');
+        } else {
+          setError(null);
+          loadImage();
+        }
       } else {
         setError(data.error);
       }
     } catch (err) {
       setError('Failed to start grabbing: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleStopGrabbing = async () => {
@@ -165,14 +245,28 @@ const CameraClient = () => {
       });
       const data = await response.json();
       if (data.success) {
-        setIsGrabbing(data.grabbing);
+        const confirmedState = await pollGrabbingState(false);
+        setIsGrabbing(confirmedState);
+        if (!confirmedState) {
+          setImageData(null);
+          setCgPosition(null);
+          const canvas = canvasRef.current;
+          if (canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          }
+          setError(null);
+        } else {
+          setError('Stop command sent, but camera still reports grabbing ON.');
+        }
       } else {
         setError(data.error);
       }
     } catch (err) {
       setError('Failed to stop grabbing: ' + err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleParameterChange = async (paramName, value) => {
@@ -216,18 +310,25 @@ const CameraClient = () => {
   return (
     <div className="camera-client">
       <div className="camera-header">
-        <h2>Camera Control</h2>
-        <select 
-          value={selectedCamera || ''} 
-          onChange={(e) => setSelectedCamera(e.target.value)}
-          className="camera-select"
-        >
-          {cameras.map(cam => (
-            <option key={cam.name} value={cam.name}>
-              {cam.friendly_name || cam.name} ({cam.state})
-            </option>
-          ))}
-        </select>
+        <h2>{panelTitle}</h2>
+        {hideSelector ? (
+          <div className="camera-select" style={{ pointerEvents: 'none', opacity: 0.9 }}>
+            {selectedCamera || lockCameraName || 'No camera selected'}
+          </div>
+        ) : (
+          <select
+            value={selectedCamera || ''}
+            onChange={(e) => setSelectedCamera(e.target.value)}
+            className="camera-select"
+            disabled={Boolean(lockCameraName)}
+          >
+            {cameras.map(cam => (
+              <option key={cam.name} value={cam.name}>
+                {cam.friendly_name || cam.name} ({cam.state})
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {error && (

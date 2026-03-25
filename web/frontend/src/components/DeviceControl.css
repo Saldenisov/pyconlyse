@@ -1,0 +1,29 @@
+.device-control {
+  display: grid;
+  gap: 16px;
+}
+
+.device-control .device-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.device-control .device-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.device-control .attributes-grid,
+.device-control .commands-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.device-control .attribute-item,
+.device-control .command-item {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 8px;
+}

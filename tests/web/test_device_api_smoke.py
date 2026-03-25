@@ -181,6 +181,14 @@ class FakeDatabase:
         device_props = self.properties.get(device_name, {})
         return {prop_name: device_props.get(prop_name, [])}
 
+    def get_device_info(self, device_name):
+        device = self.devices[device_name]
+        return SimpleNamespace(
+            class_name=getattr(device.info(), "dev_class", "FakeDS"),
+            ds_full_name=getattr(device.info(), "server_id", "fake/server"),
+            server=getattr(device.info(), "server_id", "fake/server"),
+        )
+
 
 def _build_fake_backend():
     devices = {
@@ -284,8 +292,49 @@ def test_device_listing_and_standa_properties_smoke(monkeypatch):
     assert props_payload["limit_min"] == ["-10"]
 
 
+def test_generic_device_lazy_endpoints_smoke(monkeypatch):
+    client, _devices = _make_client(monkeypatch)
+
+    summary_response = client.get("/api/device/manip/v0/dv04/summary")
+    summary_payload = summary_response.get_json()
+    assert summary_response.status_code == 200
+    assert summary_payload["success"] is True
+    assert summary_payload["device_info"]["name"] == "manip/v0/dv04"
+    assert summary_payload["device_info"]["state"] == "ON"
+
+    info_response = client.get(
+        "/api/device/manip/v0/dv04/info?include_properties=0&include_attributes=0&include_commands=0"
+    )
+    info_payload = info_response.get_json()
+    assert info_response.status_code == 200
+    assert info_payload["success"] is True
+    assert "properties" not in info_payload["device_info"]
+    assert "attributes" not in info_payload["device_info"]
+    assert "commands" not in info_payload["device_info"]
+
+    attrs_response = client.get("/api/device/manip/v0/dv04/attributes")
+    attrs_payload = attrs_response.get_json()
+    assert attrs_response.status_code == 200
+    assert attrs_payload["success"] is True
+    assert attrs_payload["attributes"]["position"]["writable"] is True
+    assert attrs_payload["attributes"]["position"]["unit"] == "mm"
+
+    commands_response = client.get("/api/device/manip/v0/dv04/commands")
+    commands_payload = commands_response.get_json()
+    assert commands_response.status_code == 200
+    assert commands_payload["success"] is True
+    assert "move_axis_abs" in commands_payload["commands"]
+
+
 def test_netio_page_routes_smoke(monkeypatch):
     client, devices = _make_client(monkeypatch)
+
+    pdu_response = client.get("/api/device/pdu/netio/1/pdu/outputs")
+    pdu_payload = pdu_response.get_json()
+    assert pdu_response.status_code == 200
+    assert pdu_payload["success"] is True
+    assert pdu_payload["outputs"][0]["id"] == 1
+    assert pdu_payload["outputs"][0]["state"] == 1
 
     attrs_response = client.get("/api/device/pdu/netio/1/attributes")
     attrs_payload = attrs_response.get_json()
@@ -296,13 +345,36 @@ def test_netio_page_routes_smoke(monkeypatch):
 
     cmd_response = client.post(
         "/api/device/pdu/netio/1/command/set_channels_states",
-        json={"args": ["{1: 1, 2: 0}"]},
+        json={"args": [1, 1, 0, 0]},
     )
     cmd_payload = cmd_response.get_json()
 
     assert cmd_response.status_code == 200
     assert cmd_payload["success"] is True
+    assert cmd_payload["verified_states"][:4] == [1, 1, 0, 0]
     assert devices["pdu/netio/1"].command_calls[-1][0] == "set_channels_states"
+
+
+def test_netio_command_returns_409_on_readback_mismatch(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    netio = devices["pdu/netio/1"]
+
+    def _no_apply(command_name, args=None):
+        netio.command_calls.append((command_name, args))
+        return 0
+
+    netio.command_inout = _no_apply
+
+    cmd_response = client.post(
+        "/api/device/pdu/netio/1/command/set_channels_states",
+        json={"args": [0, 0, 0, 0]},
+    )
+    cmd_payload = cmd_response.get_json()
+
+    assert cmd_response.status_code == 409
+    assert cmd_payload["success"] is False
+    assert "readback states" in cmd_payload["error"]
+    assert cmd_payload["requested_states"] == [0, 0, 0, 0]
 
 
 def test_standa_page_routes_smoke(monkeypatch):
@@ -376,7 +448,8 @@ def test_itest_page_routes_smoke(monkeypatch):
     tab_config_payload = tab_config_response.get_json()
     assert tab_config_response.status_code == 200
     assert tab_config_payload["success"] is True
-    assert tab_config_payload["tab_configs"]["VD"]["slots"] == [11]
+    assert tab_config_payload["tab_configs"]["V0"]["slots"] == [11]
+    assert tab_config_payload["tab_configs"]["REF"]["slots"] == []
 
     all_slots_response = client.get("/api/device/itest/power/itest/1/all_slots")
     all_slots_payload = all_slots_response.get_json()

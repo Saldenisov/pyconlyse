@@ -8,64 +8,73 @@
         * {
             box-sizing: border-box;
         }
-        
+
         body {
             margin: 0;
             padding: 20px;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f5f5f5;
         }
-        
+
         .container {
-            max-width: 1600px;
+            max-width: 1700px;
             margin: 0 auto;
         }
-        
+
         .header {
             background: white;
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        
+
         .header h1 {
             margin: 0 0 10px 0;
             color: #2c3e50;
         }
-        
+
         .device-selector {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 4px;
             margin-top: 15px;
         }
-        
+
         .device-selector h3 {
             margin: 0 0 10px 0;
             color: #495057;
         }
-        
+
         .device-input-group {
             display: flex;
             gap: 10px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             flex-wrap: wrap;
             align-items: center;
         }
-        
+
         .device-input-group label {
             font-weight: 500;
         }
-        
-        .device-input-group input {
-            flex: 1;
-            min-width: 250px;
+
+        .device-input-group input,
+        .device-input-group select {
             padding: 8px 12px;
             border: 1px solid #ced4da;
             border-radius: 4px;
+            background: white;
         }
-        
+
+        .device-input-group input {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .device-input-group select {
+            min-width: 220px;
+        }
+
         .device-input-group button {
             padding: 8px 20px;
             background: #007bff;
@@ -75,36 +84,42 @@
             cursor: pointer;
             font-weight: 500;
         }
-        
+
         .device-input-group button:hover {
             background: #0056b3;
         }
-        
+
+        .profile-help {
+            font-size: 0.9em;
+            color: #6c757d;
+            margin-top: 6px;
+        }
+
         .status {
             padding: 10px;
             margin: 10px 0;
             border-radius: 4px;
         }
-        
+
         .status.success {
             background: #d4edda;
             color: #155724;
         }
-        
+
         .status.error {
             background: #f8d7da;
             color: #721c24;
         }
-        
+
         .status.info {
             background: #d1ecf1;
             color: #0c5460;
         }
-        
+
         #client-container {
             min-height: 400px;
         }
-        
+
         .client-header {
             display: flex;
             justify-content: space-between;
@@ -113,9 +128,17 @@
             padding: 15px;
             background: white;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            gap: 16px;
+            flex-wrap: wrap;
         }
-        
+
+        .controller-list {
+            margin-top: 6px;
+            color: #495057;
+            font-size: 0.92em;
+        }
+
         .global-controls button {
             padding: 8px 16px;
             margin-left: 10px;
@@ -124,31 +147,31 @@
             cursor: pointer;
             font-weight: 500;
         }
-        
+
         .global-controls .btn-on {
             background: #28a745;
             color: white;
         }
-        
+
         .global-controls .btn-off {
             background: #dc3545;
             color: white;
         }
-        
+
         .axes-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(390px, 1fr));
             gap: 20px;
         }
-        
+
         .axis-card {
             background: white;
             border-radius: 8px;
             padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             border: 2px solid #e9ecef;
         }
-        
+
         .axis-header {
             display: flex;
             justify-content: space-between;
@@ -157,12 +180,37 @@
             padding-bottom: 15px;
             border-bottom: 2px solid #e9ecef;
         }
-        
+
         .axis-header h3 {
             margin: 0;
             color: #2c3e50;
+            font-size: 1.1em;
         }
-        
+
+        .axis-meta {
+            margin-top: 4px;
+            font-size: 0.85em;
+            color: #6c757d;
+        }
+
+        .controller-badge {
+            display: inline-block;
+            margin-left: 8px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            color: #fff;
+            background: #6c757d;
+        }
+
+        .controller-badge.ip {
+            background: #007bff;
+        }
+
+        .controller-badge.legacy {
+            background: #6f42c1;
+        }
+
         .axis-toggle label {
             display: flex;
             align-items: center;
@@ -170,7 +218,7 @@
             cursor: pointer;
             font-weight: 500;
         }
-        
+
         .toggle-switch {
             width: 40px;
             height: 20px;
@@ -180,7 +228,7 @@
             transition: all 0.3s ease;
             cursor: pointer;
         }
-        
+
         .toggle-switch::before {
             content: '';
             width: 16px;
@@ -191,56 +239,56 @@
             top: 2px;
             left: 2px;
             transition: all 0.3s ease;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
         }
-        
+
         .toggle-switch.on {
             background: #28a745;
         }
-        
+
         .toggle-switch.on::before {
             left: 22px;
         }
-        
+
         .state-label {
             min-width: 35px;
             font-weight: bold;
         }
-        
+
         .state-label.on {
             color: #28a745;
         }
-        
+
         .state-label.off {
             color: #dc3545;
         }
-        
+
         .position-display {
             background: #f8f9fa;
             padding: 15px;
             border-radius: 4px;
             margin-bottom: 15px;
         }
-        
+
         .position-display label {
             display: block;
             font-size: 0.85em;
             color: #6c757d;
             margin-bottom: 5px;
         }
-        
+
         .position-value {
             font-size: 1.5em;
             font-weight: bold;
             color: #2c3e50;
         }
-        
+
         .position-controls {
             display: flex;
             gap: 10px;
             margin-bottom: 15px;
         }
-        
+
         .position-controls input {
             flex: 1;
             padding: 8px;
@@ -248,7 +296,7 @@
             border-radius: 4px;
             text-align: center;
         }
-        
+
         .position-controls button {
             padding: 8px 16px;
             border: none;
@@ -256,38 +304,38 @@
             cursor: pointer;
             font-weight: 500;
         }
-        
+
         .btn-move {
             background: #007bff;
             color: white;
         }
-        
+
         .btn-stop {
             background: #ffc107;
             color: #000;
         }
-        
+
         .btn-set {
             background: #17a2b8;
             color: white;
         }
-        
+
         .preset-positions {
             margin-top: 15px;
         }
-        
+
         .preset-positions h4 {
             font-size: 0.95em;
             margin: 0 0 10px 0;
             color: #495057;
         }
-        
+
         .preset-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 8px;
         }
-        
+
         .preset-btn {
             padding: 8px;
             background: #e9ecef;
@@ -297,31 +345,35 @@
             transition: all 0.2s;
             font-weight: 500;
         }
-        
+
         .preset-btn:hover {
             background: #007bff;
             color: white;
             border-color: #007bff;
         }
-        
+
         .info-section {
             background: white;
             padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
             border-left: 4px solid #17a2b8;
             margin-top: 20px;
         }
-        
+
         @media (max-width: 1200px) {
             .axes-grid {
                 grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
             }
         }
-        
+
         @media (max-width: 768px) {
             .axes-grid {
                 grid-template-columns: 1fr;
+            }
+
+            .device-input-group input {
+                min-width: 100%;
             }
         }
     </style>
@@ -330,474 +382,646 @@
     <div class="container">
         <div class="header">
             <h1>OWIS PS90 Motorized Stages Control</h1>
-            <p>Control OWIS PS90 4-axis motorized delay lines</p>
-            
+            <p>Control OWIS PS90 delay lines over Tango (single or split controllers)</p>
+
             <div class="device-selector">
                 <h3>Device Selection:</h3>
                 <div class="device-input-group">
-                    <label for="device-name">Device:</label>
-                    <input type="text" id="device-name" placeholder="manip/general/DS_OWIS_PS90" value="manip/general/DS_OWIS_PS90">
-                    <button onclick="loadDevice()">Load Device</button>
-                    <label>
-                        <input type="checkbox" id="axes-selector" value="1,2,3,4" checked> All 4 Axes
-                    </label>
+                    <label for="profile-select">Profile:</label>
+                    <select id="profile-select" onchange="onProfileChange()">
+                        <option value="V0">V0 (IP 1/3 + Legacy 4)</option>
+                        <option value="VDIV2">VDIV2 (IP 2)</option>
+                        <option value="all">all (IP 1/2/3 + Legacy 4)</option>
+                        <option value="custom">custom</option>
+                    </select>
+                    <label for="device-ip">IP Device:</label>
+                    <input type="text" id="device-ip" placeholder="manip/general/DS_OWIS_PS90_IP" value="manip/general/DS_OWIS_PS90_IP">
+                    <label for="device-legacy">Legacy Device:</label>
+                    <input type="text" id="device-legacy" placeholder="manip/general/DS_OWIS_PS90" value="manip/general/DS_OWIS_PS90">
                 </div>
+
+                <div class="device-input-group" id="custom-device-row" style="display:none;">
+                    <label for="device-name">Custom Device:</label>
+                    <input type="text" id="device-name" placeholder="manip/general/DS_OWIS_PS90" value="manip/general/DS_OWIS_PS90">
+                    <label for="custom-axes">Axes:</label>
+                    <input type="text" id="custom-axes" placeholder="1,2,3,4" value="1,2,3,4" style="min-width:120px;max-width:220px;">
+                </div>
+
+                <div class="device-input-group">
+                    <button onclick="loadDevice()">Load Device</button>
+                </div>
+
+                <div class="profile-help">
+                    Split mode mapping: V0 -> IP 1/3 + legacy 4, VDIV2 -> IP 2, all -> IP 1/2/3 + legacy 4.
+                </div>
+
                 <div id="connection-status"></div>
             </div>
         </div>
-        
+
         <div id="client-container">
             <div class="status info">
-                Enter device name and click "Load Device" to start controlling the OWIS motorized stages.
+                Choose a profile and click "Load Device" to start controlling OWIS stages.
             </div>
         </div>
     </div>
 
-    <!-- Socket.IO Client -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script>
+        const DEVSTATE_ON = 6;
+        const OWIS_DEFAULTS = {
+            ip: 'manip/general/DS_OWIS_PS90_IP',
+            legacy: 'manip/general/DS_OWIS_PS90'
+        };
+
+        const OWIS_PROFILES = {
+            V0: [
+                { role: 'ip', axes: [1, 3] },
+                { role: 'legacy', axes: [4] }
+            ],
+            VDIV2: [
+                { role: 'ip', axes: [2] }
+            ],
+            VD2: [
+                { role: 'ip', axes: [2] }
+            ],
+            all: [
+                { role: 'ip', axes: [1, 2, 3] },
+                { role: 'legacy', axes: [4] }
+            ]
+        };
+
         let deviceData = null;
         let socket = null;
-        let currentDevice = null;
-        
-        async function loadDevice() {
-            const deviceName = document.getElementById('device-name').value.trim();
-            if (!deviceName) {
-                alert('Please enter a device name');
-                return;
-            }
-            
+        let axisUidCounter = 1;
+        let subscribedDevices = [];
+
+        function setStatus(type, text) {
             const statusDiv = document.getElementById('connection-status');
-            const container = document.getElementById('client-container');
-            
-            statusDiv.innerHTML = '<div class="status">🔄 Connecting to device...</div>';
-            
+            statusDiv.innerHTML = `<div class="status ${type}">${text}</div>`;
+        }
+
+        function parseAxisList(rawValue) {
+            return String(rawValue || '')
+                .split(',')
+                .map((v) => parseInt(v.trim(), 10))
+                .filter((v) => Number.isFinite(v) && v > 0);
+        }
+
+        function parsePythonDictString(strDict) {
+            if (!strDict || typeof strDict !== 'string') {
+                return {};
+            }
+
             try {
-                // Fetch device attributes
-                statusDiv.innerHTML = '<div class="status">🔄 Loading device attributes...</div>';
-                const response = await fetch(`/api/device/${deviceName}/attributes`, {
-                    credentials: 'include'
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                const jsonStr = strDict
+                    .replace(/tango\._tango\.DevState\.\w+/g, '0')
+                    .replace(/<DevState\.[A-Z_]+: (\d+)>/g, '$1')
+                    .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')
+                    .replace(/'/g, '"')
+                    .replace(/\bTrue\b/g, 'true')
+                    .replace(/\bFalse\b/g, 'false')
+                    .replace(/\bNone\b/g, 'null');
+                return JSON.parse(jsonStr);
+            } catch (error) {
+                console.warn('Failed to parse dict string:', error);
+                return {};
+            }
+        }
+
+        function numberOrDefault(value, fallback = 0.0) {
+            const n = Number(value);
+            return Number.isFinite(n) ? n : fallback;
+        }
+
+        function getValueByAxis(source, axisId) {
+            if (!source || typeof source !== 'object') {
+                return undefined;
+            }
+            if (source[axisId] !== undefined) {
+                return source[axisId];
+            }
+            return source[String(axisId)];
+        }
+
+        function collectAxisIds(states, positions, names, delayParams) {
+            const ids = new Set();
+
+            [states, positions, names, delayParams].forEach((obj) => {
+                if (!obj || typeof obj !== 'object') {
+                    return;
                 }
-                
-                const data = await response.json();
-                
-                // Try to fetch delay_lines_parameters property from Tango DB
-                // This is optional - if it fails, we'll use attribute values
-                let delayLinesParams = null;
-                try {
-                    statusDiv.innerHTML = '<div class="status">🔄 Loading device properties...</div>';
-                    const propsResponse = await fetch(`/api/device/${deviceName}/info`, {
-                        credentials: 'include',
-                        signal: AbortSignal.timeout(5000)  // 5 second timeout
-                    });
-                    if (propsResponse.ok) {
-                        const infoData = await propsResponse.json();
-                        // Parse delay_lines_parameters from device properties (not attributes)
-                        if (infoData.device_info && infoData.device_info.properties) {
-                            const delayParamProp = infoData.device_info.properties.delay_lines_parameters;
-                            if (delayParamProp && Array.isArray(delayParamProp) && delayParamProp.length > 0) {
-                                try {
-                                    // The property value is stored as a Python dict string in the Tango DB
-                                    // Format: {1: {'key': 'value', ...}, 2: {...}}
-                                    const paramStr = delayParamProp[0];
-                                    console.log('Raw delay_lines_parameters string:', paramStr.substring(0, 200) + '...');
-                                    
-                                    // Convert Python dict to JSON:
-                                    // 1. Add quotes around integer keys: {1: -> {"1":
-                                    // 2. Replace single quotes with double quotes
-                                    // 3. Handle Python booleans: True/False -> true/false
-                                    let jsonStr = paramStr
-                                        .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')  // Integer keys to string keys
-                                        .replace(/'/g, '"')  // Single to double quotes
-                                        .replace(/\bTrue\b/g, 'true')  // Python True
-                                        .replace(/\bFalse\b/g, 'false')  // Python False
-                                        .replace(/\bNone\b/g, 'null');  // Python None
-                                    
-                                    delayLinesParams = JSON.parse(jsonStr);
-                                    console.log('✅ Parsed delay_lines_parameters:', delayLinesParams);
-                                    console.log('Example axis 1 friendly_name:', delayLinesParams['1']?.friendly_name);
-                                } catch (e) {
-                                    console.error('❌ Failed to parse delay_lines_parameters:', e);
-                                    console.error('Original string:', paramStr);
-                                }
-                            }
-                        }
+                Object.keys(obj).forEach((key) => {
+                    const axis = parseInt(key, 10);
+                    if (Number.isFinite(axis) && axis > 0) {
+                        ids.add(axis);
                     }
-                } catch (e) {
-                    console.warn('Could not fetch device properties (will use attributes instead):', e);
+                });
+            });
+
+            if (ids.size === 0) {
+                [1, 2, 3, 4].forEach((axis) => ids.add(axis));
+            }
+
+            return [...ids].sort((a, b) => a - b);
+        }
+
+        function roleLabel(role) {
+            return role === 'ip' ? 'IP' : (role === 'legacy' ? 'LEGACY' : 'CUSTOM');
+        }
+
+        function resolveTargets() {
+            const profile = document.getElementById('profile-select').value;
+            if (profile === 'custom') {
+                const deviceName = document.getElementById('device-name').value.trim();
+                const customAxes = parseAxisList(document.getElementById('custom-axes').value);
+                if (!deviceName) {
+                    throw new Error('Custom device name is required.');
                 }
-                
-                deviceData = parseDeviceData(deviceName, data.attributes, delayLinesParams);
-                currentDevice = deviceName;
-                
-                statusDiv.innerHTML = '<div class="status success">✅ Connected to ' + deviceName + '</div>';
+                return [
+                    {
+                        role: 'custom',
+                        deviceName,
+                        axes: customAxes.length ? customAxes : [1, 2, 3, 4]
+                    }
+                ];
+            }
+
+            const ipDevice = document.getElementById('device-ip').value.trim() || OWIS_DEFAULTS.ip;
+            const legacyDevice = document.getElementById('device-legacy').value.trim() || OWIS_DEFAULTS.legacy;
+            const profileTargets = OWIS_PROFILES[profile] || [];
+
+            return profileTargets.map((target) => ({
+                role: target.role,
+                axes: target.axes,
+                deviceName: target.role === 'ip' ? ipDevice : legacyDevice
+            }));
+        }
+
+        async function loadControllerModel(target) {
+            const { deviceName, role, axes } = target;
+            const [attrResponse, infoResponse] = await Promise.all([
+                fetch(`/api/device/${deviceName}/attributes`, { credentials: 'include' }),
+                fetch(`/api/device/${deviceName}/info`, { credentials: 'include' })
+            ]);
+
+            if (!attrResponse.ok) {
+                throw new Error(`Failed to load attributes for ${deviceName}: HTTP ${attrResponse.status}`);
+            }
+            if (!infoResponse.ok) {
+                throw new Error(`Failed to load info for ${deviceName}: HTTP ${infoResponse.status}`);
+            }
+
+            const attrData = await attrResponse.json();
+            const infoData = await infoResponse.json();
+
+            const attributes = attrData.attributes || {};
+            const states = parsePythonDictString(attributes.states?.value);
+            const positions = parsePythonDictString(attributes.positions?.value);
+            const friendlyNames = parsePythonDictString(attributes.friendly_names?.value);
+
+            let delayParams = {};
+            const delayRaw = infoData?.device_info?.properties?.delay_lines_parameters;
+            if (Array.isArray(delayRaw) && delayRaw.length > 0) {
+                delayParams = parsePythonDictString(delayRaw[0]);
+            }
+
+            const availableAxes = collectAxisIds(states, positions, friendlyNames, delayParams);
+            const selectedAxes = (axes || []).filter((axis) => availableAxes.includes(axis));
+
+            const effectiveAxes = selectedAxes.length > 0 ? selectedAxes : availableAxes;
+            const axisModels = effectiveAxes.map((axisId) => {
+                const axisParams = getValueByAxis(delayParams, axisId) || {};
+                const friendly = getValueByAxis(friendlyNames, axisId);
+                const presets = Array.isArray(axisParams.preset_positions)
+                    ? axisParams.preset_positions.map((v) => numberOrDefault(v, 0.0))
+                    : [0, 10, 50, 100];
+
+                return {
+                    uid: axisUidCounter++,
+                    deviceName,
+                    role,
+                    axisId,
+                    name: axisParams.friendly_name || friendly || `Axis ${axisId}`,
+                    state: parseInt(getValueByAxis(states, axisId) ?? 0, 10) || 0,
+                    position: numberOrDefault(getValueByAxis(positions, axisId), 0.0),
+                    presets,
+                    limitMin: numberOrDefault(axisParams.limit_min, -1000),
+                    limitMax: numberOrDefault(axisParams.limit_max, 1000)
+                };
+            });
+
+            return {
+                role,
+                deviceName,
+                axes: axisModels
+            };
+        }
+
+        async function loadDevice() {
+            const container = document.getElementById('client-container');
+
+            try {
+                const targets = resolveTargets();
+                if (!targets.length) {
+                    throw new Error('No targets resolved from profile.');
+                }
+
+                setStatus('info', 'Connecting to OWIS device(s)...');
+
+                const controllers = [];
+                for (const target of targets) {
+                    setStatus('info', `Loading ${target.deviceName}...`);
+                    const model = await loadControllerModel(target);
+                    controllers.push(model);
+                }
+
+                const allAxes = controllers.flatMap((controller) => controller.axes);
+                if (!allAxes.length) {
+                    throw new Error('No axes available in selected profile/device mapping.');
+                }
+
+                const profile = document.getElementById('profile-select').value;
+                deviceData = {
+                    profile,
+                    controllers,
+                    axes: allAxes
+                };
+
                 renderDevice();
-                
-                // Initialize WebSocket AFTER setting currentDevice
-                initializeWebSocket();
+                initializeWebSocket(controllers.map((c) => c.deviceName));
+
+                const loadedNames = controllers.map((c) => c.deviceName).join(', ');
+                setStatus('success', `Connected: ${loadedNames}`);
             } catch (error) {
                 console.error('Connection error:', error);
-                statusDiv.innerHTML = '<div class="status error">❌ Connection failed: ' + error.message + '</div>';
+                container.innerHTML = `<div class="status error">Failed to load OWIS: ${error.message}</div>`;
+                setStatus('error', `Connection failed: ${error.message}`);
             }
         }
-        
-        function parseDeviceData(deviceName, attributes, delayLinesParams) {
-            // Parse string dict attributes to JavaScript objects
-            // These attributes return Python dict as string, e.g., "{'1': value, '2': value}"
-            const parseStringDict = (strDict) => {
-                if (!strDict || typeof strDict !== 'string') return {};
-                try {
-                    // Convert Python dict string to JSON: replace single quotes with double quotes
-                    // and handle DevState enum values like "<DevState.ON: 6>" -> 6
-                    let jsonStr = strDict
-                        .replace(/tango\._tango\.DevState\.\w+/g, '0')  // Handle tango._tango.DevState.INIT
-                        .replace(/<DevState\.[A-Z]+: (\d+)>/g, '$1')  // Handle DevState enums
-                        .replace(/(\{|,)\s*(\d+)\s*:/g, '$1"$2":')  // Integer keys to string keys {1: -> {"1":
-                        .replace(/'/g, '"')  // Single quotes to double quotes
-                        .replace(/\bTrue\b/g, 'true')  // Python True to JS true
-                        .replace(/\bFalse\b/g, 'false')  // Python False to JS false
-                        .replace(/\bNone\b/g, 'null');  // Python None to JS null
-                    return JSON.parse(jsonStr);
-                } catch (e) {
-                    console.warn('Failed to parse string dict:', strDict, e);
-                    return {};
-                }
-            };
-            
-            const states = parseStringDict(attributes.states?.value);
-            const positions = parseStringDict(attributes.positions?.value);
-            const friendlyNames = parseStringDict(attributes.friendly_names?.value);
-            
-            console.log('Parsed attributes:', { states, positions, friendlyNames });
-            
-            // Get delay lines parameters from device properties (if available)
-            const axes = [1, 2, 3, 4];
-            
-            return {
-                name: deviceName,
-                state: attributes.State?.value || 0,
-                axes: axes.map(axisId => {
-                    // JSON.parse creates string keys, so we need to use String(axisId)
-                    const axisParams = delayLinesParams ? (delayLinesParams[axisId] || delayLinesParams[String(axisId)]) : null;
-                    // Same for friendlyNames parsed from attribute string
-                    const friendlyName = friendlyNames[axisId] || friendlyNames[String(axisId)];
-                    
-                    return {
-                        id: axisId,
-                        name: axisParams?.friendly_name || friendlyName || `Axis ${axisId}`,
-                        state: states[axisId] || states[String(axisId)] || 0,
-                        position: parseFloat(positions[axisId] || positions[String(axisId)]) || 0.0,
-                        presets: axisParams?.preset_positions || [0, 10, 50, 100],
-                        limitMin: axisParams?.limit_min || -1000,
-                        limitMax: axisParams?.limit_max || 1000
-                    };
-                })
-            };
-        }
-        
+
         function renderDevice() {
-            if (!deviceData) return;
-            
+            if (!deviceData) {
+                return;
+            }
+
             const container = document.getElementById('client-container');
-            
+            const controllerLine = deviceData.controllers
+                .map((controller) => `${roleLabel(controller.role)}: ${controller.deviceName}`)
+                .join(' | ');
+
             let html = `
                 <div class="client-header">
                     <div>
-                        <h2>${deviceData.name}</h2>
-                        <span>4-Axis OWIS PS90 Controller</span>
+                        <h2>OWIS Profile: ${deviceData.profile}</h2>
+                        <div class="controller-list">${controllerLine}</div>
                     </div>
                     <div class="global-controls">
                         <button class="btn-on" onclick="globalControl(true)">Turn All ON</button>
                         <button class="btn-off" onclick="globalControl(false)">Turn All OFF</button>
                     </div>
                 </div>
-                
                 <div class="axes-grid">
             `;
-            
-            deviceData.axes.forEach(axis => {
+
+            deviceData.axes.forEach((axis) => {
                 html += renderAxis(axis);
             });
-            
+
             html += `
                 </div>
-                
                 <div class="info-section">
                     <small style="color: #6c757d; line-height: 1.6;">
-                        • Toggle ON/OFF for each axis independently<br/>
-                        • Enter position and click Move to move axis<br/>
-                        • Click Stop to halt axis movement<br/>
-                        • Click Set Position to define current position<br/>
-                        • Use preset positions for quick moves
+                        - Commands are routed per axis to the correct Tango OWIS device.<br/>
+                        - Split mode: IP controller handles fast stages, legacy handles long stage.<br/>
+                        - WebSocket updates are subscribed for each loaded controller.
                     </small>
                 </div>
             `;
-            
+
             container.innerHTML = html;
         }
-        
+
         function renderAxis(axis) {
-            const stateOn = axis.state === 6; // DevState.ON = 6
-            const position = parseFloat(axis.position) || 0.0;
-            
+            const stateOn = axis.state === DEVSTATE_ON;
+            const position = numberOrDefault(axis.position, 0.0);
+            const badgeClass = axis.role === 'ip' ? 'ip' : (axis.role === 'legacy' ? 'legacy' : '');
+
             return `
-                <div class="axis-card" id="axis-${axis.id}">
+                <div class="axis-card" id="axis-${axis.uid}">
                     <div class="axis-header">
-                        <h3>${axis.name}</h3>
+                        <div>
+                            <h3>${axis.name}</h3>
+                            <div class="axis-meta">
+                                Axis ${axis.axisId} on ${axis.deviceName}
+                                <span class="controller-badge ${badgeClass}">${roleLabel(axis.role)}</span>
+                            </div>
+                        </div>
                         <div class="axis-toggle">
                             <label>
-                                <div class="toggle-switch ${stateOn ? 'on' : ''}" onclick="toggleAxis(${axis.id})"></div>
-                                <span class="state-label ${stateOn ? 'on' : 'off'}" id="state-${axis.id}">${stateOn ? 'ON' : 'OFF'}</span>
+                                <div class="toggle-switch ${stateOn ? 'on' : ''}" onclick="toggleAxis(${axis.uid})"></div>
+                                <span class="state-label ${stateOn ? 'on' : 'off'}" id="state-${axis.uid}">${stateOn ? 'ON' : 'OFF'}</span>
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="position-display">
                         <label>Current Position</label>
-                        <div class="position-value" id="pos-value-${axis.id}">${position.toFixed(3)}</div>
+                        <div class="position-value" id="pos-value-${axis.uid}">${position.toFixed(3)}</div>
                     </div>
-                    
+
                     <div class="position-controls">
-                        <input type="number" id="pos-input-${axis.id}" placeholder="Position" step="0.001" value="${position.toFixed(3)}">
-                        <button class="btn-move" onclick="moveAxis(${axis.id})">Move</button>
-                        <button class="btn-stop" onclick="stopAxis(${axis.id})">STOP</button>
+                        <input type="number" id="pos-input-${axis.uid}" placeholder="Position" step="0.001" value="${position.toFixed(3)}">
+                        <button class="btn-move" onclick="moveAxis(${axis.uid})">Move</button>
+                        <button class="btn-stop" onclick="stopAxis(${axis.uid})">STOP</button>
                     </div>
-                    
+
                     <div class="position-controls">
-                        <input type="number" id="set-input-${axis.id}" placeholder="Set position" step="0.001">
-                        <button class="btn-set" onclick="setPosition(${axis.id})">Set Position</button>
+                        <input type="number" id="set-input-${axis.uid}" placeholder="Set position" step="0.001">
+                        <button class="btn-set" onclick="setPosition(${axis.uid})">Set Position</button>
                     </div>
-                    
+
                     <div class="preset-positions">
                         <h4>Preset Positions</h4>
-                        <div class="preset-grid" id="presets-${axis.id}">
-                            ${axis.presets.map(pos => `<button class="preset-btn" onclick="moveToPreset(${axis.id}, ${pos})">${pos.toFixed(1)}</button>`).join('')}
+                        <div class="preset-grid" id="presets-${axis.uid}">
+                            ${axis.presets.map((pos) => `<button class="preset-btn" onclick="moveToPreset(${axis.uid}, ${numberOrDefault(pos, 0.0)})">${numberOrDefault(pos, 0.0).toFixed(1)}</button>`).join('')}
                         </div>
                     </div>
                 </div>
             `;
         }
-        
-        async function toggleAxis(axisId) {
-            if (!currentDevice) return;
-            
-            const axis = deviceData.axes.find(a => a.id === axisId);
-            if (!axis) return;
-            
-            const currentState = axis.state === 6; // DevState.ON
-            const command = currentState ? 'turn_off_axis' : 'turn_on_axis';
-            
+
+        function findAxis(uid) {
+            if (!deviceData || !Array.isArray(deviceData.axes)) {
+                return null;
+            }
+            return deviceData.axes.find((axis) => axis.uid === uid) || null;
+        }
+
+        async function runAxisCommand(axis, commandName, args) {
+            const response = await fetch(`/api/device/${axis.deviceName}/command/${commandName}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify(args === undefined ? {} : { args })
+            });
+
+            if (!response.ok) {
+                throw new Error(`${commandName} failed (HTTP ${response.status})`);
+            }
+
+            const payload = await response.json();
+            if (payload.success === false) {
+                throw new Error(payload.error || `${commandName} failed`);
+            }
+        }
+
+        async function toggleAxis(uid) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
+            }
+
+            const turnOn = axis.state !== DEVSTATE_ON;
+            const command = turnOn ? 'turn_on_axis' : 'turn_off_axis';
+
             try {
-                const response = await fetch(`/api/device/${currentDevice}/command/${command}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ args: axisId })
-                });
-                
-                if (response.ok) {
-                    axis.state = currentState ? 0 : 6;
-                    updateAxisDisplay(axisId);
-                }
+                await runAxisCommand(axis, command, axis.axisId);
+                axis.state = turnOn ? DEVSTATE_ON : 0;
+                updateAxisDisplay(uid);
             } catch (error) {
                 console.error('Error toggling axis:', error);
+                alert(`Error: ${error.message}`);
             }
         }
-        
-        async function moveAxis(axisId) {
-            if (!currentDevice) return;
-            
-            const input = document.getElementById(`pos-input-${axisId}`);
+
+        async function moveAxis(uid) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
+            }
+
+            const input = document.getElementById(`pos-input-${uid}`);
             const position = parseFloat(input.value);
-            
-            if (isNaN(position)) {
+            if (!Number.isFinite(position)) {
                 alert('Please enter a valid position');
                 return;
             }
-            
+
             try {
-                const response = await fetch(`/api/device/${currentDevice}/command/move_axis`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ args: [axisId, position] })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to move axis');
-                }
+                await runAxisCommand(axis, 'move_axis', [axis.axisId, position]);
             } catch (error) {
                 console.error('Error moving axis:', error);
-                alert('Error: ' + error.message);
+                alert(`Error: ${error.message}`);
             }
         }
-        
-        async function stopAxis(axisId) {
-            if (!currentDevice) return;
-            
+
+        async function stopAxis(uid) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
+            }
+
             try {
-                const response = await fetch(`/api/device/${currentDevice}/command/stop_axis`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ args: axisId })
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to stop axis');
-                }
+                await runAxisCommand(axis, 'stop_axis', axis.axisId);
             } catch (error) {
                 console.error('Error stopping axis:', error);
+                alert(`Error: ${error.message}`);
             }
         }
-        
-        async function setPosition(axisId) {
-            if (!currentDevice) return;
-            
-            const input = document.getElementById(`set-input-${axisId}`);
+
+        async function setPosition(uid) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
+            }
+
+            const input = document.getElementById(`set-input-${uid}`);
             const position = parseFloat(input.value);
-            
-            if (isNaN(position)) {
+            if (!Number.isFinite(position)) {
                 alert('Please enter a valid position');
                 return;
             }
-            
+
             try {
-                const response = await fetch(`/api/device/${currentDevice}/command/define_position_axis`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ args: [axisId, position] })
-                });
-                
-                if (response.ok) {
-                    input.value = '';
-                }
+                await runAxisCommand(axis, 'define_position_axis', [axis.axisId, position]);
+                input.value = '';
             } catch (error) {
                 console.error('Error setting position:', error);
+                alert(`Error: ${error.message}`);
             }
         }
-        
-        async function moveToPreset(axisId, position) {
-            const input = document.getElementById(`pos-input-${axisId}`);
-            input.value = position.toFixed(3);
-            await moveAxis(axisId);
+
+        async function moveToPreset(uid, position) {
+            const input = document.getElementById(`pos-input-${uid}`);
+            if (input) {
+                input.value = numberOrDefault(position, 0.0).toFixed(3);
+            }
+            await moveAxis(uid);
         }
-        
+
         async function globalControl(turnOn) {
-            if (!currentDevice) return;
-            
+            if (!deviceData || !Array.isArray(deviceData.controllers)) {
+                return;
+            }
+
             const command = turnOn ? 'turn_on' : 'turn_off';
-            
-            try {
-                const response = await fetch(`/api/device/${currentDevice}/command/${command}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include'
+            const errors = [];
+
+            for (const controller of deviceData.controllers) {
+                const fakeAxis = { deviceName: controller.deviceName };
+                try {
+                    await runAxisCommand(fakeAxis, command);
+                } catch (error) {
+                    errors.push(`${controller.deviceName}: ${error.message}`);
+                }
+            }
+
+            if (!errors.length) {
+                deviceData.axes.forEach((axis) => {
+                    axis.state = turnOn ? DEVSTATE_ON : 0;
+                    updateAxisDisplay(axis.uid);
                 });
-                
-                if (response.ok) {
-                    // Update all axes states
-                    deviceData.axes.forEach(axis => {
-                        axis.state = turnOn ? 6 : 0;
-                        updateAxisDisplay(axis.id);
-                    });
-                }
-            } catch (error) {
-                console.error('Error with global control:', error);
+                return;
             }
+
+            alert(`Global ${command} completed with errors:\n${errors.join('\n')}`);
         }
-        
-        function updateAxisDisplay(axisId) {
-            const axis = deviceData.axes.find(a => a.id === axisId);
-            if (!axis) return;
-            
-            const stateOn = axis.state === 6;
-            const toggleEl = document.querySelector(`#axis-${axisId} .toggle-switch`);
-            const labelEl = document.getElementById(`state-${axisId}`);
-            
-            if (toggleEl) {
-                if (stateOn) {
-                    toggleEl.classList.add('on');
-                } else {
-                    toggleEl.classList.remove('on');
-                }
+
+        function updateAxisDisplay(uid) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
             }
-            
+
+            const stateOn = axis.state === DEVSTATE_ON;
+            const toggleEl = document.querySelector(`#axis-${uid} .toggle-switch`);
+            const labelEl = document.getElementById(`state-${uid}`);
+
+            if (toggleEl) {
+                toggleEl.classList.toggle('on', stateOn);
+            }
+
             if (labelEl) {
                 labelEl.textContent = stateOn ? 'ON' : 'OFF';
                 labelEl.className = `state-label ${stateOn ? 'on' : 'off'}`;
             }
         }
-        
-        function updatePositionDisplay(axisId, position) {
-            const pos = parseFloat(position) || 0.0;
-            const axis = deviceData.axes.find(a => a.id === axisId);
-            if (axis) {
-                axis.position = pos;
+
+        function updatePositionDisplay(uid, position) {
+            const axis = findAxis(uid);
+            if (!axis) {
+                return;
             }
-            
-            // Update the displayed position (read-only display)
-            const valueEl = document.getElementById(`pos-value-${axisId}`);
+
+            const pos = numberOrDefault(position, 0.0);
+            axis.position = pos;
+
+            const valueEl = document.getElementById(`pos-value-${uid}`);
             if (valueEl) {
                 valueEl.textContent = pos.toFixed(3);
             }
-            
-            // Input field is NEVER automatically updated - only by user input
         }
-        
-        function initializeWebSocket() {
+
+        function initializeWebSocket(deviceNames) {
             if (socket) {
-                try { socket.disconnect(); } catch (e) {}
+                try {
+                    socket.disconnect();
+                } catch (error) {
+                    console.warn('Socket disconnect warning:', error);
+                }
             }
-            
-            console.log('Initializing WebSocket connection...');
+
+            subscribedDevices = [...new Set(deviceNames || [])];
             socket = io();
-            
-            socket.on('connect', function() {
-                if (currentDevice) {
-                    socket.emit('subscribe_device', {'device': currentDevice});
+
+            socket.on('connect', () => {
+                subscribedDevices.forEach((deviceName) => {
+                    socket.emit('subscribe_device', { device: deviceName });
+                });
+            });
+
+            socket.on('device_update', (data) => {
+                if (!deviceData || !data || !data.device) {
+                    return;
+                }
+
+                const affectedAxes = deviceData.axes.filter((axis) => axis.deviceName === data.device);
+                if (!affectedAxes.length) {
+                    return;
+                }
+
+                if (data.positions && typeof data.positions === 'object') {
+                    affectedAxes.forEach((axis) => {
+                        const nextPos = getValueByAxis(data.positions, axis.axisId);
+                        if (nextPos !== undefined) {
+                            updatePositionDisplay(axis.uid, nextPos);
+                        }
+                    });
+                }
+
+                if (data.states && typeof data.states === 'object') {
+                    affectedAxes.forEach((axis) => {
+                        const nextState = getValueByAxis(data.states, axis.axisId);
+                        if (nextState !== undefined) {
+                            axis.state = parseInt(nextState, 10) || 0;
+                            updateAxisDisplay(axis.uid);
+                        }
+                    });
                 }
             });
-            
-            socket.on('device_update', function(data) {
-                if (data.device === currentDevice) {
-                    // Update positions and states
-                    // Note: JSON keys are always strings, so we need to check both numeric and string keys
-                    if (data.positions) {
-                        deviceData.axes.forEach(axis => {
-                            // Try both numeric and string keys since JSON serializes keys as strings
-                            const position = data.positions[axis.id] ?? data.positions[String(axis.id)];
-                            if (position !== undefined) {
-                                updatePositionDisplay(axis.id, position);
-                            }
-                        });
-                    }
-                    if (data.states) {
-                        deviceData.axes.forEach(axis => {
-                            // Try both numeric and string keys since JSON serializes keys as strings
-                            const state = data.states[axis.id] ?? data.states[String(axis.id)];
-                            if (state !== undefined) {
-                                axis.state = state;
-                                updateAxisDisplay(axis.id);
-                            }
-                        });
-                    }
-                }
-            });
-            
-            socket.on('disconnect', function(reason) {
-                // Silently handle disconnections and let Socket.IO auto-reconnect
-            });
-            
-            socket.on('connect_error', function(error) {
+
+            socket.on('connect_error', (error) => {
                 console.error('WebSocket connection error:', error);
             });
         }
+
+        function onProfileChange() {
+            const profile = document.getElementById('profile-select').value;
+            const customRow = document.getElementById('custom-device-row');
+            customRow.style.display = profile === 'custom' ? 'flex' : 'none';
+        }
+
+        function applyQueryDefaults() {
+            const params = new URLSearchParams(window.location.search);
+
+            const profile = params.get('profile');
+            const normalizedProfile = profile === 'VD2' ? 'VDIV2' : profile;
+            if (normalizedProfile && document.getElementById('profile-select').querySelector(`option[value="${normalizedProfile}"]`)) {
+                document.getElementById('profile-select').value = normalizedProfile;
+            }
+
+            const ip = params.get('ip_device');
+            if (ip) {
+                document.getElementById('device-ip').value = ip;
+            }
+
+            const legacy = params.get('legacy_device');
+            if (legacy) {
+                document.getElementById('device-legacy').value = legacy;
+            }
+
+            const customDevice = params.get('device');
+            if (customDevice) {
+                document.getElementById('device-name').value = customDevice;
+            }
+
+            const axes = params.get('axes');
+            if (axes) {
+                document.getElementById('custom-axes').value = axes;
+            }
+
+            onProfileChange();
+
+            if (params.get('autoload') === '1') {
+                loadDevice();
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            applyQueryDefaults();
+            onProfileChange();
+        });
     </script>
 </body>
 </html>

@@ -1,15 +1,52 @@
 # websocket_handler.py - WebSocket support for real-time device monitoring
 from flask_socketio import SocketIO, emit, join_room, leave_room
+import ast
+import os
 import threading
 import time
 import tango
 from datetime import datetime
 import json
 import logging
+import math
+from flask_jwt_extended import decode_token
 
 # Configure logging - reduced verbosity
 logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
+
+
+def _json_safe_number(value, default=0.0):
+    try:
+        numeric = float(value)
+    except Exception:
+        return default
+    if math.isnan(numeric) or math.isinf(numeric):
+        return None
+    return numeric
+
+
+def _env_bool(name, default=False):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
+
+
+def _socket_auth_allowed(auth_payload):
+    if not _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", False):
+        return True
+
+    token = None
+    if isinstance(auth_payload, dict):
+        token = auth_payload.get("token")
+    if not token:
+        return False
+    try:
+        decode_token(str(token))
+        return True
+    except Exception:
+        return False
 
 # Global SocketIO instance - will be initialized in app.py
 socketio = None
@@ -68,8 +105,8 @@ class DeviceMonitor:
                                 'index': i,     # Array index for reference
                                 'name': names[i] if i < len(names) else f'Slot {slot_id}',
                                 'state': bool(states[i]) if i < len(states) else False,
-                                'current_measured': float(currents_meas[i]) if i < len(currents_meas) else 0.0,
-                                'current_setpoint': float(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
+                                'current_measured': _json_safe_number(currents_meas[i]) if i < len(currents_meas) else 0.0,
+                                'current_setpoint': _json_safe_number(currents_setpoint[i]) if i < len(currents_setpoint) else 0.0
                             })
                         
                         data['slots'] = slots
@@ -78,9 +115,9 @@ class DeviceMonitor:
                         logger.error(f"Error reading DS iTest PSU attributes: {e}")
                         # Fallback to legacy single-slot attributes
                         try:
-                            data['current_setpoint'] = device.read_attribute('CurrentSetpoint').value
-                            data['measured_current'] = device.read_attribute('MeasuredCurrent').value
-                            data['measured_voltage'] = device.read_attribute('MeasuredVoltage').value
+                            data['current_setpoint'] = _json_safe_number(device.read_attribute('CurrentSetpoint').value)
+                            data['measured_current'] = _json_safe_number(device.read_attribute('MeasuredCurrent').value)
+                            data['measured_voltage'] = _json_safe_number(device.read_attribute('MeasuredVoltage').value)
                         except:
                             pass
                 
@@ -91,6 +128,53 @@ class DeviceMonitor:
                         data['acquisition_status'] = device.read_attribute('AcquisitionStatus').value
                     except:
                         pass
+                
+                elif 'netio' in device_name.lower() or 'pdu' in device_name.lower():
+                    try:
+                        ids = list(device.read_attribute('ids').value)
+                    except Exception:
+                        ids = []
+
+                    try:
+                        names = list(device.read_attribute('names').value)
+                    except Exception:
+                        names = []
+
+                    try:
+                        states = list(device.read_attribute('states').value)
+                    except Exception:
+                        try:
+                            states = list(device.read_attribute('output_statuses').value)
+                        except Exception:
+                            states = []
+
+                    output_count = max(len(ids), len(names), len(states), 4)
+                    if not ids:
+                        ids = list(range(1, output_count + 1))
+
+                    outputs = []
+                    for i, output_id in enumerate(ids):
+                        try:
+                            normalized_id = int(float(output_id))
+                        except Exception:
+                            normalized_id = i + 1
+                        output_name = (
+                            str(names[i])
+                            if i < len(names) and names[i] not in (None, "")
+                            else f"Output {normalized_id}"
+                        )
+                        raw_state = states[i] if i < len(states) else 0
+                        try:
+                            output_state = 1 if int(float(raw_state)) else 0
+                        except Exception:
+                            output_state = 1 if bool(raw_state) else 0
+                        outputs.append({
+                            'id': normalized_id,
+                            'name': output_name,
+                            'state': output_state,
+                        })
+
+                    data['outputs'] = outputs
                 
                 elif 'owis' in device_name.lower() or 'ps90' in device_name.lower():
                     # OWIS multi-axis controller attributes
@@ -110,8 +194,8 @@ class DeviceMonitor:
                             try:
                                 # Replace DevState enums with their numeric values
                                 dict_str = re.sub(r'<DevState\.[A-Z]+: (\d+)>', r'\1', dict_str)
-                                # Use eval to parse the dict (safe since it's from Tango attribute)
-                                return eval(dict_str)
+                                parsed = ast.literal_eval(dict_str)
+                                return parsed if isinstance(parsed, dict) else {}
                             except Exception as e:
                                 logger.warning(f"Failed to parse dict string: {dict_str}, error: {e}")
                                 return {}
@@ -188,8 +272,10 @@ def init_socketio(app):
     )
     
     @socketio.on('connect')
-    def handle_connect():
+    def handle_connect(auth=None):
         """Handle client connection"""
+        if not _socket_auth_allowed(auth):
+            return False
         logger.info("Client connected to WebSocket")
         emit('connected', {'status': 'Connected to PYCONLYSE WebSocket'})
     

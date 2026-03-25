@@ -1,0 +1,175 @@
+# Current Live Coverage Check
+
+Live channels now: `677`
+Covered by current mapping files: `536`
+Not yet covered: `141`
+Coverage: `79.17%`
+
+## Uncovered Buckets
+
+- `numeric_slot`: `44`
+- `ACQ`: `7`
+- `ACH39`: `2`
+- `OUT00`: `2`
+- `OUT01`: `2`
+- `OUT02`: `2`
+- `OUT03`: `2`
+- `OUT04`: `2`
+- `OUT05`: `2`
+- `OUT06`: `2`
+- `OUT07`: `2`
+- `-`: `1`
+- `ACH03`: `1`
+- `ACH05`: `1`
+- `ACH06`: `1`
+- `ACH07`: `1`
+- `ACH13`: `1`
+- `ACH14`: `1`
+- `ACH15`: `1`
+- `ACH17`: `1`
+- `ACH25`: `1`
+- `ACH26`: `1`
+- `ACH43`: `1`
+- `ACH46`: `1`
+- `ACH47`: `1`
+- `ACH48`: `1`
+- `ACH49`: `1`
+- `ACH50`: `1`
+- `ACH51`: `1`
+- `ACH52`: `1`
+- `ACH53`: `1`
+- `ACH54`: `1`
+- `ACH55`: `1`
+- `ACH56`: `1`
+- `ACH57`: `1`
+- `ACH58`: `1`
+- `ACH59`: `1`
+- `ACH60`: `1`
+- `ACH61`: `1`
+- `ACH62`: `1`
+- `ACH63`: `1`
+- `Arret`: `1`
+- `BPA0`: `1`
+- `BPA1`: `1`
+- `BPA2`: `1`
+- `BPA3`: `1`
+- `B_NI6220`: `1`
+- `CPC3`: `1`
+- `CPC5`: `1`
+- `CPC7`: `1`
+- `DPA1`: `1`
+- `DPA3`: `1`
+- `DPA5`: `1`
+- `DPA6`: `1`
+- `DPA7`: `1`
+- `DPB0`: `1`
+- `DPB1`: `1`
+- `DPB2`: `1`
+- `DPB3`: `1`
+- `DPB4`: `1`
+- `DPB5`: `1`
+- `DPB6`: `1`
+- `DPB7`: `1`
+- `DPC0`: `1`
+- `DPC1`: `1`
+- `DPC2`: `1`
+- `DPC3`: `1`
+- `DPC4`: `1`
+- `DPC5`: `1`
+- `DPC6`: `1`
+- `DPC7`: `1`
+- `NÂ°`: `1`
+- `Pilote`: `1`
+- `ProcÃ©dure`: `1`
+- `WCM2BMax`: `1`
+- `WCM2BMin`: `1`
+- `WCM2DMax`: `1`
+- `WCM2DMin`: `1`
+- `WCM2GMax`: `1`
+- `WCM2GMin`: `1`
+- `WCM2HMax`: `1`
+- `WCM2HMin`: `1`
+- `other`: `1`
+
+## Sample Uncovered Keys
+
+- `-`
+- `00`
+- `00 ACQ Auxiliare`
+- `00 OUT00 b05 C10 DÃ©lais`
+- `01`
+- `01 ACQ Variables`
+- `02`
+- `02 ACQ EvÃ©nement`
+- `02 OUT01 b09 C10 DÃ©lais`
+- `03 `
+- `03 ACH03 b09 RÃ©servÃ©`
+- `04 OUT02 b32 C10 DÃ©lais`
+- `05 ACH05 b13 Libre ?`
+- `06 ACH06 b15 Libre ?`
+- `06 OUT03 b29 C10 DÃ©lais`
+- `07 ACH07 b17 Libre ?`
+- `08 OUT04 b26 C10 DÃ©lais`
+- `10 ACQ Vide Section`
+- `10 OUT05 b23 C10 DÃ©lais`
+- `11 CPC3 b59 Marche Triplet 1-2`
+- `12 OUT06 b53 C10 DÃ©lais`
+- `13 ACH13 b14 Libre ?`
+- `13 CPC5 b55 RÃ©serve`
+- `14 ACH14 b16 Libre ?`
+- `14 OUT07 b16 C10 DÃ©lais`
+- `15 ACH15 b18 Libre ?`
+- `15 CPC7 b51 Marche Triplet 2-1`
+- `16 ACQ Vide Dip PIQ27/33 `
+- `16 OUT00 b05 C11 DÃ©lais`
+- `17 ACH17 b53 RÃ©servÃ©`
+- `17 DPA1 b96 Marche Triplet 2-2`
+- `18 ACQ Libre`
+- `18 OUT01 b09 C11 DÃ©lais`
+- `19 ACQ Libre`
+- `19 DPA3 b92 RÃ©serve`
+- `20 OUT02 b32 C11 DÃ©lais`
+- `21 DPA5 b88 M/A QuadripÃ´ple 1`
+- `22 DPA6 b86 RÃ©serve`
+- `22 OUT03 b29 C11 DÃ©lais`
+- `23`
+- `23 DPA7 b84 M/A QuadripÃ´ple 2`
+- `24`
+- `24 BPA0 b48 QuadripÃ´ple 1 en marche`
+- `24 DPB0 b82 RÃ©serve`
+- `24 OUT04 b26 C11 DÃ©lais`
+- `25`
+- `25 ACH25 b54 RÃ©servÃ©`
+- `25 BPA1 b46 QuadripÃ´ple 1 en dÃ©faut`
+- `25 DPB1 b80 M/A Focale Injection`
+- `26`
+- `26 ACH26 b56 RÃ©servÃ©`
+- `26 BPA2 b44 QuadripÃ´ple 2 en marche`
+- `26 DPB2 b78 RÃ©serve`
+- `26 OUT05 b23 C11 DÃ©lais`
+- `27`
+- `27 BPA3 b42 QuadripÃ´ple 2 en dÃ©faut`
+- `27 DPB3 b76 M/A DipÃ´le 1`
+- `28`
+- `28 DPB4 b74 RÃ©serve`
+- `28 OUT06 b53 C11 DÃ©lais`
+- `29`
+- `29 DPB5 b72 M/A DipÃ´le 2`
+- `30`
+- `30 DPB6 b70 RÃ©serve`
+- `30 OUT07 b16 C11 DÃ©lais`
+- `31`
+- `31 DPB7 b68 M/A Guidage H1`
+- `32`
+- `32 DPC0 b66 M/A Guidage V1`
+- `32 WCM2HMax`
+- `33`
+- `33 DPC1 b64 M/A Guidage H2`
+- `33 WCM2BMax`
+- `34`
+- `34 DPC2 b62 M/A Guidage V2`
+- `34 WCM2GMax`
+- `35`
+- `35 DPC3 b60 M/A Guidage H3`
+- `35 WCM2DMax`
+- `36`

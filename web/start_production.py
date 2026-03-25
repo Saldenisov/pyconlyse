@@ -33,6 +33,7 @@ finally:
     os.chdir(original_cwd)
 
 if __name__ == '__main__':
+    os.environ.setdefault('PYCONLYSE_ENFORCE_DEVICE_AUTH', 'true')
     web_host = os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1')
     web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
     print("=" * 60)
@@ -48,6 +49,7 @@ if __name__ == '__main__':
     print("  - Debug mode: OFF")
     print("  - WebSocket: eventlet")
     print("  - Auto-reload: OFF")
+    print(f"  - Device auth enforced: {os.environ.get('PYCONLYSE_ENFORCE_DEVICE_AUTH')}")
     print("=" * 60)
 
     try:

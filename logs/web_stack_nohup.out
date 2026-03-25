@@ -1,0 +1,6 @@
+Starting PYCONLYSE web stack in local dev mode...
+Conda env: pyconlyse39
+Backend:   http://127.0.0.1:5000
+Frontend:  http://localhost:3000
+TANGO_HOST:10.20.30.202:10000
+

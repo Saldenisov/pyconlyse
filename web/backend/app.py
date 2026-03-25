@@ -63,9 +63,10 @@ def netio_pdu_test():
     response.headers['Expires'] = '0'
     return response
 
-# Route for OWIS PS90 test page
-@app.route('/test_owis_ps90.html')
-def owis_ps90_test():
+# Route for OWIS PS90 page
+@app.route('/owis_ps90.html')
+@app.route('/test_owis_ps90.html')  # backward compatibility
+def owis_ps90_page():
     from flask import make_response
     test_page_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'test_owis_ps90.html')
     response = make_response(send_from_directory(os.path.dirname(test_page_path), 'test_owis_ps90.html'))

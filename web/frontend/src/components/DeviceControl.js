@@ -7,17 +7,43 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
   const [deviceInfo, setDeviceInfo] = useState(null);
   const [attributes, setAttributes] = useState({});
   const [commands, setCommands] = useState({});
-  const [loading, setLoading] = useState(true);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [loadingAttributes, setLoadingAttributes] = useState(false);
+  const [loadingCommands, setLoadingCommands] = useState(false);
+  const [attributesLoaded, setAttributesLoaded] = useState(false);
+  const [commandsLoaded, setCommandsLoaded] = useState(false);
   const [error, setError] = useState(null);
   const [realTimeData, setRealTimeData] = useState({});
   const [connected, setConnected] = useState(false);
   const [monitoring, setMonitoring] = useState(false);
-  
+
   const socketRef = useRef(null);
 
+  const parseJsonOrThrow = async (response, fallbackMessage) => {
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (_err) {
+      payload = null;
+    }
+    if (!response.ok || payload?.success === false) {
+      throw new Error(payload?.error || fallbackMessage || `HTTP ${response.status}`);
+    }
+    return payload;
+  };
+
   useEffect(() => {
+    setDeviceInfo(null);
+    setAttributes({});
+    setCommands({});
+    setAttributesLoaded(false);
+    setCommandsLoaded(false);
+    setError(null);
+    setRealTimeData({});
+    setLoadingSummary(true);
+
     if (deviceName) {
-      fetchDeviceInfo();
+      fetchDeviceSummary();
       initializeWebSocket();
     }
 
@@ -32,7 +58,7 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     const token = getCookie('access_token_cookie');
     
     socketRef.current = io('/', {
-      transports: ['websocket'],
+      withCredentials: true,
       auth: {
         token: token
       }
@@ -65,8 +91,10 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     socketRef.current.on('command_result', (data) => {
       if (data.device === deviceName) {
         console.log('Command result:', data);
-        // Refresh device info after command execution
-        fetchDeviceInfo();
+        fetchDeviceSummary();
+        if (attributesLoaded) {
+          fetchAttributes(true);
+        }
       }
     });
 
@@ -83,28 +111,70 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     return null;
   };
 
-  const fetchDeviceInfo = async () => {
+  const fetchDeviceSummary = async () => {
     try {
-      setLoading(true);
-      const response = await fetch(`/api/device/${deviceName}/info`, {
+      setLoadingSummary(true);
+      const response = await fetch(`/api/device/${deviceName}/summary`, {
         credentials: 'include'
       });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setDeviceInfo(data.device_info);
-        setAttributes(data.device_info.attributes || {});
-        setCommands(data.device_info.commands || {});
-        setError(null);
-      } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
+
+      const data = await parseJsonOrThrow(response, 'Failed to load device summary');
+      setDeviceInfo(data.device_info);
+      setError(null);
     } catch (err) {
-      console.error('Error fetching device info:', err);
+      console.error('Error fetching device summary:', err);
       setError(err.message);
     } finally {
-      setLoading(false);
+      setLoadingSummary(false);
     }
+  };
+
+  const fetchAttributes = async (force = false) => {
+    if (!force && attributesLoaded) {
+      return;
+    }
+
+    try {
+      setLoadingAttributes(true);
+      const response = await fetch(`/api/device/${deviceName}/attributes`, {
+        credentials: 'include'
+      });
+      const data = await parseJsonOrThrow(response, 'Failed to load attributes');
+      setAttributes(data.attributes || {});
+      setAttributesLoaded(true);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching attributes:', err);
+      setError(err.message);
+    } finally {
+      setLoadingAttributes(false);
+    }
+  };
+
+  const fetchCommands = async (force = false) => {
+    if (!force && commandsLoaded) {
+      return;
+    }
+
+    try {
+      setLoadingCommands(true);
+      const response = await fetch(`/api/device/${deviceName}/commands`, {
+        credentials: 'include'
+      });
+      const data = await parseJsonOrThrow(response, 'Failed to load commands');
+      setCommands(data.commands || {});
+      setCommandsLoaded(true);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching commands:', err);
+      setError(err.message);
+    } finally {
+      setLoadingCommands(false);
+    }
+  };
+
+  const fetchAllDetails = async () => {
+    await Promise.all([fetchAttributes(true), fetchCommands(true)]);
   };
 
   const toggleMonitoring = () => {
@@ -121,6 +191,9 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
 
   const readAttribute = async (attributeName) => {
     try {
+      if (!attributesLoaded) {
+        await fetchAttributes();
+      }
       const response = await fetch(`/api/device/${deviceName}/attribute/${attributeName}`, {
         credentials: 'include'
       });
@@ -147,6 +220,9 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
 
   const writeAttribute = async (attributeName, value) => {
     try {
+      if (!attributesLoaded) {
+        await fetchAttributes();
+      }
       const response = await fetch(`/api/device/${deviceName}/attribute/${attributeName}`, {
         method: 'POST',
         headers: {
@@ -178,6 +254,9 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
 
   const executeCommand = async (commandName, args = null) => {
     try {
+      if (!commandsLoaded) {
+        await fetchCommands();
+      }
       const response = await fetch(`/api/device/${deviceName}/command/${commandName}`, {
         method: 'POST',
         headers: {
@@ -190,8 +269,10 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
       if (response.ok) {
         const data = await response.json();
         console.log(`Command ${commandName} result:`, data.result);
-        // Refresh device info after command execution
-        fetchDeviceInfo();
+        fetchDeviceSummary();
+        if (attributesLoaded) {
+          fetchAttributes(true);
+        }
         return data.result;
       } else {
         throw new Error(`Failed to execute ${commandName}`);
@@ -235,15 +316,15 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
     }
   };
 
-  if (loading) {
+  if (loadingSummary) {
     return <div className="device-control loading">Loading device information...</div>;
   }
 
-  if (error) {
+  if (error && !deviceInfo) {
     return (
       <div className="device-control error">
         <h3>Error: {error}</h3>
-        <button onClick={fetchDeviceInfo}>Retry</button>
+        <button onClick={fetchDeviceSummary}>Retry</button>
       </div>
     );
   }
@@ -278,52 +359,97 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
           <p><strong>Status:</strong> {deviceInfo.status}</p>
           <p><strong>Server:</strong> {deviceInfo.server}</p>
           <p><strong>Class:</strong> {deviceInfo.info}</p>
+          <p><strong>Type:</strong> {deviceType}</p>
           {realTimeData.timestamp && (
             <p><strong>Last Update:</strong> {new Date(realTimeData.timestamp).toLocaleString()}</p>
           )}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '10px' }}>
+            <button onClick={fetchDeviceSummary}>Refresh Summary</button>
+            <button onClick={fetchAllDetails}>Load/Refresh All Details</button>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="error-alert">
+          <strong>Error:</strong> {error}
         </div>
       )}
 
       <div className="device-sections">
         <div className="attributes-section">
           <h3>Attributes</h3>
-          <div className="attributes-grid">
-            {Object.entries(attributes).map(([attrName, attr]) => (
-              <div key={attrName} className="attribute-item">
-                <label>{attrName}</label>
-                {attr.error ? (
-                  <div className="error">Error: {attr.error}</div>
-                ) : (
-                  renderAttributeValue(attr, attrName)
-                )}
-                {attr.description && (
-                  <small className="description">{attr.description}</small>
-                )}
-              </div>
-            ))}
+          <div style={{ marginBottom: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => fetchAttributes(!attributesLoaded)}
+              disabled={loadingAttributes}
+            >
+              {attributesLoaded ? 'Refresh Attributes' : 'Load Attributes'}
+            </button>
+            {loadingAttributes && <span>Loading...</span>}
           </div>
+          {attributesLoaded && (
+            <div className="attributes-grid">
+              {Object.entries(attributes).map(([attrName, attr]) => (
+                <div key={attrName} className="attribute-item">
+                  <label>{attrName}</label>
+                  {attr.error ? (
+                    <div className="error">Error: {attr.error}</div>
+                  ) : (
+                    renderAttributeValue(attr, attrName)
+                  )}
+                  {attr.description && (
+                    <small className="description">{attr.description}</small>
+                  )}
+                </div>
+              ))}
+              {Object.keys(attributes).length === 0 && (
+                <div>No attributes were returned for this device.</div>
+              )}
+            </div>
+          )}
+          {!attributesLoaded && !loadingAttributes && (
+            <div>Attributes are loaded on demand.</div>
+          )}
         </div>
 
         <div className="commands-section">
           <h3>Commands</h3>
-          <div className="commands-grid">
-            {Object.entries(commands).map(([cmdName, cmd]) => (
-              <div key={cmdName} className="command-item">
-                <button 
-                  onClick={() => executeCommand(cmdName)}
-                  className="command-btn"
-                >
-                  {cmdName}
-                </button>
-                {cmd.in_type_desc && (
-                  <small>Input: {cmd.in_type_desc}</small>
-                )}
-                {cmd.out_type_desc && (
-                  <small>Output: {cmd.out_type_desc}</small>
-                )}
-              </div>
-            ))}
+          <div style={{ marginBottom: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => fetchCommands(!commandsLoaded)}
+              disabled={loadingCommands}
+            >
+              {commandsLoaded ? 'Refresh Commands' : 'Load Commands'}
+            </button>
+            {loadingCommands && <span>Loading...</span>}
           </div>
+          {commandsLoaded && (
+            <div className="commands-grid">
+              {Object.entries(commands).map(([cmdName, cmd]) => (
+                <div key={cmdName} className="command-item">
+                  <button
+                    onClick={() => executeCommand(cmdName)}
+                    className="command-btn"
+                  >
+                    {cmdName}
+                  </button>
+                  {cmd.in_type_desc && (
+                    <small>Input: {cmd.in_type_desc}</small>
+                  )}
+                  {cmd.out_type_desc && (
+                    <small>Output: {cmd.out_type_desc}</small>
+                  )}
+                </div>
+              ))}
+              {Object.keys(commands).length === 0 && (
+                <div>No commands were returned for this device.</div>
+              )}
+            </div>
+          )}
+          {!commandsLoaded && !loadingCommands && (
+            <div>Commands are loaded on demand.</div>
+          )}
         </div>
       </div>
     </div>

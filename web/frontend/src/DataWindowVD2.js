@@ -1,5 +1,5 @@
 // DataWindowVD2.js (Main Component)
-import React, { useState, createContext } from 'react';
+import React, { useMemo, useState, createContext } from 'react';
 import TopSection from './TopSection';
 import TabsControl from './TabsControl';
 import './css/DataWindowVD2.css';
@@ -7,7 +7,46 @@ import './css/DataWindowVD2.css';
 // Create context for sharing state between components
 export const TreatmentContext = createContext();
 
-const DataWindowVD2 = () => {
+const TREATMENT_NAMESPACE_KEY = 'pyconlyse_treatment_namespace';
+let inMemoryNamespace = '';
+
+function createNamespaceToken() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getBrowserNamespace() {
+  try {
+    const stored = window.localStorage.getItem(TREATMENT_NAMESPACE_KEY);
+    if (stored) {
+      return stored;
+    }
+
+    const created = createNamespaceToken();
+    window.localStorage.setItem(TREATMENT_NAMESPACE_KEY, created);
+    return created;
+  } catch (_error) {
+    if (!inMemoryNamespace) {
+      inMemoryNamespace = createNamespaceToken();
+    }
+    return inMemoryNamespace;
+  }
+}
+
+function buildTreatmentSessionId(profile) {
+  const normalizedProfile = String(profile || 'VD2').trim().toLowerCase();
+  return `browser:${getBrowserNamespace()}:profile:${normalizedProfile}`;
+}
+
+const DataWindowVD2 = ({ profile = 'VD2' }) => {
+  const treatmentProfile = String(profile || 'VD2').trim().toUpperCase();
+  const treatmentSessionId = useMemo(
+    () => buildTreatmentSessionId(treatmentProfile),
+    [treatmentProfile]
+  );
+
   // State for file paths
   const [absPath, setAbsPath] = useState(null);
   const [basePath, setBasePath] = useState(null);
@@ -30,6 +69,11 @@ const DataWindowVD2 = () => {
   
   // State for experiment type
   const [expType, setExpType] = useState('ABS+BASE+BRUIT');
+  const [selectionRefreshToken, setSelectionRefreshToken] = useState(0);
+
+  const requestSelectionRefresh = () => {
+    setSelectionRefreshToken((current) => current + 1);
+  };
   
   const contextValue = {
     absPath, setAbsPath,
@@ -44,7 +88,11 @@ const DataWindowVD2 = () => {
     odData, setOdData,
     cursorX, setCursorX,
     cursorY, setCursorY,
-    expType, setExpType
+    expType, setExpType,
+    selectionRefreshToken,
+    requestSelectionRefresh,
+    treatmentProfile,
+    treatmentSessionId,
   };
   
   return (

@@ -168,7 +168,7 @@ async function fetchMotorDetails(motorNames) {
   return { motorsData, stepsData };
 }
 
-const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
+const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null }) => {
   const [selectedConfig, setSelectedConfig] = useState(defaultConfig);
   const [motors, setMotors] = useState({});
   const [connected, setConnected] = useState(false);
@@ -179,11 +179,17 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
   
   const socketRef = useRef(null);
   const updateTimers = useRef({});
-
-  const currentMotorNames = MOTOR_CONFIGS[selectedConfig]?.selection || [];
+  const overrideMotors = Array.isArray(motorOverride) ? motorOverride.filter(Boolean) : [];
+  const usingOverride = overrideMotors.length > 0;
+  const currentMotorNames = usingOverride
+    ? overrideMotors
+    : (MOTOR_CONFIGS[selectedConfig]?.selection || []);
+  const gridWidth = usingOverride
+    ? Math.max(1, Math.min(currentMotorNames.length, 2))
+    : (MOTOR_CONFIGS[selectedConfig]?.width || 4);
 
   useEffect(() => {
-    const motorNames = MOTOR_CONFIGS[selectedConfig]?.selection || [];
+    const motorNames = currentMotorNames;
     let disposed = false;
 
     setMonitoring(false);
@@ -225,7 +231,7 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
     if (motorNames.length > 0) {
       const token = getCookie('access_token_cookie');
       const socket = io('/', {
-        transports: ['websocket'],
+        withCredentials: true,
         auth: { token }
       });
       socketRef.current = socket;
@@ -275,7 +281,7 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
       Object.values(pendingTimers).forEach((timer) => clearTimeout(timer));
       updateTimers.current = {};
     };
-  }, [selectedConfig]);
+  }, [selectedConfig, usingOverride, currentMotorNames.join('|')]);
 
   const fetchAllMotorsData = async () => {
     try {
@@ -558,17 +564,21 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
         <h2>Standa Motorized Stages</h2>
         <div className="header-controls">
           <div className="config-selector">
-            <label>Configuration:</label>
-            <select 
-              value={selectedConfig}
-              onChange={(e) => setSelectedConfig(e.target.value)}
-            >
-              {Object.keys(MOTOR_CONFIGS).map(configName => (
-                <option key={configName} value={configName}>
-                  {configName} ({MOTOR_CONFIGS[configName].selection.length} motors)
-                </option>
-              ))}
-            </select>
+            {!usingOverride && (
+              <>
+                <label>Configuration:</label>
+                <select
+                  value={selectedConfig}
+                  onChange={(e) => setSelectedConfig(e.target.value)}
+                >
+                  {Object.keys(MOTOR_CONFIGS).map(configName => (
+                    <option key={configName} value={configName}>
+                      {configName} ({MOTOR_CONFIGS[configName].selection.length} motors)
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
           </div>
 
           <div className="connection-status">
@@ -597,7 +607,7 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short" }) => {
         </div>
       )}
 
-      <div className="motors-grid" style={{ gridTemplateColumns: `repeat(${MOTOR_CONFIGS[selectedConfig]?.width || 4}, 1fr)` }}>
+      <div className="motors-grid" style={{ gridTemplateColumns: `repeat(${gridWidth}, 1fr)` }}>
         {currentMotorNames.map(motorName => renderMotor(motorName))}
       </div>
       

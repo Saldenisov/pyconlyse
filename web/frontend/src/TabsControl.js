@@ -1,41 +1,56 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist';
+import { TreatmentContext } from './DataWindowVD2';
+import {
+  fetchFolderListing,
+  fetchTreatmentPreview,
+  fetchTreatmentSession,
+  postTreatment,
+} from './api/treatmentClient';
 import './css/DataWindowVD2.css';
 
-async function parseResponse(response) {
-  const payload = await response.json();
-  if (!response.ok || payload.success === false) {
-    throw new Error(payload.error || 'Treatment request failed.');
+const SAM_CLEANABLE_SUFFIXES = new Set(['.h5', '.his', '.img']);
+const PROFILE_PRESETS = {
+  V0: {
+    exp_type: 'HIS+NOISE',
+    selected_data_type: 'ABS+BASE',
+    calc_mode: 'individual',
+    first_map_with_electrons: true,
+  },
+  VD2: {
+    exp_type: 'ABS+BASE+NOISE',
+    selected_data_type: 'ABS',
+    calc_mode: 'averaged',
+    first_map_with_electrons: true,
+  },
+};
+const REQUIRED_DATA_TYPES = {
+  HIS: ['ABS+BASE+NOISE'],
+  'HIS+NOISE': ['ABS+BASE', 'NOISE'],
+  'ABS+BASE+NOISE': ['ABS', 'BASE', 'NOISE'],
+};
+
+function requiredDataTypesForExpType(expType) {
+  return REQUIRED_DATA_TYPES[String(expType || '').trim().toUpperCase()] || [];
+}
+
+function isSamCleanableFile(file) {
+  const suffix = String(file?.suffix || '').toLowerCase();
+  return SAM_CLEANABLE_SUFFIXES.has(suffix);
+}
+
+function shouldApplyAutoPreset(sessionState, preset) {
+  if (!sessionState || !preset) {
+    return false;
   }
-  return payload;
-}
-
-async function fetchTreatmentSession() {
-  const response = await fetch('/api/treatment/session');
-  return parseResponse(response);
-}
-
-async function postTreatment(url, body) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body || {}),
-  });
-  return parseResponse(response);
-}
-
-async function fetchFolderListing(folderPath) {
-  const response = await fetch(
-    `/api/treatment/files?folder=${encodeURIComponent(folderPath)}`
+  const assignedPaths = Object.keys(sessionState.paths || {});
+  if (assignedPaths.length > 0) {
+    return false;
+  }
+  return (
+    sessionState.exp_type !== preset.exp_type ||
+    sessionState.selected_data_type !== preset.selected_data_type
   );
-  return parseResponse(response);
-}
-
-async function fetchTreatmentPreview(dataType) {
-  const response = await fetch(
-    `/api/treatment/preview?data_type=${encodeURIComponent(dataType)}&map_index=0`
-  );
-  return parseResponse(response);
 }
 
 const ParametersZone = ({
@@ -51,10 +66,18 @@ const ParametersZone = ({
   onCommitSaveFolder,
   onCommitSaveFileName,
   onReset,
+  profileName,
+  onApplyProfilePreset,
+  isBusy,
 }) => {
+  const isAbsBaseNoiseMode = session.exp_type === 'ABS+BASE+NOISE';
+
   return (
     <div className="parameters-zone">
       <h3>Treatment Session</h3>
+      <div style={{ marginBottom: '8px', color: '#475467', fontSize: '0.9rem' }}>
+        Profile: <strong>{profileName}</strong>
+      </div>
       <div>
         <label>Experiment Type:</label>
         <select
@@ -87,9 +110,10 @@ const ParametersZone = ({
         <label>Calculation Mode:</label>
         <select
           value={session.calc_mode}
+          disabled={isAbsBaseNoiseMode}
           onChange={(event) => onConfigChange({ calc_mode: event.target.value })}
         >
-          {calcModes.map((item) => (
+          {(isAbsBaseNoiseMode ? ['averaged'] : calcModes).map((item) => (
             <option key={item} value={item}>
               {item}
             </option>
@@ -101,6 +125,7 @@ const ParametersZone = ({
           <input
             type="checkbox"
             checked={session.first_map_with_electrons}
+            disabled={isAbsBaseNoiseMode}
             onChange={(event) =>
               onConfigChange({
                 first_map_with_electrons: event.target.checked,
@@ -129,6 +154,11 @@ const ParametersZone = ({
           onBlur={onCommitSaveFileName}
           placeholder="result.dat"
         />
+      </div>
+      <div>
+        <button onClick={onApplyProfilePreset} disabled={isBusy}>
+          Apply {profileName} Preset
+        </button>
       </div>
       <div>
         <button onClick={onReset}>Reset Session</button>
@@ -181,71 +211,70 @@ const RawDataKineticsPlot = ({ preview }) => {
   return <div className="raw-data-kinetics-plot" ref={ref}></div>;
 };
 
-const ModalTreeNode = ({ node, selectedFolder, onFolderClick }) => {
-  const [expanded, setExpanded] = useState(false);
-  const hasChildren = node.children && node.children.length > 0;
+function getParentFolder(folderPath, allowedRoot) {
+  if (!folderPath || !allowedRoot || folderPath === allowedRoot) {
+    return null;
+  }
 
-  const handleClick = () => {
-    if (hasChildren) {
-      setExpanded((current) => !current);
-    }
-    if (!node.isFile) {
-      onFolderClick(node.path);
-    }
-  };
+  const trimmed = folderPath.replace(/[\\/]+$/, '');
+  const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  if (lastSeparator < 0) {
+    return null;
+  }
 
-  return (
-    <div style={{ marginLeft: '20px' }}>
-      <div
-        onClick={handleClick}
-        style={{
-          cursor: 'pointer',
-          fontWeight: selectedFolder === node.path ? 'bold' : 'normal',
-        }}
-      >
-        {node.name}
-      </div>
-      {hasChildren && expanded && (
-        <div>
-          {node.children.map((child, index) => (
-            <ModalTreeNode
-              key={`${child.path}-${index}`}
-              node={child}
-              selectedFolder={selectedFolder}
-              onFolderClick={onFolderClick}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
+  const parent = trimmed.slice(0, lastSeparator);
+  if (!parent || parent.length < allowedRoot.length) {
+    return allowedRoot;
+  }
+  return parent;
+}
 
-const AllowedFolderSelector = ({ onFolderSelect, onClose }) => {
-  const [folderTree, setFolderTree] = useState(null);
-  const [selectedFolder, setSelectedFolder] = useState(null);
+const AllowedFolderSelector = ({
+  sessionId,
+  initialFolder,
+  allowedRoot,
+  onFolderSelect,
+  onClose,
+}) => {
+  const startFolder = initialFolder || allowedRoot || '';
+  const [currentFolder, setCurrentFolder] = useState(startFolder);
+  const [folders, setFolders] = useState([]);
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
+    if (!currentFolder) {
+      setFolders([]);
+      return undefined;
+    }
 
-    fetch('/api/folder-structure')
-      .then(parseResponse)
+    let cancelled = false;
+    setIsLoading(true);
+    setError('');
+
+    fetchFolderListing(sessionId, currentFolder)
       .then((data) => {
         if (!cancelled) {
-          setFolderTree(data);
+          setFolders(data.folders || []);
         }
       })
       .catch((err) => {
         if (!cancelled) {
           setError(err.message);
         }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [currentFolder, sessionId]);
+
+  const parentFolder = getParentFolder(currentFolder, allowedRoot);
 
   return (
     <div
@@ -273,23 +302,46 @@ const AllowedFolderSelector = ({ onFolderSelect, onClose }) => {
         }}
       >
         <h3>Select Treatment Folder</h3>
+        <p>
+          <strong>Allowed Root:</strong> {allowedRoot}
+        </p>
+        <p>
+          <strong>Current Folder:</strong> {currentFolder || 'Not available'}
+        </p>
         {error && <p>{error}</p>}
-        {!error && !folderTree && <p>Loading folders...</p>}
-        {folderTree && (
+        {isLoading && <p>Loading folders...</p>}
+        {!isLoading && !error && folders.length === 0 && (
+          <p>No subfolders in this directory.</p>
+        )}
+        {!isLoading && !error && folders.length > 0 && (
           <div className="folder-tree-view">
-            <ModalTreeNode
-              node={folderTree}
-              selectedFolder={selectedFolder}
-              onFolderClick={setSelectedFolder}
-            />
+            {folders.map((folder) => (
+              <div
+                key={folder.path}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  marginBottom: '8px',
+                }}
+              >
+                <button onClick={() => setCurrentFolder(folder.path)}>{folder.name}</button>
+                <button onClick={() => onFolderSelect(folder.path)}>Use</button>
+              </div>
+            ))}
           </div>
         )}
         <div style={{ marginTop: '10px' }}>
+          <button onClick={() => onFolderSelect(currentFolder)} disabled={!currentFolder}>
+            Use Current Folder
+          </button>
           <button
-            onClick={() => onFolderSelect(selectedFolder)}
-            disabled={!selectedFolder}
+            onClick={() => setCurrentFolder(parentFolder)}
+            disabled={!parentFolder}
+            style={{ marginLeft: '10px' }}
           >
-            Use Folder
+            Up One Level
           </button>
           <button onClick={onClose} style={{ marginLeft: '10px' }}>
             Cancel
@@ -330,58 +382,97 @@ const AssignedPaths = ({ session, onPreview }) => {
 };
 
 const TabsControl = () => {
+  const treatmentContext = useContext(TreatmentContext);
+  const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
+  const treatmentProfile = String(treatmentContext?.treatmentProfile || 'VD2').toUpperCase();
+  const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
   const [folderListing, setFolderListing] = useState({ folders: [], files: [] });
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
   const [draftSaveFileName, setDraftSaveFileName] = useState('');
+  const [draftKineticsRanges, setDraftKineticsRanges] = useState('');
+  const [draftSpectraRanges, setDraftSpectraRanges] = useState('');
+  const [cleaningAngleThreshold, setCleaningAngleThreshold] = useState('1.0');
+  const [cleaningSurfaceThreshold, setCleaningSurfaceThreshold] = useState('1.0');
+  const [cleaningOutputName, setCleaningOutputName] = useState('');
   const [error, setError] = useState('');
   const [preview, setPreview] = useState(null);
   const [operationMessage, setOperationMessage] = useState('');
+  const [selectionMessage, setSelectionMessage] = useState('');
+  const [cleaningSummary, setCleaningSummary] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
+  const profilePreset = PROFILE_PRESETS[treatmentProfile] || PROFILE_PRESETS.VD2;
 
   const session = treatment ? treatment.session : null;
+  const requiredDataTypes =
+    session?.required_data_types || requiredDataTypesForExpType(session?.exp_type);
+  const assignableDataTypes =
+    requiredDataTypes && requiredDataTypes.length > 0 ? requiredDataTypes : treatment?.data_types || [];
 
   const refreshSession = async () => {
-    const payload = await fetchTreatmentSession();
+    const payload = await fetchTreatmentSession(treatmentSessionId);
     setTreatment(payload);
+    if (requestSelectionRefresh) {
+      requestSelectionRefresh();
+    }
     return payload;
   };
 
-  const refreshFolderListing = async (folderPath) => {
-    if (!folderPath) {
-      setFolderListing({ folders: [], files: [] });
-      return;
-    }
+  const refreshFolderListing = useCallback(
+    async (folderPath) => {
+      if (!folderPath) {
+        setFolderListing({ folders: [], files: [] });
+        return;
+      }
 
-    const payload = await fetchFolderListing(folderPath);
-    setFolderListing({
-      folders: payload.folders || [],
-      files: payload.files || [],
-    });
-  };
+      const payload = await fetchFolderListing(treatmentSessionId, folderPath);
+      setFolderListing({
+        folders: payload.folders || [],
+        files: payload.files || [],
+      });
+    },
+    [treatmentSessionId]
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    refreshSession()
-      .then((payload) => {
-        if (!cancelled && payload.session.folder_path) {
-          return refreshFolderListing(payload.session.folder_path);
+    const loadSession = async () => {
+      try {
+        let payload = await fetchTreatmentSession(treatmentSessionId);
+        if (shouldApplyAutoPreset(payload.session, profilePreset)) {
+          payload = await postTreatment(
+            treatmentSessionId,
+            '/api/treatment/session/config',
+            profilePreset
+          );
         }
-        return undefined;
-      })
-      .catch((err) => {
+
+        if (!cancelled) {
+          setTreatment(payload);
+          if (requestSelectionRefresh) {
+            requestSelectionRefresh();
+          }
+        }
+
+        if (!cancelled && payload.session.folder_path) {
+          await refreshFolderListing(payload.session.folder_path);
+        }
+      } catch (err) {
         if (!cancelled) {
           setError(err.message);
         }
-      });
+      }
+    };
+
+    loadSession();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [profilePreset, refreshFolderListing, requestSelectionRefresh, treatmentSessionId]);
 
   useEffect(() => {
     if (!session) {
@@ -389,6 +480,9 @@ const TabsControl = () => {
     }
     setDraftSaveFolder(session.save_folder || '');
     setDraftSaveFileName(session.save_file_name || '');
+    setCleaningOutputName((current) => (
+      current || (session.active_data_type ? `${session.active_data_type.toLowerCase()}_cleaned.h5` : '')
+    ));
   }, [session]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
@@ -397,6 +491,9 @@ const TabsControl = () => {
     try {
       const payload = await requestPromise;
       setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
       if (refreshListing && payload.session.folder_path) {
         await refreshFolderListing(payload.session.folder_path);
       }
@@ -407,11 +504,29 @@ const TabsControl = () => {
     }
   };
 
-  const handleConfigChange = (patch) =>
-    applyPayload(postTreatment('/api/treatment/session/config', patch));
+  const handleConfigChange = (patch) => {
+    if (!session) {
+      return;
+    }
+    const normalizedPatch = { ...patch };
+    const nextExpType = normalizedPatch.exp_type || session.exp_type;
+    const nextRequired = requiredDataTypesForExpType(nextExpType);
+
+    if (!Object.prototype.hasOwnProperty.call(normalizedPatch, 'selected_data_type')) {
+      if (nextRequired.length > 0 && !nextRequired.includes(session.selected_data_type)) {
+        normalizedPatch.selected_data_type = nextRequired[0];
+      }
+    }
+
+    if (nextExpType === 'ABS+BASE+NOISE') {
+      normalizedPatch.calc_mode = 'averaged';
+    }
+
+    applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/config', normalizedPatch));
+  };
 
   const handleReset = () =>
-    applyPayload(postTreatment('/api/treatment/session/reset'), true);
+    applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/reset'), true);
 
   const handleFolderSelect = (selectedFolder) => {
     if (!selectedFolder) {
@@ -419,7 +534,7 @@ const TabsControl = () => {
     }
     setIsModalOpen(false);
     applyPayload(
-      postTreatment('/api/treatment/session/folder', {
+      postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
         folder_path: selectedFolder,
       }),
       true
@@ -431,7 +546,7 @@ const TabsControl = () => {
       return;
     }
     applyPayload(
-      postTreatment('/api/treatment/session/path', {
+      postTreatment(treatmentSessionId, '/api/treatment/session/path', {
         data_type: session.selected_data_type,
         file_path: filePath,
       })
@@ -442,7 +557,15 @@ const TabsControl = () => {
     setError('');
     setIsBusy(true);
     try {
-      const payload = await fetchTreatmentPreview(dataType);
+      const sessionPayload = await postTreatment(treatmentSessionId, '/api/treatment/session/selection', {
+        active_data_type: dataType,
+        map_index: 0,
+      });
+      setTreatment(sessionPayload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      const payload = await fetchTreatmentPreview(treatmentSessionId, dataType);
       setPreview(payload.preview);
       setOperationMessage(`Preview loaded for ${dataType}.`);
     } catch (err) {
@@ -457,7 +580,7 @@ const TabsControl = () => {
     setIsBusy(true);
     setOperationMessage('');
     try {
-      const payload = await postTreatment('/api/treatment/average-noise');
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/average-noise');
       setTreatment(payload);
       setPreview(payload.noise);
       setOperationMessage('Noise averaged on the backend.');
@@ -472,7 +595,7 @@ const TabsControl = () => {
     setError('');
     setIsBusy(true);
     try {
-      const payload = await postTreatment('/api/treatment/calc-abs');
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/calc-abs');
       setTreatment(payload);
       setPreview({
         ...payload.result,
@@ -490,7 +613,7 @@ const TabsControl = () => {
     setError('');
     setIsBusy(true);
     try {
-      const payload = await postTreatment('/api/treatment/save');
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/save');
       setTreatment(payload);
       setOperationMessage(`Result saved to ${payload.saved.save_path}`);
     } catch (err) {
@@ -514,8 +637,181 @@ const TabsControl = () => {
     handleConfigChange({ save_file_name: draftSaveFileName });
   };
 
+  const handleApplyProfilePreset = async () => {
+    setError('');
+    setIsBusy(true);
+    setOperationMessage('');
+    try {
+      const payload = await postTreatment(
+        treatmentSessionId,
+        '/api/treatment/session/config',
+        profilePreset
+      );
+      setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      setOperationMessage(`${treatmentProfile} preset applied.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const formatExportRanges = (ranges) =>
+    (ranges || [])
+      .map((item) => `${item.center} ${item.width}`)
+      .join('; ');
+
+  const handleSelectionExport = async (userType) => {
+    const ranges = userType === 'kinetics' ? draftKineticsRanges : draftSpectraRanges;
+
+    setError('');
+    setSelectionMessage('');
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/selection/export', {
+        user_type: userType,
+        ranges,
+      });
+
+      setTreatment(payload);
+      const normalizedRanges = formatExportRanges(payload.exported.ranges);
+      if (userType === 'kinetics') {
+        setDraftKineticsRanges(normalizedRanges);
+      } else {
+        setDraftSpectraRanges(normalizedRanges);
+      }
+
+      setSelectionMessage(
+        `${userType} exported to ${payload.exported.output_path}`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleV0QuickExport = async () => {
+    const kineticsRanges = draftKineticsRanges || '500+-10; 600+-5';
+    const spectraRanges = draftSpectraRanges || '1+-0.5; 3+-1';
+    let kineticsOutputPath = '';
+
+    setError('');
+    setSelectionMessage('');
+    setIsBusy(true);
+    try {
+      const kineticsPayload = await postTreatment(
+        treatmentSessionId,
+        '/api/treatment/selection/export',
+        {
+          user_type: 'kinetics',
+          ranges: kineticsRanges,
+        }
+      );
+      kineticsOutputPath = kineticsPayload.exported.output_path;
+      setDraftKineticsRanges(formatExportRanges(kineticsPayload.exported.ranges));
+
+      const spectraPayload = await postTreatment(
+        treatmentSessionId,
+        '/api/treatment/selection/export',
+        {
+          user_type: 'spectra',
+          ranges: spectraRanges,
+        }
+      );
+      setTreatment(spectraPayload);
+      setDraftSpectraRanges(formatExportRanges(spectraPayload.exported.ranges));
+      setSelectionMessage(
+        `V0 quick export completed: kinetics -> ${kineticsOutputPath}; spectra -> ${spectraPayload.exported.output_path}`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleCleaningAction = async (mode) => {
+    setError('');
+    setSelectionMessage('');
+    setIsBusy(true);
+
+    try {
+      let payload;
+      if (mode === 'reset') {
+        payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/reset');
+      } else {
+        payload = await postTreatment(
+          treatmentSessionId,
+          mode === 'analyze' ? '/api/treatment/cleaning/sam' : '/api/treatment/cleaning/save',
+          {
+            angle_threshold: Number.parseFloat(cleaningAngleThreshold),
+            surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
+            output_file_name: cleaningOutputName,
+          }
+        );
+      }
+
+      if (mode === 'reset') {
+        setCleaningSummary(null);
+        setOperationMessage(
+          payload.cleaning.discarded_measurements
+            ? `Cleaning state reset for ${payload.cleaning.file_path}.`
+            : 'Cleaning state was already empty.'
+        );
+      } else {
+        setCleaningSummary(payload.cleaning);
+        if (mode === 'save') {
+          setOperationMessage(`Cleaned H5 saved to ${payload.cleaning.output_path}`);
+        } else if (payload.cleaning.state_updated === false) {
+          setOperationMessage(payload.cleaning.warning || 'No measurements passed the thresholds.');
+        } else if (payload.cleaning.source_measurements !== payload.cleaning.original_measurements) {
+          setOperationMessage(
+            `SAM pass applied to ${payload.cleaning.source_measurements} already-cleaned maps.`
+          );
+        } else {
+          setOperationMessage('SAM cleaning pass applied to the original file maps.');
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const handleCleaningFileSave = async (filePath) => {
+    setError('');
+    setSelectionMessage('');
+    setIsBusy(true);
+
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/file/save', {
+        file_path: filePath,
+        angle_threshold: Number.parseFloat(cleaningAngleThreshold),
+        surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
+        output_file_name: cleaningOutputName,
+      });
+      setCleaningSummary(payload.cleaning);
+      setOperationMessage(`Cleaned H5 saved to ${payload.cleaning.output_path}`);
+      setActiveTab('cleaning');
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   if (!session) {
-    return <div className="tabs-control">Loading treatment session...</div>;
+    return (
+      <div className="tabs-control">
+        <p>{error || 'Loading treatment session...'}</p>
+        <button onClick={refreshSession}>Retry</button>
+      </div>
+    );
   }
 
   return (
@@ -533,7 +829,7 @@ const TabsControl = () => {
               <ParametersZone
                 session={session}
                 expTypes={treatment.exp_types}
-                dataTypes={treatment.data_types}
+                dataTypes={assignableDataTypes}
                 calcModes={treatment.calc_modes}
                 draftSaveFolder={draftSaveFolder}
                 draftSaveFileName={draftSaveFileName}
@@ -543,6 +839,9 @@ const TabsControl = () => {
                 onCommitSaveFolder={handleCommitSaveFolder}
                 onCommitSaveFileName={handleCommitSaveFileName}
                 onReset={handleReset}
+                profileName={treatmentProfile}
+                onApplyProfilePreset={handleApplyProfilePreset}
+                isBusy={isBusy}
               />
             </div>
             <div className="zone files-folder">
@@ -563,11 +862,22 @@ const TabsControl = () => {
                 <strong>Status:</strong> {session.status_label}
               </p>
               <p>
+                <strong>Required Inputs:</strong>{' '}
+                {requiredDataTypes.length > 0 ? requiredDataTypes.join(', ') : 'n/a'}
+              </p>
+              {session.missing_data_types && session.missing_data_types.length > 0 && (
+                <p>
+                  <strong>Missing:</strong> {session.missing_data_types.join(', ')}
+                </p>
+              )}
+              <p>
                 <strong>Backend State:</strong>{' '}
                 {isBusy
                   ? 'Working...'
                   : session.result_ready
                     ? 'Result ready'
+                    : session.ready_for_calc
+                      ? 'Ready to calculate'
                     : session.noise_ready
                       ? 'Noise ready'
                       : 'Idle'}
@@ -602,12 +912,20 @@ const TabsControl = () => {
                     <div>
                       <strong>{file.name}</strong> ({file.suffix || 'no suffix'})
                     </div>
-                    <button
-                      onClick={() => handleAssignFile(file.path)}
-                      disabled={!file.supported}
-                    >
-                      Assign as {session.selected_data_type}
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={() => handleAssignFile(file.path)}
+                        disabled={!file.supported || isBusy}
+                      >
+                        Assign as {session.selected_data_type}
+                      </button>
+                      <button
+                        onClick={() => handleCleaningFileSave(file.path)}
+                        disabled={!isSamCleanableFile(file) || isBusy}
+                      >
+                        Clean File (SAM)
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -655,8 +973,83 @@ const TabsControl = () => {
         )}
         {activeTab === 'cleaning' && (
           <div className="tab-panel">
-            Cleaning workflow is next. The session state is now persisted on the
-            backend, so this tab can call real treatment operations next.
+            <p>
+              Run desktop-style SAM filtering on the active file. Each Analyze pass
+              filters the current cleaned working set, and Reset returns you to the
+              original file maps before the next pass.
+            </p>
+            <div style={{ display: 'grid', gap: '12px', maxWidth: '720px' }}>
+              <label>
+                Angle Threshold (degrees)
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.1"
+                  value={cleaningAngleThreshold}
+                  onChange={(event) => setCleaningAngleThreshold(event.target.value)}
+                />
+              </label>
+              <label>
+                Surface Threshold (%)
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.1"
+                  value={cleaningSurfaceThreshold}
+                  onChange={(event) => setCleaningSurfaceThreshold(event.target.value)}
+                />
+              </label>
+              <label>
+                Output H5 Name
+                <input
+                  type="text"
+                  value={cleaningOutputName}
+                  onChange={(event) => setCleaningOutputName(event.target.value)}
+                  placeholder="active_cleaned.h5"
+                />
+              </label>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy}>
+                  Analyze SAM
+                </button>
+                <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
+                  Reset Cleaning
+                </button>
+                <button onClick={() => handleCleaningAction('save')} disabled={isBusy}>
+                  Save Cleaned H5
+                </button>
+              </div>
+              {cleaningSummary && (
+                <div>
+                  <p>
+                    <strong>File:</strong> {cleaningSummary.file_path || session.active_data_type || 'n/a'}
+                  </p>
+                  <p>
+                    <strong>This Pass:</strong> {cleaningSummary.cleaned_measurements} / {cleaningSummary.source_measurements}
+                    {' | '}
+                    <strong>Pass Retention:</strong> {cleaningSummary.pass_retention_rate.toFixed(1)}%
+                  </p>
+                  <p>
+                    <strong>Overall Retained:</strong> {cleaningSummary.cleaned_measurements} / {cleaningSummary.original_measurements}
+                    {' | '}
+                    <strong>Overall Retention:</strong> {cleaningSummary.retention_rate.toFixed(1)}%
+                  </p>
+                  <p>
+                    <strong>Angle:</strong> {cleaningSummary.sam_angle_min.toFixed(3)} .. {cleaningSummary.sam_angle_max.toFixed(3)}
+                    {' | '}
+                    <strong>Mean:</strong> {cleaningSummary.sam_angle_mean.toFixed(3)}
+                  </p>
+                  {cleaningSummary.state_updated === false && cleaningSummary.warning && (
+                    <p>{cleaningSummary.warning}</p>
+                  )}
+                  {cleaningSummary.output_path && (
+                    <p>
+                      <strong>Saved:</strong> {cleaningSummary.output_path}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
         {activeTab === 'info' && (
@@ -674,14 +1067,72 @@ const TabsControl = () => {
         )}
         {activeTab === 'selection' && (
           <div className="tab-panel">
-            Selection tools from the desktop Treatment client are not ported yet,
-            but file-role assignment and session persistence now run through the
-            web backend.
+            <p>
+              <strong>Profile:</strong> {treatmentProfile}
+              {' | '}
+              {treatmentProfile === 'V0'
+                ? 'Preset uses HIS+NOISE for legacy V0 flow.'
+                : 'Preset uses ABS+BASE+NOISE for VD2 flow.'}
+            </p>
+            <p>
+              Export averaged traces from the active file and current map using
+              desktop-style ranges such as <code>500+-10; 600+-5</code>.
+            </p>
+            <p>
+              <strong>Active Data:</strong> {session.active_data_type || 'Not selected'}
+              {' | '}
+              <strong>Map:</strong> {session.map_index || 0}
+            </p>
+            {treatmentProfile === 'V0' && (
+              <div style={{ marginBottom: '12px' }}>
+                <button onClick={handleV0QuickExport} disabled={isBusy}>
+                  Quick Export Both (V0)
+                </button>
+              </div>
+            )}
+            <div style={{ display: 'grid', gap: '12px', maxWidth: '720px' }}>
+              <label>
+                Kinetics Ranges
+                <input
+                  type="text"
+                  value={draftKineticsRanges}
+                  onChange={(event) => setDraftKineticsRanges(event.target.value)}
+                  placeholder="500+-10; 600+-5"
+                  style={{ width: '100%' }}
+                />
+              </label>
+              <button
+                onClick={() => handleSelectionExport('kinetics')}
+                disabled={isBusy}
+              >
+                Get Kinetics
+              </button>
+              <label>
+                Spectra Ranges
+                <input
+                  type="text"
+                  value={draftSpectraRanges}
+                  onChange={(event) => setDraftSpectraRanges(event.target.value)}
+                  placeholder="1+-0.5; 3+-1"
+                  style={{ width: '100%' }}
+                />
+              </label>
+              <button
+                onClick={() => handleSelectionExport('spectra')}
+                disabled={isBusy}
+              >
+                Get Spectra
+              </button>
+              {selectionMessage && <p>{selectionMessage}</p>}
+            </div>
           </div>
         )}
       </div>
       {isModalOpen && (
         <AllowedFolderSelector
+          sessionId={treatmentSessionId}
+          initialFolder={session.folder_path || treatment.allowed_root}
+          allowedRoot={treatment.allowed_root}
           onFolderSelect={handleFolderSelect}
           onClose={() => setIsModalOpen(false)}
         />

@@ -1,0 +1,39 @@
+.device-browser {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 16px;
+  min-height: 520px;
+}
+
+.device-browser .browser-sidebar {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.device-browser .client-area {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  padding: 12px;
+  background: #fff;
+}
+
+.device-browser .device-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.device-browser .device-item {
+  border: 1px solid #eaecf0;
+  border-radius: 8px;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.device-browser .device-item.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}

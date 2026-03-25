@@ -55,13 +55,56 @@ function normalizeItestSlotData(data) {
   return { ids, names, states, setpoints, measuredCurrents, limits };
 }
 
+function normalizeTabConfigs(rawConfigs) {
+  const defaults = {
+    V0: { slots: [], defaults: {}, enabled: true },
+    VD2: { slots: [], defaults: {}, enabled: true },
+    REF: { slots: [], defaults: {}, enabled: true },
+    ALL: { slots: [], defaults: {}, enabled: true },
+  };
+
+  const aliases = {
+    V0: 'V0',
+    VD: 'V0',
+    VD2: 'VD2',
+    REF: 'REF',
+    RF: 'REF',
+    ALL: 'ALL',
+  };
+
+  const normalized = { ...defaults };
+  Object.entries(rawConfigs || {}).forEach(([rawName, rawPayload]) => {
+    const canonical = aliases[String(rawName).toUpperCase()];
+    if (!canonical || !rawPayload) return;
+    const slots = Array.isArray(rawPayload.slots)
+      ? rawPayload.slots
+          .map((value) => Number.parseInt(value, 10))
+          .filter((value) => Number.isFinite(value))
+      : [];
+    const defaultsMap = {};
+    Object.entries(rawPayload.defaults || {}).forEach(([slotId, value]) => {
+      const key = Number.parseInt(slotId, 10);
+      defaultsMap[Number.isFinite(key) ? key : slotId] = value;
+    });
+
+    normalized[canonical] = {
+      ...defaults[canonical],
+      ...rawPayload,
+      slots,
+      defaults: defaultsMap,
+    };
+  });
+
+  return normalized;
+}
+
 const ITestPSUClient = ({ deviceName }) => {
   // Tab configuration
-  const [activeTab, setActiveTab] = useState('VD');
+  const [activeTab, setActiveTab] = useState('V0');
   const [tabConfigs, setTabConfigs] = useState({
-    VD: { slots: [], defaults: {}, enabled: true },
+    V0: { slots: [], defaults: {}, enabled: true },
     VD2: { slots: [], defaults: {}, enabled: true },
-    RF: { slots: [], defaults: {}, enabled: true },
+    REF: { slots: [], defaults: {}, enabled: true },
     ALL: { slots: [], defaults: {}, enabled: true }
   });
   
@@ -100,7 +143,7 @@ const ITestPSUClient = ({ deviceName }) => {
           return;
         }
 
-        setTabConfigs((current) => configData.tab_configs || current);
+        setTabConfigs((current) => normalizeTabConfigs(configData.tab_configs || current));
         const normalized = normalizeItestSlotData(slotData);
         setSlotIds(normalized.ids);
         setSlotNames(normalized.names);
@@ -130,7 +173,7 @@ const ITestPSUClient = ({ deviceName }) => {
     if (deviceName) {
       const token = getCookie('access_token_cookie');
       const socket = io('/', {
-        transports: ['websocket'],
+        withCredentials: true,
         auth: { token }
       });
       socketRef.current = socket;
@@ -174,15 +217,6 @@ const ITestPSUClient = ({ deviceName }) => {
       }
     };
   }, [deviceName]);
-
-  const fetchTabConfiguration = async () => {
-    try {
-      const data = await fetchItestTabConfig(deviceName);
-      setTabConfigs((current) => data.tab_configs || current);
-    } catch (err) {
-      console.warn('Could not fetch tab configuration:', err);
-    }
-  };
 
   const fetchSlotData = async () => {
     try {

@@ -1,0 +1,111 @@
+.camera-clients-page .camera-selection-panel {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
+.camera-clients-page .camera-selection-panel h3 {
+  margin-top: 0;
+}
+
+.camera-clients-page .camera-selection-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.camera-clients-page .camera-list {
+  display: grid;
+  gap: 6px;
+}
+
+.camera-clients-page .camera-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.camera-clients-page .camera-bulk-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 14px 0;
+}
+
+.camera-clients-page .camera-panels-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: 1fr;
+}
+
+.camera-clients-page .camera-panel-card {
+  border: 1px solid #d0d5dd;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.camera-clients-page .camera-panel-card .camera-client {
+  max-width: none;
+  padding: 14px;
+}
+
+.camera-clients-page .bulk-summary {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #ecfdf3;
+  color: #027a48;
+  margin-bottom: 10px;
+}
+
+.camera-clients-page .offline-panel {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: #f8f9fb;
+}
+
+.camera-clients-page .offline-panel h4 {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.camera-clients-page .offline-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.camera-clients-page .bulk-start {
+  background: #027a48;
+  color: #fff;
+}
+
+.camera-clients-page .bulk-stop {
+  background: #b42318;
+  color: #fff;
+}
+
+.camera-clients-page .bulk-start,
+.camera-clients-page .bulk-stop {
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.camera-clients-page .bulk-start:disabled,
+.camera-clients-page .bulk-stop:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 700px) {
+  .camera-clients-page .camera-panels-grid {
+    grid-template-columns: 1fr;
+  }
+}

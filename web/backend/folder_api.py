@@ -1,16 +1,26 @@
-# folder_api.py
 import os
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
-# Default root for browsing treatment data. Can be overridden per deployment.
-ALLOWED_ROOT = r'E:\\ICP_notebooks'
+DEFAULT_ALLOWED_ROOT = Path.home() / "TreatmentData"
 
 
 def get_allowed_root():
-    return os.environ.get("PYCONLYSE_ALLOWED_ROOT", ALLOWED_ROOT)
+    return os.environ.get("PYCONLYSE_ALLOWED_ROOT", str(DEFAULT_ALLOWED_ROOT))
+
+
+def _normalize_path(path):
+    return os.path.abspath(os.path.expanduser(str(path).strip()))
+
+
+def _is_within_root(path, allowed_root):
+    try:
+        return os.path.commonpath([_normalize_path(path), _normalize_path(allowed_root)]) == _normalize_path(allowed_root)
+    except ValueError:
+        return False
 
 def build_folder_tree(root_path, include_files=False):
     """
@@ -62,12 +72,16 @@ def get_folder_contents():
     if not folder:
         return jsonify({"error": "Folder parameter is missing"}), 400
 
-    allowed_root = get_allowed_root()
+    allowed_root = _normalize_path(get_allowed_root())
+    normalized_folder = _normalize_path(folder)
 
     # Validate that the requested folder is within the configured root
-    if not os.path.abspath(folder).startswith(os.path.abspath(allowed_root)):
+    if not _is_within_root(normalized_folder, allowed_root):
         return jsonify({"error": "Invalid folder"}), 403
 
+    if not os.path.isdir(normalized_folder):
+        return jsonify({"error": "Folder not found"}), 404
+
     # Build the tree for the selected folder. Here we include files.
-    contents_tree = build_folder_tree(folder, include_files=True)
+    contents_tree = build_folder_tree(normalized_folder, include_files=True)
     return jsonify(contents_tree)

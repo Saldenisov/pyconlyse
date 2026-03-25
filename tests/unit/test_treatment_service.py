@@ -1,0 +1,320 @@
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "web" / "backend"
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+from treatment_service import TreatmentDataService
+
+
+class FakeOpener:
+    def __init__(self, measurements):
+        self._measurements = list(measurements)
+        self.paths = {}
+
+    def read_map(self, file_path, map_index):
+        return self._measurements[map_index], ""
+
+    def give_all_maps(self, file_path):
+        return list(self._measurements)
+
+
+class FakePairOpener:
+    def __init__(self, pairs):
+        self._pairs = list(pairs)
+        self.paths = {}
+
+    def give_pair_maps(self, file_path):
+        return list(self._pairs)
+
+
+class FakeAverageOpener:
+    def __init__(self, average_data):
+        self._average_data = np.asarray(average_data, dtype=float)
+        self.paths = {}
+
+    def average_map(self, file_path):
+        return np.array(self._average_data, copy=True)
+
+
+@pytest.fixture
+def service():
+    return TreatmentDataService()
+
+
+def _measurement(data, wavelengths=None, timedelays=None, time_scale="ps"):
+    array = np.asarray(data, dtype=float)
+    return SimpleNamespace(
+        data=array,
+        wavelengths=np.asarray(
+            wavelengths if wavelengths is not None else np.arange(array.shape[0], dtype=float),
+            dtype=float,
+        ),
+        timedelays=np.asarray(
+            timedelays if timedelays is not None else np.arange(array.shape[1], dtype=float),
+            dtype=float,
+        ),
+        time_scale=time_scale,
+    )
+
+
+def _critical_info(file_path, number_maps, wavelengths, timedelays):
+    return SimpleNamespace(
+        file_path=file_path,
+        number_maps=number_maps,
+        wavelengths=np.asarray(wavelengths, dtype=float),
+        timedelays=np.asarray(timedelays, dtype=float),
+        wavelengths_length=len(wavelengths),
+        timedelays_length=len(timedelays),
+        scaling_yunit="ps",
+        header="fake header",
+    )
+
+
+def test_parse_average_ranges_supports_desktop_formats(service):
+    parsed = service._parse_average_ranges("500+-10; 600 5; 700")
+
+    assert parsed == [(500.0, 10.0), (600.0, 5.0), (700.0, 3.0)]
+
+
+def test_normalize_bounds_swaps_and_clamps_invalid_values(service):
+    start, end = service._normalize_bounds(8, 2, 10)
+
+    assert (start, end) == (2, 8)
+
+    start, end = service._normalize_bounds(-5, 99, 6)
+
+    assert (start, end) == (0, 5)
+
+
+def test_get_selection_view_returns_heatmap_kinetics_and_spectrum(service, monkeypatch):
+    file_path = Path("/tmp/selection_unit.dat")
+    measurement = _measurement(
+        [[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]],
+        wavelengths=[500.0, 550.0, 600.0],
+        timedelays=[1.0, 2.0],
+    )
+    info = _critical_info(file_path, 1, [500.0, 550.0, 600.0], [1.0, 2.0])
+    opener = FakeOpener([measurement])
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    payload = service.get_selection_view(
+        {
+            "active_data_type": "ABS",
+            "map_index": 0,
+            "selection": {"x1": 1, "x2": 2, "y1": 0, "y2": 1},
+            "paths": {"ABS": str(file_path)},
+        }
+    )
+
+    assert payload["active_data_type"] == "ABS"
+    assert payload["cursors"]["x1"] == 1
+    assert payload["cursors"]["x2"] == 2
+    assert payload["kinetics"]["y"] == [3.0, 4.0]
+    assert payload["spectrum"]["y"] == [1.0, 3.0, 5.0]
+    assert payload["heatmap"]["z"] == [[1.0, 3.0, 5.0], [2.0, 4.0, 6.0]]
+
+
+def test_export_selection_average_rejects_invalid_range_text(service, monkeypatch):
+    file_path = Path("/tmp/export_unit.dat")
+    measurement = _measurement(
+        [[1.0, 2.0], [3.0, 4.0]],
+        wavelengths=[500.0, 550.0],
+        timedelays=[1.0, 2.0],
+    )
+    info = _critical_info(file_path, 1, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener([measurement])
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    with pytest.raises(ValueError, match="Invalid range"):
+        service.export_selection_average(
+            {"active_data_type": "ABS", "map_index": 0, "paths": {"ABS": str(file_path)}},
+            "kinetics",
+            "500 bad extra",
+        )
+
+
+def test_analyze_sam_cleaning_filters_by_angle_and_surface(service, monkeypatch):
+    file_path = Path("/tmp/sam_unit.dat")
+    measurements = [
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[2.0, 2.0], [2.0, 2.0]]),
+        _measurement([[1.0, 0.0], [1.0, 0.0]]),
+    ]
+    info = _critical_info(file_path, 3, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener(measurements)
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    summary = service.analyze_sam_cleaning(
+        "session-a",
+        {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}},
+        angle_threshold=20.0,
+        surface_threshold=50.0,
+    )
+
+    assert summary["file_path"] == str(file_path)
+    assert summary["original_measurements"] == 3
+    assert summary["cleaned_measurements"] == 1
+    assert summary["removed_by_angle"] == 1
+    assert summary["removed_by_surface"] == 1
+    assert summary["kept_indices"] == [0]
+    assert 30.0 < summary["sam_angle_max"] < 40.0
+
+
+def test_analyze_sam_cleaning_reuses_current_cleaned_state_until_reset(service, monkeypatch):
+    file_path = Path("/tmp/sam_iterative_unit.dat")
+    measurements = [
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[0.0, 2.0], [0.0, 2.0]]),
+    ]
+    info = _critical_info(file_path, 4, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener(measurements)
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    first = service.analyze_sam_cleaning(
+        "session-iterative",
+        {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}},
+        angle_threshold=20.0,
+        surface_threshold=10.0,
+    )
+    second = service.analyze_sam_cleaning(
+        "session-iterative",
+        {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}},
+        angle_threshold=20.0,
+        surface_threshold=10.0,
+    )
+    reset_summary = service.reset_sam_cleaning(
+        "session-iterative",
+        {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}},
+    )
+    after_reset = service.analyze_sam_cleaning(
+        "session-iterative",
+        {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}},
+        angle_threshold=20.0,
+        surface_threshold=10.0,
+    )
+
+    assert first["source_measurements"] == 4
+    assert first["cleaned_measurements"] == 3
+    assert first["state_updated"] is True
+    assert second["source_measurements"] == 3
+    assert second["original_measurements"] == 4
+    assert reset_summary["reset"] is True
+    assert reset_summary["discarded_measurements"] == 3
+    assert after_reset["source_measurements"] == 4
+
+
+def test_calc_abs_supports_his_mode_with_abs_base_noise_pairs(service, monkeypatch, tmp_path):
+    data_path = tmp_path / "his_source.his"
+    data_path.write_text("fake", encoding="ascii")
+
+    pair_opener = FakePairOpener(
+        [
+            (
+                _measurement([[2.0, 2.0], [2.0, 2.0]]),
+                _measurement([[4.0, 4.0], [4.0, 4.0]]),
+            ),
+            (
+                _measurement([[3.0, 3.0], [3.0, 3.0]]),
+                _measurement([[6.0, 6.0], [6.0, 6.0]]),
+            ),
+        ]
+    )
+    info = _critical_info(data_path, 4, [500.0, 550.0], [1.0, 2.0])
+
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (pair_opener, info))
+
+    payload = service.calc_abs(
+        "session-his",
+        {
+            "exp_type": "HIS",
+            "calc_mode": "averaged",
+            "first_map_with_electrons": True,
+            "paths": {"ABS+BASE+NOISE": str(data_path)},
+        },
+    )
+
+    expected = np.log10(np.full((2, 2), 2.0, dtype=float))
+    assert payload["shape"] == [2, 2]
+    assert np.allclose(np.asarray(payload["sample"], dtype=float), expected)
+
+    runtime = service.runtime_status("session-his")
+    assert runtime["result_ready"] is True
+    assert runtime["result_shape"] == (2, 2)
+
+
+def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
+    service, monkeypatch, tmp_path
+):
+    data_path = tmp_path / "his_abs_base.his"
+    noise_path = tmp_path / "noise_reference.his"
+    data_path.write_text("fake", encoding="ascii")
+    noise_path.write_text("fake", encoding="ascii")
+
+    pair_opener = FakePairOpener(
+        [
+            (
+                _measurement([[9.0, 9.0], [9.0, 9.0]]),
+                _measurement([[3.0, 3.0], [3.0, 3.0]]),
+            ),
+            (
+                _measurement([[15.0, 15.0], [15.0, 15.0]]),
+                _measurement([[5.0, 5.0], [5.0, 5.0]]),
+            ),
+        ]
+    )
+    noise_opener = FakeAverageOpener([[1.0, 1.0], [1.0, 1.0]])
+    data_info = _critical_info(data_path, 4, [500.0, 550.0], [1.0, 2.0])
+    noise_info = _critical_info(noise_path, 2, [500.0, 550.0], [1.0, 2.0])
+
+    def fake_get_opener_and_info(path):
+        if path == data_path:
+            return pair_opener, data_info
+        if path == noise_path:
+            return noise_opener, noise_info
+        raise AssertionError(f"Unexpected path {path}")
+
+    monkeypatch.setattr(service, "_get_opener_and_info", fake_get_opener_and_info)
+
+    payload = service.calc_abs(
+        "session-his-noise",
+        {
+            "exp_type": "HIS+NOISE",
+            "calc_mode": "individual",
+            "first_map_with_electrons": False,
+            "paths": {
+                "ABS+BASE": str(data_path),
+                "NOISE": str(noise_path),
+            },
+        },
+    )
+
+    expected_value = (np.log10(4.0) + np.log10(3.5)) / 2.0
+    expected = np.full((2, 2), expected_value, dtype=float)
+    assert payload["shape"] == [2, 2]
+    assert np.allclose(np.asarray(payload["sample"], dtype=float), expected)
+
+    runtime = service.runtime_status("session-his-noise")
+    assert runtime["noise_ready"] is True
+    assert runtime["result_ready"] is True
