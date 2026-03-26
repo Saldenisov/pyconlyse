@@ -1,7 +1,7 @@
 param(
-    [string]$Host = "10.20.30.134",
+    [string]$TargetHost = "10.20.30.134",
     [int]$Port = 8777,
-    [string]$Interface = "",
+    [string]$Interface = "ELYSE",
     [string]$Output = ""
 )
 
@@ -29,7 +29,7 @@ if ([string]::IsNullOrWhiteSpace($Output)) {
         New-Item -ItemType Directory -Path $captureDir | Out-Null
     }
     $ts = Get-Date -Format "yyyyMMdd_HHmmss"
-    $Output = Join-Path $captureDir ("owis_tcp_{0}_{1}_{2}.pcapng" -f $Host, $Port, $ts)
+    $Output = Join-Path $captureDir ("owis_tcp_{0}_{1}_{2}.pcapng" -f $TargetHost, $Port, $ts)
 }
 
 if ([string]::IsNullOrWhiteSpace($Interface)) {
@@ -51,10 +51,10 @@ if ([string]::IsNullOrWhiteSpace($Interface)) {
     Write-Host ("Auto-selected interface index: {0} ({1})" -f $Interface, $selected)
 }
 
-$filter = "host $Host and tcp port $Port"
+$filter = "host $TargetHost and tcp port $Port"
 
 Write-Host "Starting OWIS capture..."
-Write-Host ("  host      : {0}" -f $Host)
+Write-Host ("  host      : {0}" -f $TargetHost)
 Write-Host ("  port      : {0}" -f $Port)
 Write-Host ("  interface : {0}" -f $Interface)
 Write-Host ("  filter    : {0}" -f $filter)

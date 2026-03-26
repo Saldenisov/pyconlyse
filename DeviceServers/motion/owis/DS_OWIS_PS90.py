@@ -1126,6 +1126,45 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         except Exception as e:
             return False, f"Axis {axis} acceleration set failed: {e}"
 
+    def _amps_to_percent(self, axis: int, amps: float) -> int:
+        """Convert current in Amps to DLL percent value.
+
+        Values > 10 are assumed to already be percent (legacy format).
+        Low current level (0): max 2.4 A = 100%.
+        High current level (1): max 5.45 A, capped at 66% = 3.6 A.
+
+        If the requested current exceeds the low-level range and
+        *allow_high_current_level* is set, the level is switched to high
+        automatically (matching the TCP adapter behaviour).
+        """
+        v = abs(float(amps))
+        if v > 10.0:
+            # Legacy / already-percent value
+            return max(0, min(100, int(round(v))))
+
+        # Determine current level from controller
+        level_res, _ = self._get_current_level_ps90(self.control_unit_id, axis)
+        level = level_res if level_res in (0, 1) else 0
+
+        allow_high = bool(getattr(self, "allow_high_current_level", False))
+        if allow_high and v > 2.4 and level == 0:
+            res_set, _ = self._set_current_level_ps90(
+                self.control_unit_id, axis, 1
+            )
+            if res_set:
+                level = 1
+                self.info(
+                    f"Axis {axis}: switched to high current level for {v:.2f} A",
+                    True,
+                )
+
+        if level == 0:
+            pct = int(round((v / 2.4) * 100.0))
+            return max(0, min(100, pct))
+
+        pct = int(round((v / 5.45) * 100.0))
+        return max(0, min(66, pct))
+
     def _apply_axis_currents_local(self, axis: int) -> Union[int, str]:
         if (
             self._is_tcp_backend_active()
@@ -1144,18 +1183,27 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         drive_current = float(param["drive_current"])
         hold_current = float(param["hold_current"])
 
+        drive_pct = self._amps_to_percent(axis, drive_current)
+        hold_pct = self._amps_to_percent(axis, hold_current)
+        self.info(
+            f"Axis {axis} currents: drive={drive_current}A -> {drive_pct}%, "
+            f"hold={hold_current}A -> {hold_pct}%",
+            True,
+        )
+
         res_drive, com_drive = self._set_drive_current_ex_ps90(
-            self.control_unit_id, axis, drive_current
+            self.control_unit_id, axis, drive_pct
         )
         res_hold, com_hold = self._set_hold_current_ex_ps90(
-            self.control_unit_id, axis, hold_current
+            self.control_unit_id, axis, hold_pct
         )
         if res_drive and res_hold:
             return 0
 
         return (
             f"ERROR: Device {self.device_name} could not apply currents for axis {axis}: "
-            f"drive={drive_current}A ({com_drive}), hold={hold_current}A ({com_hold})"
+            f"drive={drive_current}A={drive_pct}% ({com_drive}), "
+            f"hold={hold_current}A={hold_pct}% ({com_hold})"
         )
 
     def _axis_state_name(self, state) -> str:
@@ -2160,7 +2208,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
         axis = ctypes.c_long(axis)
-        value = ctypes.c_double(value)
+        value = ctypes.c_long(int(round(value)))
         sleep(time_ps_delay)
         res = self.lib.PS90_SetDriveCurrent(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
@@ -2173,7 +2221,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         Description
         set hold current for an axis (values in percent).
         This setting is valid only for step motor axes (Open Loop). The maximum current will be defined with the
-        function “PS90_SetCurrentLevel” (low – 2.4 A, high – 5.45 A). A maximum allowed current is 3.6 A.
+        function \u201cPS90_SetCurrentLevel\u201d (low \u2013 2.4 A, high \u2013 5.45 A). A maximum allowed current is 3.6 A.
         Therefore the maximum value for high current level is 66 percent.
 
         Parameters
@@ -2184,10 +2232,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
         Returns
         -------
-         0 – function was successful
-        -1 – function error
-        -2 – communication error
-        -3 – syntax error
+         0 \u2013 function was successful
+        -1 \u2013 function error
+        -2 \u2013 communication error
+        -3 \u2013 syntax error
 
 
         Example
@@ -2198,10 +2246,37 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         control_unit = ctypes.c_long(control_unit)
         axis = int(axis)
         axis = ctypes.c_long(axis)
-        value = ctypes.c_double(value)
+        value = ctypes.c_long(int(round(value)))
         sleep(time_ps_delay)
         res = self.lib.PS90_SetHoldCurrent(control_unit, axis, value)
         return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(True, "DEV MODE"))
+    def _set_current_level_ps90(self, control_unit: int, axis: int, level: int):
+        """long PS90_SetCurrentLevel (long Index, long AxisId, long Value)
+
+        Set current level for a step motor axis.
+        Value 0 = low level (max 2.4 A), 1 = high level (max 5.45 A, capped at 66% = 3.6 A).
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(int(axis))
+        level = ctypes.c_long(int(level))
+        sleep(time_ps_delay)
+        res = self.lib.PS90_SetCurrentLevel(control_unit, axis, level)
+        return True if res == 0 else False, self._error_OWIS_ps90(res, 1)
+
+    @development_mode(dev=dev_mode, with_return=(0, "DEV MODE"))
+    def _get_current_level_ps90(self, control_unit: int, axis: int):
+        """long PS90_GetCurrentLevel (long Index, long AxisId)
+
+        Get current level for a step motor axis.
+        Returns 0 = low level, 1 = high level.
+        """
+        control_unit = ctypes.c_long(control_unit)
+        axis = ctypes.c_long(int(axis))
+        sleep(time_ps_delay)
+        res = self.lib.PS90_GetCurrentLevel(control_unit, axis)
+        return res, self._error_OWIS_ps90(min(res, 0), 1)
 
     def _error_OWIS_ps90(self, code: int, type: int, user_def="") -> str:
         """:param code: <=0

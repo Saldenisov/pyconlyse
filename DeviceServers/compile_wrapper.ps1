@@ -150,6 +150,32 @@ Write-Host "✅ Created: DS_Basler_camera.exe" -ForegroundColor Green
             Write-Warning "Failed to compile DS_ML_Stability_wrapper.cs"
         }
     }
+
+    # Also compile DS_OWIS_Aggregator if wrapper exists
+    $OwisAggSource = Join-Path $ScriptPath "DS_OWIS_Aggregator_wrapper.cs"
+    $OwisAggOutput = Join-Path $ScriptPath "DS_OWIS_Aggregator.exe"
+    if (Test-Path $OwisAggSource) {
+        Write-Host "Compiling DS_OWIS_Aggregator_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$OwisAggOutput /target:exe $OwisAggSource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $OwisAggOutput)) {
+            Write-Host "✅ Created: DS_OWIS_Aggregator.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_OWIS_Aggregator_wrapper.cs"
+        }
+    }
+
+    # Also compile DS_PSP if wrapper exists
+    $PSPSource = Join-Path $ScriptPath "DS_PSP_wrapper.cs"
+    $PSPOutput = Join-Path $ScriptPath "DS_PSP.exe"
+    if (Test-Path $PSPSource) {
+        Write-Host "Compiling DS_PSP_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$PSPOutput /target:exe $PSPSource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $PSPOutput)) {
+            Write-Host "✅ Created: DS_PSP.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_PSP_wrapper.cs"
+        }
+    }
     
     Write-Host ""
     

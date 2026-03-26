@@ -134,6 +134,32 @@ if exist DS_ML_Stability_wrapper.cs (
 )
 
 echo.
+REM Compile OWIS Aggregator wrapper if present
+if exist DS_OWIS_Aggregator_wrapper.cs (
+    echo Compiling DS_OWIS_Aggregator_wrapper.cs...
+    csc /out:DS_OWIS_Aggregator.exe /target:exe DS_OWIS_Aggregator_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_OWIS_Aggregator compilation failed!
+        pause
+        exit /b 1
+    )
+    echo ✓ DS_OWIS_Aggregator.exe created successfully!
+)
+
+echo.
+REM Compile PSP wrapper if present
+if exist DS_PSP_wrapper.cs (
+    echo Compiling DS_PSP_wrapper.cs...
+    csc /out:DS_PSP.exe /target:exe DS_PSP_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_PSP compilation failed!
+        pause
+        exit /b 1
+    )
+    echo ✓ DS_PSP.exe created successfully!
+)
+
+echo.
 echo ✓ Compilation successful!
 echo ✓ Created/updated wrappers where sources were present.
 echo.

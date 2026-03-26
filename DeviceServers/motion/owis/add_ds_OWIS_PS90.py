@@ -33,6 +33,8 @@ names_param = {
             "control_unit_id": 1,
             "friendly_name": "DS_OWIS_PS90",
             "serial_number": 15110070,
+            "transport": "dll",
+            "allow_high_current_level": True,
             "dll_path": "C:/dev/pyconlyse/DeviceServers/motion/owis/drivers/ps90_64.dll",
             "delay_lines_parameters": str(delay_lines),
             "max_retries": 3,  # Retry up to 3 times on communication errors
