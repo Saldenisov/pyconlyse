@@ -29,6 +29,14 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
 
     RULES = {
         **DS_MOTORIZED_MULTI_AXES.RULES,
+        # Allow turn_on when already ON so LabVIEW pre-move calls succeed
+        "turn_on": [
+            DevState.OFF,
+            DevState.FAULT,
+            DevState.STANDBY,
+            DevState.INIT,
+            DevState.ON,
+        ],
         "ensure_on": [
             DevState.OFF,
             DevState.FAULT,
@@ -330,6 +338,10 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             self.set_state(DevState.FAULT)
 
     def turn_on_local(self) -> Union[int, str]:
+        # Idempotent: if already ON just return success (LabVIEW calls turn_on before moves)
+        if self.get_state() == DevState.ON:
+            return 0
+
         if self._device_id_internal == -1:
             self.find_device()
         if self._device_id_internal == -1:
