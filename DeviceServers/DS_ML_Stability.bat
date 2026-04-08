@@ -11,7 +11,7 @@ REM Change to the device server directory
 cd /d "C:\dev\pyconlyse\DeviceServers\data\ml"
 
 REM Start the device server
-python DS_ML_Stability.py DS_ML_Stability/ml1 -v4
+python DS_ML_Stability.py DS_ML_Stability/1_UV1 -v4
 
 REM Pause to see any error messages
 if errorlevel 1 (

@@ -7,8 +7,10 @@ ml_devices = {
     "ML_UV1": {
         "device_path": "ml/analysis/ML_UV1",
         "server_instance": "1_UV1",
-        "ip_address": "127.0.0.1",  # ZeroMQ typically uses localhost
-        "zmq_port": "5555",  # Default ZeroMQ port from notebook
+        "device_id": "ml/analysis/ML_UV1",
+        "server_id": 1,
+        "ip_address": "129.175.100.128",
+        "zmq_port": "7000",
         "model_path": "C:/dev/pyconlyse/DeviceServers/data/ml/models",
         "data_path": "C:/dev/spectra_raw.h5",  # From notebook analysis
         "calibration_path": "C:/dev/pyconlyse/DeviceServers/data/ml/calibrations/calibrationUV-VIS140324.txt",
@@ -30,6 +32,8 @@ def main():
             dev_name,
             {
                 "ip_address": config["ip_address"],
+                "device_id": config["device_id"],
+                "server_id": config["server_id"],
                 "zmq_port": config["zmq_port"],
                 "model_path": config["model_path"],
                 "scaler_filename": config["scaler_filename"],

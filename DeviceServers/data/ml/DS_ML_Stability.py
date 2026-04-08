@@ -85,9 +85,9 @@ class DS_ML_Stability(DS_General):
 
     def init_device(self):
         """Initialize the device"""
-        super().init_device()
-        
-        # Initialize instance variables
+        # Initialize instance variables BEFORE super().init_device()
+        # because the base class calls find_device() which loads models/calibration.
+        # Initializing after super() would reset everything that was just loaded.
         self._model_version = "No model loaded"
         self._zmq_status = "Stopped"
         self._predictions_count = 0
@@ -101,6 +101,8 @@ class DS_ML_Stability(DS_General):
         self._wavelength = None
         self._from_pixel = 0
         self._to_pixel = 0
+        
+        super().init_device()
         
         self.register_variables_for_archive()
         self.turn_on()
@@ -253,6 +255,11 @@ class DS_ML_Stability(DS_General):
             return f"Could NOT turn on {self.device_name}: Device could not be found."
             
         self.set_state(DevState.ON)
+        
+        # Auto-start ZMQ server when device turns on (matches notebook behaviour)
+        if self._model is not None and not self._server_running:
+            self.StartServer()
+        
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
@@ -342,6 +349,51 @@ class DS_ML_Stability(DS_General):
             self.StartServer()
             
         self.info(f"Models updated from {self.model_path}", True)
+
+
+    @command(
+        display_level=DispLevel.OPERATOR,
+        doc_in="Retrain ML model from configured data_path"
+    )
+    def RetrainModel(self):
+        """Retrain the ML model using data_path, then reload it."""
+        from DeviceServers.data.ml.ml_retrain import retrain_model
+
+        data_path = getattr(self, "data_path", "") or ""
+        model_dir = self.model_path if getattr(self, "model_path", None) else str((Path(__file__).parent / "models").resolve())
+        scaler_name = getattr(self, "scaler_filename", "UV1_scaler.joblib")
+        model_name = getattr(self, "model_filename", "UV1_xgb.joblib")
+
+        if not data_path or not os.path.exists(data_path):
+            self.error(f"Cannot retrain: data_path not set or missing ({data_path})")
+            return
+
+        def _progress(msg, pct):
+            self.info(f"Retrain [{pct}%] {msg}", True)
+
+        self.info("Starting model retraining…", True)
+        was_running = self._server_running
+        if was_running:
+            self._stop_zmq_server()
+
+        try:
+            result = retrain_model(
+                data_path=data_path,
+                model_dir=model_dir,
+                scaler_filename=scaler_name,
+                model_filename=model_name,
+                progress_callback=_progress,
+            )
+            self._load_models()
+            self.info(
+                f"Retrain complete – R² train={result['r2_train']:.3f} test={result['r2_test']:.3f}",
+                True,
+            )
+        except Exception as e:
+            self.error(f"Retrain failed: {e}")
+
+        if was_running and self._model is not None:
+            self.StartServer()
 
 
 if __name__ == "__main__":

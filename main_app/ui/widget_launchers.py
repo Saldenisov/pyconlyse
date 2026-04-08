@@ -393,6 +393,36 @@ def start_itest_widget(device_name: str, parent=None, vis: str | VisType = "FULL
     return start_itest_client(instance, parent, vis)
 
 
+def start_ml_widget(device_name: str, parent=None, vis: str | VisType = "FULL"):
+    """Start ML Stability widget.
+
+    Example: start_ml_widget("ml/analysis/ML_UV1")
+    """
+    if OFFLINE_MODE:
+        return _offline_placeholder(
+            "ML Stability (offline)",
+            f"Offline mode is enabled. Not connecting to {device_name}.",
+            parent,
+        )
+    from DeviceServers.data.ml.DS_ML_Widget import ML_Stability
+
+    v = _to_vis(vis)
+    w = ML_Stability(device_name, parent, v)
+    try:
+        w.setWindowTitle(f"ML Stability - {device_name}")
+    except Exception:
+        pass
+    try:
+        w.resize(900, 500)
+    except Exception:
+        pass
+    try:
+        w.show()
+    except Exception:
+        pass
+    return w
+
+
 def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = "FULL"):
     """Best-effort launcher based on device name keywords.
 
@@ -423,6 +453,8 @@ def start_widget_for_device(device_name: str, parent=None, vis: str | VisType = 
         return start_keysight_widget(device_name, parent, vis)
     if "itest" in name or "2819" in name or "be2819" in name or "bilt" in name:
         return start_itest_widget(device_name, parent, vis)
+    if "ml" in name or "stability" in name:
+        return start_ml_widget(device_name, parent, vis)
 
     # Fallback: determine by server name via Database.get_device_info (no DeviceProxy)
     if OFFLINE_MODE:

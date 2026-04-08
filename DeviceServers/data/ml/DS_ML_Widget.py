@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import tango
 from PyQt5 import QtWidgets, QtCore
+from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QFont
 from taurus import Device
 from taurus.external.qt import Qt
@@ -18,6 +19,34 @@ from taurus_warnings_fix import (
     check_device_connection,
     suppress_taurus_deprecation_warnings,
 )
+
+
+class _RetrainWorker(QThread):
+    """Background worker that runs model retraining off the GUI thread."""
+    progress = pyqtSignal(str, int)   # (message, percent)
+    finished = pyqtSignal(dict)       # result dict or {'error': str}
+
+    def __init__(self, data_path: str, model_dir: str,
+                 scaler_filename: str, model_filename: str):
+        super().__init__()
+        self.data_path = data_path
+        self.model_dir = model_dir
+        self.scaler_filename = scaler_filename
+        self.model_filename = model_filename
+
+    def run(self):
+        try:
+            from DeviceServers.data.ml.ml_retrain import retrain_model
+            result = retrain_model(
+                data_path=self.data_path,
+                model_dir=self.model_dir,
+                scaler_filename=self.scaler_filename,
+                model_filename=self.model_filename,
+                progress_callback=lambda msg, pct: self.progress.emit(msg, pct),
+            )
+            self.finished.emit(result)
+        except Exception as exc:
+            self.finished.emit({"error": str(exc)})
 
 
 class ML_Stability(DS_General_Widget):
@@ -49,20 +78,28 @@ class ML_Stability(DS_General_Widget):
         # Create ML-specific UI
         ml_info_group = self.create_ml_info_group()
         ml_controls_group = self.create_ml_controls_group()
+        ml_retrain_group = self.create_ml_retrain_group()
         
-        # Subscribe to events
+        # Subscribe to events (fall back to PERIODIC_EVENT when
+        # CHANGE_EVENT fails – e.g. when abs_change / rel_change are not set)
         for attr in ("model_version", "zmq_status", "predictions_count", "last_prediction"):
             try:
                 getattr(self, f"ds_{dev_name}").subscribe_event(
                     attr, tango.EventType.CHANGE_EVENT, self.ml_attr_listener
                 )
-            except Exception as e:
-                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
+            except Exception:
+                try:
+                    getattr(self, f"ds_{dev_name}").subscribe_event(
+                        attr, tango.EventType.PERIODIC_EVENT, self.ml_attr_listener
+                    )
+                except Exception as e:
+                    print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
         
         # Layout
         lo_device.addLayout(lo_status)
         lo_device.addWidget(ml_info_group)
         lo_device.addWidget(ml_controls_group)
+        lo_device.addWidget(ml_retrain_group)
         lo_device.addLayout(lo_buttons)
         lo_group.addLayout(lo_device)
 
@@ -80,14 +117,19 @@ class ML_Stability(DS_General_Widget):
         # Minimal ML info
         ml_status_group = self.create_ml_status_minimal()
         
-        # Subscribe to key events
+        # Subscribe to key events (fall back to PERIODIC_EVENT)
         for attr in ("model_version", "zmq_status"):
             try:
                 getattr(self, f"ds_{dev_name}").subscribe_event(
                     attr, tango.EventType.CHANGE_EVENT, self.ml_attr_listener
                 )
-            except Exception as e:
-                print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
+            except Exception:
+                try:
+                    getattr(self, f"ds_{dev_name}").subscribe_event(
+                        attr, tango.EventType.PERIODIC_EVENT, self.ml_attr_listener
+                    )
+                except Exception as e:
+                    print(f"Info: couldn't subscribe to '{attr}' for {dev_name}: {e}")
         
         lo_status.addWidget(ml_status_group)
         lo_device.addLayout(lo_status)
@@ -209,14 +251,18 @@ class ML_Stability(DS_General_Widget):
         
         return group
 
-    def ml_attr_listener(self, evt_src, evt_type, evt_value):
-        """Handle ML attribute change events"""
+    def ml_attr_listener(self, event):
+        """Handle ML attribute change events.
+
+        Tango delivers a single :class:`tango.EventData` object to the
+        callback registered with :meth:`subscribe_event`.
+        """
         try:
-            if evt_type == tango.EventType.CHANGE_EVENT:
-                # Update UI based on attribute changes
-                attr_name = evt_src.name.split('/')[-1]
-                if attr_name == "zmq_status":
-                    self.update_server_buttons_state(evt_value.value)
+            if event.err:
+                return
+            attr_name = event.attr_value.name.split('/')[-1]
+            if attr_name == "zmq_status":
+                self.update_server_buttons_state(event.attr_value.value)
         except Exception as e:
             print(f"Error in ML attribute listener: {e}")
 
@@ -233,6 +279,127 @@ class ML_Stability(DS_General_Widget):
                 stop_button.setEnabled(is_running)
         except Exception as e:
             print(f"Error updating button states: {e}")
+
+    # ------------------------------------------------------------------
+    # Retrain panel
+    # ------------------------------------------------------------------
+
+    def create_ml_retrain_group(self):
+        """Create the 'Model Training' group box with a retrain button, progress bar, and status."""
+        dev_name = self.dev_name
+        self._retrain_worker = None
+
+        group = QtWidgets.QGroupBox("Model Training")
+        layout = QtWidgets.QVBoxLayout(group)
+        layout.setSpacing(8)
+
+        # --- row 1: button -------------------------------------------------
+        btn_row = QtWidgets.QHBoxLayout()
+        retrain_button = QtWidgets.QPushButton("Retrain Model")
+        retrain_button.setToolTip(
+            "Retrain the XGBoost model from the configured data file "
+            "and reload it into the device server"
+        )
+        retrain_button.clicked.connect(self._on_retrain_clicked)
+        btn_row.addWidget(retrain_button)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+        setattr(self, f"button_retrain_{dev_name}", retrain_button)
+
+        # --- row 2: progress bar -------------------------------------------
+        progress = QtWidgets.QProgressBar()
+        progress.setRange(0, 100)
+        progress.setValue(0)
+        progress.setTextVisible(True)
+        layout.addWidget(progress)
+        setattr(self, f"progress_retrain_{dev_name}", progress)
+
+        # --- row 3: status label -------------------------------------------
+        status_label = QtWidgets.QLabel("Ready")
+        status_label.setWordWrap(True)
+        layout.addWidget(status_label)
+        setattr(self, f"label_retrain_status_{dev_name}", status_label)
+
+        return group
+
+    def _on_retrain_clicked(self):
+        """Handle the Retrain button click."""
+        dev_name = self.dev_name
+        ds: Device = getattr(self, f"ds_{dev_name}")
+
+        # Read device properties from the Tango device
+        try:
+            data_path = ds.get_property("data_path")["data_path"][0]
+            model_path = ds.get_property("model_path")["model_path"][0]
+            scaler_fn = ds.get_property("scaler_filename")["scaler_filename"][0]
+            model_fn = ds.get_property("model_filename")["model_filename"][0]
+        except Exception as exc:
+            self._retrain_set_status(f"Error reading device properties: {exc}")
+            return
+
+        if not data_path:
+            self._retrain_set_status("data_path property not configured on device")
+            return
+
+        # Disable button while running
+        btn = getattr(self, f"button_retrain_{dev_name}", None)
+        if btn:
+            btn.setEnabled(False)
+
+        self._retrain_set_status("Starting…")
+        self._retrain_set_progress(0)
+
+        worker = _RetrainWorker(data_path, model_path, scaler_fn, model_fn)
+        worker.progress.connect(self._on_retrain_progress)
+        worker.finished.connect(self._on_retrain_finished)
+        self._retrain_worker = worker
+        worker.start()
+
+    def _on_retrain_progress(self, message: str, percent: int):
+        self._retrain_set_status(message)
+        self._retrain_set_progress(percent)
+
+    def _on_retrain_finished(self, result: dict):
+        dev_name = self.dev_name
+
+        if "error" in result:
+            self._retrain_set_status(f"FAILED: {result['error']}")
+        else:
+            r2_train = result.get("r2_train", 0)
+            r2_test = result.get("r2_test", 0)
+            self._retrain_set_status(
+                f"Done \u2013 R\u00b2 train={r2_train:.3f}  test={r2_test:.3f}"
+            )
+            self._retrain_set_progress(100)
+
+            # Tell the device server to reload the freshly trained model
+            try:
+                ds: Device = getattr(self, f"ds_{dev_name}")
+                ds.command_inout("UpdateModels")
+            except Exception as exc:
+                self._retrain_set_status(
+                    f"Trained OK but UpdateModels failed: {exc}"
+                )
+
+        # Re-enable button
+        btn = getattr(self, f"button_retrain_{dev_name}", None)
+        if btn:
+            btn.setEnabled(True)
+        self._retrain_worker = None
+
+    def _retrain_set_status(self, text: str):
+        lbl = getattr(self, f"label_retrain_status_{self.dev_name}", None)
+        if lbl:
+            lbl.setText(text)
+
+    def _retrain_set_progress(self, value: int):
+        bar = getattr(self, f"progress_retrain_{self.dev_name}", None)
+        if bar:
+            bar.setValue(value)
+
+    # ------------------------------------------------------------------
+    # Layout registration
+    # ------------------------------------------------------------------
 
     def register_full_layouts(self):
         super(ML_Stability, self).register_full_layouts()

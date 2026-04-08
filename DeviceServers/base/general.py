@@ -402,10 +402,8 @@ class DS_General(Device):
 
     @property
     def device_name(self) -> str:
-        # Handle None or empty device_id and friendly_name
-        device_id = getattr(self, 'device_id', None) or 'Unknown'
         friendly_name = getattr(self, 'friendly_name', None) or self.__class__.__name__
-        return f"Device {device_id} {friendly_name}"
+        return f"Device {friendly_name}"
 
     @command(polling_period=polling_main)
     def get_controller_status(self):
@@ -431,7 +429,7 @@ class DS_General(Device):
             if res != 0:
                 self.error(f"{res}")
             else:
-                self.info(f"Device {self.device_name} WAS turned ON.", True)
+                self.info(f"{self.device_name} WAS turned ON.", True)
                 self.fix_state()
         else:
             self.error(
@@ -451,7 +449,7 @@ class DS_General(Device):
             if res != 0:
                 self.error(f"{res}")
             else:
-                self.info(f"Device {self.device_name} is turned OFF.", True)
+                self.info(f"{self.device_name} is turned OFF.", True)
                 data = self.form_archive_data(0, "State")
                 self.write_to_archive(data)
         else:
