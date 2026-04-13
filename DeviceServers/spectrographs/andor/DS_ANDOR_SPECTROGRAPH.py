@@ -28,6 +28,24 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
     linked_camera_ds = device_property(dtype=str, default_value="")
     start_on_init = device_property(dtype=int, default_value=1)
 
+    @staticmethod
+    def _coerce_int(value, default: int) -> int:
+        try:
+            if value is None or value == "":
+                return int(default)
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    @staticmethod
+    def _coerce_float(value, default: float) -> float:
+        try:
+            if value is None or value == "":
+                return float(default)
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
     def init_device(self):
         self.spectrograph = None
         self.serial_number_value = ""
@@ -43,7 +61,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         self.blaze_wavelength_nm_value = 0.0
         super().init_device()
         self.register_variables_for_archive()
-        if bool(int(self.start_on_init or 0)):
+        if bool(self._coerce_int(self.start_on_init, 0)):
             try:
                 self.turn_on()
             except Exception as exc:
@@ -158,19 +176,23 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             sdk_path=self.dll_path,
             shamrock_path=self.shamrock_dll_path,
         )
-        return Andor.ShamrockSpectrograph(idx=int(self.spectrograph_index or 0))
+        return Andor.ShamrockSpectrograph(
+            idx=self._coerce_int(self.spectrograph_index, 0)
+        )
 
     def _setup_calibration_geometry(self):
         if self.spectrograph is None:
             return
 
         try:
-            self.spectrograph.set_number_pixels(int(self.pixel_number))
+            self.spectrograph.set_number_pixels(self._coerce_int(self.pixel_number, 1064))
         except Exception:
             pass
 
         try:
-            self.spectrograph.set_pixel_width(float(self.pixel_width_um) * 1e-6)
+            self.spectrograph.set_pixel_width(
+                self._coerce_float(self.pixel_width_um, 13.5) * 1e-6
+            )
         except Exception:
             pass
 
@@ -179,7 +201,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
         try:
             self.serial_number_value = str(spectrograph.get_device_info())
         except Exception:
-            self.serial_number_value = f"index-{self.spectrograph_index}"
+            self.serial_number_value = f"index-{self._coerce_int(self.spectrograph_index, 0)}"
 
         try:
             self.current_wavelength_nm = float(spectrograph.get_wavelength()) * 1e9
@@ -252,9 +274,9 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
                 self._setup_calibration_geometry()
                 self._sync_from_spectrograph(spectrograph)
                 uri = (
-                    f"andor-shamrock://index/{self.spectrograph_index}"
+                    f"andor-shamrock://index/{self._coerce_int(self.spectrograph_index, 0)}"
                 ).encode("utf-8")
-                arg_return = int(self.spectrograph_index or 0), uri
+                arg_return = self._coerce_int(self.spectrograph_index, 0), uri
             finally:
                 try:
                     spectrograph.close()

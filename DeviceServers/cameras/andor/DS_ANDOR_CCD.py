@@ -71,7 +71,34 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     }
     ACQ_MODE_MAP_INV = {value: key for key, value in ACQ_MODE_MAP.items()}
 
+    @staticmethod
+    def _coerce_int(value, default: int) -> int:
+        try:
+            if value is None or value == "":
+                return int(default)
+            return int(value)
+        except (TypeError, ValueError):
+            return int(default)
+
+    @staticmethod
+    def _coerce_float(value, default: float) -> float:
+        try:
+            if value is None or value == "":
+                return float(default)
+            return float(value)
+        except (TypeError, ValueError):
+            return float(default)
+
+    @staticmethod
+    def _coerce_str(value, default: str) -> str:
+        if value is None:
+            return str(default)
+        text = str(value).strip()
+        return text if text else str(default)
+
     def init_device(self):
+        default_width = self._coerce_int(self.width, 1064)
+        default_temperature = self._coerce_float(self.default_temperature, -50.0)
         self.serial_number_real = -1
         self.head_name = ""
         self.status_real = 0
@@ -81,13 +108,13 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.n_gains_max = 0
         self.gain_value = 0
         self.height_value = 1
-        self.current_width = int(self.width or 1064)
+        self.current_width = default_width
         self.current_height = 1
         self.track_count_value = 1
         self.current_read_mode = "multi_track"
         self.current_acquisition_mode = "cont"
-        self.temperature_value = float(self.default_temperature)
-        self.temperature_target_value = float(self.default_temperature)
+        self.temperature_value = default_temperature
+        self.temperature_target_value = default_temperature
         self.temperature_status_value = "unknown"
         self.cooler_on_value = False
         self.vsspeed_value = 0
@@ -112,7 +139,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.register_variables_for_archive()
         self._refresh_wavelengths_axis(expected_width=self.current_width)
 
-        if bool(int(self.start_grabbing_on_init or 0)):
+        if bool(self._coerce_int(self.start_grabbing_on_init, 0)):
             try:
                 self.start_grabbing()
             except Exception as exc:
@@ -184,12 +211,12 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
     def _create_camera(self):
         Andor = get_andor_module(sdk_path=self.dll_path)
-        ini_path = str(self.ini_path or "")
+        ini_path = self._coerce_str(self.ini_path, "")
         return Andor.AndorSDK2Camera(
-            idx=int(self.camera_index or 0),
+            idx=self._coerce_int(self.camera_index, 0),
             ini_path=ini_path,
-            temperature=int(self.default_temperature),
-            fan_mode=str(self.fan_mode or "off"),
+            temperature=self._coerce_int(self.default_temperature, -50),
+            fan_mode=self._coerce_str(self.fan_mode, "off"),
         )
 
     def _with_temp_camera(self):
@@ -297,10 +324,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             pass
 
     def _refresh_wavelengths_axis(self, expected_width: Optional[int] = None) -> None:
-        width = int(expected_width or self.current_width or self.width or 1064)
+        width = self._coerce_int(expected_width or self.current_width or self.width, 1064)
         axis = np.array([], dtype=np.float32)
 
-        linked_device_name = str(self.linked_spectrograph_ds or "").strip()
+        linked_device_name = self._coerce_str(self.linked_spectrograph_ds, "").strip()
         if linked_device_name:
             try:
                 linked_ds = DeviceProxy(linked_device_name)
@@ -367,9 +394,9 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
                 uri = (
                     f"andor-sdk2://camera/{self.serial_number_real}"
                     if self.serial_number_real != -1
-                    else f"andor-sdk2://index/{self.camera_index}"
+                    else f"andor-sdk2://index/{self._coerce_int(self.camera_index, 0)}"
                 )
-                argreturn = int(self.camera_index or 0), uri.encode("utf-8")
+                argreturn = self._coerce_int(self.camera_index, 0), uri.encode("utf-8")
             finally:
                 camera.close()
         except Exception as exc:
