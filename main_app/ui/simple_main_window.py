@@ -225,6 +225,11 @@ class SimpleMainWindow(QMainWindow):
         act_itest.triggered.connect(lambda: self._launch_client("ITEST"))
         clients_menu.addAction(act_itest)
 
+        act_spectroscopy = QAction("Start Spectroscopy", self)
+        act_spectroscopy.setShortcut(QKeySequence("Ctrl+P"))
+        act_spectroscopy.triggered.connect(lambda: self._launch_client("SPECTROSCOPY"))
+        clients_menu.addAction(act_spectroscopy)
+
         clients_menu.addSeparator()
         act_astor = QAction("Start Astor", self)
         act_astor.setShortcut(QKeySequence("Ctrl+A"))
@@ -246,8 +251,10 @@ class SimpleMainWindow(QMainWindow):
             "KEYSIGHT": ["laser"],
             "ITEST": ["ELYSE", "ITestPSU/test", "ITestPSU/bilt", "ITestPSU/lab", "ITestPSU/main"],
             "DAQMX_ZMQ": ["DAQMX_ZMQ_1"],
+            "SPECTROSCOPY": ["V0"],
             # Additional clients (not shown in UI rows yet)
             "ANDOR_CCD": [],
+            "ANDOR_SPECTROGRAPH": [],
             "AVANTES_CCD": [],
             "AVANTES_SPECTRO": [],
             "ARCHIVE": [],
@@ -317,6 +324,9 @@ class SimpleMainWindow(QMainWindow):
             "DAQMX_ZMQ": {
                 "DAQMX_ZMQ_1": "DAQmx ZMQ Reader: control/DAQ/DAQMX_ZMQ_1 (receives from LabVIEW PSP)",
             },
+            "SPECTROSCOPY": {
+                "V0": "Newton CCD together with Shamrock and Kymera controls",
+            },
         }
         # Try to derive instance lists from installed client modules
         self._update_defaults_from_clients()
@@ -353,6 +363,12 @@ class SimpleMainWindow(QMainWindow):
                 "DAQMX_ZMQ",
                 "DAQmx ZMQ",
                 self.icons_dir / "NETIO.png",
+                "client",
+            ),
+            (
+                "SPECTROSCOPY",
+                "Spectroscopy",
+                self.icons_dir / "spectrometer.png",
                 "client",
             ),
         ]
@@ -568,7 +584,11 @@ class SimpleMainWindow(QMainWindow):
             "LASER_POINTING": (
                 "DeviceServers.control.laser_pointing.DS_LASER_POINTING_client"
             ),
+            "SPECTROSCOPY": "DeviceServers.spectroscopy.DS_SPECTROSCOPY_client",
             "ANDOR_CCD": "DeviceServers.cameras.andor.DS_ANDOR_CCD_client",
+            "ANDOR_SPECTROGRAPH": (
+                "DeviceServers.spectrographs.andor.DS_ANDOR_SPECTROGRAPH_client"
+            ),
             "AVANTES_CCD": "DeviceServers.cameras.avantes.DS_AVANTES_CCD_client",
             "AVANTES_SPECTRO": (
                 "DeviceServers.spectrographs.avantes.DS_AVANTES_SPECTRO_client"
@@ -949,7 +969,13 @@ class SimpleMainWindow(QMainWindow):
                     "DeviceServers\\power\\iTest\\"
                     "DS_iTest_client.py"
                 ),
+                "SPECTROSCOPY": (
+                    "DeviceServers\\spectroscopy\\DS_SPECTROSCOPY_client.py"
+                ),
                 "ANDOR_CCD": "DeviceServers\\cameras\\andor\\DS_ANDOR_CCD_client.py",
+                "ANDOR_SPECTROGRAPH": (
+                    "DeviceServers\\spectrographs\\andor\\DS_ANDOR_SPECTROGRAPH_client.py"
+                ),
                 "AVANTES_CCD": (
                     "DeviceServers\\cameras\\avantes\\DS_AVANTES_CCD_client.py"
                 ),

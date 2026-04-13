@@ -1,0 +1,115 @@
+.spectroscopy-page {
+  padding-bottom: 32px;
+}
+
+.spectroscopy-toolbar {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.spectroscopy-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.spectroscopy-toolbar select {
+  min-width: 320px;
+  padding: 8px 12px;
+}
+
+.spectroscopy-layout {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.5fr) minmax(320px, 1fr);
+  gap: 20px;
+}
+
+.spectroscopy-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.spectroscopy-card {
+  background: #ffffff;
+  border: 1px solid #d8dee9;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.spectroscopy-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 14px;
+}
+
+.spectroscopy-card-header h2,
+.spectroscopy-card-header h3 {
+  margin: 0;
+}
+
+.spectroscopy-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 8px 14px;
+  margin-bottom: 16px;
+}
+
+.spectroscopy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.spectroscopy-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.spectroscopy-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.spectroscopy-form-grid input,
+.spectroscopy-form-grid select {
+  padding: 8px 10px;
+}
+
+.spectroscopy-plot-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px;
+  background: #f8fafc;
+}
+
+.spectroscopy-plot-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.spectroscopy-plot {
+  width: 100%;
+  height: auto;
+  background: #ffffff;
+  border-radius: 8px;
+}
+
+@media (max-width: 1100px) {
+  .spectroscopy-layout {
+    grid-template-columns: 1fr;
+  }
+}

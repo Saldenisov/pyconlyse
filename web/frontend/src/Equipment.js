@@ -160,6 +160,9 @@ const Equipment = () => {
               <button type="button" className="modal-link" onClick={() => openRoute("/cameras-clients")}>
                 Open Basler Cameras
               </button>
+              <button type="button" className="modal-link" onClick={() => openRoute("/spectroscopy-clients")}>
+                Open Spectroscopy
+              </button>
             </div>
             <button onClick={() => setShowCamerasModal(false)} className="modal-close">Close</button>
           </div>

@@ -372,9 +372,9 @@ def _build_psp_series(history):
         if not channel:
             continue
 
-        ts = _to_float_or_none(item.get("source_ts"))
-        if ts is None:
-            ts = _to_float_or_none(item.get("recv_ts"))
+        recv_ts = _to_float_or_none(item.get("recv_ts"))
+        source_ts = _to_float_or_none(item.get("source_ts"))
+        ts = recv_ts if recv_ts is not None else source_ts
         if ts is None:
             continue
 
@@ -384,6 +384,8 @@ def _build_psp_series(history):
 
         point = {
             "ts": ts,
+            "recv_ts": recv_ts,
+            "source_ts": source_ts,
             "value": value,
             "id": item.get("id"),
         }
@@ -391,6 +393,8 @@ def _build_psp_series(history):
         latest_by_channel[channel] = {
             "value": value,
             "ts": ts,
+            "recv_ts": recv_ts,
+            "source_ts": source_ts,
             "id": item.get("id"),
         }
 
@@ -1821,7 +1825,10 @@ def get_camera_info(device_name):
             'format_pixel', 'framerate', 'isgrabbing',
             'binning_horizontal', 'binning_vertical',
             'trigger_mode', 'trigger_delay',
-            'cg'
+            'cg', 'number_kinetics', 'track_count',
+            'wavelengths_axis', 'temperature_current',
+            'temperature_target', 'temperature_status',
+            'cooler_on', 'linked_spectrograph_device'
         ]
         
         for attr_name in camera_attrs:
@@ -1844,7 +1851,8 @@ def handle_camera_parameters(device_name):
         if request.method == 'GET':
             parameters = {}
             param_names = ['exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY', 
-                          'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal', 'binning_vertical']
+                          'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal', 'binning_vertical',
+                          'number_kinetics']
             
             for param in param_names:
                 try:
@@ -1957,6 +1965,117 @@ def get_camera_image(device_name):
             'success': True
         })
     
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/spectrographs', methods=['GET'])
+def list_spectrographs():
+    """Get list of Andor spectrograph devices directly from Tango DB."""
+    try:
+        db = tango.Database()
+        spectro_classes = ['DS_ANDOR_SPECTROGRAPH']
+        spectrograph_list = []
+
+        for dev_class in spectro_classes:
+            try:
+                device_list = db.get_device_name('*', dev_class)
+                for device_name in device_list:
+                    try:
+                        device = tango.DeviceProxy(device_name)
+                        info = {
+                            'name': device_name,
+                            'state': str(device.state()),
+                            'class': dev_class,
+                            'available': True,
+                        }
+                        try:
+                            info['friendly_name'] = str(device.read_attribute('device_friendly_name').value)
+                        except Exception:
+                            pass
+                        try:
+                            info['serial_number'] = str(device.read_attribute('serial_number').value)
+                        except Exception:
+                            pass
+                        spectrograph_list.append(info)
+                    except Exception as exc:
+                        spectrograph_list.append({
+                            'name': device_name,
+                            'state': 'UNKNOWN',
+                            'class': dev_class,
+                            'available': False,
+                            'error': str(exc),
+                        })
+            except Exception as exc:
+                print(f"No devices found for class {dev_class}: {exc}")
+
+        return jsonify({'spectrographs': spectrograph_list, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/spectrograph/<path:device_name>/info', methods=['GET'])
+def get_spectrograph_info(device_name):
+    """Get detailed spectrograph information."""
+    try:
+        device = DeviceManager.get_device(device_name)
+        info = {
+            'name': device_name,
+            'state': str(device.state()),
+            'status': device.status(),
+        }
+
+        attr_names = [
+            'device_friendly_name', 'serial_number', 'wavelength_nm',
+            'grating', 'gratings_number', 'pixel_number_attr',
+            'pixel_width_um_attr', 'input_side_slit_um',
+            'output_side_slit_um', 'input_direct_slit_um',
+            'output_direct_slit_um', 'calibration',
+            'lines_per_mm', 'blaze_wavelength_nm',
+        ]
+        for attr_name in attr_names:
+            try:
+                attr = device.read_attribute(attr_name)
+                info[attr_name] = make_json_safe(attr.value)
+            except Exception:
+                pass
+
+        return jsonify({'spectrograph_info': info, 'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+@device_api.route('/api/spectrograph/<path:device_name>/parameters', methods=['GET', 'POST'])
+def handle_spectrograph_parameters(device_name):
+    """Get or set spectrograph parameters."""
+    try:
+        device = DeviceManager.get_device(device_name)
+
+        if request.method == 'GET':
+            parameters = {}
+            attr_names = [
+                'wavelength_nm', 'grating', 'pixel_number_attr',
+                'pixel_width_um_attr', 'input_side_slit_um',
+                'output_side_slit_um', 'input_direct_slit_um',
+                'output_direct_slit_um',
+            ]
+            for attr_name in attr_names:
+                try:
+                    attr = device.read_attribute(attr_name)
+                    parameters[attr_name] = make_json_safe(attr.value)
+                except Exception:
+                    pass
+            return jsonify({'parameters': parameters, 'success': True})
+
+        _maybe_require_auth()
+        data = request.get_json()
+        results = {}
+        for param_name, param_value in data.items():
+            try:
+                device.write_attribute(param_name, param_value)
+                attr = device.read_attribute(param_name)
+                results[param_name] = {'success': True, 'value': make_json_safe(attr.value)}
+            except Exception as exc:
+                results[param_name] = {'success': False, 'error': str(exc)}
+
+        return jsonify({'results': results, 'success': True})
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 

@@ -1,58 +1,58 @@
 import zlib
 from collections import deque
 
-import numpy
 import numpy as np
 import pyqtgraph as pg
 from PyQt5 import QtWidgets
-from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
 from taurus.qt.qtgui.button import TaurusCommandButton
-from taurus.qt.qtgui.display import TaurusLabel, TaurusLed
-from taurus.qt.qtgui.input import (
-    TaurusValueComboBox,
-    TaurusValueSpinBox,
-    TaurusWheelEdit,
-)
+from taurus.qt.qtgui.display import TaurusLed
+from taurus.qt.qtgui.input import TaurusValueComboBox, TaurusValueSpinBox, TaurusWheelEdit
 
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
 
 class ANDOR_CCD(DS_General_Widget):
+    TRACK_COLORS = [
+        "#1f77b4",
+        "#d62728",
+        "#2ca02c",
+        "#9467bd",
+        "#8c564b",
+        "#e377c2",
+    ]
+
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.grabbing = False
-        super().__init__(device_name, parent, vis_type)
-        self.timer = QtCore.QTimer()
-        self.timer.timeout.connect(self.data_listener)
         self.order = None
+        self.wavelengths = np.arange(1064, dtype=np.float32)
         self.od_deque = deque(maxlen=50)
+        super().__init__(device_name, parent, vis_type)
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.data_listener)
 
     def before_ds(self):
         super().before_ds()
-        waves = self.ds.get_property("wavelengths")["wavelengths"][0]
-        self.wavelengths = np.array(eval(waves))
+        try:
+            self.wavelengths = np.asarray(self.ds.wavelengths_axis, dtype=np.float32)
+        except Exception:
+            self.wavelengths = np.arange(1064, dtype=np.float32)
 
     def register_DS_full(self, group_number=1):
-        super(ANDOR_CCD, self).register_DS_full()
-
+        super().register_DS_full()
         dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f"lo_group_{group_number}")
-
         lo_device: Qt.QLayout = getattr(self, f"layout_main_{dev_name}")
         lo_status: Qt.QLayout = getattr(self, f"layout_status_{dev_name}")
         lo_buttons: Qt.QLayout = getattr(self, f"layout_buttons_{dev_name}")
         lo_parameters: Qt.QLayout = getattr(self, f"layout_parameters_{dev_name}")
-        lo_parameters_od: Qt.QLayout = getattr(self, f"layout_parameters_od_{dev_name}")
+        lo_info: Qt.QLayout = getattr(self, f"layout_info_{dev_name}")
         lo_image: Qt.QLayout = getattr(self, f"layout_image_{dev_name}")
 
-        # State and status
         self.set_state_status(False)
-
-        # Image
         self.set_image(lo_image)
 
-        # Buttons and commands
         setattr(
             self, f"button_start_grabbing_{dev_name}", TaurusCommandButton(text="Grab")
         )
@@ -69,92 +69,80 @@ class ANDOR_CCD(DS_General_Widget):
         button_off: TaurusCommandButton = getattr(self, f"button_off_{dev_name}")
         button_off.setModel(dev_name)
 
+        setattr(
+            self,
+            f"button_refresh_calib_{dev_name}",
+            TaurusCommandButton(command="RefreshCalibration"),
+        )
+        button_refresh: TaurusCommandButton = getattr(
+            self, f"button_refresh_calib_{dev_name}"
+        )
+        button_refresh.setModel(dev_name)
+
         lo_buttons.addWidget(button_start_grabbing)
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
+        lo_buttons.addWidget(button_refresh)
 
-        # CCD parameters
         self.number_spectra = TaurusWheelEdit()
-        self.number_spectra.setValue(2)
+        self.number_spectra.setValue(5)
         self.number_spectra.setDigitCount(2, 0)
         self.number_spectra.setMinValue(1)
-        self.number_spectra.setMaxValue(50)
+        self.number_spectra.setMaxValue(100)
 
         self.number_kinetics = TaurusValueSpinBox()
-        # self.number_kinetics.model = f'{dev_name}/number_kinetics'
         self.number_kinetics.setMinimumWidth(80)
-        if self.ds.state == TaurusDevState.Ready:
-            self.number_kinetics.setValue(self.ds.number_kinetics)
+        try:
+            self.number_kinetics.setValue(int(self.ds.number_kinetics))
+        except Exception:
+            self.number_kinetics.setValue(1)
+        self.number_kinetics.valueChanged.connect(self.number_kinetics_changed)
 
         self.trigger_mode = TaurusValueComboBox()
-        self.trigger_mode.addItems(["Internal", "External"])
-        if self.ds.state == TaurusDevState.Ready:
-            res = int(self.ds.trigger_mode)
-            if res == 0:
-                self.trigger_mode.setCurrentIndex(0)
-            elif res == 1:
-                self.trigger_mode.setCurrentIndex(1)
+        self.trigger_mode.addItems(["Internal", "External", "Software"])
+        self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
 
         self.exposure_time = TaurusWheelEdit()
-        # self.exposure_time.model = f'{dev_name}/exposure_time'
-        if self.ds.state == TaurusDevState.Ready:
-            self.exposure_time.setValue(self.ds.exposure_time)
+        try:
+            self.exposure_time.setValue(float(self.ds.exposure_time))
+        except Exception:
+            self.exposure_time.setValue(0.001)
         self.exposure_time.setDigitCount(1, 6)
+        self.exposure_time.valueChanged.connect(self.exposure_time_changed)
 
-        lo_parameters.addWidget(TaurusLabel("N spectra"))
+        lo_parameters.addWidget(QtWidgets.QLabel("Frames per order"))
         lo_parameters.addWidget(self.number_spectra)
-        lo_parameters.addWidget(TaurusLabel("N kinetics"))
+        lo_parameters.addWidget(QtWidgets.QLabel("Kinetics"))
         lo_parameters.addWidget(self.number_kinetics)
-        lo_parameters.addWidget(TaurusLabel("Trigger"))
+        lo_parameters.addWidget(QtWidgets.QLabel("Trigger"))
         lo_parameters.addWidget(self.trigger_mode)
-        lo_parameters.addWidget(TaurusLabel("Exposure Time, s"))
+        lo_parameters.addWidget(QtWidgets.QLabel("Exposure, s"))
         lo_parameters.addWidget(self.exposure_time)
-        lo_parameters.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 5, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
-            )
-        )
+        lo_parameters.addStretch()
 
-        lo_parameters_od.addWidget(QtWidgets.QLabel("BG level"))
-        self.bg_level = QtWidgets.QSpinBox()
-        self.bg_level.setValue(50000)
-        lo_parameters_od.addWidget(self.bg_level)
-        lo_parameters_od.addWidget(QtWidgets.QLabel("OD err range"))
-        self.od_err_left = QtWidgets.QDoubleSpinBox()
-        self.od_err_left.setValue(360.0)
-        self.od_err_right = QtWidgets.QDoubleSpinBox()
-        self.od_err_right.setValue(770.0)
-        lo_parameters_od.addWidget(self.od_err_left)
-        lo_parameters_od.addWidget(self.od_err_right)
-        lo_parameters_od.addSpacerItem(
-            QtWidgets.QSpacerItem(
-                0, 5, QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Minimum
-            )
-        )
+        self.info_label = QtWidgets.QLabel("Waiting for data")
+        lo_info.addWidget(self.info_label)
+
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
         lo_device.addLayout(lo_buttons)
         lo_device.addLayout(lo_parameters)
-        lo_device.addLayout(lo_parameters_od)
+        lo_device.addLayout(lo_info)
         lo_group.addLayout(lo_device)
+        self.update_param()
 
     def register_DS_min(self, group_number=1):
-        super(ANDOR_CCD, self).register_DS_min()
+        super().register_DS_min()
         dev_name = self.dev_name
 
         lo_group: Qt.QHBoxLayout = getattr(self, f"lo_group_{group_number}")
-
         lo_device: Qt.QLayout = getattr(self, f"layout_main_{dev_name}")
         lo_status: Qt.QLayout = getattr(self, f"layout_status_{dev_name}")
         lo_image: Qt.QLayout = getattr(self, f"layout_image_{dev_name}")
 
-        # State and status
         self.set_state_status(False)
-
-        # Image
         self.set_image(lo_image)
 
-        # Button
         grabbing_led = TaurusLed()
         grabbing_led.model = f"{dev_name}/isgrabbing"
         setattr(
@@ -176,53 +164,63 @@ class ANDOR_CCD(DS_General_Widget):
         self.view = pg.GraphicsLayoutWidget(parent=self, title="DATA")
         pg.setConfigOptions(antialias=True)
 
-        self.plot_spectra = self.view.addPlot(title="Spectra", row=0, column=0)
-        self.plot_spectra.curves = []
+        self.plot_spectra = self.view.addPlot(title="Spectral tracks", row=0, column=0)
         self.plot_spectra.setLabel("left", "Intensity", units="counts")
         self.plot_spectra.setLabel("bottom", "Wavelength", units="nm")
-        self.add_curve(self.plot_spectra, self.wavelengths)  # background1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # background2
-        self.add_curve(self.plot_spectra, self.wavelengths)  # with_e1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # with_e2
-        self.add_curve(self.plot_spectra, self.wavelengths)  # without_e1
-        self.add_curve(self.plot_spectra, self.wavelengths)  # without_e2
+        self.plot_spectra.showGrid(x=True, y=True, alpha=0.3)
+        self.plot_spectra.curves = []
 
-        self.plot_OD = self.view.addPlot(title="Transient absorption", row=0, column=1)
-        self.plot_OD.setYRange(-0.005, 0.005)
-        self.plot_OD.setMouseEnabled(x=True, y=True)
-        self.plot_OD.curves = []
-        self.plot_OD.setLabel("left", "delta O.D.", units="")
-        self.plot_OD.setLabel("bottom", "Wavelength", units="nm")
-        self.add_curve(self.plot_OD, numpy.zeros(len(self.wavelengths)))
+        self.plot_difference = self.view.addPlot(
+            title="Track difference", row=0, column=1
+        )
+        self.plot_difference.setLabel("left", "Track 1 - Track 2", units="counts")
+        self.plot_difference.setLabel("bottom", "Wavelength", units="nm")
+        self.plot_difference.showGrid(x=True, y=True, alpha=0.3)
+        self.diff_curve = self.plot_difference.plot(self.wavelengths, np.zeros_like(self.wavelengths))
 
-        self.view.setMinimumSize(1000, 450)
+        self.view.setMinimumSize(1000, 420)
         lo_image.addWidget(self.view)
 
-    def update_curve(self, plot, i, y):
-        plot.curves[i].setData(self.wavelengths, y)
+    def _ensure_track_curves(self, track_count: int):
+        while len(self.plot_spectra.curves) < track_count:
+            color = self.TRACK_COLORS[len(self.plot_spectra.curves) % len(self.TRACK_COLORS)]
+            pen = pg.mkPen(color=color, width=2)
+            self.plot_spectra.curves.append(self.plot_spectra.plot(self.wavelengths, np.zeros_like(self.wavelengths), pen=pen))
 
-    def add_curve(self, plot, y):  # add a curve
-        plot.curves.append(plot.plot(self.wavelengths, y))
+        for idx, curve in enumerate(self.plot_spectra.curves):
+            curve.setVisible(idx < track_count)
 
-    def del_curve(self, plot, i):
-        plot.curves[i].clear()
+    def update_curve(self, curve, x, y):
+        curve.setData(x, y)
 
     def register_full_layouts(self):
-        super(ANDOR_CCD, self).register_full_layouts()
+        super().register_full_layouts()
         setattr(self, f"layout_parameters_{self.dev_name}", QtWidgets.QHBoxLayout())
-        setattr(self, f"layout_parameters_od_{self.dev_name}", QtWidgets.QHBoxLayout())
         setattr(self, f"layout_image_{self.dev_name}", QtWidgets.QHBoxLayout())
 
     def register_min_layouts(self):
-        super(ANDOR_CCD, self).register_min_layouts()
+        super().register_min_layouts()
         setattr(self, f"layout_image_{self.dev_name}", Qt.QHBoxLayout())
 
+    def number_kinetics_changed(self):
+        try:
+            self.ds.number_kinetics = int(self.number_kinetics.value())
+        except Exception:
+            return
+
     def trigger_mode_changed(self):
-        state = self.trigger_mode.currentText()
-        self.ds.trigger_mode = 1 if state == "External" else 0
+        mode_name = self.trigger_mode.currentText()
+        mapping = {"Internal": 0, "External": 1, "Software": 10}
+        try:
+            self.ds.trigger_mode = mapping.get(mode_name, 1)
+        except Exception:
+            return
 
     def exposure_time_changed(self):
-        self.ds.exposure_time = float(self.exposure_time.value / 1000)
+        try:
+            self.ds.exposure_time = float(self.exposure_time.value)
+        except Exception:
+            return
 
     def grab_clicked(self):
         button_start_grabbing: TaurusCommandButton = getattr(
@@ -236,128 +234,108 @@ class ANDOR_CCD(DS_General_Widget):
             self.order = None
         else:
             self.ds.start_grabbing()
-            self.timer.start(50)
+            self.timer.start(80)
             self.order = self.make_order()
             self.grabbing = True
             button_start_grabbing.setText("Grabbing")
 
     def make_order(self):
-        order = self.ds.register_order([int(self.number_spectra.value)])
-        return order
+        return self.ds.register_order([int(self.number_spectra.value)])
+
+    def _decode_order(self, data):
+        data_b = zlib.decompress(eval(data))
+        data_array = np.frombuffer(data_b, dtype=np.float32)
+        width = max(1, int(getattr(self.ds, "width", len(self.wavelengths) or 1)))
+        if data_array.size % width != 0:
+            width = len(self.wavelengths) or width
+        if data_array.size % width != 0:
+            return None
+        return data_array.reshape(-1, width)
+
+    def _split_groups(self, data_array: np.ndarray):
+        if data_array is None or data_array.shape[0] < 2:
+            return self.wavelengths, np.empty((0, 0, 0), dtype=np.float32), np.empty((0, 0), dtype=np.float32)
+
+        wavelengths = np.asarray(data_array[0], dtype=np.float32)
+        payload = np.asarray(data_array[1:], dtype=np.float32)
+        track_count = max(1, int(getattr(self.ds, "track_count", payload.shape[0] or 1)))
+        if payload.shape[0] < track_count:
+            track_count = payload.shape[0]
+        group_count = max(1, payload.shape[0] // max(1, track_count))
+        payload = payload[: group_count * track_count]
+        grouped = payload.reshape(group_count, track_count, -1)
+        averaged = np.mean(grouped, axis=0)
+        return wavelengths, grouped, averaged
 
     def data_listener(self):
-        if self.order:
-            is_order_ready = self.ds.is_order_ready(self.order)
-            if is_order_ready:
-                data = self.ds.give_order(self.order)
-                data_b = zlib.decompress(eval(data))
-                data_array = np.frombuffer(data_b, dtype=np.int32)
-                data_array = data_array.reshape(-1, 1024)
-                self.wavelengths = data_array[0]
-                averaged_data = self.average_data_ELYSE_seq(data_array[1:])
-                self.update_curve(self.plot_spectra, 0, averaged_data[0])
-                self.update_curve(self.plot_spectra, 1, averaged_data[1])
-                self.update_curve(self.plot_spectra, 2, averaged_data[2])
-                od = self.cald_OD(data_array[1:])
-                self.update_curve(self.plot_OD, 0, od)
-                self.set_stability()
-                self.order = self.make_order()
-        else:
+        if not self.order:
             self.order = self.make_order()
+            return
 
-    def search_for_indexes(self, data: np.ndarray):
-        """Return background_idx, with_electron, without_electron"""
+        try:
+            is_order_ready = self.ds.is_order_ready(self.order)
+        except Exception:
+            return
 
-        def search_min(data):
-            i = 0
-            level = 10**9
-            level_local = 0
-            idx_min = -1
-            for spectrum in data:
-                level_local = np.sum(spectrum)
-                if level_local < level:
-                    level = level_local
-                    idx_min = i
-                else:
-                    break
-                i += 1
-            return idx_min, level_local
+        if not is_order_ready:
+            return
 
-        def elyse_seq(idx_min):
-            if idx_min == -1:
-                return 0, 1, 2
+        try:
+            data = self.ds.give_order(self.order)
+            data_array = self._decode_order(data)
+            wavelengths, grouped, averaged = self._split_groups(data_array)
+            if averaged.size == 0:
+                self.order = self.make_order()
+                return
 
-            if idx_min % 3 == 0:
-                return 0, 1, 2
-            if idx_min % 3 == 1:
-                return 1, 0, 2
-            if idx_min % 3 == 2:
-                return 2, 1, 0
+            self.wavelengths = wavelengths
+            self._ensure_track_curves(averaged.shape[0])
+            for idx in range(averaged.shape[0]):
+                self.update_curve(self.plot_spectra.curves[idx], wavelengths, averaged[idx])
 
-        idx1, level1 = search_min(data=data[::3])
-        idx2, level2 = search_min(data=data[1::3])
+            if averaged.shape[0] >= 2:
+                difference = averaged[0] - averaged[1]
+                self.diff_curve.setData(wavelengths, difference)
+            else:
+                self.diff_curve.setData(wavelengths, np.zeros_like(wavelengths))
 
-        if idx1 != idx2 and idx1 >= 0 and idx2 >= 0:
-            if level1 <= level2:
-                return elyse_seq(idx1)
-            return elyse_seq(idx2)
-        if idx1 < 0 and idx2 >= 0:
-            return elyse_seq(idx2)
-        if (idx2 < 0 and idx1 >= 0) or (idx1 == idx2 and idx1 >= 0 and idx2 >= 0):
-            return elyse_seq(idx1)
-        return 0, 1, 2
+            self.info_label.setText(
+                f"Tracks: {averaged.shape[0]} | Frames grouped: {grouped.shape[0]} | Pixels: {wavelengths.size}"
+            )
+            self.order = self.make_order()
+        except Exception as exc:
+            self.info_label.setText(f"Data update failed: {exc}")
 
-    def cald_OD(self, data: np.ndarray) -> np.ndarray:
-        back_idx, with_idx, without_idx = self.search_for_indexes(data)
-        ODs = []
-        n_od = len(data) / 3
-        data1 = data[:3:]
-        data2 = data[1:3:]
+    def update_param(self):
+        try:
+            self.wavelengths = np.asarray(self.ds.wavelengths_axis, dtype=np.float32)
+        except Exception:
+            pass
 
-        for idx in range(int(n_od)):
-            i = 3 * idx
-            denominator1 = data1[with_idx + i] - data1[back_idx + i]
-            denominator1 = np.where(denominator1 != 0, denominator1, 10**-9)
-            transmission1 = (
-                data1[without_idx + i] - data1[back_idx + i]
-            ) / denominator1
-            transmission1 = np.where(transmission1 > 0, transmission1, 100)
+        try:
+            exposure = float(self.ds.exposure_time)
+            self.exposure_time.blockSignals(True)
+            self.exposure_time.setValue(exposure)
+            self.exposure_time.blockSignals(False)
+        except Exception:
+            pass
 
-            denominator2 = data2[with_idx + i] - data2[back_idx + i]
-            denominator2 = np.where(denominator2 != 0, denominator2, 10**-9)
-            transmission2 = (
-                data2[without_idx + i] - data2[back_idx + i]
-            ) / denominator2
-            transmission2 = np.where(transmission2 > 0, transmission2, 100)
+        try:
+            kinetics = int(self.ds.number_kinetics)
+            self.number_kinetics.blockSignals(True)
+            self.number_kinetics.setValue(kinetics)
+            self.number_kinetics.blockSignals(False)
+        except Exception:
+            pass
 
-            od = numpy.log10(transmission1 / transmission2)
-            ODs.append(od)
-        ODs = np.array(ODs)
+        try:
+            mode = int(self.ds.trigger_mode)
+            mapping = {0: 0, 1: 1, 10: 2}
+            self.trigger_mode.blockSignals(True)
+            self.trigger_mode.setCurrentIndex(mapping.get(mode, 1))
+            self.trigger_mode.blockSignals(False)
+        except Exception:
+            pass
 
-        return np.average(ODs, axis=0)
-
-    def set_stability(self):
-        stability = self.calc_stability()
-        self.plot_OD.setTitle(f"Transient absorption. Stability: {stability}")
-
-    def calc_stability(self):
-        return 0
-
-    def average_data_ELYSE_seq(self, data: np.ndarray) -> np.ndarray:
-        """Return np.ndarray(BG1, BG2, with_e1, with_e2, without_e1, without_e2)"""
-        back_idx, with_idx, without_idx = self.search_for_indexes(data)
-        background1 = np.average(data[back_idx::3], axis=0)
-        background2 = np.average(data[back_idx + 1 :: 3], axis=0)
-        with_e1 = np.average(data[with_idx::3], axis=0)
-        with_e2 = np.average(data[with_idx + 1 :: 3], axis=0)
-        without_e1 = np.average(data[without_idx::3], axis=0)
-        without_e2 = np.average(data[without_idx + 1 :: 3], axis=0)
-        return np.vstack(
-            (background1, background2, with_e1, with_e2, without_e1, without_e2)
-        )
-
-    def convert_image(self, image):
-        image2D = image
-        shp = (int(image2D.shape[0] / 3), image2D.shape[1], 3)
-        image3D = image2D.reshape(np.roll(shp, 1)).transpose(1, 2, 0)
-        return np.transpose(image3D)
+    def set_the_control_value(self, value):
+        return value

@@ -13,6 +13,7 @@ import DeviceClients from './DeviceClients';
 import PDUClients from './PDUClients';
 import MagnetsClients from './MagnetsClients';
 import CamerasClients from './CamerasClients';
+import SpectroscopyClients from './SpectroscopyClients';
 import DAQmxClients from './DAQmxClients';
 import VacuumClients from './VacuumClients';
 import Login from './Login';
@@ -35,6 +36,7 @@ function App() {
           <Route path="/pdu-clients" element={<PDUClients />} />
           <Route path="/magnets-clients" element={<MagnetsClients />} />
           <Route path="/cameras-clients" element={<CamerasClients />} />
+          <Route path="/spectroscopy-clients" element={<SpectroscopyClients />} />
           <Route path="/daqmx-clients" element={<DAQmxClients />} />
           <Route path="/vacuum-clients" element={<VacuumClients />} />
           <Route path="/login" element={<Login />} />

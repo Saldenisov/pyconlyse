@@ -17,6 +17,9 @@ from DeviceServers.motion.topdirect.DS_TOPDIRECT_Widget import TopDirect_Motor
 from DeviceServers.power.netio.DS_NETIO_Widget import Netio_pdu
 from DeviceServers.power.iTest.DS_iTest_PSU_Tabs import Itest_PSU
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
+from DeviceServers.spectrographs.andor.DS_ANDOR_SPECTROGRAPH_Widget import (
+    ANDOR_SPECTROGRAPH,
+)
 from DeviceServers.spectrographs.avantes.DS_AVANTES_SPECTRO_Widget import (
     AVANTES_SPECTRO,
 )
@@ -426,6 +429,22 @@ class AVANTES_SPECTROPanel(GeneralPanel):
         **kwargs,
     ):
         if widget_class != AVANTES_SPECTRO:
+            raise Exception(f"Wrong widget class {widget_class} is passed.")
+        super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
+
+
+class ANDOR_SPECTROGRAPHPanel(GeneralPanel):
+    def __init__(
+        self,
+        choice,
+        widget_class,
+        title="",
+        icon: QIcon = None,
+        width=2,
+        *args,
+        **kwargs,
+    ):
+        if widget_class != ANDOR_SPECTROGRAPH:
             raise Exception(f"Wrong widget class {widget_class} is passed.")
         super().__init__(choice, widget_class, title, icon, width, *args, **kwargs)
 

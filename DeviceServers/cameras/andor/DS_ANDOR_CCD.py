@@ -1,80 +1,382 @@
 #!/usr/bin/python3 -u
+import ast
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+from threading import Thread
+from time import sleep, time, time_ns
+from typing import Dict, Optional, Tuple, Union
+
+import numpy as np
+from tango import DevState
+from tango.server import AttrWriteType, attribute, command, device_property
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
-import ctypes
-import inspect
-from threading import Thread
-from time import sleep, time
-from typing import Tuple, Union
+from tango import DeviceProxy
 
-import numpy as np
-from tango import DevState
+from DeviceServers.andor.pylablib_backend import get_andor_module
+from DeviceServers.base.camera import DS_CAMERA_CCD, OrderInfo
 
-# -----------------------------
-from tango.server import AttrWriteType, attribute, device_property
 
-from DeviceServers.base.camera import DS_CAMERA_CCD
-from utilities.tools.decorators import dll_lock
+@dataclass
+class FrameOrderState(OrderInfo):
+    frames_done: int = 0
 
 
 class DS_ANDOR_CCD(DS_CAMERA_CCD):
     RULES = {**DS_CAMERA_CCD.RULES}
 
-    _version_ = "0.1"
-    _model_ = "ANDOR CCD"
+    _version_ = "0.2"
+    _model_ = "ANDOR CCD (pylablib)"
 
     polling_main = 5000
     polling_infinite = 100000
     timeoutt = 5000
 
-    dll_path = device_property(dtype=str)
-    width = device_property(dtype=int)
-    wavelengths = device_property(dtype=str)
+    dll_path = device_property(dtype=str, default_value="")
+    ini_path = device_property(dtype=str, default_value="")
+    width = device_property(dtype=int, default_value=1064)
+    wavelengths = device_property(dtype=str, default_value="[]")
+    camera_index = device_property(dtype=int, default_value=0)
+    fan_mode = device_property(dtype=str, default_value="off")
+    default_temperature = device_property(dtype=int, default_value=-50)
+    linked_spectrograph_ds = device_property(dtype=str, default_value="")
+    start_grabbing_on_init = device_property(dtype=int, default_value=0)
+
+    TRIGGER_MODE_MAP = {
+        0: "int",
+        1: "ext",
+        6: "ext_start",
+        7: "ext_exp",
+        9: "ext_fvb_em",
+        10: "software",
+    }
+    TRIGGER_MODE_MAP_INV = {value: key for key, value in TRIGGER_MODE_MAP.items()}
+    READ_MODE_MAP = {
+        0: "fvb",
+        1: "multi_track",
+        2: "random_track",
+        3: "single_track",
+        4: "image",
+    }
+    READ_MODE_MAP_INV = {value: key for key, value in READ_MODE_MAP.items()}
+    ACQ_MODE_MAP = {
+        1: "single",
+        2: "accum",
+        3: "kinetic",
+        4: "fast_kinetic",
+        5: "cont",
+    }
+    ACQ_MODE_MAP_INV = {value: key for key, value in ACQ_MODE_MAP.items()}
 
     def init_device(self):
         self.serial_number_real = -1
         self.head_name = ""
         self.status_real = 0
-        self.exposure_time_local = -1
-        self.accumulate_time_local = -1
-        self.kinetic_time_local = -1
-        self.n_gains_max = 1
-        self.gain_value = -1
-        self.height_value = 256
-        self.grabbing_thread: Thread = None
+        self.exposure_time_local = 0.0
+        self.accumulate_time_local = 0.0
+        self.kinetic_time_local = 0.0
+        self.n_gains_max = 0
+        self.gain_value = 0
+        self.height_value = 1
+        self.current_width = int(self.width or 1064)
+        self.current_height = 1
+        self.track_count_value = 1
+        self.current_read_mode = "multi_track"
+        self.current_acquisition_mode = "cont"
+        self.temperature_value = float(self.default_temperature)
+        self.temperature_target_value = float(self.default_temperature)
+        self.temperature_status_value = "unknown"
+        self.cooler_on_value = False
+        self.vsspeed_value = 0
+        self.ad_channel_value = 0
+        self.oamp_value = 0
+        self.hsspeed_value = 0
+        self.binning_horizontal_value = 1
+        self.binning_vertical_value = 1
+        self.offsetX_value = 0
+        self.offsetY_value = 0
+        self.trigger_mode_value = 1
+        self.trigger_source_value = 0
+        self.trigger_type_value = 0
+        self.grabbing_thread: Optional[Thread] = None
         self.abort = False
-        self.n_kinetics = 3
+        self.n_kinetics = 1
+        self.camera = None
+        self._default_wavelengths = self._parse_array_property(self.wavelengths)
+        self.wavelengths_axis_value = np.array([], dtype=np.float32)
 
         super().init_device()
         self.register_variables_for_archive()
-        self.wavelengths = eval(self.wavelengths)
-        self.start_grabbing()
+        self._refresh_wavelengths_axis(expected_width=self.current_width)
+
+        if bool(int(self.start_grabbing_on_init or 0)):
+            try:
+                self.start_grabbing()
+            except Exception as exc:
+                self.warn(f"Auto-start grabbing failed: {exc}", True)
 
     @attribute(label="number of kinetics", dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
         return self.n_kinetics
 
     def write_number_kinetics(self, value: int):
-        self.n_kinetics = value
+        self.n_kinetics = max(1, int(value))
+        if self.camera:
+            self._apply_acquisition_mode_settings()
+
+    @attribute(label="track count", dtype=int, access=AttrWriteType.READ)
+    def track_count(self):
+        return int(self.track_count_value)
+
+    @attribute(
+        label="wavelength axis",
+        dtype=(float,),
+        max_dim_x=4096,
+        access=AttrWriteType.READ,
+    )
+    def wavelengths_axis(self):
+        return np.asarray(self.wavelengths_axis_value, dtype=np.float32)
+
+    @attribute(label="temperature current", dtype=float, access=AttrWriteType.READ)
+    def temperature_current(self):
+        self._update_temperature_status()
+        return float(self.temperature_value)
+
+    @attribute(label="temperature target", dtype=float, access=AttrWriteType.READ)
+    def temperature_target(self):
+        self._update_temperature_status()
+        return float(self.temperature_target_value)
+
+    @attribute(label="cooler on", dtype=bool, access=AttrWriteType.READ)
+    def cooler_on(self):
+        self._update_temperature_status()
+        return bool(self.cooler_on_value)
+
+    @attribute(label="temperature status", dtype=str, access=AttrWriteType.READ)
+    def temperature_status(self):
+        self._update_temperature_status()
+        return str(self.temperature_status_value)
+
+    @attribute(label="linked spectrograph ds", dtype=str, access=AttrWriteType.READ)
+    def linked_spectrograph_device(self):
+        return str(self.linked_spectrograph_ds or "")
+
+    def _parse_array_property(self, raw_value) -> np.ndarray:
+        if isinstance(raw_value, np.ndarray):
+            return raw_value.astype(np.float32)
+
+        text = str(raw_value or "").strip()
+        if not text:
+            return np.array([], dtype=np.float32)
+
+        try:
+            parsed = ast.literal_eval(text)
+        except Exception:
+            return np.array([], dtype=np.float32)
+
+        try:
+            return np.asarray(parsed, dtype=np.float32).reshape(-1)
+        except Exception:
+            return np.array([], dtype=np.float32)
+
+    def _create_camera(self):
+        Andor = get_andor_module(sdk_path=self.dll_path)
+        ini_path = str(self.ini_path or "")
+        return Andor.AndorSDK2Camera(
+            idx=int(self.camera_index or 0),
+            ini_path=ini_path,
+            temperature=int(self.default_temperature),
+            fan_mode=str(self.fan_mode or "off"),
+        )
+
+    def _with_temp_camera(self):
+        camera = self._create_camera()
+        try:
+            yield camera
+        finally:
+            try:
+                camera.close()
+            except Exception:
+                pass
+
+    def _sync_from_camera(self, camera) -> None:
+        info = camera.get_device_info()
+        if hasattr(info, "serial_number") or hasattr(info, "head_model"):
+            self.serial_number_real = getattr(info, "serial_number", -1)
+            self.head_name = getattr(info, "head_model", "Andor")
+        elif isinstance(info, tuple):
+            if len(info) >= 3:
+                self.serial_number_real = info[2]
+            if len(info) >= 2:
+                self.head_name = str(info[1])
+            elif len(info) >= 1:
+                self.head_name = str(info[0])
+        detector_width, detector_height = camera.get_detector_size()
+        self.current_width = int(detector_width)
+        self.current_height = int(camera.get_data_dimensions()[0])
+        self.height_value = int(detector_height)
+        self.track_count_value = max(1, int(camera.get_data_dimensions()[0]))
+        self.exposure_time_local = float(camera.get_exposure())
+        timings = camera.get_cycle_timings()
+        self.accumulate_time_local = float(getattr(timings, "accum_cycle_time", 0.0))
+        self.kinetic_time_local = float(getattr(timings, "kinetic_cycle_time", 0.0))
+        self.current_read_mode = str(camera.get_read_mode())
+        self.current_acquisition_mode = str(camera.get_acquisition_mode())
+        self._update_amp_mode_state(camera)
+        self._update_temperature_status(camera)
+        self._update_image_geometry_from_mode(camera)
+
+    def _update_image_geometry_from_mode(self, camera) -> None:
+        try:
+            dims = camera.get_data_dimensions()
+            if len(dims) == 2:
+                self.current_height = int(dims[0])
+                self.current_width = int(dims[1])
+                self.track_count_value = max(1, int(dims[0]))
+        except Exception:
+            pass
+
+        if self.current_read_mode == "image":
+            try:
+                _, _, _, _, hbin, vbin = camera.get_image_mode_parameters()
+                self.binning_horizontal_value = int(hbin)
+                self.binning_vertical_value = int(vbin)
+            except Exception:
+                self.binning_horizontal_value = 1
+                self.binning_vertical_value = 1
+        else:
+            self.binning_horizontal_value = 1
+            self.binning_vertical_value = 1
+
+    def _update_temperature_status(self, camera=None) -> None:
+        cam = camera or self.camera
+        if cam is None:
+            return
+
+        try:
+            self.temperature_value = float(cam.get_temperature())
+        except Exception:
+            pass
+        try:
+            self.temperature_target_value = float(cam.get_temperature_setpoint())
+        except Exception:
+            pass
+        try:
+            self.temperature_status_value = str(cam.get_temperature_status())
+        except Exception:
+            pass
+        try:
+            self.cooler_on_value = bool(cam.is_cooler_on())
+        except Exception:
+            pass
+
+    def _update_amp_mode_state(self, camera) -> None:
+        try:
+            amp_mode = camera.get_amp_mode(full=False)
+            if len(amp_mode) >= 4:
+                self.ad_channel_value = int(amp_mode[0])
+                self.oamp_value = int(amp_mode[1])
+                self.hsspeed_value = int(amp_mode[2])
+                self.gain_value = int(amp_mode[3])
+        except Exception:
+            pass
+
+        try:
+            amp_modes = camera.get_all_amp_modes()
+            if amp_modes:
+                self.n_gains_max = max(int(mode[6]) for mode in amp_modes)
+        except Exception:
+            self.n_gains_max = max(self.n_gains_max, self.gain_value)
+
+        try:
+            self.vsspeed_value = int(camera.get_vsspeed())
+        except Exception:
+            pass
+
+    def _refresh_wavelengths_axis(self, expected_width: Optional[int] = None) -> None:
+        width = int(expected_width or self.current_width or self.width or 1064)
+        axis = np.array([], dtype=np.float32)
+
+        linked_device_name = str(self.linked_spectrograph_ds or "").strip()
+        if linked_device_name:
+            try:
+                linked_ds = DeviceProxy(linked_device_name)
+                linked_axis = linked_ds.read_attribute("calibration").value
+                axis = np.asarray(linked_axis, dtype=np.float32).reshape(-1)
+            except Exception as exc:
+                self.warn(f"Could not read calibration from {linked_device_name}: {exc}")
+
+        if axis.size == 0:
+            axis = np.asarray(self._default_wavelengths, dtype=np.float32).reshape(-1)
+
+        if axis.size != width:
+            axis = np.arange(width, dtype=np.float32)
+
+        self.wavelengths_axis_value = axis
+        self.current_width = int(axis.size)
+
+    def _normalize_frame(self, frame) -> np.ndarray:
+        frame_array = np.asarray(frame, dtype=np.float32)
+        if frame_array.ndim == 1:
+            frame_array = frame_array[np.newaxis, :]
+        elif frame_array.ndim > 2:
+            frame_array = frame_array.reshape(frame_array.shape[0], -1)
+
+        self.current_height = int(frame_array.shape[0])
+        self.current_width = int(frame_array.shape[1])
+        self.track_count_value = max(1, int(frame_array.shape[0]))
+        self._refresh_wavelengths_axis(expected_width=self.current_width)
+        return frame_array
+
+    def _consume_frame_for_orders(self, frame: np.ndarray) -> None:
+        time_stamp = time_ns()
+        self.time_stamp_deque.append(time_stamp)
+        self.data_deque.append(frame.copy())
+
+        if not self.orders:
+            return
+
+        orders_to_delete = []
+        for order_name, order_info in list(self.orders.items()):
+            if (time() - order_info.order_timestamp) >= 100:
+                orders_to_delete.append(order_name)
+                continue
+
+            if order_info.order_done:
+                continue
+
+            order_info.order_array = np.vstack([order_info.order_array, frame])
+            order_info.frames_done += 1
+            if order_info.frames_done >= order_info.order_length:
+                order_info.order_done = True
+
+        for order_name in orders_to_delete:
+            self.orders.pop(order_name, None)
 
     def find_device(self) -> Tuple[int, str]:
-        state_ok = self.check_func_allowance(self.find_device)
+        self.info(f"Searching for Andor camera {self.device_name}", True)
         argreturn = -1, b""
-        if state_ok:
-            self.dll = self.load_dll()
-            res = self._Initialize()
-            if res:
-                self.camera = True
-                self.set_state(DevState.ON)
-                self._GetCameraSerialNumber()
-                argreturn = 1, str(self.serial_number_real).encode("utf-8")
-            else:
-                self.error("Could not initialize camera.")
-            self._device_id_internal, self._uri = argreturn
+        try:
+            camera = self._create_camera()
+            try:
+                self._sync_from_camera(camera)
+                self._refresh_wavelengths_axis(expected_width=self.current_width)
+                uri = (
+                    f"andor-sdk2://camera/{self.serial_number_real}"
+                    if self.serial_number_real != -1
+                    else f"andor-sdk2://index/{self.camera_index}"
+                )
+                argreturn = int(self.camera_index or 0), uri.encode("utf-8")
+            finally:
+                camera.close()
+        except Exception as exc:
+            self.error(f"Could not initialize Andor camera via pylablib: {exc}")
+
+        self._device_id_internal, self._uri = argreturn
+        return argreturn
 
     def get_camera_friendly_name(self):
         return self.friendly_name
@@ -83,1056 +385,439 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.friendly_name = str(value)
 
     def get_camera_serial_number(self) -> Union[str, int]:
-        self._GetCameraSerialNumber()
         return self.serial_number_real
 
     def get_camera_model_name(self) -> str:
-        self._GetHeadModel()
         return self.head_name
 
     def get_exposure_time(self) -> float:
-        res = self._GetAcquisitionTimings()
-        if res:
-            self.info("Get exposure time worked", True)
-        else:
-            self.info(f"Get exposure time did not work: {res}", True)
+        if self.camera:
+            try:
+                self.exposure_time_local = float(self.camera.get_exposure())
+            except Exception:
+                pass
         return self.exposure_time_local
 
     def set_exposure_time(self, value: float):
-        restart = False
-        self.info(f"Setting exposure time {value}", True)
-        if self.grabbing:
-            self.stop_grabbing()
-            restart = True
-        res = self._SetExposureTime(value)
-        if res:
-            self.info(f"Exposure time was set to {value}", True)
-        else:
-            self.info(f"Exposure time was not set to {value}: {res}", True)
+        self.exposure_time_local = float(value)
+        if not self.camera:
+            return
+
+        restart = self.grabbing
+        if restart:
+            self.stop_grabbing_local()
+
+        self.camera.set_exposure(float(value))
+        self._apply_acquisition_mode_settings()
 
         if restart:
-            self.start_grabbing()
+            self.start_grabbing_local()
 
     def set_trigger_delay(self, value: str):
-        pass
+        self.trigger_source_value = int(float(value))
 
     def get_trigger_delay(self) -> str:
-        return -1
+        return float(self.trigger_source_value)
 
     def get_exposure_min(self):
-        return 0.00001
+        return 0.0
 
     def get_exposure_max(self):
-        return 1
+        return 3600.0
 
     def set_gain(self, value: int):
-        self._SetPreAmpGain(value)
+        self.gain_value = int(value)
+        if self.camera:
+            self.camera.set_amp_mode(preamp=self.gain_value)
 
     def get_gain(self) -> int:
-        return self.gain_value
+        return int(self.gain_value)
 
     def get_gain_min(self) -> int:
         return 0
 
     def get_gain_max(self) -> int:
-        self._GetNumberPreAmpGains()
-        return self.n_gains_max
+        return int(max(self.n_gains_max, self.gain_value, 0))
 
     def get_width(self) -> int:
-        return self.width
+        return int(self.current_width)
 
     def set_width(self, value: int):
-        pass
+        self.current_width = max(1, int(value))
 
     def get_width_min(self):
-        return self.width
+        return 1
 
     def get_width_max(self):
-        return self.width
+        return int(self.current_width)
 
     def set_height(self, value: int):
-        pass
+        self.current_height = max(1, int(value))
 
     def get_height(self) -> int:
-        return self.height_value
+        return int(self.current_height)
 
     def get_height_min(self):
         return 1
 
     def get_height_max(self):
-        return 256
+        return int(max(self.current_height, self.height_value))
 
     def get_offsetX(self) -> int:
-        return self.camera.OffsetX()
+        return int(self.offsetX_value)
 
     def set_offsetX(self, value: int):
-        pass
+        self.offsetX_value = int(value)
 
     def get_offsetY(self) -> int:
-        return -1
+        return int(self.offsetY_value)
 
     def set_offsetY(self, value: int):
-        pass
+        self.offsetY_value = int(value)
 
     def set_format_pixel(self, value: str):
-        pass
+        return None
 
     def get_format_pixel(self) -> str:
-        return "None"
+        return "float32"
 
     def get_framerate(self):
-        return -1
+        if not self.camera:
+            return 0.0
+        try:
+            timings = self.camera.get_frame_timings()
+            frame_period = float(getattr(timings, "frame_period", timings[1]))
+            return 0.0 if frame_period <= 0 else 1.0 / frame_period
+        except Exception:
+            return 0.0
 
     def set_binning_horizontal(self, value: int):
-        pass
+        self.binning_horizontal_value = max(1, int(value))
 
     def get_binning_horizontal(self) -> int:
-        return -1
+        return int(self.binning_horizontal_value)
 
     def set_binning_vertical(self, value: int):
-        pass
+        self.binning_vertical_value = max(1, int(value))
 
     def get_binning_vertical(self) -> int:
-        return -1
+        return int(self.binning_vertical_value)
 
     def get_sensor_readout_mode(self) -> str:
-        return "None"
+        return str(self.current_read_mode)
 
     def turn_on_local(self) -> Union[int, str]:
-        if self.get_state != DevState.ON:
-            res = self._Initialize()
-            if res == True:
-                import socket
+        if self.camera is not None:
+            self.set_state(DevState.ON)
+            return 0
 
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.connect(("10.20.30.131", 5025))
-                data = "*RCL 8\n".encode("ascii")
-                s.send(data)
-                sleep(0.1)
-                s.close()
-                self.info(f"{self.device_name} was Opened.", True)
-                self.set_state(DevState.ON)
-                return 0
-            self.info("Could not turn on camera, because it does not exist.", True)
-            return res
-        return "Could not turn on camera it is opened already."
+        try:
+            self.camera = self._create_camera()
+            self.camera.setup_shutter("open")
+            self._sync_from_camera(self.camera)
+            self._apply_parameters(self.parameters.get("Acquisition_Controls", {}))
+            self._refresh_wavelengths_axis(expected_width=self.current_width)
+            self.set_state(DevState.ON)
+            return 0
+        except Exception as exc:
+            self.camera = None
+            self.set_state(DevState.FAULT)
+            return f"Could not turn on camera via pylablib: {exc}"
 
     def turn_off_local(self) -> Union[int, str]:
         if self.grabbing:
             self.stop_grabbing_local()
-        res = self._GetStatus()
-        if self.status_real != 20073:
-            sleep(1)
-        res = self._ShutDown()
-        self.camera = None
-        if res == True:
-            self.set_state(DevState.OFF)
-            self.info(f"{self.device_name} was Closed.", True)
-            return 0
-        self.set_state(DevState.FAULT)
-        return res
+
+        if self.camera is not None:
+            try:
+                self.camera.close()
+            except Exception as exc:
+                self.warn(f"Camera close reported: {exc}", True)
+            finally:
+                self.camera = None
+
+        self.set_state(DevState.OFF)
+        return 0
 
     def set_param_after_init_local(self) -> Union[int, str]:
-        functions = [self.set_acquisition_controls]
-        results = []
-        for func in functions:
-            results.append(func())
-        results_s = ""
-        for res in results:
-            if res != 0:
-                results_s = results_s + res
-        return results_s if results_s else 0
+        if not self.camera:
+            return "Camera is not opened"
+        return self._apply_parameters(self.parameters.get("Acquisition_Controls", {}))
 
-    def set_acquisition_controls(self):
-        formed_parameters_dict = self.parameters["Acquisition_Controls"]
-        return self._set_parameters(formed_parameters_dict)
+    def _apply_read_mode(self, read_mode_value, controls: Dict) -> None:
+        read_mode = self.READ_MODE_MAP.get(int(read_mode_value), "multi_track")
+        self.current_read_mode = read_mode
 
-    def _set_parameters(self, formed_parameters_dict):
-        if self.get_state() == DevState.ON:
-            if self.grabbing:
-                self.stop_grabbing()
-            for param_name, param_value in formed_parameters_dict.items():
-                func = getattr(self, f"_Set{param_name}")
-                if isinstance(param_value, tuple) or isinstance(param_value, list):
-                    res = func(*list(param_value))
-                else:
-                    res = func(param_value)
-                if res != True:
-                    return f'Error appeared: {res} when setting parameter "{param_name}" for camera {self.device_name}.'
+        if read_mode == "multi_track":
+            number, height, offset = tuple(controls.get("MultiTrack", (2, 1, 0)))
+            self.camera.setup_multi_track_mode(
+                number=max(1, int(number)),
+                height=max(1, int(height)),
+                offset=max(0, int(offset)),
+            )
+        elif read_mode == "single_track":
+            center, width = tuple(controls.get("SingleTrack", (0, 1)))
+            self.camera.setup_single_track_mode(
+                center=max(0, int(center)),
+                width=max(1, int(width)),
+            )
+        elif read_mode == "image":
+            self.camera.setup_image_mode(
+                hstart=int(self.offsetX_value),
+                hend=int(self.offsetX_value + self.current_width),
+                vstart=int(self.offsetY_value),
+                vend=int(self.offsetY_value + self.current_height),
+                hbin=int(self.binning_horizontal_value),
+                vbin=int(self.binning_vertical_value),
+            )
+        else:
+            self.camera.set_read_mode(read_mode)
+
+        self._update_image_geometry_from_mode(self.camera)
+
+    def _apply_trigger_mode(self, mode_value) -> None:
+        self.trigger_mode_value = int(mode_value)
+        trigger_mode = self.TRIGGER_MODE_MAP.get(self.trigger_mode_value, "ext")
+        self.camera.set_trigger_mode(trigger_mode)
+
+    def _apply_amp_mode_from_controls(self, controls: Dict) -> None:
+        channel = controls.get("ADChannel", self.ad_channel_value)
+        preamp = controls.get("PreAmpGain", self.gain_value)
+        hsspeed_value = controls.get("HSSpeed", (self.oamp_value, self.hsspeed_value))
+        if isinstance(hsspeed_value, (tuple, list)):
+            oamp = hsspeed_value[0] if len(hsspeed_value) >= 1 else self.oamp_value
+            hsspeed = (
+                hsspeed_value[1] if len(hsspeed_value) >= 2 else self.hsspeed_value
+            )
+        else:
+            oamp = self.oamp_value
+            hsspeed = hsspeed_value
+
+        self.camera.set_amp_mode(
+            channel=int(channel),
+            oamp=int(oamp),
+            hsspeed=int(hsspeed),
+            preamp=int(preamp),
+        )
+        self._update_amp_mode_state(self.camera)
+
+    def _apply_acquisition_mode_settings(self) -> None:
+        if not self.camera:
+            return
+
+        acq_mode = str(self.current_acquisition_mode)
+        if acq_mode == "kinetic":
+            self.camera.setup_kinetic_mode(
+                num_cycle=max(1, int(self.n_kinetics)),
+                cycle_time=float(self.kinetic_time_local or 0.0),
+                num_acc=max(1, int(self.n_average)),
+                cycle_time_acc=float(self.accumulate_time_local or 0.0),
+            )
+        elif acq_mode == "accum":
+            self.camera.setup_accum_mode(
+                num_acc=max(1, int(self.n_average)),
+                cycle_time_acc=float(self.accumulate_time_local or 0.0),
+            )
+        elif acq_mode == "fast_kinetic":
+            self.camera.setup_fast_kinetic_mode(
+                num_acc=max(1, int(self.n_kinetics)),
+                cycle_time_acc=float(self.accumulate_time_local or 0.0),
+            )
+        elif acq_mode == "cont":
+            self.camera.setup_cont_mode(cycle_time=float(self.kinetic_time_local or 0.0))
+        else:
+            self.camera.set_acquisition_mode(acq_mode)
+
+    def _apply_parameters(self, controls: Dict):
+        if not self.camera:
+            return "Camera is not opened"
+
+        controls = dict(controls or {})
+        try:
+            if "ReadMode" in controls:
+                self._apply_read_mode(controls.get("ReadMode"), controls)
+
+            if "TriggerMode" in controls:
+                self._apply_trigger_mode(controls.get("TriggerMode"))
+
+            if "ExposureTime" in controls:
+                self.camera.set_exposure(float(controls.get("ExposureTime")))
+                self.exposure_time_local = float(self.camera.get_exposure())
+
+            acq_mode_value = controls.get(
+                "AcquisitionMode",
+                self.ACQ_MODE_MAP_INV.get(self.current_acquisition_mode, 5),
+            )
+            self.current_acquisition_mode = self.ACQ_MODE_MAP.get(
+                int(acq_mode_value), "cont"
+            )
+
+            if "VSSpeed" in controls:
+                self.camera.set_vsspeed(int(controls.get("VSSpeed")))
+                self.vsspeed_value = int(self.camera.get_vsspeed())
+
+            self._apply_amp_mode_from_controls(controls)
+
+            if "Temperature" in controls:
+                enable_cooler = bool(controls.get("Cooler", True))
+                self.camera.set_temperature(
+                    int(controls.get("Temperature")),
+                    enable_cooler=enable_cooler,
+                )
+            elif "Cooler" in controls:
+                self.camera.set_cooler(bool(controls.get("Cooler")))
+
+            self._apply_acquisition_mode_settings()
+            self._update_temperature_status(self.camera)
+            self._update_image_geometry_from_mode(self.camera)
+            self._refresh_wavelengths_axis(expected_width=self.current_width)
             return 0
-        return f"{self.device_name} state is {self.get_state()}."
+        except Exception as exc:
+            return f"Could not apply camera parameters: {exc}"
 
     def get_image(self):
-        if self.abort:
-            self.start_grabbing()
+        if self.last_image is not None:
+            return
+        if not self.camera:
+            return
+
+        try:
+            frame = self.camera.snap()
+            self.last_image = self._normalize_frame(frame)
+        except Exception as exc:
+            self.warn(f"Single-frame snap failed: {exc}")
 
     def wait(self, timeout=0):
-        try:
-            while self.abort is not True and self.camera:
-                a = time()
-                res = self._SetNumberKinetics(self.n_kinetics)
-                res = self._StartAcquisition()
-                res = self._GetData(size=1024 * self.n_kinetics * 2)
-                if res == True:
-                    data2D = np.reshape(self.array_real, (-1, 1024))
-                    data2D.astype("int16")
-                    self.treat_orders(data2D)
-                    self.info("Image is received...")
-                else:
-                    self.error(res)
-                    data2D = np.zeros(1024 * self.n_kinetics * 2).reshape(-1, 1024)
-                self.last_image = data2D
-                b = time()
-                self.info(f"Time passed: {b - a}")
-        except Exception as e:
-            self.error(e)
+        while self.abort is not True and self.camera is not None:
+            try:
+                self.camera.wait_for_frame(timeout=1.0, error_on_stopped=False)
+                frame = self.camera.read_newest_image()
+                if frame is None:
+                    continue
+                normalized = self._normalize_frame(frame)
+                self.last_image = normalized
+                self._consume_frame_for_orders(normalized)
+            except Exception as exc:
+                self.warn(f"Andor grabbing loop warning: {exc}")
+                sleep(0.1)
 
     def get_controller_status_local(self) -> Union[int, str]:
-        res = self._GetStatus()
-        if res == True:
-            r = 0
-            if self.status_real == 20073:
-                self.set_state(DevState.ON)
-            elif self.status_real == 20072:
-                self.set_state(DevState.RUNNING)
-            else:
-                self.set_state(DevState.UNKNOWN)
+        if self.camera is None:
+            self.set_state(DevState.OFF)
+            return 0
+        if self.grabbing:
+            self.set_state(DevState.RUNNING)
         else:
-            self.set_state(DevState.FAULT)
-            r = res
-        return r
+            self.set_state(DevState.ON)
+        return 0
 
     def start_grabbing_local(self):
-        sleep(0.5)
-        if not self.grabbing:
-            self.abort = False
-            self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt])
-            self.grabbing_thread.start()
+        if not self.camera:
+            return "Camera is not opened"
+
+        if self.grabbing_thread and self.grabbing_thread.is_alive():
+            return 0
+
+        self.abort = False
+        self._apply_acquisition_mode_settings()
+        self.camera.setup_acquisition(mode="sequence")
+        self.camera.start_acquisition()
+        self.grabbing_thread = Thread(target=self.wait, args=[self.timeoutt], daemon=True)
+        self.grabbing_thread.start()
+        self.set_state(DevState.RUNNING)
         return 0
 
     def stop_grabbing_local(self):
-        res = self._AbortAcquisition()
         self.abort = True
+        if self.camera:
+            try:
+                self.camera.stop_acquisition()
+            except Exception:
+                pass
+        if self.grabbing_thread and self.grabbing_thread.is_alive():
+            self.grabbing_thread.join(timeout=1.0)
+        self.set_state(DevState.ON if self.camera else DevState.OFF)
         return 0
 
     def grabbing_local(self):
-        res = False
-        if self.camera:
-            if self.status_real == 20072:
-                res = True
-        return res
+        return bool(self.grabbing_thread and self.grabbing_thread.is_alive() and not self.abort)
 
     def set_trigger_mode(self, state):
-        self._SetTriggerMode(state)
+        self.trigger_mode_value = int(state)
+        if self.camera:
+            self._apply_trigger_mode(state)
 
     def get_trigger_mode(self) -> int:
-        return self.trigger_mode_value
+        return int(self.trigger_mode_value)
+
+    def set_trigger_source(self, value):
+        self.trigger_source_value = int(value)
+
+    def get_trigger_source(self) -> int:
+        return int(self.trigger_source_value)
+
+    def set_trigger_type(self, value):
+        self.trigger_type_value = int(value)
+
+    def get_trigger_type(self) -> int:
+        return int(self.trigger_type_value)
 
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
-
-    # DLL functions
-    @dll_lock
-    def _Initialize(self, dir="") -> Tuple[bool, str]:
-        """Unsigned int WINAPI Initialize(char* dir)
-        Description         This function will initialize the Andor SDK System. As part of the initialization procedure on
-                            some cameras (i.e. Classic, iStar and earlier iXion) the DLL will need access to a
-                            DETECTOR.INI which contains information relating to the detector head, number pixels,
-                            readout speeds etc. If your system has multiple cameras then see the section Controlling
-                            multiple cameras
-        Parameters          char* dir: Path to the directory containing the files
-        Return              unsigned int
-                            DRV_SUCCESS             Initialisation successful.
-                            DRV_VXDNOTINSTALLED     VxD not loaded.
-                            DRV_INIERROR            Unable to load “DETECTOR.INI”.
-                            DRV_COFERROR            Unable to load “*.COF”.
-                            DRV_FLEXERROR           Unable to load “*.RBF”.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-                            DRV_ERROR_FILELOAD      Unable to load “*.COF” or “*.RBF” files.
-                            DRV_ERROR_PAGELOCK      Unable to acquire lock on requested memory.
-                            DRV_USBERROR            Unable to detect USB device or not USB2.0.
-                            DRV_ERROR_NOCAMERA      No camera found
-        """
-        dir_char = ctypes.c_char_p(dir.encode("utf-8"))
-        res = self.dll.Initialize(dir_char)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _GetCameraSerialNumber(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI GetCameraSerialNumber (int* number)
-        Description         This function will retrieve camera’s serial number.
-        Parameters          int *number: Serial Number.
-        Return              unsigned int
-                            DRV_SUCCESS             Serial Number returned.
-                            DRV_NOT_INITIALIZED     System not initialized.
-        """
-        serial_number = ctypes.c_int(0)
-        res = self.dll.GetCameraSerialNumber(ctypes.byref(serial_number))
-        self.serial_number_real = serial_number.value
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _GetHeadModel(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI GetHeadModel(char* name)
-        Description This function will retrieve the type of CCD attached to your system.
-        Parameters char* name: A user allocated array of characters for storage of the Head Model. This
-        should be declared as size MAX_PATH.
-        Return unsigned int
-        DRV_SUCCESS
-        DRV_NOT_INITIALIZED
-        Name returned.
-        System not initialized.
-        :return:
-        """
-        buf = ctypes.create_string_buffer(260)
-        res = self.dll.GetHeadModel(buf)
-        if res == 20002:
-            self.head_name = buf.value.decode('ascii', errors='ignore')
-            return True
-        else:
-            return self._error_andor(res)
-
-    @dll_lock
-    def _GetNumberPreAmpGains(self):
-        """Unsigned int WINAPI GetNumberPreAmpGains(int* noGains)
-        Description Available in some systems are a number of pre amp gains that can be applied to the
-        data as it is read out. This function gets the number of these pre amp gains available.
-        The functions GetPreAmpGain and SetPreAmpGain can be used to specify which of
-        these gains is to be used.
-        Parameters int* noGains: number of allowed pre amp gains
-        :return:
-        Return unsigned int
-        DRV_SUCCESS
-        DRV_NOT_INITIALIZED
-        DRV_ACQUIRING
-        Number of pre amp gains returned.
-        System not initialized.
-        Acquisition in progress.
-        """
-        nogains = ctypes.c_int()
-        res = self.dll.GetNumberPreAmpGains(ctypes.byref(nogains))
-        if res == 20002:
-            self.n_gains_max = nogains.value - 1
-            return True
-        else:
-            return self._error_andor(res)
-
-    @dll_lock
-    def _GetNumberADChannels(self):
-        """Unsigned int WINAPI GetNumberADChannels(int* channels)
-        Description         As your Andor SDK system may be capable of operating with more than one A-D
-                            converter, this function will tell you the number available.
-        Parameters          int* channels: number of allowed channels
-        Return              unsigned int
-                            DRV_SUCCESS         Number of channels returned
-        """
-        n_ad_channels = ctypes.c_int(0)
-        res = self.dll.GetNumberADChannels(ctypes.byref(n_ad_channels))
-        self.n_ad_channels = n_ad_channels.value
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetKineticCycleTime(self, time: float):
-        """Unsigned int WINAPI SetKineticCycleTime(float time)
-        Description This function will set the kinetic cycle time to the nearest valid value not less than the
-        given value. The actual time used is obtained by GetAcquisitionTimings. . Please refer to
-        SECTION 5 – ACQUISITION MODES for further information.
-        Parameters float time: the kinetic cycle time in seconds.
-        Return unsigned int
-        DRV_SUCCESS
-        DRV_NOT_INITIALIZED
-        DRV_ACQUIRING
-        DRV_P1INVALID
-        Cycle time accepted.
-        System not initialized.
-        Acquisition in progress.
-        Time invalid
-        """
-        res = self.dll.SetKineticCycleTime(ctypes.c_float(time))
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetAcquisitionMode(self, mode: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetAcquisitionMode(int mode)
-            Description         This function will set the acquisition mode to be used on the next StartAcquisition.
-            Parameters          int mode: the acquisition mode.
-            Valid values:
-                                1 Single Scan
-                                2 Accumulate
-                                3 Kinetics
-                                4 Fast Kinetics
-                                5 Run till abort
-            Return              unsigned int
-            DRV_SUCCESS             Acquisition mode set.
-            DRV_NOT_INITIALIZED     System not initialized.
-            DRV_ACQUIRING           Acquisition in progress.
-            DRV_P1INVALID           Acquisition Mode invalid.
-
-        NOTE: In Mode 5 the system uses a “Run Till Abort” acquisition mode. In Mode 5 only, the camera
-        continually acquires data until the AbortAcquisition function is called. By using the SetDriverEvent
-        function you will be notified as each acquisition is completed.
-        """
-        MODES = {
-            1: "Single Scan",
-            2: "Accumulate",
-            3: "Kinetics",
-            4: "Fast Kinetics",
-            5: "Run Till abort",
-        }
-        if mode not in MODES:
-            return self._error_andor(
-                -1, user_def=f"Wrong mode {mode} for SetAcquisitionMode. MODES: {MODES}"
-            )
-        mode = ctypes.c_int(mode)
-        res = self.dll.SetAcquisitionMode(mode)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetExposureTime(self, exp_time: float) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetExposureTime(float time)
-        Description             This function will set the exposure time to the nearest valid value not less than the given
-                                value. The actual exposure time used is obtained by GetAcquisitionTimings. . Please
-                                refer to SECTION 5 – ACQUISITION MODES for further information.
-        Parameters              float time: the exposure time in seconds.
-        Return                  unsigned int
-                                DRV_SUCCESS             Exposure time accepted.
-                                DRV_NOT_INITIALIZED     System not initialized.
-                                DRV_ACQUIRING           Acquisition in progress.
-                                DRV_P1INVALID           Exposure Time invalid.
-        NOTE: For Classics, if the current acquisition mode is Single-Track, Multi-Track or Image then this
-        function will actually set the Shutter Time. The actual exposure time used is obtained from the
-        GetAcquisitionTimings function.
-        """
-        exp_time = ctypes.c_float(exp_time)
-        res = self.dll.SetExposureTime(exp_time)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _GetAcquisitionTimings(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI GetAcquisitionTimings(float* exposure, float* accumulate, float* kinetic)
-        Description This function will return the current “valid” acquisition timing information. This function
-        should be used after all the acquisitions settings have been set, e.g. SetExposureTime,
-        SetKineticCycleTime and SetReadMode etc. The values returned are the actual times
-        used in subsequent acquisitions.
-        This function is required as it is possible to set the exposure time to 20ms, accumulate
-        cycle time to 30ms and then set the readout mode to full image. As it can take 250ms to
-        read out an image it is not possible to have a cycle time of 30ms.
-        Parameters float* exposure: valid exposure time in seconds
-        float* accumulate: valid accumulate cycle time in seconds
-        float* kinetic: valid kinetic cycle time in seconds
-        :return:
-        Return unsigned int
-        DRV_SUCCESS
-        DRV_NOT_INITIALIZED
-        DRV_ACQUIRING
-        DRV_INVALID_MODE
-        Timing information returned.
-        System not initialized.
-        Acquisition in progress.
-        Acquisition or readout mode is not available
-        """
-        exp_time = ctypes.c_float()
-        accumulate_time = ctypes.c_float()
-        kinetic_time = ctypes.c_float()
-        res = self.dll.GetAcquisitionTimings(
-            ctypes.byref(exp_time),
-            ctypes.byref(accumulate_time),
-            ctypes.byref(kinetic_time),
+        self.archive_state["ExposureTime"] = (self.get_exposure_time, "float32")
+        self.archive_state["Temperature"] = (
+            lambda: float(self.temperature_value),
+            "float32",
         )
-        self.exposure_time_local = exp_time.value
-        self.accumulate_time_local = accumulate_time.value
-        self.kinetic_time_local = kinetic_time.value
-        return True if res == 20002 else self._error_andor(res)
 
-    @dll_lock
-    def _SetHSSpeed(self, typ: int, index: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetHSSpeed(int typ, int index)
-        Description         This function will set the speed at which the pixels are shifted into the output node during
-                            the readout phase of an acquisition. Typically your camera will be capable of operating at
-                            several horizontal shift speeds. To get the actual speed that an index corresponds to use
-                            the GetHSSpeed function.
-        Parameters          int typ: output amplification.
-                            Valid values:       0 electron multiplication/Conventional(clara).
-                                                1 conventional/Extended NIR mode(clara).
-                            int index: the horizontal speed to be used
-                            Valid values        0 to GetNumberHSSpeeds()-1
-        Return              unsigned int
-                            DRV_SUCCESS             Horizontal speed set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_P1INVALID           Mode is invalid.
-                            DRV_P2INVALID           Index is out off range
-        """
-        typ = ctypes.c_int(typ)
-        index = ctypes.c_int(index)
-        res = self.dll.SetHSSpeed(typ, index)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetVSSpeed(self, index: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetVSSpeed(int index)
-        Description         This function will set the vertical speed to be used for subsequent acquisitions
-        Parameters          int index: index into the vertical speed table
-                            Valid values 0 to GetNumberVSSpeeds-1
-        Return              unsigned int
-                            DRV_SUCCESS             Vertical speed set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_P1INVALID           Index out of range.
-        """
-        index = ctypes.c_int(index)
-        res = self.dll.SetVSSpeed(index)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetADChannel(self, channel: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetADChannel(int channel)
-        Description     This function will set the AD channel to one of the possible A-Ds of the system. This AD
-                        channel will be used for all subsequent operations performed by the system.
-        Parameters      int index: the channel to be used
-                        Valid values: 0 to GetNumberADChannels-1
-        Return          unsigned int
-                        DRV_SUCCESS     AD channel set.
-                        DRV_P1INVALID   Index is out off range.
-        """
-        channel = ctypes.c_int(channel)
-        res = self.dll.SetADChannel(channel)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetPreAmpGain(self, index: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetPreAmpGain(int index)
-        Description             This function will set the pre amp gain to be used for subsequent acquisitions. The actual
-                                gain factor that will be applied can be found through a call to the GetPreAmpGain
-                                function.
-                                The number of Pre Amp Gains available is found by calling the GetNumberPreAmpGains
-                                function.
-        Parameters              int index: index pre amp gain table
-                                Valid values 0 to GetNumberPreAmpGains-1
-        Return                  unsigned int
-                                DRV_SUCCESS             Pre amp gain set.
-                                DRV_NOT_INITIALIZED     System not initialized.
-                                DRV_ACQUIRING           Acquisition in progress.
-                                DRV_P1INVALID           Index out of range
-        """
-        index = ctypes.c_int(index)
-        res = self.dll.SetPreAmpGain(index)
-        result = True if res == 20002 else self._error_andor(res)
-        if result:
-            self.gain_value = index
-        else:
-            self.gain_value = -1
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetTriggerMode(self, mode: int) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetTriggerMode(int mode)
-        Description         This function will set the trigger mode that the camera will operate in.
-        Parameters          int mode: trigger mode
-        Valid values:
-                            0. Internal
-                            1. External
-                            6. External Start
-                            7. External Exposure (Bulb)
-                            9. External FVB EM (only valid for EM Newton models in FVB mode)
-                            10. Software Trigger
-                            12. External Charge Shifting
-        Return              unsigned int
-                            DRV_SUCCESS             Trigger mode set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_P1INVALID           Trigger mode invalid
-        """
-        MODES = {
-            0: "Internal",
-            1: "External",
-            6: "External Start",
-            7: "External Exposure (Bulb)",
-            9: "External FVB EM (only valid for EM Newton models in FVB mode",
-            10: "Software Trigger",
-            12: "External Charge Shifting",
-        }
-        if mode not in MODES:
-            return self._error_andor(
-                -1, user_def=f"Wrong mode {mode} for SetTriggerMode. MODES: {MODES}"
-            )
-        self.trigger_mode_value = mode
-        mode = ctypes.c_int(mode)
-        res = self.dll.SetTriggerMode(mode)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetFastExtTrigger(self, mode: int) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetFastExtTrigger(int mode)
-        Description         This function will enable fast external triggering. When fast external triggering is enabled
-                            the system will NOT wait until a “Keep Clean” cycle has been completed before
-                            accepting the next trigger. This setting will only have an effect if the trigger mode has
-                            been set to External via SetTriggerMode.
-        Parameters          int mode:
-                            0 Disabled
-                            1 Enabled
-        Return              unsigned int
-                            DRV_SUCCESS         Parameters accepted.
-        """
-        MODES = {0: "Disabled", 1: "Enabled"}
-        if mode not in MODES:
-            return self._error_andor(
-                -1, user_def=f"Wrong mode {mode} for SetFastExtTrigger. MODES: {MODES}"
-            )
-        mode = ctypes.c_int(mode)
-        res = self.dll.SetFastExtTrigger(mode)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetReadMode(self, mode: int) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetReadMode(int mode)
-        Description         This function will set the readout mode to be used on the subsequent acquisitions.
-        Parameters          int mode: readout mode
-                            Valid values:
-                                        0 Full Vertical Binning
-                                        1 Multi-Track
-                                        2 Random-Track
-                                        3 Single-Track
-                                        4 Image
-        Return              unsigned int
-                            DRV_SUCCESS             Readout mode set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_P1INVALID           Invalid readout mode passed.
-        """
-        MODES = {
-            0: "Full Vertical Binning",
-            1: "Multi-Track",
-            2: "Random-Track",
-            3: "Single-Track",
-            4: "Image",
-        }
-        if mode not in MODES:
-            return self._error_andor(
-                -1, user_def=f"Wrong mode {mode} for SetReadMode. MODES: {MODES}"
-            )
-        mode = ctypes.c_int(mode)
-        res = self.dll.SetReadMode(mode)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetMultiTrack(
-        self, typ: int, index: int, offset: int, bottom=0, gap=0
-    ) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetMultiTrack(int number, int height, int offset, int* bottom, int *gap)
-        Description This function will set the multi-Track parameters. The tracks are automatically spread
-        evenly over the detector. Validation of the parameters is carried out in the following
-        order:
-        - Number of tracks,
-        - Track height
-        - Offset.
-        The first pixels row of the first track is returned via ‘bottom’.
-        The number of rows between each track is returned via ‘gap’.
-        Parameters      int number: number tracks
-                        Valid values 1 to number of vertical pixels
-                        int height: height of each track
-                        Valid values >0 (maximum depends on number of tracks)
-                        int offset: vertical displacement of tracks
-                        Valid values depend on number of tracks and track height
-                        int* bottom: first pixels row of the first track
-                        int* gap: number of rows between each track (could be 0)
-                        Return unsigned int
-                                                DRV_SUCCESS             Parameters set.
-                                                DRV_NOT_INITIALIZED     System not initialized.
-                                                DRV_ACQUIRING           Acquisition in progress.
-                                                DRV_P1INVALID           Number of tracks invalid.
-                                                DRV_P2INVALID           Track height invalid.
-                                                DRV_P3INVALID           Offset invalid.
-        """
-        typ = ctypes.c_int(typ)
-        index = ctypes.c_int(index)
-        offset = ctypes.c_int(offset)
-        bottom = ctypes.byref(ctypes.c_int(bottom))
-        gap = ctypes.byref(ctypes.c_int(gap))
-        res = self.dll.SetMultiTrack(typ, index, offset, bottom, gap)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetBaselineClamp(self, state: int) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetBaselineClamp(int state)
-        Description         This function turns on and off the baseline clamp functionality. With this feature enabled
-                            the baseline level of each scan in a kinetic series will be more consistent across the
-                            sequence.
-        Parameters          int state: Enables/Disables Baseline clamp functionality
-                                        1 – Enable Baseline Clamp
-                                        0 – Disable Baseline Clamp
-        Return      unsigned int
-                    DRV_SUCCESS             Parameters set.
-                    DRV_NOT_INITIALIZED     System not initialized.
-                    DRV_ACQUIRING           Acquisition in progress.
-                    DRV_NOT_SUPPORTED       Baseline Clamp not supported on this camera
-                    DRV_P1INVALID           State parameter was not zero or one
-        """
-        state = ctypes.c_int(state)
-        res = self.dll.SetBaselineClamp(state)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetTemperature(self, temperature: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI SetTemperature(int temperature)
-        Description         This function will set the desired temperature of the detector. To turn the cooling ON and
-                            OFF use the CoolerON and CoolerOFF function respectively.
-        Parameters          int temperature: the temperature in Centigrade.
-                            Valid range is given by GetTemperatureRange
-        Return              unsigned int
-                            DRV_SUCCESS             Temperature set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-                            DRV_P1INVALID           Temperature invalid.
-                            DRV_NOT_SUPPORTED       The camera does not support setting the temperature.
-
-            NOTE: Not available on Luca R cameras – automatically cooled to -20.
-        """
-        temperature = ctypes.c_int(temperature)
-        res = self.dll.SetTemperature(temperature)
-        return True if res == 20002 else self._error_andor(res)
-
-    def _SetCooler(self, state: bool):
-        if state:
-            res = self._CoolerON()
-        else:
-            res = self._CoolerOFF()
-        return res
-
-    @dll_lock
-    def _CoolerON(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI CoolerON(void)
-        Description         Switches ON the cooling. On some systems the rate of temperature change is controlled
-                            until the temperature is within 3º of the set value. Control is returned immediately to the
-                            calling application.
-        Parameters          NONE
-        Return              unsigned int
-                            DRV_SUCCESS             Temperature controller switched ON.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-
-        Note:
-            The temperature to which the detector will be cooled is set via SetTemperature. The temperature
-            stabilization is controlled via hardware, and the current temperature can be obtained via
-            GetTemperature. The temperature of the sensor is gradually brought to the desired temperature to
-            ensure no thermal stresses are set up in the sensor.
-            Can be called for certain systems during an acquisition. This can be tested for using
-            GetCapabilities.
-
-        """
-        res = self.dll.CoolerON()
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _CoolerOFF(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI CoolerOFF(void)
-        Description         Switches OFF the cooling. The rate of temperature change is controlled in some models
-                            until the temperature reaches 0º. Control is returned immediately to the calling
-                            application.
-        Parameters          NONE
-        Return              unsigned int
-                            DRV_SUCCESS             Temperature controller switched OFF.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-                            DRV_NOT_SUPPORTED       Camera does not support switching cooler off.
-
-        NOTE: Not available on Luca R cameras – always cooled to -20.
-        NOTE: (Classic & ICCD only)
-            1. When the temperature control is switched off the temperature of the sensor is gradually
-                raised to 0ºC to ensure no thermal stresses are set up in the sensor.
-            2. When closing down the program via ShutDown you must ensure that the temperature of the
-                detector is above -20ºC, otherwise calling ShutDown while the detector is still cooled will
-                cause the temperature to rise faster than certified.
-
-        """
-        res = self.dll.CoolerOFF()
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _ShutDown(self):
-        """Unsigned int WINAPI ShutDown(void)
-        Description         This function will close the AndorMCD system down.
-        Parameters          NONE
-        Return              unsigned int
-                            DRV_SUCCESS         System shut down.
-
-        Note:
-            1. For Classic & ICCD systems, the temperature of the detector should be above -20ºC before
-            shutting down the system.
-            2. When dynamically loading a DLL which is statically linked to the SDK library, ShutDown MUST be
-            called before unloading.
-
-        """
-        res = self.dll.ShutDown()
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _SetNumberKinetics(self, number: int) -> Tuple[int, bool, str]:
-        """Unsigned int WINAPI SetNumberKinetics(int number)
-        Description         This function will set the number of scans (possibly accumulated scans) to be taken
-                            during a single acquisition sequence. This will only take effect if the acquisition mode is
-                            Kinetic Series.
-        Parameters          int number: number of scans to store
-        Return              unsigned int
-                            DRV_SUCCESS             Series length set.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_P1INVALID           Number in series invalid
-        """
-        number = ctypes.c_int(number)
-        res = self.dll.SetNumberKinetics(number)
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _PrepareAcquisition(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI PrepareAcquisition(void)
-        Description     This function reads the current acquisition setup and allocates and configures any
-                        memory that will be used during the acquisition. The function call is not required as it will
-                        be called automatically by the StartAcquisition function if it has not already been called
-                        externally.
-                        However for long kinetic series acquisitions the time to allocate and configure any
-                        memory can be quite long which can result in a long delay between calling
-                        StartAcquisition and the acquisition actually commencing. For iDus, there is an additional
-                        delay caused by the camera being set-up with any new acquisition parameters. Calling
-                        PrepareAcquisition first will reduce this delay in the StartAcquisition call.
-        Parameters      NONE
-        Return          unsigned int
-                        DRV_SUCCESS             Acquisition prepared.
-                        DRV_NOT_INITIALIZED     System not initialized.
-                        DRV_ACQUIRING           Acquisition in progress.
-                        DRV_VXDNOTINSTALLED     VxD not loaded.
-                        DRV_ERROR_ACK           Unable to communicate with card.
-                        DRV_INIERROR            Error reading “DETECTOR.INI”.
-                        DRV_ACQERROR            Acquisition settings invalid.
-                        DRV_ERROR_PAGELOCK      Unable to allocate memory.
-                        DRV_INVALID_FILTER      Filter not available for current acquisition.
-                        DRV_IOCERROR            Integrate On Chip setup error.
-                        DRV_BINNING_ERROR       Range not multiple of horizontal binning.
-                        DRV_SPOOLSETUPERROR     Error with spool settings.
-        """
-        res = self.dll.PrepareAcquisition()
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _StartAcquisition(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI StartAcquisition(void)
-        Description         This function starts an acquisition. The status of the acquisition can be monitored via
-                            GetStatus().
-        Parameters          NONE
-        Return              unsigned int
-                            DRV_SUCCESS             Acquisition started.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_VXDNOTINSTALLED     VxD not loaded.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-                            DRV_INIERROR            Error reading “DETECTOR.INI”.
-                            DRV_ACQERROR            Acquisition settings invalid.
-                            DRV_ERROR_PAGELOCK      Unable to allocate memory.
-                            DRV_INVALID_FILTER      Filter not available for current acquisition.
-                            DRV_BINNING_ERROR       Range not multiple of horizontal binning.
-                            DRV_SPOOLSETUPERROR     Error with spool settings.
-        """
-        res = self.dll.StartAcquisition()
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _GetStatus(self) -> Tuple[bool, str]:
-        """Unsigned int WINAPI GetStatus(int* status)
-        Description         This function will return the current status of the Andor SDK system. This function should
-                            be called before an acquisition is started to ensure that it is IDLE and during an acquisition
-                            to monitor the process.
-        Parameters          int* status: current status
-                            DRV_IDLE   20073                 IDLE waiting on instructions.
-                            DRV_TEMPCYCLE               Executing temperature cycle.
-                            DRV_ACQUIRING    20072           Acquisition in progress.
-                            DRV_ACCUM_TIME_NOT_MET      Unable to meet Accumulate cycle time.
-                            DRV_KINETIC_TIME_NOT_MET    Unable to meet Kinetic cycle time.
-                            DRV_ERROR_ACK   20013            Unable to communicate with card.
-                            DRV_ACQ_BUFFER              Computer unable to read the data via the ISA slot
-                                                        at the required rate.
-                            DRV_ACQ_DOWNFIFO_FULL       Computer unable to read data fast enough to stop
-                                                        camera memory going full.
-                            DRV_SPOOLERROR              Overflow of the spool buffer.
-        Return              unsigned int
-                            DRV_SUCCESS                 Status returned
-                            DRV_NOT_INITIALIZED         System not initialized
-        """
-        status = ctypes.c_int(0)
-        res = self.dll.GetStatus(ctypes.byref(status))
-        self.status_real = status.value
-        return True if res == 20002 else self._error_andor(res)
-
-    def _GetData(self, size: int):
-        i = 0
-        while True:
-            sleep(0.015)
-            self._GetStatus()
-            i += 1
-            if self.status_real == 20073 or i > 100 or self.abort:
-                break
-        if not self.abort:
-            res = self._GetAcquiredData(size)
-        else:
-            res = "Was aborted"
-        return res
-
-    @dll_lock
-    def _GetAcquiredData(self, size: int) -> Tuple[bool, str]:
-        """Unsigned int WINAPI GetAcquiredData(at_32* arr, unsigned long size)
-        Description         This function will return the data from the last acquisition. The data are returned as long
-                            integers (32-bit signed integers). The “array” must be large enough to hold the complete
-                            data set.
-        Parameters          at_32* arr: pointer to data storage allocated by the user.
-                            unsigned long size: total number of pixels.
-        Return              unsigned int
-                            DRV_SUCCESS             Data copied.
-                            DRV_NOT_INITIALIZED     System not initialized.
-                            DRV_ACQUIRING           Acquisition in progress.
-                            DRV_ERROR_ACK           Unable to communicate with card.
-                            DRV_P1INVALID           Invalid pointer (i.e. NULL).
-                            DRV_P2INVALID           Array size is incorrect.
-                            DRV_NO_NEW_DATA         No acquisition has taken place
-        """
-        array = (ctypes.c_int32 * size)()
-        array_p = ctypes.cast(array, ctypes.POINTER(ctypes.c_int32))
-        res = self.dll.GetAcquiredData(array_p, ctypes.c_ulong(size))
-        self.array_real = np.array(array[:])
-        return True if res == 20002 else self._error_andor(res)
-
-    @dll_lock
-    def _AbortAcquisition(self):
-        """Unsigned int WINAPI AbortAcquisition(void)
-        Description This function aborts the current acquisition if one is active.
-        Parameters NONE
-                Return unsigned int
-                DRV_SUCCESS
-                DRV_NOT_INITIALIZED
-                DRV_IDLE
-                DRV_VXDNOTINSTALLED
-                DRV_ERROR_ACK
-        Acquisition aborted.
-        System not initialized.
-        The system is not currently acquiring.
-        VxD not loaded.
-        Unable to communicate with card
-        """
-        res = self.dll.AbortAcquisition()
-        return True if res == 20002 else self._error_andor(res)
-
-    def _error_andor(self, code: int, user_def="") -> str:
-        """:param code: <=0
-        :param type: 0 for Connection error codes, 1 for Function error codes
-        :return: error as string
-        """
-        errors = {
-            20001: "DRV_ERROR_CODES",
-            20002: "DRV_SUCCESS",
-            20003: "DRV_VXDNOTINSTALLED",
-            20004: "DRV_ERROR_SCAN",
-            20005: "DRV_ERROR_CHECK_SUM",
-            20006: "DRV_ERROR_FILELOAD",
-            20007: "DRV_UNKNOWN_FUNCTION",
-            20008: "DRV_ERROR_VXD_INIT",
-            20009: "DRV_ERROR_ADDRESS",
-            20010: "DRV_ERROR_PAGELOCK",
-            20011: "DRV_ERROR_PAGE_UNLOCK",
-            20012: "DRV_ERROR_BOARDTEST",
-            20013: "DRV_ERROR_ACK",
-            20014: "DRV_ERROR_UP_FIFO",
-            20015: "DRV_ERROR_PATTERN",
-            20017: "DRV_ACQUISITION_ERRORS",
-            20018: "DRV_ACQ_BUFFER",
-            20019: "DRV_ACQ_DOWNFIFO_FULL",
-            20020: "DRV_PROG_UNKNOWN_INSTRUCTION",
-            20021: "DRV_ILLEGAL_OP_CODE",
-            20022: "DRV_KINETIC_TIME_NOT_MET",
-            20023: "DRV_ACCUM_TIME_NOT_MET",
-            20024: "DRV_NO_NEW_DATA",
-            20025: "PCI_DMA_FAIL",
-            20026: "DRV_SPOOLERROR",
-            20027: "DRV_SPOOLSETUPERROR",
-            20029: "SATURATED",
-            20033: "DRV_TEMPERATURE_CODES",
-            20034: "DRV_TEMPERATURE_OFF",
-            20035: "DRV_TEMP_NOT_STABILIZED",
-            20036: "DRV_TEMPERATURE_STABILIZED",
-            20037: "DRV_TEMPERATURE_NOT_REACHED",
-            20038: "DRV_TEMPERATURE_OUT_RANGE",
-            20039: "DRV_TEMPERATURE_NOT_SUPPORTED",
-            20040: "DRV_TEMPERATURE_DRIFT",
-            20049: "DRV_GENERAL_ERRORS",
-            20050: "DRV_INVALID_AUX",
-            20051: "DRV_COF_NOTLOADED",
-            20052: "DRV_FPGAPROG",
-            20053: "DRV_FLEXERROR",
-            20054: "DRV_GPIBERROR",
-            20055: "ERROR_DMA_UPLOAD",
-            20064: "DRV_DATATYPE",
-            20065: "DRV_DRIVER_ERRORS",
-            20066: "DRV_P1INVALID",
-            20067: "DRV_P2INVALID",
-            20068: "DRV_P3INVALID",
-            20069: "DRV_P4INVALID",
-            20070: "DRV_INIERROR",
-            20071: "DRV_COFERROR",
-            20072: "DRV_ACQUIRING",
-            20073: "DRV_IDLE",
-            20074: "DRV_TEMPCYCLE",
-            20075: "DRV_NOT_INITIALIZED",
-            20076: "DRV_P5INVALID",
-            20077: "DRV_P6INVALID",
-            20078: "DRV_INVALID_MODE",
-            20079: "DRV_INVALID_FILTER",
-            20080: "DRV_I2CERRORS",
-            20081: "DRV_DRV_I2CDEVNOTFOUND",
-            20082: "DRV_I2CTIMEOUT",
-            20083: "DRV_P7INVALID",
-            20089: "DRV_USBERROR",
-            20090: "DRV_IOCERROR",
-            20091: "DRV_VRMVERSIONERROR",
-            20093: "DRV_USB_INTERRUPT_ENDPOINT_ERROR",
-            20094: "DRV_RANDOM_TRACK_ERROR",
-            20095: "DRV_INVALID_TRIGGER_MODE",
-            20096: "DRV_LOAD_FIRMWARE_ERROR",
-            20097: "DRV_DIVIDE_BY_ZERO_ERROR",
-            20098: "DRV_INVALID_RINGEXPOSURES",
-            20099: "DRV_BINNING_ERROR",
-            20990: "DRV_ERROR_NOCAMERA",
-            20991: "DRV_NOT_SUPPORTED",
-            20992: "DRV_NOT_AVAILABLE",
-            20115: "DRV_ERROR_MAP",
-            20116: "DRV_ERROR_UNMAP",
-            20117: "DRV_ERROR_MDL",
-            20118: "DRV_ERROR_UNMDL",
-            20119: "DRV_ERROR_BUFFSIZE",
-            20121: "DRV_ERROR_NOHANDLE",
-            20130: "DRV_GATING_NOT_AVAILABLE",
-            20131: "DRV_FPGA_VOLTAGE_ERROR",
-            20099: "DRV_BINNING_ERROR",
-            20100: "DRV_INVALID_AMPLIFIER",
-            20101: "DRV_INVALID_COUNTCONVERT_MODE",
-        }
-        res = ""
-        if code not in errors and user_def == "":
-            res = f"Wrong code number {code}"
-        elif user_def != "":
-            res = user_def
-        elif code != 0:
-            res = errors[code]
-        else:
-            res = user_def
-        print(
-            f"Error: {res}, Caller: {inspect.stack()[1].function} : {inspect.stack()[2].function}"
+    def register_order_local(self, name, value):
+        requested_frames = max(1, int(value[0]))
+        self._refresh_wavelengths_axis(expected_width=self.current_width)
+        self.orders[name] = FrameOrderState(
+            order_length=requested_frames,
+            order_done=False,
+            order_timestamp=time(),
+            ready_to_delete=False,
+            order_array=np.array([self.wavelengths_axis_value], dtype=np.float32),
+            frames_done=0,
         )
-        return res
+        return 0
+
+    def give_order_local(self, name):
+        if name in self.orders:
+            order = self.orders[name]
+            order.ready_to_delete = True
+            return np.asarray(order.order_array, dtype=np.float32)
+
+        if self.last_image is None:
+            self.get_image()
+        if self.last_image is None:
+            return np.array([self.wavelengths_axis_value], dtype=np.float32)
+        return np.vstack([self.wavelengths_axis_value, self.last_image]).astype(
+            np.float32
+        )
+
+    @command
+    def RefreshCalibration(self):
+        self._refresh_wavelengths_axis(expected_width=self.current_width)
+
+    @command
+    def TriggerSoftware(self):
+        if not self.camera:
+            raise RuntimeError("Camera is not opened")
+
+        for method_name in ("send_software_trigger", "TriggerSoftware"):
+            method = getattr(self.camera, method_name, None)
+            if callable(method):
+                method()
+                return
+
+        raise RuntimeError("Software trigger is not available for this camera")
+
+    @command
+    def Trigger(self):
+        return self.TriggerSoftware()
 
 
 if __name__ == "__main__":
     DS_ANDOR_CCD.run_server()
-    # Andor_test()
-
-
-
