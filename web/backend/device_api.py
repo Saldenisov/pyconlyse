@@ -933,7 +933,8 @@ def execute_command(device_name, command_name):
         })
     
     except Exception as e:
-        return jsonify({'error': str(e), 'success': False}), 500
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'traceback': traceback.format_exc(), 'success': False}), 500
 
 @device_api.route('/api/device/<path:device_name>/state', methods=['GET'])
 def get_device_state(device_name):

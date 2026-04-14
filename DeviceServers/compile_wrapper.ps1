@@ -176,6 +176,32 @@ Write-Host "✅ Created: DS_Basler_camera.exe" -ForegroundColor Green
             Write-Warning "Failed to compile DS_PSP_wrapper.cs"
         }
     }
+
+    # Also compile DS_ANDOR_CCD if wrapper exists
+    $AndorCCDSource = Join-Path $ScriptPath "DS_ANDOR_CCD_wrapper.cs"
+    $AndorCCDOutput = Join-Path $ScriptPath "DS_ANDOR_CCD.exe"
+    if (Test-Path $AndorCCDSource) {
+        Write-Host "Compiling DS_ANDOR_CCD_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$AndorCCDOutput /target:exe $AndorCCDSource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $AndorCCDOutput)) {
+            Write-Host "✅ Created: DS_ANDOR_CCD.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_ANDOR_CCD_wrapper.cs"
+        }
+    }
+
+    # Also compile DS_ANDOR_SPECTROGRAPH if wrapper exists
+    $AndorSpecSource = Join-Path $ScriptPath "DS_ANDOR_SPECTROGRAPH_wrapper.cs"
+    $AndorSpecOutput = Join-Path $ScriptPath "DS_ANDOR_SPECTROGRAPH.exe"
+    if (Test-Path $AndorSpecSource) {
+        Write-Host "Compiling DS_ANDOR_SPECTROGRAPH_wrapper.cs..." -ForegroundColor Yellow
+        & $CscPath /out:$AndorSpecOutput /target:exe $AndorSpecSource
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $AndorSpecOutput)) {
+            Write-Host "✅ Created: DS_ANDOR_SPECTROGRAPH.exe" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to compile DS_ANDOR_SPECTROGRAPH_wrapper.cs"
+        }
+    }
     
     Write-Host ""
     

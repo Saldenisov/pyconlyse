@@ -14,7 +14,31 @@ Usage:
 
 import os
 import sys
+import signal
 from pathlib import Path
+
+
+def _free_port(port):
+    """Kill any process currently listening on the given port."""
+    try:
+        import psutil
+        for conn in psutil.net_connections(kind='tcp'):
+            if conn.laddr.port == port and conn.pid:
+                try:
+                    proc = psutil.Process(conn.pid)
+                    print(f"Stopping existing server (PID {conn.pid}) on port {port}...")
+                    proc.terminate()
+                    proc.wait(timeout=5)
+                    print(f"Process {conn.pid} stopped.")
+                except Exception as e:
+                    print(f"Warning: could not stop PID {conn.pid}: {e}")
+    except ImportError:
+        # psutil not available — fall back to socket-based detection only
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if s.connect_ex(('127.0.0.1', port)) == 0:
+                print(f"WARNING: port {port} is already in use and psutil is not installed.")
+                print("Install psutil to enable auto-kill: pip install psutil")
 
 # Add the project root to Python path
 project_root = Path(__file__).resolve().parents[1]
@@ -33,8 +57,8 @@ finally:
     os.chdir(original_cwd)
 
 if __name__ == '__main__':
-    os.environ.setdefault('PYCONLYSE_ENFORCE_DEVICE_AUTH', 'true')
-    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '127.0.0.1')
+    os.environ.setdefault('PYCONLYSE_ENFORCE_DEVICE_AUTH', 'false')
+    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '0.0.0.0')
     web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
     print("=" * 60)
     print("PYCONLYSE Web Server - PRODUCTION MODE")
@@ -51,6 +75,8 @@ if __name__ == '__main__':
     print("  - Auto-reload: OFF")
     print(f"  - Device auth enforced: {os.environ.get('PYCONLYSE_ENFORCE_DEVICE_AUTH')}")
     print("=" * 60)
+
+    _free_port(web_port)
 
     try:
         # Run the server in production mode

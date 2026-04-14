@@ -160,6 +160,32 @@ if exist DS_PSP_wrapper.cs (
 )
 
 echo.
+REM Compile ANDOR CCD wrapper if present
+if exist DS_ANDOR_CCD_wrapper.cs (
+    echo Compiling DS_ANDOR_CCD_wrapper.cs...
+    csc /out:DS_ANDOR_CCD.exe /target:exe DS_ANDOR_CCD_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_ANDOR_CCD compilation failed!
+        pause
+        exit /b 1
+    )
+    echo ✓ DS_ANDOR_CCD.exe created successfully!
+)
+
+echo.
+REM Compile ANDOR SPECTROGRAPH wrapper if present
+if exist DS_ANDOR_SPECTROGRAPH_wrapper.cs (
+    echo Compiling DS_ANDOR_SPECTROGRAPH_wrapper.cs...
+    csc /out:DS_ANDOR_SPECTROGRAPH.exe /target:exe DS_ANDOR_SPECTROGRAPH_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_ANDOR_SPECTROGRAPH compilation failed!
+        pause
+        exit /b 1
+    )
+    echo ✓ DS_ANDOR_SPECTROGRAPH.exe created successfully!
+)
+
+echo.
 echo ✓ Compilation successful!
 echo ✓ Created/updated wrappers where sources were present.
 echo.
