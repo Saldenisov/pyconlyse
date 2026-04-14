@@ -4,12 +4,37 @@ import './css/DeviceClients.css';
 import './css/VacuumClients.css';
 
 const MAX_POINTS_PER_CHANNEL = 4000;
+const MIN_LOG_MAGNITUDE = 1e-12;
+const DEFAULT_Y_MIN = 1e-10;
+const DEFAULT_Y_MAX = 1e-2;
+
+const isMeasurementChannel = (channelName) => String(channelName || '').endsWith('/measurement');
+const toLogMagnitude = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+  return Math.max(Math.abs(numeric), MIN_LOG_MAGNITUDE);
+};
+const toPlotTime = (point) => {
+  const recvTs = Number(point?.recv_ts);
+  if (Number.isFinite(recvTs) && recvTs > 0) {
+    return new Date(recvTs * 1000);
+  }
+  const ts = Number(point?.ts);
+  if (Number.isFinite(ts) && ts > 0) {
+    return new Date(ts * 1000);
+  }
+  return null;
+};
 
 const VacuumClients = () => {
   const plotRef = useRef(null);
+  const userYRangeRef = useRef(null);
   const [devices, setDevices] = useState([]);
   const [selectedDeviceName, setSelectedDeviceName] = useState('');
   const [loadedDeviceName, setLoadedDeviceName] = useState('');
+  const [sessionStartMs, setSessionStartMs] = useState(null);
   const [series, setSeries] = useState({});
   const [latestByChannel, setLatestByChannel] = useState({});
   const [sampleCount, setSampleCount] = useState(0);
@@ -22,7 +47,9 @@ const VacuumClients = () => {
   const [visibleChannels, setVisibleChannels] = useState({});
 
   const channelNames = useMemo(
-    () => Object.keys(series).sort((a, b) => a.localeCompare(b)),
+    () => Object.keys(series)
+      .filter((channel) => isMeasurementChannel(channel))
+      .sort((a, b) => a.localeCompare(b)),
     [series]
   );
 
@@ -73,7 +100,15 @@ const VacuumClients = () => {
     }
     setLoadingData(true);
     try {
-      const seconds = Math.max(60, Number(windowMinutes || 30) * 60);
+      const windowSec = Math.max(60, Number(windowMinutes || 30) * 60);
+      const nowMs = Date.now();
+      const elapsedSec = Number.isFinite(sessionStartMs)
+        ? Math.max(1, Math.ceil((nowMs - sessionStartMs) / 1000))
+        : windowSec;
+      const paddingSec = Math.max(2, Math.ceil(Number(refreshSec || 2.0)) + 1);
+      const seconds = elapsedSec < windowSec
+        ? elapsedSec + paddingSec
+        : windowSec + paddingSec;
       const response = await fetch(
         `/api/psp/device/${encodeURIComponent(deviceName)}/group/vacuum/history?seconds=${seconds}&limit=${MAX_POINTS_PER_CHANNEL}`,
         { credentials: 'include' }
@@ -108,12 +143,13 @@ const VacuumClients = () => {
     } finally {
       setLoadingData(false);
     }
-  }, [windowMinutes]);
+  }, [windowMinutes, sessionStartMs, refreshSec]);
 
   const loadSelectedDevice = async () => {
     if (!selectedDeviceName) {
       return;
     }
+    setSessionStartMs(Date.now());
     setLoadedDeviceName(selectedDeviceName);
     await loadVacuumHistory(selectedDeviceName);
   };
@@ -150,18 +186,44 @@ const VacuumClients = () => {
 
     const traces = shownChannels.map((channelName) => {
       const points = Array.isArray(series[channelName]) ? series[channelName] : [];
+      const plotPoints = points
+        .map((point) => {
+          const magnitude = toLogMagnitude(point.value);
+          const plotTime = toPlotTime(point);
+          if (magnitude === null || !plotTime) {
+            return null;
+          }
+          return {
+            x: plotTime,
+            y: magnitude,
+            rawValue: Number(point.value),
+          };
+        })
+        .filter(Boolean);
+
       return {
         name: channelName,
         type: 'scattergl',
-        mode: 'lines',
+        mode: plotPoints.length > 1 ? 'lines+markers' : 'markers',
         line: { width: 1.4 },
-        x: points.map((point) => new Date(Number(point.ts) * 1000)),
-        y: points.map((point) => Number(point.value)),
+        marker: { size: plotPoints.length > 1 ? 5 : 8 },
+        x: plotPoints.map((point) => point.x),
+        y: plotPoints.map((point) => point.y),
+        customdata: plotPoints.map((point) => [point.rawValue]),
+        hovertemplate:
+          '%{fullData.name}<br>' +
+          'Time: %{x}<br>' +
+          '|value|: %{y:.3e}<br>' +
+          'raw: %{customdata[0]:.3e}<extra></extra>',
       };
     });
 
     const now = Date.now();
-    const rangeStart = now - Math.max(1, Number(windowMinutes || 30)) * 60 * 1000;
+    const windowMs = Math.max(1, Number(windowMinutes || 30)) * 60 * 1000;
+    const baseStartMs = Number.isFinite(sessionStartMs) ? sessionStartMs : now;
+    const initialEndMs = baseStartMs + windowMs;
+    const rangeEndMs = now < initialEndMs ? initialEndMs : now;
+    const rangeStartMs = now < initialEndMs ? baseStartMs : rangeEndMs - windowMs;
 
     Plotly.react(
       node,
@@ -174,12 +236,17 @@ const VacuumClients = () => {
         xaxis: {
           title: 'Time',
           type: 'date',
-          range: [new Date(rangeStart), new Date(now)],
+          range: [new Date(rangeStartMs), new Date(rangeEndMs)],
           showgrid: true,
           gridcolor: '#e8eef5',
         },
         yaxis: {
-          title: 'Value',
+          title: '|Value|',
+          type: 'log',
+          range: userYRangeRef.current || [Math.log10(DEFAULT_Y_MIN), Math.log10(DEFAULT_Y_MAX)],
+          tickmode: 'array',
+          tickvals: [1e-10, 1e-9, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4, 1e-3, 1e-2],
+          ticktext: ['10^-10', '10^-9', '10^-8', '10^-7', '10^-6', '10^-5', '10^-4', '10^-3', '10^-2'],
           showgrid: true,
           gridcolor: '#e8eef5',
         },
@@ -194,14 +261,36 @@ const VacuumClients = () => {
         modeBarButtonsToRemove: ['lasso2d', 'select2d'],
       }
     );
-  }, [series, shownChannels, windowMinutes]);
+  }, [series, shownChannels, windowMinutes, sessionStartMs]);
 
   useEffect(() => {
     const node = plotRef.current;
-    return () => {
-      if (node) {
-        Plotly.purge(node);
+    if (!node) {
+      return undefined;
+    }
+
+    const handleRelayout = (eventData) => {
+      if (!eventData || typeof eventData !== 'object') {
+        return;
       }
+
+      if (Object.prototype.hasOwnProperty.call(eventData, 'yaxis.autorange') && eventData['yaxis.autorange']) {
+        userYRangeRef.current = null;
+        return;
+      }
+
+      const y0 = eventData['yaxis.range[0]'];
+      const y1 = eventData['yaxis.range[1]'];
+      if (Number.isFinite(y0) && Number.isFinite(y1)) {
+        userYRangeRef.current = [y0, y1];
+      }
+    };
+
+    node.on('plotly_relayout', handleRelayout);
+
+    return () => {
+      node.removeListener?.('plotly_relayout', handleRelayout);
+      Plotly.purge(node);
     };
   }, []);
 
@@ -318,8 +407,8 @@ const VacuumClients = () => {
                       {latestRows.map((row) => (
                         <tr key={row.channel}>
                           <td>{row.channel}</td>
-                          <td>{Number(row.value).toExponential(6)}</td>
-                          <td>{row.ts ? new Date(Number(row.ts) * 1000).toLocaleTimeString() : 'n/a'}</td>
+                          <td>{toLogMagnitude(row.value)?.toExponential(6) || 'n/a'}</td>
+                          <td>{toPlotTime(row)?.toLocaleTimeString() || 'n/a'}</td>
                         </tr>
                       ))}
                       {latestRows.length === 0 && (
