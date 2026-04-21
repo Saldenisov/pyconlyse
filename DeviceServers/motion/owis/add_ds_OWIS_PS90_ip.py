@@ -28,12 +28,12 @@ def _delay_lines() -> dict[int, dict]:
         2: {
             "device_name": "manip/VD2/DLs_VD2",
             "friendly_name": "Sample holder VD2",
-            "drive_current": 2.5,
-            "hold_current": 0.5,
+            "drive_current": 2.75,
+            "hold_current": 0.4,
             "keep_on": False,
             "gear_ratio": 1,
             "pitch": 1,
-            "speed": 5.0,
+            "speed": 3.5,
             "acceleration": 4000,
             "revolution": 200,
             "limit_min": -40.0,
@@ -69,7 +69,7 @@ def main() -> None:
         description="Register DS_OWIS_PS90_IP — OWIS PS90 Tango DS over direct TCP/IP."
     )
     parser.add_argument("--device-name", default="manip/general/DS_OWIS_PS90_IP")
-    parser.add_argument("--instance", default="IP")
+    parser.add_argument("--instance", default="2_IP")
     parser.add_argument("--server-id", default="3")
     parser.add_argument("--device-id", default="3")
     parser.add_argument("--friendly-name", default="DS_OWIS_PS90_IP")

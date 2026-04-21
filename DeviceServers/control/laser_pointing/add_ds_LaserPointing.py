@@ -96,7 +96,9 @@ names = {
             "ActuatorX4": "manip/V0/mm4_x",
             "ActuatorY4": "manip/V0/mm4_y",
             "HalfWavePlate1": "manip/V0/L-2_1",
-            "TranslationStage1": ("manip/general/DS_OWIS_PS90", [2]),
+            # Route through the OWIS Aggregator: axis 3 is the long delay line
+            # (backed by DS_OWIS_PS90_IP - the 3-axis TCP controller).
+            "TranslationStage1": ("manip/general/DS_OWIS_Aggregator", [3]),
         },
         od(
             {
@@ -120,7 +122,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, 0),
+                    "TranslationStage1": (3, 0),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 40,
                 },
@@ -130,7 +132,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, 0),
+                    "TranslationStage1": (3, 0),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 20,
                 },
@@ -140,7 +142,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, 0),
+                    "TranslationStage1": (3, 0),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 10,
                 },
@@ -150,7 +152,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, -700),
+                    "TranslationStage1": (3, -700),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 40,
                 },
@@ -160,7 +162,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, -700),
+                    "TranslationStage1": (3, -700),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 20,
                 },
@@ -170,7 +172,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
-                    "TranslationStage1": (2, -700),
+                    "TranslationStage1": (3, -700),
                     "CrimpingDiaphragm1": 30,
                     "CrimpingDiaphragm2": 10,
                 },
@@ -180,7 +182,7 @@ names = {
                     "Shutter2": -1,
                     "MainLaserDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
-                    "TranslationStage1": (2, 0),
+                    "TranslationStage1": (3, 0),
                     "CrimpingDiaphragm1": 100,
                     "CrimpingDiaphragm2": 100,
                 },
@@ -205,7 +207,9 @@ names = {
             "ActuatorX4": "manip/V0/mm4_x",
             "ActuatorY4": "manip/V0/mm4_y",
             "HalfWavePlate1": "manip/V0/L-2_1",
-            "TranslationStage1": ("manip/general/DS_OWIS_PS90", [4]),
+            # Route through the OWIS Aggregator: axis 3 is the long delay line
+            # (backed by DS_OWIS_PS90_IP - the 3-axis TCP controller).
+            "TranslationStage1": ("manip/general/DS_OWIS_Aggregator", [3]),
         },
         od(
             {

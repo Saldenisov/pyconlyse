@@ -23,6 +23,7 @@ def get_class_match():
     try:
         from DeviceServers.cameras.basler.DS_Basler_camera import DS_Basler_camera
         from DeviceServers.cameras.basler.DS_BASLER_Widget import Basler_camera
+        from DeviceServers.motion.owis.DS_OWIS_Aggregator import DS_OWIS_Aggregator
         from DeviceServers.motion.owis.DS_OWIS_PS90 import DS_OWIS_PS90
         from DeviceServers.motion.owis.DS_OWIS_widget import OWIS_motor
         from DeviceServers.motion.standa.DS_Standa_Motor import DS_Standa_Motor
@@ -42,6 +43,7 @@ def get_class_match():
             DS_Basler_camera.__name__: Basler_camera,
             DS_Netio_pdu.__name__: Netio_pdu,
             DS_OWIS_PS90.__name__: OWIS_motor,
+            DS_OWIS_Aggregator.__name__: OWIS_motor,
             DS_Standa_Motor.__name__: Standa_motor,
             DS_TopDirect_Motor.__name__: TopDirect_Motor,
             DS_KEYSIGHT_33509B.__name__: Keysight_33509B,
