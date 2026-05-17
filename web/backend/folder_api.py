@@ -1,5 +1,7 @@
 import os
 import platform
+import re
+import socket
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
@@ -7,8 +9,11 @@ from flask import Blueprint, jsonify, request
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
 MACOS_TREATMENT_ROOT = Path("/dev/DATA/VD2")
+MACOS_TREATMENT_ROOT_BASE = Path("/dev/DATA")
 WINDOWS_TREATMENT_ROOT = "E:/VD2"
+WINDOWS_TREATMENT_ROOT_BASE = "E:/"
 FALLBACK_ALLOWED_ROOT = Path.home() / "TreatmentData"
+WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:[\\/]")
 
 
 def get_default_allowed_root():
@@ -18,6 +23,20 @@ def get_default_allowed_root():
     if system_name == "darwin":
         return str(MACOS_TREATMENT_ROOT)
     return str(FALLBACK_ALLOWED_ROOT)
+
+
+def get_treatment_root_base():
+    env_base = os.environ.get("PYCONLYSE_TREATMENT_ROOT_BASE")
+    if env_base:
+        return env_base
+
+    system_name = platform.system().lower()
+    hostname = socket.gethostname().lower()
+    if system_name == "windows" or hostname.startswith("everest"):
+        return WINDOWS_TREATMENT_ROOT_BASE
+    if system_name == "darwin":
+        return str(MACOS_TREATMENT_ROOT_BASE)
+    return str(FALLBACK_ALLOWED_ROOT.parent)
 
 
 def get_allowed_root():
@@ -32,11 +51,48 @@ def _normalize_path(path):
     return os.path.abspath(os.path.expanduser(str(path).strip()))
 
 
+def _looks_like_windows_path(path):
+    return bool(WINDOWS_DRIVE_RE.match(str(path).strip()))
+
+
+def _normalize_for_compare(path, prefer_windows=False):
+    raw_path = os.path.expanduser(str(path).strip())
+    use_windows = prefer_windows or _looks_like_windows_path(raw_path)
+    if use_windows:
+        import ntpath
+
+        return ntpath.normcase(ntpath.abspath(raw_path))
+    return os.path.normcase(_normalize_path(raw_path))
+
+
 def _is_within_root(path, allowed_root):
+    prefer_windows = _looks_like_windows_path(path) or _looks_like_windows_path(allowed_root)
     try:
-        return os.path.commonpath([_normalize_path(path), _normalize_path(allowed_root)]) == _normalize_path(allowed_root)
+        if prefer_windows:
+            import ntpath
+
+            normalized_path = _normalize_for_compare(path, prefer_windows=True)
+            normalized_root = _normalize_for_compare(allowed_root, prefer_windows=True)
+            return ntpath.commonpath([normalized_path, normalized_root]) == normalized_root
+        return os.path.commonpath([
+            _normalize_for_compare(path),
+            _normalize_for_compare(allowed_root),
+        ]) == _normalize_for_compare(allowed_root)
     except ValueError:
         return False
+
+
+def set_allowed_root(root_path):
+    normalized = _normalize_path(root_path)
+    root_base = get_treatment_root_base()
+    if not _is_within_root(root_path, root_base):
+        raise ValueError(f"Treatment root must be inside {root_base}")
+    if not os.path.isdir(normalized):
+        raise ValueError("Treatment root does not exist")
+
+    os.environ["PYCONLYSE_TREATMENT_ROOT"] = normalized
+    os.environ["PYCONLYSE_ALLOWED_ROOT"] = normalized
+    return normalized
 
 def build_folder_tree(root_path, include_files=False):
     """

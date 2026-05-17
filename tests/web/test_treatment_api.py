@@ -33,7 +33,9 @@ def _write_dat(file_path, data, wavelengths=None, timedelays=None):
 
 @pytest.fixture
 def client(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
     session_store.reset()
 
     app = Flask(__name__)
@@ -102,6 +104,41 @@ def test_set_folder_and_list_files(client):
             "supported": h5_supported,
         },
     ]
+
+
+def test_update_treatment_root_from_session_endpoint(client):
+    test_client, tmp_path = client
+    new_root = tmp_path / "VD2"
+    new_root.mkdir()
+
+    response = test_client.post(
+        "/api/treatment/session/root",
+        json={"allowed_root": str(new_root)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["allowed_root"] == str(new_root)
+    assert payload["allowed_root_exists"] is True
+    assert payload["session"]["folder_path"] == str(new_root)
+    assert payload["session"]["save_folder"] == str(new_root)
+    assert payload["session"]["paths"] == {}
+
+
+def test_update_treatment_root_rejects_paths_outside_root_base(client, tmp_path):
+    test_client, _ = client
+    outside_root = tmp_path.parent / "outside_vd2"
+    outside_root.mkdir(exist_ok=True)
+
+    response = test_client.post(
+        "/api/treatment/session/root",
+        json={"allowed_root": str(outside_root)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert payload["success"] is False
+    assert "Treatment root must be inside" in payload["error"]
 
 
 def test_assign_file_and_update_config(client):
@@ -583,7 +620,9 @@ def test_cleaning_file_save_endpoint_uses_explicit_file_path(client, monkeypatch
 
 
 def test_treatment_sessions_are_isolated_per_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
     session_store.reset()
 
     app = Flask(__name__)
@@ -626,7 +665,9 @@ def test_treatment_sessions_are_isolated_per_client(tmp_path, monkeypatch):
 
 
 def test_treatment_sessions_are_isolated_per_header(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
     session_store.reset()
 
     app = Flask(__name__)

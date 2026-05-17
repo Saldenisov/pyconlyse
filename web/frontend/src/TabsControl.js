@@ -392,6 +392,7 @@ const TabsControl = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
   const [draftSaveFileName, setDraftSaveFileName] = useState('');
+  const [draftAllowedRoot, setDraftAllowedRoot] = useState('');
   const [draftKineticsRanges, setDraftKineticsRanges] = useState('');
   const [draftSpectraRanges, setDraftSpectraRanges] = useState('');
   const [cleaningAngleThreshold, setCleaningAngleThreshold] = useState('1.0');
@@ -480,10 +481,11 @@ const TabsControl = () => {
     }
     setDraftSaveFolder(session.save_folder || '');
     setDraftSaveFileName(session.save_file_name || '');
+    setDraftAllowedRoot(treatment?.allowed_root || '');
     setCleaningOutputName((current) => (
       current || (session.active_data_type ? `${session.active_data_type.toLowerCase()}_cleaned.h5` : '')
     ));
-  }, [session]);
+  }, [session, treatment?.allowed_root]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
     setError('');
@@ -539,6 +541,34 @@ const TabsControl = () => {
       }),
       true
     );
+  };
+
+  const handleAllowedRootChange = async () => {
+    if (!draftAllowedRoot || draftAllowedRoot === treatment.allowed_root) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/root', {
+        allowed_root: draftAllowedRoot,
+      });
+      setTreatment(payload);
+      setDraftAllowedRoot(payload.allowed_root || '');
+      setPreview(null);
+      setCleaningSummary(null);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      await refreshFolderListing(payload.session.folder_path || payload.allowed_root);
+      setOperationMessage(`Data root set to ${payload.allowed_root}.`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
   };
 
   const handleAssignFile = (filePath) => {
@@ -845,6 +875,26 @@ const TabsControl = () => {
               />
             </div>
             <div className="zone files-folder">
+              <div style={{ marginBottom: '12px' }}>
+                <label>
+                  Data Root
+                  <input
+                    type="text"
+                    value={draftAllowedRoot}
+                    onChange={(event) => setDraftAllowedRoot(event.target.value)}
+                    placeholder={treatment.allowed_root || 'E:/VD2'}
+                    style={{ width: '100%', marginTop: '4px' }}
+                  />
+                </label>
+                <div style={{ marginTop: '8px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <button onClick={handleAllowedRootChange} disabled={isBusy || !draftAllowedRoot}>
+                    Apply Data Root
+                  </button>
+                  <span>
+                    <strong>Allowed Base:</strong> {treatment.treatment_root_base}
+                  </span>
+                </div>
+              </div>
               <div className="folder-selection-header">
                 <button onClick={() => setIsModalOpen(true)}>Select Folder</button>
                 <button

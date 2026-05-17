@@ -6,7 +6,7 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 
-from folder_api import get_allowed_root
+from folder_api import get_allowed_root, get_treatment_root_base, set_allowed_root
 from treatment_service import TreatmentDataService
 
 treatment_api = Blueprint("treatment_api", __name__, url_prefix="/api/treatment")
@@ -272,6 +272,7 @@ def _session_payload(session_id: str) -> Dict[str, object]:
         "session": session,
         "allowed_root": allowed_root,
         "allowed_root_exists": os.path.isdir(allowed_root),
+        "treatment_root_base": _normalize_path(get_treatment_root_base()),
         "exp_types": EXP_TYPES,
         "data_types": DATA_TYPES,
         "calc_modes": CALC_MODES,
@@ -319,6 +320,24 @@ def update_session_config():
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
         return _error(str(exc), session_id)
+    return _json_response(_session_payload(session_id), session_id)
+
+
+@treatment_api.route("/session/root", methods=["POST"])
+def update_session_root():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    root_path = payload.get("allowed_root") or payload.get("root_path")
+    if not root_path:
+        return _error("allowed_root is required", session_id)
+
+    try:
+        set_allowed_root(str(root_path))
+        session_store.reset()
+        treatment_service.reset_runtime()
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
     return _json_response(_session_payload(session_id), session_id)
 
 
