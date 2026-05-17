@@ -54,6 +54,7 @@ def test_session_defaults_follow_allowed_root(client):
     assert payload["success"] is True
     assert payload["session_id"]
     assert payload["allowed_root"] == str(tmp_path)
+    assert payload["allowed_root_exists"] is True
     assert payload["session"]["folder_path"] == str(tmp_path)
     assert payload["session"]["save_folder"] == str(tmp_path)
     assert payload["exp_types"] == ["HIS", "HIS+NOISE", "ABS+BASE+NOISE"]

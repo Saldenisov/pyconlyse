@@ -9,7 +9,7 @@ BACKEND = ROOT / "web" / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from folder_api import folder_api
+from folder_api import folder_api, get_allowed_root, get_default_allowed_root
 
 
 def _make_client(tmp_path, monkeypatch):
@@ -52,3 +52,25 @@ def test_folder_contents_reports_missing_folder(tmp_path, monkeypatch):
 
     assert response.status_code == 404
     assert payload["error"] == "Folder not found"
+
+
+def test_default_allowed_root_follows_platform(monkeypatch):
+    monkeypatch.delenv("PYCONLYSE_TREATMENT_ROOT", raising=False)
+    monkeypatch.delenv("PYCONLYSE_ALLOWED_ROOT", raising=False)
+
+    monkeypatch.setattr("folder_api.platform.system", lambda: "Windows")
+    assert get_default_allowed_root() == "E:/VD2"
+    assert get_allowed_root() == "E:/VD2"
+
+    monkeypatch.setattr("folder_api.platform.system", lambda: "Darwin")
+    assert get_default_allowed_root() == "/dev/DATA/VD2"
+    assert get_allowed_root() == "/dev/DATA/VD2"
+
+
+def test_treatment_root_env_takes_precedence(tmp_path, monkeypatch):
+    allowed_root = tmp_path / "allowed"
+    treatment_root = tmp_path / "vd2"
+    monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(allowed_root))
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(treatment_root))
+
+    assert get_allowed_root() == str(treatment_root)

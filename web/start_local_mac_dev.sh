@@ -16,11 +16,9 @@ export PYCONLYSE_FRONTEND_PORT="${PYCONLYSE_FRONTEND_PORT:-3000}"
 export PYCONLYSE_WEB_DEBUG="${PYCONLYSE_WEB_DEBUG:-true}"
 export PYCONLYSE_JWT_COOKIE_SECURE="${PYCONLYSE_JWT_COOKIE_SECURE:-false}"
 export PYCONLYSE_ENFORCE_DEVICE_AUTH="${PYCONLYSE_ENFORCE_DEVICE_AUTH:-false}"
-export PYCONLYSE_ALLOWED_ROOT="${PYCONLYSE_ALLOWED_ROOT:-$HOME/TreatmentData}"
+export PYCONLYSE_ALLOWED_ROOT="${PYCONLYSE_ALLOWED_ROOT:-/dev/DATA/VD2}"
 export BROWSER="${BROWSER:-none}"
 export PORT="${PORT:-${PYCONLYSE_FRONTEND_PORT}}"
-
-mkdir -p "${PYCONLYSE_ALLOWED_ROOT}"
 
 backend_pid=""
 frontend_pid=""
@@ -100,6 +98,9 @@ echo "============================================================"
 echo "Conda env:   ${CONDA_ENV}"
 echo "TANGO_HOST:  ${TANGO_HOST}"
 echo "Data Root:   ${PYCONLYSE_ALLOWED_ROOT}"
+if [[ ! -d "${PYCONLYSE_ALLOWED_ROOT}" ]]; then
+    echo "[warn] Data root does not exist yet. Override PYCONLYSE_ALLOWED_ROOT if VD2 is elsewhere."
+fi
 echo "Backend:     http://${PYCONLYSE_WEB_HOST}:${PYCONLYSE_WEB_PORT}"
 echo "Frontend:    http://localhost:${PORT}"
 echo "Stop:        Ctrl+C"

@@ -266,10 +266,12 @@ def _session_payload(session_id: str) -> Dict[str, object]:
     session["required_data_types"] = list(required_data_types)
     session["missing_data_types"] = missing_data_types
     session["ready_for_calc"] = len(missing_data_types) == 0
+    allowed_root = _normalize_path(get_allowed_root())
     return {
         "session_id": session_id,
         "session": session,
-        "allowed_root": _normalize_path(get_allowed_root()),
+        "allowed_root": allowed_root,
+        "allowed_root_exists": os.path.isdir(allowed_root),
         "exp_types": EXP_TYPES,
         "data_types": DATA_TYPES,
         "calc_modes": CALC_MODES,

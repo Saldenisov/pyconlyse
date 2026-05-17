@@ -24,6 +24,8 @@ sys.path.insert(0, str(project_root))
 backend_dir = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_dir))
 
+from folder_api import get_default_allowed_root
+
 # Local dev defaults: backend runs on the Mac, Tango stays remote.
 os.environ.setdefault("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000")
 os.environ.setdefault("TANGO_HOST", os.environ["PYCONLYSE_TANGO_HOST"])
@@ -32,9 +34,9 @@ os.environ.setdefault("PYCONLYSE_WEB_PORT", "5000")
 os.environ.setdefault("PYCONLYSE_WEB_DEBUG", "true")
 os.environ.setdefault("PYCONLYSE_JWT_COOKIE_SECURE", "false")
 os.environ.setdefault("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
-os.environ.setdefault("PYCONLYSE_ALLOWED_ROOT", str(Path.home() / "TreatmentData"))
+os.environ.setdefault("PYCONLYSE_ALLOWED_ROOT", get_default_allowed_root())
 
-Path(os.environ["PYCONLYSE_ALLOWED_ROOT"]).mkdir(parents=True, exist_ok=True)
+data_root = Path(os.environ["PYCONLYSE_ALLOWED_ROOT"])
 
 original_cwd = os.getcwd()
 try:
@@ -57,6 +59,8 @@ if __name__ == "__main__":
     print("Frontend:   http://localhost:3000  (run 'npm --prefix web/frontend start')")
     print(f"TANGO_HOST: {tango_host}")
     print(f"Data Root:  {os.environ['PYCONLYSE_ALLOWED_ROOT']}")
+    if not data_root.exists():
+        print("Data Root:  not found yet; set PYCONLYSE_ALLOWED_ROOT if VD2 is elsewhere.")
     print("=" * 60)
 
     socketio.run(

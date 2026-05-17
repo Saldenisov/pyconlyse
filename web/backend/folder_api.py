@@ -1,15 +1,31 @@
 import os
+import platform
 from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
-DEFAULT_ALLOWED_ROOT = Path.home() / "TreatmentData"
+MACOS_TREATMENT_ROOT = Path("/dev/DATA/VD2")
+WINDOWS_TREATMENT_ROOT = "E:/VD2"
+FALLBACK_ALLOWED_ROOT = Path.home() / "TreatmentData"
+
+
+def get_default_allowed_root():
+    system_name = platform.system().lower()
+    if system_name == "windows":
+        return WINDOWS_TREATMENT_ROOT
+    if system_name == "darwin":
+        return str(MACOS_TREATMENT_ROOT)
+    return str(FALLBACK_ALLOWED_ROOT)
 
 
 def get_allowed_root():
-    return os.environ.get("PYCONLYSE_ALLOWED_ROOT", str(DEFAULT_ALLOWED_ROOT))
+    return (
+        os.environ.get("PYCONLYSE_TREATMENT_ROOT")
+        or os.environ.get("PYCONLYSE_ALLOWED_ROOT")
+        or get_default_allowed_root()
+    )
 
 
 def _normalize_path(path):

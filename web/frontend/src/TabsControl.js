@@ -858,6 +858,11 @@ const TabsControl = () => {
                 <strong>Current Folder:</strong>{' '}
                 {session.folder_path || treatment.allowed_root}
               </p>
+              {!treatment.allowed_root_exists && (
+                <p>
+                  <strong>Data Root:</strong> not found on this server.
+                </p>
+              )}
               <p>
                 <strong>Status:</strong> {session.status_label}
               </p>
@@ -1056,6 +1061,10 @@ const TabsControl = () => {
           <div className="tab-panel">
             <p>
               <strong>Allowed Root:</strong> {treatment.allowed_root}
+            </p>
+            <p>
+              <strong>Root Available:</strong>{' '}
+              {treatment.allowed_root_exists ? 'Yes' : 'No'}
             </p>
             <p>
               <strong>Save Target:</strong>{' '}
