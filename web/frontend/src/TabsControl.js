@@ -583,6 +583,40 @@ const TabsControl = () => {
     );
   };
 
+  const handleAutoAssignFiles = async () => {
+    if (!session?.folder_path) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/auto-assign', {
+        folder_path: session.folder_path,
+      });
+      setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      const assignedTypes = Object.keys(payload.auto_assigned || {});
+      const missingTypes = payload.auto_assign_missing || [];
+      if (assignedTypes.length > 0) {
+        setOperationMessage(
+          `Auto assigned ${assignedTypes.join(', ')}${
+            missingTypes.length > 0 ? `; missing ${missingTypes.join(', ')}` : ''
+          }.`
+        );
+      } else {
+        setOperationMessage('No matching ABS/BASE/NOISE files found in this folder.');
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const handlePreview = async (dataType) => {
     setError('');
     setIsBusy(true);
@@ -902,6 +936,13 @@ const TabsControl = () => {
                   style={{ marginLeft: '10px' }}
                 >
                   Refresh
+                </button>
+                <button
+                  onClick={handleAutoAssignFiles}
+                  disabled={isBusy || !session.folder_path}
+                  style={{ marginLeft: '10px' }}
+                >
+                  Auto Assign
                 </button>
               </div>
               <p style={{ marginTop: '10px' }}>

@@ -79,6 +79,36 @@ def _default_state() -> Dict[str, object]:
     }
 
 
+def _file_data_type_candidate(file_name: str, exp_type: str) -> Optional[str]:
+    stem = Path(file_name).stem.upper()
+    if stem.startswith("NOISE"):
+        return "NOISE"
+    if exp_type == "ABS+BASE+NOISE":
+        if stem.startswith("BASE"):
+            return "BASE"
+        if stem.startswith("ABS"):
+            return "ABS"
+    elif exp_type == "HIS+NOISE":
+        if stem.startswith("ABS"):
+            return "ABS+BASE"
+    elif exp_type == "HIS":
+        if stem.startswith("ABS"):
+            return "ABS+BASE+NOISE"
+    return None
+
+
+def _candidate_rank(file_path: Path) -> tuple:
+    suffix = file_path.suffix.lower()
+    suffix_rank = {
+        ".h5": 0,
+        ".his": 1,
+        ".img": 2,
+        ".dat": 3,
+        ".raw": 4,
+    }.get(suffix, 99)
+    return (suffix_rank, file_path.name.lower())
+
+
 class TreatmentSessionStore:
     def __init__(self):
         self._lock = Lock()
@@ -374,6 +404,61 @@ def set_session_path():
         return _error(str(exc), session_id)
 
     return _json_response(_session_payload(session_id), session_id)
+
+
+@treatment_api.route("/session/auto-assign", methods=["POST"])
+def auto_assign_session_paths():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    folder = payload.get("folder_path") or session_store.snapshot(session_id).get("folder_path")
+    if not folder:
+        return _error("folder_path is required", session_id)
+
+    try:
+        normalized_folder = _ensure_within_allowed_root(str(folder))
+    except ValueError as exc:
+        return _error(str(exc), session_id, 403)
+
+    if not os.path.isdir(normalized_folder):
+        return _error("Folder does not exist", session_id, 404)
+
+    session = session_store.snapshot(session_id)
+    exp_type = str(session.get("exp_type"))
+    required_data_types = REQUIRED_DATA_TYPES.get(exp_type, [])
+    supported_suffixes = set(treatment_service.supported_suffixes)
+    candidates: Dict[str, List[Path]] = {data_type: [] for data_type in required_data_types}
+
+    with os.scandir(normalized_folder) as entries:
+        for entry in entries:
+            if not entry.is_file():
+                continue
+            file_path = Path(entry.path)
+            if file_path.suffix.lower() not in supported_suffixes:
+                continue
+            data_type = _file_data_type_candidate(entry.name, exp_type)
+            if data_type in candidates:
+                candidates[data_type].append(file_path)
+
+    assigned: Dict[str, str] = {}
+    try:
+        session_store.set_folder(session_id, normalized_folder)
+        for data_type in required_data_types:
+            matches = sorted(candidates.get(data_type, []), key=_candidate_rank)
+            if not matches:
+                continue
+            selected_path = matches[0]
+            session_store.set_data_path(session_id, data_type, str(selected_path))
+            assigned[data_type] = str(selected_path)
+        treatment_service.reset_runtime(session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    response_payload = _session_payload(session_id)
+    response_payload["auto_assigned"] = assigned
+    response_payload["auto_assign_missing"] = [
+        data_type for data_type in required_data_types if data_type not in assigned
+    ]
+    return _json_response(response_payload, session_id)
 
 
 @treatment_api.route("/session/selection", methods=["POST"])

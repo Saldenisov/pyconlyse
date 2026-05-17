@@ -179,6 +179,65 @@ def test_assign_file_and_update_config(client):
     assert config_payload["session"]["ready_for_calc"] is False
 
 
+def test_auto_assign_abs_base_noise_files_from_current_folder(client):
+    test_client, tmp_path = client
+    data_dir = tmp_path / "run_auto"
+    data_dir.mkdir()
+    abs_path = data_dir / "ABS001.dat"
+    base_path = data_dir / "BASE001.dat"
+    noise_path = data_dir / "NOISE001.dat"
+    _write_dat(abs_path, np.array([[1.0, 2.0], [3.0, 4.0]]))
+    _write_dat(base_path, np.array([[2.0, 3.0], [4.0, 5.0]]))
+    _write_dat(noise_path, np.array([[0.1, 0.2], [0.3, 0.4]]))
+    (data_dir / "notes.txt").write_text("ignored", encoding="ascii")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/auto-assign",
+        json={"folder_path": str(data_dir)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["auto_assigned"] == {
+        "ABS": str(abs_path),
+        "BASE": str(base_path),
+        "NOISE": str(noise_path),
+    }
+    assert payload["auto_assign_missing"] == []
+    assert payload["session"]["ready_for_calc"] is True
+
+
+def test_auto_assign_his_noise_uses_abs_base_plus_noise(client):
+    test_client, tmp_path = client
+    data_dir = tmp_path / "run_his_noise"
+    data_dir.mkdir()
+    abs_base_path = data_dir / "ABS010.his"
+    noise_path = data_dir / "NOISE010.img"
+    abs_base_path.write_text("placeholder", encoding="ascii")
+    noise_path.write_text("placeholder", encoding="ascii")
+
+    response = test_client.post(
+        "/api/treatment/session/auto-assign",
+        json={"folder_path": str(data_dir)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["session"]["exp_type"] == "HIS+NOISE"
+    assert payload["auto_assigned"] == {
+        "ABS+BASE": str(abs_base_path),
+        "NOISE": str(noise_path),
+    }
+    assert payload["auto_assign_missing"] == []
+    assert payload["session"]["ready_for_calc"] is True
+
+
 def test_rejects_selected_data_type_incompatible_with_exp_type(client):
     test_client, _ = client
 
