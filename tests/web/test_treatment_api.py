@@ -1,5 +1,6 @@
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -29,6 +30,50 @@ def _write_dat(file_path, data, wavelengths=None, timedelays=None):
     payload[1:, 0] = timedelays
     payload[1:, 1:] = data.transpose()
     np.savetxt(file_path, payload, delimiter="\t", fmt="%.4f")
+
+
+def _measurement(data, wavelengths=None, timedelays=None, time_scale="ps"):
+    array = np.asarray(data, dtype=float)
+    return SimpleNamespace(
+        data=array,
+        wavelengths=np.asarray(
+            wavelengths if wavelengths is not None else np.arange(array.shape[0], dtype=float),
+            dtype=float,
+        ),
+        timedelays=np.asarray(
+            timedelays if timedelays is not None else np.arange(array.shape[1], dtype=float),
+            dtype=float,
+        ),
+        time_scale=time_scale,
+    )
+
+
+def _critical_info(file_path, number_maps, wavelengths=None, timedelays=None):
+    wavelengths = np.asarray(wavelengths if wavelengths is not None else [500.0, 550.0])
+    timedelays = np.asarray(timedelays if timedelays is not None else [1.0, 2.0])
+    return SimpleNamespace(
+        file_path=file_path,
+        number_maps=number_maps,
+        wavelengths=wavelengths,
+        timedelays=timedelays,
+        wavelengths_length=len(wavelengths),
+        timedelays_length=len(timedelays),
+        scaling_yunit="ps",
+        header="fake HIS",
+    )
+
+
+class FakeHisOpener:
+    def __init__(self, pairs):
+        self._pairs = list(pairs)
+        self.paths = {}
+
+    def read_map(self, _file_path, map_index):
+        flat_maps = [measurement for pair in self._pairs for measurement in pair]
+        return flat_maps[map_index], ""
+
+    def give_pair_maps(self, _file_path):
+        return list(self._pairs)
 
 
 @pytest.fixture
@@ -213,6 +258,80 @@ def test_cache_and_assign_copies_file_to_server_cache(client):
 
     assert preview_response.status_code == 200
     assert preview_payload["preview"]["sample"] == [[1.0, 2.0], [3.0, 4.0]]
+
+
+def test_his_cache_preview_calculate_and_save_flow(client, monkeypatch):
+    test_client, tmp_path = client
+    his_path = tmp_path / "ABS001.his"
+    his_path.write_text("fake his payload", encoding="ascii")
+    pair_opener = FakeHisOpener(
+        [
+            (
+                _measurement([[2.0, 2.0], [2.0, 2.0]]),
+                _measurement([[4.0, 4.0], [4.0, 4.0]]),
+            ),
+            (
+                _measurement([[3.0, 3.0], [3.0, 3.0]]),
+                _measurement([[6.0, 6.0], [6.0, 6.0]]),
+            ),
+        ]
+    )
+
+    def fake_get_opener_and_info(path):
+        info = _critical_info(path, 4)
+        pair_opener.paths[path] = info
+        return pair_opener, info
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "_get_opener_and_info",
+        fake_get_opener_and_info,
+    )
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={
+            "exp_type": "HIS",
+            "selected_data_type": "ABS+BASE+NOISE",
+            "calc_mode": "averaged",
+        },
+    )
+    assert config_response.status_code == 200
+
+    assign_response = test_client.post(
+        "/api/treatment/session/cache-path",
+        json={"data_type": "ABS+BASE+NOISE", "file_path": str(his_path)},
+    )
+    assign_payload = assign_response.get_json()
+
+    assert assign_response.status_code == 200
+    assert assign_payload["session"]["ready_for_calc"] is True
+    assert Path(assign_payload["cached_file"]["cached_path"]).is_file()
+
+    preview_response = test_client.get(
+        "/api/treatment/preview",
+        query_string={"data_type": "ABS+BASE+NOISE", "map_index": 0},
+    )
+    preview_payload = preview_response.get_json()
+
+    assert preview_response.status_code == 200
+    assert preview_payload["preview"]["data_shape"] == [2, 2]
+    assert preview_payload["preview"]["sample"] == [[2.0, 2.0], [2.0, 2.0]]
+
+    calc_response = test_client.post("/api/treatment/calc-abs")
+    calc_payload = calc_response.get_json()
+    expected = np.log10(np.full((2, 2), 2.0, dtype=float))
+
+    assert calc_response.status_code == 200
+    assert calc_payload["session"]["result_ready"] is True
+    assert calc_payload["session"]["result_shape"] == [2, 2]
+    assert np.allclose(np.asarray(calc_payload["result"]["sample"]), expected)
+
+    save_response = test_client.post("/api/treatment/save")
+    save_payload = save_response.get_json()
+
+    assert save_response.status_code == 200
+    assert Path(save_payload["saved"]["save_path"]).is_file()
 
 
 def test_auto_assign_abs_base_noise_files_from_current_folder(client):

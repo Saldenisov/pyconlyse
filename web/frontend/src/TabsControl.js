@@ -39,6 +39,16 @@ function isSamCleanableFile(file) {
   return SAM_CLEANABLE_SUFFIXES.has(suffix);
 }
 
+function treatmentModeHint(expType) {
+  if (expType === 'HIS') {
+    return 'HIS mode: select/cache one ABS*.his file as ABS+BASE+NOISE. The file provides ABS/BASE pairs.';
+  }
+  if (expType === 'HIS+NOISE') {
+    return 'HIS+NOISE mode: assign ABS*.his as ABS+BASE and assign a separate NOISE file.';
+  }
+  return 'ABS+BASE+NOISE mode: assign separate ABS, BASE, and NOISE files.';
+}
+
 function shouldApplyAutoPreset(sessionState, preset) {
   if (!sessionState || !preset) {
     return false;
@@ -411,6 +421,7 @@ const TabsControl = () => {
     session?.required_data_types || requiredDataTypesForExpType(session?.exp_type);
   const assignableDataTypes =
     requiredDataTypes && requiredDataTypes.length > 0 ? requiredDataTypes : treatment?.data_types || [];
+  const canAverageNoise = requiredDataTypes.includes('NOISE');
 
   const refreshSession = async () => {
     const payload = await fetchTreatmentSession(treatmentSessionId);
@@ -991,6 +1002,9 @@ const TabsControl = () => {
                 <strong>Required Inputs:</strong>{' '}
                 {requiredDataTypes.length > 0 ? requiredDataTypes.join(', ') : 'n/a'}
               </p>
+              <p>
+                <strong>Mode Hint:</strong> {treatmentModeHint(session.exp_type)}
+              </p>
               {session.missing_data_types && session.missing_data_types.length > 0 && (
                 <p>
                   <strong>Missing:</strong> {session.missing_data_types.join(', ')}
@@ -1066,10 +1080,10 @@ const TabsControl = () => {
               <h3>Assigned Inputs</h3>
               <AssignedPaths session={session} onPreview={handlePreview} />
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button onClick={handleAverageNoise} disabled={isBusy}>
+                <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
                   Average Noise
                 </button>
-                <button onClick={handleCalcAbs} disabled={isBusy}>
+                <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc}>
                   Calculate OD
                 </button>
                 <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
