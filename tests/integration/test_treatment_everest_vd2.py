@@ -18,6 +18,7 @@ from treatment_api import session_store, treatment_api, treatment_service
 
 DEFAULT_EVEREST_ROOT = "E:/Data/DATA_VD2"
 DEFAULT_EVEREST_HOST = "10.20.30.202"
+DEFAULT_EVEREST_NETBIOS = "Everest"
 
 
 def _everest_root_candidates():
@@ -28,8 +29,12 @@ def _everest_root_candidates():
     system_name = platform.system().lower()
     if system_name == "windows":
         host = os.environ.get("PYCONLYSE_EVEREST_HOST", DEFAULT_EVEREST_HOST)
+        netbios = os.environ.get("PYCONLYSE_EVEREST_NETBIOS", DEFAULT_EVEREST_NETBIOS)
         yield Path(DEFAULT_EVEREST_ROOT)
+        yield Path(rf"\\{netbios}\e\Data\DATA_VD2")
+        yield Path(rf"\\{netbios}\E\Data\DATA_VD2")
         yield Path(rf"\\{host}\E\Data\DATA_VD2")
+        yield Path(rf"\\{host}\e\Data\DATA_VD2")
         yield Path(rf"\\{host}\Data\DATA_VD2")
         yield Path(rf"\\{host}\DATA_VD2")
         return
