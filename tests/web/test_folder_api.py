@@ -65,8 +65,8 @@ def test_default_allowed_root_follows_platform(monkeypatch):
     monkeypatch.delenv("PYCONLYSE_ALLOWED_ROOT", raising=False)
 
     monkeypatch.setattr("folder_api.platform.system", lambda: "Windows")
-    assert get_default_allowed_root() == "E:/VD2"
-    assert get_allowed_root() == "E:/VD2"
+    assert get_default_allowed_root() == "E:/Data/DATA_VD2"
+    assert get_allowed_root() == "E:/Data/DATA_VD2"
 
     monkeypatch.setattr("folder_api.platform.system", lambda: "Darwin")
     assert get_default_allowed_root() == "/dev/DATA/VD2"

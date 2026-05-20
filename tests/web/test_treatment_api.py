@@ -36,6 +36,11 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(tmp_path))
     monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT_BASE", str(tmp_path))
+    monkeypatch.setenv(
+        "PYCONLYSE_TREATMENT_CACHE_DIR",
+        str(tmp_path.parent / f"{tmp_path.name}_treatment_cache"),
+    )
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_CACHE_LIMIT_BYTES", str(1024 * 1024))
     session_store.reset()
 
     app = Flask(__name__)
@@ -57,6 +62,8 @@ def test_session_defaults_follow_allowed_root(client):
     assert payload["session_id"]
     assert payload["allowed_root"] == str(tmp_path)
     assert payload["allowed_root_exists"] is True
+    assert payload["cache_root"]
+    assert payload["cache_limit_bytes"] == 1024 * 1024
     assert payload["session"]["folder_path"] == str(tmp_path)
     assert payload["session"]["save_folder"] == str(tmp_path)
     assert payload["exp_types"] == ["HIS", "HIS+NOISE", "ABS+BASE+NOISE"]
@@ -177,6 +184,35 @@ def test_assign_file_and_update_config(client):
     assert config_payload["session"]["required_data_types"] == ["ABS", "BASE", "NOISE"]
     assert config_payload["session"]["missing_data_types"] == ["BASE", "NOISE"]
     assert config_payload["session"]["ready_for_calc"] is False
+
+
+def test_cache_and_assign_copies_file_to_server_cache(client):
+    test_client, tmp_path = client
+    data_file = tmp_path / "ABS001.dat"
+    _write_dat(data_file, np.array([[1.0, 2.0], [3.0, 4.0]]))
+
+    response = test_client.post(
+        "/api/treatment/session/cache-path",
+        json={"data_type": "ABS", "file_path": str(data_file)},
+    )
+    payload = response.get_json()
+    cached_path = Path(payload["cached_file"]["cached_path"])
+
+    assert response.status_code == 200
+    assert cached_path.is_file()
+    assert cached_path != data_file
+    assert payload["session"]["paths"]["ABS"] == str(cached_path)
+    assert payload["cached_file"]["source_path"] == str(data_file)
+    assert payload["cached_file"]["cache"]["size_bytes"] >= data_file.stat().st_size
+
+    preview_response = test_client.get(
+        "/api/treatment/preview",
+        query_string={"data_type": "ABS", "map_index": 0},
+    )
+    preview_payload = preview_response.get_json()
+
+    assert preview_response.status_code == 200
+    assert preview_payload["preview"]["sample"] == [[1.0, 2.0], [3.0, 4.0]]
 
 
 def test_auto_assign_abs_base_noise_files_from_current_folder(client):

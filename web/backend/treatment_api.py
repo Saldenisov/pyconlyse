@@ -7,6 +7,12 @@ from uuid import uuid4
 from flask import Blueprint, jsonify, request
 
 from folder_api import get_allowed_root, get_treatment_root_base, set_allowed_root
+from treatment_file_cache import (
+    cache_file,
+    get_cache_limit_bytes,
+    get_cache_root,
+    is_within_cache,
+)
 from treatment_service import TreatmentDataService
 
 treatment_api = Blueprint("treatment_api", __name__, url_prefix="/api/treatment")
@@ -45,6 +51,15 @@ def _ensure_within_allowed_root(path: str) -> str:
     normalized = _normalize_path(path)
     if not _is_within_allowed_root(normalized):
         raise ValueError("Path is outside the allowed treatment root")
+    return normalized
+
+
+def _ensure_readable_treatment_file(path: str) -> str:
+    normalized = _normalize_path(path)
+    if not (_is_within_allowed_root(normalized) or is_within_cache(normalized)):
+        raise ValueError("Path is outside the allowed treatment root and treatment cache")
+    if not os.path.isfile(normalized):
+        raise ValueError("Selected file does not exist")
     return normalized
 
 
@@ -214,9 +229,7 @@ class TreatmentSessionStore:
         if data_type not in DATA_TYPES:
             raise ValueError(f"Unsupported data_type '{data_type}'")
 
-        normalized = _ensure_within_allowed_root(file_path)
-        if not os.path.isfile(normalized):
-            raise ValueError("Selected file does not exist")
+        normalized = _ensure_readable_treatment_file(file_path)
 
         with self._lock:
             state = self._get_or_create_state(session_id)
@@ -303,6 +316,8 @@ def _session_payload(session_id: str) -> Dict[str, object]:
         "allowed_root": allowed_root,
         "allowed_root_exists": os.path.isdir(allowed_root),
         "treatment_root_base": _normalize_path(get_treatment_root_base()),
+        "cache_root": str(get_cache_root()),
+        "cache_limit_bytes": get_cache_limit_bytes(),
         "exp_types": EXP_TYPES,
         "data_types": DATA_TYPES,
         "calc_modes": CALC_MODES,
@@ -404,6 +419,30 @@ def set_session_path():
         return _error(str(exc), session_id)
 
     return _json_response(_session_payload(session_id), session_id)
+
+
+@treatment_api.route("/session/cache-path", methods=["POST"])
+def cache_and_set_session_path():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    data_type = payload.get("data_type")
+    file_path = payload.get("file_path")
+    if not data_type or not file_path:
+        return _error("data_type and file_path are required", session_id)
+
+    try:
+        source_path = _ensure_within_allowed_root(str(file_path))
+        if not os.path.isfile(source_path):
+            raise ValueError("Selected file does not exist")
+        cached = cache_file(source_path)
+        session_store.set_data_path(session_id, str(data_type), str(cached["cached_path"]))
+        treatment_service.reset_runtime(session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    response_payload = _session_payload(session_id)
+    response_payload["cached_file"] = cached
+    return _json_response(response_payload, session_id)
 
 
 @treatment_api.route("/session/auto-assign", methods=["POST"])
@@ -534,7 +573,7 @@ def get_file_info():
         return _error("file_path or data_type is required", session_id)
 
     try:
-        normalized = _ensure_within_allowed_root(file_path)
+        normalized = _ensure_readable_treatment_file(file_path)
         file_info = treatment_service.get_file_info(Path(normalized))
     except ValueError as exc:
         return _error(str(exc), session_id)
@@ -558,7 +597,7 @@ def preview_file():
         return _error("map_index must be an integer", session_id)
 
     try:
-        normalized = _ensure_within_allowed_root(file_path)
+        normalized = _ensure_readable_treatment_file(file_path)
         preview = treatment_service.get_preview(Path(normalized), map_index=map_index)
     except ValueError as exc:
         return _error(str(exc), session_id)
@@ -695,7 +734,7 @@ def save_sam_cleaning_for_file():
     output_file_name = str(payload.get("output_file_name") or "")
 
     try:
-        normalized = _ensure_within_allowed_root(str(raw_file_path))
+        normalized = _ensure_readable_treatment_file(str(raw_file_path))
         saved = treatment_service.save_file_sam_cleaned_h5(
             Path(normalized),
             angle_threshold,

@@ -10,7 +10,7 @@ folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
 MACOS_TREATMENT_ROOT = Path("/dev/DATA/VD2")
 MACOS_TREATMENT_ROOT_BASE = Path("/dev/DATA")
-WINDOWS_TREATMENT_ROOT = "E:/VD2"
+WINDOWS_TREATMENT_ROOT = "E:/Data/DATA_VD2"
 WINDOWS_TREATMENT_ROOT_BASE = "E:/"
 FALLBACK_ALLOWED_ROOT = Path.home() / "TreatmentData"
 WINDOWS_DRIVE_RE = re.compile(r"^[A-Za-z]:[\\/]")

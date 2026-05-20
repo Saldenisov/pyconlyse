@@ -583,6 +583,32 @@ const TabsControl = () => {
     );
   };
 
+  const handleCacheAssignFile = async (filePath) => {
+    if (!session) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/cache-path', {
+        data_type: session.selected_data_type,
+        file_path: filePath,
+      });
+      setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      const cachedPath = payload.cached_file?.cached_path || filePath;
+      setOperationMessage(`Cached and assigned ${session.selected_data_type}: ${cachedPath}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const handleAutoAssignFiles = async () => {
     if (!session?.folder_path) {
       return;
@@ -916,7 +942,7 @@ const TabsControl = () => {
                     type="text"
                     value={draftAllowedRoot}
                     onChange={(event) => setDraftAllowedRoot(event.target.value)}
-                    placeholder={treatment.allowed_root || 'E:/VD2'}
+                    placeholder={treatment.allowed_root || 'E:/Data/DATA_VD2'}
                     style={{ width: '100%', marginTop: '4px' }}
                   />
                 </label>
@@ -927,6 +953,10 @@ const TabsControl = () => {
                   <span>
                     <strong>Allowed Base:</strong> {treatment.treatment_root_base}
                   </span>
+                </div>
+                <div style={{ marginTop: '6px', color: '#475467', fontSize: '0.9rem' }}>
+                  <strong>Cache:</strong> {treatment.cache_root} (
+                  {Math.round((treatment.cache_limit_bytes || 0) / 1024 / 1024)} MB limit)
                 </div>
               </div>
               <div className="folder-selection-header">
@@ -1014,6 +1044,12 @@ const TabsControl = () => {
                         disabled={!file.supported || isBusy}
                       >
                         Assign as {session.selected_data_type}
+                      </button>
+                      <button
+                        onClick={() => handleCacheAssignFile(file.path)}
+                        disabled={!file.supported || isBusy}
+                      >
+                        Cache & Assign
                       </button>
                       <button
                         onClick={() => handleCleaningFileSave(file.path)}
