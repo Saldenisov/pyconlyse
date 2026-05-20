@@ -6,7 +6,12 @@ from uuid import uuid4
 
 from flask import Blueprint, jsonify, request
 
-from folder_api import get_allowed_root, get_treatment_root_base, set_allowed_root
+from folder_api import (
+    get_allowed_root,
+    get_treatment_root_base,
+    get_treatment_root_bases,
+    set_allowed_root,
+)
 from treatment_file_cache import (
     cache_file,
     get_cache_limit_bytes,
@@ -316,6 +321,7 @@ def _session_payload(session_id: str) -> Dict[str, object]:
         "allowed_root": allowed_root,
         "allowed_root_exists": os.path.isdir(allowed_root),
         "treatment_root_base": _normalize_path(get_treatment_root_base()),
+        "treatment_root_bases": [_normalize_path(root_base) for root_base in get_treatment_root_bases()],
         "cache_root": str(get_cache_root()),
         "cache_limit_bytes": get_cache_limit_bytes(),
         "exp_types": EXP_TYPES,

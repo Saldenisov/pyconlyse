@@ -10,6 +10,7 @@ folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
 MACOS_TREATMENT_ROOT = Path("/dev/DATA/VD2")
 MACOS_TREATMENT_ROOT_BASE = Path("/dev/DATA")
+MACOS_TREATMENT_ROOT_BASES = [Path("/dev/DATA"), Path("/Volumes")]
 WINDOWS_TREATMENT_ROOT = "E:/Data/DATA_VD2"
 WINDOWS_TREATMENT_ROOT_BASE = "E:/"
 FALLBACK_ALLOWED_ROOT = Path.home() / "TreatmentData"
@@ -26,17 +27,21 @@ def get_default_allowed_root():
 
 
 def get_treatment_root_base():
+    return get_treatment_root_bases()[0]
+
+
+def get_treatment_root_bases():
     env_base = os.environ.get("PYCONLYSE_TREATMENT_ROOT_BASE")
     if env_base:
-        return env_base
+        return [item for item in env_base.split(os.pathsep) if item]
 
     system_name = platform.system().lower()
     hostname = socket.gethostname().lower()
     if system_name == "windows" or hostname.startswith("everest"):
-        return WINDOWS_TREATMENT_ROOT_BASE
+        return [WINDOWS_TREATMENT_ROOT_BASE]
     if system_name == "darwin":
-        return str(MACOS_TREATMENT_ROOT_BASE)
-    return str(FALLBACK_ALLOWED_ROOT.parent)
+        return [str(path) for path in MACOS_TREATMENT_ROOT_BASES]
+    return [str(FALLBACK_ALLOWED_ROOT.parent)]
 
 
 def get_allowed_root():
@@ -84,9 +89,9 @@ def _is_within_root(path, allowed_root):
 
 def set_allowed_root(root_path):
     normalized = _normalize_path(root_path)
-    root_base = get_treatment_root_base()
-    if not _is_within_root(root_path, root_base):
-        raise ValueError(f"Treatment root must be inside {root_base}")
+    root_bases = get_treatment_root_bases()
+    if not any(_is_within_root(root_path, root_base) for root_base in root_bases):
+        raise ValueError(f"Treatment root must be inside one of: {', '.join(root_bases)}")
     if not os.path.isdir(normalized):
         raise ValueError("Treatment root does not exist")
 

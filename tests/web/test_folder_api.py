@@ -14,6 +14,7 @@ from folder_api import (
     get_allowed_root,
     get_default_allowed_root,
     get_treatment_root_base,
+    get_treatment_root_bases,
     set_allowed_root,
 )
 
@@ -92,6 +93,10 @@ def test_treatment_root_base_limits_windows_and_everest(monkeypatch):
     monkeypatch.setattr("folder_api.platform.system", lambda: "Linux")
     monkeypatch.setattr("folder_api.socket.gethostname", lambda: "everest")
     assert get_treatment_root_base() == "E:/"
+
+    monkeypatch.setattr("folder_api.platform.system", lambda: "Darwin")
+    monkeypatch.setattr("folder_api.socket.gethostname", lambda: "macbook")
+    assert get_treatment_root_bases() == ["/dev/DATA", "/Volumes"]
 
 
 def test_set_allowed_root_must_stay_inside_runtime_base(tmp_path, monkeypatch):

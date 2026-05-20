@@ -962,7 +962,8 @@ const TabsControl = () => {
                     Apply Data Root
                   </button>
                   <span>
-                    <strong>Allowed Base:</strong> {treatment.treatment_root_base}
+                    <strong>Allowed Bases:</strong>{' '}
+                    {(treatment.treatment_root_bases || [treatment.treatment_root_base]).join(', ')}
                   </span>
                 </div>
                 <div style={{ marginTop: '6px', color: '#475467', fontSize: '0.9rem' }}>
