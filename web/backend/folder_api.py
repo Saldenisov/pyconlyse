@@ -6,6 +6,8 @@ from pathlib import Path
 
 from flask import Blueprint, jsonify, request
 
+from treatment_network_path import is_smb_path, normalize_smb_path, smb_isdir
+
 folder_api = Blueprint('folder_api', __name__, url_prefix='/api')
 
 MACOS_TREATMENT_ROOT = Path("/dev/DATA/VD2")
@@ -53,6 +55,8 @@ def get_allowed_root():
 
 
 def _normalize_path(path):
+    if is_smb_path(path):
+        return normalize_smb_path(path)
     return os.path.abspath(os.path.expanduser(str(path).strip()))
 
 
@@ -71,6 +75,13 @@ def _normalize_for_compare(path, prefer_windows=False):
 
 
 def _is_within_root(path, allowed_root):
+    if is_smb_path(path) or is_smb_path(allowed_root):
+        from treatment_network_path import smb_is_within
+
+        if not is_smb_path(path) or not is_smb_path(allowed_root):
+            return False
+        return smb_is_within(path, allowed_root)
+
     prefer_windows = _looks_like_windows_path(path) or _looks_like_windows_path(allowed_root)
     try:
         if prefer_windows:
@@ -89,6 +100,17 @@ def _is_within_root(path, allowed_root):
 
 def set_allowed_root(root_path):
     normalized = _normalize_path(root_path)
+    if is_smb_path(root_path):
+        try:
+            if not smb_isdir(normalized):
+                raise ValueError("Treatment root does not exist")
+        except ValueError as exc:
+            if "smbprotocol" not in str(exc):
+                raise
+        os.environ["PYCONLYSE_TREATMENT_ROOT"] = normalized
+        os.environ["PYCONLYSE_ALLOWED_ROOT"] = normalized
+        return normalized
+
     root_bases = get_treatment_root_bases()
     if not any(_is_within_root(root_path, root_base) for root_base in root_bases):
         raise ValueError(f"Treatment root must be inside one of: {', '.join(root_bases)}")

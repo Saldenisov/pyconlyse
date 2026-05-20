@@ -12,6 +12,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from folder_api import folder_api
+import folder_api as folder_api_module
 import treatment_api as treatment_api_module
 from treatment_api import session_store, treatment_api
 
@@ -177,6 +178,63 @@ def test_update_treatment_root_from_session_endpoint(client):
     assert payload["session"]["paths"] == {}
 
 
+def test_smb_treatment_root_lists_network_files(client, monkeypatch):
+    test_client, _tmp_path = client
+    smb_root = r"\\Everest\e\Data\DATA_VD2"
+    normalized_root = "smb://Everest/e/Data/DATA_VD2"
+
+    monkeypatch.setattr(folder_api_module, "smb_isdir", lambda path: path == normalized_root)
+    monkeypatch.setattr(treatment_api_module, "smb_isdir", lambda path: path == normalized_root)
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_listdir",
+        lambda _folder: [
+            {
+                "name": "run_001",
+                "path": f"{normalized_root}/run_001",
+                "is_dir": True,
+                "is_file": False,
+            },
+            {
+                "name": "ABS001.his",
+                "path": f"{normalized_root}/ABS001.his",
+                "is_dir": False,
+                "is_file": True,
+            },
+        ],
+    )
+
+    root_response = test_client.post(
+        "/api/treatment/session/root",
+        json={"allowed_root": smb_root},
+    )
+    root_payload = root_response.get_json()
+
+    assert root_response.status_code == 200
+    assert root_payload["allowed_root"] == normalized_root
+    assert root_payload["allowed_root_exists"] is True
+    assert root_payload["session"]["folder_path"] == normalized_root
+
+    listing_response = test_client.get(
+        "/api/treatment/files",
+        query_string={"folder": normalized_root},
+    )
+    listing_payload = listing_response.get_json()
+
+    assert listing_response.status_code == 200
+    assert listing_payload["folders"] == [
+        {"name": "run_001", "path": f"{normalized_root}/run_001"}
+    ]
+    assert listing_payload["files"] == [
+        {
+            "name": "ABS001.his",
+            "path": f"{normalized_root}/ABS001.his",
+            "suffix": ".his",
+            "supported": True,
+        }
+    ]
+
+
 def test_update_treatment_root_rejects_paths_outside_root_base(client, tmp_path):
     test_client, _ = client
     outside_root = tmp_path.parent / "outside_vd2"
@@ -258,6 +316,45 @@ def test_cache_and_assign_copies_file_to_server_cache(client):
 
     assert preview_response.status_code == 200
     assert preview_payload["preview"]["sample"] == [[1.0, 2.0], [3.0, 4.0]]
+
+
+def test_cache_and_assign_copies_smb_file_to_server_cache(client, monkeypatch):
+    test_client, _tmp_path = client
+    smb_root = "smb://Everest/e/Data/DATA_VD2"
+    smb_file = f"{smb_root}/ABS001.his"
+
+    monkeypatch.setattr(folder_api_module, "smb_isdir", lambda path: path == smb_root)
+    monkeypatch.setattr(treatment_api_module, "smb_isdir", lambda path: path == smb_root)
+    monkeypatch.setattr(treatment_api_module, "smb_isfile", lambda path: path == smb_file)
+
+    def fake_copy_smb_file_to_local(_source_path, target_path):
+        Path(target_path).write_bytes(b"fake his")
+        return len(b"fake his")
+
+    monkeypatch.setattr(
+        treatment_api_module,
+        "copy_smb_file_to_local",
+        fake_copy_smb_file_to_local,
+    )
+
+    root_response = test_client.post(
+        "/api/treatment/session/root",
+        json={"allowed_root": r"\\Everest\e\Data\DATA_VD2"},
+    )
+    assert root_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/cache-path",
+        json={"data_type": "ABS+BASE+NOISE", "file_path": smb_file},
+    )
+    payload = response.get_json()
+    cached_path = Path(payload["cached_file"]["cached_path"])
+
+    assert response.status_code == 200
+    assert cached_path.is_file()
+    assert cached_path.read_bytes() == b"fake his"
+    assert payload["cached_file"]["source_path"] == smb_file
+    assert payload["session"]["paths"]["ABS+BASE+NOISE"] == str(cached_path)
 
 
 def test_his_cache_preview_calculate_and_save_flow(client, monkeypatch):

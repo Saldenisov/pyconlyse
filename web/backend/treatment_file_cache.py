@@ -40,6 +40,11 @@ def _source_digest(source_path: Path) -> str:
     return hashlib.sha256(payload).hexdigest()[:20]
 
 
+def _source_id_digest(source_id: str) -> str:
+    payload = str(source_id).encode("utf-8", errors="surrogateescape")
+    return hashlib.sha256(payload).hexdigest()[:20]
+
+
 def _iter_cache_files(cache_root: Path) -> Iterable[Path]:
     if not cache_root.exists():
         return []
@@ -143,6 +148,35 @@ def cache_file(
         "source_path": str(source),
         "cached_path": str(target),
         "copied": needs_copy,
+        "size_bytes": int(target.stat().st_size),
+        "cache": prune_summary,
+    }
+
+
+def cache_external_file(
+    source_id: str,
+    file_name: str,
+    copy_to_path,
+    cache_root: Optional[Path] = None,
+    limit_bytes: Optional[int] = None,
+) -> Dict[str, object]:
+    root = cache_root or get_cache_root()
+    root.mkdir(parents=True, exist_ok=True)
+
+    target_dir = root / _source_id_digest(source_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / Path(file_name).name
+    temp_target = target.with_suffix(target.suffix + ".tmp")
+
+    copy_to_path(temp_target)
+    os.replace(temp_target, target)
+    os.utime(target, None)
+    prune_summary = prune_cache(root, limit_bytes, keep_paths=[target])
+
+    return {
+        "source_path": source_id,
+        "cached_path": str(target),
+        "copied": True,
         "size_bytes": int(target.stat().st_size),
         "cache": prune_summary,
     }

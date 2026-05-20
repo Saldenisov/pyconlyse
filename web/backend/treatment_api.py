@@ -14,9 +14,21 @@ from folder_api import (
 )
 from treatment_file_cache import (
     cache_file,
+    cache_external_file,
     get_cache_limit_bytes,
     get_cache_root,
     is_within_cache,
+)
+from treatment_network_path import (
+    copy_smb_file_to_local,
+    is_smb_path,
+    normalize_smb_path,
+    smb_is_within,
+    smb_isdir,
+    smb_isfile,
+    smb_listdir,
+    smb_name,
+    smb_suffix,
 )
 from treatment_service import TreatmentDataService
 
@@ -40,12 +52,22 @@ TREATMENT_SESSION_COOKIE = "pyconlyse_treatment_sid"
 
 
 def _normalize_path(path: str) -> str:
+    if is_smb_path(path):
+        return normalize_smb_path(path)
     return os.path.abspath(os.path.expanduser(str(path).strip()))
 
 
 def _is_within_allowed_root(path: str) -> bool:
     allowed_root = _normalize_path(get_allowed_root())
     candidate = _normalize_path(path)
+    if is_smb_path(candidate) or is_smb_path(allowed_root):
+        if not is_smb_path(candidate) or not is_smb_path(allowed_root):
+            return False
+        try:
+            return smb_is_within(candidate, allowed_root)
+        except ValueError:
+            return False
+
     try:
         return os.path.commonpath([candidate, allowed_root]) == allowed_root
     except ValueError:
@@ -61,6 +83,8 @@ def _ensure_within_allowed_root(path: str) -> str:
 
 def _ensure_readable_treatment_file(path: str) -> str:
     normalized = _normalize_path(path)
+    if is_smb_path(normalized):
+        raise ValueError("Network files must be cached before treatment can read them")
     if not (_is_within_allowed_root(normalized) or is_within_cache(normalized)):
         raise ValueError("Path is outside the allowed treatment root and treatment cache")
     if not os.path.isfile(normalized):
@@ -70,9 +94,26 @@ def _ensure_readable_treatment_file(path: str) -> str:
 
 def _default_folder() -> str:
     folder = _normalize_path(get_allowed_root())
+    if is_smb_path(folder):
+        return folder
     if os.path.isdir(folder):
         return folder
     return ""
+
+
+def _folder_exists(folder: str) -> bool:
+    if is_smb_path(folder):
+        return smb_isdir(folder)
+    return os.path.isdir(folder)
+
+
+def _root_exists(root: str) -> bool:
+    if is_smb_path(root):
+        try:
+            return smb_isdir(root)
+        except ValueError:
+            return False
+    return os.path.isdir(root)
 
 
 def _default_state() -> Dict[str, object]:
@@ -218,7 +259,7 @@ class TreatmentSessionStore:
 
     def set_folder(self, session_id: str, folder_path: str) -> Dict[str, object]:
         folder = _ensure_within_allowed_root(folder_path)
-        if not os.path.isdir(folder):
+        if not _folder_exists(folder):
             raise ValueError("Selected folder does not exist")
 
         with self._lock:
@@ -319,7 +360,7 @@ def _session_payload(session_id: str) -> Dict[str, object]:
         "session_id": session_id,
         "session": session,
         "allowed_root": allowed_root,
-        "allowed_root_exists": os.path.isdir(allowed_root),
+        "allowed_root_exists": _root_exists(allowed_root),
         "treatment_root_base": _normalize_path(get_treatment_root_base()),
         "treatment_root_bases": [_normalize_path(root_base) for root_base in get_treatment_root_bases()],
         "cache_root": str(get_cache_root()),
@@ -438,9 +479,18 @@ def cache_and_set_session_path():
 
     try:
         source_path = _ensure_within_allowed_root(str(file_path))
-        if not os.path.isfile(source_path):
-            raise ValueError("Selected file does not exist")
-        cached = cache_file(source_path)
+        if is_smb_path(source_path):
+            if not smb_isfile(source_path):
+                raise ValueError("Selected file does not exist")
+            cached = cache_external_file(
+                source_path,
+                smb_name(source_path),
+                lambda target_path: copy_smb_file_to_local(source_path, target_path),
+            )
+        else:
+            if not os.path.isfile(source_path):
+                raise ValueError("Selected file does not exist")
+            cached = cache_file(source_path)
         session_store.set_data_path(session_id, str(data_type), str(cached["cached_path"]))
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
@@ -465,6 +515,8 @@ def auto_assign_session_paths():
         return _error(str(exc), session_id, 403)
 
     if not os.path.isdir(normalized_folder):
+        if is_smb_path(normalized_folder):
+            return _error("Auto Assign is not available for network folders yet; use Cache & Assign", session_id)
         return _error("Folder does not exist", session_id, 404)
 
     session = session_store.snapshot(session_id)
@@ -534,25 +586,48 @@ def list_files():
     except ValueError as exc:
         return _error(str(exc), session_id, 403)
 
-    if not os.path.isdir(normalized):
+    try:
+        folder_exists = _folder_exists(normalized)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+    if not folder_exists:
         return _error("Folder does not exist", session_id, 404)
 
     folders: List[Dict[str, str]] = []
     files: List[Dict[str, object]] = []
-    with os.scandir(normalized) as entries:
-        for entry in entries:
-            if entry.is_dir():
-                folders.append({"name": entry.name, "path": entry.path})
-            elif entry.is_file():
-                suffix = os.path.splitext(entry.name)[1].lower()
-                files.append(
-                    {
-                        "name": entry.name,
-                        "path": entry.path,
-                        "suffix": suffix,
-                        "supported": suffix in treatment_service.supported_suffixes,
-                    }
-                )
+    try:
+        if is_smb_path(normalized):
+            entries = smb_listdir(normalized)
+            for entry in entries:
+                if entry["is_dir"]:
+                    folders.append({"name": entry["name"], "path": entry["path"]})
+                elif entry["is_file"]:
+                    suffix = smb_suffix(str(entry["path"]))
+                    files.append(
+                        {
+                            "name": entry["name"],
+                            "path": entry["path"],
+                            "suffix": suffix,
+                            "supported": suffix in treatment_service.supported_suffixes,
+                        }
+                    )
+        else:
+            with os.scandir(normalized) as entries:
+                for entry in entries:
+                    if entry.is_dir():
+                        folders.append({"name": entry.name, "path": entry.path})
+                    elif entry.is_file():
+                        suffix = os.path.splitext(entry.name)[1].lower()
+                        files.append(
+                            {
+                                "name": entry.name,
+                                "path": entry.path,
+                                "suffix": suffix,
+                                "supported": suffix in treatment_service.supported_suffixes,
+                            }
+                        )
+    except ValueError as exc:
+        return _error(str(exc), session_id)
 
     folders.sort(key=lambda item: item["name"].lower())
     files.sort(key=lambda item: item["name"].lower())
