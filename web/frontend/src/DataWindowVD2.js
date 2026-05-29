@@ -1,5 +1,5 @@
 // DataWindowVD2.js (Main Component)
-import React, { useMemo, useState, createContext } from 'react';
+import React, { useCallback, useMemo, useState, createContext } from 'react';
 import TopSection from './TopSection';
 import TabsControl from './TabsControl';
 import './css/DataWindowVD2.css';
@@ -71,9 +71,9 @@ const DataWindowVD2 = ({ profile = 'VD2' }) => {
   const [expType, setExpType] = useState('ABS+BASE+BRUIT');
   const [selectionRefreshToken, setSelectionRefreshToken] = useState(0);
 
-  const requestSelectionRefresh = () => {
+  const requestSelectionRefresh = useCallback(() => {
     setSelectionRefreshToken((current) => current + 1);
-  };
+  }, []);
   
   const contextValue = {
     absPath, setAbsPath,

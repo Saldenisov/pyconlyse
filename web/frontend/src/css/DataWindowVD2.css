@@ -1,109 +1,348 @@
-/* DataWindowVD2.css */
-
-/* Main container uses full viewport height */
 .graph-window {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  padding: 10px;
+  min-width: 0;
+  padding: 8px;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
-/* Top section container with fixed height */
-.top-section-container {
-  height: 50vh;  /* reserves 50% of the viewport height */
-  position: relative;
-  margin-bottom: 10px;
-}
-
-/* Bottom section fills remaining space */
 .bottom-section {
   flex: 1;
-  border-top: 1px solid #ccc;
-  padding-top: 10px;
+  min-width: 0;
+  min-height: 0;
+  padding-top: 8px;
   overflow: auto;
+  border-top: 1px solid #98a2b3;
 }
 
-/* For the SplitPane (top section) */
-.SplitPane {
-  height: 100% !important;
-}
-
-/* Left column for imshow graph */
-.left-column {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-
-/* Imshow graph: forced square, min 8cm, max 12cm (approximate conversion) */
-.imshow-graph {
-  width: 100%;
-  height: 100%;
-  border: 1px solid #ccc;
-  aspect-ratio: 1 / 1;
-  min-width: 300px; /* ≈8 cm */
-  max-width: 450px; /* ≈12 cm */
-  margin: 0 auto;
-}
-
-/* Right column for XY plots */
-.right-column {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-/* Vertical layout for stacking XY plots */
-.vertical-layout {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 10px;
-}
-
-/* XY plot containers */
-.xy-plot {
-  border: 1px solid #ccc;
-  width: 100%;
-  height: 100%;
-  min-width: 230px; /* ≈6 cm */
-  min-height: 150px; /* ≈4 cm */
-}
-
-/* Ensure kinetics and spectrum plots share available space equally */
-.kinetics-plot,
-.spectrum-plot {
-  flex: 1;
-}
-
-/* Tabs control styling */
 .tabs-control {
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .tabs {
   display: flex;
-  gap: 5px;
+  flex: 0 0 auto;
+  gap: 4px;
+  min-width: 0;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+
+.tabs button {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 4px 10px;
 }
 
 .tab-content {
-  margin-top: 10px;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: auto;
 }
 
-/* Files tab horizontal layout for zones */
 .horizontal-layout {
-  display: flex;
-  flex-direction: row;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(220px, 0.72fr) minmax(360px, 1.28fr) minmax(320px, 1fr);
+  align-items: stretch;
+  gap: 8px;
+  width: max(100%, 940px);
+  height: 100%;
+  min-height: 430px;
 }
 
 .zone {
-  flex: 1;
-  border: 1px solid #aaa;
-  padding: 5px;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.parameters-zone {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+
+.parameters-zone h3,
+.zone h3,
+.zone h4 {
+  margin-top: 0;
+}
+
+.parameters-zone input[type="text"],
+.parameters-zone select,
+.files-folder input[type="text"] {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.parameters-zone label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.parameters-zone > div {
+  min-width: 0;
+}
+
+.files-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.files-folder p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+.folder-selection-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.folder-selection-header button {
+  margin-left: 0 !important;
+}
+
+.raw-data-kinetics-plot {
+  max-width: 100%;
+  overflow: auto;
+}
+
+.raw-data-kinetics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.folder-browser-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.48);
+  box-sizing: border-box;
+}
+
+.folder-browser-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(860px, 94vw);
+  max-height: min(760px, 88vh);
+  min-height: min(620px, 88vh);
+  padding: 16px;
+  color: #111827;
+  background: #fff;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+  box-sizing: border-box;
+}
+
+.folder-browser-header {
+  flex: 0 0 auto;
+}
+
+.folder-browser-header h3 {
+  margin: 0 0 12px;
+}
+
+.folder-browser-path {
+  margin-bottom: 8px;
+  overflow-wrap: anywhere;
+  font-size: 0.92rem;
+}
+
+.folder-browser-list {
+  flex: 1 1 auto;
+  min-height: 260px;
+  margin-top: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #98a2b3;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.folder-browser-row {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-bottom: 1px solid #eaecf0;
+  color: #111827;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.folder-browser-row:hover,
+.folder-browser-row:focus,
+.folder-browser-row.is-active {
+  background: #eef4ff;
+  outline: none;
+}
+
+.folder-browser-icon {
+  font-family: monospace;
+  color: #475467;
+}
+
+.folder-browser-message {
+  margin: 12px;
+}
+
+.folder-browser-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.explorer-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(240px, 1.1fr);
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: 0;
+}
+
+.explorer-tree,
+.explorer-files {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid #98a2b3;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.explorer-tree-row {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  min-height: 30px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.explorer-tree-row.is-selected {
+  background: #eef4ff;
+}
+
+.explorer-tree-toggle,
+.explorer-tree-name,
+.explorer-file-name {
+  min-width: 0;
+  border: 0;
+  color: #111827;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.explorer-tree-toggle {
+  width: 28px;
+  padding: 6px 4px;
+  font-family: monospace;
+  text-align: center;
+}
+
+.explorer-tree-name {
+  overflow: hidden;
+  padding: 6px 8px 6px 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-tree-name:hover,
+.explorer-file-row:hover {
+  background: #f2f4f7;
+}
+
+.explorer-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 54px;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.explorer-file-row.is-disabled {
+  color: #98a2b3;
+}
+
+.explorer-file-name {
+  overflow: hidden;
+  padding: 7px 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-file-name:disabled {
+  color: #98a2b3;
+  cursor: default;
+}
+
+.explorer-file-suffix {
+  color: #475467;
+  font-family: monospace;
+  font-size: 0.86rem;
+}
+
+.file-context-menu {
+  position: fixed;
+  z-index: 1200;
+  display: grid;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid #98a2b3;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+}
+
+.file-context-menu button {
+  border: 0;
+  padding: 8px 10px;
+  color: #111827;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.file-context-menu button:hover {
+  background: #eef4ff;
+}
+
+@media (max-width: 1050px) {
+  .explorer-panel {
+    grid-template-columns: minmax(170px, 0.9fr) minmax(220px, 1.1fr);
+  }
 }

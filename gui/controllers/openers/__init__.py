@@ -6,7 +6,11 @@ from .Opener import *
 
 try:
     from .H5Opener import H5Opener
-except ModuleNotFoundError:
+    import h5py as _h5py
+
+    if not hasattr(_h5py, "File"):
+        H5Opener = None
+except (ModuleNotFoundError, ImportError, AttributeError):
     H5Opener = None
 
 

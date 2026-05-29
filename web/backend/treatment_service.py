@@ -1,6 +1,7 @@
 import logging
 import re
 import sys
+import tempfile
 from pathlib import Path
 from threading import Lock
 from typing import Dict, List, Optional, Tuple
@@ -11,6 +12,9 @@ try:
     import h5py
 except ImportError:  # pragma: no cover - optional runtime dependency
     h5py = None
+else:
+    if not hasattr(h5py, "File"):  # pragma: no cover - broken namespace install
+        h5py = None
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -23,6 +27,7 @@ from gui.controllers.openers import (
     OPENER_ACCRODANCE,
     OpenersTypes,
 )
+from treatment_network_path import copy_local_file_to_smb, is_smb_path, smb_join
 
 module_logger = logging.getLogger(__name__)
 
@@ -132,21 +137,49 @@ class TreatmentDataService:
             "mean": float(np.mean(data)),
         }
 
-    def get_selection_view(self, session_state: Dict[str, object]) -> Dict[str, object]:
-        active_data_type, file_path = self._resolve_active_path(session_state)
-        opener, info = self._get_opener_and_info(file_path)
+    def get_selection_view(
+        self,
+        session_state: Dict[str, object],
+        session_id: Optional[str] = None,
+    ) -> Dict[str, object]:
+        active_data_type = str(session_state.get("active_data_type") or "").strip()
+        result_payload = None
+        if active_data_type == "OD" and session_id:
+            with self._lock:
+                runtime = self._runtimes.get(session_id)
+                if runtime and runtime["result"] is not None and runtime["result_info"] is not None:
+                    result_payload = (
+                        np.asarray(runtime["result"], dtype=float),
+                        runtime["result_info"],
+                        Path(str(runtime["result_source_path"] or "calculated_od.dat")),
+                    )
 
-        map_index = int(session_state.get("map_index") or 0)
-        if map_index < 0 or map_index >= int(info.number_maps):
-            raise ValueError("Selected map index is outside the available range")
+        if result_payload is not None:
+            data, info, file_path = result_payload
+            map_index = 0
+            wavelengths = np.asarray(info.wavelengths, dtype=float)
+            timedelays = np.asarray(info.timedelays, dtype=float)
+            time_scale = getattr(info, "scaling_yunit", "") or ""
+            file_info = self._format_file_info(file_path, info, data.shape)
+            file_info["number_maps"] = 1
+            resolved_active_data_type = "OD"
+        else:
+            resolved_active_data_type, file_path = self._resolve_active_path(session_state)
+            opener, info = self._get_opener_and_info(file_path)
 
-        measurement, comments = opener.read_map(file_path, map_index)
-        if measurement is False:
-            raise ValueError(comments or "Could not read selected map")
+            map_index = int(session_state.get("map_index") or 0)
+            if map_index < 0 or map_index >= int(info.number_maps):
+                raise ValueError("Selected map index is outside the available range")
 
-        data = np.asarray(measurement.data, dtype=float)
-        wavelengths = np.asarray(measurement.wavelengths, dtype=float)
-        timedelays = np.asarray(measurement.timedelays, dtype=float)
+            measurement, comments = opener.read_map(file_path, map_index)
+            if measurement is False:
+                raise ValueError(comments or "Could not read selected map")
+
+            data = np.asarray(measurement.data, dtype=float)
+            wavelengths = np.asarray(measurement.wavelengths, dtype=float)
+            timedelays = np.asarray(measurement.timedelays, dtype=float)
+            time_scale = measurement.time_scale
+            file_info = self._format_file_info(file_path, info, data.shape)
         cursor_state = self._normalize_selection(session_state.get("selection"), data.shape)
 
         x1 = cursor_state["x1"]
@@ -167,13 +200,15 @@ class TreatmentDataService:
             for data_type, assigned_path in (session_state.get("paths") or {}).items()
             if assigned_path
         ]
+        if result_payload is not None:
+            assigned_data_types = ["OD", *assigned_data_types]
 
         return {
             "selection_ready": True,
-            "active_data_type": active_data_type,
+            "active_data_type": resolved_active_data_type,
             "assigned_data_types": assigned_data_types,
             "map_index": map_index,
-            "file_info": self._format_file_info(file_path, info, data.shape),
+            "file_info": file_info,
             "heatmap": {
                 "z": heatmap_sample.tolist(),
                 "wavelengths": heatmap_wavelengths.tolist(),
@@ -192,7 +227,7 @@ class TreatmentDataService:
             "kinetics": {
                 "x": timedelays.tolist(),
                 "y": kinetics.tolist(),
-                "time_scale": measurement.time_scale,
+                "time_scale": time_scale,
             },
             "spectrum": {
                 "x": wavelengths.tolist(),
@@ -533,15 +568,30 @@ class TreatmentDataService:
             data = np.array(runtime["result"], copy=True)
             info = runtime["result_info"]
 
-        save_folder = Path(str(session_state.get("save_folder") or "")).expanduser()
+        raw_save_folder = str(session_state.get("save_folder") or "").strip()
         save_file_name = Path(str(session_state.get("save_file_name") or "")).name
-        if not save_folder:
+        if not raw_save_folder:
             raise ValueError("save_folder is not configured")
         if not save_file_name:
             raise ValueError("save_file_name is not configured")
+        if not save_file_name.lower().endswith(".dat"):
+            save_file_name = f"{Path(save_file_name).stem}.dat"
 
-        save_path = save_folder / save_file_name
         payload = self._build_ascii_export(data, info)
+        if is_smb_path(raw_save_folder):
+            save_path = smb_join(raw_save_folder, save_file_name)
+            with tempfile.NamedTemporaryFile(suffix=".dat", delete=True) as temp_file:
+                np.savetxt(temp_file.name, payload, delimiter="\t", fmt="%.4f")
+                bytes_written = copy_local_file_to_smb(temp_file.name, save_path)
+            return {
+                "save_path": save_path,
+                "rows": int(payload.shape[0]),
+                "cols": int(payload.shape[1]),
+                "bytes": int(bytes_written),
+            }
+
+        save_folder = Path(raw_save_folder).expanduser()
+        save_path = save_folder / save_file_name
         np.savetxt(str(save_path), payload, delimiter="\t", fmt="%.4f")
         return {
             "save_path": str(save_path),

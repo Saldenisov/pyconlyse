@@ -1,4 +1,11 @@
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import {
@@ -239,6 +246,22 @@ function getParentFolder(folderPath, allowedRoot) {
   return parent;
 }
 
+function pathName(folderPath) {
+  const trimmed = String(folderPath || '').replace(/[\\/]+$/, '');
+  const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  return lastSeparator >= 0 ? trimmed.slice(lastSeparator + 1) : trimmed;
+}
+
+function folderDepthFromRoot(folderPath, allowedRoot) {
+  const normalizedRoot = String(allowedRoot || '').replace(/[\\/]+$/, '');
+  const normalizedFolder = String(folderPath || '').replace(/[\\/]+$/, '');
+  if (!normalizedRoot || !normalizedFolder.startsWith(normalizedRoot)) {
+    return 0;
+  }
+  const tail = normalizedFolder.slice(normalizedRoot.length).replace(/^[\\/]+/, '');
+  return tail ? tail.split(/[\\/]+/).filter(Boolean).length : 0;
+}
+
 const AllowedFolderSelector = ({
   sessionId,
   initialFolder,
@@ -251,6 +274,8 @@ const AllowedFolderSelector = ({
   const [folders, setFolders] = useState([]);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const listRef = useRef(null);
 
   useEffect(() => {
     if (!currentFolder) {
@@ -285,77 +310,115 @@ const AllowedFolderSelector = ({
   }, [currentFolder, sessionId]);
 
   const parentFolder = getParentFolder(currentFolder, allowedRoot);
+  const depth = folderDepthFromRoot(currentFolder, allowedRoot);
+  const rows = useMemo(
+    () => [
+      ...(parentFolder
+        ? [{ path: parentFolder, label: 'Parent folder', icon: '..' }]
+        : []),
+      ...folders.map((folder) => ({
+        path: folder.path,
+        label: folder.name || pathName(folder.path),
+        icon: `[${depth + 1}]`,
+      })),
+    ],
+    [depth, folders, parentFolder]
+  );
+
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [currentFolder]);
+
+  useEffect(() => {
+    const activeRow = listRef.current?.querySelector(
+      `[data-folder-index="${focusedIndex}"]`
+    );
+    activeRow?.focus({ preventScroll: true });
+    activeRow?.scrollIntoView({ block: 'nearest' });
+  }, [focusedIndex, rows.length]);
+
+  const handleListKeyDown = (event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (rows.length === 0) {
+      return;
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      setFocusedIndex((index) => Math.min(index + 1, rows.length - 1));
+      return;
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      setFocusedIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const selectedRow = rows[focusedIndex];
+      if (selectedRow?.path) {
+        setCurrentFolder(selectedRow.path);
+      }
+    }
+  };
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'rgba(0,0,0,0.45)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: '#fff',
-          padding: '20px',
-          borderRadius: '4px',
-          width: 'min(800px, 90vw)',
-          maxHeight: '80vh',
-          overflowY: 'auto',
-        }}
-      >
-        <h3>Select Treatment Folder</h3>
-        <p>
-          <strong>Allowed Root:</strong> {allowedRoot}
-        </p>
-        <p>
-          <strong>Current Folder:</strong> {currentFolder || 'Not available'}
-        </p>
-        {error && <p>{error}</p>}
-        {isLoading && <p>Loading folders...</p>}
-        {!isLoading && !error && folders.length === 0 && (
-          <p>No subfolders in this directory.</p>
-        )}
-        {!isLoading && !error && folders.length > 0 && (
-          <div className="folder-tree-view">
-            {folders.map((folder) => (
-              <div
-                key={folder.path}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '12px',
-                  marginBottom: '8px',
-                }}
-              >
-                <button onClick={() => setCurrentFolder(folder.path)}>{folder.name}</button>
-                <button onClick={() => onFolderSelect(folder.path)}>Use</button>
-              </div>
-            ))}
+    <div className="folder-browser-overlay">
+      <div className="folder-browser-dialog">
+        <div className="folder-browser-header">
+          <h3>Select Treatment Folder</h3>
+          <div className="folder-browser-path">
+            <strong>Root:</strong> {allowedRoot}
           </div>
-        )}
-        <div style={{ marginTop: '10px' }}>
-          <button onClick={() => onFolderSelect(currentFolder)} disabled={!currentFolder}>
-            Use Current Folder
-          </button>
+          <div className="folder-browser-path">
+            <strong>Current:</strong> {currentFolder || 'Not available'}
+          </div>
+        </div>
+        <div
+          ref={listRef}
+          className="folder-browser-list"
+          role="tree"
+          aria-label="Treatment folders"
+          tabIndex={0}
+          onKeyDown={handleListKeyDown}
+        >
+          {error && <p className="folder-browser-message">{error}</p>}
+          {isLoading && <p className="folder-browser-message">Loading folders...</p>}
+          {!isLoading && !error && folders.length === 0 && (
+            <p className="folder-browser-message">No subfolders in this directory.</p>
+          )}
+          {!isLoading && !error && rows.map((folder, index) => (
+            <button
+              key={folder.path}
+              className={`folder-browser-row ${
+                index === focusedIndex ? 'is-active' : ''
+              }`}
+              data-folder-index={index}
+              onFocus={() => setFocusedIndex(index)}
+              onClick={() => setCurrentFolder(folder.path)}
+            >
+              <span className="folder-browser-icon">{folder.icon}</span>
+              <span>{folder.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="folder-browser-actions">
           <button
             onClick={() => setCurrentFolder(parentFolder)}
             disabled={!parentFolder}
-            style={{ marginLeft: '10px' }}
           >
-            Up One Level
+            Up
           </button>
-          <button onClick={onClose} style={{ marginLeft: '10px' }}>
-            Cancel
+          <button
+            onClick={() => onFolderSelect(currentFolder)}
+            disabled={!currentFolder}
+          >
+            Select Current Folder
           </button>
+          <button onClick={onClose}>Cancel</button>
         </div>
       </div>
     </div>
@@ -381,10 +444,15 @@ const AssignedPaths = ({ session, onPreview }) => {
             marginBottom: '8px',
           }}
         >
-          <div>
+          <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
             <strong>{dataType}:</strong> {filePath}
           </div>
-          <button onClick={() => onPreview(dataType)}>Preview</button>
+          <button
+            onClick={() => onPreview(dataType)}
+            style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+          >
+            Preview
+          </button>
         </div>
       ))}
     </div>
@@ -399,6 +467,9 @@ const TabsControl = () => {
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
   const [folderListing, setFolderListing] = useState({ folders: [], files: [] });
+  const [folderTreeCache, setFolderTreeCache] = useState({});
+  const [expandedFolders, setExpandedFolders] = useState(() => new Set());
+  const [fileContextMenu, setFileContextMenu] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
   const [draftSaveFileName, setDraftSaveFileName] = useState('');
@@ -432,6 +503,19 @@ const TabsControl = () => {
     return payload;
   };
 
+  const cacheFolderListing = useCallback((folderPath, payload) => {
+    if (!folderPath) {
+      return;
+    }
+    setFolderTreeCache((current) => ({
+      ...current,
+      [folderPath]: {
+        folders: payload.folders || [],
+        files: payload.files || [],
+      },
+    }));
+  }, []);
+
   const refreshFolderListing = useCallback(
     async (folderPath) => {
       if (!folderPath) {
@@ -440,12 +524,24 @@ const TabsControl = () => {
       }
 
       const payload = await fetchFolderListing(treatmentSessionId, folderPath);
+      cacheFolderListing(folderPath, payload);
       setFolderListing({
         folders: payload.folders || [],
         files: payload.files || [],
       });
     },
-    [treatmentSessionId]
+    [cacheFolderListing, treatmentSessionId]
+  );
+
+  const loadFolderTreeNode = useCallback(
+    async (folderPath) => {
+      if (!folderPath || folderTreeCache[folderPath]) {
+        return;
+      }
+      const payload = await fetchFolderListing(treatmentSessionId, folderPath);
+      cacheFolderListing(folderPath, payload);
+    },
+    [cacheFolderListing, folderTreeCache, treatmentSessionId]
   );
 
   useEffect(() => {
@@ -472,6 +568,16 @@ const TabsControl = () => {
         if (!cancelled && payload.session.folder_path) {
           await refreshFolderListing(payload.session.folder_path);
         }
+        if (
+          !cancelled &&
+          payload.allowed_root &&
+          payload.allowed_root !== payload.session.folder_path
+        ) {
+          const rootPayload = await fetchFolderListing(treatmentSessionId, payload.allowed_root);
+          if (!cancelled) {
+            cacheFolderListing(payload.allowed_root, rootPayload);
+          }
+        }
       } catch (err) {
         if (!cancelled) {
           setError(err.message);
@@ -484,7 +590,23 @@ const TabsControl = () => {
     return () => {
       cancelled = true;
     };
-  }, [profilePreset, refreshFolderListing, requestSelectionRefresh, treatmentSessionId]);
+  }, [
+    cacheFolderListing,
+    profilePreset,
+    refreshFolderListing,
+    requestSelectionRefresh,
+    treatmentSessionId,
+  ]);
+
+  useEffect(() => {
+    const closeContextMenu = () => setFileContextMenu(null);
+    window.addEventListener('click', closeContextMenu);
+    window.addEventListener('keydown', closeContextMenu);
+    return () => {
+      window.removeEventListener('click', closeContextMenu);
+      window.removeEventListener('keydown', closeContextMenu);
+    };
+  }, []);
 
   useEffect(() => {
     if (!session) {
@@ -497,6 +619,13 @@ const TabsControl = () => {
       current || (session.active_data_type ? `${session.active_data_type.toLowerCase()}_cleaned.h5` : '')
     ));
   }, [session, treatment?.allowed_root]);
+
+  useEffect(() => {
+    if (!treatment?.allowed_root) {
+      return;
+    }
+    setExpandedFolders((current) => new Set(current).add(treatment.allowed_root));
+  }, [treatment?.allowed_root]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
     setError('');
@@ -582,20 +711,11 @@ const TabsControl = () => {
     }
   };
 
-  const handleAssignFile = (filePath) => {
+  const handleAssignFile = async (filePath, dataType = session?.selected_data_type) => {
     if (!session) {
       return;
     }
-    applyPayload(
-      postTreatment(treatmentSessionId, '/api/treatment/session/path', {
-        data_type: session.selected_data_type,
-        file_path: filePath,
-      })
-    );
-  };
-
-  const handleCacheAssignFile = async (filePath) => {
-    if (!session) {
+    if (!dataType) {
       return;
     }
 
@@ -604,7 +724,7 @@ const TabsControl = () => {
     setIsBusy(true);
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/cache-path', {
-        data_type: session.selected_data_type,
+        data_type: dataType,
         file_path: filePath,
       });
       setTreatment(payload);
@@ -612,12 +732,61 @@ const TabsControl = () => {
         requestSelectionRefresh();
       }
       const cachedPath = payload.cached_file?.cached_path || filePath;
-      setOperationMessage(`Cached and assigned ${session.selected_data_type}: ${cachedPath}`);
+      setOperationMessage(`Assigned ${dataType}: ${cachedPath}`);
     } catch (err) {
       setError(err.message);
     } finally {
+      setFileContextMenu(null);
       setIsBusy(false);
     }
+  };
+
+  const handleFolderTreeToggle = async (folderPath) => {
+    if (!folderPath) {
+      return;
+    }
+    const isExpanded = expandedFolders.has(folderPath);
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      if (isExpanded) {
+        next.delete(folderPath);
+      } else {
+        next.add(folderPath);
+      }
+      return next;
+    });
+    if (!isExpanded) {
+      try {
+        await loadFolderTreeNode(folderPath);
+      } catch (err) {
+        setError(err.message);
+      }
+    }
+  };
+
+  const handleExplorerFolderSelect = async (folderPath) => {
+    if (!folderPath) {
+      return;
+    }
+    setExpandedFolders((current) => new Set(current).add(folderPath));
+    await applyPayload(
+      postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
+        folder_path: folderPath,
+      }),
+      true
+    );
+  };
+
+  const handleFileContextMenu = (event, file) => {
+    event.preventDefault();
+    if (!file.supported || isBusy) {
+      return;
+    }
+    setFileContextMenu({
+      file,
+      x: event.clientX,
+      y: event.clientY,
+    });
   };
 
   const handleAutoAssignFiles = async () => {
@@ -698,6 +867,9 @@ const TabsControl = () => {
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/calc-abs');
       setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
       setPreview({
         ...payload.result,
         sample: payload.result.sample,
@@ -906,6 +1078,43 @@ const TabsControl = () => {
     }
   };
 
+  const renderFolderTreeRows = (folders, level = 1) =>
+    (folders || []).map((folder) => {
+      const isExpanded = expandedFolders.has(folder.path);
+      const cachedListing = folderTreeCache[folder.path];
+      const isSelected = session.folder_path === folder.path;
+
+      return (
+        <React.Fragment key={folder.path}>
+          <div
+            className={`explorer-tree-row ${isSelected ? 'is-selected' : ''}`}
+            style={{ paddingLeft: `${level * 14}px` }}
+          >
+            <button
+              className="explorer-tree-toggle"
+              onClick={() => handleFolderTreeToggle(folder.path)}
+              aria-label={isExpanded ? 'Collapse folder' : 'Expand folder'}
+            >
+              {isExpanded ? 'v' : '>'}
+            </button>
+            <button
+              className="explorer-tree-name"
+              onClick={() => handleExplorerFolderSelect(folder.path)}
+              title={folder.path}
+            >
+              {folder.name || pathName(folder.path)}
+            </button>
+          </div>
+          {isExpanded && cachedListing && renderFolderTreeRows(cachedListing.folders, level + 1)}
+        </React.Fragment>
+      );
+    });
+
+  const explorerRoot = treatment?.allowed_root || session?.folder_path || '';
+  const explorerRootListing =
+    folderTreeCache[explorerRoot] ||
+    (session?.folder_path === explorerRoot ? folderListing : { folders: [], files: [] });
+
   if (!session) {
     return (
       <div className="tabs-control">
@@ -1025,57 +1234,75 @@ const TabsControl = () => {
               </p>
               {operationMessage && <p>{operationMessage}</p>}
               {error && <p>{error}</p>}
-              <div style={{ marginTop: '15px' }}>
-                <h4>Subfolders</h4>
-                {folderListing.folders.length === 0 && <p>No subfolders.</p>}
-                {folderListing.folders.map((folder) => (
-                  <div key={folder.path} style={{ marginBottom: '8px' }}>
-                    <button onClick={() => handleFolderSelect(folder.path)}>
-                      {folder.name}
+              <div className="explorer-panel">
+                <div className="explorer-tree" role="tree">
+                  <div
+                    className={`explorer-tree-row ${
+                      session.folder_path === explorerRoot ? 'is-selected' : ''
+                    }`}
+                  >
+                    <button
+                      className="explorer-tree-toggle"
+                      onClick={() => handleFolderTreeToggle(explorerRoot)}
+                      aria-label="Expand root"
+                    >
+                      {expandedFolders.has(explorerRoot) ? 'v' : '>'}
+                    </button>
+                    <button
+                      className="explorer-tree-name"
+                      onClick={() => handleExplorerFolderSelect(explorerRoot)}
+                      title={explorerRoot}
+                    >
+                      {pathName(explorerRoot) || explorerRoot}
                     </button>
                   </div>
-                ))}
-              </div>
-              <div style={{ marginTop: '15px' }}>
-                <h4>Files</h4>
-                {folderListing.files.length === 0 && <p>No files in this folder.</p>}
-                {folderListing.files.map((file) => (
-                  <div
-                    key={file.path}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      gap: '12px',
-                      marginBottom: '8px',
-                    }}
-                  >
-                    <div>
-                      <strong>{file.name}</strong> ({file.suffix || 'no suffix'})
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {(expandedFolders.has(explorerRoot) || session.folder_path === explorerRoot) &&
+                    renderFolderTreeRows(explorerRootListing.folders, 1)}
+                </div>
+                <div className="explorer-files">
+                  {folderListing.files.length === 0 && <p>No files in this folder.</p>}
+                  {folderListing.files.map((file) => (
+                    <div
+                      key={file.path}
+                      className={`explorer-file-row ${file.supported ? '' : 'is-disabled'}`}
+                      onContextMenu={(event) => handleFileContextMenu(event, file)}
+                      title={file.path}
+                    >
                       <button
-                        onClick={() => handleAssignFile(file.path)}
+                        className="explorer-file-name"
+                        onContextMenu={(event) => handleFileContextMenu(event, file)}
                         disabled={!file.supported || isBusy}
                       >
-                        Assign as {session.selected_data_type}
+                        {file.name}
                       </button>
-                      <button
-                        onClick={() => handleCacheAssignFile(file.path)}
-                        disabled={!file.supported || isBusy}
-                      >
-                        Cache & Assign
-                      </button>
+                      <span className="explorer-file-suffix">{file.suffix || 'file'}</span>
                       <button
                         onClick={() => handleCleaningFileSave(file.path)}
                         disabled={!isSamCleanableFile(file) || isBusy}
                       >
-                        Clean File (SAM)
+                        SAM
                       </button>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
+              {fileContextMenu && (
+                <div
+                  className="file-context-menu"
+                  style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {assignableDataTypes.map((dataType) => (
+                    <button
+                      key={dataType}
+                      onClick={() => handleAssignFile(fileContextMenu.file.path, dataType)}
+                      disabled={isBusy}
+                    >
+                      Assign to {dataType}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="zone raw-data-kinetics">
               <h3>Assigned Inputs</h3>

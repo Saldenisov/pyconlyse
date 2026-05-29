@@ -28,6 +28,7 @@ from treatment_network_path import (
     smb_isfile,
     smb_listdir,
     smb_name,
+    smb_parent,
     smb_suffix,
 )
 from treatment_service import TreatmentDataService
@@ -142,7 +143,7 @@ def _default_state() -> Dict[str, object]:
 
 def _file_data_type_candidate(file_name: str, exp_type: str) -> Optional[str]:
     stem = Path(file_name).stem.upper()
-    if stem.startswith("NOISE"):
+    if stem.startswith("NOISE") or stem.startswith("BRUIT"):
         return "NOISE"
     if exp_type == "ABS+BASE+NOISE":
         if stem.startswith("BASE"):
@@ -161,13 +162,62 @@ def _file_data_type_candidate(file_name: str, exp_type: str) -> Optional[str]:
 def _candidate_rank(file_path: Path) -> tuple:
     suffix = file_path.suffix.lower()
     suffix_rank = {
-        ".h5": 0,
-        ".his": 1,
+        ".his": 0,
         ".img": 2,
         ".dat": 3,
+        ".h5": 4,
         ".raw": 4,
     }.get(suffix, 99)
     return (suffix_rank, file_path.name.lower())
+
+
+def _default_save_target_for_folder(folder: str):
+    folder_name = _path_name(folder)
+    save_file_name = f"{folder_name}_test.dat" if folder_name else "test.dat"
+    if is_smb_path(folder):
+        parent = smb_parent(folder)
+        return parent or folder, save_file_name
+    parent = str(Path(folder).expanduser().resolve().parent)
+    return parent, save_file_name
+
+
+def _path_name(path: str) -> str:
+    if is_smb_path(path):
+        return smb_name(path)
+    return Path(path).name
+
+
+def _path_suffix(path: str) -> str:
+    if is_smb_path(path):
+        return smb_suffix(path)
+    return Path(path).suffix.lower()
+
+
+def _candidate_sort_key(path: str) -> tuple:
+    suffix = _path_suffix(path)
+    suffix_rank = {
+        ".his": 0,
+        ".img": 2,
+        ".dat": 3,
+        ".h5": 4,
+        ".raw": 4,
+    }.get(suffix, 99)
+    return (suffix_rank, _path_name(path).lower())
+
+
+def _cache_assignable_source(source_path: str) -> Dict[str, object]:
+    if is_smb_path(source_path):
+        if not smb_isfile(source_path):
+            raise ValueError("Selected file does not exist")
+        return cache_external_file(
+            source_path,
+            smb_name(source_path),
+            lambda target_path: copy_smb_file_to_local(source_path, target_path),
+        )
+
+    if not os.path.isfile(source_path):
+        raise ValueError("Selected file does not exist")
+    return cache_file(source_path)
 
 
 class TreatmentSessionStore:
@@ -245,12 +295,14 @@ class TreatmentSessionStore:
 
             if "save_folder" in payload:
                 save_folder = _ensure_within_allowed_root(str(payload["save_folder"]))
-                if not os.path.isdir(save_folder):
+                if not _folder_exists(save_folder):
                     raise ValueError("save_folder does not exist")
                 state["save_folder"] = save_folder
 
             if "save_file_name" in payload:
                 save_file_name = os.path.basename(str(payload["save_file_name"]).strip())
+                if save_file_name and not save_file_name.lower().endswith(".dat"):
+                    save_file_name = f"{Path(save_file_name).stem}.dat"
                 state["save_file_name"] = save_file_name
 
             state["status_label"] = "Treatment session updated."
@@ -265,8 +317,9 @@ class TreatmentSessionStore:
         with self._lock:
             state = self._get_or_create_state(session_id)
             state["folder_path"] = folder
-            if not state["save_folder"]:
-                state["save_folder"] = folder
+            save_folder, save_file_name = _default_save_target_for_folder(folder)
+            state["save_folder"] = save_folder
+            state["save_file_name"] = save_file_name
             state["status_label"] = f"Folder selected: {folder}"
 
         return self.snapshot(session_id)
@@ -296,7 +349,7 @@ class TreatmentSessionStore:
 
             if "active_data_type" in payload:
                 active_data_type = str(payload["active_data_type"])
-                if active_data_type and active_data_type not in DATA_TYPES:
+                if active_data_type and active_data_type != "OD" and active_data_type not in DATA_TYPES:
                     raise ValueError(f"Unsupported active_data_type '{active_data_type}'")
                 state["active_data_type"] = active_data_type
 
@@ -479,18 +532,7 @@ def cache_and_set_session_path():
 
     try:
         source_path = _ensure_within_allowed_root(str(file_path))
-        if is_smb_path(source_path):
-            if not smb_isfile(source_path):
-                raise ValueError("Selected file does not exist")
-            cached = cache_external_file(
-                source_path,
-                smb_name(source_path),
-                lambda target_path: copy_smb_file_to_local(source_path, target_path),
-            )
-        else:
-            if not os.path.isfile(source_path):
-                raise ValueError("Selected file does not exist")
-            cached = cache_file(source_path)
+        cached = _cache_assignable_source(source_path)
         session_store.set_data_path(session_id, str(data_type), str(cached["cached_path"]))
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
@@ -514,44 +556,66 @@ def auto_assign_session_paths():
     except ValueError as exc:
         return _error(str(exc), session_id, 403)
 
-    if not os.path.isdir(normalized_folder):
-        if is_smb_path(normalized_folder):
-            return _error("Auto Assign is not available for network folders yet; use Cache & Assign", session_id)
+    try:
+        folder_exists = _folder_exists(normalized_folder)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+    if not folder_exists:
         return _error("Folder does not exist", session_id, 404)
 
     session = session_store.snapshot(session_id)
     exp_type = str(session.get("exp_type"))
     required_data_types = REQUIRED_DATA_TYPES.get(exp_type, [])
     supported_suffixes = set(treatment_service.supported_suffixes)
-    candidates: Dict[str, List[Path]] = {data_type: [] for data_type in required_data_types}
+    candidates: Dict[str, List[str]] = {data_type: [] for data_type in required_data_types}
 
-    with os.scandir(normalized_folder) as entries:
+    if is_smb_path(normalized_folder):
+        entries = smb_listdir(normalized_folder)
         for entry in entries:
-            if not entry.is_file():
+            if not entry["is_file"]:
                 continue
-            file_path = Path(entry.path)
-            if file_path.suffix.lower() not in supported_suffixes:
+            file_path = str(entry["path"])
+            if _path_suffix(file_path) not in supported_suffixes:
                 continue
-            data_type = _file_data_type_candidate(entry.name, exp_type)
+            data_type = _file_data_type_candidate(str(entry["name"]), exp_type)
             if data_type in candidates:
                 candidates[data_type].append(file_path)
+    else:
+        with os.scandir(normalized_folder) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                file_path = entry.path
+                if _path_suffix(file_path) not in supported_suffixes:
+                    continue
+                data_type = _file_data_type_candidate(entry.name, exp_type)
+                if data_type in candidates:
+                    candidates[data_type].append(file_path)
 
     assigned: Dict[str, str] = {}
+    cached_files: Dict[str, Dict[str, object]] = {}
     try:
         session_store.set_folder(session_id, normalized_folder)
         for data_type in required_data_types:
-            matches = sorted(candidates.get(data_type, []), key=_candidate_rank)
+            matches = sorted(candidates.get(data_type, []), key=_candidate_sort_key)
             if not matches:
                 continue
             selected_path = matches[0]
-            session_store.set_data_path(session_id, data_type, str(selected_path))
-            assigned[data_type] = str(selected_path)
+            if is_smb_path(selected_path):
+                cached = _cache_assignable_source(selected_path)
+                assigned_path = str(cached["cached_path"])
+                cached_files[data_type] = cached
+            else:
+                assigned_path = str(selected_path)
+            session_store.set_data_path(session_id, data_type, assigned_path)
+            assigned[data_type] = assigned_path
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
         return _error(str(exc), session_id)
 
     response_payload = _session_payload(session_id)
     response_payload["auto_assigned"] = assigned
+    response_payload["auto_assigned_cached_files"] = cached_files
     response_payload["auto_assign_missing"] = [
         data_type for data_type in required_data_types if data_type not in assigned
     ]
@@ -701,7 +765,10 @@ def average_noise():
 def get_selection():
     session_id = _current_session_id()
     try:
-        selection = treatment_service.get_selection_view(session_store.snapshot(session_id))
+        selection = treatment_service.get_selection_view(
+            session_store.snapshot(session_id),
+            session_id=session_id,
+        )
     except ValueError as exc:
         return _error(str(exc), session_id)
 
@@ -833,6 +900,7 @@ def calc_abs():
     session_id = _current_session_id()
     try:
         result = treatment_service.calc_abs(session_id, session_store.snapshot(session_id))
+        session_store.update_selection(session_id, {"active_data_type": "OD", "map_index": 0})
     except ValueError as exc:
         return _error(str(exc), session_id)
 

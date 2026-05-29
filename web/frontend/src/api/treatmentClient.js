@@ -1,4 +1,5 @@
-const DEFAULT_TIMEOUT_MS = 8000;
+const DEFAULT_TIMEOUT_MS = 30000;
+const LONG_TREATMENT_TIMEOUT_MS = 120000;
 
 function buildHeaders(sessionId, baseHeaders = {}) {
   const headers = { ...baseHeaders };
@@ -48,11 +49,25 @@ export function fetchTreatmentSession(sessionId) {
 }
 
 export function postTreatment(sessionId, url, body = {}) {
-  return requestTreatment(url, {
-    method: 'POST',
-    headers: buildHeaders(sessionId, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify(body),
-  });
+  const timeoutMs = [
+    '/api/treatment/session/cache-path',
+    '/api/treatment/session/auto-assign',
+    '/api/treatment/average-noise',
+    '/api/treatment/calc-abs',
+    '/api/treatment/save',
+  ].includes(url)
+    ? LONG_TREATMENT_TIMEOUT_MS
+    : DEFAULT_TIMEOUT_MS;
+
+  return requestTreatment(
+    url,
+    {
+      method: 'POST',
+      headers: buildHeaders(sessionId, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify(body),
+    },
+    timeoutMs
+  );
 }
 
 export function fetchFolderListing(sessionId, folderPath) {

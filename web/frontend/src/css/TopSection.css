@@ -1,25 +1,76 @@
 /* TopSection.css */
 
-/* Container for the entire top section */
 .top-section-container {
-  height: 50vh; /* Reserve 50% of viewport height */
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 clamp(320px, 43vh, 520px);
+  min-height: 0;
   margin-bottom: 10px;
+  overflow: hidden;
 }
 
-/* Left column: centers its content so extra space appears as margin */
+.selection-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.3fr) repeat(5, minmax(64px, 0.55fr)) repeat(3, minmax(58px, 0.5fr));
+  gap: 8px;
+  align-items: end;
+  flex: 0 0 auto;
+  margin-bottom: 6px;
+}
+
+.selection-controls label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #344054;
+  font-size: 0.78rem;
+}
+
+.selection-controls input,
+.selection-controls select {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  box-sizing: border-box;
+}
+
+.selection-controls button {
+  height: 28px;
+  white-space: nowrap;
+}
+
+.selection-path {
+  flex: 0 0 auto;
+  margin-bottom: 6px;
+  overflow: hidden;
+  color: #475467;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-plot-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1.45fr) minmax(300px, 1fr);
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+
 .left-column {
   display: flex;
   justify-content: center;
   align-items: center;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* The imshow-wrapper constrains the imshow graph to remain square
-   with a minimum size of ~8 cm (300px) and maximum size of ~12 cm (450px) */
 .imshow-wrapper {
-  width: 100%;
-  max-width: 450px; /* ≈12 cm */
-  min-width: 300px; /* ≈8 cm */
-  aspect-ratio: 1 / 1; /* Force square */
+  width: min(100%, 52vh);
+  height: min(100%, 52vh);
+  min-width: 240px;
+  min-height: 240px;
   border: 1px solid #ccc;
   box-sizing: border-box;
   margin: 0 auto;
@@ -31,7 +82,6 @@
   height: 100%;
 }
 
-/* The imshow-graph fills its wrapper */
 .imshow-graph {
   width: 100%;
   height: 100%;
@@ -52,14 +102,14 @@
   box-sizing: border-box;
 }
 
-/* Right column: contains the XY plots */
 .right-column {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  min-height: 0;
 }
 
-/* Vertical layout for stacking the XY plots */
 .vertical-layout {
   display: flex;
   flex-direction: column;
@@ -67,17 +117,55 @@
   gap: 10px;
 }
 
-/* XY plot container style */
 .xy-plot {
   border: 1px solid #ccc;
   width: 100%;
-  height: 100%;
-  min-width: 230px;  /* ≈6 cm */
-  min-height: 150px; /* ≈4 cm */
+  min-height: 0;
+  min-width: 0;
 }
 
-/* Allow kinetics and spectrum plots to share available space equally */
 .kinetics-plot,
 .spectrum-plot {
-  flex: 1;
+  flex: 1 1 0;
+  height: 100%;
+}
+
+@media (max-width: 1050px) {
+  .top-section-container {
+    flex-basis: clamp(390px, 48vh, 500px);
+  }
+
+  .selection-controls {
+    grid-template-columns: repeat(3, minmax(72px, 1fr));
+  }
+
+  .top-plot-grid {
+    grid-template-columns: minmax(230px, 1.25fr) minmax(150px, 0.75fr);
+  }
+
+  .imshow-wrapper {
+    width: min(100%, 260px);
+    height: min(100%, 260px);
+    min-width: 200px;
+    min-height: 200px;
+  }
+}
+
+@media (max-width: 720px) {
+  .top-section-container {
+    flex-basis: 430px;
+  }
+
+  .top-plot-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .imshow-wrapper {
+    width: min(100%, 260px);
+    height: min(100%, 260px);
+  }
+
+  .right-column {
+    display: none;
+  }
 }

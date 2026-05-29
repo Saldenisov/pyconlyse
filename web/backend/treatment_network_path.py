@@ -59,6 +59,14 @@ def smb_join(folder: str, name: str) -> str:
     return f"smb://{server}/{quote(share)}" + (f"/{tail}" if tail else "")
 
 
+def smb_parent(path: str) -> str:
+    server, share, remote_path = split_smb_path(path)
+    parent = posixpath.dirname(posixpath.normpath("/" + remote_path)).strip("/")
+    parts = [quote(part) for part in parent.split("/") if part]
+    tail = "/".join(parts)
+    return f"smb://{server}/{quote(share)}" + (f"/{tail}" if tail else "")
+
+
 def smb_to_unc(path: str) -> str:
     server, share, remote_path = split_smb_path(path)
     unc = f"\\\\{server}\\{share}"
@@ -74,6 +82,8 @@ def smb_is_within(path: str, root: str) -> bool:
         return False
     candidate = posixpath.normpath("/" + remote_path).strip("/").lower()
     root_candidate = posixpath.normpath("/" + root_remote_path).strip("/").lower()
+    if not root_candidate:
+        return True
     return candidate == root_candidate or candidate.startswith(root_candidate.rstrip("/") + "/")
 
 
@@ -93,9 +103,9 @@ def _register_session(server: str) -> None:
     domain = os.environ.get("PYCONLYSE_SMB_DOMAIN")
     if not username:
         return
+    if domain and "\\" not in username and "@" not in username:
+        username = f"{domain}\\{username}"
     kwargs = {"username": username, "password": password or ""}
-    if domain:
-        kwargs["domain"] = domain
     _smbclient().register_session(server, **kwargs)
 
 
@@ -152,6 +162,26 @@ def copy_smb_file_to_local(smb_path: str, local_path) -> int:
         total = 0
         with _smbclient().open_file(smb_to_unc(smb_path), mode="rb") as source:
             with open(local_path, "wb") as target:
+                while True:
+                    chunk = source.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    target.write(chunk)
+                    total += len(chunk)
+        return total
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise _smb_value_error(smb_path, exc) from exc
+
+
+def copy_local_file_to_smb(local_path, smb_path: str) -> int:
+    try:
+        server, _share, _remote_path = split_smb_path(smb_path)
+        _register_session(server)
+        total = 0
+        with open(local_path, "rb") as source:
+            with _smbclient().open_file(smb_to_unc(smb_path), mode="wb") as target:
                 while True:
                     chunk = source.read(1024 * 1024)
                     if not chunk:

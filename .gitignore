@@ -1,6 +1,7 @@
 *.log
 
 /.mypy_cache
+/.tmp/treatment_smb_cache/
 
 *.pyc
 

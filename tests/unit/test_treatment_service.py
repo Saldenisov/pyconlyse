@@ -12,6 +12,7 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from treatment_service import TreatmentDataService
+import treatment_service as treatment_service_module
 
 
 class FakeOpener:
@@ -318,3 +319,63 @@ def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
     runtime = service.runtime_status("session-his-noise")
     assert runtime["noise_ready"] is True
     assert runtime["result_ready"] is True
+
+
+def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
+    abs_path = tmp_path / "abs.his"
+    base_path = tmp_path / "base.his"
+    noise_path = tmp_path / "bruit.his"
+    for file_path in (abs_path, base_path, noise_path):
+        file_path.write_text("fake", encoding="ascii")
+
+    abs_opener = FakeAverageOpener([[2.0, 2.0], [2.0, 2.0]])
+    base_opener = FakeAverageOpener([[4.0, 4.0], [4.0, 4.0]])
+    noise_opener = FakeAverageOpener([[1.0, 1.0], [1.0, 1.0]])
+    info = _critical_info(abs_path, 1, [500.0, 550.0], [1.0, 2.0])
+
+    def fake_get_opener_and_info(path):
+        if path == abs_path:
+            return abs_opener, info
+        if path == base_path:
+            return base_opener, info
+        if path == noise_path:
+            return noise_opener, info
+        raise AssertionError(f"Unexpected path {path}")
+
+    copied = {}
+
+    def fake_copy_local_file_to_smb(local_path, smb_path):
+        copied["smb_path"] = smb_path
+        copied["payload"] = Path(local_path).read_text(encoding="utf-8")
+        return len(copied["payload"].encode("utf-8"))
+
+    monkeypatch.setattr(service, "_get_opener_and_info", fake_get_opener_and_info)
+    monkeypatch.setattr(
+        treatment_service_module,
+        "copy_local_file_to_smb",
+        fake_copy_local_file_to_smb,
+    )
+
+    service.calc_abs(
+        "session-save-smb",
+        {
+            "exp_type": "ABS+BASE+NOISE",
+            "paths": {
+                "ABS": str(abs_path),
+                "BASE": str(base_path),
+                "NOISE": str(noise_path),
+            },
+        },
+    )
+    saved = service.save_result(
+        "session-save-smb",
+        {
+            "save_folder": "smb://10.20.30.202/e/DATA_VD2/20260127",
+            "save_file_name": "water_test",
+        },
+    )
+
+    assert saved["save_path"] == "smb://10.20.30.202/e/DATA_VD2/20260127/water_test.dat"
+    assert copied["smb_path"] == saved["save_path"]
+    assert "500.0000" in copied["payload"]
+    assert "0.4771" in copied["payload"]

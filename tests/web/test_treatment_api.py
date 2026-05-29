@@ -357,6 +357,104 @@ def test_cache_and_assign_copies_smb_file_to_server_cache(client, monkeypatch):
     assert payload["session"]["paths"]["ABS+BASE+NOISE"] == str(cached_path)
 
 
+def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
+    test_client, _tmp_path = client
+    smb_root = "smb://Everest/e/Data/DATA_VD2"
+    smb_folder = f"{smb_root}/20260127/water"
+    abs_file = f"{smb_folder}/ABS12886.his"
+    base_h5 = f"{smb_folder}/BASE12886.h5"
+    base_file = f"{smb_folder}/BASE12886.his"
+    bruit_file = f"{smb_folder}/BRUIT12886.his"
+
+    monkeypatch.setattr(
+        folder_api_module,
+        "smb_isdir",
+        lambda path: path in {smb_root, smb_folder},
+    )
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_isdir",
+        lambda path: path in {smb_root, smb_folder},
+    )
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_isfile",
+        lambda path: path in {abs_file, base_h5, base_file, bruit_file},
+    )
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_listdir",
+        lambda _folder: [
+            {
+                "name": "ABS12886.his",
+                "path": abs_file,
+                "is_dir": False,
+                "is_file": True,
+            },
+            {
+                "name": "BASE12886.h5",
+                "path": base_h5,
+                "is_dir": False,
+                "is_file": True,
+            },
+            {
+                "name": "BASE12886.his",
+                "path": base_file,
+                "is_dir": False,
+                "is_file": True,
+            },
+            {
+                "name": "BRUIT12886.his",
+                "path": bruit_file,
+                "is_dir": False,
+                "is_file": True,
+            },
+        ],
+    )
+
+    def fake_copy_smb_file_to_local(source_path, target_path):
+        Path(target_path).write_bytes(Path(source_path).name.encode("ascii"))
+        return Path(target_path).stat().st_size
+
+    monkeypatch.setattr(
+        treatment_api_module,
+        "copy_smb_file_to_local",
+        fake_copy_smb_file_to_local,
+    )
+
+    root_response = test_client.post(
+        "/api/treatment/session/root",
+        json={"allowed_root": smb_root},
+    )
+    assert root_response.status_code == 200
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/auto-assign",
+        json={"folder_path": smb_folder},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["auto_assign_missing"] == []
+    assert payload["session"]["ready_for_calc"] is True
+    assert payload["session"]["save_folder"] == f"{smb_root}/20260127"
+    assert payload["session"]["save_file_name"] == "water_test.dat"
+    assert payload["auto_assigned_cached_files"]["ABS"]["source_path"] == abs_file
+    assert payload["auto_assigned_cached_files"]["BASE"]["source_path"] == base_file
+    assert payload["auto_assigned_cached_files"]["NOISE"]["source_path"] == bruit_file
+
+    assigned = payload["auto_assigned"]
+    assert Path(assigned["ABS"]).read_bytes() == b"ABS12886.his"
+    assert Path(assigned["BASE"]).read_bytes() == b"BASE12886.his"
+    assert Path(assigned["NOISE"]).read_bytes() == b"BRUIT12886.his"
+
+
 def test_his_cache_preview_calculate_and_save_flow(client, monkeypatch):
     test_client, tmp_path = client
     his_path = tmp_path / "ABS001.his"

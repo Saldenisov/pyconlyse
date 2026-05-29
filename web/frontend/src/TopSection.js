@@ -101,10 +101,16 @@ function SelectionHeatmap({ selection, onSelectRange }) {
           },
         ],
       },
-      { responsive: true }
+      { responsive: true, displayModeBar: false }
     );
 
+    const resizeObserver = new ResizeObserver(() => {
+      Plotly.Plots.resize(plotNode);
+    });
+    resizeObserver.observe(plotNode);
+
     return () => {
+      resizeObserver.disconnect();
       Plotly.purge(plotNode);
     };
   }, [selection]);
@@ -288,10 +294,16 @@ function LinePlot({ x, y, title, xTitle, className }) {
         xaxis: { title: xTitle },
         yaxis: { title: 'Intensity' },
       },
-      { responsive: true }
+      { responsive: true, displayModeBar: false }
     );
 
+    const resizeObserver = new ResizeObserver(() => {
+      Plotly.Plots.resize(plotNode);
+    });
+    resizeObserver.observe(plotNode);
+
     return () => {
+      resizeObserver.disconnect();
       Plotly.purge(plotNode);
     };
   }, [className, title, x, xTitle, y]);
@@ -468,15 +480,7 @@ const TopSection = () => {
 
     return (
       <>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(6, minmax(90px, 1fr))',
-            gap: '8px',
-            marginBottom: '12px',
-            alignItems: 'end',
-          }}
-        >
+        <div className="selection-controls">
           <label>
             Data
             <select
@@ -568,42 +572,28 @@ const TopSection = () => {
                   y2: event.target.value,
                 }))
               }
-            />
+              />
           </label>
-        </div>
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px', alignItems: 'center' }}>
           <button
             onClick={() => stepMap(-1)}
             disabled={isSaving || selection.file_info.number_maps <= 1}
           >
-            Prev Map
+            Prev
           </button>
           <button
             onClick={() => stepMap(1)}
             disabled={isSaving || selection.file_info.number_maps <= 1}
           >
-            Next Map
+            Next
           </button>
           <button onClick={applySelection} disabled={isSaving}>
-            {isSaving ? 'Applying...' : 'Apply Selection'}
+            {isSaving ? 'Applying...' : 'Apply'}
           </button>
-          <span style={{ color: '#475467', fontSize: '0.9rem' }}>
-            Drag on the heatmap to update x1/x2/y1/y2 directly.
-          </span>
-          <span style={{ color: '#475467', fontSize: '0.9rem' }}>
-            {selection.file_info.file_path}
-          </span>
         </div>
+        <div className="selection-path">{selection.file_info.file_path}</div>
         {error && <p>{error}</p>}
-        <div
-          style={{
-            display: 'flex',
-            gap: '12px',
-            height: '100%',
-            width: '100%',
-          }}
-        >
-          <div className="left-column" style={{ flex: 3 }}>
+        <div className="top-plot-grid">
+          <div className="left-column">
             <div className="imshow-wrapper">
               <SelectionHeatmap
                 selection={selection}
@@ -611,7 +601,7 @@ const TopSection = () => {
               />
             </div>
           </div>
-          <div className="right-column" style={{ flex: 2 }}>
+          <div className="right-column">
             <div className="vertical-layout">
               <LinePlot
                 className="xy-plot kinetics-plot"
