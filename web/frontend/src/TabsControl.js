@@ -6,11 +6,9 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import {
   fetchFolderListing,
-  fetchTreatmentPreview,
   fetchTreatmentSession,
   postTreatment,
 } from './api/treatmentClient';
@@ -182,50 +180,6 @@ const ParametersZone = ({
       </div>
     </div>
   );
-};
-
-const RawDataKineticsPlot = ({ preview }) => {
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const plotNode = ref.current;
-    if (!plotNode) {
-      return undefined;
-    }
-
-    const sample = preview && Array.isArray(preview.sample) ? preview.sample : null;
-    const isHeatmap =
-      sample &&
-      sample.length > 0 &&
-      Array.isArray(sample[0]) &&
-      sample[0].length > 0;
-
-    Plotly.newPlot(
-      plotNode,
-      isHeatmap
-        ? [
-            {
-              z: sample,
-              type: 'heatmap',
-              colorscale: 'Viridis',
-            },
-          ]
-        : [
-            {
-              x: [0, 1, 2, 3],
-              y: [3, 8, 5, 7],
-              type: 'scatter',
-            },
-          ],
-      { margin: { t: 20 }, width: 300, height: 300 }
-    );
-
-    return () => {
-      Plotly.purge(plotNode);
-    };
-  }, [preview]);
-
-  return <div className="raw-data-kinetics-plot" ref={ref}></div>;
 };
 
 function getParentFolder(folderPath, allowedRoot) {
@@ -425,36 +379,48 @@ const AllowedFolderSelector = ({
   );
 };
 
-const AssignedPaths = ({ session, onPreview }) => {
-  const entries = Object.entries(session.paths || {});
-  if (entries.length === 0) {
+const AssignedPaths = ({ session }) => {
+  const paths = session.paths || {};
+  const dataPaths = ['ABS', 'BASE', 'ABS+BASE', 'ABS+BASE+NOISE']
+    .filter((dataType) => paths[dataType])
+    .map((dataType) => [dataType, paths[dataType]]);
+  const noisePath = paths.NOISE;
+
+  if (dataPaths.length === 0 && !noisePath) {
     return <p>No input files assigned yet.</p>;
   }
 
   return (
-    <div>
-      {entries.map(([dataType, filePath]) => (
-        <div
-          key={dataType}
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '12px',
-            marginBottom: '8px',
-          }}
-        >
-          <div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+    <div className="assigned-paths">
+      {dataPaths.length > 0 && (
+        <div className="assigned-path-group">
+          <strong>Data</strong>
+          {dataPaths.map(([dataType, filePath]) => (
+            <div key={dataType} className="assigned-path-row">
+              <span>{dataType}</span>
+              <span>{filePath}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {noisePath && (
+        <div className="assigned-path-group">
+          <strong>Noise</strong>
+          <div className="assigned-path-row">
+            <span>NOISE</span>
+            <span>{noisePath}</span>
+          </div>
+        </div>
+      )}
+      {Object.entries(paths)
+        .filter(([dataType]) => (
+          !['ABS', 'BASE', 'ABS+BASE', 'ABS+BASE+NOISE', 'NOISE'].includes(dataType)
+        ))
+        .map(([dataType, filePath]) => (
+          <div key={dataType} className="assigned-path-row">
             <strong>{dataType}:</strong> {filePath}
           </div>
-          <button
-            onClick={() => onPreview(dataType)}
-            style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
-          >
-            Preview
-          </button>
-        </div>
-      ))}
+        ))}
     </div>
   );
 };
@@ -480,7 +446,6 @@ const TabsControl = () => {
   const [cleaningSurfaceThreshold, setCleaningSurfaceThreshold] = useState('1.0');
   const [cleaningOutputName, setCleaningOutputName] = useState('');
   const [error, setError] = useState('');
-  const [preview, setPreview] = useState(null);
   const [operationMessage, setOperationMessage] = useState('');
   const [selectionMessage, setSelectionMessage] = useState('');
   const [cleaningSummary, setCleaningSummary] = useState(null);
@@ -697,7 +662,6 @@ const TabsControl = () => {
       });
       setTreatment(payload);
       setDraftAllowedRoot(payload.allowed_root || '');
-      setPreview(null);
       setCleaningSummary(null);
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
@@ -823,28 +787,6 @@ const TabsControl = () => {
     }
   };
 
-  const handlePreview = async (dataType) => {
-    setError('');
-    setIsBusy(true);
-    try {
-      const sessionPayload = await postTreatment(treatmentSessionId, '/api/treatment/session/selection', {
-        active_data_type: dataType,
-        map_index: 0,
-      });
-      setTreatment(sessionPayload);
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
-      const payload = await fetchTreatmentPreview(treatmentSessionId, dataType);
-      setPreview(payload.preview);
-      setOperationMessage(`Preview loaded for ${dataType}.`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
   const handleAverageNoise = async () => {
     setError('');
     setIsBusy(true);
@@ -852,7 +794,6 @@ const TabsControl = () => {
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/average-noise');
       setTreatment(payload);
-      setPreview(payload.noise);
       setOperationMessage('Noise averaged on the backend.');
     } catch (err) {
       setError(err.message);
@@ -870,10 +811,6 @@ const TabsControl = () => {
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
       }
-      setPreview({
-        ...payload.result,
-        sample: payload.result.sample,
-      });
       setOperationMessage('OD result calculated on the backend.');
     } catch (err) {
       setError(err.message);
@@ -1305,8 +1242,8 @@ const TabsControl = () => {
               )}
             </div>
             <div className="zone raw-data-kinetics">
-              <h3>Assigned Inputs</h3>
-              <AssignedPaths session={session} onPreview={handlePreview} />
+              <h3>Selected Files</h3>
+              <AssignedPaths session={session} />
               <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                 <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
                   Average Noise
@@ -1317,30 +1254,6 @@ const TabsControl = () => {
                 <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
                   Save Result
                 </button>
-              </div>
-              <div style={{ marginTop: '20px' }}>
-                <h3>Preview</h3>
-                {preview && (
-                  <div style={{ marginBottom: '12px' }}>
-                    {preview.file_info && (
-                      <p>
-                        <strong>File:</strong> {preview.file_info.file_path}
-                      </p>
-                    )}
-                    {(preview.data_shape || preview.shape) && (
-                      <p>
-                        <strong>Shape:</strong>{' '}
-                        {(preview.data_shape || preview.shape).join(' x ')}
-                      </p>
-                    )}
-                    {'mean' in preview && (
-                      <p>
-                        <strong>Mean:</strong> {preview.mean.toFixed(4)}
-                      </p>
-                    )}
-                  </div>
-                )}
-                <RawDataKineticsPlot preview={preview} />
               </div>
             </div>
           </div>

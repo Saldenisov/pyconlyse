@@ -122,15 +122,37 @@
   margin-left: 0 !important;
 }
 
-.raw-data-kinetics-plot {
-  max-width: 100%;
-  overflow: auto;
-}
-
 .raw-data-kinetics {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.assigned-paths {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.assigned-path-group {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.assigned-path-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  min-width: 0;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(152, 162, 179, 0.45);
+  font-size: 0.86rem;
+}
+
+.assigned-path-row span:last-child {
+  overflow-wrap: anywhere;
 }
 
 .folder-browser-overlay {
