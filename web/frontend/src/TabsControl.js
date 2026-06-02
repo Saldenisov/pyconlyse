@@ -242,12 +242,9 @@ const AssignedPaths = ({ session }) => {
         </div>
       )}
       {noisePath && (
-        <div className="assigned-path-group">
-          <strong>Noise</strong>
-          <div className="assigned-path-row">
-            <span>NOISE</span>
-            <span>{noisePath}</span>
-          </div>
+        <div className="assigned-path-row">
+          <span>NOISE</span>
+          <span>{noisePath}</span>
         </div>
       )}
       {Object.entries(paths)
