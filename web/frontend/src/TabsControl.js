@@ -1074,6 +1074,26 @@ const TabsControl = () => {
     }
   };
 
+  const renderFolderTreeFiles = (files, level = 1) =>
+    (files || []).map((file) => (
+      <div
+        key={file.path}
+        className={`explorer-tree-file-row ${file.supported ? '' : 'is-disabled'}`}
+        style={{ paddingLeft: `${level * 14 + 28}px` }}
+        onContextMenu={(event) => handleFileContextMenu(event, file)}
+        title={file.path}
+      >
+        <button
+          className="explorer-tree-file-name"
+          onContextMenu={(event) => handleFileContextMenu(event, file)}
+          disabled={!file.supported || isBusy}
+        >
+          {file.name}
+        </button>
+        <span className="explorer-file-suffix">{file.suffix || 'file'}</span>
+      </div>
+    ));
+
   const renderFolderTreeRows = (folders, level = 1) =>
     (folders || []).map((folder) => {
       const isExpanded = expandedFolders.has(folder.path);
@@ -1101,7 +1121,12 @@ const TabsControl = () => {
               {folder.name || pathName(folder.path)}
             </button>
           </div>
-          {isExpanded && cachedListing && renderFolderTreeRows(cachedListing.folders, level + 1)}
+          {isExpanded && cachedListing && (
+            <>
+              {renderFolderTreeRows(cachedListing.folders, level + 1)}
+              {renderFolderTreeFiles(cachedListing.files, level + 1)}
+            </>
+          )}
         </React.Fragment>
       );
     });
@@ -1253,7 +1278,12 @@ const TabsControl = () => {
                     </button>
                   </div>
                   {(expandedFolders.has(explorerRoot) || session.folder_path === explorerRoot) &&
-                    renderFolderTreeRows(explorerRootListing.folders, 1)}
+                    (
+                      <>
+                        {renderFolderTreeRows(explorerRootListing.folders, 1)}
+                        {renderFolderTreeFiles(explorerRootListing.files, 1)}
+                      </>
+                    )}
                 </div>
                 <div className="explorer-files">
                   {folderListing.files.length === 0 && <p>No files in this folder.</p>}

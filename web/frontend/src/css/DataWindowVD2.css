@@ -278,6 +278,7 @@
 
 .explorer-tree-toggle,
 .explorer-tree-name,
+.explorer-tree-file-name,
 .explorer-file-name {
   min-width: 0;
   border: 0;
@@ -302,8 +303,35 @@
 }
 
 .explorer-tree-name:hover,
+.explorer-tree-file-row:hover,
 .explorer-file-row:hover {
   background: #f2f4f7;
+}
+
+.explorer-tree-file-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 68px;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding-right: 8px;
+  border-bottom: 1px solid #eaecf0;
+}
+
+.explorer-tree-file-row.is-disabled {
+  color: #98a2b3;
+}
+
+.explorer-tree-file-name {
+  overflow: hidden;
+  padding: 6px 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.explorer-tree-file-name:disabled {
+  color: #98a2b3;
+  cursor: default;
 }
 
 .explorer-file-row {
