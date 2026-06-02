@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from threading import Lock
+from time import monotonic
 from typing import Dict, List, Optional
 from uuid import uuid4
 
@@ -50,6 +51,9 @@ REQUIRED_DATA_TYPES = {
     "ABS+BASE+NOISE": ["ABS", "BASE", "NOISE"],
 }
 TREATMENT_SESSION_COOKIE = "pyconlyse_treatment_sid"
+ROOT_EXISTS_CACHE_TTL_SECONDS = 15.0
+_root_exists_cache: Dict[str, tuple] = {}
+_root_exists_cache_lock = Lock()
 
 
 def _normalize_path(path: str) -> str:
@@ -109,12 +113,31 @@ def _folder_exists(folder: str) -> bool:
 
 
 def _root_exists(root: str) -> bool:
+    now = monotonic()
+    with _root_exists_cache_lock:
+        cached = _root_exists_cache.get(root)
+        if cached and now - cached[1] <= ROOT_EXISTS_CACHE_TTL_SECONDS:
+            return bool(cached[0])
+
     if is_smb_path(root):
         try:
-            return smb_isdir(root)
+            exists = smb_isdir(root)
         except ValueError:
-            return False
-    return os.path.isdir(root)
+            exists = False
+    else:
+        exists = os.path.isdir(root)
+
+    with _root_exists_cache_lock:
+        _root_exists_cache[root] = (bool(exists), now)
+    return bool(exists)
+
+
+def _clear_root_exists_cache(root: Optional[str] = None) -> None:
+    with _root_exists_cache_lock:
+        if root is None:
+            _root_exists_cache.clear()
+        else:
+            _root_exists_cache.pop(root, None)
 
 
 def _default_state() -> Dict[str, object]:
@@ -477,7 +500,10 @@ def update_session_root():
         return _error("allowed_root is required", session_id)
 
     try:
+        previous_root = _normalize_path(get_allowed_root())
         set_allowed_root(str(root_path))
+        _clear_root_exists_cache(previous_root)
+        _clear_root_exists_cache(_normalize_path(str(root_path)))
         session_store.reset()
         treatment_service.reset_runtime()
     except ValueError as exc:
