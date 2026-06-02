@@ -216,6 +216,35 @@ function folderDepthFromRoot(folderPath, allowedRoot) {
   return tail ? tail.split(/[\\/]+/).filter(Boolean).length : 0;
 }
 
+function folderPathChain(folderPath, allowedRoot) {
+  if (!folderPath || !allowedRoot) {
+    return [];
+  }
+
+  const chain = [];
+  let current = String(folderPath).replace(/[\\/]+$/, '');
+  const root = String(allowedRoot).replace(/[\\/]+$/, '');
+  const seen = new Set();
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    chain.unshift(current);
+    if (current === root) {
+      break;
+    }
+    const parent = getParentFolder(current, root);
+    if (!parent || parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  if (chain[0] !== root) {
+    chain.unshift(root);
+  }
+  return chain;
+}
+
 const AllowedFolderSelector = ({
   sessionId,
   initialFolder,
@@ -509,6 +538,29 @@ const TabsControl = () => {
     [cacheFolderListing, folderTreeCache, treatmentSessionId]
   );
 
+  const ensureFolderTreePath = useCallback(
+    async (folderPath, allowedRoot) => {
+      const chain = folderPathChain(folderPath, allowedRoot);
+      if (chain.length === 0) {
+        return;
+      }
+
+      setExpandedFolders((current) => {
+        const next = new Set(current);
+        chain.forEach((path) => next.add(path));
+        return next;
+      });
+
+      await Promise.all(
+        chain.map(async (path) => {
+          const payload = await fetchFolderListing(treatmentSessionId, path);
+          cacheFolderListing(path, payload);
+        })
+      );
+    },
+    [cacheFolderListing, treatmentSessionId]
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -532,6 +584,7 @@ const TabsControl = () => {
 
         if (!cancelled && payload.session.folder_path) {
           await refreshFolderListing(payload.session.folder_path);
+          await ensureFolderTreePath(payload.session.folder_path, payload.allowed_root);
         }
         if (
           !cancelled &&
@@ -557,6 +610,7 @@ const TabsControl = () => {
     };
   }, [
     cacheFolderListing,
+    ensureFolderTreePath,
     profilePreset,
     refreshFolderListing,
     requestSelectionRefresh,
@@ -635,17 +689,22 @@ const TabsControl = () => {
   const handleReset = () =>
     applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/reset'), true);
 
-  const handleFolderSelect = (selectedFolder) => {
+  const handleFolderSelect = async (selectedFolder) => {
     if (!selectedFolder) {
       return;
     }
     setIsModalOpen(false);
-    applyPayload(
+    await applyPayload(
       postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
         folder_path: selectedFolder,
       }),
       true
     );
+    try {
+      await ensureFolderTreePath(selectedFolder, treatment?.allowed_root);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleAllowedRootChange = async () => {
@@ -732,7 +791,7 @@ const TabsControl = () => {
     if (!folderPath) {
       return;
     }
-    setExpandedFolders((current) => new Set(current).add(folderPath));
+    await ensureFolderTreePath(folderPath, treatment?.allowed_root);
     await applyPayload(
       postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
         folder_path: folderPath,
