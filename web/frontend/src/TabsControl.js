@@ -640,11 +640,16 @@ const TabsControl = () => {
   }, [session, treatment?.allowed_root]);
 
   useEffect(() => {
-    if (!treatment?.allowed_root) {
+    const rootsToExpand = [treatment?.allowed_root, session?.folder_path].filter(Boolean);
+    if (rootsToExpand.length === 0) {
       return;
     }
-    setExpandedFolders((current) => new Set(current).add(treatment.allowed_root));
-  }, [treatment?.allowed_root]);
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      rootsToExpand.forEach((folderPath) => next.add(folderPath));
+      return next;
+    });
+  }, [session?.folder_path, treatment?.allowed_root]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
     setError('');
@@ -1131,7 +1136,7 @@ const TabsControl = () => {
       );
     });
 
-  const explorerRoot = treatment?.allowed_root || session?.folder_path || '';
+  const explorerRoot = session?.folder_path || treatment?.allowed_root || '';
   const explorerRootListing =
     folderTreeCache[explorerRoot] ||
     (session?.folder_path === explorerRoot ? folderListing : { folders: [], files: [] });
