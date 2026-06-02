@@ -274,6 +274,8 @@ const TabsControl = () => {
   const [expandedFolders, setExpandedFolders] = useState(() => new Set());
   const [fileContextMenu, setFileContextMenu] = useState(null);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(false);
+  const [isSelectingFolderRoot, setIsSelectingFolderRoot] = useState(false);
+  const [treeRoot, setTreeRoot] = useState('');
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
   const [draftSaveFileName, setDraftSaveFileName] = useState('');
   const [draftAllowedRoot, setDraftAllowedRoot] = useState('');
@@ -443,6 +445,12 @@ const TabsControl = () => {
   }, [session, treatment?.allowed_root]);
 
   useEffect(() => {
+    if (!treeRoot && (session?.folder_path || treatment?.allowed_root)) {
+      setTreeRoot(session?.folder_path || treatment?.allowed_root || '');
+    }
+  }, [session?.folder_path, treatment?.allowed_root, treeRoot]);
+
+  useEffect(() => {
     const rootsToExpand = [treatment?.allowed_root, session?.folder_path].filter(Boolean);
     if (rootsToExpand.length === 0) {
       return;
@@ -518,6 +526,9 @@ const TabsControl = () => {
       await refreshFolderListing(payload.session.folder_path || payload.allowed_root);
       const rootPayload = await fetchFolderListing(treatmentSessionId, payload.allowed_root);
       cacheFolderListing(payload.allowed_root, rootPayload);
+      setTreeRoot(payload.allowed_root || '');
+      setIsSelectingFolderRoot(true);
+      setIsFolderTreeOpen(true);
       setExpandedFolders((current) => {
         const next = new Set(current);
         next.add(payload.allowed_root);
@@ -594,23 +605,41 @@ const TabsControl = () => {
     if (!folderPath) {
       return;
     }
-    await ensureFolderTreePath(folderPath, treatment?.allowed_root);
+    if (!isSelectingFolderRoot) {
+      await handleFolderTreeToggle(folderPath);
+      return;
+    }
+
+    setError('');
     await applyPayload(
       postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
         folder_path: folderPath,
       }),
       true
     );
+    setTreeRoot(folderPath);
+    setIsSelectingFolderRoot(false);
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      next.add(folderPath);
+      return next;
+    });
+    try {
+      await loadFolderTreeNode(folderPath);
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const handleFolderTreeOpen = async () => {
-    const shouldOpen = !isFolderTreeOpen;
-    setIsFolderTreeOpen(shouldOpen);
-    if (!shouldOpen || !treatment?.allowed_root) {
+    if (!treatment?.allowed_root) {
       return;
     }
 
     setError('');
+    setIsFolderTreeOpen(true);
+    setIsSelectingFolderRoot(true);
+    setTreeRoot(treatment.allowed_root);
     setExpandedFolders((current) => {
       const next = new Set(current);
       next.add(treatment.allowed_root);
@@ -898,7 +927,7 @@ const TabsControl = () => {
       );
     });
 
-  const explorerRoot = treatment?.allowed_root || '';
+  const explorerRoot = treeRoot || session?.folder_path || treatment?.allowed_root || '';
   const explorerRootListing = folderTreeCache[explorerRoot] || { folders: [], files: [] };
 
   if (!session) {
