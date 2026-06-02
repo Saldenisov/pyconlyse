@@ -2,8 +2,6 @@ import React, {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
-  useRef,
   useState,
 } from 'react';
 import { TreatmentContext } from './DataWindowVD2';
@@ -14,7 +12,6 @@ import {
 } from './api/treatmentClient';
 import './css/DataWindowVD2.css';
 
-const SAM_CLEANABLE_SUFFIXES = new Set(['.h5', '.his', '.img']);
 const PROFILE_PRESETS = {
   V0: {
     exp_type: 'HIS+NOISE',
@@ -37,21 +34,6 @@ const REQUIRED_DATA_TYPES = {
 
 function requiredDataTypesForExpType(expType) {
   return REQUIRED_DATA_TYPES[String(expType || '').trim().toUpperCase()] || [];
-}
-
-function isSamCleanableFile(file) {
-  const suffix = String(file?.suffix || '').toLowerCase();
-  return SAM_CLEANABLE_SUFFIXES.has(suffix);
-}
-
-function treatmentModeHint(expType) {
-  if (expType === 'HIS') {
-    return 'HIS mode: select/cache one ABS*.his file as ABS+BASE+NOISE. The file provides ABS/BASE pairs.';
-  }
-  if (expType === 'HIS+NOISE') {
-    return 'HIS+NOISE mode: assign ABS*.his as ABS+BASE and assign a separate NOISE file.';
-  }
-  return 'ABS+BASE+NOISE mode: assign separate ABS, BASE, and NOISE files.';
 }
 
 function shouldApplyAutoPreset(sessionState, preset) {
@@ -206,16 +188,6 @@ function pathName(folderPath) {
   return lastSeparator >= 0 ? trimmed.slice(lastSeparator + 1) : trimmed;
 }
 
-function folderDepthFromRoot(folderPath, allowedRoot) {
-  const normalizedRoot = String(allowedRoot || '').replace(/[\\/]+$/, '');
-  const normalizedFolder = String(folderPath || '').replace(/[\\/]+$/, '');
-  if (!normalizedRoot || !normalizedFolder.startsWith(normalizedRoot)) {
-    return 0;
-  }
-  const tail = normalizedFolder.slice(normalizedRoot.length).replace(/^[\\/]+/, '');
-  return tail ? tail.split(/[\\/]+/).filter(Boolean).length : 0;
-}
-
 function folderPathChain(folderPath, allowedRoot) {
   if (!folderPath || !allowedRoot) {
     return [];
@@ -244,169 +216,6 @@ function folderPathChain(folderPath, allowedRoot) {
   }
   return chain;
 }
-
-const AllowedFolderSelector = ({
-  sessionId,
-  initialFolder,
-  allowedRoot,
-  onFolderSelect,
-  onClose,
-}) => {
-  const startFolder = initialFolder || allowedRoot || '';
-  const [currentFolder, setCurrentFolder] = useState(startFolder);
-  const [folders, setFolders] = useState([]);
-  const [error, setError] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const listRef = useRef(null);
-
-  useEffect(() => {
-    if (!currentFolder) {
-      setFolders([]);
-      return undefined;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    setError('');
-
-    fetchFolderListing(sessionId, currentFolder)
-      .then((data) => {
-        if (!cancelled) {
-          setFolders(data.folders || []);
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err.message);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [currentFolder, sessionId]);
-
-  const parentFolder = getParentFolder(currentFolder, allowedRoot);
-  const depth = folderDepthFromRoot(currentFolder, allowedRoot);
-  const rows = useMemo(
-    () => [
-      ...(parentFolder
-        ? [{ path: parentFolder, label: 'Parent folder', icon: '..' }]
-        : []),
-      ...folders.map((folder) => ({
-        path: folder.path,
-        label: folder.name || pathName(folder.path),
-        icon: `[${depth + 1}]`,
-      })),
-    ],
-    [depth, folders, parentFolder]
-  );
-
-  useEffect(() => {
-    setFocusedIndex(0);
-  }, [currentFolder]);
-
-  useEffect(() => {
-    const activeRow = listRef.current?.querySelector(
-      `[data-folder-index="${focusedIndex}"]`
-    );
-    activeRow?.focus({ preventScroll: true });
-    activeRow?.scrollIntoView({ block: 'nearest' });
-  }, [focusedIndex, rows.length]);
-
-  const handleListKeyDown = (event) => {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      onClose();
-      return;
-    }
-    if (rows.length === 0) {
-      return;
-    }
-    if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      setFocusedIndex((index) => Math.min(index + 1, rows.length - 1));
-      return;
-    }
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      setFocusedIndex((index) => Math.max(index - 1, 0));
-      return;
-    }
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      const selectedRow = rows[focusedIndex];
-      if (selectedRow?.path) {
-        setCurrentFolder(selectedRow.path);
-      }
-    }
-  };
-
-  return (
-    <div className="folder-browser-overlay">
-      <div className="folder-browser-dialog">
-        <div className="folder-browser-header">
-          <h3>Select Treatment Folder</h3>
-          <div className="folder-browser-path">
-            <strong>Root:</strong> {allowedRoot}
-          </div>
-          <div className="folder-browser-path">
-            <strong>Current:</strong> {currentFolder || 'Not available'}
-          </div>
-        </div>
-        <div
-          ref={listRef}
-          className="folder-browser-list"
-          role="tree"
-          aria-label="Treatment folders"
-          tabIndex={0}
-          onKeyDown={handleListKeyDown}
-        >
-          {error && <p className="folder-browser-message">{error}</p>}
-          {isLoading && <p className="folder-browser-message">Loading folders...</p>}
-          {!isLoading && !error && folders.length === 0 && (
-            <p className="folder-browser-message">No subfolders in this directory.</p>
-          )}
-          {!isLoading && !error && rows.map((folder, index) => (
-            <button
-              key={folder.path}
-              className={`folder-browser-row ${
-                index === focusedIndex ? 'is-active' : ''
-              }`}
-              data-folder-index={index}
-              onFocus={() => setFocusedIndex(index)}
-              onClick={() => setCurrentFolder(folder.path)}
-            >
-              <span className="folder-browser-icon">{folder.icon}</span>
-              <span>{folder.label}</span>
-            </button>
-          ))}
-        </div>
-        <div className="folder-browser-actions">
-          <button
-            onClick={() => setCurrentFolder(parentFolder)}
-            disabled={!parentFolder}
-          >
-            Up
-          </button>
-          <button
-            onClick={() => onFolderSelect(currentFolder)}
-            disabled={!currentFolder}
-          >
-            Select Current Folder
-          </button>
-          <button onClick={onClose}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const AssignedPaths = ({ session }) => {
   const paths = session.paths || {};
@@ -461,11 +270,10 @@ const TabsControl = () => {
   const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
-  const [folderListing, setFolderListing] = useState({ folders: [], files: [] });
   const [folderTreeCache, setFolderTreeCache] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => new Set());
   const [fileContextMenu, setFileContextMenu] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(false);
   const [draftSaveFolder, setDraftSaveFolder] = useState('');
   const [draftSaveFileName, setDraftSaveFileName] = useState('');
   const [draftAllowedRoot, setDraftAllowedRoot] = useState('');
@@ -513,16 +321,11 @@ const TabsControl = () => {
   const refreshFolderListing = useCallback(
     async (folderPath) => {
       if (!folderPath) {
-        setFolderListing({ folders: [], files: [] });
         return;
       }
 
       const payload = await fetchFolderListing(treatmentSessionId, folderPath);
       cacheFolderListing(folderPath, payload);
-      setFolderListing({
-        folders: payload.folders || [],
-        files: payload.files || [],
-      });
     },
     [cacheFolderListing, treatmentSessionId]
   );
@@ -694,35 +497,17 @@ const TabsControl = () => {
   const handleReset = () =>
     applyPayload(postTreatment(treatmentSessionId, '/api/treatment/session/reset'), true);
 
-  const handleFolderSelect = async (selectedFolder) => {
-    if (!selectedFolder) {
-      return;
-    }
-    setIsModalOpen(false);
-    await applyPayload(
-      postTreatment(treatmentSessionId, '/api/treatment/session/folder', {
-        folder_path: selectedFolder,
-      }),
-      true
-    );
-    try {
-      await ensureFolderTreePath(selectedFolder, treatment?.allowed_root);
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
   const handleAllowedRootChange = async () => {
-    if (!draftAllowedRoot || draftAllowedRoot === treatment.allowed_root) {
+    const nextAllowedRoot = draftAllowedRoot.trim();
+    if (!nextAllowedRoot || nextAllowedRoot === treatment.allowed_root) {
       return;
     }
 
     setError('');
-    setOperationMessage('');
     setIsBusy(true);
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/root', {
-        allowed_root: draftAllowedRoot,
+        allowed_root: nextAllowedRoot,
       });
       setTreatment(payload);
       setDraftAllowedRoot(payload.allowed_root || '');
@@ -731,11 +516,24 @@ const TabsControl = () => {
         requestSelectionRefresh();
       }
       await refreshFolderListing(payload.session.folder_path || payload.allowed_root);
-      setOperationMessage(`Data root set to ${payload.allowed_root}.`);
+      const rootPayload = await fetchFolderListing(treatmentSessionId, payload.allowed_root);
+      cacheFolderListing(payload.allowed_root, rootPayload);
+      setExpandedFolders((current) => {
+        const next = new Set(current);
+        next.add(payload.allowed_root);
+        return next;
+      });
     } catch (err) {
       setError(err.message);
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  const handleAllowedRootKeyDown = (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      handleAllowedRootChange();
     }
   };
 
@@ -805,6 +603,26 @@ const TabsControl = () => {
     );
   };
 
+  const handleFolderTreeOpen = async () => {
+    const shouldOpen = !isFolderTreeOpen;
+    setIsFolderTreeOpen(shouldOpen);
+    if (!shouldOpen || !treatment?.allowed_root) {
+      return;
+    }
+
+    setError('');
+    setExpandedFolders((current) => {
+      const next = new Set(current);
+      next.add(treatment.allowed_root);
+      return next;
+    });
+    try {
+      await loadFolderTreeNode(treatment.allowed_root);
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const handleFileContextMenu = (event, file) => {
     event.preventDefault();
     if (!file.supported || isBusy) {
@@ -815,40 +633,6 @@ const TabsControl = () => {
       x: event.clientX,
       y: event.clientY,
     });
-  };
-
-  const handleAutoAssignFiles = async () => {
-    if (!session?.folder_path) {
-      return;
-    }
-
-    setError('');
-    setOperationMessage('');
-    setIsBusy(true);
-    try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/auto-assign', {
-        folder_path: session.folder_path,
-      });
-      setTreatment(payload);
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
-      const assignedTypes = Object.keys(payload.auto_assigned || {});
-      const missingTypes = payload.auto_assign_missing || [];
-      if (assignedTypes.length > 0) {
-        setOperationMessage(
-          `Auto assigned ${assignedTypes.join(', ')}${
-            missingTypes.length > 0 ? `; missing ${missingTypes.join(', ')}` : ''
-          }.`
-        );
-      } else {
-        setOperationMessage('No matching ABS/BASE/NOISE files found in this folder.');
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsBusy(false);
-    }
   };
 
   const handleAverageNoise = async () => {
@@ -1057,28 +841,6 @@ const TabsControl = () => {
     }
   };
 
-  const handleCleaningFileSave = async (filePath) => {
-    setError('');
-    setSelectionMessage('');
-    setIsBusy(true);
-
-    try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/file/save', {
-        file_path: filePath,
-        angle_threshold: Number.parseFloat(cleaningAngleThreshold),
-        surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
-        output_file_name: cleaningOutputName,
-      });
-      setCleaningSummary(payload.cleaning);
-      setOperationMessage(`Cleaned H5 saved to ${payload.cleaning.output_path}`);
-      setActiveTab('cleaning');
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
   const renderFolderTreeFiles = (files, level = 1) =>
     (files || []).map((file) => (
       <div
@@ -1136,10 +898,8 @@ const TabsControl = () => {
       );
     });
 
-  const explorerRoot = session?.folder_path || treatment?.allowed_root || '';
-  const explorerRootListing =
-    folderTreeCache[explorerRoot] ||
-    (session?.folder_path === explorerRoot ? folderListing : { folders: [], files: [] });
+  const explorerRoot = treatment?.allowed_root || '';
+  const explorerRootListing = folderTreeCache[explorerRoot] || { folders: [], files: [] };
 
   if (!session) {
     return (
@@ -1181,85 +941,26 @@ const TabsControl = () => {
               />
             </div>
             <div className="zone files-folder">
-              <div style={{ marginBottom: '12px' }}>
+              <div className="data-root-control">
                 <label>
                   Data Root
                   <input
                     type="text"
                     value={draftAllowedRoot}
                     onChange={(event) => setDraftAllowedRoot(event.target.value)}
+                    onBlur={handleAllowedRootChange}
+                    onKeyDown={handleAllowedRootKeyDown}
                     placeholder={treatment.allowed_root || 'E:/Data/DATA_VD2'}
-                    style={{ width: '100%', marginTop: '4px' }}
                   />
                 </label>
-                <div style={{ marginTop: '8px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                  <button onClick={handleAllowedRootChange} disabled={isBusy || !draftAllowedRoot}>
-                    Apply Data Root
-                  </button>
-                  <span>
-                    <strong>Allowed Bases:</strong>{' '}
-                    {(treatment.treatment_root_bases || [treatment.treatment_root_base]).join(', ')}
-                  </span>
-                </div>
-                <div style={{ marginTop: '6px', color: '#475467', fontSize: '0.9rem' }}>
-                  <strong>Cache:</strong> {treatment.cache_root} (
-                  {Math.round((treatment.cache_limit_bytes || 0) / 1024 / 1024)} MB limit)
-                </div>
               </div>
               <div className="folder-selection-header">
-                <button onClick={() => setIsModalOpen(true)}>Select Folder</button>
-                <button
-                  onClick={() => refreshFolderListing(session.folder_path)}
-                  style={{ marginLeft: '10px' }}
-                >
-                  Refresh
-                </button>
-                <button
-                  onClick={handleAutoAssignFiles}
-                  disabled={isBusy || !session.folder_path}
-                  style={{ marginLeft: '10px' }}
-                >
-                  Auto Assign
+                <button onClick={handleFolderTreeOpen} disabled={isBusy || !explorerRoot}>
+                  Select Folder
                 </button>
               </div>
-              <p style={{ marginTop: '10px' }}>
-                <strong>Current Folder:</strong>{' '}
-                {session.folder_path || treatment.allowed_root}
-              </p>
-              {!treatment.allowed_root_exists && (
-                <p>
-                  <strong>Data Root:</strong> not found on this server.
-                </p>
-              )}
-              <p>
-                <strong>Status:</strong> {session.status_label}
-              </p>
-              <p>
-                <strong>Required Inputs:</strong>{' '}
-                {requiredDataTypes.length > 0 ? requiredDataTypes.join(', ') : 'n/a'}
-              </p>
-              <p>
-                <strong>Mode Hint:</strong> {treatmentModeHint(session.exp_type)}
-              </p>
-              {session.missing_data_types && session.missing_data_types.length > 0 && (
-                <p>
-                  <strong>Missing:</strong> {session.missing_data_types.join(', ')}
-                </p>
-              )}
-              <p>
-                <strong>Backend State:</strong>{' '}
-                {isBusy
-                  ? 'Working...'
-                  : session.result_ready
-                    ? 'Result ready'
-                    : session.ready_for_calc
-                      ? 'Ready to calculate'
-                    : session.noise_ready
-                      ? 'Noise ready'
-                      : 'Idle'}
-              </p>
-              {operationMessage && <p>{operationMessage}</p>}
-              {error && <p>{error}</p>}
+              {error && <p className="treatment-error">{error}</p>}
+              {isFolderTreeOpen && (
               <div className="explorer-panel">
                 <div className="explorer-tree" role="tree">
                   <div
@@ -1290,33 +991,8 @@ const TabsControl = () => {
                       </>
                     )}
                 </div>
-                <div className="explorer-files">
-                  {folderListing.files.length === 0 && <p>No files in this folder.</p>}
-                  {folderListing.files.map((file) => (
-                    <div
-                      key={file.path}
-                      className={`explorer-file-row ${file.supported ? '' : 'is-disabled'}`}
-                      onContextMenu={(event) => handleFileContextMenu(event, file)}
-                      title={file.path}
-                    >
-                      <button
-                        className="explorer-file-name"
-                        onContextMenu={(event) => handleFileContextMenu(event, file)}
-                        disabled={!file.supported || isBusy}
-                      >
-                        {file.name}
-                      </button>
-                      <span className="explorer-file-suffix">{file.suffix || 'file'}</span>
-                      <button
-                        onClick={() => handleCleaningFileSave(file.path)}
-                        disabled={!isSamCleanableFile(file) || isBusy}
-                      >
-                        SAM
-                      </button>
-                    </div>
-                  ))}
-                </div>
               </div>
+              )}
               {fileContextMenu && (
                 <div
                   className="file-context-menu"
@@ -1349,6 +1025,7 @@ const TabsControl = () => {
                   Save Result
                 </button>
               </div>
+              {operationMessage && <p>{operationMessage}</p>}
             </div>
           </div>
         )}
@@ -1513,15 +1190,6 @@ const TabsControl = () => {
           </div>
         )}
       </div>
-      {isModalOpen && (
-        <AllowedFolderSelector
-          sessionId={treatmentSessionId}
-          initialFolder={session.folder_path || treatment.allowed_root}
-          allowedRoot={treatment.allowed_root}
-          onFolderSelect={handleFolderSelect}
-          onClose={() => setIsModalOpen(false)}
-        />
-      )}
     </div>
   );
 };
