@@ -2093,7 +2093,7 @@ names = {
             ],
             "arduino_sync": "10.20.30.47",
         },
-        "C:/dev/pyconlyse/DeviceServers/AVANTES_CCD/avaspecx64_COPY.dll",
+        "C:/dev/pyconlyse/DeviceServers/cameras/avantes/drivers/avaspecx64.dll",
     ],
     "1810226U1": [
         "manip/CR",
@@ -4185,7 +4185,7 @@ names = {
             ],
             "arduino_sync": "10.20.30.47",
         },
-        "C:/dev/pyconlyse/DeviceServers/AVANTES_CCD/avaspecx64_COPY.dll",
+        "C:/dev/pyconlyse/DeviceServers/cameras/avantes/drivers/avaspecx64.dll",
     ],
 }
 

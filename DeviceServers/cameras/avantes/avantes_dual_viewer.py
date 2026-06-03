@@ -329,7 +329,7 @@ class SpectrometerWidget(QGroupBox):
                 ),
             )
             
-            self.spec = record.connect(demo=False)
+            self.spec = record.connect()
             self.spec.use_high_res_adc(True)
             
             # Get wavelength calibration

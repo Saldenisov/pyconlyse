@@ -68,7 +68,7 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
     def _connect(self):
         try:
-            self.camera = self.record.connect(demo=False)
+            self.camera = self.record.connect()
         except (Exception, AvantesError) as e:
             self.error(e)
 
@@ -390,5 +390,4 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
 if __name__ == "__main__":
     DS_AVANTES_CCD.run_server()
-
 
