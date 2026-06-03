@@ -137,6 +137,7 @@ Wavelength tracker exports:
 - **Rate (s)**: Time between saved data points, 0.1-86400 seconds
 - **Start/Stop DC**: Toggle data recording
 - **Show**: Open or raise floating OD time map window
+- **Settings**: Load, save, or update JSON settings
 
 ### Long-Interval Lamp Management
 - Lamp warmup lead time is 120 seconds.
@@ -146,6 +147,14 @@ Wavelength tracker exports:
 - If the next saved point is 120 seconds away or sooner, the lamp stays on.
 - Each saved point uses the synced detector `Averages` value. Acquisition time is `Averages / Arduino frequency`.
 - Rate cannot be shorter than one acquisition. Example: detector `Averages = 80` at default 40 Hz takes about 2 seconds, so `Rate = 1 s` is rejected and reset to 2 seconds.
+
+### Settings JSON
+- Use top menu **Settings** or the main-panel **Settings** button.
+- **Load JSON...** applies saved settings from a chosen JSON file.
+- **Save JSON As...** writes current settings to a chosen JSON file.
+- **Update JSON** writes current settings to the current settings path.
+- Default path: `DeviceServers/cameras/avantes/avantes_dual_viewer_settings.json`.
+- Saved values include Arduino frequency, lamp behavior, detector serials, integration times, synced averages, trigger mode, reference/background averages, data-collection rate, save folder/name, OD plot limits, and wavelength tracker value.
 
 ### Wavelength Tracking Section
 - **λ (nm)**: Target wavelength for tracking (200-1100 nm)

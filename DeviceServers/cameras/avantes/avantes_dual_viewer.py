@@ -24,6 +24,7 @@ Usage:
     python avantes_dual_viewer.py
 """
 
+import json
 import sys
 from pathlib import Path
 import time
@@ -60,6 +61,9 @@ from DeviceServers.cameras.avantes.avantes_emulator import (
     EmulatedAvantesSpectrometer,
     should_use_avantes_emulator,
 )
+
+
+DEFAULT_SETTINGS_JSON = Path(__file__).with_name("avantes_dual_viewer_settings.json")
 
 
 class WavelengthTrackerWindow(QMainWindow):
@@ -675,6 +679,7 @@ class AvantesDualViewer(QMainWindow):
         self.od_heatmap_wavelengths = None
         self.od_heatmap_window = None
         self.current_measurement_role = None
+        self.settings_json_path = DEFAULT_SETTINGS_JSON
         self._measurement_count = 0
         self.wavelength_tracker_window = None
         self.emulate_hardware = should_use_avantes_emulator()
@@ -710,6 +715,7 @@ class AvantesDualViewer(QMainWindow):
             title += " [EMULATOR]"
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 1400, 900)
+        self.create_menu_bar()
 
         # Central widget
         central_widget = QWidget()
@@ -1007,6 +1013,10 @@ class AvantesDualViewer(QMainWindow):
         self.continuous_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         layout.addWidget(self.continuous_btn)
 
+        self.settings_btn = QPushButton("Settings")
+        self.settings_btn.setMenu(self.create_settings_menu(self.settings_btn))
+        layout.addWidget(self.settings_btn)
+
         # Export button
         self.export_btn = QPushButton("Export Data")
         self.export_btn.clicked.connect(self.export_data)
@@ -1019,6 +1029,25 @@ class AvantesDualViewer(QMainWindow):
 
         panel.setLayout(layout)
         return panel
+
+    def create_menu_bar(self):
+        """Create top-level application menus."""
+        settings_menu = self.menuBar().addMenu("Settings")
+        self.populate_settings_menu(settings_menu)
+
+    def create_settings_menu(self, parent=None):
+        """Create settings menu for toolbar button."""
+        menu = QMenu(parent or self)
+        self.populate_settings_menu(menu)
+        return menu
+
+    def populate_settings_menu(self, menu):
+        """Populate settings actions."""
+        menu.addAction("Collection Settings...", self.open_collection_settings)
+        menu.addSeparator()
+        menu.addAction("Load JSON...", self.load_settings_json)
+        menu.addAction("Save JSON As...", self.save_settings_json_as)
+        menu.addAction("Update JSON", self.update_settings_json)
 
     def update_od_axis_limits(self):
         """Update OD plot axis limits based on auto/manual settings."""
@@ -1235,6 +1264,174 @@ class AvantesDualViewer(QMainWindow):
 
         if self.data_collection_active and self.collection_next_due_time:
             self.schedule_collection_due_time(self.collection_next_due_time)
+
+    def get_settings_dict(self) -> dict:
+        """Return current UI settings for JSON export."""
+        return {
+            "version": 1,
+            "arduino": {
+                "frequency_hz": float(self.arduino_frequency_hz),
+                "lamp_warmup_seconds": float(self.lamp_warmup_seconds),
+                "auto_lamp_management_enabled": bool(self.auto_lamp_management_enabled),
+                "lamp_off_between_points_enabled": bool(self.lamp_off_between_points_enabled),
+            },
+            "spectrometers": {
+                "1": self.get_spectrometer_settings(self.spec1_widget),
+                "2": self.get_spectrometer_settings(self.spec2_widget),
+            },
+            "reference_background": {
+                "averages": int(self.ref_averages_spin.value()),
+            },
+            "data_collection": {
+                "rate_s": float(self.collection_rate_spin.value()),
+                "save_folder": self.save_folder_input.text(),
+                "save_name": self.save_name_input.text(),
+            },
+            "od_plot_limits": {
+                "x_auto": bool(self.od_x_auto_check.isChecked()),
+                "x_min_nm": float(self.od_x_min_spin.value()),
+                "x_max_nm": float(self.od_x_max_spin.value()),
+                "y_auto": bool(self.od_y_auto_check.isChecked()),
+                "y_min": float(self.od_y_min_spin.value()),
+                "y_max": float(self.od_y_max_spin.value()),
+            },
+            "wavelength_tracking": {
+                "wavelength_nm": float(self.track_wavelength_spin.value()),
+            },
+        }
+
+    def get_spectrometer_settings(self, widget) -> dict:
+        """Return settings for one spectrometer panel."""
+        return {
+            "serial": widget.serial_input.text().strip(),
+            "integration_ms": float(widget.integration_spin.value()),
+            "averages": int(widget.averages_spin.value()),
+            "trigger_mode": int(widget.trigger_combo.currentIndex()),
+        }
+
+    def apply_settings_dict(self, settings: dict):
+        """Apply settings loaded from JSON."""
+        arduino = settings.get("arduino", {})
+        if "lamp_warmup_seconds" in arduino:
+            self.lamp_warmup_seconds = float(arduino["lamp_warmup_seconds"])
+        if "auto_lamp_management_enabled" in arduino:
+            self.auto_lamp_management_enabled = bool(arduino["auto_lamp_management_enabled"])
+        if "lamp_off_between_points_enabled" in arduino:
+            self.lamp_off_between_points_enabled = bool(arduino["lamp_off_between_points_enabled"])
+        if "frequency_hz" in arduino:
+            frequency = min(max(float(arduino["frequency_hz"]), 1.0), 100.0)
+            if not self.set_arduino_frequency_hz(frequency):
+                self.arduino_frequency_hz = frequency
+
+        spectrometers = settings.get("spectrometers", {})
+        self.apply_spectrometer_settings(self.spec1_widget, spectrometers.get("1", {}))
+        self.apply_spectrometer_settings(self.spec2_widget, spectrometers.get("2", {}))
+
+        ref_bg = settings.get("reference_background", {})
+        if "averages" in ref_bg:
+            self.ref_averages_spin.setValue(int(ref_bg["averages"]))
+
+        data_collection = settings.get("data_collection", {})
+        if "rate_s" in data_collection:
+            self.collection_rate_spin.setValue(float(data_collection["rate_s"]))
+        if "save_folder" in data_collection:
+            self.save_folder_input.setText(str(data_collection["save_folder"]))
+        if "save_name" in data_collection:
+            self.save_name_input.setText(str(data_collection["save_name"]))
+
+        od_limits = settings.get("od_plot_limits", {})
+        if "x_auto" in od_limits:
+            self.od_x_auto_check.setChecked(bool(od_limits["x_auto"]))
+        if "x_min_nm" in od_limits:
+            self.od_x_min_spin.setValue(float(od_limits["x_min_nm"]))
+        if "x_max_nm" in od_limits:
+            self.od_x_max_spin.setValue(float(od_limits["x_max_nm"]))
+        if "y_auto" in od_limits:
+            self.od_y_auto_check.setChecked(bool(od_limits["y_auto"]))
+        if "y_min" in od_limits:
+            self.od_y_min_spin.setValue(float(od_limits["y_min"]))
+        if "y_max" in od_limits:
+            self.od_y_max_spin.setValue(float(od_limits["y_max"]))
+        self.update_od_axis_limits()
+
+        tracking = settings.get("wavelength_tracking", {})
+        if "wavelength_nm" in tracking:
+            self.track_wavelength_spin.setValue(float(tracking["wavelength_nm"]))
+
+        self.validate_collection_rate(show_warning=False)
+        self.update_live_preview_interval()
+
+    def apply_spectrometer_settings(self, widget, settings: dict):
+        """Apply settings to one spectrometer panel."""
+        if "serial" in settings:
+            widget.serial_input.setText(str(settings["serial"]))
+        if "integration_ms" in settings:
+            widget.integration_spin.setValue(float(settings["integration_ms"]))
+        if "averages" in settings:
+            widget.averages_spin.setValue(int(settings["averages"]))
+        if "trigger_mode" in settings:
+            widget.trigger_combo.setCurrentIndex(int(settings["trigger_mode"]))
+
+    def load_settings_json(self):
+        """Choose and load JSON settings."""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Settings JSON",
+            str(self.settings_json_path),
+            "JSON Files (*.json)"
+        )
+        if filename:
+            self.load_settings_from_file(Path(filename), show_message=True)
+
+    def load_settings_from_file(self, path: Path, show_message: bool = False):
+        """Load JSON settings from path."""
+        try:
+            settings = json.loads(path.read_text(encoding="utf-8"))
+            self.apply_settings_dict(settings)
+            self.settings_json_path = path
+            self.statusBar().showMessage(f"Loaded settings: {path}")
+            self.logger.info(f"SETTINGS: Loaded {path}")
+            if show_message:
+                QMessageBox.information(self, "Settings Loaded", f"Loaded:\n{path}")
+        except Exception as e:
+            self.logger.error(f"SETTINGS: Failed to load {path} - {e}")
+            QMessageBox.critical(self, "Settings Error", f"Failed to load settings:\n{e}")
+
+    def save_settings_json_as(self):
+        """Choose JSON path and save settings."""
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Settings JSON",
+            str(self.settings_json_path),
+            "JSON Files (*.json)"
+        )
+        if not filename:
+            return
+        path = Path(filename)
+        if path.suffix.lower() != ".json":
+            path = path.with_suffix(".json")
+        self.settings_json_path = path
+        self.write_settings_json(path, show_message=True)
+
+    def update_settings_json(self):
+        """Write current settings to current JSON path."""
+        self.write_settings_json(self.settings_json_path, show_message=True)
+
+    def write_settings_json(self, path: Path, show_message: bool = False):
+        """Write current settings to JSON."""
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(
+                json.dumps(self.get_settings_dict(), indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
+            self.statusBar().showMessage(f"Updated settings JSON: {path}")
+            self.logger.info(f"SETTINGS: Updated {path}")
+            if show_message:
+                QMessageBox.information(self, "Settings Saved", f"Saved:\n{path}")
+        except Exception as e:
+            self.logger.error(f"SETTINGS: Failed to save {path} - {e}")
+            QMessageBox.critical(self, "Settings Error", f"Failed to save settings:\n{e}")
 
     def is_lamp_enabled(self) -> bool:
         """Check whether lamp TTL is enabled."""
