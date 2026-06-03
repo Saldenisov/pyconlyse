@@ -3,13 +3,30 @@
 ## Overview
 The Avantes Dual Spectrometer Viewer now implements a reference-based OD measurement system with wavelength tracking capabilities.
 
+## Local Emulator
+
+On macOS the standalone app uses an Avantes/Arduino emulator by default because the real Avantes DLL is Windows-only.
+
+```bash
+python DeviceServers/cameras/avantes/avantes_dual_viewer.py
+```
+
+Environment override:
+
+```bash
+AVANTES_EMULATOR=1 python DeviceServers/cameras/avantes/avantes_dual_viewer.py
+AVANTES_EMULATOR=0 python DeviceServers/cameras/avantes/avantes_dual_viewer.py
+```
+
+The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like spectral shape, 1-2% pulse amplitude jitter, slow spectral drift, channel-specific fiber transport, dark signal, and detector nonlinearity. Hardware averages still wait for Arduino-like 40 Hz trigger timing, so `Pulse avg = 40` takes about 1 second.
+
 ## New Layout
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  REFERENCE MEASUREMENT | DATA COLLECTION | WAVELENGTH TRACKING│
-│  [Averages: 10] [Measure Reference]                          │
-│  [Rate: 1.0s] [Start Data Collection]                        │
+│  [Averages: 40] [Measure Reference]                          │
+│  [Rate: 1.0s] [Pulse avg: 40] [Start Data Collection]        │
 │  [λ: 550nm] [Track Wavelength]                               │
 ├──────────────────────┬───────────────────────────────────────┤
 │ Channel 1 Spectrum   │                                       │
@@ -27,7 +44,7 @@ The Avantes Dual Spectrometer Viewer now implements a reference-based OD measure
 - Default serial numbers: 1810225U1 (Ch1), 1810226U1 (Ch2)
 
 ### 2. Measure Reference (I₀)
-1. Set number of averages (default: 10)
+1. Set number of hardware trigger averages (default: 40)
 2. Click **"Measure Reference"** button
 3. System automatically:
    - Collects N measurements from both channels

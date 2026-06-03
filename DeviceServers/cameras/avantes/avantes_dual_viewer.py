@@ -54,6 +54,11 @@ from DeviceServers.cameras.avantes.avantes_parallel import (
     parallel_poll_and_get_data
 )
 from DeviceServers.cameras.avantes.arduino_trigger_controller import ArduinoTriggerController
+from DeviceServers.cameras.avantes.avantes_emulator import (
+    EmulatedArduinoTriggerController,
+    EmulatedAvantesSpectrometer,
+    should_use_avantes_emulator,
+)
 
 
 class WavelengthTrackerWindow(QMainWindow):
@@ -231,9 +236,10 @@ class MeasurementThread(QThread):
 class SpectrometerWidget(QGroupBox):
     """Widget for controlling a single spectrometer."""
 
-    def __init__(self, spec_id: int, parent=None):
+    def __init__(self, spec_id: int, parent=None, emulate_hardware: bool = False):
         super().__init__(f"Spectrometer {spec_id}", parent)
         self.spec_id = spec_id
+        self.emulate_hardware = emulate_hardware
         self.spec = None
         self.wavelengths = None
         self.last_data = None
@@ -254,7 +260,7 @@ class SpectrometerWidget(QGroupBox):
         layout.addWidget(self.serial_input, 0, 1)
 
         # Connect button
-        self.connect_btn = QPushButton("Connect")
+        self.connect_btn = QPushButton("Connect Emulator" if self.emulate_hardware else "Connect")
         self.connect_btn.clicked.connect(self.connect_spectrometer)
         layout.addWidget(self.connect_btn, 0, 2)
 
@@ -318,29 +324,33 @@ class SpectrometerWidget(QGroupBox):
             return
 
         try:
-            dll_path = Path(__file__).parent / "drivers" / "avaspecx64.dll"
+            if self.emulate_hardware:
+                self.spec = EmulatedAvantesSpectrometer(serial=serial, channel_index=self.spec_id - 1)
+            else:
+                dll_path = Path(__file__).parent / "drivers" / "avaspecx64.dll"
 
-            record = EquipmentRecord(
-                manufacturer="Avantes",
-                model="AvaSpec-2048L",
-                serial=serial,
-                connection=ConnectionRecord(
-                    address=f"SDK::{dll_path}"
-                ),
-            )
+                record = EquipmentRecord(
+                    manufacturer="Avantes",
+                    model="AvaSpec-2048L",
+                    serial=serial,
+                    connection=ConnectionRecord(
+                        address=f"SDK::{dll_path}"
+                    ),
+                )
 
-            self.spec = record.connect()
+                self.spec = record.connect()
             self.spec.use_high_res_adc(True)
 
             # Get wavelength calibration
             self.wavelengths = self.spec.get_lambda()
             num_pixels = self.spec.get_num_pixels()
 
-            logging.info(f"Spec {self.spec_id} CONNECTED: Serial={serial}, Pixels={num_pixels}, λ={self.wavelengths[0]:.1f}-{self.wavelengths[-1]:.1f} nm")
+            mode = "EMULATED" if self.emulate_hardware else "CONNECTED"
+            logging.info(f"Spec {self.spec_id} {mode}: Serial={serial}, Pixels={num_pixels}, λ={self.wavelengths[0]:.1f}-{self.wavelengths[-1]:.1f} nm")
 
             # Update UI
-            self.status_label.setText("Connected")
-            self.status_label.setStyleSheet("color: green; font-weight: bold;")
+            self.status_label.setText("Emulated" if self.emulate_hardware else "Connected")
+            self.status_label.setStyleSheet("color: purple; font-weight: bold;" if self.emulate_hardware else "color: green; font-weight: bold;")
             self.pixels_label.setText(str(num_pixels))
             self.wavelength_label.setText(f"{self.wavelengths[0]:.1f} - {self.wavelengths[-1]:.1f}")
 
@@ -371,6 +381,8 @@ class SpectrometerWidget(QGroupBox):
             self.max_label.setText("---")
 
             self.connect_btn.setText("Connect")
+            if self.emulate_hardware:
+                self.connect_btn.setText("Connect Emulator")
             self.connect_btn.clicked.disconnect()
             self.connect_btn.clicked.connect(self.connect_spectrometer)
             self.serial_input.setEnabled(True)
@@ -457,9 +469,13 @@ class AvantesDualViewer(QMainWindow):
         self.current_measurement_role = None
         self._measurement_count = 0
         self.wavelength_tracker_window = None
+        self.emulate_hardware = should_use_avantes_emulator()
 
         # Arduino controller
-        self.arduino = ArduinoTriggerController(ip="10.20.30.47")
+        if self.emulate_hardware:
+            self.arduino = EmulatedArduinoTriggerController()
+        else:
+            self.arduino = ArduinoTriggerController(ip="10.20.30.47")
 
         # Timers
         self.continuous_timer = QTimer()
@@ -478,7 +494,10 @@ class AvantesDualViewer(QMainWindow):
 
     def init_ui(self):
         """Initialize the main UI."""
-        self.setWindowTitle("Avantes Dual Spectrometer Viewer")
+        title = "Avantes Dual Spectrometer Viewer"
+        if self.emulate_hardware:
+            title += " [EMULATOR]"
+        self.setWindowTitle(title)
         self.setGeometry(100, 100, 1400, 900)
 
         # Central widget
@@ -494,11 +513,11 @@ class AvantesDualViewer(QMainWindow):
         controls_splitter = QSplitter(Qt.Horizontal)
 
         # Spectrometer 1 controls
-        self.spec1_widget = SpectrometerWidget(1)
+        self.spec1_widget = SpectrometerWidget(1, emulate_hardware=self.emulate_hardware)
         controls_splitter.addWidget(self.spec1_widget)
 
         # Spectrometer 2 controls
-        self.spec2_widget = SpectrometerWidget(2)
+        self.spec2_widget = SpectrometerWidget(2, emulate_hardware=self.emulate_hardware)
         controls_splitter.addWidget(self.spec2_widget)
 
         main_layout.addWidget(controls_splitter)
@@ -657,6 +676,11 @@ class AvantesDualViewer(QMainWindow):
 
         self.arduino_status_label = QLabel("Status: Unknown")
         arduino_layout.addWidget(self.arduino_status_label)
+
+        if self.emulate_hardware:
+            emulator_label = QLabel("Mode: Emulator")
+            emulator_label.setStyleSheet("color: purple; font-weight: bold;")
+            arduino_layout.addWidget(emulator_label)
 
         arduino_group.setLayout(arduino_layout)
         layout.addWidget(arduino_group)
