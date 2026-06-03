@@ -33,20 +33,19 @@ The Avantes Dual Spectrometer Viewer now implements a reference-based OD measure
    - Collects N measurements from both channels
    - Averages them to create reference spectra (I₀_ch1, I₀_ch2)
    - Displays reference as dashed lines on Ch1 and Ch2 plots
-   - Enables continuous display mode
-   - Enables "Start Data Collection" and "Track Wavelength" buttons
+   - Enables "Start Data Collection" and "Track Wavelength" buttons after background exists
 
-### 3. Continuous Monitoring (Optional)
-- After reference measurement, continuous mode is automatically active
-- Both channels displayed in real-time
-- OD spectrum calculated and updated continuously
-- No data is saved to disk yet
+### 3. Live Preview (Optional)
+- Live preview is manual and runs at 1 Hz
+- Experiment data collection uses its own timer and does not run at 50 ms/100 ms in the background
+- No data is saved to disk until data collection is started
 
 ### 4. Start Data Collection
 1. Set measurement rate (0.1-10.0 seconds, minimum 100ms)
-2. Click **"Start Data Collection"**
-3. System begins saving time-series OD data
-4. Click again to stop collection
+2. Set pulse average. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
+3. Click **"Start Data Collection"**
+4. System saves each hardware-averaged data point to CSV
+5. Click again to stop collection
 
 ### 5. Wavelength Tracking
 1. Set target wavelength (e.g., 550 nm)
@@ -102,7 +101,8 @@ Wavelength tracker exports:
 - **Measure Reference**: Start reference measurement
 
 ### Data Collection Section
-- **Rate (s)**: Measurement interval (0.1-10.0s, min 100ms)
+- **Rate (s)**: Time between saved data points
+- **Pulse avg**: Avantes hardware trigger averages per saved data point
 - **Start/Stop Data Collection**: Toggle data recording
 
 ### Wavelength Tracking Section
@@ -151,7 +151,8 @@ No periodic measurement logs to keep files clean.
 ## Technical Notes
 
 ### Minimum Measurement Interval
-- Hardware limit: 100ms (Arduino trigger at 10 Hz)
+- Arduino trigger: 25ms interval (40 Hz)
+- With `Pulse avg = 40`, one hardware-averaged spectrum takes about 1 second
 - User-settable range: 0.1-10.0s
 - Prevents USB bus overload
 

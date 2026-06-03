@@ -14,7 +14,7 @@ const int PIN_AVANTES = 8;
 
 // Timing configuration
 const unsigned int PULSE_WIDTH_US = 10;      // Pulse width in microseconds
-const unsigned long PULSE_INTERVAL_MS = 100; // 100ms = 10Hz
+const unsigned long PULSE_INTERVAL_MS = 25;  // 25ms = 40Hz
 const unsigned long CLIENT_TIMEOUT_MS = 1000; // HTTP client timeout
 
 // ============================================================================

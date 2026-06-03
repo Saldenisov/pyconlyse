@@ -33,7 +33,7 @@ Measure background light (ambient + dark current) with lamp OFF for proper OD ca
 2. Arduino automatically switches to "Avantes Only" mode (lamp OFF)
 3. Averages N measurements (same counter as reference, default 10)
 4. Displays background as **blue dashed lines** on Ch1 and Ch2 plots
-5. Continues continuous readout
+5. Leaves measurement idle until user starts collection or live preview
 
 ### Color Scheme
 
@@ -51,7 +51,7 @@ On application startup:
 1. Connects to both spectrometers
 2. Connects to Arduino (IP: 10.20.30.47)
 3. Automatically enables "Lamp + Avantes" mode
-4. Starts continuous readout at 200ms interval
+4. Starts no automatic measurement loop
 
 If Arduino is not reachable:
 - Logs warning
@@ -106,7 +106,7 @@ Where:
 ### Connections:
 - **Pin 7**: Flash lamp trigger (10µs pulse)
 - **Pin 8**: Avantes spectrometers trigger (10µs pulse)
-- **Frequency**: 10 Hz (100ms interval)
+- **Frequency**: 40 Hz (25ms interval)
 - **IP Address**: 10.20.30.47
 - **Port**: 80 (HTTP)
 
@@ -187,8 +187,8 @@ Where:
 ## Technical Notes
 
 ### Measurement Timing:
-- Reference collection: ~2 seconds (10 measurements × 200ms)
-- Background collection: ~2 seconds (10 measurements × 200ms)
+- Reference collection: depends on Avantes hardware averaging (`avg=40` at 40Hz is about 1s)
+- Background collection: depends on Avantes hardware averaging (`avg=40` at 40Hz is about 1s)
 - Mode switching: <100ms (Arduino HTTP response)
 
 ### Memory Usage:
