@@ -18,7 +18,7 @@ AVANTES_EMULATOR=1 python DeviceServers/cameras/avantes/avantes_dual_viewer.py
 AVANTES_EMULATOR=0 python DeviceServers/cameras/avantes/avantes_dual_viewer.py
 ```
 
-The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like spectral shape, 1-2% pulse amplitude jitter, slow spectral drift, channel-specific fiber transport, dark signal, and detector nonlinearity. Hardware averages still wait for Arduino-like 40 Hz trigger timing, so `Pulse avg = 40` takes about 1 second.
+The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like spectral shape, 1-2% pulse amplitude jitter, slow spectral drift, channel-specific fiber transport, dark signal, and detector nonlinearity. Hardware averages still wait for Arduino-like 40 Hz trigger timing, so detector `Averages = 40` takes about 1 second.
 
 ## New Layout
 
@@ -26,7 +26,7 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 ┌──────────────────────────────────────────────────────────────┐
 │  REFERENCE MEASUREMENT | DATA COLLECTION | WAVELENGTH TRACKING│
 │  [Averages: 40] [Measure Reference]                          │
-│  [Rate: 1.0s] [Pulse avg: 40] [Start DC] [Show]              │
+│  [Rate: 1.0s] [Start DC] [Show]                              │
 │  [λ: 550nm] [Track Wavelength]                               │
 ├──────────────────────┬───────────────────────────────────────┤
 │ Channel 1 Spectrum   │                                       │
@@ -124,7 +124,6 @@ Wavelength tracker exports:
 - **Lamp OFF**: Disable flash lamp while keeping Avantes triggers available
 - **Advanced**: Manual Arduino modes (`Lamp + Avantes`, `Avantes Only`, `Arduino OFF`)
 - **Rate (s)**: Time between saved data points, 0.1-86400 seconds
-- **Pulse avg**: Avantes hardware trigger averages per saved data point
 - **Start/Stop DC**: Toggle data recording
 - **Show**: Open or raise floating OD time map window
 
@@ -133,8 +132,8 @@ Wavelength tracker exports:
 - If DC starts while the lamp is off, the first point is delayed until the lamp has warmed for 120 seconds.
 - If the next saved point is more than 120 seconds away, the lamp is switched off between points.
 - If the next saved point is 120 seconds away or sooner, the lamp stays on.
-- Each saved point still uses Avantes hardware averaging: `Pulse avg = 40` at 40 Hz means 40 TTL pulses and about 1 second of averaging.
-- Rate cannot be shorter than one acquisition. Example: `Pulse avg = 80` at 40 Hz takes about 2 seconds, so `Rate = 1 s` is rejected and reset to 2 seconds.
+- Each saved point uses the synced detector `Averages` value. `Averages = 40` at 40 Hz means 40 TTL pulses and about 1 second of averaging.
+- Rate cannot be shorter than one acquisition. Example: detector `Averages = 80` at 40 Hz takes about 2 seconds, so `Rate = 1 s` is rejected and reset to 2 seconds.
 
 ### Wavelength Tracking Section
 - **λ (nm)**: Target wavelength for tracking (200-1100 nm)
@@ -183,8 +182,8 @@ No periodic measurement logs to keep files clean.
 
 ### Minimum Measurement Interval
 - Arduino trigger: 25ms interval (40 Hz)
-- With `Pulse avg = 40`, one hardware-averaged spectrum takes about 1 second
-- With `Pulse avg = 80`, one hardware-averaged spectrum takes about 2 seconds, so collection rate must be at least 2 seconds
+- With detector `Averages = 40`, one hardware-averaged spectrum takes about 1 second
+- With detector `Averages = 80`, one hardware-averaged spectrum takes about 2 seconds, so collection rate must be at least 2 seconds
 - User-settable range: 0.1-86400s
 - Prevents USB bus overload
 

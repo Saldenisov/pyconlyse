@@ -805,22 +805,15 @@ class AvantesDualViewer(QMainWindow):
         self.collection_rate_spin.setToolTip("Time between saved data points")
         data_layout.addWidget(self.collection_rate_spin, 0, 1)
 
-        data_layout.addWidget(QLabel("Pulse avg:"), 0, 2)
-        self.collection_averages_spin = QSpinBox()
-        self.collection_averages_spin.setRange(1, 100)
-        self.collection_averages_spin.setValue(40)
-        self.collection_averages_spin.setToolTip("Avantes hardware trigger averages per saved point")
-        data_layout.addWidget(self.collection_averages_spin, 0, 3)
-
         self.start_collection_btn = QPushButton("Start DC")
         self.start_collection_btn.clicked.connect(self.toggle_data_collection)
         self.start_collection_btn.setEnabled(False)
-        data_layout.addWidget(self.start_collection_btn, 0, 4)
+        data_layout.addWidget(self.start_collection_btn, 0, 2)
 
         self.show_od_map_btn = QPushButton("Show")
         self.show_od_map_btn.clicked.connect(self.show_od_heatmap_window)
         self.show_od_map_btn.setToolTip("Show OD time map")
-        data_layout.addWidget(self.show_od_map_btn, 0, 5)
+        data_layout.addWidget(self.show_od_map_btn, 0, 3)
 
         data_layout.addWidget(QLabel("Folder:"), 1, 0)
         self.save_folder_input = QLineEdit(str(Path.home() / "AvantesData"))
@@ -953,7 +946,7 @@ class AvantesDualViewer(QMainWindow):
 
     def get_collection_min_rate_s(self) -> float:
         """Return minimum non-overlapping collection rate."""
-        avg = self.collection_averages_spin.value()
+        avg = self.get_detector_average_count()
         trigger_mode = max(self.spec1_widget.trigger_combo.currentIndex(), self.spec2_widget.trigger_combo.currentIndex())
         if trigger_mode in {1, 2}:
             acquisition_s = avg / ARDUINO_TRIGGER_HZ
@@ -961,6 +954,10 @@ class AvantesDualViewer(QMainWindow):
             integration_ms = max(self.spec1_widget.integration_spin.value(), self.spec2_widget.integration_spin.value())
             acquisition_s = avg * integration_ms / 1000.0
         return max(0.1, acquisition_s)
+
+    def get_detector_average_count(self) -> int:
+        """Return synced detector average count."""
+        return max(self.spec1_widget.averages_spin.value(), self.spec2_widget.averages_spin.value())
 
     def validate_collection_rate(self, show_warning: bool = False) -> bool:
         """Ensure collection rate is not shorter than one acquisition."""
@@ -972,7 +969,7 @@ class AvantesDualViewer(QMainWindow):
         self.collection_rate_spin.setValue(min_rate_s)
         message = (
             f"Rate cannot be shorter than acquisition time.\n\n"
-            f"Pulse avg = {self.collection_averages_spin.value()}\n"
+            f"Detector averages = {self.get_detector_average_count()}\n"
             f"Minimum rate = {min_rate_s:.3g} s\n\n"
             f"Rate was set to {min_rate_s:.3g} s."
         )
@@ -1317,7 +1314,7 @@ class AvantesDualViewer(QMainWindow):
             self.start_collection_btn.setText("Stop DC")
             self.logger.info(
                 f"DATA COLLECTION: Started (rate={self.collection_rate_spin.value()}s, "
-                f"pulse_avg={self.collection_averages_spin.value()}, file={self.collection_file_path})"
+                f"detector_avg={self.get_detector_average_count()}, file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
             if self.is_lamp_enabled():
@@ -1343,7 +1340,7 @@ class AvantesDualViewer(QMainWindow):
         if self.measurement_thread and self.measurement_thread.isRunning():
             return
 
-        n_avg = self.collection_averages_spin.value()
+        n_avg = self.get_detector_average_count()
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
         if not self.is_lamp_enabled():
@@ -1529,7 +1526,7 @@ class AvantesDualViewer(QMainWindow):
 
         completed_collection_point = measurement_role == "collection" and data1 is not None and data2 is not None
         collection_elapsed = None
-        collection_pulses = self.collection_averages_spin.value() if completed_collection_point else 0
+        collection_pulses = self.get_detector_average_count() if completed_collection_point else 0
         if completed_collection_point:
             collection_elapsed = time.time() - self.collection_start_time
             skip_normal_status = True
