@@ -64,7 +64,9 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 4. System appends each hardware-averaged OD spectrum to `*_measurement.dat`
 5. Click **"Show"** to open the floating OD time map window
 6. OD time map fills bottom-to-top during collection: X is wavelength in nm, Y is elapsed time in seconds
-7. Click **"Stop DC"** to stop collection
+7. Move the vertical cursor region to average wavelengths and plot kinetics
+8. Move the horizontal cursor region to average time points and plot spectrum
+9. Click **"Stop DC"** to stop collection
 
 ### 5. Wavelength Tracking
 1. Set target wavelength (e.g., 550 nm)
@@ -114,6 +116,10 @@ Data collection saves:
 - `*_measurement.dat`: tab-delimited OD map
 - First column: elapsed time in seconds
 - Remaining columns: OD values at wavelength columns from the header row
+
+OD time map window:
+- Vertical cursor pair selects wavelength range and plots mean OD kinetics versus time.
+- Horizontal cursor pair selects time range and plots mean OD spectrum versus wavelength.
 
 Wavelength tracker exports:
 - `od_timeseries_550nm.csv`: Time series at specific wavelength

@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
     QCheckBox, QSplitter, QMenu
 )
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread, QRectF
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
@@ -196,7 +196,17 @@ class ODHeatmapWindow(QMainWindow):
         super().__init__(parent)
         self.parent_viewer = parent
         self.setWindowTitle("OD Time Map")
-        self.setGeometry(220, 180, 1000, 600)
+        self.setGeometry(220, 180, 1200, 800)
+
+        self.wavelengths = None
+        self.times = None
+        self.heatmap = None
+        self._regions_initialized = False
+
+        central_widget = QWidget()
+        central_layout = QVBoxLayout(central_widget)
+        central_layout.setContentsMargins(0, 0, 0, 0)
+        self.setCentralWidget(central_widget)
 
         self.plot = pg.PlotWidget(title="OD Time Map")
         self.plot.setLabel('left', 'Time', units='s')
@@ -204,36 +214,130 @@ class ODHeatmapWindow(QMainWindow):
         self.plot.getAxis('left').enableAutoSIPrefix(False)
         self.plot.getAxis('bottom').enableAutoSIPrefix(False)
         self.plot.showGrid(x=True, y=True)
-        self.setCentralWidget(self.plot)
 
-        self.image_item = pg.ImageItem()
-        self.plot.addItem(self.image_item)
-        lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
-        self.image_item.setLookupTable(lut)
+        self.mesh_item = pg.PColorMeshItem(colorMap=pg.colormap.get("viridis"))
+        self.plot.addItem(self.mesh_item)
+
+        self.wavelength_region = pg.LinearRegionItem([350, 450], orientation='vertical')
+        self.time_region = pg.LinearRegionItem([0, 1], orientation='horizontal')
+        self.wavelength_region.setZValue(10)
+        self.time_region.setZValue(11)
+        self.wavelength_region.sigRegionChanged.connect(self.update_profiles)
+        self.time_region.sigRegionChanged.connect(self.update_profiles)
+        self.plot.addItem(self.wavelength_region)
+        self.plot.addItem(self.time_region)
         self.plot.setYRange(0, 1, padding=0)
+        central_layout.addWidget(self.plot, stretch=3)
+
+        profile_splitter = QSplitter(Qt.Horizontal)
+        self.kinetics_plot = pg.PlotWidget(title="Kinetics: mean OD over wavelength band")
+        self.kinetics_plot.setLabel('left', 'OD', units='AU')
+        self.kinetics_plot.setLabel('bottom', 'Time', units='s')
+        self.kinetics_plot.getAxis('bottom').enableAutoSIPrefix(False)
+        self.kinetics_plot.showGrid(x=True, y=True)
+        self.kinetics_curve = self.kinetics_plot.plot(pen=pg.mkPen('y', width=2), symbol='o', symbolSize=4)
+        profile_splitter.addWidget(self.kinetics_plot)
+
+        self.spectrum_plot = pg.PlotWidget(title="Spectrum: mean OD over time band")
+        self.spectrum_plot.setLabel('left', 'OD', units='AU')
+        self.spectrum_plot.setLabel('bottom', 'Wavelength', units='nm')
+        self.spectrum_plot.getAxis('bottom').enableAutoSIPrefix(False)
+        self.spectrum_plot.showGrid(x=True, y=True)
+        self.spectrum_curve = self.spectrum_plot.plot(pen=pg.mkPen('c', width=2))
+        profile_splitter.addWidget(self.spectrum_plot)
+        central_layout.addWidget(profile_splitter, stretch=1)
 
     def set_heatmap(self, wavelengths, rows, times):
         """Render OD rows as wavelength x elapsed-time image."""
         if wavelengths is None or not rows:
-            self.image_item.clear()
+            self.wavelengths = None
+            self.times = None
+            self.heatmap = None
+            self.mesh_item.setVisible(False)
+            self.kinetics_curve.setData([], [])
+            self.spectrum_curve.setData([], [])
             self.plot.setYRange(0, 1, padding=0)
             self.plot.enableAutoRange(axis='x')
             return
 
-        heatmap = np.vstack(rows)
-        heatmap = np.nan_to_num(heatmap, nan=0.0, posinf=0.0, neginf=0.0)
-        display = heatmap.T
+        self.wavelengths = np.asarray(wavelengths, dtype=float)
+        self.times = np.asarray(times, dtype=float)
+        self.heatmap = np.nan_to_num(np.vstack(rows), nan=0.0, posinf=0.0, neginf=0.0)
 
-        x_min = float(wavelengths[0])
-        x_max = float(wavelengths[-1])
-        elapsed = np.array(times, dtype=float)
-        y_max = max(float(elapsed[-1]) if len(elapsed) else 0.0, 1.0)
+        x_edges = self._edges_from_centers(self.wavelengths)
+        y_edges = self._time_edges(self.times)
+        x_grid, y_grid = np.meshgrid(x_edges, y_edges)
 
-        self.image_item.setImage(display, autoLevels=True)
-        self.image_item.setRect(QRectF(x_min, 0, x_max - x_min, y_max))
+        self.mesh_item.setVisible(True)
+        self.mesh_item.setData(x_grid, y_grid, self.heatmap)
         self.plot.setTitle(f"OD Time Map ({len(rows)} points)")
+        x_min = float(x_edges[0])
+        x_max = float(x_edges[-1])
+        y_min = float(y_edges[0])
+        y_max = max(float(y_edges[-1]), 1.0)
         self.plot.setXRange(x_min, x_max, padding=0)
-        self.plot.setYRange(0, y_max, padding=0)
+        self.plot.setYRange(y_min, y_max, padding=0)
+
+        self._initialize_regions(x_min, x_max, y_min, y_max)
+        self.update_profiles()
+
+    def _edges_from_centers(self, centers):
+        """Build cell edges from monotonically increasing center coordinates."""
+        centers = np.asarray(centers, dtype=float)
+        if len(centers) == 1:
+            return np.array([centers[0] - 0.5, centers[0] + 0.5])
+        mids = (centers[:-1] + centers[1:]) / 2.0
+        first = centers[0] - (mids[0] - centers[0])
+        last = centers[-1] + (centers[-1] - mids[-1])
+        return np.concatenate(([first], mids, [last]))
+
+    def _time_edges(self, times):
+        """Build time cell edges while keeping first edge at zero when possible."""
+        times = np.asarray(times, dtype=float)
+        if len(times) == 1:
+            width = max(times[0], 1.0)
+            return np.array([max(0.0, times[0] - width / 2.0), times[0] + width / 2.0])
+        edges = self._edges_from_centers(times)
+        edges[0] = max(0.0, edges[0])
+        return edges
+
+    def _initialize_regions(self, x_min, x_max, y_min, y_max):
+        """Set initial cursor regions once."""
+        if self._regions_initialized:
+            return
+        x_width = x_max - x_min
+        y_width = y_max - y_min
+        self.wavelength_region.setRegion([x_min + 0.4 * x_width, x_min + 0.6 * x_width])
+        self.time_region.setRegion([y_min, max(y_min + min(y_width, 1.0), y_min + 0.1)])
+        self._regions_initialized = True
+
+    def update_profiles(self):
+        """Update kinetics and spectrum from cursor-selected regions."""
+        if self.heatmap is None or self.wavelengths is None or self.times is None:
+            return
+
+        wl_min, wl_max = self.wavelength_region.getRegion()
+        time_min, time_max = self.time_region.getRegion()
+        wl_mask = (self.wavelengths >= min(wl_min, wl_max)) & (self.wavelengths <= max(wl_min, wl_max))
+        time_mask = (self.times >= min(time_min, time_max)) & (self.times <= max(time_min, time_max))
+
+        if np.any(wl_mask):
+            kinetics = np.nanmean(self.heatmap[:, wl_mask], axis=1)
+            self.kinetics_curve.setData(self.times, kinetics)
+            self.kinetics_plot.setTitle(
+                f"Kinetics: mean OD {min(wl_min, wl_max):.1f}-{max(wl_min, wl_max):.1f} nm"
+            )
+        else:
+            self.kinetics_curve.setData([], [])
+
+        if np.any(time_mask):
+            spectrum = np.nanmean(self.heatmap[time_mask, :], axis=0)
+            self.spectrum_curve.setData(self.wavelengths, spectrum)
+            self.spectrum_plot.setTitle(
+                f"Spectrum: mean OD {min(time_min, time_max):.1f}-{max(time_min, time_max):.1f} s"
+            )
+        else:
+            self.spectrum_curve.setData([], [])
 
     def closeEvent(self, event):
         """Allow Show button to recreate window after user closes it."""
