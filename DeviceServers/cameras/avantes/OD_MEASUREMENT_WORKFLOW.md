@@ -63,7 +63,7 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 3. Click **"Start DC"**
 4. System saves each hardware-averaged data point to CSV
 5. Click **"Show"** to open the floating OD time map window
-6. OD time map fills bottom-to-top during collection: X is wavelength, Y is saved point index
+6. OD time map fills bottom-to-top during collection: X is wavelength in nm, Y is elapsed time in seconds
 7. Click **"Stop DC"** to stop collection
 
 ### 5. Wavelength Tracking

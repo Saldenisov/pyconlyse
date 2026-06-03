@@ -198,8 +198,10 @@ class ODHeatmapWindow(QMainWindow):
         self.setGeometry(220, 180, 1000, 600)
 
         self.plot = pg.PlotWidget(title="OD Time Map")
-        self.plot.setLabel('left', 'Time index')
+        self.plot.setLabel('left', 'Time', units='s')
         self.plot.setLabel('bottom', 'Wavelength', units='nm')
+        self.plot.getAxis('left').enableAutoSIPrefix(False)
+        self.plot.getAxis('bottom').enableAutoSIPrefix(False)
         self.plot.showGrid(x=True, y=True)
         self.setCentralWidget(self.plot)
 
@@ -209,8 +211,8 @@ class ODHeatmapWindow(QMainWindow):
         self.image_item.setLookupTable(lut)
         self.plot.setYRange(0, 1, padding=0)
 
-    def set_heatmap(self, wavelengths, rows):
-        """Render OD rows as wavelength x time-index image."""
+    def set_heatmap(self, wavelengths, rows, times):
+        """Render OD rows as wavelength x elapsed-time image."""
         if wavelengths is None or not rows:
             self.image_item.clear()
             self.plot.setYRange(0, 1, padding=0)
@@ -223,12 +225,14 @@ class ODHeatmapWindow(QMainWindow):
 
         x_min = float(wavelengths[0])
         x_max = float(wavelengths[-1])
-        y_count = max(len(rows), 1)
+        elapsed = np.array(times, dtype=float)
+        y_max = max(float(elapsed[-1]) if len(elapsed) else 0.0, 1.0)
 
         self.image_item.setImage(display, autoLevels=True)
-        self.image_item.setRect(QRectF(x_min, 0, x_max - x_min, y_count))
+        self.image_item.setRect(QRectF(x_min, 0, x_max - x_min, y_max))
+        self.plot.setTitle(f"OD Time Map ({len(rows)} points)")
         self.plot.setXRange(x_min, x_max, padding=0)
-        self.plot.setYRange(0, y_count, padding=0)
+        self.plot.setYRange(0, y_max, padding=0)
 
     def closeEvent(self, event):
         """Allow Show button to recreate window after user closes it."""
@@ -518,6 +522,7 @@ class AvantesDualViewer(QMainWindow):
         self.collection_point_start_time = None
         self.collection_file_path = None
         self.od_heatmap_rows = []
+        self.od_heatmap_times = []
         self.od_heatmap_wavelengths = None
         self.od_heatmap_window = None
         self.current_measurement_role = None
@@ -613,6 +618,7 @@ class AvantesDualViewer(QMainWindow):
         self.plot_od = pg.PlotWidget(title="Optical Density (OD) Spectrum")
         self.plot_od.setLabel('left', 'OD (Absorbance)', units='AU')
         self.plot_od.setLabel('bottom', 'Wavelength', units='nm')
+        self.plot_od.getAxis('bottom').enableAutoSIPrefix(False)
         self.plot_od.showGrid(x=True, y=True)
         self.curve_od = self.plot_od.plot(pen=pg.mkPen('w', width=2))  # White for OD
         od_layout.addWidget(self.plot_od)
@@ -1296,22 +1302,35 @@ class AvantesDualViewer(QMainWindow):
     def reset_od_heatmap(self):
         """Clear OD time map for a new data collection run."""
         self.od_heatmap_rows = []
+        self.od_heatmap_times = []
         self.od_heatmap_wavelengths = None
         self.render_od_heatmap()
 
-    def update_od_heatmap(self, wavelengths: np.ndarray, od_spectrum: Optional[np.ndarray]):
+    def update_od_heatmap(
+        self,
+        wavelengths: np.ndarray,
+        od_spectrum: Optional[np.ndarray],
+        elapsed_time: Optional[float] = None,
+    ):
         """Append one OD spectrum to the time map."""
         if wavelengths is None or od_spectrum is None:
             return
 
         self.od_heatmap_wavelengths = wavelengths
         self.od_heatmap_rows.append(np.array(od_spectrum, dtype=float))
+        if elapsed_time is None:
+            elapsed_time = float(len(self.od_heatmap_rows))
+        self.od_heatmap_times.append(float(elapsed_time))
         self.render_od_heatmap()
 
     def render_od_heatmap(self):
         """Render heatmap data if floating window exists."""
         if self.od_heatmap_window is not None:
-            self.od_heatmap_window.set_heatmap(self.od_heatmap_wavelengths, self.od_heatmap_rows)
+            self.od_heatmap_window.set_heatmap(
+                self.od_heatmap_wavelengths,
+                self.od_heatmap_rows,
+                self.od_heatmap_times,
+            )
 
     def show_od_heatmap_window(self):
         """Open or raise the floating OD time map window."""
@@ -1441,7 +1460,7 @@ class AvantesDualViewer(QMainWindow):
                 }
             )
             self.collection_point_index += 1
-            self.update_od_heatmap(wavelengths1, od_spectrum)
+            self.update_od_heatmap(wavelengths1, od_spectrum, collection_elapsed)
             self.statusBar().showMessage(
                 f"Saved point {self.collection_point_index} ({collection_pulses} pulses)"
             )
