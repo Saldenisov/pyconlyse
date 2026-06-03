@@ -418,6 +418,9 @@ class SpectrometerWidget(QGroupBox):
         """Called when integration time, averages, or trigger mode changes."""
         # Settings will be applied on next measurement
         # No need to stop/restart - new config used automatically
+        parent = self.parent()
+        if parent and hasattr(parent, "update_live_preview_interval"):
+            parent.update_live_preview_interval()
         pass
 
     def update_od_axis_limits(self):
@@ -519,6 +522,7 @@ class AvantesDualViewer(QMainWindow):
         # Spectrometer 2 controls
         self.spec2_widget = SpectrometerWidget(2, emulate_hardware=self.emulate_hardware)
         controls_splitter.addWidget(self.spec2_widget)
+        self.link_detector_averages()
 
         main_layout.addWidget(controls_splitter)
 
@@ -821,6 +825,44 @@ class AvantesDualViewer(QMainWindow):
         else:
             self.plot_od.enableAutoRange(axis='y')
 
+    def link_detector_averages(self):
+        """Keep detector average controls synchronized."""
+        self._syncing_detector_averages = False
+
+        def sync_averages(source, target):
+            if self._syncing_detector_averages:
+                return
+            self._syncing_detector_averages = True
+            target.averages_spin.setValue(source.averages_spin.value())
+            self._syncing_detector_averages = False
+            if self.continuous_mode:
+                self.update_live_preview_interval()
+
+        self.spec1_widget.averages_spin.valueChanged.connect(
+            lambda: sync_averages(self.spec1_widget, self.spec2_widget)
+        )
+        self.spec2_widget.averages_spin.valueChanged.connect(
+            lambda: sync_averages(self.spec2_widget, self.spec1_widget)
+        )
+        self.spec1_widget.integration_spin.valueChanged.connect(self.update_live_preview_interval)
+        self.spec2_widget.integration_spin.valueChanged.connect(self.update_live_preview_interval)
+        self.spec1_widget.trigger_combo.currentIndexChanged.connect(self.update_live_preview_interval)
+        self.spec2_widget.trigger_combo.currentIndexChanged.connect(self.update_live_preview_interval)
+
+    def get_live_preview_interval_ms(self) -> int:
+        """Return preview interval for hardware-triggered acquisition."""
+        avg = max(self.spec1_widget.averages_spin.value(), self.spec2_widget.averages_spin.value())
+        trigger_mode = max(self.spec1_widget.trigger_combo.currentIndex(), self.spec2_widget.trigger_combo.currentIndex())
+        if trigger_mode in {1, 2}:
+            return max(50, avg * 25)
+        integration_ms = max(self.spec1_widget.integration_spin.value(), self.spec2_widget.integration_spin.value())
+        return max(50, int(avg * integration_ms))
+
+    def update_live_preview_interval(self):
+        """Apply live preview interval if preview is running."""
+        if self.continuous_mode:
+            self.continuous_timer.start(self.get_live_preview_interval_ms())
+
     def single_measurement(self, averages_override=None, measurement_role=None):
         """Perform a single parallel measurement."""
         if self.measurement_thread and self.measurement_thread.isRunning():
@@ -949,11 +991,12 @@ class AvantesDualViewer(QMainWindow):
             self.stop_live_preview()
         else:
             # Start live preview at a modest rate; experiment collection has its own timer.
-            self.continuous_timer.start(1000)
+            interval_ms = self.get_live_preview_interval_ms()
+            self.continuous_timer.start(interval_ms)
             self.continuous_mode = True
             self.continuous_btn.setText("Stop Live Preview")
             self.continuous_btn.setStyleSheet("background-color: #d32f2f; color: white; font-weight: bold;")
-            self.logger.info("LIVE PREVIEW: Started (1000ms interval)")
+            self.logger.info(f"LIVE PREVIEW: Started ({interval_ms}ms interval)")
             self.statusBar().showMessage("Live preview active")
 
     def stop_live_preview(self):
