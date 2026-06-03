@@ -699,6 +699,9 @@ class AvantesDualViewer(QMainWindow):
         self.lamp_warmup_timer = QTimer()
         self.lamp_warmup_timer.setSingleShot(True)
         self.lamp_warmup_timer.timeout.connect(self.prepare_lamp_for_collection)
+        self.collection_countdown_timer = QTimer()
+        self.collection_countdown_timer.setInterval(1000)
+        self.collection_countdown_timer.timeout.connect(self.update_collection_countdown_label)
 
         # Setup logging
         self.setup_logging()
@@ -969,6 +972,10 @@ class AvantesDualViewer(QMainWindow):
         self.show_od_map_btn.clicked.connect(self.show_od_heatmap_window)
         self.show_od_map_btn.setToolTip("Show OD time map")
         data_layout.addWidget(self.show_od_map_btn, 0, 3)
+
+        self.collection_countdown_label = QLabel("Next: -- | Points: 0")
+        self.collection_countdown_label.setToolTip("Next data-collection point countdown and saved point count")
+        data_layout.addWidget(self.collection_countdown_label, 0, 4)
 
         data_layout.addWidget(QLabel("Folder:"), 1, 0)
         self.save_folder_input = QLineEdit(str(Path.home() / "AvantesData"))
@@ -1693,24 +1700,24 @@ class AvantesDualViewer(QMainWindow):
                 self.collection_file_path.unlink()
 
             self.start_collection_btn.setText("Stop DC")
+            self.collection_countdown_timer.start()
+            self.update_collection_countdown_label()
             self.logger.info(
                 f"DATA COLLECTION: Started (rate={self.collection_rate_spin.value()}s, "
                 f"detector_avg={self.get_detector_average_count()}, file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
-            if not self.auto_lamp_management_enabled or self.is_lamp_enabled():
-                self.collect_data_point()
-            else:
-                first_due_time = time.time() + self.lamp_warmup_seconds
-                self.schedule_collection_due_time(first_due_time)
+            self.collect_data_point()
         else:
             # Stop data collection
             self.data_collection_active = False
             self.collection_timer.stop()
             self.lamp_warmup_timer.stop()
+            self.collection_countdown_timer.stop()
             self.start_collection_btn.setText("Start DC")
 
             n_points = len(self.collection_data) if hasattr(self, 'collection_data') else 0
+            self.update_collection_countdown_label()
             self.logger.info(f"DATA COLLECTION: Stopped ({n_points} data points collected, file={self.collection_file_path})")
             self.statusBar().showMessage(f"Data collection stopped ({n_points} points)")
 
@@ -1724,7 +1731,7 @@ class AvantesDualViewer(QMainWindow):
         n_avg = self.get_detector_average_count()
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
-        if self.auto_lamp_management_enabled and not self.is_lamp_enabled():
+        if not self.is_lamp_enabled():
             self.logger.info("DATA COLLECTION: Lamp was off at measurement time; enabling now")
             if not self.set_lamp_and_avantes():
                 self.statusBar().showMessage("Data collection paused: failed to enable lamp")
@@ -1732,6 +1739,7 @@ class AvantesDualViewer(QMainWindow):
                 return
         self.collection_point_start_time = time.time()
         self.statusBar().showMessage(f"Collecting point {self.collection_point_index + 1} (avg={n_avg})...")
+        self.update_collection_countdown_label()
         self.single_measurement(averages_override=n_avg, measurement_role="collection")
 
     def schedule_next_collection_point(self):
@@ -1743,6 +1751,7 @@ class AvantesDualViewer(QMainWindow):
         interval_s = float(self.collection_rate_spin.value())
         base_time = self.collection_point_start_time or time.time()
         self.schedule_collection_due_time(base_time + interval_s)
+        self.update_collection_countdown_label()
 
     def on_collection_rate_changed(self):
         """Reschedule active data collection when rate changes."""
@@ -1755,6 +1764,7 @@ class AvantesDualViewer(QMainWindow):
         interval_s = float(self.collection_rate_spin.value())
         base_time = self.collection_point_start_time or self.collection_start_time or time.time()
         self.schedule_collection_due_time(base_time + interval_s)
+        self.update_collection_countdown_label()
 
     def schedule_collection_due_time(self, due_time: float):
         """Schedule warmup and measurement for the next collection point."""
@@ -1786,6 +1796,7 @@ class AvantesDualViewer(QMainWindow):
                 self.prepare_lamp_for_collection()
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s; lamp stays on")
+        self.update_collection_countdown_label()
 
     def prepare_lamp_for_collection(self):
         """Enable lamp before a scheduled collection point."""
@@ -1797,6 +1808,43 @@ class AvantesDualViewer(QMainWindow):
             due = self.collection_next_due_time or time.time()
             self.statusBar().showMessage(f"Lamp warming; next point in {max(0.0, due - time.time()):.0f}s")
             self.logger.info("DATA COLLECTION: Lamp enabled for scheduled measurement")
+            self.update_collection_countdown_label()
+
+    def format_seconds_for_countdown(self, seconds: float) -> str:
+        """Format countdown seconds as compact time text."""
+        seconds = max(0, int(round(seconds)))
+        hours, rem = divmod(seconds, 3600)
+        minutes, secs = divmod(rem, 60)
+        if hours:
+            return f"{hours:d}:{minutes:02d}:{secs:02d}"
+        return f"{minutes:d}:{secs:02d}"
+
+    def update_collection_countdown_label(self):
+        """Update data-collection countdown and point counter."""
+        points = self.collection_point_index if hasattr(self, "collection_point_index") else 0
+        if not hasattr(self, "collection_countdown_label"):
+            return
+        if not self.data_collection_active:
+            self.collection_countdown_label.setText(f"Next: -- | Points: {points}")
+            return
+        if getattr(self, "current_measurement_role", None) == "collection":
+            self.collection_countdown_label.setText(f"Collecting... | Points: {points}")
+            return
+        if self.collection_next_due_time is None:
+            self.collection_countdown_label.setText(f"Next: now | Points: {points}")
+            return
+
+        remaining = max(0.0, self.collection_next_due_time - time.time())
+        text = f"Next: {self.format_seconds_for_countdown(remaining)} | Points: {points}"
+
+        if self.auto_lamp_management_enabled and self.lamp_off_between_points_enabled:
+            warmup_start_in = remaining - self.lamp_warmup_seconds
+            if warmup_start_in > 0:
+                text += f" | Lamp in {self.format_seconds_for_countdown(warmup_start_in)}"
+            else:
+                text += " | Lamp on"
+
+        self.collection_countdown_label.setText(text)
 
     def browse_save_folder(self):
         """Choose folder for exported and collected files."""
@@ -1924,7 +1972,10 @@ class AvantesDualViewer(QMainWindow):
         collection_elapsed = None
         collection_pulses = self.get_detector_average_count() if completed_collection_point else 0
         if completed_collection_point:
-            collection_elapsed = time.time() - self.collection_start_time
+            if self.collection_point_index == 0:
+                collection_elapsed = 0.0
+            else:
+                collection_elapsed = time.time() - self.collection_start_time
             skip_normal_status = True
 
         # Calculate and plot Optical Density (only if both reference AND background exist)
@@ -1972,6 +2023,7 @@ class AvantesDualViewer(QMainWindow):
             self.statusBar().showMessage(
                 f"Saved point {self.collection_point_index} ({collection_pulses} pulses)"
             )
+            self.update_collection_countdown_label()
             self.schedule_next_collection_point()
 
         # Update status (unless we're in the middle of collecting reference/background)
@@ -2020,6 +2072,8 @@ class AvantesDualViewer(QMainWindow):
     def on_measurement_finished(self):
         """Handle measurement thread finished."""
         self.current_measurement_role = None
+        if self.data_collection_active:
+            self.update_collection_countdown_label()
 
     def save_collection_point(
         self,
@@ -2307,6 +2361,7 @@ class AvantesDualViewer(QMainWindow):
         if self.data_collection_active:
             self.collection_timer.stop()
             self.lamp_warmup_timer.stop()
+            self.collection_countdown_timer.stop()
 
         # Stop measurement thread
         if self.measurement_thread and self.measurement_thread.isRunning():
