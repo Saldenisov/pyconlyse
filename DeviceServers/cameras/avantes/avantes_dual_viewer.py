@@ -784,7 +784,7 @@ class AvantesDualViewer(QMainWindow):
                 QMessageBox.warning(self, "Error", "Both spectrometers must be connected")
             else:
                 self.logger.error("Spectrometer connection lost - stopping continuous mode")
-                self.continuous_check.setChecked(False)
+                self._stop_continuous_mode_safe()
             return
         
         # Validate connections are still active
@@ -795,7 +795,7 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"Failed to get measurement config: {e}")
             if self.continuous_mode:
                 self.logger.error("Stopping continuous mode due to connection error")
-                self.continuous_check.setChecked(False)
+                self._stop_continuous_mode_safe()
             else:
                 QMessageBox.critical(self, "Error", f"Connection error:\n{str(e)}")
             return
@@ -884,6 +884,33 @@ class AvantesDualViewer(QMainWindow):
             self.arduino_status_label.setStyleSheet("color: red; font-weight: bold;")
             self.logger.error("ARDUINO: Failed to turn off")
     
+    def _stop_continuous_mode_safe(self):
+        """Stop continuous readout mode defensively.
+
+        Used from error-handling paths where the UI control referenced by the
+        old code (self.continuous_check) no longer exists. Tolerates missing
+        attributes so it never raises while the app is already in an error
+        state.
+        """
+        try:
+            if getattr(self, "continuous_mode", False):
+                self.toggle_continuous_readout()
+        except Exception as exc:
+            try:
+                # Best-effort fallback: stop the timer and clear the flag.
+                if getattr(self, "continuous_timer", None) is not None:
+                    self.continuous_timer.stop()
+                self.continuous_mode = False
+                if hasattr(self, "continuous_btn"):
+                    self.continuous_btn.setText("Start Continuous")
+                    self.continuous_btn.setStyleSheet(
+                        "background-color: #4CAF50; color: white; font-weight: bold;"
+                    )
+            finally:
+                self.logger.error(
+                    f"Failed to cleanly stop continuous mode: {exc}"
+                )
+
     def toggle_continuous_readout(self):
         """Toggle continuous readout mode on/off."""
         if self.continuous_mode:
@@ -1391,7 +1418,12 @@ class AvantesDualViewer(QMainWindow):
         self.statusBar().showMessage("Plots cleared")
     
     def setup_logging(self):
-        """Setup logging to file and console."""
+        """Setup logging to file and console.
+
+        Both handlers are configured to use UTF-8 so Unicode characters
+        (e.g. the Greek letter lambda used in wavelength messages) can be
+        emitted without UnicodeEncodeError on Windows (default cp1252).
+        """
         # Create logs directory if it doesn't exist
         log_dir = Path(__file__).parent / "logs"
         log_dir.mkdir(exist_ok=True)
@@ -1399,17 +1431,39 @@ class AvantesDualViewer(QMainWindow):
         # Create log filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_file = log_dir / f"avantes_dual_{timestamp}.log"
-        
-        # Configure logging
+
+        # File handler with UTF-8 encoding
+        file_handler = logging.FileHandler(log_file, encoding="utf-8")
+
+        # Stream handler: try to reconfigure stdout to UTF-8 (Python 3.7+);
+        # fall back to replacing un-encodable characters so logging never crashes.
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            stream_handler = logging.StreamHandler(sys.stdout)
+        except Exception:
+            import io
+            utf8_stream = io.TextIOWrapper(
+                sys.stdout.buffer if hasattr(sys.stdout, "buffer") else sys.stdout,
+                encoding="utf-8",
+                errors="replace",
+                line_buffering=True,
+            )
+            stream_handler = logging.StreamHandler(utf8_stream)
+
+        formatter = logging.Formatter(
+            '%(asctime)s - %(levelname)s - %(message)s'
+        )
+        file_handler.setFormatter(formatter)
+        stream_handler.setFormatter(formatter)
+
+        # Configure root logger (force=True clears any pre-existing handlers
+        # so we don't end up with duplicate non-UTF-8 handlers).
         logging.basicConfig(
             level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[
-                logging.FileHandler(log_file),
-                logging.StreamHandler()  # Also print to console
-            ]
+            handlers=[file_handler, stream_handler],
+            force=True,
         )
-        
+
         self.logger = logging.getLogger(__name__)
         self.logger.info("="*60)
         self.logger.info("INIT: Avantes Dual Spectrometer Viewer")
