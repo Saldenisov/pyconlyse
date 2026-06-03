@@ -58,7 +58,7 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 - No data is saved to disk until data collection is started
 
 ### 4. Start DC
-1. Set measurement rate (0.1-10.0 seconds, minimum 100ms)
+1. Set measurement rate (0.1-86400 seconds, minimum 100ms)
 2. Set pulse average. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
 3. Click **"Start DC"**
 4. System saves each hardware-averaged data point to CSV
@@ -120,10 +120,20 @@ Wavelength tracker exports:
 - **Measure Reference**: Start reference measurement
 
 ### Data Collection Section
-- **Rate (s)**: Time between saved data points
+- **Lamp ON**: Enable flash lamp and Avantes triggers
+- **Lamp OFF**: Disable flash lamp while keeping Avantes triggers available
+- **Advanced**: Manual Arduino modes (`Lamp + Avantes`, `Avantes Only`, `Arduino OFF`)
+- **Rate (s)**: Time between saved data points, 0.1-86400 seconds
 - **Pulse avg**: Avantes hardware trigger averages per saved data point
 - **Start/Stop DC**: Toggle data recording
 - **Show**: Open or raise floating OD time map window
+
+### Long-Interval Lamp Management
+- Lamp warmup lead time is 120 seconds.
+- If DC starts while the lamp is off, the first point is delayed until the lamp has warmed for 120 seconds.
+- If the next saved point is more than 120 seconds away, the lamp is switched off between points.
+- If the next saved point is 120 seconds away or sooner, the lamp stays on.
+- Each saved point still uses Avantes hardware averaging: `Pulse avg = 40` at 40 Hz means 40 TTL pulses and about 1 second of averaging.
 
 ### Wavelength Tracking Section
 - **λ (nm)**: Target wavelength for tracking (200-1100 nm)
@@ -154,7 +164,7 @@ No periodic measurement logs to keep files clean.
 1. **Setup**: Connect both spectrometers
 2. **Blank/Reference**: 
    - Place reference sample (solvent only)
-   - Click "Measure Reference" (averages 10 measurements)
+   - Click "Measure Reference" (hardware averages selected pulse count)
 3. **Sample Measurement**:
    - Replace with sample
    - Watch OD spectrum in real-time
@@ -173,7 +183,7 @@ No periodic measurement logs to keep files clean.
 ### Minimum Measurement Interval
 - Arduino trigger: 25ms interval (40 Hz)
 - With `Pulse avg = 40`, one hardware-averaged spectrum takes about 1 second
-- User-settable range: 0.1-10.0s
+- User-settable range: 0.1-86400s
 - Prevents USB bus overload
 
 ### Reference Stability
@@ -183,7 +193,7 @@ No periodic measurement logs to keep files clean.
 
 ### Connection Recovery
 - Recoverable errors (timing) continue in background
-- Fatal errors (device disconnect) stop continuous mode
+- Fatal errors (device disconnect) stop live preview
 - See logs for details
 
 ## Keyboard Shortcuts

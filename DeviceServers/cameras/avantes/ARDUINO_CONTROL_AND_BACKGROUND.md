@@ -6,17 +6,18 @@
 Complete control over the Arduino TTL pulse generator directly from the UI.
 
 #### Buttons:
-1. **Lamp + Avantes**: Triggers both flash lamp (Pin 7) and spectrometers (Pin 8)
+1. **Lamp ON**: Triggers both flash lamp (Pin 7) and spectrometers (Pin 8)
    - Use for: Sample measurements with excitation
    - Status: Green "Lamp + Avantes"
 
-2. **Avantes Only**: Triggers only spectrometers (Pin 8), lamp OFF
+2. **Lamp OFF**: Triggers only spectrometers (Pin 8), lamp OFF
    - Use for: Background/dark measurements
    - Status: Orange "Avantes Only"
 
-3. **Arduino OFF**: Stops all TTL generation
-   - Use for: Pause measurements
-   - Status: Gray "OFF"
+3. **Advanced**: Opens manual Arduino modes
+   - Lamp + Avantes
+   - Avantes Only
+   - Arduino OFF
 
 #### Status Display:
 - Shows current Arduino mode
@@ -50,13 +51,13 @@ Measure background light (ambient + dark current) with lamp OFF for proper OD ca
 On application startup:
 1. Connects to both spectrometers
 2. Connects to Arduino (IP: 10.20.30.47)
-3. Automatically enables "Lamp + Avantes" mode
+3. Reads Arduino state without changing lamp mode
 4. Starts no automatic measurement loop
 
 If Arduino is not reachable:
 - Logs warning
 - Shows "Status: Not Connected" in red
-- Continuous readout still starts (for manual triggering)
+- Measurements remain user-triggered
 
 ## Usage Examples
 
@@ -65,10 +66,10 @@ If Arduino is not reachable:
 #### 1. Reference Measurement (with excitation)
 ```
 1. Ensure sample cuvette is in place
-2. Click "Lamp + Avantes" (if not already active)
+2. Click "Lamp ON" (if not already active)
 3. Click "Measure Reference"
    → Arduino stays in "Lamp + Avantes" mode
-   → Collects 10 measurements (default)
+   → Collects hardware-averaged pulses
    → Displays magenta reference lines
 ```
 
@@ -76,14 +77,14 @@ If Arduino is not reachable:
 ```
 1. Click "Measure Background"
    → Arduino automatically switches to "Avantes Only"
-   → Collects 10 measurements
+   → Collects hardware-averaged pulses
    → Displays blue background lines
 ```
 
 #### 3. Sample Measurement
 ```
 1. Replace with sample cuvette
-2. Click "Lamp + Avantes" to re-enable lamp
+2. Click "Lamp ON" to re-enable lamp
 3. Watch real-time OD calculation
 4. Start data collection if needed
 ```
@@ -128,11 +129,11 @@ Where:
 
 ### Example Log Output:
 ```
-2026-02-09 12:15:30 - INFO - AUTO-START: Arduino enabled (Lamp + Avantes)
-2026-02-09 12:16:45 - INFO - REFERENCE: Starting measurement (lamp ON, averaging 10 spectra)
+2026-02-09 12:15:30 - INFO - AUTO-START: Arduino reachable
+2026-02-09 12:16:45 - INFO - REFERENCE: Starting measurement (lamp ON, hardware averaging 40 pulses)
 2026-02-09 12:16:47 - INFO - REFERENCE: Measurement complete (lamp ON)
 2026-02-09 12:17:15 - INFO - ARDUINO: Avantes Only mode activated (lamp OFF)
-2026-02-09 12:17:16 - INFO - BACKGROUND: Starting measurement (lamp OFF, averaging 10 spectra)
+2026-02-09 12:17:16 - INFO - BACKGROUND: Starting measurement (lamp OFF, hardware averaging 40 pulses)
 2026-02-09 12:17:18 - INFO - BACKGROUND: Measurement complete (lamp OFF)
 ```
 

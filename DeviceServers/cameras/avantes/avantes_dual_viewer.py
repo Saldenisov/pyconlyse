@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
-    QCheckBox, QSplitter
+    QCheckBox, QSplitter, QMenu
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread, QRectF
 from PyQt5.QtGui import QFont
@@ -521,6 +521,8 @@ class AvantesDualViewer(QMainWindow):
         self.collection_start_time = None
         self.collection_point_start_time = None
         self.collection_file_path = None
+        self.collection_next_due_time = None
+        self.lamp_warmup_seconds = 120.0
         self.od_heatmap_rows = []
         self.od_heatmap_times = []
         self.od_heatmap_wavelengths = None
@@ -542,6 +544,9 @@ class AvantesDualViewer(QMainWindow):
         self.collection_timer = QTimer()
         self.collection_timer.setSingleShot(True)
         self.collection_timer.timeout.connect(self.collect_data_point)
+        self.lamp_warmup_timer = QTimer()
+        self.lamp_warmup_timer.setSingleShot(True)
+        self.lamp_warmup_timer.timeout.connect(self.prepare_lamp_for_collection)
 
         # Setup logging
         self.setup_logging()
@@ -721,17 +726,21 @@ class AvantesDualViewer(QMainWindow):
         arduino_layout = QVBoxLayout()
 
         arduino_btn_layout = QHBoxLayout()
-        self.lamp_avantes_btn = QPushButton("Lamp + Avantes")
-        self.lamp_avantes_btn.clicked.connect(self.set_lamp_and_avantes)
-        arduino_btn_layout.addWidget(self.lamp_avantes_btn)
+        self.lamp_on_btn = QPushButton("Lamp ON")
+        self.lamp_on_btn.clicked.connect(lambda: self.set_lamp_on())
+        arduino_btn_layout.addWidget(self.lamp_on_btn)
 
-        self.avantes_only_btn = QPushButton("Avantes Only")
-        self.avantes_only_btn.clicked.connect(self.set_avantes_only)
-        arduino_btn_layout.addWidget(self.avantes_only_btn)
+        self.lamp_off_btn = QPushButton("Lamp OFF")
+        self.lamp_off_btn.clicked.connect(lambda: self.set_lamp_off())
+        arduino_btn_layout.addWidget(self.lamp_off_btn)
 
-        self.arduino_off_btn = QPushButton("Arduino OFF")
-        self.arduino_off_btn.clicked.connect(self.set_arduino_off)
-        arduino_btn_layout.addWidget(self.arduino_off_btn)
+        self.arduino_advanced_btn = QPushButton("Advanced")
+        advanced_menu = QMenu(self)
+        advanced_menu.addAction("Lamp + Avantes", self.set_lamp_and_avantes)
+        advanced_menu.addAction("Avantes Only", self.set_avantes_only)
+        advanced_menu.addAction("Arduino OFF", self.set_arduino_off)
+        self.arduino_advanced_btn.setMenu(advanced_menu)
+        arduino_btn_layout.addWidget(self.arduino_advanced_btn)
 
         arduino_layout.addLayout(arduino_btn_layout)
 
@@ -789,9 +798,9 @@ class AvantesDualViewer(QMainWindow):
 
         data_layout.addWidget(QLabel("Rate (s):"), 0, 0)
         self.collection_rate_spin = QDoubleSpinBox()
-        self.collection_rate_spin.setRange(0.1, 10.0)
+        self.collection_rate_spin.setRange(0.1, 86400.0)
         self.collection_rate_spin.setValue(1.0)
-        self.collection_rate_spin.setSingleStep(0.1)
+        self.collection_rate_spin.setSingleStep(1.0)
         self.collection_rate_spin.setToolTip("Time between saved data points")
         data_layout.addWidget(self.collection_rate_spin, 0, 1)
 
@@ -1006,6 +1015,30 @@ class AvantesDualViewer(QMainWindow):
             return
 
         self.single_measurement()
+
+    def get_arduino_state(self):
+        """Return current Arduino state from controller."""
+        try:
+            return self.arduino.get_state()
+        except Exception as e:
+            self.logger.error(f"ARDUINO: Failed to get state - {e}")
+            return False, False
+
+    def is_lamp_enabled(self) -> bool:
+        """Check whether lamp TTL is enabled."""
+        lamp_enabled, _ = self.get_arduino_state()
+        return bool(lamp_enabled)
+
+    def set_lamp_on(self):
+        """Enable lamp and Avantes TTL pulses."""
+        return self.set_lamp_and_avantes()
+
+    def set_lamp_off(self, reschedule=True):
+        """Disable lamp while keeping Avantes TTL available."""
+        result = self.set_avantes_only()
+        if result and reschedule and self.data_collection_active and self.collection_next_due_time:
+            self.schedule_collection_due_time(self.collection_next_due_time)
+        return result
 
     def set_lamp_and_avantes(self, wait_for_thermalization=False):
         """Set Arduino to trigger both lamp and Avantes.
@@ -1242,6 +1275,7 @@ class AvantesDualViewer(QMainWindow):
             self.collection_point_index = 0
             self.collection_start_time = time.time()
             self.collection_point_start_time = None
+            self.collection_next_due_time = None
             self.reset_od_heatmap()
             if self.collection_file_path.exists():
                 self.collection_file_path.unlink()
@@ -1252,11 +1286,16 @@ class AvantesDualViewer(QMainWindow):
                 f"pulse_avg={self.collection_averages_spin.value()}, file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
-            self.collect_data_point()
+            if self.is_lamp_enabled():
+                self.collect_data_point()
+            else:
+                first_due_time = time.time() + self.lamp_warmup_seconds
+                self.schedule_collection_due_time(first_due_time)
         else:
             # Stop data collection
             self.data_collection_active = False
             self.collection_timer.stop()
+            self.lamp_warmup_timer.stop()
             self.start_collection_btn.setText("Start DC")
 
             n_points = len(self.collection_data) if hasattr(self, 'collection_data') else 0
@@ -1272,6 +1311,13 @@ class AvantesDualViewer(QMainWindow):
 
         n_avg = self.collection_averages_spin.value()
         self.collection_timer.stop()
+        self.lamp_warmup_timer.stop()
+        if not self.is_lamp_enabled():
+            self.logger.info("DATA COLLECTION: Lamp was off at measurement time; enabling now")
+            if not self.set_lamp_and_avantes():
+                self.statusBar().showMessage("Data collection paused: failed to enable lamp")
+                self.schedule_next_collection_point()
+                return
         self.collection_point_start_time = time.time()
         self.statusBar().showMessage(f"Collecting point {self.collection_point_index + 1} (avg={n_avg})...")
         self.single_measurement(averages_override=n_avg, measurement_role="collection")
@@ -1281,11 +1327,48 @@ class AvantesDualViewer(QMainWindow):
         if not self.data_collection_active:
             return
 
-        interval_ms = int(self.collection_rate_spin.value() * 1000)
-        elapsed_ms = 0
-        if self.collection_point_start_time is not None:
-            elapsed_ms = int((time.time() - self.collection_point_start_time) * 1000)
-        self.collection_timer.start(max(0, interval_ms - elapsed_ms))
+        interval_s = float(self.collection_rate_spin.value())
+        base_time = self.collection_point_start_time or time.time()
+        self.schedule_collection_due_time(base_time + interval_s)
+
+    def schedule_collection_due_time(self, due_time: float):
+        """Schedule warmup and measurement for the next collection point."""
+        if not self.data_collection_active:
+            return
+
+        self.collection_next_due_time = due_time
+        self.collection_timer.stop()
+        self.lamp_warmup_timer.stop()
+
+        now = time.time()
+        seconds_until_due = max(0.0, due_time - now)
+        warmup_s = self.lamp_warmup_seconds
+
+        if seconds_until_due > warmup_s:
+            if self.is_lamp_enabled():
+                self.set_lamp_off(reschedule=False)
+            warmup_delay_ms = int((seconds_until_due - warmup_s) * 1000)
+            self.lamp_warmup_timer.start(warmup_delay_ms)
+            self.collection_timer.start(int(seconds_until_due * 1000))
+            self.statusBar().showMessage(
+                f"Next point in {seconds_until_due:.0f}s; lamp warmup starts in {seconds_until_due - warmup_s:.0f}s"
+            )
+        else:
+            if not self.is_lamp_enabled():
+                self.prepare_lamp_for_collection()
+            self.collection_timer.start(int(seconds_until_due * 1000))
+            self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s; lamp stays on")
+
+    def prepare_lamp_for_collection(self):
+        """Enable lamp before a scheduled collection point."""
+        if not self.data_collection_active:
+            return
+        if self.is_lamp_enabled():
+            return
+        if self.set_lamp_and_avantes():
+            due = self.collection_next_due_time or time.time()
+            self.statusBar().showMessage(f"Lamp warming; next point in {max(0.0, due - time.time()):.0f}s")
+            self.logger.info("DATA COLLECTION: Lamp enabled for scheduled measurement")
 
     def browse_save_folder(self):
         """Choose folder for exported and collected CSV files."""
@@ -1779,13 +1862,21 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error("AUTO-CONNECT: Failed to connect both spectrometers")
 
     def auto_start_continuous(self):
-        """Enable Arduino after connection without starting measurements."""
+        """Check Arduino after connection without starting measurements."""
         self.logger.info("AUTO-START: Checking Arduino")
 
-        # Check Arduino status and enable Lamp + Avantes mode
         if self.arduino.is_connected():
-            self.set_lamp_and_avantes()
-            self.logger.info("AUTO-START: Arduino enabled (Lamp + Avantes)")
+            lamp_on, avantes_on = self.get_arduino_state()
+            if lamp_on and avantes_on:
+                self.arduino_status_label.setText("Status: Lamp + Avantes")
+                self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
+            elif avantes_on:
+                self.arduino_status_label.setText("Status: Avantes Only")
+                self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            else:
+                self.arduino_status_label.setText("Status: OFF")
+                self.arduino_status_label.setStyleSheet("color: gray; font-weight: bold;")
+            self.logger.info("AUTO-START: Arduino reachable")
         else:
             self.logger.warning("AUTO-START: Arduino not reachable")
             self.arduino_status_label.setText("Status: Not Connected")
@@ -1805,6 +1896,7 @@ class AvantesDualViewer(QMainWindow):
             self.continuous_timer.stop()
         if self.data_collection_active:
             self.collection_timer.stop()
+            self.lamp_warmup_timer.stop()
 
         # Stop measurement thread
         if self.measurement_thread and self.measurement_thread.isRunning():
