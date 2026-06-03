@@ -36,7 +36,7 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
-    QCheckBox, QSplitter, QMenu
+    QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
@@ -345,6 +345,45 @@ class ODHeatmapWindow(QMainWindow):
         event.accept()
 
 
+class CollectionSettingsDialog(QDialog):
+    """Dialog for Arduino frequency and lamp-management settings."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_viewer = parent
+        self.setWindowTitle("Collection Settings")
+
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+
+        self.frequency_spin = QSpinBox()
+        self.frequency_spin.setRange(1, 100)
+        self.frequency_spin.setValue(int(round(parent.arduino_frequency_hz)))
+        form.addRow("Arduino frequency (Hz):", self.frequency_spin)
+
+        self.warmup_spin = QDoubleSpinBox()
+        self.warmup_spin.setRange(0.0, 3600.0)
+        self.warmup_spin.setDecimals(1)
+        self.warmup_spin.setSingleStep(10.0)
+        self.warmup_spin.setValue(parent.lamp_warmup_seconds)
+        form.addRow("Lamp warmup lead (s):", self.warmup_spin)
+
+        self.auto_lamp_check = QCheckBox("Auto-control lamp during data collection")
+        self.auto_lamp_check.setChecked(parent.auto_lamp_management_enabled)
+        form.addRow("", self.auto_lamp_check)
+
+        self.lamp_off_between_check = QCheckBox("Turn lamp off between long-interval points")
+        self.lamp_off_between_check.setChecked(parent.lamp_off_between_points_enabled)
+        form.addRow("", self.lamp_off_between_check)
+
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+
 class MeasurementThread(QThread):
     """Background thread for parallel spectrometer measurements."""
 
@@ -628,6 +667,9 @@ class AvantesDualViewer(QMainWindow):
         self.collection_file_path = None
         self.collection_next_due_time = None
         self.lamp_warmup_seconds = 120.0
+        self.arduino_frequency_hz = ARDUINO_TRIGGER_HZ
+        self.auto_lamp_management_enabled = True
+        self.lamp_off_between_points_enabled = True
         self.od_heatmap_rows = []
         self.od_heatmap_times = []
         self.od_heatmap_wavelengths = None
@@ -841,6 +883,8 @@ class AvantesDualViewer(QMainWindow):
 
         self.arduino_advanced_btn = QPushButton("Advanced")
         advanced_menu = QMenu(self)
+        advanced_menu.addAction("Collection Settings...", self.open_collection_settings)
+        advanced_menu.addSeparator()
         advanced_menu.addAction("Lamp + Avantes", self.set_lamp_and_avantes)
         advanced_menu.addAction("Avantes Only", self.set_avantes_only)
         advanced_menu.addAction("Arduino OFF", self.set_arduino_off)
@@ -1040,7 +1084,7 @@ class AvantesDualViewer(QMainWindow):
         avg = max(self.spec1_widget.averages_spin.value(), self.spec2_widget.averages_spin.value())
         trigger_mode = max(self.spec1_widget.trigger_combo.currentIndex(), self.spec2_widget.trigger_combo.currentIndex())
         if trigger_mode in {1, 2}:
-            return max(50, avg * 25)
+            return max(50, int(avg * 1000.0 / max(self.arduino_frequency_hz, 1.0)))
         integration_ms = max(self.spec1_widget.integration_spin.value(), self.spec2_widget.integration_spin.value())
         return max(50, int(avg * integration_ms))
 
@@ -1054,7 +1098,7 @@ class AvantesDualViewer(QMainWindow):
         avg = self.get_detector_average_count()
         trigger_mode = max(self.spec1_widget.trigger_combo.currentIndex(), self.spec2_widget.trigger_combo.currentIndex())
         if trigger_mode in {1, 2}:
-            acquisition_s = avg / ARDUINO_TRIGGER_HZ
+            acquisition_s = avg / max(self.arduino_frequency_hz, 1.0)
         else:
             integration_ms = max(self.spec1_widget.integration_spin.value(), self.spec2_widget.integration_spin.value())
             acquisition_s = avg * integration_ms / 1000.0
@@ -1156,6 +1200,41 @@ class AvantesDualViewer(QMainWindow):
         except Exception as e:
             self.logger.error(f"ARDUINO: Failed to get state - {e}")
             return False, False
+
+    def set_arduino_frequency_hz(self, frequency_hz: float) -> bool:
+        """Set Arduino trigger frequency."""
+        frequency = min(max(float(frequency_hz), 1.0), 100.0)
+        if self.arduino.set_frequency_hz(frequency):
+            self.sync_arduino_frequency_from_controller()
+            self.update_live_preview_interval()
+            if self.data_collection_active and self.collection_next_due_time:
+                self.validate_collection_rate(show_warning=False)
+                self.schedule_collection_due_time(self.collection_next_due_time)
+            self.logger.info(f"ARDUINO: Frequency set to {self.arduino_frequency_hz:.0f} Hz")
+            return True
+        self.logger.error(f"ARDUINO: Failed to set frequency to {frequency:.0f} Hz")
+        return False
+
+    def sync_arduino_frequency_from_controller(self):
+        """Read Arduino trigger frequency if controller supports it."""
+        try:
+            self.arduino_frequency_hz = float(self.arduino.get_frequency_hz())
+        except Exception:
+            pass
+
+    def open_collection_settings(self):
+        """Open collection settings dialog."""
+        dialog = CollectionSettingsDialog(self)
+        if dialog.exec_() != QDialog.Accepted:
+            return
+
+        self.lamp_warmup_seconds = float(dialog.warmup_spin.value())
+        self.auto_lamp_management_enabled = dialog.auto_lamp_check.isChecked()
+        self.lamp_off_between_points_enabled = dialog.lamp_off_between_check.isChecked()
+        self.set_arduino_frequency_hz(dialog.frequency_spin.value())
+
+        if self.data_collection_active and self.collection_next_due_time:
+            self.schedule_collection_due_time(self.collection_next_due_time)
 
     def is_lamp_enabled(self) -> bool:
         """Check whether lamp TTL is enabled."""
@@ -1422,7 +1501,7 @@ class AvantesDualViewer(QMainWindow):
                 f"detector_avg={self.get_detector_average_count()}, file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
-            if self.is_lamp_enabled():
+            if not self.auto_lamp_management_enabled or self.is_lamp_enabled():
                 self.collect_data_point()
             else:
                 first_due_time = time.time() + self.lamp_warmup_seconds
@@ -1448,7 +1527,7 @@ class AvantesDualViewer(QMainWindow):
         n_avg = self.get_detector_average_count()
         self.collection_timer.stop()
         self.lamp_warmup_timer.stop()
-        if not self.is_lamp_enabled():
+        if self.auto_lamp_management_enabled and not self.is_lamp_enabled():
             self.logger.info("DATA COLLECTION: Lamp was off at measurement time; enabling now")
             if not self.set_lamp_and_avantes():
                 self.statusBar().showMessage("Data collection paused: failed to enable lamp")
@@ -1493,7 +1572,10 @@ class AvantesDualViewer(QMainWindow):
         seconds_until_due = max(0.0, due_time - now)
         warmup_s = self.lamp_warmup_seconds
 
-        if seconds_until_due > warmup_s:
+        if not self.auto_lamp_management_enabled:
+            self.collection_timer.start(int(seconds_until_due * 1000))
+            self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s")
+        elif seconds_until_due > warmup_s and self.lamp_off_between_points_enabled:
             if self.is_lamp_enabled():
                 self.set_lamp_off(reschedule=False)
             warmup_delay_ms = int((seconds_until_due - warmup_s) * 1000)
@@ -1996,6 +2078,7 @@ class AvantesDualViewer(QMainWindow):
         self.logger.info("AUTO-START: Checking Arduino")
 
         if self.arduino.is_connected():
+            self.sync_arduino_frequency_from_controller()
             lamp_on, avantes_on = self.get_arduino_state()
             if lamp_on and avantes_on:
                 self.arduino_status_label.setText("Status: Lamp + Avantes")

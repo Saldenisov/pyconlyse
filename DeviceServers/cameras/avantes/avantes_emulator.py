@@ -33,6 +33,7 @@ class _EmulatedArduinoState:
     lamp_enabled: bool = False
     avantes_enabled: bool = False
     mode: str = "OFF"
+    frequency_hz: float = ARDUINO_TRIGGER_HZ
 
 
 EMULATED_ARDUINO_STATE = _EmulatedArduinoState()
@@ -67,6 +68,13 @@ class EmulatedArduinoTriggerController:
 
     def get_state(self) -> Tuple[bool, bool]:
         return EMULATED_ARDUINO_STATE.lamp_enabled, EMULATED_ARDUINO_STATE.avantes_enabled
+
+    def set_frequency_hz(self, frequency_hz: float) -> bool:
+        EMULATED_ARDUINO_STATE.frequency_hz = min(max(float(frequency_hz), 1.0), 100.0)
+        return True
+
+    def get_frequency_hz(self) -> float:
+        return EMULATED_ARDUINO_STATE.frequency_hz
 
     def start_lamp_and_spectrometers(self) -> bool:
         return self.set_mode("LAMP AND AVANTES")
@@ -151,7 +159,7 @@ class EmulatedAvantesSpectrometer:
         integration_s = max(0.0001, float(getattr(self._config, "m_IntegrationTime", 1.0)) / 1000.0)
 
         if trigger_mode in {1, 2}:
-            duration_s = averages / ARDUINO_TRIGGER_HZ
+            duration_s = averages / max(EMULATED_ARDUINO_STATE.frequency_hz, 1.0)
         else:
             duration_s = averages * integration_s
 

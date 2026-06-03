@@ -70,6 +70,7 @@ class ArduinoTriggerController:
         self._lamp_enabled = False
         self._avantes_enabled = False
         self._last_mode = None
+        self._frequency_hz = 40.0
         
     def set_mode(self, mode: str) -> bool:
         """
@@ -159,11 +160,55 @@ class ArduinoTriggerController:
             
             self._lamp_enabled = lamp_on
             self._avantes_enabled = avantes_on
+            self._frequency_hz = self._parse_frequency(html)
             return self._lamp_enabled, self._avantes_enabled
                 
         except requests.exceptions.RequestException as e:
             print(f"Failed to get Arduino state: {e}")
             return False, False
+
+    def set_frequency_hz(self, frequency_hz: float) -> bool:
+        """Set Arduino TTL frequency in Hz."""
+        frequency = int(round(min(max(float(frequency_hz), 1.0), 100.0)))
+        url = f"{self.base_url}/?freq={frequency}"
+        try:
+            response = requests.get(url, timeout=self.timeout)
+            if response.status_code == 200:
+                self._frequency_hz = float(frequency)
+                self.get_state()
+                return True
+            print(f"Arduino returned status code: {response.status_code}")
+            return False
+        except requests.exceptions.RequestException as e:
+            print(f"Failed to set Arduino frequency: {e}")
+            return False
+
+    def get_frequency_hz(self) -> float:
+        """Get current Arduino TTL frequency in Hz."""
+        try:
+            response = requests.get(self.base_url, timeout=self.timeout)
+            if response.status_code == 200:
+                self._frequency_hz = self._parse_frequency(response.text)
+        except requests.exceptions.RequestException:
+            pass
+        return self._frequency_hz
+
+    def _parse_frequency(self, html: str) -> float:
+        marker = "Frequency:"
+        idx = html.find(marker)
+        if idx < 0:
+            return self._frequency_hz
+        text = html[idx:idx + 80]
+        digits = ""
+        for ch in text:
+            if ch.isdigit() or ch == ".":
+                digits += ch
+            elif digits:
+                break
+        try:
+            return float(digits)
+        except ValueError:
+            return self._frequency_hz
     
     def start_lamp_and_spectrometers(self) -> bool:
         """

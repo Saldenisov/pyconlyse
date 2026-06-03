@@ -107,9 +107,14 @@ Where:
 ### Connections:
 - **Pin 7**: Flash lamp trigger (10µs pulse)
 - **Pin 8**: Avantes spectrometers trigger (10µs pulse)
-- **Frequency**: 40 Hz (25ms interval)
+- **Frequency**: configurable 1-100 Hz, default 40 Hz (25ms interval)
 - **IP Address**: 10.20.30.47
 - **Port**: 80 (HTTP)
+
+### Uploadable Arduino Code:
+- `DeviceServers/spectrographs/avantes/arduino_sync_code/arduino_sync_code.ino`
+- Open this `.ino` in Arduino IDE, compile, and upload to the Ethernet Arduino.
+- Frequency can be changed from the web UI or standalone app Advanced settings.
 
 ### Modes:
 | Mode | Pin 7 (Lamp) | Pin 8 (Avantes) | Use Case |
@@ -188,8 +193,8 @@ Where:
 ## Technical Notes
 
 ### Measurement Timing:
-- Reference collection: depends on Avantes hardware averaging (`avg=40` at 40Hz is about 1s)
-- Background collection: depends on Avantes hardware averaging (`avg=40` at 40Hz is about 1s)
+- Reference collection: depends on Avantes hardware averaging (`avg / frequency`; `avg=40` at default 40Hz is about 1s)
+- Background collection: depends on Avantes hardware averaging (`avg / frequency`; `avg=40` at default 40Hz is about 1s)
 - Mode switching: <100ms (Arduino HTTP response)
 
 ### Memory Usage:
