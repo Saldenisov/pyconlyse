@@ -62,7 +62,8 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 2. Set pulse average. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
 3. Click **"Start Data Collection"**
 4. System saves each hardware-averaged data point to CSV
-5. Click again to stop collection
+5. OD time map fills bottom-to-top during collection: X is wavelength, Y is saved point index
+6. Click again to stop collection
 
 ### 5. Wavelength Tracking
 1. Set target wavelength (e.g., 550 nm)

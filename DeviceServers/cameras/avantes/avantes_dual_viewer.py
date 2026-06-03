@@ -38,7 +38,7 @@ from PyQt5.QtWidgets import (
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
     QCheckBox, QSplitter
 )
-from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
+from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread, QRectF
 from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
@@ -469,6 +469,8 @@ class AvantesDualViewer(QMainWindow):
         self.collection_start_time = None
         self.collection_point_start_time = None
         self.collection_file_path = None
+        self.od_heatmap_rows = []
+        self.od_heatmap_wavelengths = None
         self.current_measurement_role = None
         self._measurement_count = 0
         self.wavelength_tracker_window = None
@@ -565,6 +567,17 @@ class AvantesDualViewer(QMainWindow):
         self.plot_od.showGrid(x=True, y=True)
         self.curve_od = self.plot_od.plot(pen=pg.mkPen('w', width=2))  # White for OD
         od_layout.addWidget(self.plot_od)
+
+        self.plot_od_map = pg.PlotWidget(title="OD Time Map")
+        self.plot_od_map.setLabel('left', 'Time index')
+        self.plot_od_map.setLabel('bottom', 'Wavelength', units='nm')
+        self.plot_od_map.showGrid(x=True, y=True)
+        self.od_heatmap_item = pg.ImageItem()
+        self.plot_od_map.addItem(self.od_heatmap_item)
+        self.od_heatmap_lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
+        self.od_heatmap_item.setLookupTable(self.od_heatmap_lut)
+        self.plot_od_map.setYRange(0, 1, padding=0)
+        od_layout.addWidget(self.plot_od_map)
 
         # OD plot axis controls
         od_controls = QGroupBox("OD Plot Limits")
@@ -1180,6 +1193,7 @@ class AvantesDualViewer(QMainWindow):
             self.collection_point_index = 0
             self.collection_start_time = time.time()
             self.collection_point_start_time = None
+            self.reset_od_heatmap()
             if self.collection_file_path.exists():
                 self.collection_file_path.unlink()
 
@@ -1235,6 +1249,35 @@ class AvantesDualViewer(QMainWindow):
         enabled = self.has_reference and self.has_background
         self.start_collection_btn.setEnabled(enabled)
         self.track_wl_btn.setEnabled(enabled)
+
+    def reset_od_heatmap(self):
+        """Clear OD time map for a new data collection run."""
+        self.od_heatmap_rows = []
+        self.od_heatmap_wavelengths = None
+        self.od_heatmap_item.clear()
+        self.plot_od_map.setYRange(0, 1, padding=0)
+        self.plot_od_map.enableAutoRange(axis='x')
+
+    def update_od_heatmap(self, wavelengths: np.ndarray, od_spectrum: Optional[np.ndarray]):
+        """Append one OD spectrum to the time map."""
+        if wavelengths is None or od_spectrum is None:
+            return
+
+        self.od_heatmap_wavelengths = wavelengths
+        self.od_heatmap_rows.append(np.array(od_spectrum, dtype=float))
+
+        heatmap = np.vstack(self.od_heatmap_rows)
+        heatmap = np.nan_to_num(heatmap, nan=0.0, posinf=0.0, neginf=0.0)
+        display = heatmap.T
+
+        x_min = float(wavelengths[0])
+        x_max = float(wavelengths[-1])
+        y_count = max(len(self.od_heatmap_rows), 1)
+
+        self.od_heatmap_item.setImage(display, autoLevels=True)
+        self.od_heatmap_item.setRect(QRectF(x_min, 0, x_max - x_min, y_count))
+        self.plot_od_map.setXRange(x_min, x_max, padding=0)
+        self.plot_od_map.setYRange(0, y_count, padding=0)
 
     def get_export_base_path(self) -> Path:
         """Return base path for manual export files."""
@@ -1355,6 +1398,7 @@ class AvantesDualViewer(QMainWindow):
                 }
             )
             self.collection_point_index += 1
+            self.update_od_heatmap(wavelengths1, od_spectrum)
             self.statusBar().showMessage(
                 f"Saved point {self.collection_point_index} ({collection_pulses} pulses)"
             )
@@ -1570,6 +1614,7 @@ class AvantesDualViewer(QMainWindow):
         self.ref_curve2.setData([], [])
         self.bg_curve1.setData([], [])
         self.bg_curve2.setData([], [])
+        self.reset_od_heatmap()
 
         self.spec1_widget.last_data = None
         self.spec2_widget.last_data = None
