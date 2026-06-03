@@ -188,6 +188,54 @@ class WavelengthTrackerWindow(QMainWindow):
                 QMessageBox.critical(self, "Export Error", f"Failed to export:\n{str(e)}")
 
 
+class ODHeatmapWindow(QMainWindow):
+    """Floating OD time map window."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent_viewer = parent
+        self.setWindowTitle("OD Time Map")
+        self.setGeometry(220, 180, 1000, 600)
+
+        self.plot = pg.PlotWidget(title="OD Time Map")
+        self.plot.setLabel('left', 'Time index')
+        self.plot.setLabel('bottom', 'Wavelength', units='nm')
+        self.plot.showGrid(x=True, y=True)
+        self.setCentralWidget(self.plot)
+
+        self.image_item = pg.ImageItem()
+        self.plot.addItem(self.image_item)
+        lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
+        self.image_item.setLookupTable(lut)
+        self.plot.setYRange(0, 1, padding=0)
+
+    def set_heatmap(self, wavelengths, rows):
+        """Render OD rows as wavelength x time-index image."""
+        if wavelengths is None or not rows:
+            self.image_item.clear()
+            self.plot.setYRange(0, 1, padding=0)
+            self.plot.enableAutoRange(axis='x')
+            return
+
+        heatmap = np.vstack(rows)
+        heatmap = np.nan_to_num(heatmap, nan=0.0, posinf=0.0, neginf=0.0)
+        display = heatmap.T
+
+        x_min = float(wavelengths[0])
+        x_max = float(wavelengths[-1])
+        y_count = max(len(rows), 1)
+
+        self.image_item.setImage(display, autoLevels=True)
+        self.image_item.setRect(QRectF(x_min, 0, x_max - x_min, y_count))
+        self.plot.setXRange(x_min, x_max, padding=0)
+        self.plot.setYRange(0, y_count, padding=0)
+
+    def closeEvent(self, event):
+        """Allow Show button to recreate window after user closes it."""
+        self.parent_viewer.od_heatmap_window = None
+        event.accept()
+
+
 class MeasurementThread(QThread):
     """Background thread for parallel spectrometer measurements."""
 
@@ -471,6 +519,7 @@ class AvantesDualViewer(QMainWindow):
         self.collection_file_path = None
         self.od_heatmap_rows = []
         self.od_heatmap_wavelengths = None
+        self.od_heatmap_window = None
         self.current_measurement_role = None
         self._measurement_count = 0
         self.wavelength_tracker_window = None
@@ -567,17 +616,6 @@ class AvantesDualViewer(QMainWindow):
         self.plot_od.showGrid(x=True, y=True)
         self.curve_od = self.plot_od.plot(pen=pg.mkPen('w', width=2))  # White for OD
         od_layout.addWidget(self.plot_od)
-
-        self.plot_od_map = pg.PlotWidget(title="OD Time Map")
-        self.plot_od_map.setLabel('left', 'Time index')
-        self.plot_od_map.setLabel('bottom', 'Wavelength', units='nm')
-        self.plot_od_map.showGrid(x=True, y=True)
-        self.od_heatmap_item = pg.ImageItem()
-        self.plot_od_map.addItem(self.od_heatmap_item)
-        self.od_heatmap_lut = pg.colormap.get("viridis").getLookupTable(0.0, 1.0, 256)
-        self.od_heatmap_item.setLookupTable(self.od_heatmap_lut)
-        self.plot_od_map.setYRange(0, 1, padding=0)
-        od_layout.addWidget(self.plot_od_map)
 
         # OD plot axis controls
         od_controls = QGroupBox("OD Plot Limits")
@@ -758,10 +796,15 @@ class AvantesDualViewer(QMainWindow):
         self.collection_averages_spin.setToolTip("Avantes hardware trigger averages per saved point")
         data_layout.addWidget(self.collection_averages_spin, 0, 3)
 
-        self.start_collection_btn = QPushButton("Start Data Collection")
+        self.start_collection_btn = QPushButton("Start DC")
         self.start_collection_btn.clicked.connect(self.toggle_data_collection)
         self.start_collection_btn.setEnabled(False)
         data_layout.addWidget(self.start_collection_btn, 0, 4)
+
+        self.show_od_map_btn = QPushButton("Show")
+        self.show_od_map_btn.clicked.connect(self.show_od_heatmap_window)
+        self.show_od_map_btn.setToolTip("Show OD time map")
+        data_layout.addWidget(self.show_od_map_btn, 0, 5)
 
         data_layout.addWidget(QLabel("Folder:"), 1, 0)
         self.save_folder_input = QLineEdit(str(Path.home() / "AvantesData"))
@@ -1197,7 +1240,7 @@ class AvantesDualViewer(QMainWindow):
             if self.collection_file_path.exists():
                 self.collection_file_path.unlink()
 
-            self.start_collection_btn.setText("Stop Data Collection")
+            self.start_collection_btn.setText("Stop DC")
             self.logger.info(
                 f"DATA COLLECTION: Started (rate={self.collection_rate_spin.value()}s, "
                 f"pulse_avg={self.collection_averages_spin.value()}, file={self.collection_file_path})"
@@ -1208,7 +1251,7 @@ class AvantesDualViewer(QMainWindow):
             # Stop data collection
             self.data_collection_active = False
             self.collection_timer.stop()
-            self.start_collection_btn.setText("Start Data Collection")
+            self.start_collection_btn.setText("Start DC")
 
             n_points = len(self.collection_data) if hasattr(self, 'collection_data') else 0
             self.logger.info(f"DATA COLLECTION: Stopped ({n_points} data points collected, file={self.collection_file_path})")
@@ -1254,9 +1297,7 @@ class AvantesDualViewer(QMainWindow):
         """Clear OD time map for a new data collection run."""
         self.od_heatmap_rows = []
         self.od_heatmap_wavelengths = None
-        self.od_heatmap_item.clear()
-        self.plot_od_map.setYRange(0, 1, padding=0)
-        self.plot_od_map.enableAutoRange(axis='x')
+        self.render_od_heatmap()
 
     def update_od_heatmap(self, wavelengths: np.ndarray, od_spectrum: Optional[np.ndarray]):
         """Append one OD spectrum to the time map."""
@@ -1265,19 +1306,21 @@ class AvantesDualViewer(QMainWindow):
 
         self.od_heatmap_wavelengths = wavelengths
         self.od_heatmap_rows.append(np.array(od_spectrum, dtype=float))
+        self.render_od_heatmap()
 
-        heatmap = np.vstack(self.od_heatmap_rows)
-        heatmap = np.nan_to_num(heatmap, nan=0.0, posinf=0.0, neginf=0.0)
-        display = heatmap.T
+    def render_od_heatmap(self):
+        """Render heatmap data if floating window exists."""
+        if self.od_heatmap_window is not None:
+            self.od_heatmap_window.set_heatmap(self.od_heatmap_wavelengths, self.od_heatmap_rows)
 
-        x_min = float(wavelengths[0])
-        x_max = float(wavelengths[-1])
-        y_count = max(len(self.od_heatmap_rows), 1)
-
-        self.od_heatmap_item.setImage(display, autoLevels=True)
-        self.od_heatmap_item.setRect(QRectF(x_min, 0, x_max - x_min, y_count))
-        self.plot_od_map.setXRange(x_min, x_max, padding=0)
-        self.plot_od_map.setYRange(0, y_count, padding=0)
+    def show_od_heatmap_window(self):
+        """Open or raise the floating OD time map window."""
+        if self.od_heatmap_window is None:
+            self.od_heatmap_window = ODHeatmapWindow(self)
+        self.render_od_heatmap()
+        self.od_heatmap_window.show()
+        self.od_heatmap_window.raise_()
+        self.od_heatmap_window.activateWindow()
 
     def get_export_base_path(self) -> Path:
         """Return base path for manual export files."""
@@ -1752,6 +1795,8 @@ class AvantesDualViewer(QMainWindow):
         # Close wavelength tracker
         if self.wavelength_tracker_window:
             self.wavelength_tracker_window.close()
+        if self.od_heatmap_window:
+            self.od_heatmap_window.close()
 
         # Disconnect spectrometers
         if self.spec1_widget and self.spec1_widget.spec:

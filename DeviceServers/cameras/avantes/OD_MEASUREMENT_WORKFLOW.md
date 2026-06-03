@@ -26,7 +26,7 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 ┌──────────────────────────────────────────────────────────────┐
 │  REFERENCE MEASUREMENT | DATA COLLECTION | WAVELENGTH TRACKING│
 │  [Averages: 40] [Measure Reference]                          │
-│  [Rate: 1.0s] [Pulse avg: 40] [Start Data Collection]        │
+│  [Rate: 1.0s] [Pulse avg: 40] [Start DC] [Show]              │
 │  [λ: 550nm] [Track Wavelength]                               │
 ├──────────────────────┬───────────────────────────────────────┤
 │ Channel 1 Spectrum   │                                       │
@@ -50,20 +50,21 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
    - Collects N measurements from both channels
    - Averages them to create reference spectra (I₀_ch1, I₀_ch2)
    - Displays reference as dashed lines on Ch1 and Ch2 plots
-   - Enables "Start Data Collection" and "Track Wavelength" buttons after background exists
+   - Enables "Start DC" and "Track Wavelength" buttons after background exists
 
 ### 3. Live Preview (Optional)
 - Live preview is manual and runs at 1 Hz
 - Experiment data collection uses its own timer and does not run at 50 ms/100 ms in the background
 - No data is saved to disk until data collection is started
 
-### 4. Start Data Collection
+### 4. Start DC
 1. Set measurement rate (0.1-10.0 seconds, minimum 100ms)
 2. Set pulse average. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
-3. Click **"Start Data Collection"**
+3. Click **"Start DC"**
 4. System saves each hardware-averaged data point to CSV
-5. OD time map fills bottom-to-top during collection: X is wavelength, Y is saved point index
-6. Click again to stop collection
+5. Click **"Show"** to open the floating OD time map window
+6. OD time map fills bottom-to-top during collection: X is wavelength, Y is saved point index
+7. Click **"Stop DC"** to stop collection
 
 ### 5. Wavelength Tracking
 1. Set target wavelength (e.g., 550 nm)
@@ -121,7 +122,8 @@ Wavelength tracker exports:
 ### Data Collection Section
 - **Rate (s)**: Time between saved data points
 - **Pulse avg**: Avantes hardware trigger averages per saved data point
-- **Start/Stop Data Collection**: Toggle data recording
+- **Start/Stop DC**: Toggle data recording
+- **Show**: Open or raise floating OD time map window
 
 ### Wavelength Tracking Section
 - **λ (nm)**: Target wavelength for tracking (200-1100 nm)
@@ -162,7 +164,7 @@ No periodic measurement logs to keep files clean.
    - Watch OD change over time
 5. **Data Collection**:
    - Set rate (e.g., 1.0s)
-   - Click "Start Data Collection"
+   - Click "Start DC"
    - Record time-series data
 6. **Export**: Save both full spectra and time-series data
 
