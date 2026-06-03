@@ -55,6 +55,7 @@ from DeviceServers.cameras.avantes.avantes_parallel import (
 )
 from DeviceServers.cameras.avantes.arduino_trigger_controller import ArduinoTriggerController
 from DeviceServers.cameras.avantes.avantes_emulator import (
+    ARDUINO_TRIGGER_HZ,
     EmulatedArduinoTriggerController,
     EmulatedAvantesSpectrometer,
     should_use_avantes_emulator,
@@ -950,6 +951,36 @@ class AvantesDualViewer(QMainWindow):
         if self.continuous_mode:
             self.continuous_timer.start(self.get_live_preview_interval_ms())
 
+    def get_collection_min_rate_s(self) -> float:
+        """Return minimum non-overlapping collection rate."""
+        avg = self.collection_averages_spin.value()
+        trigger_mode = max(self.spec1_widget.trigger_combo.currentIndex(), self.spec2_widget.trigger_combo.currentIndex())
+        if trigger_mode in {1, 2}:
+            acquisition_s = avg / ARDUINO_TRIGGER_HZ
+        else:
+            integration_ms = max(self.spec1_widget.integration_spin.value(), self.spec2_widget.integration_spin.value())
+            acquisition_s = avg * integration_ms / 1000.0
+        return max(0.1, acquisition_s)
+
+    def validate_collection_rate(self, show_warning: bool = False) -> bool:
+        """Ensure collection rate is not shorter than one acquisition."""
+        min_rate_s = self.get_collection_min_rate_s()
+        current_rate_s = self.collection_rate_spin.value()
+        if current_rate_s + 1e-9 >= min_rate_s:
+            return True
+
+        self.collection_rate_spin.setValue(min_rate_s)
+        message = (
+            f"Rate cannot be shorter than acquisition time.\n\n"
+            f"Pulse avg = {self.collection_averages_spin.value()}\n"
+            f"Minimum rate = {min_rate_s:.3g} s\n\n"
+            f"Rate was set to {min_rate_s:.3g} s."
+        )
+        self.logger.warning(f"DATA COLLECTION: {message.replace(chr(10), ' ')}")
+        if show_warning:
+            QMessageBox.warning(self, "Rate Too Short", message)
+        return False
+
     def single_measurement(self, averages_override=None, measurement_role=None):
         """Perform a single parallel measurement."""
         if self.measurement_thread and self.measurement_thread.isRunning():
@@ -1255,6 +1286,9 @@ class AvantesDualViewer(QMainWindow):
                 QMessageBox.warning(self, "Error", "Please measure reference and background first")
                 return
 
+            if not self.validate_collection_rate(show_warning=True):
+                return
+
             interval_ms = int(self.collection_rate_spin.value() * 1000)
             if interval_ms < 100:
                 QMessageBox.warning(self, "Error", "Minimum collection rate is 0.1s (100ms)")
@@ -1327,6 +1361,7 @@ class AvantesDualViewer(QMainWindow):
         if not self.data_collection_active:
             return
 
+        self.validate_collection_rate(show_warning=False)
         interval_s = float(self.collection_rate_spin.value())
         base_time = self.collection_point_start_time or time.time()
         self.schedule_collection_due_time(base_time + interval_s)

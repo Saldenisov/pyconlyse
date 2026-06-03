@@ -134,6 +134,7 @@ Wavelength tracker exports:
 - If the next saved point is more than 120 seconds away, the lamp is switched off between points.
 - If the next saved point is 120 seconds away or sooner, the lamp stays on.
 - Each saved point still uses Avantes hardware averaging: `Pulse avg = 40` at 40 Hz means 40 TTL pulses and about 1 second of averaging.
+- Rate cannot be shorter than one acquisition. Example: `Pulse avg = 80` at 40 Hz takes about 2 seconds, so `Rate = 1 s` is rejected and reset to 2 seconds.
 
 ### Wavelength Tracking Section
 - **λ (nm)**: Target wavelength for tracking (200-1100 nm)
@@ -183,6 +184,7 @@ No periodic measurement logs to keep files clean.
 ### Minimum Measurement Interval
 - Arduino trigger: 25ms interval (40 Hz)
 - With `Pulse avg = 40`, one hardware-averaged spectrum takes about 1 second
+- With `Pulse avg = 80`, one hardware-averaged spectrum takes about 2 seconds, so collection rate must be at least 2 seconds
 - User-settable range: 0.1-86400s
 - Prevents USB bus overload
 
