@@ -826,8 +826,9 @@ class AvantesDualViewer(QMainWindow):
             self.plot_od.enableAutoRange(axis='y')
 
     def link_detector_averages(self):
-        """Keep detector average controls synchronized."""
+        """Keep detector average and trigger controls synchronized."""
         self._syncing_detector_averages = False
+        self._syncing_detector_triggers = False
 
         def sync_averages(source, target):
             if self._syncing_detector_averages:
@@ -838,11 +839,26 @@ class AvantesDualViewer(QMainWindow):
             if self.continuous_mode:
                 self.update_live_preview_interval()
 
+        def sync_trigger_mode(source, target):
+            if self._syncing_detector_triggers:
+                return
+            self._syncing_detector_triggers = True
+            target.trigger_combo.setCurrentIndex(source.trigger_combo.currentIndex())
+            self._syncing_detector_triggers = False
+            if self.continuous_mode:
+                self.update_live_preview_interval()
+
         self.spec1_widget.averages_spin.valueChanged.connect(
             lambda: sync_averages(self.spec1_widget, self.spec2_widget)
         )
         self.spec2_widget.averages_spin.valueChanged.connect(
             lambda: sync_averages(self.spec2_widget, self.spec1_widget)
+        )
+        self.spec1_widget.trigger_combo.currentIndexChanged.connect(
+            lambda: sync_trigger_mode(self.spec1_widget, self.spec2_widget)
+        )
+        self.spec2_widget.trigger_combo.currentIndexChanged.connect(
+            lambda: sync_trigger_mode(self.spec2_widget, self.spec1_widget)
         )
         self.spec1_widget.integration_spin.valueChanged.connect(self.update_live_preview_interval)
         self.spec2_widget.integration_spin.valueChanged.connect(self.update_live_preview_interval)
