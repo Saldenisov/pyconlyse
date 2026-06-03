@@ -59,9 +59,9 @@ The emulator generates 2048-pixel spectra from 200-1100 nm with Xe-flash-like sp
 
 ### 4. Start DC
 1. Set measurement rate (0.1-86400 seconds, minimum 100ms)
-2. Set pulse average. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
+2. Set detector `Averages`. This maps to Avantes `m_NrAverages`, so at 40 Hz `avg=40` takes about 1 second.
 3. Click **"Start DC"**
-4. System saves each hardware-averaged data point to CSV
+4. System appends each hardware-averaged OD spectrum to `*_measurement.dat`
 5. Click **"Show"** to open the floating OD time map window
 6. OD time map fills bottom-to-top during collection: X is wavelength in nm, Y is elapsed time in seconds
 7. Click **"Stop DC"** to stop collection
@@ -109,6 +109,11 @@ Main window "Export Data" button saves:
 - `*_spec1.csv`: Ch1 current spectrum
 - `*_spec2.csv`: Ch2 current spectrum  
 - `*_OD.csv`: Full OD spectrum
+
+Data collection saves:
+- `*_measurement.dat`: tab-delimited OD map
+- First column: elapsed time in seconds
+- Remaining columns: OD values at wavelength columns from the header row
 
 Wavelength tracker exports:
 - `od_timeseries_550nm.csv`: Time series at specific wavelength

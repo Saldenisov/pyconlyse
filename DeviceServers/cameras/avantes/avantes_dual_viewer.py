@@ -803,6 +803,7 @@ class AvantesDualViewer(QMainWindow):
         self.collection_rate_spin.setValue(1.0)
         self.collection_rate_spin.setSingleStep(1.0)
         self.collection_rate_spin.setToolTip("Time between saved data points")
+        self.collection_rate_spin.valueChanged.connect(self.on_collection_rate_changed)
         data_layout.addWidget(self.collection_rate_spin, 0, 1)
 
         self.start_collection_btn = QPushButton("Start DC")
@@ -1299,7 +1300,7 @@ class AvantesDualViewer(QMainWindow):
                 return
 
             base_name = self.save_name_input.text().strip() or "avantes_measurement"
-            self.collection_file_path = save_dir / f"{base_name}_collection.csv"
+            self.collection_file_path = save_dir / f"{base_name}.dat"
 
             self.data_collection_active = True
             self.collection_data = []
@@ -1363,6 +1364,18 @@ class AvantesDualViewer(QMainWindow):
         base_time = self.collection_point_start_time or time.time()
         self.schedule_collection_due_time(base_time + interval_s)
 
+    def on_collection_rate_changed(self):
+        """Reschedule active data collection when rate changes."""
+        if not self.data_collection_active:
+            return
+        if self.measurement_thread and self.measurement_thread.isRunning():
+            return
+
+        self.validate_collection_rate(show_warning=False)
+        interval_s = float(self.collection_rate_spin.value())
+        base_time = self.collection_point_start_time or self.collection_start_time or time.time()
+        self.schedule_collection_due_time(base_time + interval_s)
+
     def schedule_collection_due_time(self, due_time: float):
         """Schedule warmup and measurement for the next collection point."""
         if not self.data_collection_active:
@@ -1403,7 +1416,7 @@ class AvantesDualViewer(QMainWindow):
             self.logger.info("DATA COLLECTION: Lamp enabled for scheduled measurement")
 
     def browse_save_folder(self):
-        """Choose folder for exported and collected CSV files."""
+        """Choose folder for exported and collected files."""
         folder = QFileDialog.getExistingDirectory(self, "Choose Save Folder", self.save_folder_input.text())
         if folder:
             self.save_folder_input.setText(folder)
@@ -1560,10 +1573,7 @@ class AvantesDualViewer(QMainWindow):
             self.save_collection_point(
                 collection_elapsed,
                 wavelengths1,
-                data1,
-                data2,
                 od_spectrum,
-                collection_pulses,
             )
             self.collection_data.append(
                 {
@@ -1632,38 +1642,22 @@ class AvantesDualViewer(QMainWindow):
         self,
         elapsed_time: float,
         wavelengths: np.ndarray,
-        ch1_data: np.ndarray,
-        ch2_data: np.ndarray,
         od_spectrum: Optional[np.ndarray],
-        pulse_average: int,
     ):
-        """Append averaged collection point to CSV."""
+        """Append one OD spectrum row to tab-delimited DAT file."""
         if self.collection_file_path is None or wavelengths is None:
             return
 
         if od_spectrum is None:
             od_spectrum = np.full_like(wavelengths, np.nan, dtype=float)
 
-        rows = np.column_stack(
-            (
-                np.full_like(wavelengths, self.collection_point_index + 1, dtype=float),
-                np.full_like(wavelengths, elapsed_time, dtype=float),
-                np.full_like(wavelengths, pulse_average, dtype=float),
-                wavelengths,
-                ch1_data,
-                ch2_data,
-                od_spectrum,
-            )
-        )
         write_header = not self.collection_file_path.exists()
-        with open(self.collection_file_path, "ab") as f:
-            np.savetxt(
-                f,
-                rows,
-                delimiter=",",
-                header="point,time_s,pulse_average,wavelength_nm,ch1_counts,ch2_counts,od_au" if write_header else "",
-                comments="",
-            )
+        row = np.concatenate(([elapsed_time], np.asarray(od_spectrum, dtype=float)))
+        with open(self.collection_file_path, "a", encoding="utf-8") as f:
+            if write_header:
+                wavelength_header = "\t".join(f"{wl:.3f}" for wl in wavelengths)
+                f.write(f"time_s\t{wavelength_header}\n")
+            np.savetxt(f, row.reshape(1, -1), delimiter="\t", fmt="%.8g")
         self.logger.info(f"DATA COLLECTION: Saved point {self.collection_point_index + 1} to {self.collection_file_path}")
 
     def set_controls_enabled(self, enabled: bool):
