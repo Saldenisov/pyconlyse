@@ -1,0 +1,15 @@
+name: pyconlyse313
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - git
+  - numpy
+  - pyqt=5.15.*
+  - pyqtgraph=0.14.0
+  - requests
+  - beautifulsoup4=4.14.3
+  - pyzmq
+  - pip:
+      - git+https://github.com/MSLNZ/msl-equipment.git

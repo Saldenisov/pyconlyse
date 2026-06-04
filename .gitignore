@@ -14,6 +14,7 @@
 *.stpmtr
 
 *.txt
+!Gamma-spectrometer/requirements*.txt
 
 .idea/pyconlyse.iml
 /DeviceServers/DS_DenisBox_Motor.exe

@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+logs/
+avantes_dual_viewer_settings.json
+.venv/
