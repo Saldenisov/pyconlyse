@@ -21,6 +21,13 @@ Choices:
 2. pyconlyse313 - Python 3.13, modern test environment
 ```
 
+Second-time start:
+
+```text
+run_avantes_dual_viewer.bat
+run_avantes_dual_viewer_py313.bat
+```
+
 ## Conda Setup
 
 ```bash
