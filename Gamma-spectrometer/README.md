@@ -66,6 +66,22 @@ On macOS/Linux emulator mode is enabled by default.
 AVANTES_EMULATOR=1 python avantes_dual_viewer.py
 ```
 
+## Demo Kinetics
+
+Run:
+
+```bash
+./run_gamma_demo.command
+```
+
+or:
+
+```bash
+AVANTES_EMULATOR=1 AVANTES_DEMO_KINETICS=1 AVANTES_DEMO_DURATION_S=40 python avantes_dual_viewer.py
+```
+
+Demo kinetics adds a synthetic growing UV-visible species during data collection. Measure reference, measure background, click **Start DC**, then **Show**. With `Rate = 1 s`, the OD map fills over about 40 seconds.
+
 On Windows with real hardware:
 
 ```bat

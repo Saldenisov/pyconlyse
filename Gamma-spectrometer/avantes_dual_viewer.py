@@ -25,6 +25,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 import time
@@ -60,6 +61,13 @@ from avantes_emulator import (
 
 
 DEFAULT_SETTINGS_JSON = Path(__file__).with_name("avantes_dual_viewer_settings.json")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 class WavelengthTrackerWindow(QMainWindow):
@@ -679,6 +687,9 @@ class AvantesDualViewer(QMainWindow):
         self._measurement_count = 0
         self.wavelength_tracker_window = None
         self.emulate_hardware = should_use_avantes_emulator()
+        self.demo_kinetics_enabled = self.emulate_hardware and _env_bool("AVANTES_DEMO_KINETICS", False)
+        self.demo_kinetics_duration_s = float(os.environ.get("AVANTES_DEMO_DURATION_S", "40"))
+        self.demo_kinetics_max_od = float(os.environ.get("AVANTES_DEMO_MAX_OD", "0.95"))
 
         # Arduino controller
         if self.emulate_hardware:
@@ -712,6 +723,8 @@ class AvantesDualViewer(QMainWindow):
         title = "Avantes Dual Spectrometer Viewer"
         if self.emulate_hardware:
             title += " [EMULATOR]"
+        if self.demo_kinetics_enabled:
+            title += " [DEMO KINETICS]"
         self.setWindowTitle(title)
         self.setGeometry(100, 100, 1400, 900)
         self.create_menu_bar()
@@ -1978,7 +1991,11 @@ class AvantesDualViewer(QMainWindow):
         od_spectrum = None
         if data1 is not None and data2 is not None and wavelengths1 is not None:
             if self.has_reference and self.has_background:
-                od_spectrum = self.calculate_optical_density(data1, data2)
+                od_spectrum = self.calculate_optical_density(
+                    data1,
+                    data2,
+                    elapsed_time=collection_elapsed if completed_collection_point else None,
+                )
                 if od_spectrum is not None:
                     self.curve_od.setData(wavelengths1, od_spectrum)
                     # Apply manual limits if not in auto mode
@@ -2155,7 +2172,12 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"Export failed: {str(e)}")
             QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
 
-    def calculate_optical_density(self, ch1_current: np.ndarray, ch2_current: np.ndarray) -> Optional[np.ndarray]:
+    def calculate_optical_density(
+        self,
+        ch1_current: np.ndarray,
+        ch2_current: np.ndarray,
+        elapsed_time: Optional[float] = None,
+    ) -> Optional[np.ndarray]:
         """Calculate optical density using ratio of ratios method with background subtraction.
 
         OD = log10((I0_ch1 - BG_ch1) / (I0_ch2 - BG_ch2)) / ((I_ch1 - BG_ch1) / (I_ch2 - BG_ch2)))
@@ -2200,6 +2222,9 @@ class AvantesDualViewer(QMainWindow):
                 # OD = log10(ref_ratio / curr_ratio)
                 od = np.log10(ref_ratio / curr_ratio)
 
+                if elapsed_time is not None and self.demo_kinetics_enabled:
+                    od += self.get_demo_species_od(np.asarray(self.spec1_widget.wavelengths), elapsed_time)
+
                 # Replace inf and nan with 0
                 od[~np.isfinite(od)] = 0
 
@@ -2208,6 +2233,29 @@ class AvantesDualViewer(QMainWindow):
         except Exception as e:
             self.logger.error(f"Failed to calculate OD: {e}")
             return None
+
+    def get_demo_species_od(self, wavelengths: np.ndarray, elapsed_time: float) -> np.ndarray:
+        """Return a synthetic growing UV-visible species OD spectrum."""
+        if wavelengths is None:
+            return 0.0
+
+        duration_s = max(1.0, self.demo_kinetics_duration_s)
+        progress = np.clip(float(elapsed_time) / duration_s, 0.0, 1.0)
+        growth = 1.0 - np.exp(-4.2 * progress)
+        slow_growth = progress * progress * (3.0 - 2.0 * progress)
+        wl = np.asarray(wavelengths, dtype=float)
+
+        # Broad product bands spanning UV to visible, with a later visible shoulder.
+        species_shape = (
+            0.32 * np.exp(-0.5 * ((wl - 285.0) / 34.0) ** 2)
+            + 0.46 * np.exp(-0.5 * ((wl - 365.0) / 58.0) ** 2)
+            + 0.58 * np.exp(-0.5 * ((wl - 525.0) / 120.0) ** 2)
+            + 0.25 * np.exp(-0.5 * ((wl - 705.0) / 170.0) ** 2)
+        )
+        late_visible = 0.24 * slow_growth * np.exp(-0.5 * ((wl - 610.0) / 95.0) ** 2)
+        baseline = 0.025 * growth * np.exp(-0.5 * ((wl - 480.0) / 360.0) ** 2)
+        species_shape = species_shape / max(float(np.max(species_shape)), 1e-12)
+        return self.demo_kinetics_max_od * growth * species_shape + late_visible + baseline
 
     def clear_plots(self):
         """Clear all plots and reset reference and background."""
