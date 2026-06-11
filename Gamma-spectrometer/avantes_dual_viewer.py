@@ -45,7 +45,21 @@ from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
 
-from msl.equipment import Backend, ConnectionRecord, EquipmentRecord
+try:
+    from msl.equipment import Connection
+except ImportError:
+    from msl.equipment import ConnectionRecord, EquipmentRecord
+    msl_avantes = None
+    MSL_EQUIPMENT_API = "legacy"
+else:
+    try:
+        from msl.equipment.resources import avantes as msl_avantes
+    except ImportError as exc:
+        raise ImportError(
+            "Modern msl-equipment requires msl-equipment-resources for Avantes support"
+        ) from exc
+
+    MSL_EQUIPMENT_API = "modern"
 from avantes_parallel import (
     parallel_prepare_measure,
     parallel_measure,
@@ -376,6 +390,13 @@ class CollectionSettingsDialog(QDialog):
         self.warmup_spin.setValue(parent.lamp_warmup_seconds)
         form.addRow("Lamp warmup lead (s):", self.warmup_spin)
 
+        self.min_off_spin = QDoubleSpinBox()
+        self.min_off_spin.setRange(0.0, 3600.0)
+        self.min_off_spin.setDecimals(1)
+        self.min_off_spin.setSingleStep(10.0)
+        self.min_off_spin.setValue(parent.lamp_min_off_seconds)
+        form.addRow("Minimum lamp-off gap (s):", self.min_off_spin)
+
         self.auto_lamp_check = QCheckBox("Auto-control lamp during data collection")
         self.auto_lamp_check.setChecked(parent.auto_lamp_management_enabled)
         form.addRow("", self.auto_lamp_check)
@@ -533,16 +554,24 @@ class SpectrometerWidget(QGroupBox):
             else:
                 dll_path = Path(__file__).parent / "drivers" / "avaspecx64.dll"
 
-                record = EquipmentRecord(
-                    manufacturer="Avantes",
-                    model="AvaSpec-2048L",
-                    serial=serial,
-                    connection=ConnectionRecord(
-                        address=f"SDK::{dll_path}"
-                    ),
-                )
-
-                self.spec = self._connect_with_discovery_retry(record, serial)
+                if MSL_EQUIPMENT_API == "modern":
+                    connection = Connection(
+                        f"SDK::{dll_path}",
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                    )
+                    self.spec = self._connect_with_discovery_retry(connection, serial)
+                else:
+                    record = EquipmentRecord(
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                        connection=ConnectionRecord(
+                            address=f"SDK::{dll_path}"
+                        ),
+                    )
+                    self.spec = self._connect_with_discovery_retry(record, serial)
 
             self.enable_high_res_adc_if_supported()
 
@@ -568,7 +597,7 @@ class SpectrometerWidget(QGroupBox):
             logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
             QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
 
-    def _connect_with_discovery_retry(self, record, serial, attempts=6, delay_s=2.0):
+    def _connect_with_discovery_retry(self, connector, serial, attempts=6, delay_s=2.0):
         """Connect to an Ethernet AvaSpec, retrying transient discovery misses.
 
         ``AVS_Init`` runs a fresh Ethernet discovery scan on every call. The first
@@ -580,13 +609,14 @@ class SpectrometerWidget(QGroupBox):
         regardless of order.
         """
         transient_errors = (
+            "Cannot activate. No devices found",
             "No Avantes devices were found",
             "Did not find the Avantes serial",
         )
         last_error = None
         for attempt in range(1, attempts + 1):
             try:
-                return record.connect()
+                return connector.connect()
             except Exception as exc:
                 if not any(token in str(exc) for token in transient_errors):
                     raise
@@ -644,12 +674,12 @@ class SpectrometerWidget(QGroupBox):
             return None
 
         try:
-            cfg = self.spec.MeasConfigType()
+            cfg = self.create_meas_config()
             cfg.m_StopPixel = self.spec.get_num_pixels() - 1
             cfg.m_IntegrationTime = float(self.integration_spin.value())
             cfg.m_NrAverages = self.averages_spin.value()
 
-            trigger = self.spec.TriggerType()
+            trigger = self.create_trigger_config()
             trigger_mode = self.trigger_combo.currentIndex()
             trigger.m_Mode = trigger_mode
             trigger.m_Source = 0
@@ -664,6 +694,16 @@ class SpectrometerWidget(QGroupBox):
             self.status_label.setText("Connection Lost")
             self.status_label.setStyleSheet("color: orange; font-weight: bold;")
             raise
+
+    def create_meas_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.MeasConfigType()
+        return self.spec.MeasConfigType()
+
+    def create_trigger_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.TriggerType()
+        return self.spec.TriggerType()
 
     def on_settings_changed(self):
         """Called when integration time, averages, or trigger mode changes."""
@@ -722,6 +762,7 @@ class AvantesDualViewer(QMainWindow):
         self.collection_file_path = None
         self.collection_next_due_time = None
         self.lamp_warmup_seconds = 120.0
+        self.lamp_min_off_seconds = 60.0
         self.arduino_frequency_hz = ARDUINO_TRIGGER_HZ
         self.auto_lamp_management_enabled = True
         self.lamp_off_between_points_enabled = True
@@ -1321,6 +1362,7 @@ class AvantesDualViewer(QMainWindow):
             return
 
         self.lamp_warmup_seconds = float(dialog.warmup_spin.value())
+        self.lamp_min_off_seconds = float(dialog.min_off_spin.value())
         self.auto_lamp_management_enabled = dialog.auto_lamp_check.isChecked()
         self.lamp_off_between_points_enabled = dialog.lamp_off_between_check.isChecked()
         self.set_arduino_frequency_hz(dialog.frequency_spin.value())
@@ -1335,6 +1377,7 @@ class AvantesDualViewer(QMainWindow):
             "arduino": {
                 "frequency_hz": float(self.arduino_frequency_hz),
                 "lamp_warmup_seconds": float(self.lamp_warmup_seconds),
+                "lamp_min_off_seconds": float(self.lamp_min_off_seconds),
                 "auto_lamp_management_enabled": bool(self.auto_lamp_management_enabled),
                 "lamp_off_between_points_enabled": bool(self.lamp_off_between_points_enabled),
             },
@@ -1377,6 +1420,8 @@ class AvantesDualViewer(QMainWindow):
         arduino = settings.get("arduino", {})
         if "lamp_warmup_seconds" in arduino:
             self.lamp_warmup_seconds = float(arduino["lamp_warmup_seconds"])
+        if "lamp_min_off_seconds" in arduino:
+            self.lamp_min_off_seconds = float(arduino["lamp_min_off_seconds"])
         if "auto_lamp_management_enabled" in arduino:
             self.auto_lamp_management_enabled = bool(arduino["auto_lamp_management_enabled"])
         if "lamp_off_between_points_enabled" in arduino:
@@ -1496,10 +1541,19 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"SETTINGS: Failed to save {path} - {e}")
             QMessageBox.critical(self, "Settings Error", f"Failed to save settings:\n{e}")
 
-    def is_lamp_enabled(self) -> bool:
+    def is_lamp_enabled(self, poll: bool = False) -> bool:
         """Check whether lamp TTL is enabled."""
-        lamp_enabled, _ = self.get_arduino_state()
-        return bool(lamp_enabled)
+        if poll:
+            lamp_enabled, _ = self.get_arduino_state()
+            return bool(lamp_enabled)
+        return bool(getattr(self.arduino, "lamp_enabled", False))
+
+    def is_avantes_enabled(self, poll: bool = False) -> bool:
+        """Check whether Avantes TTL is enabled."""
+        if poll:
+            _, avantes_enabled = self.get_arduino_state()
+            return bool(avantes_enabled)
+        return bool(getattr(self.arduino, "avantes_enabled", False))
 
     def set_lamp_on(self):
         """Enable lamp and Avantes TTL pulses."""
@@ -1520,7 +1574,11 @@ class AvantesDualViewer(QMainWindow):
         wait_for_thermalization : bool
             If True, wait 1 second after enabling lamp for thermalization
         """
-        # Always send command to ensure mode is set correctly
+        if self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Lamp + Avantes")
+            self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("LAMP AND AVANTES"):
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -1545,7 +1603,11 @@ class AvantesDualViewer(QMainWindow):
 
     def set_avantes_only(self):
         """Set Arduino to trigger only Avantes (no lamp)."""
-        # Always send command to ensure mode is set correctly
+        if not self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Avantes Only")
+            self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("ONLY AVANTES"):
             self.arduino_status_label.setText("Status: Avantes Only")
             self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
@@ -1833,25 +1895,41 @@ class AvantesDualViewer(QMainWindow):
 
         now = time.time()
         seconds_until_due = max(0.0, due_time - now)
-        warmup_s = self.lamp_warmup_seconds
+        warmup_s = max(0.0, float(self.lamp_warmup_seconds))
+        lamp_off_gap_s = seconds_until_due - warmup_s
+        min_off_s = max(0.0, float(self.lamp_min_off_seconds))
+        can_save_lamp = (
+            self.auto_lamp_management_enabled
+            and self.lamp_off_between_points_enabled
+            and lamp_off_gap_s >= min_off_s
+        )
 
         if not self.auto_lamp_management_enabled:
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s")
-        elif seconds_until_due > warmup_s and self.lamp_off_between_points_enabled:
+        elif can_save_lamp:
             if self.is_lamp_enabled():
                 self.set_lamp_off(reschedule=False)
-            warmup_delay_ms = int((seconds_until_due - warmup_s) * 1000)
+            warmup_delay_ms = int(lamp_off_gap_s * 1000)
             self.lamp_warmup_timer.start(warmup_delay_ms)
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(
-                f"Next point in {seconds_until_due:.0f}s; lamp warmup starts in {seconds_until_due - warmup_s:.0f}s"
+                f"Next point in {seconds_until_due:.0f}s; lamp warmup starts in {lamp_off_gap_s:.0f}s"
             )
         else:
             if not self.is_lamp_enabled():
                 self.prepare_lamp_for_collection()
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s; lamp stays on")
+            if (
+                self.auto_lamp_management_enabled
+                and self.lamp_off_between_points_enabled
+                and lamp_off_gap_s > 0
+            ):
+                self.logger.info(
+                    f"DATA COLLECTION: Lamp stays on; off gap {lamp_off_gap_s:.1f}s "
+                    f"is shorter than minimum {min_off_s:.1f}s"
+                )
         self.update_collection_countdown_label()
 
     def prepare_lamp_for_collection(self):
@@ -1894,8 +1972,8 @@ class AvantesDualViewer(QMainWindow):
         text = f"Next: {self.format_seconds_for_countdown(remaining)} | Points: {points}"
 
         if self.auto_lamp_management_enabled and self.lamp_off_between_points_enabled:
-            warmup_start_in = remaining - self.lamp_warmup_seconds
-            if warmup_start_in > 0:
+            warmup_start_in = remaining - max(0.0, float(self.lamp_warmup_seconds))
+            if warmup_start_in >= max(0.0, float(self.lamp_min_off_seconds)):
                 text += f" | Lamp in {self.format_seconds_for_countdown(warmup_start_in)}"
             else:
                 text += " | Lamp on"

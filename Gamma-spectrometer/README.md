@@ -15,7 +15,7 @@ first_run_gamma_spectrometer.bat
 It opens an elevated PowerShell window, installs Miniconda if needed, creates or updates:
 
 ```text
-pyconlyse39
+pyconlyse311
 ```
 
 Then it starts `avantes_dual_viewer.py`.
@@ -42,17 +42,17 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File first_run_gamma_spectrom
 
 ```bash
 cd /Users/sad/dev/pyconlyse/Gamma-spectrometer
-conda env create -f environment-py39.yml
-conda activate pyconlyse39
+conda env create -f environment-py311.yml
+conda activate pyconlyse311
 python avantes_dual_viewer.py
 ```
 
-Python 3.11 test env:
+Python 3.9 stable fallback:
 
 ```bash
 cd /Users/sad/dev/pyconlyse/Gamma-spectrometer
-conda env create -f environment-py311.yml
-conda activate pyconlyse311
+conda env create -f environment-py39.yml
+conda activate pyconlyse39
 python avantes_dual_viewer.py
 ```
 
@@ -75,7 +75,7 @@ python -m pip install -r requirements.txt
 python avantes_dual_viewer.py
 ```
 
-Pip setup is intended for Python 3.9. Use conda for Python 3.11 or 3.13.
+Pip setup is intended for Python 3.11. Use conda for Python 3.9 or 3.13.
 
 ## Emulator
 
