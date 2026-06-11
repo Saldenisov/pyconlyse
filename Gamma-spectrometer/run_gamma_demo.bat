@@ -11,5 +11,5 @@ if not exist "%CONDA_EXE%" set "CONDA_EXE=%USERPROFILE%\miniconda3\condabin\cond
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%LOCALAPPDATA%\miniconda3\Scripts\conda.exe"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=%LOCALAPPDATA%\miniconda3\condabin\conda.bat"
 if not exist "%CONDA_EXE%" set "CONDA_EXE=conda"
-"%CONDA_EXE%" run -n pyconlyse39 python avantes_dual_viewer.py
+"%CONDA_EXE%" run -n pyconlyse311 python avantes_dual_viewer.py
 pause

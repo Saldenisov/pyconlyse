@@ -45,7 +45,21 @@ from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
 
-from msl.equipment import Backend, ConnectionRecord, EquipmentRecord
+try:
+    from msl.equipment import Connection
+except ImportError:
+    from msl.equipment import ConnectionRecord, EquipmentRecord
+    msl_avantes = None
+    MSL_EQUIPMENT_API = "legacy"
+else:
+    try:
+        from msl.equipment.resources import avantes as msl_avantes
+    except ImportError as exc:
+        raise ImportError(
+            "Modern msl-equipment requires msl-equipment-resources for Avantes support"
+        ) from exc
+
+    MSL_EQUIPMENT_API = "modern"
 from avantes_parallel import (
     parallel_prepare_measure,
     parallel_measure,
@@ -533,16 +547,24 @@ class SpectrometerWidget(QGroupBox):
             else:
                 dll_path = Path(__file__).parent / "drivers" / "avaspecx64.dll"
 
-                record = EquipmentRecord(
-                    manufacturer="Avantes",
-                    model="AvaSpec-2048L",
-                    serial=serial,
-                    connection=ConnectionRecord(
-                        address=f"SDK::{dll_path}"
-                    ),
-                )
-
-                self.spec = record.connect()
+                if MSL_EQUIPMENT_API == "modern":
+                    connection = Connection(
+                        f"SDK::{dll_path}",
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                    )
+                    self.spec = connection.connect()
+                else:
+                    record = EquipmentRecord(
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                        connection=ConnectionRecord(
+                            address=f"SDK::{dll_path}"
+                        ),
+                    )
+                    self.spec = record.connect()
 
             self.enable_high_res_adc_if_supported()
 
@@ -612,12 +634,12 @@ class SpectrometerWidget(QGroupBox):
             return None
 
         try:
-            cfg = self.spec.MeasConfigType()
+            cfg = self.create_meas_config()
             cfg.m_StopPixel = self.spec.get_num_pixels() - 1
             cfg.m_IntegrationTime = float(self.integration_spin.value())
             cfg.m_NrAverages = self.averages_spin.value()
 
-            trigger = self.spec.TriggerType()
+            trigger = self.create_trigger_config()
             trigger_mode = self.trigger_combo.currentIndex()
             trigger.m_Mode = trigger_mode
             trigger.m_Source = 0
@@ -632,6 +654,16 @@ class SpectrometerWidget(QGroupBox):
             self.status_label.setText("Connection Lost")
             self.status_label.setStyleSheet("color: orange; font-weight: bold;")
             raise
+
+    def create_meas_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.MeasConfigType()
+        return self.spec.MeasConfigType()
+
+    def create_trigger_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.TriggerType()
+        return self.spec.TriggerType()
 
     def on_settings_changed(self):
         """Called when integration time, averages, or trigger mode changes."""
