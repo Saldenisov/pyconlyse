@@ -554,7 +554,7 @@ class SpectrometerWidget(QGroupBox):
                         model="AvaSpec-2048L",
                         serial=serial,
                     )
-                    self.spec = connection.connect()
+                    self.spec = self._connect_with_discovery_retry(connection, serial)
                 else:
                     record = EquipmentRecord(
                         manufacturer="Avantes",
@@ -564,7 +564,7 @@ class SpectrometerWidget(QGroupBox):
                             address=f"SDK::{dll_path}"
                         ),
                     )
-                    self.spec = record.connect()
+                    self.spec = self._connect_with_discovery_retry(record, serial)
 
             self.enable_high_res_adc_if_supported()
 
@@ -589,6 +589,30 @@ class SpectrometerWidget(QGroupBox):
         except Exception as e:
             logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
             QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
+
+    def _connect_with_discovery_retry(self, connector, serial, attempts=6, delay_s=2.0):
+        """Connect to an AvaSpec, retrying transient Ethernet discovery misses."""
+        transient_errors = (
+            "Cannot activate. No devices found",
+            "No Avantes devices were found",
+            "Did not find the Avantes serial",
+        )
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return connector.connect()
+            except Exception as exc:
+                if not any(token in str(exc) for token in transient_errors):
+                    raise
+                last_error = exc
+                logging.warning(
+                    f"Spec {self.spec_id}: '{serial}' not discovered yet "
+                    f"(attempt {attempt}/{attempts}); waiting {delay_s:.0f}s for "
+                    f"Ethernet discovery to populate..."
+                )
+                if attempt < attempts:
+                    time.sleep(delay_s)
+        raise last_error
 
     def enable_high_res_adc_if_supported(self):
         """Enable high-resolution ADC only when this SDK exposes it."""
