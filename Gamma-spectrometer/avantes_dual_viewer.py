@@ -542,7 +542,7 @@ class SpectrometerWidget(QGroupBox):
                     ),
                 )
 
-                self.spec = record.connect()
+                self.spec = self._connect_with_discovery_retry(record, serial)
 
             self.enable_high_res_adc_if_supported()
 
@@ -567,6 +567,38 @@ class SpectrometerWidget(QGroupBox):
         except Exception as e:
             logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
             QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
+
+    def _connect_with_discovery_retry(self, record, serial, attempts=6, delay_s=2.0):
+        """Connect to an Ethernet AvaSpec, retrying transient discovery misses.
+
+        ``AVS_Init`` runs a fresh Ethernet discovery scan on every call. The first
+        scan after process start (or right after the network interface comes up)
+        often returns zero devices, which msl-equipment raises as "No Avantes
+        devices were found". Because each spectrometer is connected with its own
+        ``record.connect()`` call, whichever unit is connected first loses this
+        race. Retrying a few times lets a cold scan settle so both units connect
+        regardless of order.
+        """
+        transient_errors = (
+            "No Avantes devices were found",
+            "Did not find the Avantes serial",
+        )
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return record.connect()
+            except Exception as exc:
+                if not any(token in str(exc) for token in transient_errors):
+                    raise
+                last_error = exc
+                logging.warning(
+                    f"Spec {self.spec_id}: '{serial}' not discovered yet "
+                    f"(attempt {attempt}/{attempts}); waiting {delay_s:.0f}s for "
+                    f"Ethernet discovery to populate..."
+                )
+                if attempt < attempts:
+                    time.sleep(delay_s)
+        raise last_error
 
     def enable_high_res_adc_if_supported(self):
         """Enable high-resolution ADC only when this SDK exposes it."""
