@@ -13,4 +13,4 @@ dependencies:
   - beautifulsoup4=4.12.3
   - pyzmq
   - pip:
-      - git+https://github.com/MSLNZ/msl-equipment.git
+      - git+https://github.com/MSLNZ/msl-equipment.git@v0.2.0

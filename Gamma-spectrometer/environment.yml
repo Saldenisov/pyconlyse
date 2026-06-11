@@ -1,9 +1,9 @@
-name: pyconlyse311
+name: pyconlyse39
 channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python=3.11
+  - python=3.9
   - pip
   - git
   - numpy=1.26.4
@@ -13,4 +13,4 @@ dependencies:
   - beautifulsoup4=4.12.3
   - pyzmq
   - pip:
-      - git+https://github.com/MSLNZ/msl-equipment.git
+      - git+https://github.com/MSLNZ/msl-equipment.git@v0.2.0

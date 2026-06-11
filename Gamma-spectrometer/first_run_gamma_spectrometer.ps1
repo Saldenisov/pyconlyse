@@ -1,6 +1,6 @@
 param(
     [ValidateSet("pyconlyse311", "pyconlyse39", "pyconlyse313")]
-    [string]$EnvName = "pyconlyse311",
+    [string]$EnvName = "pyconlyse39",
     [switch]$Prompt,
     [switch]$Emulator
 )
@@ -164,23 +164,23 @@ try {
 
     if ($Prompt) {
         Write-Host "Choose Python environment:"
-        Write-Host "  1. pyconlyse311 - Python 3.11, recommended"
-        Write-Host "  2. pyconlyse39  - Python 3.9, legacy fallback"
+        Write-Host "  1. pyconlyse39  - Python 3.9, recommended for Avantes SDK"
+        Write-Host "  2. pyconlyse311 - Python 3.11"
         Write-Host "  3. pyconlyse313 - Python 3.13, modern test environment"
         $choice = Read-Host "Choice [1/2/3]"
         if ($choice -eq "2") {
-            $EnvName = "pyconlyse39"
+            $EnvName = "pyconlyse311"
         } elseif ($choice -eq "3") {
             $EnvName = "pyconlyse313"
         } else {
-            $EnvName = "pyconlyse311"
+            $EnvName = "pyconlyse39"
         }
     }
 
     switch ($EnvName) {
         "pyconlyse39" { $envFile = Join-Path $ProjectRoot "environment-py39.yml" }
         "pyconlyse313" { $envFile = Join-Path $ProjectRoot "environment-py313.yml" }
-        default { $envFile = Join-Path $ProjectRoot "environment-py311.yml" }
+        default { $envFile = Join-Path $ProjectRoot "environment-py39.yml" }
     }
 
     if (-not (Test-Path $envFile)) {
