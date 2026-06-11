@@ -543,7 +543,8 @@ class SpectrometerWidget(QGroupBox):
                 )
 
                 self.spec = record.connect()
-            self.spec.use_high_res_adc(True)
+
+            self.enable_high_res_adc_if_supported()
 
             # Get wavelength calibration
             self.wavelengths = self.spec.get_lambda()
@@ -566,6 +567,20 @@ class SpectrometerWidget(QGroupBox):
         except Exception as e:
             logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
             QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
+
+    def enable_high_res_adc_if_supported(self):
+        """Enable high-resolution ADC only when this SDK exposes it."""
+        method = getattr(self.spec, "use_high_res_adc", None)
+        if not callable(method):
+            logging.warning(f"Spec {self.spec_id}: High-resolution ADC method not available; continuing")
+            return
+
+        try:
+            method(True)
+        except AttributeError as exc:
+            logging.warning(f"Spec {self.spec_id}: High-resolution ADC not supported by this SDK: {exc}")
+        except Exception as exc:
+            logging.warning(f"Spec {self.spec_id}: Could not enable high-resolution ADC: {exc}")
 
     def disconnect_spectrometer(self):
         """Disconnect from the spectrometer."""
