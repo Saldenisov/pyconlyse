@@ -5,8 +5,8 @@ param(
     [switch]$Emulator
 )
 
-# Gamma-spectrometer first-run installer for Windows 10.
-# Installs Miniconda if needed, creates/updates conda env, then starts the app.
+# Windows 10 first-run installer for Gamma-spectrometer.
+# Installs Miniconda if missing, creates or updates conda env, then starts app.
 
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -17,12 +17,20 @@ function Test-Administrator {
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Quote-Argument {
+    param([string]$Value)
+    if ($Value -match "[\s`"]") {
+        return '"' + ($Value -replace '"', '\"') + '"'
+    }
+    return $Value
+}
+
 if (-not (Test-Administrator)) {
     $script = $MyInvocation.MyCommand.Path
     $argsList = @(
         "-NoProfile",
         "-ExecutionPolicy", "Bypass",
-        "-File", "`"$script`"",
+        "-File", (Quote-Argument $script),
         "-EnvName", $EnvName
     )
     if ($Prompt) {
@@ -31,8 +39,19 @@ if (-not (Test-Administrator)) {
     if ($Emulator) {
         $argsList += "-Emulator"
     }
-    Start-Process powershell.exe -Verb RunAs -ArgumentList $argsList
-    exit
+
+    try {
+        $process = Start-Process -FilePath "powershell.exe" -Verb RunAs -ArgumentList $argsList -Wait -PassThru
+        exit $process.ExitCode
+    }
+    catch {
+        Write-Host ""
+        Write-Host "FAILED: Administrator elevation was cancelled or failed." -ForegroundColor Red
+        Write-Host $_.Exception.Message
+        Write-Host ""
+        Read-Host "Press Enter to close"
+        exit 1
+    }
 }
 
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -40,25 +59,37 @@ Set-Location $ProjectRoot
 $env:PYTHONNOUSERSITE = "1"
 
 $logPath = Join-Path $ProjectRoot "first_run_gamma_spectrometer.log"
-Start-Transcript -Path $logPath -Append | Out-Null
+$transcriptStarted = $false
 
 try {
-    function Find-Conda {
-        $cmd = Get-Command conda.exe -ErrorAction SilentlyContinue
-        if ($cmd) {
-            return $cmd.Source
-        }
+    Start-Transcript -Path $logPath -Append | Out-Null
+    $transcriptStarted = $true
 
-        $candidates = @(
-            "$env:ProgramData\miniconda3\Scripts\conda.exe",
-            "$env:ProgramData\anaconda3\Scripts\conda.exe",
-            "$env:USERPROFILE\miniconda3\Scripts\conda.exe",
-            "$env:USERPROFILE\anaconda3\Scripts\conda.exe",
-            "$env:LOCALAPPDATA\miniconda3\Scripts\conda.exe",
-            "$env:LOCALAPPDATA\anaconda3\Scripts\conda.exe"
+    function Get-CondaCandidates {
+        $roots = @(
+            "$env:ProgramData\miniconda3",
+            "$env:ProgramData\anaconda3",
+            "$env:USERPROFILE\miniconda3",
+            "$env:USERPROFILE\anaconda3",
+            "$env:LOCALAPPDATA\miniconda3",
+            "$env:LOCALAPPDATA\anaconda3"
         )
 
-        foreach ($candidate in $candidates) {
+        foreach ($root in $roots) {
+            Join-Path $root "Scripts\conda.exe"
+            Join-Path $root "condabin\conda.bat"
+        }
+    }
+
+    function Find-Conda {
+        foreach ($name in @("conda.exe", "conda.bat", "conda")) {
+            $cmd = Get-Command $name -ErrorAction SilentlyContinue
+            if ($cmd) {
+                return $cmd.Source
+            }
+        }
+
+        foreach ($candidate in (Get-CondaCandidates)) {
             if (Test-Path $candidate) {
                 return $candidate
             }
@@ -69,29 +100,56 @@ try {
 
     function Install-Miniconda {
         $installDir = "$env:ProgramData\miniconda3"
-        $condaExe = Join-Path $installDir "Scripts\conda.exe"
-        if (Test-Path $condaExe) {
-            return $condaExe
+        foreach ($candidate in @(
+            (Join-Path $installDir "Scripts\conda.exe"),
+            (Join-Path $installDir "condabin\conda.bat")
+        )) {
+            if (Test-Path $candidate) {
+                return $candidate
+            }
         }
 
         Write-Host "Conda not found. Installing Miniconda to $installDir"
         $installer = Join-Path $env:TEMP "Miniconda3-latest-Windows-x86_64.exe"
         $url = "https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe"
+
         Invoke-WebRequest -Uri $url -OutFile $installer -UseBasicParsing
 
-        Start-Process -FilePath $installer -ArgumentList @(
+        $installArgs = @(
             "/S",
             "/InstallationType=AllUsers",
             "/RegisterPython=0",
             "/AddToPath=0",
             "/D=$installDir"
-        ) -Wait
-
-        if (-not (Test-Path $condaExe)) {
-            throw "Miniconda install failed: $condaExe not found"
+        )
+        $installProcess = Start-Process -FilePath $installer -ArgumentList $installArgs -Wait -PassThru
+        if ($installProcess.ExitCode -ne 0) {
+            throw "Miniconda installer failed with exit code $($installProcess.ExitCode)"
         }
 
-        return $condaExe
+        foreach ($candidate in @(
+            (Join-Path $installDir "Scripts\conda.exe"),
+            (Join-Path $installDir "condabin\conda.bat")
+        )) {
+            if (Test-Path $candidate) {
+                return $candidate
+            }
+        }
+
+        throw "Miniconda install failed: conda executable not found in $installDir"
+    }
+
+    function Invoke-Conda {
+        param(
+            [string]$CondaExe,
+            [string[]]$Arguments,
+            [string]$FailureMessage
+        )
+
+        & $CondaExe @Arguments
+        if ($LASTEXITCODE -ne 0) {
+            throw "$FailureMessage (exit code $LASTEXITCODE)"
+        }
     }
 
     function Test-CondaEnv {
@@ -137,18 +195,12 @@ try {
     Write-Host "Using conda: $conda"
     Write-Host "Using env file: $envFile"
 
-    & $conda config --set channel_priority flexible
-
     if (Test-CondaEnv -CondaExe $conda -Name $EnvName) {
         Write-Host "Updating existing conda env: $EnvName"
-        & $conda env update -n $EnvName -f $envFile
+        Invoke-Conda -CondaExe $conda -Arguments @("env", "update", "-n", $EnvName, "-f", $envFile) -FailureMessage "Conda environment update failed"
     } else {
         Write-Host "Creating conda env: $EnvName"
-        & $conda env create -f $envFile
-    }
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Conda environment setup failed"
+        Invoke-Conda -CondaExe $conda -Arguments @("env", "create", "-f", $envFile) -FailureMessage "Conda environment create failed"
     }
 
     if ($Prompt) {
@@ -165,11 +217,7 @@ try {
     }
 
     Write-Host "Starting Gamma-spectrometer in $EnvName"
-    & $conda run -n $EnvName python (Join-Path $ProjectRoot "avantes_dual_viewer.py")
-
-    if ($LASTEXITCODE -ne 0) {
-        throw "Gamma-spectrometer exited with code $LASTEXITCODE"
-    }
+    Invoke-Conda -CondaExe $conda -Arguments @("run", "-n", $EnvName, "python", (Join-Path $ProjectRoot "avantes_dual_viewer.py")) -FailureMessage "Gamma-spectrometer failed"
 }
 catch {
     Write-Host ""
@@ -180,5 +228,7 @@ catch {
     exit 1
 }
 finally {
-    Stop-Transcript | Out-Null
+    if ($transcriptStarted) {
+        Stop-Transcript | Out-Null
+    }
 }
