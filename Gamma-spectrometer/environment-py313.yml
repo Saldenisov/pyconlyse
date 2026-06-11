@@ -1,6 +1,7 @@
 name: pyconlyse313
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   - python=3.13
   - pip

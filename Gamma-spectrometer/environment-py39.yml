@@ -1,6 +1,7 @@
 name: pyconlyse39
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   - python=3.9
   - pip
@@ -9,7 +10,7 @@ dependencies:
   - pyqt=5.15.*
   - pyqtgraph=0.13.7
   - requests=2.32.5
-  - beautifulsoup4=4.14.3
+  - beautifulsoup4=4.12.3
   - pyzmq
   - pip:
       - git+https://github.com/MSLNZ/msl-equipment.git

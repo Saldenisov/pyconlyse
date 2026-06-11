@@ -4,7 +4,7 @@ Standalone PyQt5 application for two Avantes spectrometers and Arduino TTL contr
 
 This subproject does not use Tango.
 
-## Windows First Run
+## Windows 10 First Run
 
 Run:
 
@@ -12,23 +12,42 @@ Run:
 first_run_gamma_spectrometer.bat
 ```
 
-It opens an elevated PowerShell window, installs Miniconda if needed, asks which env to use, creates or updates the env, then starts the viewer.
-
-Choices:
+It opens an elevated PowerShell window, installs Miniconda if needed, creates or updates:
 
 ```text
-1. pyconlyse39  - Python 3.9, recommended for real Avantes hardware
-2. pyconlyse313 - Python 3.13, modern test environment
+pyconlyse311
 ```
+
+Then it starts `avantes_dual_viewer.py`.
 
 Second-time start:
 
 ```text
 run_avantes_dual_viewer.bat
-run_avantes_dual_viewer_py313.bat
+```
+
+Diagnostic log:
+
+```text
+first_run_gamma_spectrometer.log
+```
+
+Optional interactive installer:
+
+```bat
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File first_run_gamma_spectrometer.ps1 -Prompt
 ```
 
 ## Conda Setup
+
+```bash
+cd /Users/sad/dev/pyconlyse/Gamma-spectrometer
+conda env create -f environment-py311.yml
+conda activate pyconlyse311
+python avantes_dual_viewer.py
+```
+
+Python 3.9 fallback:
 
 ```bash
 cd /Users/sad/dev/pyconlyse/Gamma-spectrometer
@@ -37,7 +56,7 @@ conda activate pyconlyse39
 python avantes_dual_viewer.py
 ```
 
-Python 3.13:
+Python 3.13 test env:
 
 ```bash
 cd /Users/sad/dev/pyconlyse/Gamma-spectrometer
@@ -56,7 +75,7 @@ python -m pip install -r requirements.txt
 python avantes_dual_viewer.py
 ```
 
-Pip setup is intended for Python 3.9. Use conda for Python 3.13.
+Pip setup is intended for Python 3.11. Use conda for Python 3.9 or 3.13.
 
 ## Emulator
 
