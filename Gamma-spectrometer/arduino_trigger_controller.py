@@ -107,7 +107,17 @@ class ArduinoTriggerController:
             response = requests.get(url, timeout=self.timeout)
             if response.status_code == 200:
                 self._last_mode = mode
-                # Update cached state
+                if mode == "LAMP AND AVANTES":
+                    self._lamp_enabled = True
+                    self._avantes_enabled = True
+                elif mode == "ONLY AVANTES":
+                    self._lamp_enabled = False
+                    self._avantes_enabled = True
+                elif mode == "OFF":
+                    self._lamp_enabled = False
+                    self._avantes_enabled = False
+
+                # Refresh cached state when the status page is readable.
                 self.get_state()
                 return True
             else:
@@ -131,7 +141,7 @@ class ArduinoTriggerController:
             response = requests.get(self.base_url, timeout=self.timeout)
             
             if response.status_code != 200:
-                return False, False
+                return self._lamp_enabled, self._avantes_enabled
             
             # Parse HTML response
             html = response.text
@@ -140,23 +150,15 @@ class ArduinoTriggerController:
             # <span class='on'>ON</span> or <span class='off'>OFF</span>
             # Look for the text content to determine state
             
-            # Find lamp status (appears after "Flash Lamp (Pin 7)")
-            lamp_on = "Flash Lamp (Pin 7)" in html and "class='on'>ON" in html
-            if "Flash Lamp" in html:
-                # Check if the next status span says ON or OFF
-                lamp_idx = html.find("Flash Lamp (Pin 7)")
-                if lamp_idx >= 0:
-                    next_span = html[lamp_idx:lamp_idx+200]
-                    lamp_on = "class='on'>ON" in next_span
-            
-            # Find Avantes status (appears after "Avantes (Pin 8)")
-            avantes_on = "Avantes (Pin 8)" in html and "class='on'>ON" in html
-            if "Avantes (Pin 8)" in html:
-                # Check if the next status span says ON or OFF
-                avantes_idx = html.find("Avantes (Pin 8)")
-                if avantes_idx >= 0:
-                    next_span = html[avantes_idx:avantes_idx+200]
-                    avantes_on = "class='on'>ON" in next_span
+            lamp_idx = html.find("Flash Lamp (Pin 7)")
+            avantes_idx = html.find("Avantes (Pin 8)")
+            if lamp_idx < 0 or avantes_idx < 0:
+                return self._lamp_enabled, self._avantes_enabled
+
+            lamp_span = html[lamp_idx:lamp_idx + 200]
+            avantes_span = html[avantes_idx:avantes_idx + 200]
+            lamp_on = "ON" in lamp_span and "off'>OFF" not in lamp_span
+            avantes_on = "ON" in avantes_span and "off'>OFF" not in avantes_span
             
             self._lamp_enabled = lamp_on
             self._avantes_enabled = avantes_on
@@ -165,7 +167,7 @@ class ArduinoTriggerController:
                 
         except requests.exceptions.RequestException as e:
             print(f"Failed to get Arduino state: {e}")
-            return False, False
+            return self._lamp_enabled, self._avantes_enabled
 
     def set_frequency_hz(self, frequency_hz: float) -> bool:
         """Set Arduino TTL frequency in Hz."""
