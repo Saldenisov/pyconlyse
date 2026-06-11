@@ -117,8 +117,6 @@ class ArduinoTriggerController:
                     self._lamp_enabled = False
                     self._avantes_enabled = False
 
-                # Refresh cached state when the status page is readable.
-                self.get_state()
                 return True
             else:
                 print(f"Arduino returned status code: {response.status_code}")

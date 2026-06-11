@@ -1532,10 +1532,19 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"SETTINGS: Failed to save {path} - {e}")
             QMessageBox.critical(self, "Settings Error", f"Failed to save settings:\n{e}")
 
-    def is_lamp_enabled(self) -> bool:
+    def is_lamp_enabled(self, poll: bool = False) -> bool:
         """Check whether lamp TTL is enabled."""
-        lamp_enabled, _ = self.get_arduino_state()
-        return bool(lamp_enabled)
+        if poll:
+            lamp_enabled, _ = self.get_arduino_state()
+            return bool(lamp_enabled)
+        return bool(getattr(self.arduino, "lamp_enabled", False))
+
+    def is_avantes_enabled(self, poll: bool = False) -> bool:
+        """Check whether Avantes TTL is enabled."""
+        if poll:
+            _, avantes_enabled = self.get_arduino_state()
+            return bool(avantes_enabled)
+        return bool(getattr(self.arduino, "avantes_enabled", False))
 
     def set_lamp_on(self):
         """Enable lamp and Avantes TTL pulses."""
@@ -1556,7 +1565,11 @@ class AvantesDualViewer(QMainWindow):
         wait_for_thermalization : bool
             If True, wait 1 second after enabling lamp for thermalization
         """
-        # Always send command to ensure mode is set correctly
+        if self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Lamp + Avantes")
+            self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("LAMP AND AVANTES"):
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -1581,7 +1594,11 @@ class AvantesDualViewer(QMainWindow):
 
     def set_avantes_only(self):
         """Set Arduino to trigger only Avantes (no lamp)."""
-        # Always send command to ensure mode is set correctly
+        if not self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Avantes Only")
+            self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("ONLY AVANTES"):
             self.arduino_status_label.setText("Status: Avantes Only")
             self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
