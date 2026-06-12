@@ -14,30 +14,7 @@ function clampCursor(value, fallback) {
   return parsed;
 }
 
-function findClosestIndex(values, target) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return 0;
-  }
-
-  let bestIndex = 0;
-  let bestDistance = Math.abs(values[0] - target);
-
-  for (let index = 1; index < values.length; index += 1) {
-    const distance = Math.abs(values[index] - target);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
-    }
-  }
-
-  return bestIndex;
-}
-
-function interpolate(fromValue, toValue, ratio) {
-  return fromValue + (toValue - fromValue) * ratio;
-}
-
-function SelectionHeatmap({ selection, onSelectRange }) {
+function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   const shellRef = useRef(null);
   const plotRef = useRef(null);
   const dragStateRef = useRef(null);
@@ -123,8 +100,19 @@ function SelectionHeatmap({ selection, onSelectRange }) {
       ],
       {
         margin: HEATMAP_MARGIN,
-        xaxis: { title: 'Wavelength, nm' },
-        yaxis: { title: `Time delay, ${kinetics.time_scale || ''}`.trim() },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
+        xaxis: {
+          title: 'Wavelength, nm',
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
+        yaxis: {
+          title: `Time delay, ${kinetics.time_scale || ''}`.trim(),
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
       },
       { responsive: true, displayModeBar: false }
     );
@@ -188,9 +176,9 @@ function SelectionHeatmap({ selection, onSelectRange }) {
   };
 
   const normalizeSelectionIndexes = (nextSelection) => {
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    const timedelays = selection?.heatmap?.timedelays || [];
-    if (wavelengths.length === 0 || timedelays.length === 0) {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (xLength === 0 || yLength === 0) {
       return null;
     }
 
@@ -210,33 +198,29 @@ function SelectionHeatmap({ selection, onSelectRange }) {
       return [left, right];
     };
 
-    const [x1, x2] = normalizePair(nextSelection.x1, nextSelection.x2, wavelengths.length);
-    const [y1, y2] = normalizePair(nextSelection.y1, nextSelection.y2, timedelays.length);
+    const [x1, x2] = normalizePair(nextSelection.x1, nextSelection.x2, xLength);
+    const [y1, y2] = normalizePair(nextSelection.y1, nextSelection.y2, yLength);
     return { x1, x2, y1, y2 };
   };
 
   const xIndexFromPoint = (point) => {
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    if (wavelengths.length === 0 || !point) {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    if (xLength === 0 || !point) {
       return 0;
     }
 
-    const xMin = Math.min(wavelengths[0], wavelengths[wavelengths.length - 1]);
-    const xMax = Math.max(wavelengths[0], wavelengths[wavelengths.length - 1]);
     const ratio = (point.localX - point.xOffset) / Math.max(1, point.innerWidth);
-    return findClosestIndex(wavelengths, interpolate(xMin, xMax, ratio));
+    return Math.round(Math.max(0, Math.min(1, ratio)) * (xLength - 1));
   };
 
   const yIndexFromPoint = (point) => {
-    const timedelays = selection?.heatmap?.timedelays || [];
-    if (timedelays.length === 0 || !point) {
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (yLength === 0 || !point) {
       return 0;
     }
 
-    const yMin = Math.min(timedelays[0], timedelays[timedelays.length - 1]);
-    const yMax = Math.max(timedelays[0], timedelays[timedelays.length - 1]);
     const ratio = (point.localY - point.yOffset) / Math.max(1, point.innerHeight);
-    return findClosestIndex(timedelays, interpolate(yMin, yMax, 1 - ratio));
+    return Math.round((1 - Math.max(0, Math.min(1, ratio))) * (yLength - 1));
   };
 
   const clampMovedRange = (start, end, delta, length) => {
@@ -270,7 +254,9 @@ function SelectionHeatmap({ selection, onSelectRange }) {
       startXIndex: xIndexFromPoint(point),
       startYIndex: yIndexFromPoint(point),
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const captureTarget =
+      event.currentTarget.closest?.('.selection-overlay') || event.currentTarget;
+    captureTarget.setPointerCapture(event.pointerId);
   };
 
   const handlePointerMove = (event) => {
@@ -327,6 +313,9 @@ function SelectionHeatmap({ selection, onSelectRange }) {
     if (normalizedSelection) {
       visualSelectionRef.current = normalizedSelection;
       setVisualSelection(normalizedSelection);
+      if (onPreviewRange) {
+        onPreviewRange(normalizedSelection);
+      }
     }
   };
 
@@ -346,29 +335,25 @@ function SelectionHeatmap({ selection, onSelectRange }) {
   };
 
   const valueToX = (value) => {
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    if (!metrics || wavelengths.length === 0) {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    if (!metrics || xLength === 0) {
       return HEATMAP_MARGIN.l;
     }
-    const xMin = Math.min(wavelengths[0], wavelengths[wavelengths.length - 1]);
-    const xMax = Math.max(wavelengths[0], wavelengths[wavelengths.length - 1]);
-    if (xMax === xMin) {
+    if (xLength <= 1) {
       return metrics.xOffset;
     }
-    return metrics.xOffset + ((value - xMin) / (xMax - xMin)) * metrics.innerWidth;
+    return metrics.xOffset + (value / (xLength - 1)) * metrics.innerWidth;
   };
 
   const valueToY = (value) => {
-    const timedelays = selection?.heatmap?.timedelays || [];
-    if (!metrics || timedelays.length === 0) {
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (!metrics || yLength === 0) {
       return HEATMAP_MARGIN.t;
     }
-    const yMin = Math.min(timedelays[0], timedelays[timedelays.length - 1]);
-    const yMax = Math.max(timedelays[0], timedelays[timedelays.length - 1]);
-    if (yMax === yMin) {
+    if (yLength <= 1) {
       return metrics.yOffset;
     }
-    return metrics.yOffset + (1 - (value - yMin) / (yMax - yMin)) * metrics.innerHeight;
+    return metrics.yOffset + (1 - value / (yLength - 1)) * metrics.innerHeight;
   };
 
   const buildRegionStyle = () => {
@@ -376,12 +361,10 @@ function SelectionHeatmap({ selection, onSelectRange }) {
       return null;
     }
 
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    const timedelays = selection?.heatmap?.timedelays || [];
-    const xStart = valueToX(wavelengths[visualSelection.x1]);
-    const xEnd = valueToX(wavelengths[visualSelection.x2]);
-    const yStart = valueToY(timedelays[visualSelection.y1]);
-    const yEnd = valueToY(timedelays[visualSelection.y2]);
+    const xStart = valueToX(visualSelection.x1);
+    const xEnd = valueToX(visualSelection.x2);
+    const yStart = valueToY(visualSelection.y1);
+    const yEnd = valueToY(visualSelection.y2);
 
     return {
       x: {
@@ -491,9 +474,20 @@ function LinePlot({ x, y, title, xTitle, className }) {
       ],
       {
         margin: { t: 28, r: 16, b: 40, l: 48 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
         title,
-        xaxis: { title: xTitle },
-        yaxis: { title: 'Intensity' },
+        xaxis: {
+          title: xTitle,
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
+        yaxis: {
+          title: 'Intensity',
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
       },
       { responsive: true, displayModeBar: false }
     );
@@ -512,6 +506,64 @@ function LinePlot({ x, y, title, xTitle, className }) {
   return <div className={className} ref={ref}></div>;
 }
 
+function clampSampleIndex(fullIndex, fullLength, sampleLength) {
+  if (sampleLength <= 1 || fullLength <= 1) {
+    return 0;
+  }
+  const ratio = Math.max(0, Math.min(1, fullIndex / (fullLength - 1)));
+  return Math.round(ratio * (sampleLength - 1));
+}
+
+function mean(values) {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (finiteValues.length === 0) {
+    return null;
+  }
+  return finiteValues.reduce((total, value) => total + value, 0) / finiteValues.length;
+}
+
+function buildPreviewCurves(selection, selectedRange) {
+  const z = selection?.heatmap?.z || [];
+  const wavelengths = selection?.heatmap?.wavelengths || [];
+  const timedelays = selection?.heatmap?.timedelays || [];
+  const xLength = selection?.file_info?.wavelengths_length || wavelengths.length;
+  const yLength = selection?.file_info?.timedelays_length || timedelays.length;
+
+  if (!selectedRange || z.length === 0 || wavelengths.length === 0 || timedelays.length === 0) {
+    return null;
+  }
+
+  const x1 = clampSampleIndex(selectedRange.x1, xLength, wavelengths.length);
+  const x2 = clampSampleIndex(selectedRange.x2, xLength, wavelengths.length);
+  const y1 = clampSampleIndex(selectedRange.y1, yLength, timedelays.length);
+  const y2 = clampSampleIndex(selectedRange.y2, yLength, timedelays.length);
+  const xStart = Math.min(x1, x2);
+  const xEnd = Math.max(x1, x2);
+  const yStart = Math.min(y1, y2);
+  const yEnd = Math.max(y1, y2);
+
+  const kinetics = z.map((row) => mean((row || []).slice(xStart, xEnd + 1)) ?? 0);
+  const spectrum = wavelengths.map((_, colIndex) => {
+    const values = [];
+    for (let rowIndex = yStart; rowIndex <= yEnd; rowIndex += 1) {
+      values.push(z[rowIndex]?.[colIndex]);
+    }
+    return mean(values) ?? 0;
+  });
+
+  return {
+    kinetics: {
+      x: timedelays,
+      y: kinetics,
+      time_scale: selection.kinetics?.time_scale || '',
+    },
+    spectrum: {
+      x: wavelengths,
+      y: spectrum,
+    },
+  };
+}
+
 const TopSection = () => {
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
@@ -522,6 +574,7 @@ const TopSection = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [previewRange, setPreviewRange] = useState(null);
   const [draft, setDraft] = useState({
     activeDataType: '',
     mapIndex: 0,
@@ -551,6 +604,7 @@ const TopSection = () => {
           y1: nextSelection.cursors.y1,
           y2: nextSelection.cursors.y2,
         });
+        setPreviewRange(null);
         setError('');
       })
       .catch((err) => {
@@ -625,6 +679,17 @@ const TopSection = () => {
     }
   };
 
+  const handleHeatmapPreview = (nextSelection) => {
+    setPreviewRange(nextSelection);
+    setDraft((current) => ({
+      ...current,
+      x1: nextSelection.x1,
+      x2: nextSelection.x2,
+      y1: nextSelection.y1,
+      y2: nextSelection.y2,
+    }));
+  };
+
   const stepMap = async (direction) => {
     if (!selection) {
       return;
@@ -678,6 +743,10 @@ const TopSection = () => {
         </div>
       );
     }
+
+    const previewCurves = buildPreviewCurves(selection, previewRange);
+    const shownKinetics = previewCurves?.kinetics || selection.kinetics;
+    const shownSpectrum = previewCurves?.spectrum || selection.spectrum;
 
     return (
       <>
@@ -739,6 +808,7 @@ const TopSection = () => {
               <SelectionHeatmap
                 selection={selection}
                 onSelectRange={handleHeatmapSelection}
+                onPreviewRange={handleHeatmapPreview}
               />
             </div>
           </div>
@@ -746,15 +816,15 @@ const TopSection = () => {
             <div className="vertical-layout">
               <LinePlot
                 className="xy-plot kinetics-plot"
-                x={selection.kinetics.x}
-                y={selection.kinetics.y}
+                x={shownKinetics.x}
+                y={shownKinetics.y}
                 title="Kinetics"
-                xTitle={`Time Delay, ${selection.kinetics.time_scale || ''}`.trim()}
+                xTitle={`Time Delay, ${shownKinetics.time_scale || ''}`.trim()}
               />
               <LinePlot
                 className="xy-plot spectrum-plot"
-                x={selection.spectrum.x}
-                y={selection.spectrum.y}
+                x={shownSpectrum.x}
+                y={shownSpectrum.y}
                 title="Spectrum"
                 xTitle="Wavelength, nm"
               />
