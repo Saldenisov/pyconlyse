@@ -3,10 +3,10 @@
 .top-section-container {
   display: flex;
   flex-direction: column;
-  flex: 0 0 clamp(320px, 43vh, 520px);
+  flex: 0 0 clamp(440px, 62vh, 680px);
   min-height: 0;
   margin-bottom: 10px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .selection-controls {
@@ -68,11 +68,11 @@
 
 .imshow-wrapper {
   aspect-ratio: 1 / 1;
-  width: min(100%, 32vh);
-  height: min(100%, 32vh);
+  width: min(100%, clamp(302px, 48vh, 420px));
+  height: min(100%, clamp(302px, 48vh, 420px));
   max-height: 100%;
-  min-width: 220px;
-  min-height: 220px;
+  min-width: 302px;
+  min-height: 302px;
   border: 1px solid #ccc;
   box-sizing: border-box;
   margin: 0 auto;
@@ -87,6 +87,37 @@
 .imshow-graph {
   width: 100%;
   height: 100%;
+}
+
+.selection-toolbar {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 12;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid rgba(229, 231, 235, 0.42);
+  border-radius: 4px;
+  background: rgba(17, 24, 39, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.selection-toolbar button {
+  min-width: 26px;
+  height: 24px;
+  padding: 0 7px;
+  border: 1px solid rgba(229, 231, 235, 0.52);
+  border-radius: 3px;
+  color: #f9fafb;
+  background: rgba(31, 41, 55, 0.84);
+  font-size: 0.78rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.selection-toolbar button:hover {
+  background: rgba(55, 65, 81, 0.92);
 }
 
 .selection-overlay {
@@ -189,7 +220,7 @@
 
 @media (max-width: 1050px) {
   .top-section-container {
-    flex-basis: clamp(390px, 48vh, 500px);
+    flex-basis: clamp(430px, 58vh, 620px);
   }
 
   .selection-controls {
@@ -201,10 +232,10 @@
   }
 
   .imshow-wrapper {
-    width: min(100%, 260px);
-    height: min(100%, 260px);
-    min-width: 200px;
-    min-height: 200px;
+    width: min(100%, 302px);
+    height: min(100%, 302px);
+    min-width: 240px;
+    min-height: 240px;
   }
 }
 
@@ -218,8 +249,8 @@
   }
 
   .imshow-wrapper {
-    width: min(100%, 260px);
-    height: min(100%, 260px);
+    width: min(100%, 302px);
+    height: min(100%, 302px);
   }
 
   .right-column {

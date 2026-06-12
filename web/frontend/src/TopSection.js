@@ -4,7 +4,9 @@ import { TreatmentContext } from './DataWindowVD2';
 import { fetchSelection, updateSelectionConfig } from './api/treatmentClient';
 import './css/TopSection.css';
 
-const HEATMAP_MARGIN = { t: 24, r: 16, b: 48, l: 56 };
+const HEATMAP_MARGIN = { t: 14, r: 8, b: 8, l: 8 };
+const HEATMAP_X_DOMAIN = [0.15, 0.83];
+const HEATMAP_Y_DOMAIN = [0.18, 0.8];
 
 function safePlot(plotNode, traces, layout, config) {
   if (!plotNode?.isConnected) {
@@ -48,6 +50,41 @@ function clampCursor(value, fallback) {
     return fallback;
   }
   return parsed;
+}
+
+function interpolateValue(index, fullLength, values) {
+  if (!values?.length) {
+    return index;
+  }
+  if (values.length === 1 || fullLength <= 1) {
+    return values[0];
+  }
+
+  const position = (Math.max(0, Math.min(fullLength - 1, index)) / (fullLength - 1)) *
+    (values.length - 1);
+  const left = Math.floor(position);
+  const right = Math.min(values.length - 1, left + 1);
+  const fraction = position - left;
+  return values[left] + (values[right] - values[left]) * fraction;
+}
+
+function nearestFullIndex(value, fullLength, values) {
+  if (!values?.length || fullLength <= 1) {
+    return Math.max(0, Math.round(value || 0));
+  }
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  values.forEach((candidate, index) => {
+    const distance = Math.abs(candidate - value);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
+    }
+  });
+
+  const ratio = values.length <= 1 ? 0 : nearestIndex / (values.length - 1);
+  return Math.max(0, Math.min(fullLength - 1, Math.round(ratio * (fullLength - 1))));
 }
 
 function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
@@ -146,6 +183,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
   const heatmapForPlot = selection?.heatmap;
   const timeScaleForPlot = selection?.kinetics?.time_scale || '';
+  const updateMetricsFromShell = useCallback(() => {
+    const shellNode = shellRef.current;
+    if (shellNode) {
+      setMetrics(readPlotMetrics(shellNode.getBoundingClientRect()));
+    }
+  }, [readPlotMetrics]);
 
   useEffect(() => {
     const plotNode = plotRef.current;
@@ -162,6 +205,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           y: heatmapForPlot.timedelays,
           type: 'heatmap',
           colorscale: 'Viridis',
+          colorbar: {
+            x: 0.9,
+            y: 0.49,
+            len: 0.62,
+            thickness: 22,
+          },
         },
       ],
       {
@@ -170,36 +219,34 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
         plot_bgcolor: 'rgba(0,0,0,0)',
         font: { color: '#e5e7eb' },
         xaxis: {
+          domain: HEATMAP_X_DOMAIN,
           title: 'Wavelength, nm',
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
         },
         yaxis: {
+          domain: HEATMAP_Y_DOMAIN,
           title: `Time delay, ${timeScaleForPlot}`.trim(),
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
         },
+        dragmode: 'zoom',
       },
-      { responsive: true, displayModeBar: false }
+      {
+        responsive: true,
+        displayModeBar: false,
+        doubleClick: 'reset',
+        scrollZoom: false,
+      }
     );
 
     const resizeObserver = new ResizeObserver(() => {
       safeResize(plotNode);
-      window.requestAnimationFrame(() => {
-        const shellNode = shellRef.current;
-        if (shellNode) {
-          setMetrics(readPlotMetrics(shellNode.getBoundingClientRect()));
-        }
-      });
+      window.requestAnimationFrame(updateMetricsFromShell);
     });
     resizeObserver.observe(plotNode);
 
-    window.requestAnimationFrame(() => {
-      const shellNode = shellRef.current;
-      if (shellNode) {
-        setMetrics(readPlotMetrics(shellNode.getBoundingClientRect()));
-      }
-    });
+    window.requestAnimationFrame(updateMetricsFromShell);
 
     return () => {
       resizeObserver.disconnect();
@@ -209,7 +256,47 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     heatmapForPlot,
     readPlotMetrics,
     timeScaleForPlot,
+    updateMetricsFromShell,
   ]);
+
+  const relayoutHeatmap = (layoutUpdate) => {
+    const plotNode = plotRef.current;
+    if (!plotNode?._fullLayout) {
+      return;
+    }
+    Plotly.relayout(plotNode, layoutUpdate)
+      .then(() => window.requestAnimationFrame(updateMetricsFromShell))
+      .catch(() => undefined);
+  };
+
+  const resetZoom = () => {
+    relayoutHeatmap({
+      'xaxis.autorange': true,
+      'yaxis.autorange': true,
+    });
+  };
+
+  const zoomBy = (factor) => {
+    const plotNode = plotRef.current;
+    const xAxis = plotNode?._fullLayout?.xaxis;
+    const yAxis = plotNode?._fullLayout?.yaxis;
+    const xRange = xAxis?.range;
+    const yRange = yAxis?.range;
+    if (!Array.isArray(xRange) || !Array.isArray(yRange)) {
+      return;
+    }
+
+    const zoomRange = (range) => {
+      const center = (range[0] + range[1]) / 2;
+      const halfWidth = Math.abs(range[1] - range[0]) * factor / 2;
+      return [center - halfWidth, center + halfWidth];
+    };
+
+    relayoutHeatmap({
+      'xaxis.range': zoomRange(xRange),
+      'yaxis.range': zoomRange(yRange),
+    });
+  };
 
   const getClampedLocalPoint = (event) => {
     const shellNode = shellRef.current;
@@ -279,6 +366,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       return 0;
     }
 
+    const xAxis = plotRef.current?._fullLayout?.xaxis;
+    const xValues = selection?.heatmap?.wavelengths || [];
+    if (xAxis?.p2l && xValues.length > 0) {
+      return nearestFullIndex(xAxis.p2l(point.localX - point.xOffset), xLength, xValues);
+    }
+
     const ratio = (point.localX - point.xOffset) / Math.max(1, point.innerWidth);
     return Math.round(Math.max(0, Math.min(1, ratio)) * (xLength - 1));
   };
@@ -287,6 +380,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     const yLength = selection?.file_info?.timedelays_length || 0;
     if (yLength === 0 || !point) {
       return 0;
+    }
+
+    const yAxis = plotRef.current?._fullLayout?.yaxis;
+    const yValues = selection?.heatmap?.timedelays || [];
+    if (yAxis?.p2l && yValues.length > 0) {
+      return nearestFullIndex(yAxis.p2l(point.localY - point.yOffset), yLength, yValues);
     }
 
     const ratio = (point.localY - point.yOffset) / Math.max(1, point.innerHeight);
@@ -431,6 +530,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     if (xLength <= 1) {
       return metrics.xOffset;
     }
+    const xAxis = plotRef.current?._fullLayout?.xaxis;
+    if (xAxis?.l2p) {
+      return metrics.xOffset + xAxis.l2p(
+        interpolateValue(value, xLength, selection?.heatmap?.wavelengths || [])
+      );
+    }
     return metrics.xOffset + (value / (xLength - 1)) * metrics.innerWidth;
   };
 
@@ -441,6 +546,12 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     }
     if (yLength <= 1) {
       return metrics.yOffset;
+    }
+    const yAxis = plotRef.current?._fullLayout?.yaxis;
+    if (yAxis?.l2p) {
+      return metrics.yOffset + yAxis.l2p(
+        interpolateValue(value, yLength, selection?.heatmap?.timedelays || [])
+      );
     }
     return metrics.yOffset + (1 - value / (yLength - 1)) * metrics.innerHeight;
   };
@@ -475,6 +586,17 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
   return (
     <div className="selection-heatmap-shell" ref={shellRef}>
+      <div className="selection-toolbar" aria-label="Optical density view controls">
+        <button type="button" onClick={() => zoomBy(0.75)} title="Zoom in">
+          +
+        </button>
+        <button type="button" onClick={() => zoomBy(1.35)} title="Zoom out">
+          -
+        </button>
+        <button type="button" onClick={resetZoom} title="Reset zoom">
+          Reset
+        </button>
+      </div>
       <div className="imshow-graph" ref={plotRef}></div>
       <div
         className="selection-overlay"
