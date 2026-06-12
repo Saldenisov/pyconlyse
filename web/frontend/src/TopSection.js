@@ -6,6 +6,35 @@ import './css/TopSection.css';
 
 const HEATMAP_MARGIN = { t: 24, r: 16, b: 48, l: 56 };
 
+function safePlot(plotNode, traces, layout, config) {
+  if (!plotNode?.isConnected) {
+    return Promise.resolve();
+  }
+  return Plotly.react(plotNode, traces, layout, config).catch(() => undefined);
+}
+
+function safeResize(plotNode) {
+  if (!plotNode?.isConnected || !plotNode._fullLayout) {
+    return;
+  }
+  try {
+    Plotly.Plots.resize(plotNode);
+  } catch (_error) {
+    // Plotly can briefly lose internal layout while React/hot reload redraws.
+  }
+}
+
+function safePurge(plotNode) {
+  if (!plotNode) {
+    return;
+  }
+  try {
+    Plotly.purge(plotNode);
+  } catch (_error) {
+    // Ignore Plotly teardown races.
+  }
+}
+
 function clampCursor(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -87,7 +116,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
     const { heatmap, kinetics } = selection;
 
-    Plotly.newPlot(
+    safePlot(
       plotNode,
       [
         {
@@ -118,7 +147,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     );
 
     const resizeObserver = new ResizeObserver(() => {
-      Plotly.Plots.resize(plotNode);
+      safeResize(plotNode);
       window.requestAnimationFrame(() => {
         const shellNode = shellRef.current;
         if (shellNode) {
@@ -137,7 +166,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
     return () => {
       resizeObserver.disconnect();
-      Plotly.purge(plotNode);
+      safePurge(plotNode);
     };
   }, [readPlotMetrics, selection]);
 
@@ -461,7 +490,7 @@ function LinePlot({ x, y, title, xTitle, className }) {
       return undefined;
     }
 
-    Plotly.newPlot(
+    safePlot(
       plotNode,
       [
         {
@@ -493,13 +522,13 @@ function LinePlot({ x, y, title, xTitle, className }) {
     );
 
     const resizeObserver = new ResizeObserver(() => {
-      Plotly.Plots.resize(plotNode);
+      safeResize(plotNode);
     });
     resizeObserver.observe(plotNode);
 
     return () => {
       resizeObserver.disconnect();
-      Plotly.purge(plotNode);
+      safePurge(plotNode);
     };
   }, [className, title, x, xTitle, y]);
 
