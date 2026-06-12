@@ -35,6 +35,13 @@ function safePurge(plotNode) {
   }
 }
 
+function safeRestyle(plotNode, update) {
+  if (!plotNode?.isConnected || !plotNode._fullLayout) {
+    return Promise.resolve();
+  }
+  return Plotly.restyle(plotNode, update, [0]).catch(() => undefined);
+}
+
 function clampCursor(value, fallback) {
   const parsed = Number.parseInt(value, 10);
   if (Number.isNaN(parsed)) {
@@ -48,6 +55,8 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   const plotRef = useRef(null);
   const dragStateRef = useRef(null);
   const visualSelectionRef = useRef(null);
+  const pendingPreviewRef = useRef(null);
+  const previewFrameRef = useRef(null);
   const [metrics, setMetrics] = useState(null);
   const [visualSelection, setVisualSelection] = useState(null);
 
@@ -75,6 +84,9 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   }, []);
 
   useEffect(() => {
+    if (dragStateRef.current) {
+      return;
+    }
     if (!selection?.cursors) {
       visualSelectionRef.current = null;
       setVisualSelection(null);
@@ -90,6 +102,30 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     visualSelectionRef.current = nextVisualSelection;
     setVisualSelection(nextVisualSelection);
   }, [selection]);
+
+  useEffect(() => () => {
+    if (previewFrameRef.current) {
+      window.cancelAnimationFrame(previewFrameRef.current);
+    }
+  }, []);
+
+  const schedulePreview = (nextSelection) => {
+    if (!onPreviewRange) {
+      return;
+    }
+
+    pendingPreviewRef.current = nextSelection;
+    if (previewFrameRef.current) {
+      return;
+    }
+
+    previewFrameRef.current = window.requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      if (pendingPreviewRef.current) {
+        onPreviewRange(pendingPreviewRef.current);
+      }
+    });
+  };
 
   useEffect(() => {
     const shellNode = shellRef.current;
@@ -300,8 +336,8 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
     const dragState = dragStateRef.current;
     const startSelection = dragState.selection;
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    const timedelays = selection?.heatmap?.timedelays || [];
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    const yLength = selection?.file_info?.timedelays_length || 0;
     let nextSelection = { ...startSelection };
 
     if (dragState.axis === 'x') {
@@ -315,7 +351,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           startSelection.x1,
           startSelection.x2,
           nextIndex - dragState.startXIndex,
-          wavelengths.length
+          xLength
         );
         nextSelection.x1 = x1;
         nextSelection.x2 = x2;
@@ -331,7 +367,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           startSelection.y1,
           startSelection.y2,
           nextIndex - dragState.startYIndex,
-          timedelays.length
+          yLength
         );
         nextSelection.y1 = y1;
         nextSelection.y2 = y2;
@@ -342,9 +378,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     if (normalizedSelection) {
       visualSelectionRef.current = normalizedSelection;
       setVisualSelection(normalizedSelection);
-      if (onPreviewRange) {
-        onPreviewRange(normalizedSelection);
-      }
+      schedulePreview(normalizedSelection);
     }
   };
 
@@ -494,8 +528,8 @@ function LinePlot({ x, y, title, xTitle, className }) {
       plotNode,
       [
         {
-          x,
-          y,
+          x: [],
+          y: [],
           type: 'scatter',
           mode: 'lines',
           line: { color: '#dc2626', width: 2 },
@@ -530,7 +564,15 @@ function LinePlot({ x, y, title, xTitle, className }) {
       resizeObserver.disconnect();
       safePurge(plotNode);
     };
-  }, [className, title, x, xTitle, y]);
+  }, [className, title, xTitle]);
+
+  useEffect(() => {
+    const plotNode = ref.current;
+    if (!plotNode) {
+      return;
+    }
+    safeRestyle(plotNode, { x: [x], y: [y] });
+  }, [x, y]);
 
   return <div className={className} ref={ref}></div>;
 }
