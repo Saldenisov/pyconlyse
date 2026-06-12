@@ -11,7 +11,7 @@
 
 .selection-controls {
   display: grid;
-  grid-template-columns: minmax(120px, 1.3fr) repeat(5, minmax(64px, 0.55fr)) repeat(3, minmax(58px, 0.5fr));
+  grid-template-columns: minmax(140px, 1.4fr) minmax(70px, 0.55fr) repeat(3, minmax(68px, 0.5fr));
   gap: 8px;
   align-items: end;
   flex: 0 0 auto;
@@ -90,16 +90,67 @@
 .selection-overlay {
   position: absolute;
   inset: 0;
-  cursor: crosshair;
+  z-index: 5;
+  pointer-events: none;
   touch-action: none;
 }
 
-.selection-rect {
+.selection-region {
   position: absolute;
-  border: 2px solid rgba(220, 38, 38, 0.95);
-  background: rgba(220, 38, 38, 0.14);
-  pointer-events: none;
   box-sizing: border-box;
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.selection-region-x {
+  border-left: 3px solid rgba(250, 204, 21, 0.98);
+  border-right: 3px solid rgba(250, 204, 21, 0.98);
+  background: rgba(250, 204, 21, 0.24);
+  cursor: ew-resize;
+}
+
+.selection-region-y {
+  border-top: 3px solid rgba(34, 211, 238, 0.98);
+  border-bottom: 3px solid rgba(34, 211, 238, 0.98);
+  background: rgba(34, 211, 238, 0.2);
+  cursor: ns-resize;
+}
+
+.selection-region-handle {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(17, 24, 39, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);
+}
+
+.selection-region-x .selection-region-handle {
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.selection-region-x .selection-region-handle-start {
+  left: -5px;
+}
+
+.selection-region-x .selection-region-handle-end {
+  right: -5px;
+}
+
+.selection-region-y .selection-region-handle {
+  left: 0;
+  right: 0;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.selection-region-y .selection-region-handle-start {
+  top: -5px;
+}
+
+.selection-region-y .selection-region-handle-end {
+  bottom: -5px;
 }
 
 .right-column {
