@@ -67,10 +67,12 @@
 }
 
 .imshow-wrapper {
-  width: min(100%, 52vh);
-  height: min(100%, 52vh);
-  min-width: 240px;
-  min-height: 240px;
+  aspect-ratio: 1 / 1;
+  width: min(100%, 32vh);
+  height: min(100%, 32vh);
+  max-height: 100%;
+  min-width: 220px;
+  min-height: 220px;
   border: 1px solid #ccc;
   box-sizing: border-box;
   margin: 0 auto;
@@ -98,11 +100,12 @@
 .selection-region {
   position: absolute;
   box-sizing: border-box;
-  pointer-events: auto;
+  pointer-events: none;
   touch-action: none;
 }
 
 .selection-region-x {
+  z-index: 1;
   border-left: 3px solid rgba(250, 204, 21, 0.98);
   border-right: 3px solid rgba(250, 204, 21, 0.98);
   background: rgba(250, 204, 21, 0.24);
@@ -110,6 +113,7 @@
 }
 
 .selection-region-y {
+  z-index: 2;
   border-top: 3px solid rgba(34, 211, 238, 0.98);
   border-bottom: 3px solid rgba(34, 211, 238, 0.98);
   background: rgba(34, 211, 238, 0.2);
@@ -118,6 +122,8 @@
 
 .selection-region-handle {
   position: absolute;
+  z-index: 4;
+  pointer-events: auto;
   border-radius: 999px;
   background: rgba(17, 24, 39, 0.72);
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.85);

@@ -144,21 +144,22 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     return () => resizeObserver.disconnect();
   }, [readPlotMetrics]);
 
+  const heatmapForPlot = selection?.heatmap;
+  const timeScaleForPlot = selection?.kinetics?.time_scale || '';
+
   useEffect(() => {
     const plotNode = plotRef.current;
-    if (!plotNode || !selection) {
+    if (!plotNode || !heatmapForPlot) {
       return undefined;
     }
-
-    const { heatmap, kinetics } = selection;
 
     safePlot(
       plotNode,
       [
         {
-          z: heatmap.z,
-          x: heatmap.wavelengths,
-          y: heatmap.timedelays,
+          z: heatmapForPlot.z,
+          x: heatmapForPlot.wavelengths,
+          y: heatmapForPlot.timedelays,
           type: 'heatmap',
           colorscale: 'Viridis',
         },
@@ -174,7 +175,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
         },
         yaxis: {
-          title: `Time delay, ${kinetics.time_scale || ''}`.trim(),
+          title: `Time delay, ${timeScaleForPlot}`.trim(),
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
         },
@@ -204,7 +205,11 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       resizeObserver.disconnect();
       safePurge(plotNode);
     };
-  }, [readPlotMetrics, selection]);
+  }, [
+    heatmapForPlot,
+    readPlotMetrics,
+    timeScaleForPlot,
+  ]);
 
   const getClampedLocalPoint = (event) => {
     const shellNode = shellRef.current;
@@ -299,6 +304,7 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       return;
     }
 
+    event.preventDefault();
     const point = getClampedLocalPoint(event);
     if (!point) {
       return;
@@ -311,17 +317,18 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       y2: selection.cursors.y2,
     };
 
+    const captureTarget = event.currentTarget;
     dragStateRef.current = {
       axis,
       mode,
       point,
+      pointerId: event.pointerId,
+      captureTarget,
       selection: startSelection,
       startXIndex: xIndexFromPoint(point),
       startYIndex: yIndexFromPoint(point),
     };
-    const captureTarget =
-      event.currentTarget.closest?.('.selection-overlay') || event.currentTarget;
-    captureTarget.setPointerCapture(event.pointerId);
+    captureTarget.setPointerCapture?.(event.pointerId);
   };
 
   const handlePointerMove = (event) => {
@@ -383,10 +390,18 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   };
 
   const finishDrag = (event) => {
-    if (!dragStateRef.current) {
+    const dragState = dragStateRef.current;
+    if (!dragState) {
       return;
     }
 
+    const captureTarget = dragState.captureTarget;
+    if (
+      captureTarget?.hasPointerCapture?.(dragState.pointerId) &&
+      (!event?.pointerId || event.pointerId === dragState.pointerId)
+    ) {
+      captureTarget.releasePointerCapture(dragState.pointerId);
+    }
     dragStateRef.current = null;
 
     const nextSelection = normalizeSelectionIndexes(
@@ -396,6 +411,17 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
       onSelectRange(nextSelection);
     }
   };
+
+  useEffect(() => {
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
+    };
+  });
 
   const valueToX = (value) => {
     const xLength = selection?.file_info?.wavelengths_length || 0;
@@ -497,14 +523,14 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
                 className="selection-region-handle selection-region-handle-start"
                 onPointerDown={(event) => {
                   event.stopPropagation();
-                  handleRegionPointerDown(event, 'y', 'start');
+                  handleRegionPointerDown(event, 'y', 'end');
                 }}
               />
               <span
                 className="selection-region-handle selection-region-handle-end"
                 onPointerDown={(event) => {
                   event.stopPropagation();
-                  handleRegionPointerDown(event, 'y', 'end');
+                  handleRegionPointerDown(event, 'y', 'start');
                 }}
               />
             </div>
@@ -724,6 +750,7 @@ const TopSection = () => {
       return;
     }
 
+    setPreviewRange(null);
     setDraft((current) => ({
       ...current,
       x1: nextSelection.x1,
@@ -731,6 +758,14 @@ const TopSection = () => {
       y1: nextSelection.y1,
       y2: nextSelection.y2,
     }));
+    setSelection((current) =>
+      current
+        ? {
+            ...current,
+            cursors: nextSelection,
+          }
+        : current
+    );
 
     setIsSaving(true);
     try {
@@ -740,9 +775,6 @@ const TopSection = () => {
         selection: nextSelection,
       });
       setError('');
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
     } catch (err) {
       setError(err.message);
     } finally {

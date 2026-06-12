@@ -36,6 +36,9 @@ async function requestTreatment(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_M
     if (error.name === 'AbortError') {
       throw new Error(`Request timed out after ${timeoutMs / 1000} seconds.`);
     }
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      throw new Error(`Failed to fetch ${url}. Check backend connection.`);
+    }
     throw error;
   } finally {
     window.clearTimeout(timeoutId);
