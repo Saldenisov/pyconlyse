@@ -1036,6 +1036,12 @@ class AvantesDualViewer(QMainWindow):
         self.measure_bg_btn.setToolTip("Measure background with lamp OFF")
         btn_layout.addWidget(self.measure_bg_btn)
 
+        self.zero_reference_btn = QPushButton("Zero / Re-reference")
+        self.zero_reference_btn.clicked.connect(self.zero_reference_from_current)
+        self.zero_reference_btn.setEnabled(False)
+        self.zero_reference_btn.setToolTip("Use current no-sample spectrum as the OD zero/reference line")
+        btn_layout.addWidget(self.zero_reference_btn)
+
         self.stop_measure_btn = QPushButton("Stop Measurement")
         self.stop_measure_btn.clicked.connect(self.stop_measurement)
         self.stop_measure_btn.setEnabled(False)
@@ -1746,6 +1752,37 @@ class AvantesDualViewer(QMainWindow):
         self.measure_ref_btn.setEnabled(True)
         self.measure_bg_btn.setEnabled(True)
         self.stop_measure_btn.setEnabled(False)  # Disable stop button
+        self.update_analysis_buttons()
+
+    def zero_reference_from_current(self):
+        """Use the current measured spectra as the OD zero/reference."""
+        data1 = self.spec1_widget.last_data
+        data2 = self.spec2_widget.last_data
+        wavelengths = self.spec1_widget.wavelengths
+
+        if data1 is None or data2 is None or wavelengths is None:
+            QMessageBox.warning(self, "Zero Reference", "No current spectra available")
+            return
+
+        if not self.has_background:
+            QMessageBox.warning(self, "Zero Reference", "Measure background first")
+            return
+
+        self.reference_ch1 = np.array(data1, dtype=float, copy=True)
+        self.reference_ch2 = np.array(data2, dtype=float, copy=True)
+        self.reference_wavelengths = np.array(wavelengths, dtype=float, copy=True)
+        self.has_reference = True
+
+        self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
+        self.ref_curve2.setData(self.reference_wavelengths, self.reference_ch2)
+
+        od_spectrum = self.calculate_optical_density(self.reference_ch1, self.reference_ch2)
+        if od_spectrum is not None:
+            self.curve_od.setData(self.reference_wavelengths, od_spectrum)
+
+        self.update_analysis_buttons()
+        self.logger.info("REFERENCE: Zero/re-reference set from current spectra")
+        self.statusBar().showMessage("Zero reference set from current spectra")
 
     def measure_background_complete(self):
         """Called when background measurement is complete."""
@@ -1991,6 +2028,8 @@ class AvantesDualViewer(QMainWindow):
         enabled = self.has_reference and self.has_background
         self.start_collection_btn.setEnabled(enabled)
         self.track_wl_btn.setEnabled(enabled)
+        has_current = self.spec1_widget.last_data is not None and self.spec2_widget.last_data is not None
+        self.zero_reference_btn.setEnabled(self.has_background and has_current)
 
     def reset_od_heatmap(self):
         """Clear OD time map for a new data collection run."""
@@ -2136,6 +2175,7 @@ class AvantesDualViewer(QMainWindow):
         if not hasattr(self, '_measurement_count'):
             self._measurement_count = 0
         self._measurement_count += 1
+        self.update_analysis_buttons()
 
         # Update wavelength tracker if active
         if self.wavelength_tracker_window and od_spectrum is not None:
