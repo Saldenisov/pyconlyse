@@ -38,7 +38,8 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
-    QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout
+    QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout,
+    QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
@@ -268,6 +269,13 @@ class ODHeatmapWindow(QMainWindow):
         self.spectrum_curve = self.spectrum_plot.plot(pen=pg.mkPen('c', width=2))
         profile_splitter.addWidget(self.spectrum_plot)
         central_layout.addWidget(profile_splitter, stretch=1)
+
+    def closeEvent(self, event):
+        """Keep the parent Show/Hide button in sync."""
+        self.parent_viewer.od_heatmap_window = None
+        if hasattr(self.parent_viewer, "show_od_map_btn"):
+            self.parent_viewer.show_od_map_btn.setText("Show")
+        super().closeEvent(event)
 
     def set_heatmap(self, wavelengths, rows, times):
         """Render OD rows as wavelength x elapsed-time image."""
@@ -540,6 +548,7 @@ class SpectrometerWidget(QGroupBox):
         layout.addWidget(self.max_label, 8, 1)
 
         self.setLayout(layout)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
     def connect_spectrometer(self):
         """Connect to the Avantes spectrometer."""
@@ -814,7 +823,7 @@ class AvantesDualViewer(QMainWindow):
         if self.demo_kinetics_enabled:
             title += " [DEMO KINETICS]"
         self.setWindowTitle(title)
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(80, 80, 1180, 820)
         self.create_menu_bar()
 
         # Central widget
@@ -836,6 +845,7 @@ class AvantesDualViewer(QMainWindow):
         # Spectrometer 2 controls
         self.spec2_widget = SpectrometerWidget(2, emulate_hardware=self.emulate_hardware)
         controls_splitter.addWidget(self.spec2_widget)
+        controls_splitter.setSizes([590, 590])
         self.link_detector_averages()
 
         main_layout.addWidget(controls_splitter)
@@ -845,12 +855,14 @@ class AvantesDualViewer(QMainWindow):
 
         # Left side: Channel spectra (vertical split)
         left_plot_splitter = QSplitter(Qt.Vertical)
+        left_plot_splitter.setMinimumWidth(260)
 
         # Ch1 plot (top left)
         self.plot1 = pg.PlotWidget(title="Channel 1 Spectrum")
         self.plot1.setLabel('left', 'Intensity', units='counts')
         self.plot1.setLabel('bottom', 'Wavelength', units='nm')
         self.plot1.showGrid(x=True, y=True)
+        self.plot1.setMinimumWidth(260)
         self.curve1 = self.plot1.plot(pen=pg.mkPen('w', width=2), name='RT')  # White for real-time
         self.ref_curve1 = self.plot1.plot(pen=pg.mkPen('m', width=2, style=Qt.DashLine), name='REF')  # Magenta for reference
         self.bg_curve1 = self.plot1.plot(pen=pg.mkPen('b', width=2, style=Qt.DashLine), name='BG')  # Blue for background
@@ -861,6 +873,7 @@ class AvantesDualViewer(QMainWindow):
         self.plot2.setLabel('left', 'Intensity', units='counts')
         self.plot2.setLabel('bottom', 'Wavelength', units='nm')
         self.plot2.showGrid(x=True, y=True)
+        self.plot2.setMinimumWidth(260)
         self.curve2 = self.plot2.plot(pen=pg.mkPen('w', width=2), name='RT')  # White for real-time
         self.ref_curve2 = self.plot2.plot(pen=pg.mkPen('m', width=2, style=Qt.DashLine), name='REF')  # Magenta for reference
         self.bg_curve2 = self.plot2.plot(pen=pg.mkPen('b', width=2, style=Qt.DashLine), name='BG')  # Blue for background
@@ -870,6 +883,7 @@ class AvantesDualViewer(QMainWindow):
 
         # Right side: OD spectrum plot with controls
         od_widget = QWidget()
+        od_widget.setMinimumWidth(520)
         od_layout = QVBoxLayout(od_widget)
         od_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -952,8 +966,9 @@ class AvantesDualViewer(QMainWindow):
 
         plot_main_splitter.addWidget(od_widget)
 
-        # Set initial splitter ratio: 50% left (spectra), 50% right (OD)
-        plot_main_splitter.setSizes([700, 700])
+        plot_main_splitter.setStretchFactor(0, 1)
+        plot_main_splitter.setStretchFactor(1, 2)
+        plot_main_splitter.setSizes([390, 760])
 
         main_layout.addWidget(plot_main_splitter, stretch=3)
 
@@ -963,6 +978,8 @@ class AvantesDualViewer(QMainWindow):
         self.background_ch1 = None
         self.background_ch2 = None
         self.reference_wavelengths = None
+        self.zero_baseline_wavelengths = None
+        self.zero_baseline_od = None
         self.has_reference = False
         self.has_background = False
 
@@ -1036,10 +1053,10 @@ class AvantesDualViewer(QMainWindow):
         self.measure_bg_btn.setToolTip("Measure background with lamp OFF")
         btn_layout.addWidget(self.measure_bg_btn)
 
-        self.zero_reference_btn = QPushButton("Zero / Re-reference")
-        self.zero_reference_btn.clicked.connect(self.zero_reference_from_current)
+        self.zero_reference_btn = QPushButton("Set Zero")
+        self.zero_reference_btn.clicked.connect(self.set_zero_baseline_from_current)
         self.zero_reference_btn.setEnabled(False)
-        self.zero_reference_btn.setToolTip("Use current no-sample spectrum as the OD zero/reference line")
+        self.zero_reference_btn.setToolTip("Store current no-sample OD as a zero baseline spectrum")
         btn_layout.addWidget(self.zero_reference_btn)
 
         self.stop_measure_btn = QPushButton("Stop Measurement")
@@ -1072,7 +1089,7 @@ class AvantesDualViewer(QMainWindow):
         data_layout.addWidget(self.start_collection_btn, 0, 2)
 
         self.show_od_map_btn = QPushButton("Show")
-        self.show_od_map_btn.clicked.connect(self.show_od_heatmap_window)
+        self.show_od_map_btn.clicked.connect(self.toggle_od_heatmap_window)
         self.show_od_map_btn.setToolTip("Show OD time map")
         data_layout.addWidget(self.show_od_map_btn, 0, 3)
 
@@ -1730,6 +1747,7 @@ class AvantesDualViewer(QMainWindow):
             self.reference_ch1 = self.reference_measurements[-1]['ch1']
             self.reference_ch2 = self.reference_measurements[-1]['ch2']
             self.reference_wavelengths = self.spec1_widget.wavelengths
+            self.clear_zero_baseline()
             self.has_reference = True
 
             # Display reference lines on plots (magenta/purple)
@@ -1754,41 +1772,37 @@ class AvantesDualViewer(QMainWindow):
         self.stop_measure_btn.setEnabled(False)  # Disable stop button
         self.update_analysis_buttons()
 
-    def zero_reference_from_current(self):
-        """Use the current measured spectra as the OD zero/reference."""
+    def set_zero_baseline_from_current(self):
+        """Store current no-sample OD as a baseline to subtract from future OD."""
         data1 = self.spec1_widget.last_data
         data2 = self.spec2_widget.last_data
         wavelengths = self.spec1_widget.wavelengths
 
         if data1 is None or data2 is None or wavelengths is None:
-            QMessageBox.warning(self, "Zero Reference", "No current spectra available")
+            QMessageBox.warning(self, "Set Zero", "No current spectra available")
             return
 
-        if not self.has_background:
-            QMessageBox.warning(self, "Zero Reference", "Measure background first")
+        if not self.has_reference or not self.has_background:
+            QMessageBox.warning(self, "Set Zero", "Measure background and reference first")
             return
 
-        self.reference_ch1 = np.array(data1, dtype=float, copy=True)
-        self.reference_ch2 = np.array(data2, dtype=float, copy=True)
-        self.reference_wavelengths = np.array(wavelengths, dtype=float, copy=True)
-        self.has_reference = True
-
-        self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
-        self.ref_curve2.setData(self.reference_wavelengths, self.reference_ch2)
-
-        od_spectrum = self.calculate_optical_density(self.reference_ch1, self.reference_ch2)
+        od_spectrum = self.calculate_optical_density(data1, data2, apply_zero_baseline=False)
         if od_spectrum is not None:
-            self.curve_od.setData(self.reference_wavelengths, od_spectrum)
+            self.zero_baseline_wavelengths = np.array(wavelengths, dtype=float, copy=True)
+            self.zero_baseline_od = np.array(od_spectrum, dtype=float, copy=True)
+            corrected_od = od_spectrum - self.zero_baseline_od
+            self.curve_od.setData(self.zero_baseline_wavelengths, corrected_od)
 
         self.update_analysis_buttons()
-        self.logger.info("REFERENCE: Zero/re-reference set from current spectra")
-        self.statusBar().showMessage("Zero reference set from current spectra")
+        self.logger.info("ZERO: Baseline OD set from current spectra")
+        self.statusBar().showMessage("Zero baseline set from current spectra")
 
     def measure_background_complete(self):
         """Called when background measurement is complete."""
         if self.background_measurements:
             self.background_ch1 = self.background_measurements[-1]['ch1']
             self.background_ch2 = self.background_measurements[-1]['ch2']
+            self.clear_zero_baseline()
             self.has_background = True
 
             # Display background lines on plots (blue)
@@ -2029,7 +2043,12 @@ class AvantesDualViewer(QMainWindow):
         self.start_collection_btn.setEnabled(enabled)
         self.track_wl_btn.setEnabled(enabled)
         has_current = self.spec1_widget.last_data is not None and self.spec2_widget.last_data is not None
-        self.zero_reference_btn.setEnabled(self.has_background and has_current)
+        self.zero_reference_btn.setEnabled(enabled and has_current)
+
+    def clear_zero_baseline(self):
+        """Clear the stored OD zero baseline."""
+        self.zero_baseline_wavelengths = None
+        self.zero_baseline_od = None
 
     def reset_od_heatmap(self):
         """Clear OD time map for a new data collection run."""
@@ -2064,6 +2083,17 @@ class AvantesDualViewer(QMainWindow):
                 self.od_heatmap_times,
             )
 
+    def toggle_od_heatmap_window(self):
+        """Open the floating OD time map, or close it if already visible."""
+        if self.od_heatmap_window is not None:
+            window = self.od_heatmap_window
+            self.od_heatmap_window = None
+            self.show_od_map_btn.setText("Show")
+            window.close()
+            return
+
+        self.show_od_heatmap_window()
+
     def show_od_heatmap_window(self):
         """Open or raise the floating OD time map window."""
         if self.od_heatmap_window is None:
@@ -2072,6 +2102,7 @@ class AvantesDualViewer(QMainWindow):
         self.od_heatmap_window.show()
         self.od_heatmap_window.raise_()
         self.od_heatmap_window.activateWindow()
+        self.show_od_map_btn.setText("Hide")
 
     def get_export_base_path(self) -> Path:
         """Return base path for manual export files."""
@@ -2342,6 +2373,7 @@ class AvantesDualViewer(QMainWindow):
         ch1_current: np.ndarray,
         ch2_current: np.ndarray,
         elapsed_time: Optional[float] = None,
+        apply_zero_baseline: bool = True,
     ) -> Optional[np.ndarray]:
         """Calculate optical density using ratio of ratios method with background subtraction.
 
@@ -2389,6 +2421,13 @@ class AvantesDualViewer(QMainWindow):
 
                 if elapsed_time is not None and self.demo_kinetics_enabled:
                     od += self.get_demo_species_od(np.asarray(self.spec1_widget.wavelengths), elapsed_time)
+
+                if (
+                    apply_zero_baseline
+                    and self.zero_baseline_od is not None
+                    and len(self.zero_baseline_od) == len(od)
+                ):
+                    od = od - self.zero_baseline_od
 
                 # Replace inf and nan with 0
                 od[~np.isfinite(od)] = 0
@@ -2446,6 +2485,7 @@ class AvantesDualViewer(QMainWindow):
         self.background_ch1 = None
         self.background_ch2 = None
         self.reference_wavelengths = None
+        self.clear_zero_baseline()
         self.has_reference = False
         self.has_background = False
 
