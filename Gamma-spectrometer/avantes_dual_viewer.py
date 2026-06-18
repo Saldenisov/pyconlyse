@@ -1047,12 +1047,12 @@ class AvantesDualViewer(QMainWindow):
 
         # Buttons
         btn_layout = QHBoxLayout()
-        self.measure_ref_btn = QPushButton("Measure Reference")
+        self.measure_ref_btn = QPushButton("Reference")
         self.measure_ref_btn.clicked.connect(self.measure_reference)
         self.measure_ref_btn.setToolTip("Measure reference with lamp ON")
         btn_layout.addWidget(self.measure_ref_btn)
 
-        self.measure_bg_btn = QPushButton("Measure Background")
+        self.measure_bg_btn = QPushButton("Background")
         self.measure_bg_btn.clicked.connect(self.measure_background)
         self.measure_bg_btn.setToolTip("Measure background with lamp OFF")
         btn_layout.addWidget(self.measure_bg_btn)
