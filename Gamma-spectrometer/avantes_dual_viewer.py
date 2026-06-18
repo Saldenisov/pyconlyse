@@ -764,6 +764,9 @@ class AvantesDualViewer(QMainWindow):
         self.measuring_background = False
         self.reference_measurements = []
         self.background_measurements = []
+        self.reference_target_blocks = 1
+        self.background_target_blocks = 1
+        self.pending_ref_bg_role = None
         self.collection_data = []
         self.collection_point_index = 0
         self.collection_start_time = None
@@ -1031,14 +1034,15 @@ class AvantesDualViewer(QMainWindow):
         ref_bg_group = QGroupBox("Reference & Background")
         ref_bg_layout = QVBoxLayout()
 
-        # Averages control (shared by both)
+        # Block averaging for reference/background. Avantes hardware averages
+        # are controlled in the spectrometer panels.
         avg_layout = QHBoxLayout()
-        avg_layout.addWidget(QLabel("Averages:"))
-        self.ref_averages_spin = QSpinBox()
-        self.ref_averages_spin.setRange(1, 100)
-        self.ref_averages_spin.setValue(40)
-        self.ref_averages_spin.setToolTip("Avantes hardware trigger averages")
-        avg_layout.addWidget(self.ref_averages_spin)
+        avg_layout.addWidget(QLabel("Blocks:"))
+        self.ref_blocks_spin = QSpinBox()
+        self.ref_blocks_spin.setRange(1, 100)
+        self.ref_blocks_spin.setValue(3)
+        self.ref_blocks_spin.setToolTip("Number of spectra, already averaged by Avantes, to average in Python")
+        avg_layout.addWidget(self.ref_blocks_spin)
         ref_bg_layout.addLayout(avg_layout)
 
         # Buttons
@@ -1328,6 +1332,11 @@ class AvantesDualViewer(QMainWindow):
             self.current_measurement_role = measurement_role
         else:
             self.current_measurement_role = "preview" if self.continuous_mode else "manual"
+        if self.current_measurement_role in {"reference", "background", "collection"}:
+            self.logger.info(
+                f"MEASUREMENT: role={self.current_measurement_role}, "
+                f"Avantes averages ch1={int(cfg1.m_NrAverages)}, ch2={int(cfg2.m_NrAverages)}"
+            )
         self.statusBar().showMessage("Measuring...")
 
         # Start measurement thread
@@ -1409,7 +1418,7 @@ class AvantesDualViewer(QMainWindow):
                 "2": self.get_spectrometer_settings(self.spec2_widget),
             },
             "reference_background": {
-                "averages": int(self.ref_averages_spin.value()),
+                "blocks": int(self.ref_blocks_spin.value()),
             },
             "data_collection": {
                 "rate_s": float(self.collection_rate_spin.value()),
@@ -1459,8 +1468,12 @@ class AvantesDualViewer(QMainWindow):
         self.apply_spectrometer_settings(self.spec2_widget, spectrometers.get("2", {}))
 
         ref_bg = settings.get("reference_background", {})
-        if "averages" in ref_bg:
-            self.ref_averages_spin.setValue(int(ref_bg["averages"]))
+        if "blocks" in ref_bg:
+            self.ref_blocks_spin.setValue(int(ref_bg["blocks"]))
+        elif "averages" in ref_bg:
+            legacy_averages = int(ref_bg["averages"])
+            self.spec1_widget.averages_spin.setValue(legacy_averages)
+            self.spec2_widget.averages_spin.setValue(legacy_averages)
 
         data_collection = settings.get("data_collection", {})
         if "rate_s" in data_collection:
@@ -1680,13 +1693,19 @@ class AvantesDualViewer(QMainWindow):
     def stop_measurement(self):
         """Stop current reference or background measurement."""
         if self.measuring_reference:
-            self.logger.info(f"REFERENCE: Measurement aborted by user ({len(self.reference_measurements)} of {self.ref_averages_spin.value()} collected)")
+            self.logger.info(
+                f"REFERENCE: Measurement aborted by user "
+                f"({len(self.reference_measurements)} of {self.reference_target_blocks} blocks collected)"
+            )
             self.measuring_reference = False
             self.reference_measurements = []
             self.statusBar().showMessage("Reference measurement aborted")
 
         if self.measuring_background:
-            self.logger.info(f"BACKGROUND: Measurement aborted by user ({len(self.background_measurements)} of {self.ref_averages_spin.value()} collected)")
+            self.logger.info(
+                f"BACKGROUND: Measurement aborted by user "
+                f"({len(self.background_measurements)} of {self.background_target_blocks} blocks collected)"
+            )
             self.measuring_background = False
             self.background_measurements = []
             self.statusBar().showMessage("Background measurement aborted")
@@ -1695,6 +1714,7 @@ class AvantesDualViewer(QMainWindow):
         self.measure_ref_btn.setEnabled(True)
         self.measure_bg_btn.setEnabled(True)
         self.stop_measure_btn.setEnabled(False)
+        self.pending_ref_bg_role = None
 
     def measure_reference(self):
         """Measure reference spectra by averaging N measurements (with lamp ON)."""
@@ -1708,17 +1728,23 @@ class AvantesDualViewer(QMainWindow):
             QMessageBox.warning(self, "Error", "Failed to enable lamp")
             return
 
-        n_avg = self.ref_averages_spin.value()
+        n_avg = self.get_detector_average_count()
+        n_blocks = self.ref_blocks_spin.value()
+        self.reference_target_blocks = n_blocks
+        self.pending_ref_bg_role = None
         self.measuring_reference = True
         self.reference_measurements = []
         self.measure_ref_btn.setEnabled(False)
         self.measure_bg_btn.setEnabled(False)
         self.stop_measure_btn.setEnabled(True)  # Enable stop button
 
-        self.logger.info(f"REFERENCE: Starting measurement (lamp ON, hardware averaging {n_avg} pulses)")
-        self.statusBar().showMessage(f"Measuring reference (hardware avg={n_avg})...")
+        self.logger.info(
+            f"REFERENCE: Starting measurement (lamp ON, hardware avg={n_avg} pulses, "
+            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
+        )
+        self.statusBar().showMessage(f"Measuring reference block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(averages_override=n_avg, measurement_role="reference")
+        self.single_measurement(measurement_role="reference")
 
     def measure_background(self):
         """Measure background spectra by averaging N measurements (with lamp OFF)."""
@@ -1729,23 +1755,29 @@ class AvantesDualViewer(QMainWindow):
         # Ensure lamp is OFF
         self.set_avantes_only()
 
-        n_avg = self.ref_averages_spin.value()
+        n_avg = self.get_detector_average_count()
+        n_blocks = self.ref_blocks_spin.value()
+        self.background_target_blocks = n_blocks
+        self.pending_ref_bg_role = None
         self.measuring_background = True
         self.background_measurements = []
         self.measure_ref_btn.setEnabled(False)
         self.measure_bg_btn.setEnabled(False)
         self.stop_measure_btn.setEnabled(True)  # Enable stop button
 
-        self.logger.info(f"BACKGROUND: Starting measurement (lamp OFF, hardware averaging {n_avg} pulses)")
-        self.statusBar().showMessage(f"Measuring background (hardware avg={n_avg})...")
+        self.logger.info(
+            f"BACKGROUND: Starting measurement (lamp OFF, hardware avg={n_avg} pulses, "
+            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
+        )
+        self.statusBar().showMessage(f"Measuring background block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(averages_override=n_avg, measurement_role="background")
+        self.single_measurement(measurement_role="background")
 
     def measure_reference_complete(self):
         """Called when reference measurement is complete."""
         if self.reference_measurements:
-            self.reference_ch1 = self.reference_measurements[-1]['ch1']
-            self.reference_ch2 = self.reference_measurements[-1]['ch2']
+            self.reference_ch1 = np.mean([m['ch1'] for m in self.reference_measurements], axis=0)
+            self.reference_ch2 = np.mean([m['ch2'] for m in self.reference_measurements], axis=0)
             self.reference_wavelengths = self.spec1_widget.wavelengths
             self.clear_zero_baseline()
             self.has_reference = True
@@ -1755,8 +1787,13 @@ class AvantesDualViewer(QMainWindow):
                 self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
                 self.ref_curve2.setData(self.reference_wavelengths, self.reference_ch2)
 
-            self.logger.info("REFERENCE: Measurement complete (lamp ON)")
-            self.statusBar().showMessage("Reference measured")
+            n_blocks = len(self.reference_measurements)
+            n_avg = self.get_detector_average_count()
+            self.logger.info(
+                f"REFERENCE: Measurement complete (lamp ON, blocks={n_blocks}, "
+                f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
+            )
+            self.statusBar().showMessage(f"Reference measured ({n_blocks} blocks x {n_avg} pulses)")
 
             # Enable data collection and tracking after reference and background exist.
             self.update_analysis_buttons()
@@ -1800,8 +1837,8 @@ class AvantesDualViewer(QMainWindow):
     def measure_background_complete(self):
         """Called when background measurement is complete."""
         if self.background_measurements:
-            self.background_ch1 = self.background_measurements[-1]['ch1']
-            self.background_ch2 = self.background_measurements[-1]['ch2']
+            self.background_ch1 = np.mean([m['ch1'] for m in self.background_measurements], axis=0)
+            self.background_ch2 = np.mean([m['ch2'] for m in self.background_measurements], axis=0)
             self.clear_zero_baseline()
             self.has_background = True
 
@@ -1811,11 +1848,16 @@ class AvantesDualViewer(QMainWindow):
             if wavelengths is not None:
                 self.bg_curve1.setData(wavelengths, self.background_ch1)
                 self.bg_curve2.setData(wavelengths, self.background_ch2)
-                self.logger.info("BACKGROUND: Measurement complete (lamp OFF) - blue lines displayed")
+                n_blocks = len(self.background_measurements)
+                n_avg = self.get_detector_average_count()
+                self.logger.info(
+                    f"BACKGROUND: Measurement complete (lamp OFF, blocks={n_blocks}, "
+                    f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
+                )
             else:
                 self.logger.warning("BACKGROUND: Wavelengths not available for plotting")
 
-            self.statusBar().showMessage("Background measured")
+            self.statusBar().showMessage(f"Background measured ({len(self.background_measurements)} blocks)")
             self.update_analysis_buttons()
 
         else:
@@ -2157,8 +2199,15 @@ class AvantesDualViewer(QMainWindow):
         skip_normal_status = False
         if measurement_role == "reference" and self.measuring_reference and data1 is not None and data2 is not None:
             self.reference_measurements.append({'ch1': data1, 'ch2': data2})
-            self.statusBar().showMessage("Reference measured")
             skip_normal_status = True
+            count = len(self.reference_measurements)
+            target = max(1, int(self.reference_target_blocks))
+            if count < target:
+                self.statusBar().showMessage(f"Measuring reference block {count + 1}/{target}...")
+                self.logger.info(f"REFERENCE: Block {count}/{target} collected")
+                self.pending_ref_bg_role = "reference"
+                return
+            self.statusBar().showMessage("Reference measured")
             self.measure_reference_complete()
             skip_normal_status = False
 
@@ -2167,8 +2216,15 @@ class AvantesDualViewer(QMainWindow):
         if measurement_role == "background" and self.measuring_background:
             if data1 is not None and data2 is not None:
                 self.background_measurements.append({'ch1': data1, 'ch2': data2})
-                self.statusBar().showMessage("Background measured")
                 skip_normal_status = True
+                count = len(self.background_measurements)
+                target = max(1, int(self.background_target_blocks))
+                if count < target:
+                    self.statusBar().showMessage(f"Measuring background block {count + 1}/{target}...")
+                    self.logger.info(f"BACKGROUND: Block {count}/{target} collected")
+                    self.pending_ref_bg_role = "background"
+                    return
+                self.statusBar().showMessage("Background measured")
                 self.measure_background_complete()
                 skip_normal_status = False
 
@@ -2254,6 +2310,7 @@ class AvantesDualViewer(QMainWindow):
     def on_measurement_error(self, error_msg: str):
         """Handle measurement error."""
         self.logger.error(f"Measurement error: {error_msg}")
+        self.pending_ref_bg_role = None
 
         if getattr(self, "current_measurement_role", None) == "collection" and self.data_collection_active:
             self.statusBar().showMessage(f"Collection warning: {error_msg[:50]}...")
@@ -2280,7 +2337,15 @@ class AvantesDualViewer(QMainWindow):
 
     def on_measurement_finished(self):
         """Handle measurement thread finished."""
+        pending_role = self.pending_ref_bg_role
+        self.pending_ref_bg_role = None
         self.current_measurement_role = None
+        if pending_role == "reference" and self.measuring_reference:
+            self.single_measurement(measurement_role="reference")
+            return
+        if pending_role == "background" and self.measuring_background:
+            self.single_measurement(measurement_role="background")
+            return
         if self.data_collection_active:
             self.update_collection_countdown_label()
 
