@@ -772,7 +772,9 @@ class AvantesDualViewer(QMainWindow):
         self.collection_start_time = None
         self.collection_point_start_time = None
         self.collection_file_path = None
+        self.loaded_collection_file_path = None
         self.collection_next_due_time = None
+        self.collection_time_offset_s = 0.0
         self.lamp_warmup_seconds = 120.0
         self.lamp_min_off_seconds = 60.0
         self.arduino_frequency_hz = ARDUINO_TRIGGER_HZ
@@ -1114,6 +1116,11 @@ class AvantesDualViewer(QMainWindow):
         self.save_name_input.setToolTip("Base file name without extension")
         data_layout.addWidget(self.save_name_input, 2, 1, 1, 4)
 
+        data_layout.addWidget(QLabel("Loaded:"), 3, 0)
+        self.loaded_collection_label = QLabel("No DAT loaded")
+        self.loaded_collection_label.setWordWrap(True)
+        data_layout.addWidget(self.loaded_collection_label, 3, 1, 1, 4)
+
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
 
@@ -1163,6 +1170,9 @@ class AvantesDualViewer(QMainWindow):
 
     def create_menu_bar(self):
         """Create top-level application menus."""
+        data_menu = self.menuBar().addMenu("Data")
+        data_menu.addAction("Load DAT...", self.load_collection_dat)
+
         settings_menu = self.menuBar().addMenu("Settings")
         self.populate_settings_menu(settings_menu)
 
@@ -1898,24 +1908,65 @@ class AvantesDualViewer(QMainWindow):
                 return
 
             base_name = self.save_name_input.text().strip() or "avantes_measurement"
+            previous_collection_file_path = self.collection_file_path
             self.collection_file_path = save_dir / f"{base_name}.dat"
+            resume_collection = False
+            has_loaded_points = bool(self.collection_data)
+            target_is_loaded = (
+                self.loaded_collection_file_path is not None
+                and self.collection_file_path == self.loaded_collection_file_path
+            )
+            target_is_current = (
+                self.collection_file_path.exists()
+                and has_loaded_points
+                and previous_collection_file_path is not None
+                and self.collection_file_path == previous_collection_file_path
+            )
+            if target_is_loaded or target_is_current:
+                start_mode = self.ask_collection_start_mode(self.collection_file_path, len(self.collection_data))
+                if start_mode is None:
+                    return
+                resume_collection = start_mode == "resume"
+                if resume_collection and not self.can_resume_collection_wavelengths():
+                    return
+                if not resume_collection:
+                    new_path = self.choose_new_collection_file_path(self.collection_file_path)
+                    if new_path is None:
+                        return
+                    self.collection_file_path = new_path
+                    self.save_folder_input.setText(str(new_path.parent))
+                    self.save_name_input.setText(new_path.stem)
+
+            if self.continuous_mode:
+                self.stop_live_preview()
 
             self.data_collection_active = True
-            self.collection_data = []
-            self.collection_point_index = 0
+            if resume_collection:
+                self.collection_point_index = len(self.collection_data)
+                existing_times = [float(point.get("time", 0.0)) for point in self.collection_data]
+                self.collection_time_offset_s = self.get_resume_collection_time_offset(existing_times)
+                self.loaded_collection_file_path = self.collection_file_path
+                self.update_loaded_collection_label(self.collection_file_path)
+            else:
+                self.collection_data = []
+                self.collection_point_index = 0
+                self.collection_time_offset_s = 0.0
+                self.loaded_collection_file_path = None
+                self.update_loaded_collection_label(None)
+                self.reset_od_heatmap()
+                if self.collection_file_path.exists():
+                    self.collection_file_path.unlink()
             self.collection_start_time = time.time()
             self.collection_point_start_time = None
             self.collection_next_due_time = None
-            self.reset_od_heatmap()
-            if self.collection_file_path.exists():
-                self.collection_file_path.unlink()
 
             self.start_collection_btn.setText("Stop DC")
             self.collection_countdown_timer.start()
             self.update_collection_countdown_label()
             self.logger.info(
-                f"DATA COLLECTION: Started (rate={self.collection_rate_spin.value()}s, "
-                f"detector_avg={self.get_detector_average_count()}, file={self.collection_file_path})"
+                f"DATA COLLECTION: Started ({'resume' if resume_collection else 'new'}, "
+                f"rate={self.collection_rate_spin.value()}s, detector_avg={self.get_detector_average_count()}, "
+                f"file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
             self.collect_data_point()
@@ -1937,6 +1988,7 @@ class AvantesDualViewer(QMainWindow):
         if not self.data_collection_active or not self.has_reference or not self.has_background:
             return
         if self.measurement_thread and self.measurement_thread.isRunning():
+            QTimer.singleShot(50, self.collect_data_point)
             return
 
         n_avg = self.get_detector_average_count()
@@ -2078,6 +2130,182 @@ class AvantesDualViewer(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Choose Save Folder", self.save_folder_input.text())
         if folder:
             self.save_folder_input.setText(folder)
+
+    def update_loaded_collection_label(self, path: Optional[Path]):
+        """Show loaded collection path in the Data Collection panel."""
+        if not hasattr(self, "loaded_collection_label"):
+            return
+        if path is None:
+            self.loaded_collection_label.setText("No DAT loaded")
+            self.loaded_collection_label.setToolTip("")
+            return
+        text = str(path)
+        self.loaded_collection_label.setText(text)
+        self.loaded_collection_label.setToolTip(text)
+
+    def ask_collection_start_mode(self, path: Path, n_points: int) -> Optional[str]:
+        """Ask whether to append to a loaded DAT file or start from scratch."""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("Start Data Collection")
+        msg.setText(f"DAT file already loaded:\n{path}")
+        msg.setInformativeText(f"{n_points} existing points found. Continue writing this file?")
+        resume_btn = msg.addButton("Resume", QMessageBox.AcceptRole)
+        new_btn = msg.addButton("Start New", QMessageBox.DestructiveRole)
+        msg.addButton("Cancel", QMessageBox.RejectRole)
+        msg.exec_()
+        clicked = msg.clickedButton()
+        if clicked == resume_btn:
+            return "resume"
+        if clicked == new_btn:
+            return "new"
+        return None
+
+    def suggest_new_collection_file_path(self, path: Path) -> Path:
+        """Return an unused DAT path next to the loaded file."""
+        for index in range(1, 1000):
+            suffix = "_new" if index == 1 else f"_new_{index}"
+            candidate = path.with_name(f"{path.stem}{suffix}.dat")
+            if not candidate.exists():
+                return candidate
+        return path.with_name(f"{path.stem}_{datetime.now():%Y%m%d_%H%M%S}.dat")
+
+    def choose_new_collection_file_path(self, current_path: Path) -> Optional[Path]:
+        """Choose a new DAT path and reflect it in the main collection controls."""
+        default_path = self.suggest_new_collection_file_path(current_path)
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Start New DAT",
+            str(default_path),
+            "Avantes DAT (*.dat);;All Files (*)",
+        )
+        if not filename:
+            return None
+
+        path = Path(filename).expanduser()
+        if path.suffix.lower() != ".dat":
+            path = path.with_suffix(".dat")
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Save Folder Error", f"Cannot use save folder:\n{e}")
+            return None
+
+        if path.exists():
+            reply = QMessageBox.question(
+                self,
+                "Overwrite DAT?",
+                f"File exists:\n{path}\n\nOverwrite it?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return None
+
+        self.save_folder_input.setText(str(path.parent))
+        self.save_name_input.setText(path.stem)
+        return path
+
+    def can_resume_collection_wavelengths(self) -> bool:
+        """Ensure current spectrometer wavelengths match loaded DAT columns."""
+        current = self.spec1_widget.wavelengths if self.spec1_widget else None
+        loaded = self.od_heatmap_wavelengths
+        if current is None or loaded is None:
+            return True
+
+        current = np.asarray(current, dtype=float)
+        loaded = np.asarray(loaded, dtype=float)
+        if current.shape != loaded.shape or not np.allclose(current, loaded, atol=1e-3, rtol=0):
+            QMessageBox.warning(
+                self,
+                "Resume Error",
+                "Cannot resume this DAT file: current wavelength grid differs from loaded file.",
+            )
+            return False
+        return True
+
+    def get_resume_collection_time_offset(self, times) -> float:
+        """Return first resumed timestamp anchor: last time plus last positive delta."""
+        if not times:
+            return 0.0
+        clean_times = sorted(float(value) for value in times)
+        last_time = clean_times[-1]
+        if len(clean_times) < 2:
+            return last_time + float(self.collection_rate_spin.value())
+
+        deltas = [
+            clean_times[index] - clean_times[index - 1]
+            for index in range(1, len(clean_times))
+            if clean_times[index] > clean_times[index - 1]
+        ]
+        if not deltas:
+            return last_time + float(self.collection_rate_spin.value())
+        return last_time + deltas[-1]
+
+    def load_collection_dat(self):
+        """Load a saved data-collection DAT file and display it as an OD map."""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Avantes Measurement DAT",
+            self.save_folder_input.text(),
+            "Avantes DAT (*.dat);;All Files (*)",
+        )
+        if not filename:
+            return
+
+        try:
+            self.load_collection_dat_file(Path(filename))
+        except Exception as e:
+            self.logger.error(f"DATA LOAD: Failed to load {filename} - {e}")
+            QMessageBox.critical(self, "Load DAT Error", f"Failed to load DAT file:\n{e}")
+
+    def load_collection_dat_file(self, path: Path):
+        """Load one DAT file written by save_collection_point()."""
+        path = Path(path)
+        with path.open("r", encoding="utf-8") as f:
+            header = f.readline().strip().split("\t")
+
+        if len(header) < 2 or header[0] != "time_s":
+            raise ValueError("Expected first header column to be time_s")
+
+        wavelengths = np.array([float(value) for value in header[1:]], dtype=float)
+        data = np.loadtxt(path, delimiter="\t", skiprows=1)
+        data = np.atleast_2d(data)
+        if data.shape[1] != len(wavelengths) + 1:
+            raise ValueError(
+                f"DAT column count mismatch: expected {len(wavelengths) + 1}, got {data.shape[1]}"
+            )
+
+        times = np.asarray(data[:, 0], dtype=float)
+        rows = np.asarray(data[:, 1:], dtype=float)
+        self.od_heatmap_wavelengths = wavelengths
+        self.od_heatmap_times = [float(value) for value in times]
+        self.od_heatmap_rows = [np.array(row, dtype=float) for row in rows]
+        self.collection_data = [
+            {"time": float(t), "od": np.array(row, dtype=float)}
+            for t, row in zip(times, rows)
+        ]
+        self.collection_point_index = len(self.collection_data)
+        self.collection_time_offset_s = self.get_resume_collection_time_offset(self.od_heatmap_times)
+        self.collection_file_path = path
+        self.loaded_collection_file_path = path
+        self.save_folder_input.setText(str(path.parent))
+        self.save_name_input.setText(path.stem)
+        self.update_loaded_collection_label(path)
+
+        if len(rows):
+            self.curve_od.setData(wavelengths, rows[-1])
+            if not self.od_x_auto_check.isChecked():
+                self.plot_od.setXRange(self.od_x_min_spin.value(), self.od_x_max_spin.value(), padding=0)
+            if not self.od_y_auto_check.isChecked():
+                self.plot_od.setYRange(self.od_y_min_spin.value(), self.od_y_max_spin.value(), padding=0)
+
+        self.show_od_heatmap_window()
+        if self.od_heatmap_window is not None:
+            self.od_heatmap_window.setWindowTitle(f"OD Time Map - {path.name}")
+        self.statusBar().showMessage(f"Loaded DAT: {path.name} ({len(rows)} points)")
+        self.logger.info(f"DATA LOAD: Loaded {path} ({len(rows)} points, {len(wavelengths)} wavelengths)")
 
     def update_analysis_buttons(self):
         """Enable controls that require complete OD prerequisites."""
@@ -2232,10 +2460,10 @@ class AvantesDualViewer(QMainWindow):
         collection_elapsed = None
         collection_pulses = self.get_detector_average_count() if completed_collection_point else 0
         if completed_collection_point:
-            if self.collection_point_index == 0:
+            if self.collection_point_index == 0 and self.collection_time_offset_s <= 0:
                 collection_elapsed = 0.0
             else:
-                collection_elapsed = time.time() - self.collection_start_time
+                collection_elapsed = self.collection_time_offset_s + (time.time() - self.collection_start_time)
             skip_normal_status = True
 
         # Calculate and plot Optical Density (only if both reference AND background exist)
