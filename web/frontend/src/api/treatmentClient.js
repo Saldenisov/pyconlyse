@@ -55,6 +55,7 @@ export function postTreatment(sessionId, url, body = {}) {
   const timeoutMs = [
     '/api/treatment/session/cache-path',
     '/api/treatment/session/compress-file',
+    '/api/treatment/session/compress-file/start',
     '/api/treatment/session/compress-path',
     '/api/treatment/session/auto-assign',
     '/api/treatment/session/folder-set',
@@ -80,6 +81,21 @@ export function postTreatment(sessionId, url, body = {}) {
 export function fetchFolderListing(sessionId, folderPath) {
   return requestTreatment(
     `/api/treatment/files?folder=${encodeURIComponent(folderPath)}`,
+    {
+      headers: buildHeaders(sessionId),
+    }
+  );
+}
+
+export function startCompressionJob(sessionId, filePath) {
+  return postTreatment(sessionId, '/api/treatment/session/compress-file/start', {
+    file_path: filePath,
+  });
+}
+
+export function fetchCompressionJob(sessionId, jobId) {
+  return requestTreatment(
+    `/api/treatment/session/compress-file/status/${encodeURIComponent(jobId)}`,
     {
       headers: buildHeaders(sessionId),
     }

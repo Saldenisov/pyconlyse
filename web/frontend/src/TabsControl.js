@@ -9,10 +9,12 @@ import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import {
   fetchCleaningView,
+  fetchCompressionJob,
   fetchFileSummary,
   fetchFolderListing,
   fetchTreatmentSession,
   postTreatment,
+  startCompressionJob,
   updateSelectionConfig,
 } from './api/treatmentClient';
 import './css/DataWindowVD2.css';
@@ -307,6 +309,27 @@ function summarizeFileCompression(payload, dataType = '') {
     lines.push(`Output: ${conversion.output_path || ''}.`);
   }
   return lines.join('\n');
+}
+
+function summarizeCompressionProgress(job, filePath) {
+  const current = Number(job?.current_bytes || 0);
+  const total = Number(job?.total_bytes || 0);
+  const percent = total > 0 ? ` (${Math.min(100, (current / total) * 100).toFixed(1)}%)` : '';
+  const lines = [
+    `Convert/Compress running for ${pathName(filePath)}.`,
+    job?.message || 'Working...',
+  ];
+  if (total > 0) {
+    lines.push(`${formatFileSize(current)} / ${formatFileSize(total)}${percent}`);
+  }
+  if (job?.phase === 'convert') {
+    lines.push('This step may not show byte progress while H5 is being rewritten.');
+  }
+  return lines.join('\n');
+}
+
+function wait(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function folderPathChain(folderPath, allowedRoot) {
@@ -892,9 +915,20 @@ const TabsControl = () => {
     setFileContextMenu(null);
     setIsBusy(true);
     try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/compress-file', {
-        file_path: filePath,
-      });
+      const started = await startCompressionJob(treatmentSessionId, filePath);
+      let job = started.compression_job;
+      setOperationMessage(summarizeCompressionProgress(job, filePath));
+      let payload = null;
+      while (job?.status === 'running') {
+        await wait(500);
+        const statusPayload = await fetchCompressionJob(treatmentSessionId, job.job_id);
+        job = statusPayload.compression_job;
+        setOperationMessage(summarizeCompressionProgress(job, filePath));
+      }
+      if (job?.status === 'error') {
+        throw new Error(job.error || job.message || 'Convert/Compress failed.');
+      }
+      payload = job?.payload || { conversion: job?.conversion };
       setTreatment(payload);
       setOperationMessage(summarizeFileCompression(payload));
       if (requestSelectionRefresh) {

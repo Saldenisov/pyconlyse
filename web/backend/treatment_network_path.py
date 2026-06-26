@@ -161,7 +161,7 @@ def smb_listdir(folder: str) -> Iterable[Dict[str, object]]:
         }
 
 
-def copy_smb_file_to_local(smb_path: str, local_path) -> int:
+def copy_smb_file_to_local(smb_path: str, local_path, progress_callback=None) -> int:
     try:
         server, _share, _remote_path = split_smb_path(smb_path)
         _register_session(server)
@@ -174,6 +174,8 @@ def copy_smb_file_to_local(smb_path: str, local_path) -> int:
                         break
                     target.write(chunk)
                     total += len(chunk)
+                    if progress_callback:
+                        progress_callback(total)
         return total
     except ValueError:
         raise
@@ -181,7 +183,7 @@ def copy_smb_file_to_local(smb_path: str, local_path) -> int:
         raise _smb_value_error(smb_path, exc) from exc
 
 
-def copy_local_file_to_smb(local_path, smb_path: str) -> int:
+def copy_local_file_to_smb(local_path, smb_path: str, progress_callback=None) -> int:
     try:
         server, _share, _remote_path = split_smb_path(smb_path)
         _register_session(server)
@@ -194,6 +196,8 @@ def copy_local_file_to_smb(local_path, smb_path: str) -> int:
                         break
                     target.write(chunk)
                     total += len(chunk)
+                    if progress_callback:
+                        progress_callback(total)
         return total
     except ValueError:
         raise
@@ -201,12 +205,12 @@ def copy_local_file_to_smb(local_path, smb_path: str) -> int:
         raise _smb_value_error(smb_path, exc) from exc
 
 
-def copy_local_file_to_smb_atomic(local_path, smb_path: str) -> int:
+def copy_local_file_to_smb_atomic(local_path, smb_path: str, progress_callback=None) -> int:
     temp_path = smb_join(
         smb_parent(smb_path),
         f".{smb_name(smb_path)}.pyconlyse-{uuid4().hex}.tmp",
     )
-    bytes_written = copy_local_file_to_smb(local_path, temp_path)
+    bytes_written = copy_local_file_to_smb(local_path, temp_path, progress_callback=progress_callback)
     try:
         server, _share, _remote_path = split_smb_path(smb_path)
         _register_session(server)

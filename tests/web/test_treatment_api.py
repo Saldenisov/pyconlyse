@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -472,6 +473,51 @@ def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
     assert payload["conversion"]["overwritten"] is True
     assert payload["session"]["paths"] == {}
     assert payload["session"]["path_sources"] == {}
+
+
+def test_compress_file_start_reports_job_progress(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.h5"
+    source_file.write_bytes(b"old h5 payload")
+
+    def fake_convert(source_path, output_path):
+        assert Path(source_path) == Path(output_path)
+        Path(output_path).write_bytes(b"recompressed h5 payload")
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 10,
+            "compression": "gzip",
+            "compression_level": 9,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-file/start",
+        json={"file_path": str(source_file)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    job_id = payload["compression_job"]["job_id"]
+    status_payload = None
+    for _attempt in range(20):
+        status_response = test_client.get(f"/api/treatment/session/compress-file/status/{job_id}")
+        status_payload = status_response.get_json()
+        if status_payload["compression_job"]["status"] == "complete":
+            break
+        time.sleep(0.05)
+
+    job = status_payload["compression_job"]
+    assert job["status"] == "complete"
+    assert job["conversion"]["overwritten"] is True
+    assert job["conversion"]["output_size_bytes"] == len(b"recompressed h5 payload")
+    assert job["payload"]["conversion"]["output_path"] == str(source_file)
 
 
 def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):

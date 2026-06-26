@@ -1,7 +1,7 @@
 import os
 import tempfile
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 from time import monotonic
 from typing import Dict, List, Optional
 from uuid import uuid4
@@ -58,6 +58,8 @@ TREATMENT_SESSION_COOKIE = "pyconlyse_treatment_sid"
 ROOT_EXISTS_CACHE_TTL_SECONDS = 15.0
 _root_exists_cache: Dict[str, tuple] = {}
 _root_exists_cache_lock = Lock()
+_compression_jobs: Dict[str, Dict[str, object]] = {}
+_compression_jobs_lock = Lock()
 
 
 def _normalize_path(path: str) -> str:
@@ -371,6 +373,155 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
         ),
     })
     return summary
+
+
+def _smb_size_bytes(path: str) -> int:
+    parent = smb_parent(path)
+    for entry in smb_listdir(parent):
+        if str(entry.get("path")) == path:
+            return int(entry.get("size_bytes") or 0)
+    return 0
+
+
+def _compression_job_snapshot(job_id: str) -> Dict[str, object]:
+    with _compression_jobs_lock:
+        return dict(_compression_jobs.get(job_id) or {})
+
+
+def _update_compression_job(job_id: str, **updates) -> None:
+    with _compression_jobs_lock:
+        job = _compression_jobs.setdefault(job_id, {})
+        job.update(updates)
+        job["updated_at"] = monotonic()
+
+
+def _compression_progress_summary(source_path: str, progress_callback=None) -> Dict[str, object]:
+    source_suffix = _path_suffix(source_path)
+    if source_suffix not in {".his", ".h5"}:
+        raise ValueError("Convert/Compress supports only HIS or H5 files")
+
+    output_name = f"{Path(_path_name(source_path)).stem}.h5"
+    output_path = source_path if source_suffix == ".h5" else (
+        smb_join(smb_parent(source_path), output_name)
+        if is_smb_path(source_path)
+        else str(Path(source_path).expanduser().with_suffix(".h5"))
+    )
+
+    if is_smb_path(source_path):
+        source_size_bytes = _smb_size_bytes(source_path)
+        with tempfile.TemporaryDirectory(prefix="pyconlyse_compress_job_") as tmp_dir:
+            local_source = Path(tmp_dir) / _path_name(source_path)
+            local_output = Path(tmp_dir) / output_name
+            if progress_callback:
+                progress_callback("download", 0, source_size_bytes, "Reading source file from SMB")
+            copy_smb_file_to_local(
+                source_path,
+                local_source,
+                progress_callback=(
+                    lambda current: progress_callback(
+                        "download",
+                        current,
+                        source_size_bytes,
+                        "Reading source file from SMB",
+                    )
+                    if progress_callback
+                    else None
+                ),
+            )
+
+            if progress_callback:
+                progress_callback("convert", 0, 0, "Compressing local H5 with gzip level 9")
+            summary = treatment_service.convert_file_to_h5(local_source, local_output)
+            output_size_bytes = int(local_output.stat().st_size)
+
+            if progress_callback:
+                progress_callback("upload", 0, output_size_bytes, "Writing compressed H5 to SMB")
+            copy_local_file_to_smb_atomic(
+                local_output,
+                output_path,
+                progress_callback=(
+                    lambda current: progress_callback(
+                        "upload",
+                        current,
+                        output_size_bytes,
+                        "Writing compressed H5 to SMB",
+                    )
+                    if progress_callback
+                    else None
+                ),
+            )
+
+        if not smb_isfile(output_path):
+            raise ValueError(f"Compressed H5 was not created: {output_path}")
+        if source_suffix == ".his":
+            if progress_callback:
+                progress_callback("delete", 0, 0, "Removing source HIS")
+            smb_remove(source_path)
+    else:
+        source = Path(source_path).expanduser()
+        source_size_bytes = int(source.stat().st_size)
+        output = Path(output_path).expanduser()
+        if progress_callback:
+            progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 9")
+        summary = treatment_service.convert_file_to_h5(source, output)
+        if not output.is_file():
+            raise ValueError(f"Compressed H5 was not created: {output}")
+        output_size_bytes = int(output.stat().st_size)
+        if source_suffix == ".his":
+            if progress_callback:
+                progress_callback("delete", 0, 0, "Removing source HIS")
+            source.unlink()
+
+    space_change_bytes = output_size_bytes - source_size_bytes
+    summary.update({
+        "source_path": source_path,
+        "output_path": output_path,
+        "converted": True,
+        "overwritten": source_suffix == ".h5",
+        "deleted_source": source_suffix == ".his",
+        "source_size_bytes": source_size_bytes,
+        "output_size_bytes": output_size_bytes,
+        "space_change_bytes": space_change_bytes,
+        "space_change_percent": (
+            round((space_change_bytes / source_size_bytes) * 100, 2)
+            if source_size_bytes
+            else 0.0
+        ),
+    })
+    return summary
+
+
+def _run_compression_job(job_id: str, session_id: str, source_path: str) -> None:
+    def progress(phase: str, current: int, total: int, message: str) -> None:
+        _update_compression_job(
+            job_id,
+            phase=phase,
+            current_bytes=int(current or 0),
+            total_bytes=int(total or 0),
+            message=message,
+        )
+
+    try:
+        progress("start", 0, 0, "Starting Convert/Compress")
+        conversion = _compression_progress_summary(source_path, progress_callback=progress)
+        _update_compression_job(
+            job_id,
+            status="complete",
+            phase="complete",
+            current_bytes=int(conversion.get("output_size_bytes") or 0),
+            total_bytes=int(conversion.get("output_size_bytes") or 0),
+            message="Convert/Compress complete",
+            conversion=conversion,
+            payload={**_session_payload(session_id), "conversion": conversion},
+        )
+    except ValueError as exc:
+        _update_compression_job(
+            job_id,
+            status="error",
+            phase="error",
+            message=str(exc),
+            error=str(exc),
+        )
 
 
 def _delete_source_his_after_cleaning(saved: Dict[str, object]) -> Optional[str]:
@@ -938,6 +1089,51 @@ def compress_file_path():
     response_payload = _session_payload(session_id)
     response_payload["conversion"] = conversion
     return _json_response(response_payload, session_id)
+
+
+@treatment_api.route("/session/compress-file/start", methods=["POST"])
+def start_compress_file_path():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    file_path = payload.get("file_path")
+    if not file_path:
+        return _error("file_path is required", session_id)
+
+    try:
+        source_path = _ensure_within_allowed_root(str(file_path))
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    job_id = uuid4().hex
+    with _compression_jobs_lock:
+        _compression_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "running",
+            "phase": "queued",
+            "message": "Queued Convert/Compress",
+            "source_path": source_path,
+            "current_bytes": 0,
+            "total_bytes": 0,
+            "created_at": monotonic(),
+            "updated_at": monotonic(),
+        }
+
+    thread = Thread(
+        target=_run_compression_job,
+        args=(job_id, session_id, source_path),
+        daemon=True,
+    )
+    thread.start()
+    return _json_response({"compression_job": _compression_job_snapshot(job_id), "success": True}, session_id)
+
+
+@treatment_api.route("/session/compress-file/status/<job_id>", methods=["GET"])
+def get_compress_file_status(job_id: str):
+    session_id = _current_session_id()
+    job = _compression_job_snapshot(str(job_id))
+    if not job:
+        return _error("compression job not found", session_id, 404)
+    return _json_response({"compression_job": job, "success": True}, session_id)
 
 
 @treatment_api.route("/session/auto-assign", methods=["POST"])

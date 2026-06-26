@@ -17,8 +17,10 @@ def test_copy_local_file_to_smb_atomic_replaces_target(monkeypatch, tmp_path):
     source.write_bytes(b"h5")
     calls = {}
 
-    def fake_copy(local_path, smb_path):
+    def fake_copy(local_path, smb_path, progress_callback=None):
         calls["copy"] = (str(local_path), smb_path)
+        if progress_callback:
+            progress_callback(2)
         return 2
 
     class FakeSmbClient:
@@ -46,7 +48,9 @@ def test_copy_local_file_to_smb_atomic_reports_locked_target(monkeypatch, tmp_pa
     source.write_bytes(b"h5")
     removed = {}
 
-    def fake_copy(_local_path, _smb_path):
+    def fake_copy(_local_path, _smb_path, progress_callback=None):
+        if progress_callback:
+            progress_callback(2)
         return 2
 
     class FakeSmbClient:
