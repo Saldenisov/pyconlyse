@@ -11,6 +11,27 @@ import sys
 from pathlib import Path
 
 
+def _load_project_env(path):
+    if not path.exists():
+        return
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            for line in handle:
+                text = line.strip()
+                if not text or text.startswith("#") or "=" not in text:
+                    continue
+                key, value = text.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if key.startswith("export "):
+                    key = key[len("export "):].strip()
+                if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+                    value = value[1:-1]
+                os.environ.setdefault(key, value)
+    except OSError:
+        return
+
+
 def _env_bool(name, default=False):
     value = os.environ.get(name)
     if value is None:
@@ -20,6 +41,7 @@ def _env_bool(name, default=False):
 
 project_root = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(project_root))
+_load_project_env(project_root / "web" / ".env")
 
 backend_dir = Path(__file__).parent / "backend"
 sys.path.insert(0, str(backend_dir))

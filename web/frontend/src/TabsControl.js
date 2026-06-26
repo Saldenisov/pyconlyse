@@ -2,13 +2,18 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from 'react';
+import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import {
+  fetchCleaningView,
+  fetchFileSummary,
   fetchFolderListing,
   fetchTreatmentSession,
   postTreatment,
+  updateSelectionConfig,
 } from './api/treatmentClient';
 import './css/DataWindowVD2.css';
 
@@ -185,7 +190,48 @@ function getParentFolder(folderPath, allowedRoot) {
 function pathName(folderPath) {
   const trimmed = String(folderPath || '').replace(/[\\/]+$/, '');
   const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
-  return lastSeparator >= 0 ? trimmed.slice(lastSeparator + 1) : trimmed;
+  const name = lastSeparator >= 0 ? trimmed.slice(lastSeparator + 1) : trimmed;
+  try {
+    return decodeURIComponent(name);
+  } catch (_error) {
+    return name;
+  }
+}
+
+function pathStem(filePath) {
+  const name = pathName(filePath);
+  const dotIndex = name.lastIndexOf('.');
+  return dotIndex > 0 ? name.slice(0, dotIndex) : name;
+}
+
+function h5NameForPath(filePath) {
+  const stem = pathStem(filePath);
+  return stem ? `${stem}.h5` : '';
+}
+
+function formatFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value <= 0) {
+    return '...';
+  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let scaled = value;
+  let unitIndex = 0;
+  while (scaled >= 1024 && unitIndex < units.length - 1) {
+    scaled /= 1024;
+    unitIndex += 1;
+  }
+  const digits = scaled >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${scaled.toFixed(digits)}${units[unitIndex]}`;
+}
+
+function formatWavelengthRange(summary) {
+  const low = Number(summary?.wavelength_min);
+  const high = Number(summary?.wavelength_max);
+  if (!Number.isFinite(low) || !Number.isFinite(high)) {
+    return '...';
+  }
+  return `${Math.round(low)}-${Math.round(high)}nm`;
 }
 
 function folderPathChain(folderPath, allowedRoot) {
@@ -260,6 +306,96 @@ const AssignedPaths = ({ session }) => {
   );
 };
 
+function CleaningKineticsPreview({ view }) {
+  const plotRef = useRef(null);
+
+  useEffect(() => {
+    const plotNode = plotRef.current;
+    if (!plotNode || !view) {
+      return undefined;
+    }
+
+    const traces = [
+      ...(view.traces || []).map((trace) => ({
+        x: view.x || [],
+        y: trace.y || [],
+        type: 'scatter',
+        mode: 'lines',
+        line: { color: 'rgba(148, 163, 184, 0.34)', width: 1 },
+        hoverinfo: 'skip',
+        showlegend: false,
+      })),
+      {
+        x: view.x || [],
+        y: view.average || [],
+        type: 'scatter',
+        mode: 'lines',
+        name: 'Average',
+        line: { color: '#dc2626', width: 2.5 },
+        showlegend: false,
+      },
+    ];
+
+    Plotly.react(
+      plotNode,
+      traces,
+      {
+        margin: { t: 18, r: 16, b: 42, l: 54 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
+        xaxis: {
+          title: `Time Delay, ${view.time_scale || ''}`.trim(),
+          gridcolor: 'rgba(148, 163, 184, 0.24)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.36)',
+        },
+        yaxis: {
+          title: 'Intensity',
+          type: view.y_axis_type || 'linear',
+          gridcolor: 'rgba(148, 163, 184, 0.24)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.36)',
+        },
+      },
+      { responsive: true, displayModeBar: false }
+    ).catch(() => undefined);
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (plotNode?._fullLayout) {
+        Plotly.Plots.resize(plotNode);
+      }
+    });
+    resizeObserver.observe(plotNode);
+
+    return () => {
+      resizeObserver.disconnect();
+      try {
+        Plotly.purge(plotNode);
+      } catch (_error) {
+        // Ignore Plotly teardown races.
+      }
+    };
+  }, [view]);
+
+  if (!view) {
+    return <div className="cleaning-preview-empty">Assign an input file to preview cleaning kinetics.</div>;
+  }
+
+  return (
+    <div className="cleaning-preview">
+      <div className="cleaning-preview-header">
+        <span>{view.cleaned_state ? 'Cleaned kinetics preview' : 'Original kinetics preview'}</span>
+        <span>
+          {view.current_measurements} / {view.original_measurements} maps
+          {view.shown_measurements < view.current_measurements
+            ? `, showing ${view.shown_measurements}`
+            : ''}
+        </span>
+      </div>
+      <div className="cleaning-preview-plot" ref={plotRef}></div>
+    </div>
+  );
+}
+
 const TabsControl = () => {
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
@@ -268,8 +404,10 @@ const TabsControl = () => {
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
   const [folderTreeCache, setFolderTreeCache] = useState({});
+  const [fileSummaryCache, setFileSummaryCache] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => new Set());
   const [fileContextMenu, setFileContextMenu] = useState(null);
+  const [folderContextMenu, setFolderContextMenu] = useState(null);
   const [isFolderTreeOpen, setIsFolderTreeOpen] = useState(false);
   const [isSelectingFolderRoot, setIsSelectingFolderRoot] = useState(false);
   const [treeRoot, setTreeRoot] = useState('');
@@ -280,11 +418,12 @@ const TabsControl = () => {
   const [draftSpectraRanges, setDraftSpectraRanges] = useState('');
   const [cleaningAngleThreshold, setCleaningAngleThreshold] = useState('1.0');
   const [cleaningSurfaceThreshold, setCleaningSurfaceThreshold] = useState('1.0');
-  const [cleaningOutputName, setCleaningOutputName] = useState('');
   const [error, setError] = useState('');
   const [operationMessage, setOperationMessage] = useState('');
   const [selectionMessage, setSelectionMessage] = useState('');
   const [cleaningSummary, setCleaningSummary] = useState(null);
+  const [cleaningView, setCleaningView] = useState(null);
+  const [isCleaningViewLoading, setIsCleaningViewLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const profilePreset = PROFILE_PRESETS[treatmentProfile] || PROFILE_PRESETS.VD2;
 
@@ -294,6 +433,16 @@ const TabsControl = () => {
   const assignableDataTypes =
     requiredDataTypes && requiredDataTypes.length > 0 ? requiredDataTypes : treatment?.data_types || [];
   const canAverageNoise = requiredDataTypes.includes('NOISE');
+  const assignedCleaningTypes = assignableDataTypes.filter((dataType) => session?.paths?.[dataType]);
+  const cleaningActiveDataType =
+    assignedCleaningTypes.includes(session?.active_data_type)
+      ? session.active_data_type
+      : assignedCleaningTypes[0] || '';
+  const cleaningSourcePath =
+    cleaningActiveDataType
+      ? (session?.path_sources?.[cleaningActiveDataType] || session?.paths?.[cleaningActiveDataType] || '')
+      : '';
+  const cleaningOutputName = h5NameForPath(cleaningSourcePath);
 
   const refreshSession = async () => {
     const payload = await fetchTreatmentSession(treatmentSessionId);
@@ -303,6 +452,53 @@ const TabsControl = () => {
     }
     return payload;
   };
+
+  const loadFileSummary = useCallback(
+    async (file) => {
+      if (!file?.path || !['.his', '.h5'].includes(String(file.suffix || '').toLowerCase())) {
+        return;
+      }
+      if (fileSummaryCache[file.path]) {
+        return;
+      }
+
+      setFileSummaryCache((current) => ({
+        ...current,
+        [file.path]: { loading: true },
+      }));
+      try {
+        const payload = await fetchFileSummary(treatmentSessionId, file.path);
+        setFileSummaryCache((current) => ({
+          ...current,
+          [file.path]: payload.file_summary || {},
+        }));
+      } catch (err) {
+        setFileSummaryCache((current) => ({
+          ...current,
+          [file.path]: { error: err.message },
+        }));
+      }
+    },
+    [fileSummaryCache, treatmentSessionId]
+  );
+
+  const refreshCleaningView = useCallback(async () => {
+    if (!treatmentSessionId) {
+      return null;
+    }
+
+    setIsCleaningViewLoading(true);
+    try {
+      const payload = await fetchCleaningView(treatmentSessionId);
+      setCleaningView(payload.cleaning_view);
+      return payload.cleaning_view;
+    } catch (err) {
+      setCleaningView(null);
+      return null;
+    } finally {
+      setIsCleaningViewLoading(false);
+    }
+  }, [treatmentSessionId]);
 
   const cacheFolderListing = useCallback((folderPath, payload) => {
     if (!folderPath) {
@@ -420,7 +616,16 @@ const TabsControl = () => {
   ]);
 
   useEffect(() => {
-    const closeContextMenu = () => setFileContextMenu(null);
+    if (activeTab === 'cleaning') {
+      refreshCleaningView();
+    }
+  }, [activeTab, refreshCleaningView, session?.active_data_type, session?.paths]);
+
+  useEffect(() => {
+    const closeContextMenu = () => {
+      setFileContextMenu(null);
+      setFolderContextMenu(null);
+    };
     window.addEventListener('click', closeContextMenu);
     window.addEventListener('keydown', closeContextMenu);
     return () => {
@@ -436,9 +641,6 @@ const TabsControl = () => {
     setDraftSaveFolder(session.save_folder || '');
     setDraftSaveFileName(session.save_file_name || '');
     setDraftAllowedRoot(treatment?.allowed_root || '');
-    setCleaningOutputName((current) => (
-      current || (session.active_data_type ? `${session.active_data_type.toLowerCase()}_cleaned.h5` : '')
-    ));
   }, [session, treatment?.allowed_root]);
 
   useEffect(() => {
@@ -458,6 +660,24 @@ const TabsControl = () => {
       return next;
     });
   }, [session?.folder_path, treatment?.allowed_root]);
+
+  useEffect(() => {
+    const visibleFiles = [];
+    Object.entries(folderTreeCache).forEach(([folderPath, listing]) => {
+      if (folderPath !== treeRoot && !expandedFolders.has(folderPath)) {
+        return;
+      }
+      (listing.files || []).forEach((file) => {
+        const suffix = String(file.suffix || '').toLowerCase();
+        if (suffix === '.his' || suffix === '.h5') {
+          visibleFiles.push(file);
+        }
+      });
+    });
+    visibleFiles.slice(0, 40).forEach((file) => {
+      loadFileSummary(file);
+    });
+  }, [expandedFolders, fileSummaryCache, folderTreeCache, loadFileSummary, treeRoot]);
 
   const applyPayload = async (requestPromise, refreshListing = false) => {
     setError('');
@@ -566,7 +786,44 @@ const TabsControl = () => {
         requestSelectionRefresh();
       }
       const cachedPath = payload.cached_file?.cached_path || filePath;
-      setOperationMessage(`Assigned ${dataType}: ${cachedPath}`);
+      setOperationMessage(`Set to ${dataType}: ${cachedPath}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFileContextMenu(null);
+      setIsBusy(false);
+    }
+  };
+
+  const handleAssignAndCleanFile = async (filePath, dataType = session?.selected_data_type) => {
+    if (!session || !dataType) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setSelectionMessage('');
+    setCleaningSummary(null);
+    setIsBusy(true);
+    try {
+      await postTreatment(treatmentSessionId, '/api/treatment/session/cache-path', {
+        data_type: dataType,
+        file_path: filePath,
+      });
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/save', {
+        angle_threshold: Number.parseFloat(cleaningAngleThreshold),
+        surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
+        output_file_name: '',
+      });
+      setTreatment(payload);
+      setCleaningSummary(payload.cleaning);
+      setOperationMessage(
+        `Set to ${dataType}, cleaned, saved to ${payload.cleaning.output_path}.`
+      );
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      refreshCleaningView();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -651,14 +908,69 @@ const TabsControl = () => {
 
   const handleFileContextMenu = (event, file) => {
     event.preventDefault();
+    event.stopPropagation();
     if (!file.supported || isBusy) {
       return;
     }
+    setFolderContextMenu(null);
     setFileContextMenu({
       file,
       x: event.clientX,
       y: event.clientY,
     });
+  };
+
+  const handleFolderContextMenu = (event, folder) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!folder?.path || isBusy) {
+      return;
+    }
+    setFileContextMenu(null);
+    setFolderContextMenu({
+      folder,
+      x: event.clientX,
+      y: event.clientY,
+    });
+  };
+
+  const handleFolderSet = async (folderPath, convert = false, clean = false) => {
+    if (!folderPath) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/folder-set', {
+        folder_path: folderPath,
+        convert,
+        clean,
+        angle_threshold: Number(cleaningAngleThreshold),
+        surface_threshold: Number(cleaningSurfaceThreshold),
+      });
+      setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      await refreshFolderListing(folderPath);
+      setExpandedFolders((current) => {
+        const next = new Set(current);
+        next.add(folderPath);
+        return next;
+      });
+      const assigned = Object.keys(payload.folder_set?.assigned || {}).join(', ');
+      const label = clean ? 'Set/Convert/Clean' : convert ? 'Set/Convert' : 'Set';
+      setOperationMessage(
+        `${label} completed for ${pathName(folderPath)}: ${assigned}.`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFolderContextMenu(null);
+      setIsBusy(false);
+    }
   };
 
   const handleAverageNoise = async () => {
@@ -818,6 +1130,33 @@ const TabsControl = () => {
     }
   };
 
+  const handleCleaningTargetChange = async (dataType) => {
+    if (!dataType || dataType === session?.active_data_type) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setCleaningSummary(null);
+    setIsBusy(true);
+    try {
+      const payload = await updateSelectionConfig(treatmentSessionId, {
+        active_data_type: dataType,
+        map_index: 0,
+        selection: {},
+      });
+      setTreatment(payload);
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      await refreshCleaningView();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const handleCleaningAction = async (mode) => {
     setError('');
     setSelectionMessage('');
@@ -834,13 +1173,18 @@ const TabsControl = () => {
           {
             angle_threshold: Number.parseFloat(cleaningAngleThreshold),
             surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
-            output_file_name: cleaningOutputName,
+            output_file_name: '',
           }
         );
       }
 
       if (mode === 'reset') {
         setCleaningSummary(null);
+        if (payload.cleaning_view) {
+          setCleaningView(payload.cleaning_view);
+        } else {
+          refreshCleaningView();
+        }
         setOperationMessage(
           payload.cleaning.discarded_measurements
             ? `Cleaning state reset for ${payload.cleaning.file_path}.`
@@ -848,8 +1192,18 @@ const TabsControl = () => {
         );
       } else {
         setCleaningSummary(payload.cleaning);
+        if (payload.cleaning_view) {
+          setCleaningView(payload.cleaning_view);
+        }
         if (mode === 'save') {
-          setOperationMessage(`Cleaned H5 saved to ${payload.cleaning.output_path}`);
+          setTreatment(payload);
+          setOperationMessage(
+            `Cleaned H5 saved to ${payload.cleaning.output_path} and assigned as ${payload.cleaning.assigned_data_type || session?.active_data_type || 'active file'}.`
+          );
+          if (requestSelectionRefresh) {
+            requestSelectionRefresh();
+          }
+          refreshCleaningView();
         } else if (payload.cleaning.state_updated === false) {
           setOperationMessage(payload.cleaning.warning || 'No measurements passed the thresholds.');
         } else if (payload.cleaning.source_measurements !== payload.cleaning.original_measurements) {
@@ -868,24 +1222,33 @@ const TabsControl = () => {
   };
 
   const renderFolderTreeFiles = (files, level = 1) =>
-    (files || []).map((file) => (
-      <div
-        key={file.path}
-        className={`explorer-tree-file-row ${file.supported ? '' : 'is-disabled'}`}
-        style={{ paddingLeft: `${level * 14 + 28}px` }}
-        onContextMenu={(event) => handleFileContextMenu(event, file)}
-        title={file.path}
-      >
-        <button
-          className="explorer-tree-file-name"
+    (files || []).map((file) => {
+      const summary = fileSummaryCache[file.path] || {};
+      const frames = summary.number_maps ? String(summary.number_maps) : '...';
+      const timeScale = summary.time_scale || '...';
+      const wavelengths = formatWavelengthRange(summary);
+      return (
+        <div
+          key={file.path}
+          className={`explorer-tree-file-row ${file.supported ? '' : 'is-disabled'}`}
+          style={{ paddingLeft: `${level * 14 + 28}px` }}
           onContextMenu={(event) => handleFileContextMenu(event, file)}
-          disabled={!file.supported || isBusy}
+          title={file.path}
         >
-          {file.name}
-        </button>
-        <span className="explorer-file-suffix">{file.suffix || 'file'}</span>
-      </div>
-    ));
+          <button
+            className="explorer-tree-file-name"
+            onContextMenu={(event) => handleFileContextMenu(event, file)}
+            disabled={!file.supported || isBusy}
+          >
+            {file.name}
+          </button>
+          <span className="explorer-file-meta">S:{formatFileSize(file.size_bytes)}</span>
+          <span className="explorer-file-meta">F:{frames}</span>
+          <span className="explorer-file-meta">T:{timeScale}</span>
+          <span className="explorer-file-meta">W:{wavelengths}</span>
+        </div>
+      );
+    });
 
   const renderFolderTreeRows = (folders, level = 1) =>
     (folders || []).map((folder) => {
@@ -898,6 +1261,7 @@ const TabsControl = () => {
           <div
             className={`explorer-tree-row ${isSelected ? 'is-selected' : ''}`}
             style={{ paddingLeft: `${level * 14}px` }}
+            onContextMenu={(event) => handleFolderContextMenu(event, folder)}
           >
             <button
               className="explorer-tree-toggle"
@@ -993,6 +1357,12 @@ const TabsControl = () => {
                     className={`explorer-tree-row ${
                       session.folder_path === explorerRoot ? 'is-selected' : ''
                     }`}
+                    onContextMenu={(event) =>
+                      handleFolderContextMenu(event, {
+                        name: pathName(explorerRoot) || explorerRoot,
+                        path: explorerRoot,
+                      })
+                    }
                   >
                     <button
                       className="explorer-tree-toggle"
@@ -1031,9 +1401,45 @@ const TabsControl = () => {
                       onClick={() => handleAssignFile(fileContextMenu.file.path, dataType)}
                       disabled={isBusy}
                     >
-                      Assign to {dataType}
+                      Set to {dataType}
                     </button>
                   ))}
+                  <div className="file-context-menu-separator" />
+                  {assignableDataTypes.map((dataType) => (
+                    <button
+                      key={`${dataType}-clean`}
+                      onClick={() => handleAssignAndCleanFile(fileContextMenu.file.path, dataType)}
+                      disabled={isBusy}
+                    >
+                      Set to {dataType} + Clean
+                    </button>
+                  ))}
+                </div>
+              )}
+              {folderContextMenu && (
+                <div
+                  className="file-context-menu"
+                  style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    onClick={() => handleFolderSet(folderContextMenu.folder.path, true)}
+                    disabled={isBusy}
+                  >
+                    Set/Convert
+                  </button>
+                  <button
+                    onClick={() => handleFolderSet(folderContextMenu.folder.path, true, true)}
+                    disabled={isBusy}
+                  >
+                    Set/Convert/Clean
+                  </button>
+                  <button
+                    onClick={() => handleFolderSet(folderContextMenu.folder.path, false)}
+                    disabled={isBusy}
+                  >
+                    Set
+                  </button>
                 </div>
               )}
             </div>
@@ -1056,55 +1462,75 @@ const TabsControl = () => {
           </div>
         )}
         {activeTab === 'cleaning' && (
-          <div className="tab-panel">
-            <p>
-              Run desktop-style SAM filtering on the active file. Each Analyze pass
-              filters the current cleaned working set, and Reset returns you to the
-              original file maps before the next pass.
-            </p>
-            <div style={{ display: 'grid', gap: '12px', maxWidth: '720px' }}>
-              <label>
-                Angle Threshold (degrees)
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.1"
-                  value={cleaningAngleThreshold}
-                  onChange={(event) => setCleaningAngleThreshold(event.target.value)}
-                />
-              </label>
-              <label>
-                Surface Threshold (%)
-                <input
-                  type="number"
-                  min="0.01"
-                  step="0.1"
-                  value={cleaningSurfaceThreshold}
-                  onChange={(event) => setCleaningSurfaceThreshold(event.target.value)}
-                />
-              </label>
-              <label>
-                Output H5 Name
-                <input
-                  type="text"
-                  value={cleaningOutputName}
-                  onChange={(event) => setCleaningOutputName(event.target.value)}
-                  placeholder="active_cleaned.h5"
-                />
-              </label>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-                <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy}>
-                  Analyze SAM
-                </button>
-                <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
-                  Reset Cleaning
-                </button>
-                <button onClick={() => handleCleaningAction('save')} disabled={isBusy}>
-                  Save Cleaned H5
-                </button>
+          <div className="tab-panel cleaning-tab">
+            <div className="cleaning-main">
+              <CleaningKineticsPreview view={cleaningView} />
+              <div className="cleaning-controls">
+                {isCleaningViewLoading && <p>Loading cleaning preview...</p>}
+                <label>
+                  Clean File
+                  <select
+                    value={cleaningActiveDataType}
+                    onChange={(event) => handleCleaningTargetChange(event.target.value)}
+                    disabled={isBusy || assignedCleaningTypes.length === 0}
+                  >
+                    {assignedCleaningTypes.length === 0 && (
+                      <option value="">No assigned files</option>
+                    )}
+                    {assignedCleaningTypes.map((dataType) => {
+                      const sourcePath = session.path_sources?.[dataType] || session.paths?.[dataType] || '';
+                      return (
+                        <option key={dataType} value={dataType}>
+                          {dataType} - {pathName(sourcePath)}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </label>
+                <label>
+                  Angle Threshold (degrees)
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.1"
+                    value={cleaningAngleThreshold}
+                    onChange={(event) => setCleaningAngleThreshold(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Surface Threshold (%)
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.1"
+                    value={cleaningSurfaceThreshold}
+                    onChange={(event) => setCleaningSurfaceThreshold(event.target.value)}
+                  />
+                </label>
+                <label>
+                  Output H5 Name
+                  <input
+                    type="text"
+                    value={cleaningOutputName}
+                    readOnly
+                    placeholder="source-name.h5"
+                  />
+                </label>
+                <div className="cleaning-actions">
+                  <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy}>
+                    Clean
+                  </button>
+                  <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
+                    Reset
+                  </button>
+                  <button onClick={() => handleCleaningAction('save')} disabled={isBusy}>
+                    Clean and Save
+                  </button>
+                </div>
               </div>
+            </div>
               {cleaningSummary && (
-                <div>
+                <div className="cleaning-summary">
                   <p>
                     <strong>File:</strong> {cleaningSummary.file_path || session.active_data_type || 'n/a'}
                   </p>
@@ -1133,7 +1559,6 @@ const TabsControl = () => {
                   )}
                 </div>
               )}
-            </div>
           </div>
         )}
         {activeTab === 'info' && (

@@ -1,4 +1,5 @@
 import logging
+import json
 import re
 import sys
 import tempfile
@@ -27,7 +28,7 @@ from gui.controllers.openers import (
     OPENER_ACCRODANCE,
     OpenersTypes,
 )
-from treatment_network_path import copy_local_file_to_smb, is_smb_path, smb_join
+from treatment_network_path import copy_local_file_to_smb, is_smb_path, smb_join, smb_parent
 
 module_logger = logging.getLogger(__name__)
 
@@ -59,6 +60,9 @@ class TreatmentDataService:
             "cleaning_file_path": None,
             "cleaning_info": None,
             "cleaning_measurements": None,
+            "cleaning_indices": None,
+            "cleaning_removed_measurements": None,
+            "cleaning_removed_records": None,
             "cleaning_original_count": None,
             "cleaning_summary": None,
         }
@@ -68,6 +72,9 @@ class TreatmentDataService:
         runtime["cleaning_file_path"] = None
         runtime["cleaning_info"] = None
         runtime["cleaning_measurements"] = None
+        runtime["cleaning_indices"] = None
+        runtime["cleaning_removed_measurements"] = None
+        runtime["cleaning_removed_records"] = None
         runtime["cleaning_original_count"] = None
         runtime["cleaning_summary"] = None
 
@@ -342,14 +349,32 @@ class TreatmentDataService:
                 if has_cleaning_state
                 else None
             )
+            existing_indices = (
+                list(runtime["cleaning_indices"])
+                if has_cleaning_state and runtime.get("cleaning_indices") is not None
+                else None
+            )
+            existing_removed_records = (
+                list(runtime["cleaning_removed_records"] or [])
+                if has_cleaning_state
+                else None
+            )
+            existing_removed_measurements = (
+                list(runtime["cleaning_removed_measurements"] or [])
+                if has_cleaning_state
+                else None
+            )
 
-        file_path, info, _source_measurements, kept_measurements, summary = self._compute_sam_cleaning(
+        file_path, info, _source_measurements, kept_measurements, removed_measurements, summary = self._compute_sam_cleaning(
             session_state,
             angle_threshold,
             surface_threshold,
             measurements=existing_measurements,
             original_measurement_count=original_measurement_count,
+            source_indices=existing_indices,
+            previous_removed_records=existing_removed_records,
         )
+        removed_measurements = list(existing_removed_measurements or []) + list(removed_measurements)
         summary["file_path"] = str(file_path)
         with self._lock:
             runtime = self._runtimes.setdefault(session_id, self._empty_runtime())
@@ -357,6 +382,9 @@ class TreatmentDataService:
                 runtime["cleaning_file_path"] = file_path
                 runtime["cleaning_info"] = info
                 runtime["cleaning_measurements"] = list(kept_measurements)
+                runtime["cleaning_indices"] = list(summary["kept_indices"])
+                runtime["cleaning_removed_measurements"] = list(removed_measurements)
+                runtime["cleaning_removed_records"] = list(summary["removed_records"])
                 runtime["cleaning_original_count"] = int(summary["original_measurements"])
                 runtime["cleaning_summary"] = dict(summary)
                 summary["state_updated"] = True
@@ -401,6 +429,67 @@ class TreatmentDataService:
             "original_measurements": original_measurements,
         }
 
+    def get_cleaning_view(
+        self,
+        session_id: str,
+        session_state: Dict[str, object],
+        trace_limit: int = 80,
+    ) -> Dict[str, object]:
+        _active_data_type, active_file_path = self._resolve_active_path(session_state)
+
+        with self._lock:
+            runtime = self._runtimes.setdefault(session_id, self._empty_runtime())
+            has_cleaning_state = (
+                runtime["cleaning_file_path"] == active_file_path
+                and runtime["cleaning_measurements"] is not None
+            )
+            runtime_measurements = (
+                list(runtime["cleaning_measurements"])
+                if has_cleaning_state
+                else None
+            )
+            runtime_original_count = int(runtime["cleaning_original_count"] or 0)
+
+        opener, info = self._get_opener_and_info(active_file_path)
+        if not hasattr(opener, "give_all_maps"):
+            raise ValueError("Selected file type does not support cleaning preview")
+
+        measurements = runtime_measurements or list(opener.give_all_maps(active_file_path))
+        if not measurements:
+            raise ValueError("No measurements were found in the selected file")
+
+        maps = np.asarray([measurement.data for measurement in measurements], dtype=float)
+        if maps.ndim != 3:
+            raise ValueError("Cleaning preview requires map-based treatment data")
+
+        kinetics = np.mean(maps, axis=1)
+        average = np.mean(kinetics, axis=0)
+        indices = self._sample_indices(kinetics.shape[0], max(1, int(trace_limit)))
+        positive_values = kinetics[np.isfinite(kinetics)]
+        can_use_log = positive_values.size > 0 and np.all(positive_values > 0)
+
+        return {
+            "file_path": str(active_file_path),
+            "source_file_path": self._active_source_path(session_state, active_file_path),
+            "cleaned_state": bool(has_cleaning_state),
+            "original_measurements": (
+                runtime_original_count if has_cleaning_state else int(len(measurements))
+            ),
+            "current_measurements": int(len(measurements)),
+            "shown_measurements": int(len(indices)),
+            "time_scale": getattr(info, "scaling_yunit", "") or "",
+            "x": np.asarray(info.timedelays, dtype=float).tolist(),
+            "traces": [
+                {
+                    "index": int(index),
+                    "y": kinetics[int(index)].tolist(),
+                }
+                for index in indices
+            ],
+            "average": average.tolist(),
+            "y_axis_type": "log" if can_use_log else "linear",
+        }
+
     def save_sam_cleaned_h5(
         self,
         session_id: str,
@@ -424,9 +513,10 @@ class TreatmentDataService:
                 file_path = active_file_path
                 info = runtime["cleaning_info"]
                 kept_measurements = list(runtime["cleaning_measurements"])
+                removed_measurements = list(runtime.get("cleaning_removed_measurements") or [])
                 summary = dict(runtime["cleaning_summary"] or {})
             else:
-                file_path, info, _measurements, kept_measurements, summary = self._compute_sam_cleaning(
+                file_path, info, _measurements, kept_measurements, removed_measurements, summary = self._compute_sam_cleaning(
                     session_state,
                     angle_threshold,
                     surface_threshold,
@@ -436,6 +526,9 @@ class TreatmentDataService:
                     runtime["cleaning_file_path"] = file_path
                     runtime["cleaning_info"] = info
                     runtime["cleaning_measurements"] = list(kept_measurements)
+                    runtime["cleaning_indices"] = list(summary["kept_indices"])
+                    runtime["cleaning_removed_measurements"] = list(removed_measurements)
+                    runtime["cleaning_removed_records"] = list(summary["removed_records"])
                     runtime["cleaning_original_count"] = int(summary["original_measurements"])
                     runtime["cleaning_summary"] = dict(summary)
 
@@ -444,31 +537,54 @@ class TreatmentDataService:
                 "No cleaned measurements are available. Run Analyze SAM with thresholds that keep at least one map."
             )
 
-        save_folder = Path(str(session_state.get("save_folder") or file_path.parent)).expanduser()
-        if not save_folder.exists():
-            raise ValueError("save_folder does not exist")
+        source_path = self._active_source_path(session_state, file_path)
 
         file_name = Path(output_file_name).name.strip()
         if not file_name:
-            file_name = f"{file_path.stem}_cleaned.h5"
+            file_name = f"{self._path_stem(source_path)}.h5"
         if not file_name.lower().endswith(".h5"):
             file_name = f"{Path(file_name).stem}.h5"
 
-        output_path = save_folder / file_name
+        output_target = self._cleaning_output_target(session_state, source_path, file_name)
         saved_angle_threshold = float(summary.get("angle_threshold", angle_threshold))
         saved_surface_threshold = float(summary.get("surface_threshold", surface_threshold))
-        self._write_cleaned_h5(
-            output_path=output_path,
-            info=info,
-            kept_measurements=kept_measurements,
-            original_file_path=file_path,
-            original_measurements=int(summary.get("original_measurements", len(kept_measurements))),
-            angle_threshold=saved_angle_threshold,
-            surface_threshold=saved_surface_threshold,
-        )
+        if is_smb_path(output_target):
+            with tempfile.TemporaryDirectory(prefix="pyconlyse_cleaned_h5_") as tmp_dir:
+                local_output_path = Path(tmp_dir) / file_name
+                self._write_cleaned_h5(
+                    output_path=local_output_path,
+                    info=info,
+                    kept_measurements=kept_measurements,
+                    removed_measurements=removed_measurements,
+                    original_file_path=file_path,
+                    original_measurements=int(summary.get("original_measurements", len(kept_measurements))),
+                    angle_threshold=saved_angle_threshold,
+                    surface_threshold=saved_surface_threshold,
+                    kept_indices=summary.get("kept_indices"),
+                    removed_indices=summary.get("removed_indices"),
+                    removed_records=summary.get("removed_records"),
+                )
+                copy_local_file_to_smb(local_output_path, output_target)
+        else:
+            output_path = Path(output_target).expanduser()
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_cleaned_h5(
+                output_path=output_path,
+                info=info,
+                kept_measurements=kept_measurements,
+                removed_measurements=removed_measurements,
+                original_file_path=file_path,
+                original_measurements=int(summary.get("original_measurements", len(kept_measurements))),
+                angle_threshold=saved_angle_threshold,
+                surface_threshold=saved_surface_threshold,
+                kept_indices=summary.get("kept_indices"),
+                removed_indices=summary.get("removed_indices"),
+                removed_records=summary.get("removed_records"),
+            )
 
         summary["file_path"] = str(file_path)
-        summary["output_path"] = str(output_path)
+        summary["source_file_path"] = source_path
+        summary["output_path"] = str(output_target)
         return summary
 
     def save_file_sam_cleaned_h5(
@@ -485,7 +601,7 @@ class TreatmentDataService:
         if not path.is_file():
             raise ValueError("Selected file does not exist")
 
-        file_path, info, _measurements, kept_measurements, summary = self._compute_sam_cleaning(
+        file_path, info, _measurements, kept_measurements, removed_measurements, summary = self._compute_sam_cleaning(
             {
                 "active_data_type": "ABS",
                 "paths": {"ABS": str(path)},
@@ -507,15 +623,61 @@ class TreatmentDataService:
             output_path=output_path,
             info=info,
             kept_measurements=kept_measurements,
+            removed_measurements=removed_measurements,
             original_file_path=file_path,
             original_measurements=int(summary["original_measurements"]),
             angle_threshold=float(angle_threshold),
             surface_threshold=float(surface_threshold),
+            kept_indices=summary.get("kept_indices"),
+            removed_indices=summary.get("removed_indices"),
+            removed_records=summary.get("removed_records"),
         )
 
         summary["file_path"] = str(file_path)
         summary["output_path"] = str(output_path)
         return summary
+
+    def convert_file_to_h5(self, source_path: Path, output_path: Path) -> Dict[str, object]:
+        if h5py is None:
+            raise ValueError("h5py is not available in this Python environment")
+
+        source = Path(source_path).expanduser()
+        if not source.is_file():
+            raise ValueError("Selected file does not exist")
+
+        opener, info = self._get_opener_and_info(source)
+        if not hasattr(opener, "give_all_maps"):
+            raise ValueError("Selected file type does not support H5 conversion")
+
+        measurements = list(opener.give_all_maps(source))
+        if not measurements:
+            raise ValueError("No measurements were found in the selected file")
+
+        raw_data = np.asarray([measurement.data for measurement in measurements], dtype=float)
+        target = Path(output_path).expanduser()
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        with h5py.File(target, "w") as h5_file:
+            metadata_group = h5_file.create_group("metadata")
+            h5_file.create_dataset("timedelays", data=np.asarray(info.timedelays, dtype=float))
+            h5_file.create_dataset("wavelengths", data=np.asarray(info.wavelengths, dtype=float))
+            h5_file.create_dataset(
+                "raw_data",
+                data=raw_data,
+                compression="gzip",
+                compression_opts=4,
+            )
+            description = getattr(info, "header", "") or ""
+            metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
+            metadata_group.attrs["source_file"] = str(source)
+            metadata_group.attrs["original_measurements"] = int(len(measurements))
+            metadata_group.attrs["converted_without_cleaning"] = True
+
+        return {
+            "source_path": str(source),
+            "output_path": str(target),
+            "original_measurements": int(len(measurements)),
+        }
 
     def average_noise(self, session_id: str, session_state: Dict[str, object]) -> Dict[str, object]:
         noise_path = self._require_path(session_state, "NOISE")
@@ -735,6 +897,42 @@ class TreatmentDataService:
 
         raise ValueError("Assign at least one input file before using selection tools")
 
+    def _active_source_path(self, session_state: Dict[str, object], fallback_path: Path) -> str:
+        paths = session_state.get("paths") or {}
+        path_sources = session_state.get("path_sources") or {}
+        active_data_type = str(session_state.get("active_data_type") or "").strip()
+        if active_data_type and path_sources.get(active_data_type):
+            return str(path_sources[active_data_type])
+
+        for data_type, file_path in paths.items():
+            if file_path and Path(str(file_path)).expanduser() == fallback_path:
+                return str(path_sources.get(data_type) or fallback_path)
+        return str(fallback_path)
+
+    @staticmethod
+    def _path_stem(path: str) -> str:
+        if is_smb_path(path):
+            return Path(str(path).rstrip("/").split("/")[-1]).stem
+        return Path(path).stem
+
+    @staticmethod
+    def _join_parent(path: str, file_name: str) -> str:
+        if is_smb_path(path):
+            return smb_join(smb_parent(path), file_name)
+        return str(Path(path).expanduser().parent / file_name)
+
+    @staticmethod
+    def _cleaning_output_target(session_state: Dict[str, object], source_path: str, file_name: str) -> str:
+        if is_smb_path(source_path):
+            return smb_join(smb_parent(source_path), file_name)
+
+        for folder_key in ("save_folder", "folder_path"):
+            folder = str(session_state.get(folder_key) or "").strip()
+            if is_smb_path(folder):
+                return smb_join(folder, file_name)
+
+        return str(Path(source_path).expanduser().parent / file_name)
+
     def _compute_sam_cleaning(
         self,
         session_state: Dict[str, object],
@@ -742,6 +940,8 @@ class TreatmentDataService:
         surface_threshold: float,
         measurements: Optional[List[object]] = None,
         original_measurement_count: Optional[int] = None,
+        source_indices: Optional[List[int]] = None,
+        previous_removed_records: Optional[List[Dict[str, object]]] = None,
     ):
         if angle_threshold <= 0:
             raise ValueError("angle_threshold must be positive")
@@ -760,7 +960,21 @@ class TreatmentDataService:
         if not measurements:
             raise ValueError("No measurements were found in the selected file")
         if original_measurement_count is None:
-            original_measurement_count = len(measurements)
+            original_measurement_count = int(
+                getattr(measurements[0], "original_measurements", len(measurements))
+            )
+        if source_indices is None:
+            source_indices = [
+                int(getattr(measurement, "original_index", index))
+                for index, measurement in enumerate(measurements)
+            ]
+        else:
+            source_indices = [int(index) for index in source_indices]
+        if len(source_indices) != len(measurements):
+            source_indices = list(range(len(measurements)))
+        if not previous_removed_records and file_path.suffix.lower() == ".h5":
+            previous_removed_records = self._existing_deleted_records(file_path)
+        previous_removed_records = list(previous_removed_records or [])
 
         maps = np.asarray([measurement.data for measurement in measurements], dtype=float)
         if maps.ndim != 3:
@@ -788,22 +1002,49 @@ class TreatmentDataService:
 
         kept_measurements = []
         kept_indices = []
+        removed_records = []
+        removed_measurements = []
         removed_by_angle = 0
         removed_by_surface = 0
 
         for index, (angle, measurement) in enumerate(zip(spectral_angles, measurements)):
+            original_index = int(source_indices[index])
             if angle > angle_threshold:
                 removed_by_angle += 1
+                removed_measurements.append(measurement)
+                removed_records.append({
+                    "index": original_index,
+                    "pass_index": int(index),
+                    "reason": "angle",
+                    "sam_angle": float(angle),
+                    "surface_diff_percent": None,
+                })
                 continue
 
             surface = float(np.sum(np.mean(np.asarray(measurement.data, dtype=float), axis=0)))
             diff = abs((average_surface - surface) / average_surface * 100.0)
             if diff >= surface_threshold:
                 removed_by_surface += 1
+                removed_measurements.append(measurement)
+                removed_records.append({
+                    "index": original_index,
+                    "pass_index": int(index),
+                    "reason": "surface",
+                    "sam_angle": float(angle),
+                    "surface_diff_percent": float(diff),
+                })
                 continue
 
             kept_measurements.append(measurement)
-            kept_indices.append(index)
+            kept_indices.append(original_index)
+
+        removed_records = previous_removed_records + removed_records
+        kept_index_set = set(int(index) for index in kept_indices)
+        removed_indices = [
+            int(index)
+            for index in range(int(original_measurement_count))
+            if index not in kept_index_set
+        ]
 
         summary = {
             "angle_threshold": float(angle_threshold),
@@ -824,24 +1065,100 @@ class TreatmentDataService:
             "sam_angle_min": float(np.min(spectral_angles)),
             "sam_angle_max": float(np.max(spectral_angles)),
             "sam_angle_mean": float(np.mean(spectral_angles)),
-            "kept_indices": kept_indices[:128],
+            "kept_indices": kept_indices,
+            "removed_indices": removed_indices,
+            "removed_records": removed_records,
+            "removed_current_records": removed_records[len(previous_removed_records):],
+            "removed_records_sample": removed_records[:128],
         }
-        return file_path, info, measurements, kept_measurements, summary
+        return file_path, info, measurements, kept_measurements, removed_measurements, summary
+
+    @staticmethod
+    def _existing_deleted_records(file_path: Path) -> List[Dict[str, object]]:
+        path = Path(file_path).expanduser()
+        if path.suffix.lower() == ".h5" and h5py is not None:
+            try:
+                with h5py.File(path, "r") as h5_file:
+                    if "deleted" in h5_file and "records_json" in h5_file["deleted"].attrs:
+                        return json.loads(str(h5_file["deleted"].attrs["records_json"]))
+                    if "metadata" in h5_file and "removed_records_json" in h5_file["metadata"].attrs:
+                        return json.loads(str(h5_file["metadata"].attrs["removed_records_json"]))
+            except Exception:
+                return []
+        return []
+
+    @staticmethod
+    def _existing_deleted_payload(file_path: Path) -> Tuple[np.ndarray, List[int], List[Dict[str, object]]]:
+        path = Path(file_path).expanduser()
+        if path.suffix.lower() != ".h5" or h5py is None:
+            return np.asarray([], dtype=float), [], []
+        try:
+            with h5py.File(path, "r") as h5_file:
+                if "deleted" not in h5_file:
+                    return np.asarray([], dtype=float), [], []
+                deleted_group = h5_file["deleted"]
+                data = (
+                    np.asarray(deleted_group["data"], dtype=float)
+                    if "data" in deleted_group
+                    else np.asarray([], dtype=float)
+                )
+                indices = (
+                    [int(value) for value in np.asarray(deleted_group.attrs["indices"], dtype=int).tolist()]
+                    if "indices" in deleted_group.attrs
+                    else []
+                )
+                records = (
+                    json.loads(str(deleted_group.attrs["records_json"]))
+                    if "records_json" in deleted_group.attrs
+                    else []
+                )
+                return data, indices, records
+        except Exception:
+            return np.asarray([], dtype=float), [], []
 
     @staticmethod
     def _write_cleaned_h5(
         output_path: Path,
         info,
         kept_measurements: List[object],
+        removed_measurements: Optional[List[object]],
         original_file_path: Path,
         original_measurements: int,
         angle_threshold: float,
         surface_threshold: float,
+        kept_indices: Optional[List[int]] = None,
+        removed_indices: Optional[List[int]] = None,
+        removed_records: Optional[List[Dict[str, object]]] = None,
     ) -> None:
         raw_data = np.asarray([measurement.data for measurement in kept_measurements], dtype=float)
+        kept_indices_array = np.asarray(kept_indices or [], dtype=np.int64)
+        removed_indices_array = np.asarray(removed_indices or [], dtype=np.int64)
+        existing_deleted_data, existing_deleted_indices, existing_deleted_records = (
+            TreatmentDataService._existing_deleted_payload(original_file_path)
+        )
+        current_removed_records = list(removed_records or [])[len(existing_deleted_records):]
+        current_removed_data = np.asarray(
+            [measurement.data for measurement in (removed_measurements or [])],
+            dtype=float,
+        )
+        current_removed_indices = [
+            int(record.get("index"))
+            for record in current_removed_records
+            if record.get("index") is not None
+        ]
+        if existing_deleted_data.size and current_removed_data.size:
+            deleted_data = np.concatenate([existing_deleted_data, current_removed_data], axis=0)
+        elif existing_deleted_data.size:
+            deleted_data = existing_deleted_data
+        elif current_removed_data.size:
+            deleted_data = current_removed_data
+        else:
+            deleted_data = np.empty((0,) + tuple(raw_data.shape[1:]), dtype=float)
+        deleted_indices = existing_deleted_indices + current_removed_indices
 
         with h5py.File(output_path, "w") as h5_file:
             metadata_group = h5_file.create_group("metadata")
+            deleted_group = h5_file.create_group("deleted")
             h5_file.create_dataset("timedelays", data=np.asarray(info.timedelays, dtype=float))
             h5_file.create_dataset("wavelengths", data=np.asarray(info.wavelengths, dtype=float))
             h5_file.create_dataset(
@@ -850,6 +1167,7 @@ class TreatmentDataService:
                 compression="gzip",
                 compression_opts=4,
             )
+            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=4)
 
             description = getattr(info, "header", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
@@ -858,6 +1176,17 @@ class TreatmentDataService:
             metadata_group.attrs["original_file"] = str(original_file_path)
             metadata_group.attrs["original_measurements"] = int(original_measurements)
             metadata_group.attrs["cleaned_measurements"] = int(len(kept_measurements))
+            metadata_group.attrs["kept_indices"] = kept_indices_array
+            metadata_group.attrs["removed_indices"] = removed_indices_array
+            metadata_group.attrs["removed_records_json"] = json.dumps(
+                removed_records or [],
+                separators=(",", ":"),
+            )
+            deleted_group.attrs["indices"] = np.asarray(deleted_indices, dtype=np.int64)
+            deleted_group.attrs["records_json"] = json.dumps(
+                removed_records or [],
+                separators=(",", ":"),
+            )
 
     @staticmethod
     def _parse_average_ranges(ranges_text: str) -> List[Tuple[float, float]]:
@@ -1058,12 +1387,15 @@ class TreatmentDataService:
 
     @staticmethod
     def _format_file_info(file_path: Path, info, data_shape) -> Dict[str, object]:
+        wavelengths = np.asarray(info.wavelengths, dtype=float)
         return {
             "file_path": str(file_path),
             "suffix": file_path.suffix.lower(),
             "number_maps": int(info.number_maps),
             "timedelays_length": int(info.timedelays_length),
             "wavelengths_length": int(info.wavelengths_length),
+            "wavelength_min": float(np.min(wavelengths)) if wavelengths.size else None,
+            "wavelength_max": float(np.max(wavelengths)) if wavelengths.size else None,
             "time_scale": getattr(info, "scaling_yunit", "") or "",
             "data_shape": list(data_shape),
         }

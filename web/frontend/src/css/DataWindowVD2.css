@@ -228,6 +228,112 @@
   overflow-wrap: anywhere;
 }
 
+.cleaning-tab {
+  min-width: 0;
+  padding: 0;
+}
+
+.cleaning-main {
+  display: grid;
+  grid-template-columns: minmax(520px, 1fr) minmax(240px, 300px);
+  gap: 10px;
+  min-width: 0;
+}
+
+.cleaning-preview,
+.cleaning-controls,
+.cleaning-summary {
+  min-width: 0;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #303946;
+  color: #e5e7eb;
+}
+
+.cleaning-preview {
+  display: flex;
+  flex-direction: column;
+  min-height: 390px;
+}
+
+.cleaning-preview-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.22);
+  font-size: 0.86rem;
+}
+
+.cleaning-preview-header span:last-child {
+  color: #cbd5e1;
+  text-align: right;
+}
+
+.cleaning-preview-plot {
+  flex: 1 1 auto;
+  min-height: 350px;
+}
+
+.cleaning-preview-empty {
+  display: flex;
+  min-height: 390px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #303946;
+  color: #cbd5e1;
+}
+
+.cleaning-controls {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+}
+
+.cleaning-controls p {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.84rem;
+}
+
+.cleaning-controls label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.84rem;
+}
+
+.cleaning-controls input,
+.cleaning-controls select {
+  width: 100%;
+  min-height: 30px;
+  box-sizing: border-box;
+}
+
+.cleaning-actions {
+  display: grid;
+  gap: 6px;
+}
+
+.cleaning-actions button {
+  min-height: 30px;
+}
+
+.cleaning-summary {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding: 10px;
+  font-size: 0.86rem;
+}
+
+.cleaning-summary p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .folder-browser-overlay {
   position: fixed;
   inset: 0;
@@ -382,7 +488,7 @@
 
 .explorer-tree-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 68px;
+  grid-template-columns: minmax(0, 1fr) 72px 58px 58px 118px;
   align-items: center;
   gap: 8px;
   min-height: 30px;
@@ -432,10 +538,12 @@
   cursor: default;
 }
 
-.explorer-file-suffix {
+.explorer-file-suffix,
+.explorer-file-meta {
   color: #475467;
   font-family: monospace;
   font-size: 0.86rem;
+  white-space: nowrap;
 }
 
 .file-context-menu {
@@ -463,7 +571,17 @@
   background: #eef4ff;
 }
 
+.file-context-menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: #d0d5dd;
+}
+
 @media (max-width: 1050px) {
+  .cleaning-main {
+    grid-template-columns: 1fr;
+  }
+
   .explorer-panel {
     min-height: 260px;
   }

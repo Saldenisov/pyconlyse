@@ -4,6 +4,7 @@
 /.tmp/treatment_smb_cache/
 
 *.pyc
+/web/.env
 
 *.json
 !web/frontend/package.json

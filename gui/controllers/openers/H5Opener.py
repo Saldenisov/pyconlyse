@@ -23,6 +23,26 @@ module_logger = logging.getLogger(__name__)
 class H5Opener(Opener):
     ALLOWED_FILES_TYPES = ['.h5']
 
+    @staticmethod
+    def _data_key(h5_file) -> str:
+        return "raw_data"
+
+    @staticmethod
+    def _kept_indices(h5_file):
+        if "metadata" not in h5_file:
+            return None
+        if "kept_indices" not in h5_file["metadata"].attrs:
+            return None
+        return np.asarray(h5_file["metadata"].attrs["kept_indices"], dtype=int)
+
+    @staticmethod
+    def _original_measurements(h5_file):
+        if "metadata" not in h5_file:
+            return None
+        if "original_measurements" not in h5_file["metadata"].attrs:
+            return None
+        return int(h5_file["metadata"].attrs["original_measurements"])
+
     def read_critical_info(self, file_path: Path) -> CriticalInfo:
         """Read axes and basic info from an HDF5 file.
 
@@ -34,7 +54,7 @@ class H5Opener(Opener):
             with h5py.File(file_path, "r") as f:
                 timedelays = np.array(f["timedelays"])
                 wavelengths = np.array(f["wavelengths"])
-                n_maps = f["raw_data"].shape[0]
+                n_maps = f[self._data_key(f)].shape[0]
 
                 comments = ""
                 if "metadata" in f:
@@ -115,7 +135,10 @@ class H5Opener(Opener):
         if res:
             info: CriticalInfo = self.paths[file_path]
             with h5py.File(file_path, "r") as f:
-                data = f["raw_data"][map_index]
+                data_key = self._data_key(f)
+                data = f[data_key][map_index]
+                kept_indices = self._kept_indices(f)
+                original_measurements = self._original_measurements(f)
                 comments = ""
                 if "metadata" in f and "description" in f["metadata"].attrs:
                     comments = f["metadata"].attrs["description"]
@@ -129,19 +152,21 @@ class H5Opener(Opener):
                 except Exception:
                     pass
 
-            return (
-                Measurement(
-                    type=file_path.suffix,
-                    comments=comments,
-                    author="",
-                    timestamp=file_path.stat().st_mtime,
-                    data=data,
-                    wavelengths=info.wavelengths,
-                    timedelays=info.timedelays,
-                    time_scale=scalingyunit,
-                ),
-                "",
+            measurement = Measurement(
+                type=file_path.suffix,
+                comments=comments,
+                author="",
+                timestamp=file_path.stat().st_mtime,
+                data=data,
+                wavelengths=info.wavelengths,
+                timedelays=info.timedelays,
+                time_scale=scalingyunit,
             )
+            if kept_indices is not None and map_index < len(kept_indices):
+                measurement.original_index = int(kept_indices[map_index])
+            if original_measurements is not None:
+                measurement.original_measurements = int(original_measurements)
+            return (measurement, "")
             return False, comments
 
     def average_map(self, file_path: Path, call_back_func=None):
@@ -159,7 +184,7 @@ class H5Opener(Opener):
 
         info: CriticalInfo = self.paths[file_path]
         with h5py.File(file_path, "r") as f:
-            data3d = np.array(f["raw_data"])
+            data3d = np.array(f[self._data_key(f)])
 
         # Inspect one slice to decide orientation.
         sample = data3d[0]
@@ -185,14 +210,17 @@ class H5Opener(Opener):
         if res:
             info: CriticalInfo = self.paths[file_path]
             with h5py.File(file_path, "r") as f:
-                data3d = np.array(f["raw_data"])
+                data_key = self._data_key(f)
+                data3d = np.array(f[data_key])
+                kept_indices = self._kept_indices(f)
+                original_measurements = self._original_measurements(f)
                 comments = ""
                 if "metadata" in f and "description" in f["metadata"].attrs:
                     comments = f["metadata"].attrs["description"]
 
-            for data_i in data3d:
+            for index, data_i in enumerate(data3d):
                 data_i = self._reorient_data2d(data_i, info)
-                yield Measurement(
+                measurement = Measurement(
                     type=file_path.suffix,
                     comments=comments,
                     author="",
@@ -202,5 +230,10 @@ class H5Opener(Opener):
                     timedelays=info.timedelays,
                     time_scale=info.scaling_yunit,
                 )
+                if kept_indices is not None and index < len(kept_indices):
+                    measurement.original_index = int(kept_indices[index])
+                if original_measurements is not None:
+                    measurement.original_measurements = int(original_measurements)
+                yield measurement
         else:
             return res, comments

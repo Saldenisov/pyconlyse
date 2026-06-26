@@ -1,4 +1,5 @@
 import os
+import tempfile
 from pathlib import Path
 from threading import Lock
 from time import monotonic
@@ -22,14 +23,17 @@ from treatment_file_cache import (
 )
 from treatment_network_path import (
     copy_smb_file_to_local,
+    copy_local_file_to_smb,
     is_smb_path,
     normalize_smb_path,
     smb_is_within,
     smb_isdir,
     smb_isfile,
+    smb_join,
     smb_listdir,
     smb_name,
     smb_parent,
+    smb_remove,
     smb_suffix,
 )
 from treatment_service import TreatmentDataService
@@ -156,6 +160,7 @@ def _default_state() -> Dict[str, object]:
         "save_folder": folder,
         "save_file_name": "",
         "paths": {},
+        "path_sources": {},
         "status_label": "Treatment session is ready.",
         "noise_ready": False,
         "result_ready": False,
@@ -228,6 +233,115 @@ def _candidate_sort_key(path: str) -> tuple:
     return (suffix_rank, _path_name(path).lower())
 
 
+def _folder_input_candidates(folder: str, exp_type: str, convert: bool = False) -> Dict[str, List[str]]:
+    required_data_types = REQUIRED_DATA_TYPES.get(exp_type, [])
+    candidates: Dict[str, List[str]] = {data_type: [] for data_type in required_data_types}
+    accepted_suffixes = {".his", ".h5"} if convert else set(treatment_service.supported_suffixes)
+
+    if is_smb_path(folder):
+        entries = smb_listdir(folder)
+        for entry in entries:
+            if not entry["is_file"]:
+                continue
+            file_path = str(entry["path"])
+            if _path_suffix(file_path) not in accepted_suffixes:
+                continue
+            data_type = _file_data_type_candidate(str(entry["name"]), exp_type)
+            if data_type in candidates:
+                candidates[data_type].append(file_path)
+    else:
+        with os.scandir(folder) as entries:
+            for entry in entries:
+                if not entry.is_file():
+                    continue
+                file_path = entry.path
+                if _path_suffix(file_path) not in accepted_suffixes:
+                    continue
+                data_type = _file_data_type_candidate(entry.name, exp_type)
+                if data_type in candidates:
+                    candidates[data_type].append(file_path)
+
+    return candidates
+
+
+def _convert_sort_key(path: str) -> tuple:
+    suffix = _path_suffix(path)
+    suffix_rank = {".his": 0, ".h5": 1}.get(suffix, 99)
+    return (suffix_rank, _path_name(path).lower())
+
+
+def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
+    source_suffix = _path_suffix(source_path)
+    if source_suffix == ".h5":
+        return {
+            "source_path": source_path,
+            "output_path": source_path,
+            "converted": False,
+            "deleted_source": False,
+        }
+    if source_suffix != ".his":
+        raise ValueError("Set/Convert supports only HIS to H5 conversion or existing H5 files")
+
+    output_name = f"{Path(_path_name(source_path)).stem}.h5"
+    if is_smb_path(source_path):
+        output_path = smb_join(smb_parent(source_path), output_name)
+        cached_source = _cache_assignable_source(source_path)
+        with tempfile.TemporaryDirectory(prefix="pyconlyse_convert_h5_") as tmp_dir:
+            local_output = Path(tmp_dir) / output_name
+            summary = treatment_service.convert_file_to_h5(
+                Path(str(cached_source["cached_path"])),
+                local_output,
+            )
+            copy_local_file_to_smb(local_output, output_path)
+        if not smb_isfile(output_path):
+            raise ValueError(f"Converted H5 was not created: {output_path}")
+        smb_remove(source_path)
+        summary.update({
+            "source_path": source_path,
+            "output_path": output_path,
+            "converted": True,
+            "deleted_source": True,
+        })
+        return summary
+
+    source = Path(source_path).expanduser()
+    output_path = source.with_suffix(".h5")
+    summary = treatment_service.convert_file_to_h5(source, output_path)
+    if not output_path.is_file():
+        raise ValueError(f"Converted H5 was not created: {output_path}")
+    source.unlink()
+    summary.update({
+        "source_path": str(source),
+        "output_path": str(output_path),
+        "converted": True,
+        "deleted_source": True,
+    })
+    return summary
+
+
+def _delete_source_his_after_cleaning(saved: Dict[str, object]) -> Optional[str]:
+    source_path = str(saved.get("source_file_path") or saved.get("file_path") or "")
+    output_path = str(saved.get("output_path") or "")
+    if not source_path or not output_path or _path_suffix(source_path) != ".his":
+        return None
+    if is_within_cache(source_path):
+        return None
+
+    if is_smb_path(source_path):
+        if not is_smb_path(output_path) or not smb_isfile(output_path):
+            raise ValueError("Cleaned H5 was not created; HIS was not deleted")
+        smb_remove(source_path)
+        return source_path
+
+    normalized_source = _ensure_within_allowed_root(source_path)
+    source = Path(normalized_source).expanduser()
+    output = Path(output_path).expanduser()
+    if not output.is_file():
+        raise ValueError("Cleaned H5 was not created; HIS was not deleted")
+    source.unlink()
+    return str(source)
+
+
 def _cache_assignable_source(source_path: str) -> Dict[str, object]:
     if is_smb_path(source_path):
         if not smb_isfile(source_path):
@@ -252,6 +366,7 @@ class TreatmentSessionStore:
     def _clone_state(state: Dict[str, object]) -> Dict[str, object]:
         snapshot = dict(state)
         snapshot["paths"] = dict(state["paths"])
+        snapshot["path_sources"] = dict(state.get("path_sources") or {})
         snapshot["selection"] = dict(state["selection"])
         return snapshot
 
@@ -347,15 +462,23 @@ class TreatmentSessionStore:
 
         return self.snapshot(session_id)
 
-    def set_data_path(self, session_id: str, data_type: str, file_path: str) -> Dict[str, object]:
+    def set_data_path(
+        self,
+        session_id: str,
+        data_type: str,
+        file_path: str,
+        source_path: Optional[str] = None,
+    ) -> Dict[str, object]:
         if data_type not in DATA_TYPES:
             raise ValueError(f"Unsupported data_type '{data_type}'")
 
         normalized = _ensure_readable_treatment_file(file_path)
+        normalized_source = _normalize_path(source_path) if source_path else normalized
 
         with self._lock:
             state = self._get_or_create_state(session_id)
             state["paths"][data_type] = normalized
+            state.setdefault("path_sources", {})[data_type] = normalized_source
             state["active_data_type"] = data_type
             state["map_index"] = 0
             state["selection"] = {}
@@ -449,6 +572,17 @@ def _session_payload(session_id: str) -> Dict[str, object]:
     }
 
 
+def _active_assignable_data_type(session: Dict[str, object]) -> str:
+    paths = session.get("paths") or {}
+    active_data_type = str(session.get("active_data_type") or "").strip()
+    if active_data_type in DATA_TYPES and paths.get(active_data_type):
+        return active_data_type
+    for data_type in DATA_TYPES:
+        if paths.get(data_type):
+            return data_type
+    return ""
+
+
 def _json_response(payload: Dict[str, object], session_id: str, status_code: int = 200):
     response = jsonify(payload)
     response.status_code = status_code
@@ -529,6 +663,130 @@ def set_session_folder():
     return _json_response(_session_payload(session_id), session_id)
 
 
+@treatment_api.route("/session/folder-set", methods=["POST"])
+def set_inputs_from_folder():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    folder_path = payload.get("folder_path")
+    convert = bool(payload.get("convert", False))
+    clean = bool(payload.get("clean", False))
+    if clean:
+        convert = True
+    if not folder_path:
+        return _error("folder_path is required", session_id)
+
+    try:
+        angle_threshold = float(payload.get("angle_threshold", 1.0))
+        surface_threshold = float(payload.get("surface_threshold", 1.0))
+    except (TypeError, ValueError):
+        return _error("angle_threshold and surface_threshold must be numeric", session_id)
+
+    try:
+        folder = _ensure_within_allowed_root(str(folder_path))
+        if not _folder_exists(folder):
+            return _error("Folder does not exist", session_id, 404)
+
+        session = session_store.snapshot(session_id)
+        exp_type = str(session.get("exp_type"))
+        candidates = _folder_input_candidates(folder, exp_type, convert=convert)
+        found = {
+            data_type: sorted(paths, key=_convert_sort_key if convert else _candidate_sort_key)
+            for data_type, paths in candidates.items()
+            if paths
+        }
+        if len(found) < 2:
+            names = ", ".join(sorted(found.keys())) or "none"
+            return _error(
+                f"Folder must contain at least two assignable inputs for {exp_type}; found {names}.",
+                session_id,
+            )
+
+        prepared: Dict[str, Dict[str, object]] = {}
+        for data_type, paths in found.items():
+            selected_path = paths[0]
+            if convert:
+                conversion = _convert_source_to_h5(selected_path)
+                source_path = str(conversion["output_path"])
+                prepared[data_type] = {
+                    "source_path": source_path,
+                    "conversion": conversion,
+                }
+            else:
+                prepared[data_type] = {
+                    "source_path": selected_path,
+                    "conversion": None,
+                }
+
+        session_store.set_folder(session_id, folder)
+        assigned: Dict[str, str] = {}
+        cached_files: Dict[str, Dict[str, object]] = {}
+        conversions: Dict[str, Dict[str, object]] = {}
+        cleaned: Dict[str, Dict[str, object]] = {}
+        for data_type, prepared_item in prepared.items():
+            source_path = str(prepared_item["source_path"])
+            cached = _cache_assignable_source(source_path)
+            session_store.set_data_path(
+                session_id,
+                data_type,
+                str(cached["cached_path"]),
+                source_path=str(cached["source_path"]),
+            )
+            assigned[data_type] = str(cached["cached_path"])
+            cached_files[data_type] = cached
+            if prepared_item["conversion"]:
+                conversions[data_type] = prepared_item["conversion"]
+            if clean:
+                treatment_service.reset_runtime(session_id)
+                saved = treatment_service.save_sam_cleaned_h5(
+                    session_id,
+                    session_store.snapshot(session_id),
+                    angle_threshold,
+                    surface_threshold,
+                )
+                deleted_source_file = _delete_source_his_after_cleaning(saved)
+                if deleted_source_file:
+                    saved["deleted_source_file"] = deleted_source_file
+                output_path = str(saved.get("output_path") or "")
+                if output_path:
+                    if is_smb_path(output_path):
+                        cleaned_cache = _cache_assignable_source(output_path)
+                        assigned_path = str(cleaned_cache["cached_path"])
+                        source_path = str(cleaned_cache["source_path"])
+                        saved["cached_file"] = cleaned_cache
+                        cached_files[data_type] = cleaned_cache
+                    else:
+                        assigned_path = output_path
+                        source_path = output_path
+                    session_store.set_data_path(
+                        session_id,
+                        data_type,
+                        assigned_path,
+                        source_path=source_path,
+                    )
+                    assigned[data_type] = assigned_path
+                    saved["assigned_data_type"] = data_type
+                    saved["assigned_path"] = assigned_path
+                cleaned[data_type] = saved
+
+        treatment_service.reset_runtime(session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+    except OSError as exc:
+        return _error(str(exc), session_id)
+
+    response_payload = _session_payload(session_id)
+    response_payload["folder_set"] = {
+        "folder": folder,
+        "convert": convert,
+        "clean": clean,
+        "assigned": assigned,
+        "cached_files": cached_files,
+        "conversions": conversions,
+        "cleaned": cleaned,
+    }
+    return _json_response(response_payload, session_id)
+
+
 @treatment_api.route("/session/path", methods=["POST"])
 def set_session_path():
     session_id = _current_session_id()
@@ -539,7 +797,12 @@ def set_session_path():
         return _error("data_type and file_path are required", session_id)
 
     try:
-        session_store.set_data_path(session_id, str(data_type), str(file_path))
+        session_store.set_data_path(
+            session_id,
+            str(data_type),
+            str(file_path),
+            source_path=str(file_path),
+        )
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
         return _error(str(exc), session_id)
@@ -559,7 +822,12 @@ def cache_and_set_session_path():
     try:
         source_path = _ensure_within_allowed_root(str(file_path))
         cached = _cache_assignable_source(source_path)
-        session_store.set_data_path(session_id, str(data_type), str(cached["cached_path"]))
+        session_store.set_data_path(
+            session_id,
+            str(data_type),
+            str(cached["cached_path"]),
+            source_path=str(cached["source_path"]),
+        )
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
         return _error(str(exc), session_id)
@@ -627,13 +895,20 @@ def auto_assign_session_paths():
             if not matches:
                 continue
             selected_path = matches[0]
+            source_path = selected_path
             if is_smb_path(selected_path):
                 cached = _cache_assignable_source(selected_path)
                 assigned_path = str(cached["cached_path"])
+                source_path = str(cached["source_path"])
                 cached_files[data_type] = cached
             else:
                 assigned_path = str(selected_path)
-            session_store.set_data_path(session_id, data_type, assigned_path)
+            session_store.set_data_path(
+                session_id,
+                data_type,
+                assigned_path,
+                source_path=source_path,
+            )
             assigned[data_type] = assigned_path
         treatment_service.reset_runtime(session_id)
     except ValueError as exc:
@@ -698,6 +973,7 @@ def list_files():
                             "name": entry["name"],
                             "path": entry["path"],
                             "suffix": suffix,
+                            "size_bytes": int(entry.get("size_bytes") or 0),
                             "supported": suffix in treatment_service.supported_suffixes,
                         }
                     )
@@ -713,6 +989,7 @@ def list_files():
                                 "name": entry.name,
                                 "path": entry.path,
                                 "suffix": suffix,
+                                "size_bytes": int(entry.stat().st_size),
                                 "supported": suffix in treatment_service.supported_suffixes,
                             }
                         )
@@ -750,6 +1027,39 @@ def get_file_info():
         return _error(str(exc), session_id)
 
     return _json_response({"file_info": file_info, "success": True}, session_id)
+
+
+@treatment_api.route("/file-summary", methods=["GET"])
+def get_file_summary():
+    session_id = _current_session_id()
+    file_path = request.args.get("file_path")
+    if not file_path:
+        return _error("file_path is required", session_id)
+
+    try:
+        source_path = _ensure_within_allowed_root(file_path)
+        suffix = _path_suffix(source_path)
+        if suffix not in {".his", ".h5"}:
+            return _json_response({"file_summary": {}, "success": True}, session_id)
+
+        if is_smb_path(source_path):
+            cached = _cache_assignable_source(source_path)
+            readable_path = str(cached["cached_path"])
+        else:
+            readable_path = _ensure_readable_treatment_file(source_path)
+
+        file_info = treatment_service.get_file_info(Path(readable_path))
+        file_summary = {
+            "file_path": source_path,
+            "number_maps": file_info.get("number_maps"),
+            "time_scale": file_info.get("time_scale"),
+            "wavelength_min": file_info.get("wavelength_min"),
+            "wavelength_max": file_info.get("wavelength_max"),
+        }
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    return _json_response({"file_summary": file_summary, "success": True}, session_id)
 
 
 @treatment_api.route("/preview", methods=["GET"])
@@ -843,10 +1153,32 @@ def analyze_sam_cleaning():
             angle_threshold,
             surface_threshold,
         )
+        cleaning_view = treatment_service.get_cleaning_view(
+            session_id,
+            session_store.snapshot(session_id),
+        )
     except ValueError as exc:
         return _error(str(exc), session_id)
 
-    return _json_response({"cleaning": summary, "success": True}, session_id)
+    return _json_response(
+        {"cleaning": summary, "cleaning_view": cleaning_view, "success": True},
+        session_id,
+    )
+
+
+@treatment_api.route("/cleaning/view", methods=["GET"])
+def get_sam_cleaning_view():
+    session_id = _current_session_id()
+
+    try:
+        cleaning_view = treatment_service.get_cleaning_view(
+            session_id,
+            session_store.snapshot(session_id),
+        )
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    return _json_response({"cleaning_view": cleaning_view, "success": True}, session_id)
 
 
 @treatment_api.route("/cleaning/reset", methods=["POST"])
@@ -858,10 +1190,17 @@ def reset_sam_cleaning():
             session_id,
             session_store.snapshot(session_id),
         )
+        cleaning_view = treatment_service.get_cleaning_view(
+            session_id,
+            session_store.snapshot(session_id),
+        )
     except ValueError as exc:
         return _error(str(exc), session_id)
 
-    return _json_response({"cleaning": summary, "success": True}, session_id)
+    return _json_response(
+        {"cleaning": summary, "cleaning_view": cleaning_view, "success": True},
+        session_id,
+    )
 
 
 @treatment_api.route("/cleaning/save", methods=["POST"])
@@ -878,17 +1217,43 @@ def save_sam_cleaning():
     output_file_name = str(payload.get("output_file_name") or "")
 
     try:
+        before_save_state = session_store.snapshot(session_id)
+        active_data_type = _active_assignable_data_type(before_save_state)
         saved = treatment_service.save_sam_cleaned_h5(
             session_id,
-            session_store.snapshot(session_id),
+            before_save_state,
             angle_threshold,
             surface_threshold,
             output_file_name=output_file_name,
         )
+        deleted_source_file = _delete_source_his_after_cleaning(saved)
+        if deleted_source_file:
+            saved["deleted_source_file"] = deleted_source_file
+        output_path = str(saved.get("output_path") or "")
+        if output_path and active_data_type:
+            if is_smb_path(output_path):
+                cached = _cache_assignable_source(output_path)
+                assigned_path = str(cached["cached_path"])
+                source_path = str(cached["source_path"])
+                saved["cached_file"] = cached
+            else:
+                assigned_path = output_path
+                source_path = output_path
+            session_store.set_data_path(
+                session_id,
+                active_data_type,
+                assigned_path,
+                source_path=source_path,
+            )
+            treatment_service.reset_runtime(session_id)
+            saved["assigned_data_type"] = active_data_type
+            saved["assigned_path"] = assigned_path
     except ValueError as exc:
         return _error(str(exc), session_id)
 
-    return _json_response({"cleaning": saved, "success": True}, session_id)
+    payload = _session_payload(session_id)
+    payload["cleaning"] = saved
+    return _json_response(payload, session_id)
 
 
 @treatment_api.route("/cleaning/file/save", methods=["POST"])

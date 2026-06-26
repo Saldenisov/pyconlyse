@@ -263,6 +263,7 @@ def test_assign_file_and_update_config(client):
     assign_payload = assign_response.get_json()
 
     assert assign_response.status_code == 200
+    assert assign_payload["session"]["path_sources"]["ABS"] == str(data_file)
     assert assign_payload["session"]["paths"]["ABS"] == str(data_file)
     assert assign_payload["session"]["save_file_name"] == "abs_data.dat"
 
@@ -305,6 +306,7 @@ def test_cache_and_assign_copies_file_to_server_cache(client):
     assert cached_path.is_file()
     assert cached_path != data_file
     assert payload["session"]["paths"]["ABS"] == str(cached_path)
+    assert payload["session"]["path_sources"]["ABS"] == str(data_file)
     assert payload["cached_file"]["source_path"] == str(data_file)
     assert payload["cached_file"]["cache"]["size_bytes"] >= data_file.stat().st_size
 
@@ -355,6 +357,86 @@ def test_cache_and_assign_copies_smb_file_to_server_cache(client, monkeypatch):
     assert cached_path.read_bytes() == b"fake his"
     assert payload["cached_file"]["source_path"] == smb_file
     assert payload["session"]["paths"]["ABS+BASE+NOISE"] == str(cached_path)
+    assert payload["session"]["path_sources"]["ABS+BASE+NOISE"] == smb_file
+
+
+def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "20260127"
+    folder.mkdir()
+    abs_his = folder / "ABS12886.his"
+    base_his = folder / "BASE12886.his"
+    abs_his.write_bytes(b"abs his")
+    base_his.write_bytes(b"base his")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    def fake_convert(source_path, output_path):
+        Path(output_path).write_bytes(b"converted h5")
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 10,
+        }
+
+    cleaned_types = []
+
+    def fake_save(session_id, session_state, angle_threshold, surface_threshold, output_file_name=""):
+        data_type = session_state["active_data_type"]
+        source_path = Path(session_state["path_sources"][data_type])
+        source_path.write_bytes(f"cleaned {data_type}".encode("ascii"))
+        cleaned_types.append(data_type)
+        return {
+            "file_path": session_state["paths"][data_type],
+            "source_file_path": str(source_path),
+            "output_path": str(source_path),
+            "original_measurements": 10,
+            "cleaned_measurements": 8,
+            "removed_measurements": 2,
+            "angle_threshold": angle_threshold,
+            "surface_threshold": surface_threshold,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "save_sam_cleaned_h5",
+        fake_save,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={
+            "folder_path": str(folder),
+            "convert": True,
+            "clean": True,
+            "angle_threshold": 2.5,
+            "surface_threshold": 9.0,
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert not abs_his.exists()
+    assert not base_his.exists()
+    assert (folder / "ABS12886.h5").read_bytes() == b"cleaned ABS"
+    assert (folder / "BASE12886.h5").read_bytes() == b"cleaned BASE"
+    assert sorted(cleaned_types) == ["ABS", "BASE"]
+    assert payload["folder_set"]["convert"] is True
+    assert payload["folder_set"]["clean"] is True
+    assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["deleted_source"] is True
+    assert payload["folder_set"]["cleaned"]["ABS"]["output_path"] == str(folder / "ABS12886.h5")
+    assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS12886.h5")
+    assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE12886.h5")
 
 
 def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
@@ -846,6 +928,11 @@ def test_cleaning_sam_endpoint_returns_service_summary(client, monkeypatch):
         "analyze_sam_cleaning",
         fake_analyze,
     )
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "get_cleaning_view",
+        lambda _session_id, _session_state: {"current_measurements": 7},
+    )
 
     response = test_client.post(
         "/api/treatment/cleaning/sam",
@@ -860,6 +947,50 @@ def test_cleaning_sam_endpoint_returns_service_summary(client, monkeypatch):
     assert captured["surface_threshold"] == 5.0
     assert payload["cleaning"]["cleaned_measurements"] == 7
     assert payload["cleaning"]["sam_angle_mean"] == 0.25
+    assert payload["cleaning_view"]["current_measurements"] == 7
+
+
+def test_cleaning_view_endpoint_returns_service_preview(client, monkeypatch):
+    test_client, tmp_path = client
+    data_file = tmp_path / "cleaning_view_input.dat"
+    _write_dat(data_file, np.array([[1.0, 2.0], [3.0, 4.0]]))
+
+    assign_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(data_file)},
+    )
+    assert assign_response.status_code == 200
+
+    captured = {}
+
+    def fake_view(session_id, session_state):
+        captured["session_id"] = session_id
+        captured["paths"] = dict(session_state["paths"])
+        return {
+            "file_path": str(data_file),
+            "cleaned_state": False,
+            "current_measurements": 3,
+            "original_measurements": 3,
+            "shown_measurements": 3,
+            "x": [1.0, 2.0],
+            "traces": [{"index": 0, "y": [1.0, 2.0]}],
+            "average": [2.0, 3.0],
+            "y_axis_type": "linear",
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "get_cleaning_view",
+        fake_view,
+    )
+
+    response = test_client.get("/api/treatment/cleaning/view")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert captured["session_id"]
+    assert captured["paths"]["ABS"] == str(data_file)
+    assert payload["cleaning_view"]["current_measurements"] == 3
 
 
 def test_cleaning_reset_endpoint_clears_runtime_state(client, monkeypatch):
@@ -890,6 +1021,11 @@ def test_cleaning_reset_endpoint_clears_runtime_state(client, monkeypatch):
         "reset_sam_cleaning",
         fake_reset,
     )
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "get_cleaning_view",
+        lambda _session_id, _session_state: {"current_measurements": 10},
+    )
 
     response = test_client.post("/api/treatment/cleaning/reset")
     payload = response.get_json()
@@ -899,6 +1035,7 @@ def test_cleaning_reset_endpoint_clears_runtime_state(client, monkeypatch):
     assert captured["paths"]["ABS"] == str(data_file)
     assert payload["cleaning"]["reset"] is True
     assert payload["cleaning"]["discarded_measurements"] == 4
+    assert payload["cleaning_view"]["current_measurements"] == 10
 
 
 def test_cleaning_save_endpoint_returns_output_path(client, monkeypatch):
@@ -921,6 +1058,7 @@ def test_cleaning_save_endpoint_returns_output_path(client, monkeypatch):
         captured["angle_threshold"] = angle_threshold
         captured["surface_threshold"] = surface_threshold
         captured["output_file_name"] = output_file_name
+        saved_path.write_bytes(b"fake h5")
         return {
             "file_path": str(data_file),
             "output_path": str(saved_path),
@@ -966,6 +1104,58 @@ def test_cleaning_save_endpoint_returns_output_path(client, monkeypatch):
     assert captured["surface_threshold"] == 10.0
     assert captured["output_file_name"] == "abs_cleaned.h5"
     assert payload["cleaning"]["output_path"] == str(saved_path)
+    assert payload["cleaning"]["assigned_data_type"] == "ABS"
+    assert payload["cleaning"]["assigned_path"] == str(saved_path)
+    assert payload["session"]["paths"]["ABS"] == str(saved_path)
+    assert payload["session"]["path_sources"]["ABS"] == str(saved_path)
+
+
+def test_cleaning_save_deletes_source_his_after_h5_is_written(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.his"
+    source_file.write_bytes(b"fake his")
+
+    assign_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(source_file)},
+    )
+    assert assign_response.status_code == 200
+
+    saved_path = tmp_path / "ABS12886.h5"
+
+    def fake_save(session_id, session_state, angle_threshold, surface_threshold, output_file_name=""):
+        saved_path.write_bytes(b"fake h5")
+        return {
+            "file_path": str(source_file),
+            "source_file_path": str(source_file),
+            "output_path": str(saved_path),
+            "original_measurements": 10,
+            "cleaned_measurements": 6,
+            "removed_measurements": 4,
+            "kept_indices": [0, 1, 2, 3, 4, 5],
+            "removed_indices": [6, 7, 8, 9],
+            "angle_threshold": angle_threshold,
+            "surface_threshold": surface_threshold,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "save_sam_cleaned_h5",
+        fake_save,
+    )
+
+    response = test_client.post(
+        "/api/treatment/cleaning/save",
+        json={"angle_threshold": 2.0, "surface_threshold": 10.0},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert saved_path.is_file()
+    assert not source_file.exists()
+    assert payload["cleaning"]["deleted_source_file"] == str(source_file)
+    assert payload["session"]["paths"]["ABS"] == str(saved_path)
+    assert payload["session"]["path_sources"]["ABS"] == str(saved_path)
 
 
 def test_cleaning_file_save_endpoint_uses_explicit_file_path(client, monkeypatch):

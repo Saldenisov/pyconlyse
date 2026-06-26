@@ -1,4 +1,28 @@
 import os
+from pathlib import Path
+
+
+def _load_project_env(path: str) -> None:
+    if not path or not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            for line in handle:
+                text = line.strip()
+                if not text or text.startswith("#"):
+                    continue
+                if "=" not in text:
+                    continue
+                key, value = text.split("=", 1)
+                key = key.strip()
+                value = value.strip()
+                if key.startswith("export "):
+                    key = key[len("export "):].strip()
+                if value.startswith(("'", '"')) and value.endswith(("'", '"')) and len(value) >= 2:
+                    value = value[1:-1]
+                os.environ.setdefault(key, value)
+    except OSError:
+        return
 
 
 def _env_bool(name, default=False):
@@ -9,6 +33,7 @@ def _env_bool(name, default=False):
 
 
 # Default to the lab Tango DB, but never overwrite an explicit shell setting.
+_load_project_env(str(Path(__file__).resolve().parents[1] / ".env"))
 os.environ.setdefault(
     "TANGO_HOST",
     os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),

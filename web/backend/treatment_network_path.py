@@ -147,11 +147,16 @@ def smb_listdir(folder: str) -> Iterable[Dict[str, object]]:
 
     for entry in entries:
         name = entry.name
+        try:
+            size_bytes = int(entry.stat().st_size) if entry.is_file() else 0
+        except Exception:
+            size_bytes = 0
         yield {
             "name": name,
             "path": smb_join(folder, name),
             "is_dir": entry.is_dir(),
             "is_file": entry.is_file(),
+            "size_bytes": size_bytes,
         }
 
 
@@ -193,3 +198,14 @@ def copy_local_file_to_smb(local_path, smb_path: str) -> int:
         raise
     except Exception as exc:
         raise _smb_value_error(smb_path, exc) from exc
+
+
+def smb_remove(path: str) -> None:
+    try:
+        server, _share, _remote_path = split_smb_path(path)
+        _register_session(server)
+        _smbclient().remove(smb_to_unc(path))
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise _smb_value_error(path, exc) from exc

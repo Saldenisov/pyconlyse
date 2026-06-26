@@ -55,8 +55,10 @@ export function postTreatment(sessionId, url, body = {}) {
   const timeoutMs = [
     '/api/treatment/session/cache-path',
     '/api/treatment/session/auto-assign',
+    '/api/treatment/session/folder-set',
     '/api/treatment/average-noise',
     '/api/treatment/calc-abs',
+    '/api/treatment/cleaning/save',
     '/api/treatment/save',
   ].includes(url)
     ? LONG_TREATMENT_TIMEOUT_MS
@@ -91,8 +93,24 @@ export function fetchTreatmentPreview(sessionId, dataType) {
   );
 }
 
+export function fetchFileSummary(sessionId, filePath) {
+  return requestTreatment(
+    `/api/treatment/file-summary?file_path=${encodeURIComponent(filePath)}`,
+    {
+      headers: buildHeaders(sessionId),
+    },
+    LONG_TREATMENT_TIMEOUT_MS
+  );
+}
+
 export function fetchSelection(sessionId) {
   return requestTreatment('/api/treatment/selection', {
+    headers: buildHeaders(sessionId),
+  });
+}
+
+export function fetchCleaningView(sessionId) {
+  return requestTreatment('/api/treatment/cleaning/view', {
     headers: buildHeaders(sessionId),
   });
 }

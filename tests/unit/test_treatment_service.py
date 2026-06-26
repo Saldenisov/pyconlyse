@@ -226,6 +226,85 @@ def test_analyze_sam_cleaning_reuses_current_cleaned_state_until_reset(service, 
     assert after_reset["source_measurements"] == 4
 
 
+def test_get_cleaning_view_returns_cleaned_kinetics(service, monkeypatch):
+    file_path = Path("/tmp/sam_view_unit.dat")
+    measurements = [
+        _measurement([[1.0, 3.0], [5.0, 7.0]], timedelays=[10.0, 20.0]),
+        _measurement([[2.0, 4.0], [6.0, 8.0]], timedelays=[10.0, 20.0]),
+    ]
+    info = _critical_info(file_path, 2, [500.0, 550.0], [10.0, 20.0])
+    opener = FakeOpener(measurements)
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    session_state = {
+        "active_data_type": "ABS",
+        "paths": {"ABS": str(file_path)},
+        "path_sources": {"ABS": "smb://10.20.30.202/e/DATA_VD2/20260127/water/ABS12886.his"},
+    }
+    service.analyze_sam_cleaning(
+        "session-cleaning-view",
+        session_state,
+        angle_threshold=180.0,
+        surface_threshold=100.0,
+    )
+    view = service.get_cleaning_view("session-cleaning-view", session_state, trace_limit=1)
+
+    assert view["cleaned_state"] is True
+    assert view["source_file_path"] == session_state["path_sources"]["ABS"]
+    assert view["current_measurements"] == 2
+    assert view["shown_measurements"] == 1
+    assert view["x"] == [10.0, 20.0]
+    assert view["average"] == [3.5, 5.5]
+    assert view["y_axis_type"] == "log"
+
+
+def test_save_sam_cleaned_h5_defaults_to_source_folder_and_stem(
+    service, monkeypatch, tmp_path
+):
+    if treatment_service_module.h5py is None:
+        pytest.skip("h5py is not available")
+
+    cached_path = tmp_path / "cache" / "ABS12886.his"
+    cached_path.parent.mkdir()
+    cached_path.write_text("fake", encoding="ascii")
+    source_path = tmp_path / "20260127" / "water" / "ABS12886.his"
+    source_path.parent.mkdir(parents=True)
+
+    measurements = [
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[2.0, 2.0], [2.0, 2.0]]),
+    ]
+    info = _critical_info(cached_path, 2, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener(measurements)
+    opener.paths[cached_path] = info
+    written = {}
+
+    def fake_write_cleaned_h5(**kwargs):
+        written.update(kwargs)
+        Path(kwargs["output_path"]).write_bytes(b"h5")
+
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+    monkeypatch.setattr(service, "_write_cleaned_h5", fake_write_cleaned_h5)
+
+    summary = service.save_sam_cleaned_h5(
+        "session-save-cleaned",
+        {
+            "active_data_type": "ABS",
+            "paths": {"ABS": str(cached_path)},
+            "path_sources": {"ABS": str(source_path)},
+        },
+        angle_threshold=180.0,
+        surface_threshold=100.0,
+    )
+
+    assert summary["source_file_path"] == str(source_path)
+    assert summary["output_path"] == str(source_path.parent / "ABS12886.h5")
+    assert written["output_path"] == source_path.parent / "ABS12886.h5"
+
+
 def test_calc_abs_supports_his_mode_with_abs_base_noise_pairs(service, monkeypatch, tmp_path):
     data_path = tmp_path / "his_source.his"
     data_path.write_text("fake", encoding="ascii")
