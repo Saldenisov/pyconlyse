@@ -434,6 +434,11 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     assert payload["folder_set"]["clean"] is True
     assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
     assert payload["folder_set"]["conversions"]["BASE"]["deleted_source"] is True
+    assert payload["folder_set"]["conversions"]["ABS"]["source_size_bytes"] == len(b"abs his")
+    assert payload["folder_set"]["conversions"]["ABS"]["output_size_bytes"] == len(b"converted h5")
+    assert payload["folder_set"]["conversions"]["ABS"]["space_change_bytes"] == (
+        len(b"converted h5") - len(b"abs his")
+    )
     assert payload["folder_set"]["cleaned"]["ABS"]["output_path"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE12886.h5")

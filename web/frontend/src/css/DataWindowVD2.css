@@ -195,6 +195,14 @@
   color: #b42318;
 }
 
+.treatment-operation-message {
+  color: #d1fae5;
+  font-size: 0.86rem;
+  line-height: 1.35;
+  margin: 0;
+  white-space: pre-line;
+}
+
 .raw-data-kinetics {
   display: flex;
   flex-direction: column;

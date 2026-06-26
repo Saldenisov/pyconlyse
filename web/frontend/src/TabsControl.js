@@ -225,6 +225,14 @@ function formatFileSize(bytes) {
   return `${scaled.toFixed(digits)}${units[unitIndex]}`;
 }
 
+function formatSignedFileSize(bytes) {
+  const value = Number(bytes || 0);
+  if (!Number.isFinite(value) || value === 0) {
+    return '0B';
+  }
+  return `${value > 0 ? '+' : '-'}${formatFileSize(Math.abs(value))}`;
+}
+
 function formatWavelengthRange(summary) {
   const low = Number(summary?.wavelength_min);
   const high = Number(summary?.wavelength_max);
@@ -232,6 +240,48 @@ function formatWavelengthRange(summary) {
     return '...';
   }
   return `${Math.round(low)}-${Math.round(high)}nm`;
+}
+
+function summarizeFolderSet(payload, label, folderPath) {
+  const folderSet = payload.folder_set || {};
+  const assignedTypes = Object.keys(folderSet.assigned || {});
+  const conversions = Object.values(folderSet.conversions || {});
+  const cleanedTypes = Object.keys(folderSet.cleaned || {});
+  const converted = conversions.filter((item) => item.converted);
+  const reused = conversions.filter((item) => item.converted === false);
+  const deletedHisCount = conversions.filter((item) => item.deleted_source).length;
+  const sourceBytes = converted.reduce(
+    (total, item) => total + Number(item.source_size_bytes || 0),
+    0
+  );
+  const outputBytes = converted.reduce(
+    (total, item) => total + Number(item.output_size_bytes || 0),
+    0
+  );
+  const spaceChange = outputBytes - sourceBytes;
+  const lines = [`${label} completed for ${pathName(folderPath)}.`];
+
+  if (assignedTypes.length) {
+    lines.push(`Assigned: ${assignedTypes.join(', ')}.`);
+  }
+  if (conversions.length) {
+    lines.push(
+      `Converted: ${converted.length}; reused H5: ${reused.length}; removed HIS: ${deletedHisCount}.`
+    );
+  }
+  if (converted.length) {
+    const percent = sourceBytes
+      ? `${((spaceChange / sourceBytes) * 100).toFixed(1)}%`
+      : '0.0%';
+    lines.push(
+      `Disk: ${formatFileSize(sourceBytes)} HIS -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
+    );
+    lines.push('H5 raw_data compression: gzip; file can still grow if source is already compact.');
+  }
+  if (cleanedTypes.length) {
+    lines.push(`Cleaned: ${cleanedTypes.join(', ')}.`);
+  }
+  return lines.join('\n');
 }
 
 function folderPathChain(folderPath, allowedRoot) {
@@ -960,11 +1010,8 @@ const TabsControl = () => {
         next.add(folderPath);
         return next;
       });
-      const assigned = Object.keys(payload.folder_set?.assigned || {}).join(', ');
       const label = clean ? 'Set/Convert/Clean' : convert ? 'Set/Convert' : 'Set';
-      setOperationMessage(
-        `${label} completed for ${pathName(folderPath)}: ${assigned}.`
-      );
+      setOperationMessage(summarizeFolderSet(payload, label, folderPath));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1457,7 +1504,7 @@ const TabsControl = () => {
                   Save Result
                 </button>
               </div>
-              {operationMessage && <p>{operationMessage}</p>}
+              {operationMessage && <p className="treatment-operation-message">{operationMessage}</p>}
             </div>
           </div>
         )}
