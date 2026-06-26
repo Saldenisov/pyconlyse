@@ -876,9 +876,20 @@ const TabsControl = () => {
     }
 
     setError('');
-    setOperationMessage('');
+    const suffix = String(filePath).split('?')[0].toLowerCase().split('.').pop();
+    setOperationMessage(
+      [
+        `Convert/Compress started for ${pathName(filePath)}.`,
+        'Reading source file...',
+        'Writing H5 with gzip level 9...',
+        suffix === 'his'
+          ? 'HIS will be removed after H5 is verified.'
+          : 'H5 will be overwritten in place.',
+      ].join('\n')
+    );
     setSelectionMessage('');
     setCleaningSummary(null);
+    setFileContextMenu(null);
     setIsBusy(true);
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/compress-file', {
@@ -892,8 +903,8 @@ const TabsControl = () => {
       await refreshFolderListing(getParentFolder(filePath, treatment?.allowed_root));
     } catch (err) {
       setError(err.message);
+      setOperationMessage(`Convert/Compress failed for ${pathName(filePath)}.`);
     } finally {
-      setFileContextMenu(null);
       setIsBusy(false);
     }
   };
@@ -1517,7 +1528,11 @@ const TabsControl = () => {
                   Save Result
                 </button>
               </div>
-              {operationMessage && <p className="treatment-operation-message">{operationMessage}</p>}
+              {operationMessage && (
+                <p className={`treatment-operation-message ${isBusy ? 'is-active' : ''}`}>
+                  {operationMessage}
+                </p>
+              )}
             </div>
           </div>
         )}
