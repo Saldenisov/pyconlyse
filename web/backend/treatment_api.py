@@ -871,6 +871,36 @@ def cache_and_set_session_path():
     return _json_response(response_payload, session_id)
 
 
+@treatment_api.route("/session/compress-path", methods=["POST"])
+def compress_and_set_session_path():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    data_type = payload.get("data_type")
+    file_path = payload.get("file_path")
+    if not data_type or not file_path:
+        return _error("data_type and file_path are required", session_id)
+
+    try:
+        source_path = _ensure_within_allowed_root(str(file_path))
+        conversion = _convert_source_to_h5(source_path)
+        output_path = str(conversion["output_path"])
+        cached = _cache_assignable_source(output_path)
+        session_store.set_data_path(
+            session_id,
+            str(data_type),
+            str(cached["cached_path"]),
+            source_path=str(cached["source_path"]),
+        )
+        treatment_service.reset_runtime(session_id)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    response_payload = _session_payload(session_id)
+    response_payload["cached_file"] = cached
+    response_payload["conversion"] = conversion
+    return _json_response(response_payload, session_id)
+
+
 @treatment_api.route("/session/auto-assign", methods=["POST"])
 def auto_assign_session_paths():
     session_id = _current_session_id()

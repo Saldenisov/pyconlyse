@@ -360,6 +360,45 @@ def test_cache_and_assign_copies_smb_file_to_server_cache(client, monkeypatch):
     assert payload["session"]["path_sources"]["ABS+BASE+NOISE"] == smb_file
 
 
+def test_compress_and_assign_converts_his_to_h5_and_deletes_source(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.his"
+    source_file.write_bytes(b"fake his payload")
+    output_file = tmp_path / "ABS12886.h5"
+
+    def fake_convert(source_path, output_path):
+        Path(output_path).write_bytes(b"compressed h5 payload")
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 10,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-path",
+        json={"data_type": "ABS", "file_path": str(source_file)},
+    )
+    payload = response.get_json()
+    cached_path = Path(payload["cached_file"]["cached_path"])
+
+    assert response.status_code == 200
+    assert not source_file.exists()
+    assert output_file.is_file()
+    assert cached_path.read_bytes() == b"compressed h5 payload"
+    assert payload["conversion"]["converted"] is True
+    assert payload["conversion"]["deleted_source"] is True
+    assert payload["conversion"]["source_size_bytes"] == len(b"fake his payload")
+    assert payload["conversion"]["output_size_bytes"] == len(b"compressed h5 payload")
+    assert payload["session"]["paths"]["ABS"] == str(cached_path)
+    assert payload["session"]["path_sources"]["ABS"] == str(output_file)
+
+
 def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "20260127"

@@ -305,6 +305,35 @@ def test_save_sam_cleaned_h5_defaults_to_source_folder_and_stem(
     assert written["output_path"] == source_path.parent / "ABS12886.h5"
 
 
+def test_convert_file_to_h5_uses_gzip_level_9(service, monkeypatch, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    source_path = tmp_path / "ABS12886.his"
+    source_path.write_bytes(b"fake his")
+    output_path = tmp_path / "ABS12886.h5"
+    measurements = [
+        _measurement([[1.0, 2.0], [3.0, 4.0]], [500.0, 550.0], [1.0, 2.0]),
+        _measurement([[2.0, 3.0], [4.0, 5.0]], [500.0, 550.0], [1.0, 2.0]),
+    ]
+    info = _critical_info(source_path, 2, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener(measurements)
+    opener.paths[source_path] = info
+
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+
+    summary = service.convert_file_to_h5(source_path, output_path)
+
+    assert summary["output_path"] == str(output_path)
+    with h5py.File(output_path, "r") as h5_file:
+        raw_data = h5_file["raw_data"]
+        assert raw_data.compression == "gzip"
+        assert raw_data.compression_opts == 9
+        assert h5_file["metadata"].attrs["compression"] == "gzip"
+        assert h5_file["metadata"].attrs["compression_level"] == 9
+
+
 def test_calc_abs_supports_his_mode_with_abs_base_noise_pairs(service, monkeypatch, tmp_path):
     data_path = tmp_path / "his_source.his"
     data_path.write_text("fake", encoding="ascii")

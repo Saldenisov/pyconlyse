@@ -665,18 +665,22 @@ class TreatmentDataService:
                 "raw_data",
                 data=raw_data,
                 compression="gzip",
-                compression_opts=4,
+                compression_opts=9,
             )
             description = getattr(info, "header", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["source_file"] = str(source)
             metadata_group.attrs["original_measurements"] = int(len(measurements))
             metadata_group.attrs["converted_without_cleaning"] = True
+            metadata_group.attrs["compression"] = "gzip"
+            metadata_group.attrs["compression_level"] = 9
 
         return {
             "source_path": str(source),
             "output_path": str(target),
             "original_measurements": int(len(measurements)),
+            "compression": "gzip",
+            "compression_level": 9,
         }
 
     def average_noise(self, session_id: str, session_state: Dict[str, object]) -> Dict[str, object]:
@@ -1165,14 +1169,16 @@ class TreatmentDataService:
                 "raw_data",
                 data=raw_data,
                 compression="gzip",
-                compression_opts=4,
+                compression_opts=9,
             )
-            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=4)
+            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=9)
 
             description = getattr(info, "header", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["sam_angle_threshold"] = float(angle_threshold)
             metadata_group.attrs["sam_surface_threshold"] = float(surface_threshold)
+            metadata_group.attrs["compression"] = "gzip"
+            metadata_group.attrs["compression_level"] = 9
             metadata_group.attrs["original_file"] = str(original_file_path)
             metadata_group.attrs["original_measurements"] = int(original_measurements)
             metadata_group.attrs["cleaned_measurements"] = int(len(kept_measurements))

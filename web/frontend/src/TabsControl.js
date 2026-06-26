@@ -276,11 +276,28 @@ function summarizeFolderSet(payload, label, folderPath) {
     lines.push(
       `Disk: ${formatFileSize(sourceBytes)} HIS -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
     );
-    lines.push('H5 raw_data compression: gzip; file can still grow if source is already compact.');
+    lines.push('H5 raw_data compression: gzip level 9; file can still grow if source is already compact.');
   }
   if (cleanedTypes.length) {
     lines.push(`Cleaned: ${cleanedTypes.join(', ')}.`);
   }
+  return lines.join('\n');
+}
+
+function summarizeFileCompression(payload, dataType) {
+  const conversion = payload.conversion || {};
+  const lines = [`Set to ${dataType} + Compress completed.`];
+  if (conversion.converted) {
+    lines.push(`${pathName(conversion.source_path)} -> ${pathName(conversion.output_path)}.`);
+  } else {
+    lines.push(`Reused existing H5: ${pathName(conversion.output_path)}.`);
+  }
+  lines.push(`Removed HIS: ${conversion.deleted_source ? 'yes' : 'no'}.`);
+  lines.push(
+    `Disk: ${formatFileSize(conversion.source_size_bytes)} -> ${formatFileSize(conversion.output_size_bytes)} (${formatSignedFileSize(conversion.space_change_bytes)}, ${Number(conversion.space_change_percent || 0).toFixed(1)}%).`
+  );
+  lines.push('H5 raw_data compression: gzip level 9.');
+  lines.push(`Assigned source: ${payload.session?.path_sources?.[dataType] || conversion.output_path || ''}.`);
   return lines.join('\n');
 }
 
@@ -837,6 +854,36 @@ const TabsControl = () => {
       }
       const cachedPath = payload.cached_file?.cached_path || filePath;
       setOperationMessage(`Set to ${dataType}: ${cachedPath}`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFileContextMenu(null);
+      setIsBusy(false);
+    }
+  };
+
+  const handleAssignAndCompressFile = async (filePath, dataType = session?.selected_data_type) => {
+    if (!session || !dataType) {
+      return;
+    }
+
+    setError('');
+    setOperationMessage('');
+    setSelectionMessage('');
+    setCleaningSummary(null);
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/compress-path', {
+        data_type: dataType,
+        file_path: filePath,
+      });
+      setTreatment(payload);
+      setOperationMessage(summarizeFileCompression(payload, dataType));
+      if (requestSelectionRefresh) {
+        requestSelectionRefresh();
+      }
+      refreshCleaningView();
+      await refreshFolderListing(getParentFolder(filePath, treatment?.allowed_root));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1459,6 +1506,16 @@ const TabsControl = () => {
                       disabled={isBusy}
                     >
                       Set to {dataType} + Clean
+                    </button>
+                  ))}
+                  <div className="file-context-menu-separator" />
+                  {assignableDataTypes.map((dataType) => (
+                    <button
+                      key={`${dataType}-compress`}
+                      onClick={() => handleAssignAndCompressFile(fileContextMenu.file.path, dataType)}
+                      disabled={isBusy}
+                    >
+                      Set to {dataType} + Compress
                     </button>
                   ))}
                 </div>
