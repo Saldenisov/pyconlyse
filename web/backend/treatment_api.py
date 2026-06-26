@@ -126,10 +126,7 @@ def _root_exists(root: str) -> bool:
             return bool(cached[0])
 
     if is_smb_path(root):
-        try:
-            exists = smb_isdir(root)
-        except ValueError:
-            exists = False
+        exists = True
     else:
         exists = os.path.isdir(root)
 
