@@ -302,6 +302,8 @@ def test_save_sam_cleaned_h5_defaults_to_source_folder_and_stem(
 
     assert summary["source_file_path"] == str(source_path)
     assert summary["output_path"] == str(source_path.parent / "ABS12886.h5")
+    assert summary["compression"] == "gzip"
+    assert summary["compression_level"] == 9
     assert written["output_path"] == source_path.parent / "ABS12886.h5"
 
 
@@ -332,6 +334,13 @@ def test_convert_file_to_h5_uses_gzip_level_9(service, monkeypatch, tmp_path):
         assert raw_data.compression_opts == 9
         assert h5_file["metadata"].attrs["compression"] == "gzip"
         assert h5_file["metadata"].attrs["compression_level"] == 9
+
+    overwrite_summary = service.convert_file_to_h5(output_path, output_path)
+    assert overwrite_summary["output_path"] == str(output_path)
+    with h5py.File(output_path, "r") as h5_file:
+        raw_data = h5_file["raw_data"]
+        assert raw_data.compression == "gzip"
+        assert raw_data.compression_opts == 9
 
 
 def test_calc_abs_supports_his_mode_with_abs_base_noise_pairs(service, monkeypatch, tmp_path):

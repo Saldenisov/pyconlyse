@@ -273,24 +273,44 @@ def _convert_sort_key(path: str) -> tuple:
 def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
     source_suffix = _path_suffix(source_path)
     if source_suffix == ".h5":
-        size_bytes = 0
         if is_smb_path(source_path):
-            for entry in smb_listdir(smb_parent(source_path)):
-                if str(entry.get("path")) == source_path:
-                    size_bytes = int(entry.get("size_bytes") or 0)
-                    break
+            cached_source = _cache_assignable_source(source_path)
+            source_size_bytes = int(cached_source.get("size_bytes") or 0)
+            with tempfile.TemporaryDirectory(prefix="pyconlyse_recompress_h5_") as tmp_dir:
+                local_output = Path(tmp_dir) / _path_name(source_path)
+                summary = treatment_service.convert_file_to_h5(
+                    Path(str(cached_source["cached_path"])),
+                    local_output,
+                )
+                output_size_bytes = int(local_output.stat().st_size)
+                copy_local_file_to_smb(local_output, source_path)
+            if not smb_isfile(source_path):
+                raise ValueError(f"Compressed H5 was not created: {source_path}")
         else:
-            size_bytes = int(Path(source_path).expanduser().stat().st_size)
-        return {
+            source = Path(source_path).expanduser()
+            source_size_bytes = int(source.stat().st_size)
+            summary = treatment_service.convert_file_to_h5(source, source)
+            if not source.is_file():
+                raise ValueError(f"Compressed H5 was not created: {source}")
+            output_size_bytes = int(source.stat().st_size)
+
+        space_change_bytes = output_size_bytes - source_size_bytes
+        summary.update({
             "source_path": source_path,
             "output_path": source_path,
-            "converted": False,
+            "converted": True,
+            "overwritten": True,
             "deleted_source": False,
-            "source_size_bytes": size_bytes,
-            "output_size_bytes": size_bytes,
-            "space_change_bytes": 0,
-            "space_change_percent": 0.0,
-        }
+            "source_size_bytes": source_size_bytes,
+            "output_size_bytes": output_size_bytes,
+            "space_change_bytes": space_change_bytes,
+            "space_change_percent": (
+                round((space_change_bytes / source_size_bytes) * 100, 2)
+                if source_size_bytes
+                else 0.0
+            ),
+        })
+        return summary
     if source_suffix != ".his":
         raise ValueError("Set/Convert supports only HIS to H5 conversion or existing H5 files")
 

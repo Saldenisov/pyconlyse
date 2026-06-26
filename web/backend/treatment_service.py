@@ -585,6 +585,8 @@ class TreatmentDataService:
         summary["file_path"] = str(file_path)
         summary["source_file_path"] = source_path
         summary["output_path"] = str(output_target)
+        summary["compression"] = "gzip"
+        summary["compression_level"] = 9
         return summary
 
     def save_file_sam_cleaned_h5(
@@ -635,6 +637,8 @@ class TreatmentDataService:
 
         summary["file_path"] = str(file_path)
         summary["output_path"] = str(output_path)
+        summary["compression"] = "gzip"
+        summary["compression_level"] = 9
         return summary
 
     def convert_file_to_h5(self, source_path: Path, output_path: Path) -> Dict[str, object]:

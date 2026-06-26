@@ -247,14 +247,16 @@ function summarizeFolderSet(payload, label, folderPath) {
   const assignedTypes = Object.keys(folderSet.assigned || {});
   const conversions = Object.values(folderSet.conversions || {});
   const cleanedTypes = Object.keys(folderSet.cleaned || {});
-  const converted = conversions.filter((item) => item.converted);
+  const converted = conversions.filter((item) => item.converted && !item.overwritten);
+  const overwritten = conversions.filter((item) => item.overwritten);
   const reused = conversions.filter((item) => item.converted === false);
   const deletedHisCount = conversions.filter((item) => item.deleted_source).length;
-  const sourceBytes = converted.reduce(
+  const changedFiles = conversions.filter((item) => item.converted || item.overwritten);
+  const sourceBytes = changedFiles.reduce(
     (total, item) => total + Number(item.source_size_bytes || 0),
     0
   );
-  const outputBytes = converted.reduce(
+  const outputBytes = changedFiles.reduce(
     (total, item) => total + Number(item.output_size_bytes || 0),
     0
   );
@@ -266,15 +268,15 @@ function summarizeFolderSet(payload, label, folderPath) {
   }
   if (conversions.length) {
     lines.push(
-      `Converted: ${converted.length}; reused H5: ${reused.length}; removed HIS: ${deletedHisCount}.`
+      `Converted HIS: ${converted.length}; overwritten H5: ${overwritten.length}; reused H5: ${reused.length}; removed HIS: ${deletedHisCount}.`
     );
   }
-  if (converted.length) {
+  if (changedFiles.length) {
     const percent = sourceBytes
       ? `${((spaceChange / sourceBytes) * 100).toFixed(1)}%`
       : '0.0%';
     lines.push(
-      `Disk: ${formatFileSize(sourceBytes)} HIS -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
+      `Disk: ${formatFileSize(sourceBytes)} source -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
     );
     lines.push('H5 raw_data compression: gzip level 9; file can still grow if source is already compact.');
   }
@@ -287,7 +289,9 @@ function summarizeFolderSet(payload, label, folderPath) {
 function summarizeFileCompression(payload, dataType) {
   const conversion = payload.conversion || {};
   const lines = [`Set to ${dataType} + Compress completed.`];
-  if (conversion.converted) {
+  if (conversion.overwritten) {
+    lines.push(`Overwritten H5: ${pathName(conversion.output_path)}.`);
+  } else if (conversion.converted) {
     lines.push(`${pathName(conversion.source_path)} -> ${pathName(conversion.output_path)}.`);
   } else {
     lines.push(`Reused existing H5: ${pathName(conversion.output_path)}.`);
