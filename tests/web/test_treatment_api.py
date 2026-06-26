@@ -439,6 +439,41 @@ def test_compress_and_assign_overwrites_h5_without_deleting_source(client, monke
     assert payload["session"]["path_sources"]["ABS"] == str(source_file)
 
 
+def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.h5"
+    source_file.write_bytes(b"old h5 payload")
+
+    def fake_convert(source_path, output_path):
+        assert Path(source_path) == Path(output_path)
+        Path(output_path).write_bytes(b"recompressed h5 payload")
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 10,
+            "compression": "gzip",
+            "compression_level": 9,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-file",
+        json={"file_path": str(source_file)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert source_file.read_bytes() == b"recompressed h5 payload"
+    assert payload["conversion"]["overwritten"] is True
+    assert payload["session"]["paths"] == {}
+    assert payload["session"]["path_sources"] == {}
+
+
 def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "20260127"

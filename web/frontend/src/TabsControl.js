@@ -286,9 +286,9 @@ function summarizeFolderSet(payload, label, folderPath) {
   return lines.join('\n');
 }
 
-function summarizeFileCompression(payload, dataType) {
+function summarizeFileCompression(payload, dataType = '') {
   const conversion = payload.conversion || {};
-  const lines = [`Set to ${dataType} + Compress completed.`];
+  const lines = [dataType ? `Set to ${dataType} + Compress completed.` : 'Convert/Compress completed.'];
   if (conversion.overwritten) {
     lines.push(`Overwritten H5: ${pathName(conversion.output_path)}.`);
   } else if (conversion.converted) {
@@ -301,7 +301,11 @@ function summarizeFileCompression(payload, dataType) {
     `Disk: ${formatFileSize(conversion.source_size_bytes)} -> ${formatFileSize(conversion.output_size_bytes)} (${formatSignedFileSize(conversion.space_change_bytes)}, ${Number(conversion.space_change_percent || 0).toFixed(1)}%).`
   );
   lines.push('H5 raw_data compression: gzip level 9.');
-  lines.push(`Assigned source: ${payload.session?.path_sources?.[dataType] || conversion.output_path || ''}.`);
+  if (dataType) {
+    lines.push(`Assigned source: ${payload.session?.path_sources?.[dataType] || conversion.output_path || ''}.`);
+  } else {
+    lines.push(`Output: ${conversion.output_path || ''}.`);
+  }
   return lines.join('\n');
 }
 
@@ -866,8 +870,8 @@ const TabsControl = () => {
     }
   };
 
-  const handleAssignAndCompressFile = async (filePath, dataType = session?.selected_data_type) => {
-    if (!session || !dataType) {
+  const handleCompressFile = async (filePath) => {
+    if (!session || !filePath) {
       return;
     }
 
@@ -877,54 +881,15 @@ const TabsControl = () => {
     setCleaningSummary(null);
     setIsBusy(true);
     try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/compress-path', {
-        data_type: dataType,
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/compress-file', {
         file_path: filePath,
       });
       setTreatment(payload);
-      setOperationMessage(summarizeFileCompression(payload, dataType));
+      setOperationMessage(summarizeFileCompression(payload));
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
       }
-      refreshCleaningView();
       await refreshFolderListing(getParentFolder(filePath, treatment?.allowed_root));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setFileContextMenu(null);
-      setIsBusy(false);
-    }
-  };
-
-  const handleAssignAndCleanFile = async (filePath, dataType = session?.selected_data_type) => {
-    if (!session || !dataType) {
-      return;
-    }
-
-    setError('');
-    setOperationMessage('');
-    setSelectionMessage('');
-    setCleaningSummary(null);
-    setIsBusy(true);
-    try {
-      await postTreatment(treatmentSessionId, '/api/treatment/session/cache-path', {
-        data_type: dataType,
-        file_path: filePath,
-      });
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/save', {
-        angle_threshold: Number.parseFloat(cleaningAngleThreshold),
-        surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
-        output_file_name: '',
-      });
-      setTreatment(payload);
-      setCleaningSummary(payload.cleaning);
-      setOperationMessage(
-        `Set to ${dataType}, cleaned, saved to ${payload.cleaning.output_path}.`
-      );
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
-      refreshCleaningView();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -1493,35 +1458,22 @@ const TabsControl = () => {
                   style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
                   onClick={(event) => event.stopPropagation()}
                 >
-                  {assignableDataTypes.map((dataType) => (
+                  {['ABS', 'BASE', 'NOISE'].map((dataType) => (
                     <button
                       key={dataType}
                       onClick={() => handleAssignFile(fileContextMenu.file.path, dataType)}
                       disabled={isBusy}
                     >
-                      Set to {dataType}
+                      Set {dataType}
                     </button>
                   ))}
                   <div className="file-context-menu-separator" />
-                  {assignableDataTypes.map((dataType) => (
-                    <button
-                      key={`${dataType}-clean`}
-                      onClick={() => handleAssignAndCleanFile(fileContextMenu.file.path, dataType)}
-                      disabled={isBusy}
-                    >
-                      Set to {dataType} + Clean
-                    </button>
-                  ))}
-                  <div className="file-context-menu-separator" />
-                  {assignableDataTypes.map((dataType) => (
-                    <button
-                      key={`${dataType}-compress`}
-                      onClick={() => handleAssignAndCompressFile(fileContextMenu.file.path, dataType)}
-                      disabled={isBusy}
-                    >
-                      Set to {dataType} + Compress
-                    </button>
-                  ))}
+                  <button
+                    onClick={() => handleCompressFile(fileContextMenu.file.path)}
+                    disabled={isBusy}
+                  >
+                    Convert/Compress
+                  </button>
                 </div>
               )}
               {folderContextMenu && (

@@ -921,6 +921,25 @@ def compress_and_set_session_path():
     return _json_response(response_payload, session_id)
 
 
+@treatment_api.route("/session/compress-file", methods=["POST"])
+def compress_file_path():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    file_path = payload.get("file_path")
+    if not file_path:
+        return _error("file_path is required", session_id)
+
+    try:
+        source_path = _ensure_within_allowed_root(str(file_path))
+        conversion = _convert_source_to_h5(source_path)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+
+    response_payload = _session_payload(session_id)
+    response_payload["conversion"] = conversion
+    return _json_response(response_payload, session_id)
+
+
 @treatment_api.route("/session/auto-assign", methods=["POST"])
 def auto_assign_session_paths():
     session_id = _current_session_id()
