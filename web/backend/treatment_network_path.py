@@ -3,6 +3,7 @@ import posixpath
 from pathlib import PurePosixPath
 from typing import Dict, Iterable
 from urllib.parse import quote, unquote, urlparse
+from uuid import uuid4
 
 
 def is_smb_path(path: str) -> bool:
@@ -197,6 +198,31 @@ def copy_local_file_to_smb(local_path, smb_path: str) -> int:
     except ValueError:
         raise
     except Exception as exc:
+        raise _smb_value_error(smb_path, exc) from exc
+
+
+def copy_local_file_to_smb_atomic(local_path, smb_path: str) -> int:
+    temp_path = smb_join(
+        smb_parent(smb_path),
+        f".{smb_name(smb_path)}.pyconlyse-{uuid4().hex}.tmp",
+    )
+    bytes_written = copy_local_file_to_smb(local_path, temp_path)
+    try:
+        server, _share, _remote_path = split_smb_path(smb_path)
+        _register_session(server)
+        _smbclient().replace(smb_to_unc(temp_path), smb_to_unc(smb_path))
+        return bytes_written
+    except Exception as exc:
+        try:
+            smb_remove(temp_path)
+        except Exception:
+            pass
+        message = str(exc)
+        if "c0000043" in message.lower() or "being used by another process" in message.lower():
+            raise ValueError(
+                f"SMB target is locked by another process: {normalize_smb_path(smb_path)}. "
+                "Close the file in other software and retry. Original file was not changed."
+            ) from exc
         raise _smb_value_error(smb_path, exc) from exc
 
 

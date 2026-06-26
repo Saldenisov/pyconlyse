@@ -28,7 +28,13 @@ from gui.controllers.openers import (
     OPENER_ACCRODANCE,
     OpenersTypes,
 )
-from treatment_network_path import copy_local_file_to_smb, is_smb_path, smb_join, smb_parent
+from treatment_network_path import (
+    copy_local_file_to_smb,
+    copy_local_file_to_smb_atomic,
+    is_smb_path,
+    smb_join,
+    smb_parent,
+)
 
 module_logger = logging.getLogger(__name__)
 
@@ -564,7 +570,7 @@ class TreatmentDataService:
                     removed_indices=summary.get("removed_indices"),
                     removed_records=summary.get("removed_records"),
                 )
-                copy_local_file_to_smb(local_output_path, output_target)
+                copy_local_file_to_smb_atomic(local_output_path, output_target)
         else:
             output_path = Path(output_target).expanduser()
             output_path.parent.mkdir(parents=True, exist_ok=True)

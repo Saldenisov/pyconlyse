@@ -23,7 +23,7 @@ from treatment_file_cache import (
 )
 from treatment_network_path import (
     copy_smb_file_to_local,
-    copy_local_file_to_smb,
+    copy_local_file_to_smb_atomic,
     is_smb_path,
     normalize_smb_path,
     smb_is_within,
@@ -283,7 +283,7 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
                     local_output,
                 )
                 output_size_bytes = int(local_output.stat().st_size)
-                copy_local_file_to_smb(local_output, source_path)
+                copy_local_file_to_smb_atomic(local_output, source_path)
             if not smb_isfile(source_path):
                 raise ValueError(f"Compressed H5 was not created: {source_path}")
         else:
@@ -326,7 +326,7 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
                 local_output,
             )
             output_size_bytes = int(local_output.stat().st_size)
-            copy_local_file_to_smb(local_output, output_path)
+            copy_local_file_to_smb_atomic(local_output, output_path)
         if not smb_isfile(output_path):
             raise ValueError(f"Converted H5 was not created: {output_path}")
         smb_remove(source_path)
