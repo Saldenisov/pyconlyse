@@ -647,7 +647,7 @@ class TreatmentDataService:
         summary["compression_level"] = 9
         return summary
 
-    def convert_file_to_h5(self, source_path: Path, output_path: Path) -> Dict[str, object]:
+    def convert_file_to_h5(self, source_path: Path, output_path: Path, progress_callback=None) -> Dict[str, object]:
         if h5py is None:
             raise ValueError("h5py is not available in this Python environment")
 
@@ -663,7 +663,7 @@ class TreatmentDataService:
         if not measurements:
             raise ValueError("No measurements were found in the selected file")
 
-        raw_data = np.asarray([measurement.data for measurement in measurements], dtype=float)
+        first_map = np.asarray(measurements[0].data, dtype=float)
         target = Path(output_path).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
 
@@ -671,12 +671,20 @@ class TreatmentDataService:
             metadata_group = h5_file.create_group("metadata")
             h5_file.create_dataset("timedelays", data=np.asarray(info.timedelays, dtype=float))
             h5_file.create_dataset("wavelengths", data=np.asarray(info.wavelengths, dtype=float))
-            h5_file.create_dataset(
+            raw_dataset = h5_file.create_dataset(
                 "raw_data",
-                data=raw_data,
+                shape=(len(measurements),) + tuple(first_map.shape),
+                dtype=float,
                 compression="gzip",
                 compression_opts=9,
             )
+            raw_dataset[0] = first_map
+            if progress_callback:
+                progress_callback(1, len(measurements))
+            for index, measurement in enumerate(measurements[1:], start=1):
+                raw_dataset[index] = np.asarray(measurement.data, dtype=float)
+                if progress_callback:
+                    progress_callback(index + 1, len(measurements))
             description = getattr(info, "header", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["source_file"] = str(source)

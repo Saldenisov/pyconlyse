@@ -428,7 +428,20 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
 
             if progress_callback:
                 progress_callback("convert", 0, 0, "Compressing local H5 with gzip level 9")
-            summary = treatment_service.convert_file_to_h5(local_source, local_output)
+            summary = treatment_service.convert_file_to_h5(
+                local_source,
+                local_output,
+                progress_callback=(
+                    lambda current, total: progress_callback(
+                        "convert",
+                        current,
+                        total,
+                        f"Compressing map {current}/{total} with gzip level 9",
+                    )
+                    if progress_callback
+                    else None
+                ),
+            )
             output_size_bytes = int(local_output.stat().st_size)
 
             if progress_callback:
@@ -460,7 +473,20 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
         output = Path(output_path).expanduser()
         if progress_callback:
             progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 9")
-        summary = treatment_service.convert_file_to_h5(source, output)
+        summary = treatment_service.convert_file_to_h5(
+            source,
+            output,
+            progress_callback=(
+                lambda current, total: progress_callback(
+                    "convert",
+                    current,
+                    total,
+                    f"Compressing map {current}/{total} with gzip level 9",
+                )
+                if progress_callback
+                else None
+            ),
+        )
         if not output.is_file():
             raise ValueError(f"Compressed H5 was not created: {output}")
         output_size_bytes = int(output.stat().st_size)

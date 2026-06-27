@@ -405,8 +405,10 @@ def test_compress_and_assign_overwrites_h5_without_deleting_source(client, monke
     source_file = tmp_path / "ABS12886.h5"
     source_file.write_bytes(b"old h5 payload")
 
-    def fake_convert(source_path, output_path):
+    def fake_convert(source_path, output_path, progress_callback=None):
         assert Path(source_path) == Path(output_path)
+        if progress_callback:
+            progress_callback(1, 1)
         Path(output_path).write_bytes(b"recompressed h5 payload")
         return {
             "source_path": str(source_path),
@@ -445,8 +447,10 @@ def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
     source_file = tmp_path / "ABS12886.h5"
     source_file.write_bytes(b"old h5 payload")
 
-    def fake_convert(source_path, output_path):
+    def fake_convert(source_path, output_path, progress_callback=None):
         assert Path(source_path) == Path(output_path)
+        if progress_callback:
+            progress_callback(1, 1)
         Path(output_path).write_bytes(b"recompressed h5 payload")
         return {
             "source_path": str(source_path),
@@ -480,8 +484,10 @@ def test_compress_file_start_reports_job_progress(client, monkeypatch):
     source_file = tmp_path / "ABS12886.h5"
     source_file.write_bytes(b"old h5 payload")
 
-    def fake_convert(source_path, output_path):
+    def fake_convert(source_path, output_path, progress_callback=None):
         assert Path(source_path) == Path(output_path)
+        if progress_callback:
+            progress_callback(1, 1)
         Path(output_path).write_bytes(b"recompressed h5 payload")
         return {
             "source_path": str(source_path),

@@ -325,9 +325,15 @@ def test_convert_file_to_h5_uses_gzip_level_9(service, monkeypatch, tmp_path):
 
     monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
 
-    summary = service.convert_file_to_h5(source_path, output_path)
+    progress = []
+    summary = service.convert_file_to_h5(
+        source_path,
+        output_path,
+        progress_callback=lambda current, total: progress.append((current, total)),
+    )
 
     assert summary["output_path"] == str(output_path)
+    assert progress == [(1, 2), (2, 2)]
     with h5py.File(output_path, "r") as h5_file:
         raw_data = h5_file["raw_data"]
         assert raw_data.compression == "gzip"

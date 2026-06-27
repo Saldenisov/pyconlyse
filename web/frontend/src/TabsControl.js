@@ -319,10 +319,12 @@ function summarizeCompressionProgress(job, filePath) {
     `Convert/Compress running for ${pathName(filePath)}.`,
     job?.message || 'Working...',
   ];
-  if (total > 0) {
+  if (job?.phase === 'convert' && total > 0) {
+    lines.push(`${current} / ${total} maps${percent}`);
+  } else if (total > 0) {
     lines.push(`${formatFileSize(current)} / ${formatFileSize(total)}${percent}`);
   }
-  if (job?.phase === 'convert') {
+  if (job?.phase === 'convert' && total === 0) {
     lines.push('This step may not show byte progress while H5 is being rewritten.');
   }
   return lines.join('\n');
