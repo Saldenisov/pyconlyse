@@ -415,7 +415,7 @@ def test_compress_and_assign_overwrites_h5_without_deleting_source(client, monke
             "output_path": str(output_path),
             "original_measurements": 10,
             "compression": "gzip",
-            "compression_level": 9,
+            "compression_level": 4,
         }
 
     monkeypatch.setattr(
@@ -457,7 +457,7 @@ def test_compress_file_endpoint_does_not_assign_input(client, monkeypatch):
             "output_path": str(output_path),
             "original_measurements": 10,
             "compression": "gzip",
-            "compression_level": 9,
+            "compression_level": 4,
         }
 
     monkeypatch.setattr(
@@ -494,7 +494,7 @@ def test_compress_file_start_reports_job_progress(client, monkeypatch):
             "output_path": str(output_path),
             "original_measurements": 10,
             "compression": "gzip",
-            "compression_level": 9,
+            "compression_level": 4,
         }
 
     monkeypatch.setattr(

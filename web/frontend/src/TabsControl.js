@@ -280,7 +280,7 @@ function summarizeFolderSet(payload, label, folderPath) {
     lines.push(
       `Disk: ${formatFileSize(sourceBytes)} source -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
     );
-    lines.push('H5 raw_data compression: gzip level 9; file can still grow if source is already compact.');
+    lines.push('H5 raw_data compression: gzip level 4; file can still grow if source is already compact.');
   }
   if (cleanedTypes.length) {
     lines.push(`Cleaned: ${cleanedTypes.join(', ')}.`);
@@ -302,7 +302,7 @@ function summarizeFileCompression(payload, dataType = '') {
   lines.push(
     `Disk: ${formatFileSize(conversion.source_size_bytes)} -> ${formatFileSize(conversion.output_size_bytes)} (${formatSignedFileSize(conversion.space_change_bytes)}, ${Number(conversion.space_change_percent || 0).toFixed(1)}%).`
   );
-  lines.push('H5 raw_data compression: gzip level 9.');
+  lines.push('H5 raw_data compression: gzip level 4.');
   if (dataType) {
     lines.push(`Assigned source: ${payload.session?.path_sources?.[dataType] || conversion.output_path || ''}.`);
   } else {
@@ -927,7 +927,7 @@ const TabsControl = () => {
       [
         `Convert/Compress started for ${pathName(filePath)}.`,
         'Reading source file...',
-        'Writing H5 with gzip level 9...',
+        'Writing H5 with gzip level 4...',
         suffix === 'his'
           ? 'HIS will be removed after H5 is verified.'
           : 'H5 will be overwritten in place.',

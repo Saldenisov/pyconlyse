@@ -427,7 +427,7 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
             )
 
             if progress_callback:
-                progress_callback("convert", 0, 0, "Compressing local H5 with gzip level 9")
+                progress_callback("convert", 0, 0, "Compressing local H5 with gzip level 4")
             summary = treatment_service.convert_file_to_h5(
                 local_source,
                 local_output,
@@ -436,7 +436,7 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
                         "convert",
                         current,
                         total,
-                        f"Compressing map {current}/{total} with gzip level 9",
+                        f"Compressing map {current}/{total} with gzip level 4",
                     )
                     if progress_callback
                     else None
@@ -472,7 +472,7 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
         source_size_bytes = int(source.stat().st_size)
         output = Path(output_path).expanduser()
         if progress_callback:
-            progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 9")
+            progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 4")
         summary = treatment_service.convert_file_to_h5(
             source,
             output,
@@ -481,7 +481,7 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
                     "convert",
                     current,
                     total,
-                    f"Compressing map {current}/{total} with gzip level 9",
+                    f"Compressing map {current}/{total} with gzip level 4",
                 )
                 if progress_callback
                 else None

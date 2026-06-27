@@ -592,7 +592,7 @@ class TreatmentDataService:
         summary["source_file_path"] = source_path
         summary["output_path"] = str(output_target)
         summary["compression"] = "gzip"
-        summary["compression_level"] = 9
+        summary["compression_level"] = 4
         return summary
 
     def save_file_sam_cleaned_h5(
@@ -644,7 +644,7 @@ class TreatmentDataService:
         summary["file_path"] = str(file_path)
         summary["output_path"] = str(output_path)
         summary["compression"] = "gzip"
-        summary["compression_level"] = 9
+        summary["compression_level"] = 4
         return summary
 
     def convert_file_to_h5(self, source_path: Path, output_path: Path, progress_callback=None) -> Dict[str, object]:
@@ -676,7 +676,7 @@ class TreatmentDataService:
                 shape=(len(measurements),) + tuple(first_map.shape),
                 dtype=float,
                 compression="gzip",
-                compression_opts=9,
+                compression_opts=4,
             )
             raw_dataset[0] = first_map
             if progress_callback:
@@ -691,14 +691,14 @@ class TreatmentDataService:
             metadata_group.attrs["original_measurements"] = int(len(measurements))
             metadata_group.attrs["converted_without_cleaning"] = True
             metadata_group.attrs["compression"] = "gzip"
-            metadata_group.attrs["compression_level"] = 9
+            metadata_group.attrs["compression_level"] = 4
 
         return {
             "source_path": str(source),
             "output_path": str(target),
             "original_measurements": int(len(measurements)),
             "compression": "gzip",
-            "compression_level": 9,
+            "compression_level": 4,
         }
 
     def average_noise(self, session_id: str, session_state: Dict[str, object]) -> Dict[str, object]:
@@ -1187,16 +1187,16 @@ class TreatmentDataService:
                 "raw_data",
                 data=raw_data,
                 compression="gzip",
-                compression_opts=9,
+                compression_opts=4,
             )
-            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=9)
+            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=4)
 
             description = getattr(info, "header", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["sam_angle_threshold"] = float(angle_threshold)
             metadata_group.attrs["sam_surface_threshold"] = float(surface_threshold)
             metadata_group.attrs["compression"] = "gzip"
-            metadata_group.attrs["compression_level"] = 9
+            metadata_group.attrs["compression_level"] = 4
             metadata_group.attrs["original_file"] = str(original_file_path)
             metadata_group.attrs["original_measurements"] = int(original_measurements)
             metadata_group.attrs["cleaned_measurements"] = int(len(kept_measurements))
