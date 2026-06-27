@@ -61,6 +61,8 @@ _root_exists_cache: Dict[str, tuple] = {}
 _root_exists_cache_lock = Lock()
 _compression_jobs: Dict[str, Dict[str, object]] = {}
 _compression_jobs_lock = Lock()
+_folder_set_jobs: Dict[str, Dict[str, object]] = {}
+_folder_set_jobs_lock = Lock()
 
 
 def _normalize_path(path: str) -> str:
@@ -386,9 +388,21 @@ def _compression_job_snapshot(job_id: str) -> Dict[str, object]:
         return dict(_compression_jobs.get(job_id) or {})
 
 
+def _folder_set_job_snapshot(job_id: str) -> Dict[str, object]:
+    with _folder_set_jobs_lock:
+        return dict(_folder_set_jobs.get(job_id) or {})
+
+
 def _update_compression_job(job_id: str, **updates) -> None:
     with _compression_jobs_lock:
         job = _compression_jobs.setdefault(job_id, {})
+        job.update(updates)
+        job["updated_at"] = monotonic()
+
+
+def _update_folder_set_job(job_id: str, **updates) -> None:
+    with _folder_set_jobs_lock:
+        job = _folder_set_jobs.setdefault(job_id, {})
         job.update(updates)
         job["updated_at"] = monotonic()
 
@@ -892,127 +906,190 @@ def set_session_folder():
     return _json_response(_session_payload(session_id), session_id)
 
 
-@treatment_api.route("/session/folder-set", methods=["POST"])
-def set_inputs_from_folder():
-    session_id = _current_session_id()
-    payload = request.get_json(silent=True) or {}
+def _set_inputs_from_folder_job_payload(session_id: str, payload: Dict[str, object], progress_callback=None):
     folder_path = payload.get("folder_path")
     convert = bool(payload.get("convert", False))
     clean = bool(payload.get("clean", False))
     if clean:
         convert = True
     if not folder_path:
-        return _error("folder_path is required", session_id)
+        raise ValueError("folder_path is required")
 
     try:
         angle_threshold = float(payload.get("angle_threshold", 1.0))
         surface_threshold = float(payload.get("surface_threshold", 1.0))
     except (TypeError, ValueError):
-        return _error("angle_threshold and surface_threshold must be numeric", session_id)
+        raise ValueError("angle_threshold and surface_threshold must be numeric")
 
-    try:
-        folder = _ensure_within_allowed_root(str(folder_path))
-        if not _folder_exists(folder):
-            return _error("Folder does not exist", session_id, 404)
+    folder = _ensure_within_allowed_root(str(folder_path))
+    if progress_callback:
+        progress_callback("checking", 0, 0, f"Checking folder {folder}", {})
+    if not _folder_exists(folder):
+        raise ValueError("Folder does not exist")
 
-        session = session_store.snapshot(session_id)
-        exp_type = str(session.get("exp_type"))
-        candidates = _folder_input_candidates(folder, exp_type, convert=convert)
-        found = {
-            data_type: sorted(paths, key=_convert_sort_key if convert else _candidate_sort_key)
-            for data_type, paths in candidates.items()
-            if paths
+    session = session_store.snapshot(session_id)
+    exp_type = str(session.get("exp_type"))
+    candidates = _folder_input_candidates(folder, exp_type, convert=convert)
+    found = {
+        data_type: sorted(paths, key=_convert_sort_key if convert else _candidate_sort_key)
+        for data_type, paths in candidates.items()
+        if paths
+    }
+    if len(found) < 2:
+        names = ", ".join(sorted(found.keys())) or "none"
+        raise ValueError(
+            f"Folder must contain at least two assignable inputs for {exp_type}; found {names}."
+        )
+
+    file_statuses = {
+        data_type: {
+            "source_path": paths[0],
+            "status": "queued" if convert else "ready",
         }
-        if len(found) < 2:
-            names = ", ".join(sorted(found.keys())) or "none"
-            return _error(
-                f"Folder must contain at least two assignable inputs for {exp_type}; found {names}.",
-                session_id,
-            )
+        for data_type, paths in found.items()
+    }
+    total_items = len(file_statuses)
+    if progress_callback:
+        progress_callback(
+            "converting" if convert else "assigning",
+            0,
+            total_items,
+            f"Converting {total_items} files in parallel" if convert else f"Assigning {total_items} files",
+            file_statuses,
+        )
 
-        prepared: Dict[str, Dict[str, object]] = {}
-        if convert:
-            selected_paths = {
-                data_type: paths[0]
-                for data_type, paths in found.items()
-            }
-            max_workers = min(len(selected_paths), max(1, os.cpu_count() or 1))
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
-                futures = {
-                    executor.submit(_convert_source_to_h5, selected_path): data_type
-                    for data_type, selected_path in selected_paths.items()
-                }
-                for future in as_completed(futures):
-                    data_type = futures[future]
-                    conversion = future.result()
-                    prepared[data_type] = {
-                        "source_path": str(conversion["output_path"]),
-                        "conversion": conversion,
-                    }
-        else:
-            for data_type, paths in found.items():
-                prepared[data_type] = {
-                    "source_path": paths[0],
-                    "conversion": None,
-                }
+    prepared: Dict[str, Dict[str, object]] = {}
+    if convert:
+        selected_paths = {
+            data_type: paths[0]
+            for data_type, paths in found.items()
+        }
+        status_lock = Lock()
 
-        session_store.set_folder(session_id, folder)
-        assigned: Dict[str, str] = {}
-        cached_files: Dict[str, Dict[str, object]] = {}
-        conversions: Dict[str, Dict[str, object]] = {}
-        cleaned: Dict[str, Dict[str, object]] = {}
-        for data_type, prepared_item in prepared.items():
-            source_path = str(prepared_item["source_path"])
-            cached = _cache_assignable_source(source_path)
-            session_store.set_data_path(
-                session_id,
-                data_type,
-                str(cached["cached_path"]),
-                source_path=str(cached["source_path"]),
-            )
-            assigned[data_type] = str(cached["cached_path"])
-            cached_files[data_type] = cached
-            if prepared_item["conversion"]:
-                conversions[data_type] = prepared_item["conversion"]
-            if clean:
-                treatment_service.reset_runtime(session_id)
-                saved = treatment_service.save_sam_cleaned_h5(
-                    session_id,
-                    session_store.snapshot(session_id),
-                    angle_threshold,
-                    surface_threshold,
+        def set_file_status(data_type: str, **updates) -> Dict[str, Dict[str, object]]:
+            with status_lock:
+                file_statuses[data_type] = {**file_statuses.get(data_type, {}), **updates}
+                return {key: dict(value) for key, value in file_statuses.items()}
+
+        def convert_one(data_type: str, selected_path: str) -> Dict[str, object]:
+            statuses = set_file_status(data_type, status="running")
+            if progress_callback:
+                progress_callback(
+                    "converting",
+                    sum(1 for item in statuses.values() if item.get("status") == "complete"),
+                    total_items,
+                    f"Converting {data_type}: {_path_name(selected_path)}",
+                    statuses,
                 )
-                deleted_source_file = _delete_source_his_after_cleaning(saved)
-                if deleted_source_file:
-                    saved["deleted_source_file"] = deleted_source_file
-                output_path = str(saved.get("output_path") or "")
-                if output_path:
-                    if is_smb_path(output_path):
-                        cleaned_cache = _cache_assignable_source(output_path)
-                        assigned_path = str(cleaned_cache["cached_path"])
-                        source_path = str(cleaned_cache["source_path"])
-                        saved["cached_file"] = cleaned_cache
-                        cached_files[data_type] = cleaned_cache
-                    else:
-                        assigned_path = output_path
-                        source_path = output_path
-                    session_store.set_data_path(
-                        session_id,
-                        data_type,
-                        assigned_path,
-                        source_path=source_path,
+            conversion_result = _convert_source_to_h5(selected_path)
+            return {"data_type": data_type, "conversion": conversion_result}
+
+        max_workers = min(len(selected_paths), max(1, os.cpu_count() or 1))
+        completed = 0
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(convert_one, data_type, selected_path): data_type
+                for data_type, selected_path in selected_paths.items()
+            }
+            for future in as_completed(futures):
+                data_type = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    statuses = set_file_status(data_type, status="error", error=str(exc))
+                    if progress_callback:
+                        progress_callback("error", completed, total_items, str(exc), statuses)
+                    raise
+                conversion = result["conversion"]
+                completed += 1
+                statuses = set_file_status(
+                    data_type,
+                    status="complete",
+                    output_path=str(conversion["output_path"]),
+                )
+                prepared[data_type] = {
+                    "source_path": str(conversion["output_path"]),
+                    "conversion": conversion,
+                }
+                if progress_callback:
+                    progress_callback(
+                        "converting",
+                        completed,
+                        total_items,
+                        f"Converted {completed}/{total_items} files",
+                        statuses,
                     )
-                    assigned[data_type] = assigned_path
-                    saved["assigned_data_type"] = data_type
-                    saved["assigned_path"] = assigned_path
-                cleaned[data_type] = saved
+    else:
+        for data_type, paths in found.items():
+            prepared[data_type] = {
+                "source_path": paths[0],
+                "conversion": None,
+            }
 
-        treatment_service.reset_runtime(session_id)
-    except ValueError as exc:
-        return _error(str(exc), session_id)
-    except OSError as exc:
-        return _error(str(exc), session_id)
+    session_store.set_folder(session_id, folder)
+    assigned: Dict[str, str] = {}
+    cached_files: Dict[str, Dict[str, object]] = {}
+    conversions: Dict[str, Dict[str, object]] = {}
+    cleaned: Dict[str, Dict[str, object]] = {}
+    for data_type, prepared_item in prepared.items():
+        source_path = str(prepared_item["source_path"])
+        if progress_callback:
+            file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "assigning"}
+            progress_callback("assigning", len(assigned), total_items, f"Assigning {data_type}", file_statuses)
+        cached = _cache_assignable_source(source_path)
+        session_store.set_data_path(
+            session_id,
+            data_type,
+            str(cached["cached_path"]),
+            source_path=str(cached["source_path"]),
+        )
+        assigned[data_type] = str(cached["cached_path"])
+        cached_files[data_type] = cached
+        if prepared_item["conversion"]:
+            conversions[data_type] = prepared_item["conversion"]
+        if progress_callback:
+            file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "assigned"}
+            progress_callback("assigning", len(assigned), total_items, f"Assigned {len(assigned)}/{total_items} files", file_statuses)
+        if clean:
+            if progress_callback:
+                file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "cleaning"}
+                progress_callback("cleaning", len(cleaned), total_items, f"Cleaning {data_type}", file_statuses)
+            treatment_service.reset_runtime(session_id)
+            saved = treatment_service.save_sam_cleaned_h5(
+                session_id,
+                session_store.snapshot(session_id),
+                angle_threshold,
+                surface_threshold,
+            )
+            deleted_source_file = _delete_source_his_after_cleaning(saved)
+            if deleted_source_file:
+                saved["deleted_source_file"] = deleted_source_file
+            output_path = str(saved.get("output_path") or "")
+            if output_path:
+                if is_smb_path(output_path):
+                    cleaned_cache = _cache_assignable_source(output_path)
+                    assigned_path = str(cleaned_cache["cached_path"])
+                    source_path = str(cleaned_cache["source_path"])
+                    saved["cached_file"] = cleaned_cache
+                    cached_files[data_type] = cleaned_cache
+                else:
+                    assigned_path = output_path
+                    source_path = output_path
+                session_store.set_data_path(
+                    session_id,
+                    data_type,
+                    assigned_path,
+                    source_path=source_path,
+                )
+                assigned[data_type] = assigned_path
+                saved["assigned_data_type"] = data_type
+                saved["assigned_path"] = assigned_path
+            cleaned[data_type] = saved
+            if progress_callback:
+                file_statuses[data_type] = {**file_statuses.get(data_type, {}), "status": "cleaned"}
+                progress_callback("cleaning", len(cleaned), total_items, f"Cleaned {len(cleaned)}/{total_items} files", file_statuses)
 
+    treatment_service.reset_runtime(session_id)
     response_payload = _session_payload(session_id)
     response_payload["folder_set"] = {
         "folder": folder,
@@ -1023,7 +1100,102 @@ def set_inputs_from_folder():
         "conversions": conversions,
         "cleaned": cleaned,
     }
+    if progress_callback:
+        progress_callback("complete", total_items, total_items, "Folder operation complete", file_statuses)
+    return response_payload
+
+
+def _run_folder_set_job(job_id: str, session_id: str, request_payload: Dict[str, object]) -> None:
+    def progress(phase: str, current: int, total: int, message: str, files: Dict[str, Dict[str, object]]) -> None:
+        _update_folder_set_job(
+            job_id,
+            phase=phase,
+            current_items=int(current or 0),
+            total_items=int(total or 0),
+            message=message,
+            files={key: dict(value) for key, value in (files or {}).items()},
+        )
+
+    try:
+        progress("start", 0, 0, "Starting folder operation", {})
+        response_payload = _set_inputs_from_folder_job_payload(
+            session_id,
+            request_payload,
+            progress_callback=progress,
+        )
+        total_items = int(_folder_set_job_snapshot(job_id).get("total_items") or 0)
+        _update_folder_set_job(
+            job_id,
+            status="complete",
+            phase="complete",
+            current_items=total_items,
+            message="Folder operation complete",
+            payload=response_payload,
+            folder_set=response_payload.get("folder_set", {}),
+        )
+    except (ValueError, OSError) as exc:
+        _update_folder_set_job(
+            job_id,
+            status="error",
+            phase="error",
+            message=str(exc),
+            error=str(exc),
+        )
+
+
+@treatment_api.route("/session/folder-set", methods=["POST"])
+def set_inputs_from_folder():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    try:
+        response_payload = _set_inputs_from_folder_job_payload(session_id, payload)
+    except ValueError as exc:
+        return _error(str(exc), session_id)
+    except OSError as exc:
+        return _error(str(exc), session_id)
     return _json_response(response_payload, session_id)
+
+
+@treatment_api.route("/session/folder-set/start", methods=["POST"])
+def start_folder_set():
+    session_id = _current_session_id()
+    payload = request.get_json(silent=True) or {}
+    if not payload.get("folder_path"):
+        return _error("folder_path is required", session_id)
+
+    job_id = uuid4().hex
+    with _folder_set_jobs_lock:
+        _folder_set_jobs[job_id] = {
+            "job_id": job_id,
+            "status": "running",
+            "phase": "queued",
+            "message": "Queued folder operation",
+            "folder_path": str(payload.get("folder_path") or ""),
+            "convert": bool(payload.get("convert", False) or payload.get("clean", False)),
+            "clean": bool(payload.get("clean", False)),
+            "current_items": 0,
+            "total_items": 0,
+            "files": {},
+            "created_at": monotonic(),
+            "updated_at": monotonic(),
+        }
+
+    thread = Thread(
+        target=_run_folder_set_job,
+        args=(job_id, session_id, payload),
+        daemon=True,
+    )
+    thread.start()
+    return _json_response({"folder_set_job": _folder_set_job_snapshot(job_id), "success": True}, session_id)
+
+
+@treatment_api.route("/session/folder-set/status/<job_id>", methods=["GET"])
+def get_folder_set_status(job_id: str):
+    session_id = _current_session_id()
+    job = _folder_set_job_snapshot(str(job_id))
+    if not job:
+        return _error("folder operation job not found", session_id, 404)
+    return _json_response({"folder_set_job": job, "success": True}, session_id)
 
 
 @treatment_api.route("/session/path", methods=["POST"])

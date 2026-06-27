@@ -12,9 +12,11 @@ import {
   fetchCompressionJob,
   fetchFileSummary,
   fetchFolderListing,
+  fetchFolderSetJob,
   fetchTreatmentSession,
   postTreatment,
   startCompressionJob,
+  startFolderSetJob,
   updateSelectionConfig,
 } from './api/treatmentClient';
 import './css/DataWindowVD2.css';
@@ -326,6 +328,29 @@ function summarizeCompressionProgress(job, filePath) {
   }
   if (job?.phase === 'convert' && total === 0) {
     lines.push('This step may not show byte progress while H5 is being rewritten.');
+  }
+  return lines.join('\n');
+}
+
+function summarizeFolderSetProgress(job, label, folderPath) {
+  const current = Number(job?.current_items || 0);
+  const total = Number(job?.total_items || 0);
+  const files = Object.entries(job?.files || {});
+  const lines = [
+    `${label} running for ${pathName(folderPath)}.`,
+    job?.message || 'Working...',
+  ];
+
+  if (total > 0) {
+    lines.push(`${current}/${total}`);
+  }
+  files.forEach(([dataType, item]) => {
+    const source = item?.output_path || item?.source_path || '';
+    const status = item?.status || 'queued';
+    lines.push(`${dataType}: ${status}${source ? ` - ${pathName(source)}` : ''}`);
+  });
+  if (job?.phase === 'converting') {
+    lines.push('H5 raw_data compression: gzip level 4.');
   }
   return lines.join('\n');
 }
@@ -1074,16 +1099,29 @@ const TabsControl = () => {
     }
 
     setError('');
-    setOperationMessage('');
+    const label = clean ? 'Set/Convert/Clean' : convert ? 'Set/Convert' : 'Set';
+    setOperationMessage(`${label} started for ${pathName(folderPath)}.`);
     setIsBusy(true);
     try {
-      const payload = await postTreatment(treatmentSessionId, '/api/treatment/session/folder-set', {
+      const started = await startFolderSetJob(treatmentSessionId, {
         folder_path: folderPath,
         convert,
         clean,
         angle_threshold: Number(cleaningAngleThreshold),
         surface_threshold: Number(cleaningSurfaceThreshold),
       });
+      let job = started.folder_set_job;
+      setOperationMessage(summarizeFolderSetProgress(job, label, folderPath));
+      while (job?.status === 'running') {
+        await wait(500);
+        const statusPayload = await fetchFolderSetJob(treatmentSessionId, job.job_id);
+        job = statusPayload.folder_set_job;
+        setOperationMessage(summarizeFolderSetProgress(job, label, folderPath));
+      }
+      if (job?.status === 'error') {
+        throw new Error(job.error || job.message || `${label} failed.`);
+      }
+      const payload = job?.payload || { folder_set: job?.folder_set };
       setTreatment(payload);
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
@@ -1094,10 +1132,10 @@ const TabsControl = () => {
         next.add(folderPath);
         return next;
       });
-      const label = clean ? 'Set/Convert/Clean' : convert ? 'Set/Convert' : 'Set';
       setOperationMessage(summarizeFolderSet(payload, label, folderPath));
     } catch (err) {
       setError(err.message);
+      setOperationMessage(`${label} failed for ${pathName(folderPath)}.`);
     } finally {
       setFolderContextMenu(null);
       setIsBusy(false);

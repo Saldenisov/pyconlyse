@@ -675,6 +675,69 @@ def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
     assert payload["session"]["path_sources"]["NOISE"] == str(folder / "BRUIT001.h5")
 
 
+def test_folder_set_start_reports_job_progress(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "async_parallel"
+    folder.mkdir()
+    abs_his = folder / "ABS001.his"
+    base_his = folder / "BASE001.his"
+    abs_his.write_bytes(b"abs his")
+    base_his.write_bytes(b"base his")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    def fake_convert(source_path):
+        source = Path(source_path)
+        output = source.with_suffix(".h5")
+        time.sleep(0.1)
+        output.write_bytes(f"h5 {source.stem}".encode("ascii"))
+        source.unlink()
+        return {
+            "source_path": str(source),
+            "output_path": str(output),
+            "converted": True,
+            "deleted_source": True,
+            "source_size_bytes": len(b"abs his"),
+            "output_size_bytes": output.stat().st_size,
+            "space_change_bytes": output.stat().st_size - len(b"abs his"),
+            "space_change_percent": 0.0,
+        }
+
+    monkeypatch.setattr(treatment_api_module, "_convert_source_to_h5", fake_convert)
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set/start",
+        json={"folder_path": str(folder), "convert": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    job_id = payload["folder_set_job"]["job_id"]
+    assert payload["folder_set_job"]["status"] == "running"
+
+    status_payload = None
+    observed_progress = False
+    for _attempt in range(20):
+        status_response = test_client.get(f"/api/treatment/session/folder-set/status/{job_id}")
+        status_payload = status_response.get_json()
+        job = status_payload["folder_set_job"]
+        observed_progress = observed_progress or bool(job.get("files"))
+        if job["status"] == "complete":
+            break
+        time.sleep(0.05)
+
+    job = status_payload["folder_set_job"]
+    assert observed_progress is True
+    assert job["status"] == "complete"
+    assert job["payload"]["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
+    assert job["payload"]["session"]["path_sources"]["ABS"] == str(folder / "ABS001.h5")
+    assert job["payload"]["session"]["path_sources"]["BASE"] == str(folder / "BASE001.h5")
+
+
 def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
     test_client, _tmp_path = client
     smb_root = "smb://Everest/e/Data/DATA_VD2"

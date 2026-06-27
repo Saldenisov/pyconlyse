@@ -56,6 +56,7 @@ export function postTreatment(sessionId, url, body = {}) {
     '/api/treatment/session/cache-path',
     '/api/treatment/session/compress-file',
     '/api/treatment/session/compress-file/start',
+    '/api/treatment/session/folder-set/start',
     '/api/treatment/session/compress-path',
     '/api/treatment/session/auto-assign',
     '/api/treatment/session/folder-set',
@@ -96,6 +97,19 @@ export function startCompressionJob(sessionId, filePath) {
 export function fetchCompressionJob(sessionId, jobId) {
   return requestTreatment(
     `/api/treatment/session/compress-file/status/${encodeURIComponent(jobId)}`,
+    {
+      headers: buildHeaders(sessionId),
+    }
+  );
+}
+
+export function startFolderSetJob(sessionId, payload) {
+  return postTreatment(sessionId, '/api/treatment/session/folder-set/start', payload);
+}
+
+export function fetchFolderSetJob(sessionId, jobId) {
+  return requestTreatment(
+    `/api/treatment/session/folder-set/status/${encodeURIComponent(jobId)}`,
     {
       headers: buildHeaders(sessionId),
     }
