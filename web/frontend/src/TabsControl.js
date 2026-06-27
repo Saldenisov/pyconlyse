@@ -525,6 +525,8 @@ const TabsControl = () => {
   const [cleaningView, setCleaningView] = useState(null);
   const [isCleaningViewLoading, setIsCleaningViewLoading] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [busyStartedAt, setBusyStartedAt] = useState(null);
+  const [busyNow, setBusyNow] = useState(Date.now());
   const profilePreset = PROFILE_PRESETS[treatmentProfile] || PROFILE_PRESETS.VD2;
 
   const session = treatment ? treatment.session : null;
@@ -543,6 +545,25 @@ const TabsControl = () => {
       ? (session?.path_sources?.[cleaningActiveDataType] || session?.paths?.[cleaningActiveDataType] || '')
       : '';
   const cleaningOutputName = h5NameForPath(cleaningSourcePath);
+  const busyElapsedSeconds =
+    isBusy && busyStartedAt ? Math.max(0, Math.floor((busyNow - busyStartedAt) / 1000)) : 0;
+
+  useEffect(() => {
+    if (!isBusy) {
+      return undefined;
+    }
+    if (!busyStartedAt) {
+      setBusyStartedAt(Date.now());
+    }
+    const timerId = window.setInterval(() => setBusyNow(Date.now()), 1000);
+    return () => window.clearInterval(timerId);
+  }, [busyStartedAt, isBusy]);
+
+  useEffect(() => {
+    if (!isBusy) {
+      setBusyStartedAt(null);
+    }
+  }, [isBusy]);
 
   const refreshSession = async () => {
     const payload = await fetchTreatmentSession(treatmentSessionId);
@@ -1566,6 +1587,12 @@ const TabsControl = () => {
               </div>
               {operationMessage && (
                 <p className={`treatment-operation-message ${isBusy ? 'is-active' : ''}`}>
+                  {isBusy && (
+                    <span className="treatment-operation-live">
+                      <span className="treatment-operation-spinner" aria-hidden="true"></span>
+                      <span>{busyElapsedSeconds}s</span>
+                    </span>
+                  )}
                   {operationMessage}
                 </p>
               )}

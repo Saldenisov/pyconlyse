@@ -213,6 +213,29 @@
   background: rgba(30, 64, 175, 0.2);
 }
 
+.treatment-operation-live {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  margin-right: 8px;
+}
+
+.treatment-operation-spinner {
+  animation: treatment-operation-spin 0.9s linear infinite;
+  border: 2px solid rgba(191, 219, 254, 0.3);
+  border-top-color: #bfdbfe;
+  border-radius: 999px;
+  display: inline-block;
+  height: 12px;
+  width: 12px;
+}
+
+@keyframes treatment-operation-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .raw-data-kinetics {
   display: flex;
   flex-direction: column;
