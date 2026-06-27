@@ -37,7 +37,7 @@ from treatment_network_path import (
     smb_remove,
     smb_suffix,
 )
-from treatment_service import TreatmentDataService
+from treatment_service import TreatmentDataService, h5py
 
 treatment_api = Blueprint("treatment_api", __name__, url_prefix="/api/treatment")
 
@@ -272,12 +272,50 @@ def _convert_sort_key(path: str) -> tuple:
     return (suffix_rank, _path_name(path).lower())
 
 
+def _compressed_h5_reuse_summary(local_path: Path, display_path: str, source_size_bytes: int) -> Optional[Dict[str, object]]:
+    if h5py is None:
+        return None
+    try:
+        with h5py.File(local_path, "r") as h5_file:
+            if "raw_data" not in h5_file:
+                return None
+            raw_data = h5_file["raw_data"]
+            if raw_data.compression != "gzip":
+                return None
+            compression_level = raw_data.compression_opts
+    except (AttributeError, OSError, TypeError):
+        return None
+
+    output_size_bytes = int(source_size_bytes or local_path.stat().st_size)
+    return {
+        "source_path": display_path,
+        "output_path": display_path,
+        "converted": False,
+        "overwritten": False,
+        "deleted_source": False,
+        "reused_compressed": True,
+        "compression": "gzip",
+        "compression_level": compression_level,
+        "source_size_bytes": output_size_bytes,
+        "output_size_bytes": output_size_bytes,
+        "space_change_bytes": 0,
+        "space_change_percent": 0.0,
+    }
+
+
 def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
     source_suffix = _path_suffix(source_path)
     if source_suffix == ".h5":
         if is_smb_path(source_path):
             cached_source = _cache_assignable_source(source_path)
             source_size_bytes = int(cached_source.get("size_bytes") or 0)
+            reuse_summary = _compressed_h5_reuse_summary(
+                Path(str(cached_source["cached_path"])),
+                source_path,
+                source_size_bytes,
+            )
+            if reuse_summary:
+                return reuse_summary
             with tempfile.TemporaryDirectory(prefix="pyconlyse_recompress_h5_") as tmp_dir:
                 local_output = Path(tmp_dir) / _path_name(source_path)
                 summary = treatment_service.convert_file_to_h5(
@@ -291,6 +329,9 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
         else:
             source = Path(source_path).expanduser()
             source_size_bytes = int(source.stat().st_size)
+            reuse_summary = _compressed_h5_reuse_summary(source, str(source), source_size_bytes)
+            if reuse_summary:
+                return reuse_summary
             summary = treatment_service.convert_file_to_h5(source, source)
             if not source.is_file():
                 raise ValueError(f"Compressed H5 was not created: {source}")
@@ -319,6 +360,22 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
     output_name = f"{Path(_path_name(source_path)).stem}.h5"
     if is_smb_path(source_path):
         output_path = smb_join(smb_parent(source_path), output_name)
+        if smb_isfile(output_path):
+            existing_cached = _cache_assignable_source(output_path)
+            existing_size_bytes = int(existing_cached.get("size_bytes") or 0)
+            reuse_summary = _compressed_h5_reuse_summary(
+                Path(str(existing_cached["cached_path"])),
+                output_path,
+                existing_size_bytes,
+            )
+            if reuse_summary:
+                smb_remove(source_path)
+                reuse_summary.update({
+                    "source_path": source_path,
+                    "deleted_source": True,
+                    "reused_existing_output": True,
+                })
+                return reuse_summary
         cached_source = _cache_assignable_source(source_path)
         source_size_bytes = int(cached_source.get("size_bytes") or 0)
         with tempfile.TemporaryDirectory(prefix="pyconlyse_convert_h5_") as tmp_dir:
@@ -352,6 +409,20 @@ def _convert_source_to_h5(source_path: str) -> Dict[str, object]:
     source = Path(source_path).expanduser()
     source_size_bytes = int(source.stat().st_size)
     output_path = source.with_suffix(".h5")
+    if output_path.is_file():
+        reuse_summary = _compressed_h5_reuse_summary(
+            output_path,
+            str(output_path),
+            int(output_path.stat().st_size),
+        )
+        if reuse_summary:
+            source.unlink()
+            reuse_summary.update({
+                "source_path": str(source),
+                "deleted_source": True,
+                "reused_existing_output": True,
+            })
+            return reuse_summary
     summary = treatment_service.convert_file_to_h5(source, output_path)
     if not output_path.is_file():
         raise ValueError(f"Converted H5 was not created: {output_path}")
@@ -424,6 +495,39 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
         with tempfile.TemporaryDirectory(prefix="pyconlyse_compress_job_") as tmp_dir:
             local_source = Path(tmp_dir) / _path_name(source_path)
             local_output = Path(tmp_dir) / output_name
+            if source_suffix == ".his" and smb_isfile(output_path):
+                existing_size_bytes = _smb_size_bytes(output_path)
+                if progress_callback:
+                    progress_callback("download", 0, existing_size_bytes, "Checking existing compressed H5")
+                copy_smb_file_to_local(
+                    output_path,
+                    local_output,
+                    progress_callback=(
+                        lambda current: progress_callback(
+                            "download",
+                            current,
+                            existing_size_bytes,
+                            "Checking existing compressed H5",
+                        )
+                        if progress_callback
+                        else None
+                    ),
+                )
+                reuse_summary = _compressed_h5_reuse_summary(
+                    local_output,
+                    output_path,
+                    existing_size_bytes,
+                )
+                if reuse_summary:
+                    if progress_callback:
+                        progress_callback("delete", 0, 0, "Existing H5 is already gzip compressed; removing source HIS")
+                    smb_remove(source_path)
+                    reuse_summary.update({
+                        "source_path": source_path,
+                        "deleted_source": True,
+                        "reused_existing_output": True,
+                    })
+                    return reuse_summary
             if progress_callback:
                 progress_callback("download", 0, source_size_bytes, "Reading source file from SMB")
             copy_smb_file_to_local(
@@ -440,6 +544,16 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
                     else None
                 ),
             )
+            if source_suffix == ".h5":
+                reuse_summary = _compressed_h5_reuse_summary(
+                    local_source,
+                    source_path,
+                    source_size_bytes,
+                )
+                if reuse_summary:
+                    if progress_callback:
+                        progress_callback("complete", source_size_bytes, source_size_bytes, "H5 is already gzip compressed")
+                    return reuse_summary
 
             if progress_callback:
                 progress_callback("convert", 0, 0, "Compressing local H5 with gzip level 4")
@@ -486,6 +600,28 @@ def _compression_progress_summary(source_path: str, progress_callback=None) -> D
         source = Path(source_path).expanduser()
         source_size_bytes = int(source.stat().st_size)
         output = Path(output_path).expanduser()
+        if source_suffix == ".h5":
+            reuse_summary = _compressed_h5_reuse_summary(source, str(source), source_size_bytes)
+            if reuse_summary:
+                if progress_callback:
+                    progress_callback("complete", source_size_bytes, source_size_bytes, "H5 is already gzip compressed")
+                return reuse_summary
+        if source_suffix == ".his" and output.is_file():
+            reuse_summary = _compressed_h5_reuse_summary(
+                output,
+                str(output),
+                int(output.stat().st_size),
+            )
+            if reuse_summary:
+                if progress_callback:
+                    progress_callback("delete", 0, 0, "Existing H5 is already gzip compressed; removing source HIS")
+                source.unlink()
+                reuse_summary.update({
+                    "source_path": str(source),
+                    "deleted_source": True,
+                    "reused_existing_output": True,
+                })
+                return reuse_summary
         if progress_callback:
             progress_callback("convert", 0, source_size_bytes, "Compressing local H5 with gzip level 4")
         summary = treatment_service.convert_file_to_h5(

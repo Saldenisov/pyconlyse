@@ -66,6 +66,24 @@ def _critical_info(file_path, number_maps, wavelengths=None, timedelays=None):
     )
 
 
+def _write_gzip_h5(file_path, compression_level=9):
+    h5py = treatment_api_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+    with h5py.File(file_path, "w") as h5_file:
+        h5_file.create_dataset("timedelays", data=np.asarray([1.0, 2.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([500.0, 550.0]))
+        h5_file.create_dataset(
+            "raw_data",
+            data=np.ones((2, 2, 2), dtype=float),
+            compression="gzip",
+            compression_opts=compression_level,
+        )
+        metadata = h5_file.create_group("metadata")
+        metadata.attrs["compression"] = "gzip"
+        metadata.attrs["compression_level"] = compression_level
+
+
 class FakeHisOpener:
     def __init__(self, pairs):
         self._pairs = list(pairs)
@@ -530,6 +548,36 @@ def test_compress_file_start_reports_job_progress(client, monkeypatch):
     assert job["payload"]["conversion"]["output_path"] == str(source_file)
 
 
+def test_compress_file_skips_existing_gzip_h5(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.h5"
+    _write_gzip_h5(source_file, compression_level=9)
+    original_bytes = source_file.read_bytes()
+
+    def fail_convert(*_args, **_kwargs):
+        raise AssertionError("already compressed H5 should not be rewritten")
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fail_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-file",
+        json={"file_path": str(source_file)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert source_file.read_bytes() == original_bytes
+    assert payload["conversion"]["converted"] is False
+    assert payload["conversion"]["overwritten"] is False
+    assert payload["conversion"]["reused_compressed"] is True
+    assert payload["conversion"]["compression"] == "gzip"
+    assert payload["conversion"]["compression_level"] == 9
+
+
 def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "20260127"
@@ -673,6 +721,54 @@ def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
     assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS001.h5")
     assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE001.h5")
     assert payload["session"]["path_sources"]["NOISE"] == str(folder / "BRUIT001.h5")
+
+
+def test_folder_set_convert_reuses_existing_gzip_h5_and_removes_his(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "already_converted"
+    folder.mkdir()
+    abs_his = folder / "ABS001.his"
+    base_his = folder / "BASE001.his"
+    abs_h5 = folder / "ABS001.h5"
+    base_h5 = folder / "BASE001.h5"
+    abs_his.write_bytes(b"abs his")
+    base_his.write_bytes(b"base his")
+    _write_gzip_h5(abs_h5, compression_level=9)
+    _write_gzip_h5(base_h5, compression_level=4)
+    original_abs_bytes = abs_h5.read_bytes()
+    original_base_bytes = base_h5.read_bytes()
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    def fail_convert(*_args, **_kwargs):
+        raise AssertionError("existing compressed H5 should be reused")
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fail_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder), "convert": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert not abs_his.exists()
+    assert not base_his.exists()
+    assert abs_h5.read_bytes() == original_abs_bytes
+    assert base_h5.read_bytes() == original_base_bytes
+    assert payload["folder_set"]["conversions"]["ABS"]["converted"] is False
+    assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
+    assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
+    assert payload["session"]["path_sources"]["ABS"] == str(abs_h5)
+    assert payload["session"]["path_sources"]["BASE"] == str(base_h5)
 
 
 def test_folder_set_start_reports_job_progress(client, monkeypatch):
