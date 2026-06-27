@@ -1,6 +1,7 @@
 import sys
 import time
 from pathlib import Path
+from threading import Lock
 from types import SimpleNamespace
 
 import numpy as np
@@ -148,12 +149,14 @@ def test_set_folder_and_list_files(client):
         {
             "name": "notes.md",
             "path": str(data_dir / "notes.md"),
+            "size_bytes": 5,
             "suffix": ".md",
             "supported": False,
         },
         {
             "name": "signal.h5",
             "path": str(data_dir / "signal.h5"),
+            "size_bytes": 4,
             "suffix": ".h5",
             "supported": h5_supported,
         },
@@ -230,6 +233,7 @@ def test_smb_treatment_root_lists_network_files(client, monkeypatch):
         {
             "name": "ABS001.his",
             "path": f"{normalized_root}/ABS001.his",
+            "size_bytes": 0,
             "suffix": ".his",
             "supported": True,
         }
@@ -608,6 +612,67 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     assert payload["folder_set"]["cleaned"]["ABS"]["output_path"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE12886.h5")
+
+
+def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "parallel"
+    folder.mkdir()
+    source_files = [
+        folder / "ABS001.his",
+        folder / "BASE001.his",
+        folder / "BRUIT001.his",
+    ]
+    for source_file in source_files:
+        source_file.write_bytes(b"his")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    lock = Lock()
+    active = {"current": 0, "max": 0}
+
+    def fake_convert(source_path):
+        source = Path(source_path)
+        output = source.with_suffix(".h5")
+        with lock:
+            active["current"] += 1
+            active["max"] = max(active["max"], active["current"])
+        try:
+            time.sleep(0.1)
+            output.write_bytes(f"h5 {source.stem}".encode("ascii"))
+            source.unlink()
+            return {
+                "source_path": str(source),
+                "output_path": str(output),
+                "converted": True,
+                "deleted_source": True,
+                "source_size_bytes": len(b"his"),
+                "output_size_bytes": output.stat().st_size,
+                "space_change_bytes": output.stat().st_size - len(b"his"),
+                "space_change_percent": 0.0,
+            }
+        finally:
+            with lock:
+                active["current"] -= 1
+
+    monkeypatch.setattr(treatment_api_module, "_convert_source_to_h5", fake_convert)
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder), "convert": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert active["max"] > 1
+    assert sorted(payload["folder_set"]["conversions"]) == ["ABS", "BASE", "NOISE"]
+    assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS001.h5")
+    assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE001.h5")
+    assert payload["session"]["path_sources"]["NOISE"] == str(folder / "BRUIT001.h5")
 
 
 def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):

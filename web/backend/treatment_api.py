@@ -1,5 +1,6 @@
 import os
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Lock, Thread
 from time import monotonic
@@ -930,18 +931,28 @@ def set_inputs_from_folder():
             )
 
         prepared: Dict[str, Dict[str, object]] = {}
-        for data_type, paths in found.items():
-            selected_path = paths[0]
-            if convert:
-                conversion = _convert_source_to_h5(selected_path)
-                source_path = str(conversion["output_path"])
-                prepared[data_type] = {
-                    "source_path": source_path,
-                    "conversion": conversion,
+        if convert:
+            selected_paths = {
+                data_type: paths[0]
+                for data_type, paths in found.items()
+            }
+            max_workers = min(len(selected_paths), max(1, os.cpu_count() or 1))
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(_convert_source_to_h5, selected_path): data_type
+                    for data_type, selected_path in selected_paths.items()
                 }
-            else:
+                for future in as_completed(futures):
+                    data_type = futures[future]
+                    conversion = future.result()
+                    prepared[data_type] = {
+                        "source_path": str(conversion["output_path"]),
+                        "conversion": conversion,
+                    }
+        else:
+            for data_type, paths in found.items():
                 prepared[data_type] = {
-                    "source_path": selected_path,
+                    "source_path": paths[0],
                     "conversion": None,
                 }
 
