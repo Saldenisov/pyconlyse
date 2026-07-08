@@ -1,3 +1,4 @@
+import json
 import sys
 import time
 from pathlib import Path
@@ -181,6 +182,241 @@ def test_set_folder_and_list_files(client):
     ]
 
 
+def test_stitch_od_dat_endpoint_saves_joined_dat(client):
+    test_client, tmp_path = client
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    _write_dat(first, [[1, 2], [10, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[30, 40], [60, 70]], wavelengths=[435, 450], timedelays=[1, 2])
+
+    response = test_client.post(
+        "/api/treatment/stitch/od",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "output_folder": str(tmp_path),
+            "output_file_name": "stitched.dat",
+        },
+    )
+    payload = response.get_json()
+    output = tmp_path / "stitched.dat"
+    manifest = tmp_path / "stitched.manifest.json"
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["stitched"]["output_path"] == str(output)
+    assert payload["stitched"]["manifest_path"] == str(manifest)
+    assert payload["stitched"]["wavelengths"] == 4
+    assert output.is_file()
+    assert manifest.is_file()
+    manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert manifest_payload["operation"] == "vd2_od_stitch"
+    assert manifest_payload["inputs"]["file_a"] == str(first)
+    assert manifest_payload["inputs"]["file_b"] == str(second)
+    assert manifest_payload["output"]["path"] == str(output)
+    assert manifest_payload["stitch"]["axis_overlap_range"] == [435.0, 440.0]
+    assert manifest_payload["coefficients"]["right_scale"] == 1.0
+    saved = np.loadtxt(output)
+    assert saved[0, 1:].tolist() == [1.0, 2.0]
+    assert saved[1:, 0].tolist() == [420.0, 435.0, 440.0, 450.0]
+    assert saved[2, 1:].tolist() == [18.875, 27.75]
+    assert saved[3, 1:].tolist() == [25.0, 35.0]
+
+
+def test_stitch_od_dat_endpoint_defaults_to_first_file_parent(client):
+    test_client, tmp_path = client
+    pair_folder = tmp_path / "pair"
+    pair_folder.mkdir()
+    first = pair_folder / "blue.dat"
+    second = pair_folder / "red.dat"
+    _write_dat(first, [[1, 2], [10, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[30, 40], [60, 70]], wavelengths=[435, 450], timedelays=[1, 2])
+
+    response = test_client.post(
+        "/api/treatment/stitch/od",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "output_file_name": "stitched.dat",
+        },
+    )
+    payload = response.get_json()
+    output = pair_folder / "stitched.dat"
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["stitched"]["output_path"] == str(output)
+    assert output.is_file()
+
+
+def test_stitch_od_dat_endpoint_allows_default_stitch_root_output(client, monkeypatch):
+    test_client, tmp_path = client
+    allowed_root = tmp_path / "e" / "DATA_VD2"
+    pair_folder = tmp_path / "f" / "DATA_VD2" / "pair"
+    allowed_root.mkdir(parents=True)
+    pair_folder.mkdir(parents=True)
+    first = pair_folder / "blue.dat"
+    second = pair_folder / "red.dat"
+    _write_dat(first, [[1, 2], [10, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[30, 40], [60, 70]], wavelengths=[435, 450], timedelays=[1, 2])
+    monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", str(allowed_root))
+    monkeypatch.setattr(
+        treatment_api_module,
+        "DEFAULT_STITCH_OD_ROOTS",
+        (str(pair_folder.parent),),
+    )
+
+    response = test_client.post(
+        "/api/treatment/stitch/od",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "output_folder": str(pair_folder),
+            "output_file_name": "stitched.dat",
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert (pair_folder / "stitched.dat").is_file()
+    assert (pair_folder / "stitched.manifest.json").is_file()
+
+
+def test_stitch_od_dat_endpoint_applies_right_delay_shift(client):
+    test_client, tmp_path = client
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    _write_dat(first, [[1, 2], [10, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[30, 40], [60, 70]], wavelengths=[435, 450], timedelays=[1, 2])
+
+    response = test_client.post(
+        "/api/treatment/stitch/od",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "output_folder": str(tmp_path),
+            "output_file_name": "shifted.dat",
+            "right_delay_shift_pixels": 1,
+        },
+    )
+    output = tmp_path / "shifted.dat"
+    manifest = tmp_path / "shifted.manifest.json"
+
+    assert response.status_code == 200
+    saved = np.loadtxt(output)
+    assert saved[2, 1:].tolist() == [18.875, 22.75]
+    assert saved[4, 1:].tolist() == [60.0, 60.0]
+    manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+    assert manifest_payload["coefficients"]["right_delay_shift_pixels"] == 1
+
+
+def test_stitch_od_dat_endpoint_uses_trusted_wavelength_ranges(client):
+    test_client, tmp_path = client
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    _write_dat(
+        first,
+        [[1, 1], [10, 10], [20, 20], [999, 999]],
+        wavelengths=[400, 420, 440, 460],
+        timedelays=[1, 2],
+    )
+    _write_dat(
+        second,
+        [[999, 999], [40, 40], [100, 100], [999, 999]],
+        wavelengths=[430, 440, 450, 470],
+        timedelays=[1, 2],
+    )
+
+    response = test_client.post(
+        "/api/treatment/stitch/od",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "output_folder": str(tmp_path),
+            "output_file_name": "trusted.dat",
+            "time_regions": [{
+                "left_wavelength_start": 420,
+                "left_wavelength_end": 440,
+                "right_wavelength_start": 440,
+                "right_wavelength_end": 450,
+                "delay_start": 1,
+                "delay_end": 2,
+            }],
+        },
+    )
+    output = tmp_path / "trusted.dat"
+
+    assert response.status_code == 200
+    saved = np.loadtxt(output, ndmin=2)
+    assert saved[1:, 0].tolist() == [400.0, 420.0, 440.0, 450.0, 470.0]
+    assert saved[1:, 1].tolist() == [1.0, 10.0, 30.0, 100.0, 999.0]
+
+
+def test_stitch_od_preview_fits_right_map(client):
+    test_client, tmp_path = client
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    _write_dat(first, [[10, 20], [30, 40]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[5, 10], [15, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+
+    response = test_client.post(
+        "/api/treatment/stitch/od/preview",
+        json={
+            "file_a": str(first),
+            "file_b": str(second),
+            "fit_right": True,
+            "time_regions": [{
+                "left_wavelength_start": 420,
+                "left_wavelength_end": 430,
+                "right_wavelength_start": 420,
+                "right_wavelength_end": 430,
+                "delay_start": 1,
+                "delay_end": 2,
+            }],
+        },
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["stitch_preview"]["fit"]["right_scale"] == pytest.approx(2.0)
+    assert payload["stitch_preview"]["fit"]["right_offset"] == pytest.approx(0.0)
+    assert payload["stitch_preview"]["spectra"]
+
+
+def test_stitch_od_preview_fit_ignores_existing_right_scale(client):
+    test_client, tmp_path = client
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    _write_dat(first, [[10, 20], [30, 40]], wavelengths=[420, 440], timedelays=[1, 2])
+    _write_dat(second, [[5, 10], [15, 20]], wavelengths=[420, 440], timedelays=[1, 2])
+    request_payload = {
+        "file_a": str(first),
+        "file_b": str(second),
+        "fit_right": True,
+        "right_scale": 0.25,
+        "right_offset": 123.0,
+        "time_regions": [{
+            "left_wavelength_start": 420,
+            "left_wavelength_end": 430,
+            "right_wavelength_start": 420,
+            "right_wavelength_end": 430,
+            "delay_start": 1,
+            "delay_end": 2,
+        }],
+    }
+
+    response = test_client.post("/api/treatment/stitch/od/preview", json=request_payload)
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["stitch_preview"]["fit"]["right_scale"] == pytest.approx(2.0)
+    assert payload["stitch_preview"]["coefficients"]["right_scale"] == pytest.approx(2.0)
+    assert payload["stitch_preview"]["coefficients"]["right_offset"] == pytest.approx(0.0)
+
+
 def test_update_treatment_root_from_session_endpoint(client):
     test_client, tmp_path = client
     new_root = tmp_path / "VD2"
@@ -256,6 +492,105 @@ def test_smb_treatment_root_lists_network_files(client, monkeypatch):
             "supported": True,
         }
     ]
+
+
+def test_smb_local_map_lists_local_disk_with_smb_paths(client, monkeypatch):
+    test_client, tmp_path = client
+    local_root = tmp_path / "mapped_e"
+    data_dir = local_root / "DATA_VD2"
+    run_dir = data_dir / "run_001"
+    run_dir.mkdir(parents=True)
+    abs_file = data_dir / "ABS001.h5"
+    abs_file.write_bytes(b"h5")
+    smb_root = "smb://10.20.30.202/e"
+    smb_data = f"{smb_root}/DATA_VD2"
+
+    monkeypatch.setenv("PYCONLYSE_TREATMENT_ROOT", smb_root)
+    monkeypatch.setenv("PYCONLYSE_ALLOWED_ROOT", smb_root)
+    monkeypatch.setenv("PYCONLYSE_SMB_LOCAL_MAP", f"{smb_root}/={local_root}")
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_listdir",
+        lambda _path: (_ for _ in ()).throw(AssertionError("SMB listdir was called")),
+    )
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_isdir",
+        lambda _path: (_ for _ in ()).throw(AssertionError("SMB isdir was called")),
+    )
+
+    response = test_client.get("/api/treatment/files", query_string={"folder": smb_data})
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["folders"] == [{"name": "run_001", "path": f"{smb_data}/run_001"}]
+    assert payload["files"] == [
+        {
+            "name": "ABS001.h5",
+            "path": f"{smb_data}/ABS001.h5",
+            "size_bytes": 2,
+            "suffix": ".h5",
+            "supported": True,
+        }
+    ]
+
+
+def test_cache_assignable_source_uses_smb_local_map_without_copy(tmp_path, monkeypatch):
+    local_root = tmp_path / "mapped_e"
+    source = local_root / "DATA_VD2" / "run_001" / "ABS001.h5"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"h5")
+    smb_source = "smb://10.20.30.202/e/DATA_VD2/run_001/ABS001.h5"
+
+    monkeypatch.setenv("PYCONLYSE_SMB_LOCAL_MAP", f"smb://10.20.30.202/e/={local_root}")
+    monkeypatch.setattr(
+        treatment_api_module,
+        "smb_isfile",
+        lambda _path: (_ for _ in ()).throw(AssertionError("SMB isfile was called")),
+    )
+    monkeypatch.setattr(
+        treatment_api_module,
+        "copy_smb_file_to_local",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("SMB copy was called")),
+    )
+
+    cached = treatment_api_module._cache_assignable_source(smb_source)
+
+    assert cached["source_path"] == smb_source
+    assert cached["cached_path"] == str(source)
+    assert cached["copied"] is False
+    assert cached["size_bytes"] == 2
+    assert cached["cache"]["local_map"] is True
+
+
+def test_file_summary_infers_time_scale_from_legacy_h5_path(client):
+    h5py = treatment_api_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    test_client, tmp_path = client
+    folder = tmp_path / "13113-water_600_1us-x0"
+    folder.mkdir()
+    file_path = folder / "ABS13113.h5"
+    with h5py.File(file_path, "w") as h5_file:
+        h5_file.create_dataset("timedelays", data=np.asarray([1.0, 2.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([421.0, 778.0]))
+        h5_file.create_dataset("raw_data", data=np.ones((2, 2, 2), dtype=float))
+
+    response = test_client.get(
+        "/api/treatment/file-summary",
+        query_string={"file_path": str(file_path)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["file_summary"]["number_maps"] == 2
+    assert payload["file_summary"]["original_number_maps"] == 2
+    assert payload["file_summary"]["time_scale"] == "us"
+    assert payload["file_summary"]["timedelay_min"] == 1.0
+    assert payload["file_summary"]["timedelay_max"] == 2.0
+    assert payload["file_summary"]["wavelength_min"] == 421.0
+    assert payload["file_summary"]["wavelength_max"] == 778.0
 
 
 def test_update_treatment_root_rejects_paths_outside_root_base(client, tmp_path):
@@ -389,7 +724,7 @@ def test_compress_and_assign_converts_his_to_h5_and_deletes_source(client, monke
     source_file.write_bytes(b"fake his payload")
     output_file = tmp_path / "ABS12886.h5"
 
-    def fake_convert(source_path, output_path):
+    def fake_convert(source_path, output_path, progress_callback=None):
         Path(output_path).write_bytes(b"compressed h5 payload")
         return {
             "source_path": str(source_path),
@@ -593,7 +928,7 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     )
     assert config_response.status_code == 200
 
-    def fake_convert(source_path, output_path):
+    def fake_convert(source_path, output_path, progress_callback=None):
         Path(output_path).write_bytes(b"converted h5")
         return {
             "source_path": str(source_path),
@@ -662,6 +997,60 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     assert payload["session"]["path_sources"]["BASE"] == str(folder / "BASE12886.h5")
 
 
+def test_folder_set_his_noise_allows_abs_base_without_folder_noise(client):
+    test_client, tmp_path = client
+    folder = tmp_path / "sample_without_noise"
+    folder.mkdir()
+    abs_base_path = folder / "ABS010.his"
+    previous_noise_path = tmp_path / "previous_NOISE.his"
+    abs_base_path.write_bytes(b"abs base his")
+    previous_noise_path.write_bytes(b"previous noise")
+
+    noise_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "NOISE", "file_path": str(previous_noise_path)},
+    )
+    assert noise_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["folder_set"]["assigned"] == {
+        "ABS+BASE": payload["session"]["paths"]["ABS+BASE"]
+    }
+    assert payload["session"]["path_sources"]["ABS+BASE"] == str(abs_base_path)
+    assert payload["session"]["path_sources"]["NOISE"] == str(previous_noise_path)
+    assert payload["session"]["ready_for_calc"] is True
+
+
+def test_folder_set_abs_base_noise_requires_abs_and_base_not_noise(client):
+    test_client, tmp_path = client
+    folder = tmp_path / "missing_base"
+    folder.mkdir()
+    (folder / "ABS001.his").write_bytes(b"abs his")
+    (folder / "BRUIT001.his").write_bytes(b"noise his")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder)},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert "missing BASE" in payload["error"]
+    assert "found ABS, NOISE" in payload["error"]
+
+
 def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "parallel"
@@ -683,16 +1072,22 @@ def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
     lock = Lock()
     active = {"current": 0, "max": 0}
 
-    def fake_convert(source_path):
+    def fake_convert(source_path, progress_callback=None):
         source = Path(source_path)
         output = source.with_suffix(".h5")
+        if progress_callback:
+            progress_callback("download", 1, 3, "Reading source file")
         with lock:
             active["current"] += 1
             active["max"] = max(active["max"], active["current"])
         try:
+            if progress_callback:
+                progress_callback("convert", 1, 2, "Compressing map 1/2")
             time.sleep(0.1)
             output.write_bytes(f"h5 {source.stem}".encode("ascii"))
             source.unlink()
+            if progress_callback:
+                progress_callback("upload", 3, 3, "Writing compressed H5")
             return {
                 "source_path": str(source),
                 "output_path": str(output),
@@ -723,7 +1118,80 @@ def test_folder_set_convert_runs_conversions_in_parallel(client, monkeypatch):
     assert payload["session"]["path_sources"]["NOISE"] == str(folder / "BRUIT001.h5")
 
 
-def test_folder_set_convert_reuses_existing_gzip_h5_and_removes_his(client, monkeypatch):
+def test_smb_folder_convert_stages_io_and_converts_locally_in_parallel(monkeypatch, tmp_path):
+    selected_paths = {
+        "ABS": "smb://10.20.30.202/e/DATA_VD2/run/ABS001.his",
+        "BASE": "smb://10.20.30.202/e/DATA_VD2/run/BASE001.his",
+        "NOISE": "smb://10.20.30.202/e/DATA_VD2/run/BRUIT001.his",
+    }
+    events = []
+    active = {"current": 0, "max": 0}
+    lock = Lock()
+
+    monkeypatch.setattr(treatment_api_module, "_smb_size_bytes", lambda _path: 3)
+    monkeypatch.setattr(treatment_api_module, "smb_isfile", lambda path: path.endswith(".h5"))
+
+    def fake_download(source_path, local_path, progress_callback=None):
+        with lock:
+            events.append(("download", Path(source_path).name))
+        Path(local_path).write_bytes(b"his")
+        if progress_callback:
+            progress_callback(3)
+        return 3
+
+    def fake_convert(source_path, output_path, progress_callback=None):
+        with lock:
+            active["current"] += 1
+            active["max"] = max(active["max"], active["current"])
+            events.append(("convert-start", Path(source_path).name))
+        try:
+            time.sleep(0.05)
+            Path(output_path).write_bytes(f"h5 {Path(source_path).stem}".encode("ascii"))
+            if progress_callback:
+                progress_callback(1, 1)
+            return {
+                "source_path": str(source_path),
+                "output_path": str(output_path),
+                "original_measurements": 1,
+                "compression": "gzip",
+                "compression_level": 4,
+            }
+        finally:
+            with lock:
+                active["current"] -= 1
+                events.append(("convert-end", Path(source_path).name))
+
+    def fake_upload(local_path, smb_path, progress_callback=None):
+        with lock:
+            events.append(("upload", Path(smb_path).name))
+        if progress_callback:
+            progress_callback(Path(local_path).stat().st_size)
+        return Path(local_path).stat().st_size
+
+    def fake_remove(path):
+        with lock:
+            events.append(("delete", Path(path).name))
+
+    monkeypatch.setattr(treatment_api_module, "copy_smb_file_to_local", fake_download)
+    monkeypatch.setattr(treatment_api_module.treatment_service, "convert_file_to_h5", fake_convert)
+    monkeypatch.setattr(treatment_api_module, "copy_local_file_to_smb_atomic", fake_upload)
+    monkeypatch.setattr(treatment_api_module, "smb_remove", fake_remove)
+
+    conversions = treatment_api_module._convert_smb_sources_to_h5_pipeline(selected_paths)
+    event_names = [name for name, _detail in events]
+    first_convert = event_names.index("convert-start")
+    first_upload = event_names.index("upload")
+
+    assert event_names[:3] == ["download", "download", "download"]
+    assert all(name.startswith("convert") for name in event_names[first_convert:first_upload])
+    assert active["max"] > 1
+    assert sorted(conversions) == ["ABS", "BASE", "NOISE"]
+    assert conversions["ABS"]["output_path"].endswith("/ABS001.h5")
+    assert conversions["BASE"]["output_path"].endswith("/BASE001.h5")
+    assert conversions["NOISE"]["output_path"].endswith("/BRUIT001.h5")
+
+
+def test_folder_set_convert_replaces_existing_gzip_h5_from_his(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "already_converted"
     folder.mkdir()
@@ -735,22 +1203,29 @@ def test_folder_set_convert_reuses_existing_gzip_h5_and_removes_his(client, monk
     base_his.write_bytes(b"base his")
     _write_gzip_h5(abs_h5, compression_level=9)
     _write_gzip_h5(base_h5, compression_level=4)
-    original_abs_bytes = abs_h5.read_bytes()
-    original_base_bytes = base_h5.read_bytes()
-
     config_response = test_client.post(
         "/api/treatment/session/config",
         json={"exp_type": "ABS+BASE+NOISE"},
     )
     assert config_response.status_code == 200
 
-    def fail_convert(*_args, **_kwargs):
-        raise AssertionError("existing compressed H5 should be reused")
+    def fake_convert(source_path, output_path, progress_callback=None):
+        if progress_callback:
+            progress_callback(1, 1)
+        source = Path(source_path)
+        Path(output_path).write_bytes(f"converted {source.stem}".encode("ascii"))
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 1,
+            "compression": "gzip",
+            "compression_level": 4,
+        }
 
     monkeypatch.setattr(
         treatment_api_module.treatment_service,
         "convert_file_to_h5",
-        fail_convert,
+        fake_convert,
     )
 
     response = test_client.post(
@@ -762,11 +1237,110 @@ def test_folder_set_convert_reuses_existing_gzip_h5_and_removes_his(client, monk
     assert response.status_code == 200
     assert not abs_his.exists()
     assert not base_his.exists()
-    assert abs_h5.read_bytes() == original_abs_bytes
-    assert base_h5.read_bytes() == original_base_bytes
-    assert payload["folder_set"]["conversions"]["ABS"]["converted"] is False
-    assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
+    assert abs_h5.read_bytes() == b"converted ABS001"
+    assert base_h5.read_bytes() == b"converted BASE001"
+    assert payload["folder_set"]["conversions"]["ABS"]["converted"] is True
+    assert payload["folder_set"]["conversions"]["ABS"]["overwritten"] is True
     assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["converted"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["overwritten"] is True
+    assert payload["session"]["path_sources"]["ABS"] == str(abs_h5)
+    assert payload["session"]["path_sources"]["BASE"] == str(base_h5)
+
+
+def test_folder_set_convert_mixed_h5_and_his_converts_remaining_his(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "mixed_h5_his"
+    folder.mkdir()
+    abs_h5 = folder / "ABS001.h5"
+    base_his = folder / "BASE001.his"
+    base_h5 = folder / "BASE001.h5"
+    _write_gzip_h5(abs_h5, compression_level=4)
+    base_his.write_bytes(b"base his")
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    def fake_convert(source_path, output_path, progress_callback=None):
+        if progress_callback:
+            progress_callback(1, 1)
+        Path(output_path).write_bytes(b"converted base h5")
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 1,
+            "compression": "gzip",
+            "compression_level": 4,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder), "convert": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert not base_his.exists()
+    assert base_h5.read_bytes() == b"converted base h5"
+    assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["converted"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["deleted_source"] is True
+    assert payload["session"]["path_sources"]["ABS"] == str(abs_h5)
+    assert payload["session"]["path_sources"]["BASE"] == str(base_h5)
+
+
+def test_folder_set_his_noise_mode_detects_separate_abs_base_folder(client, monkeypatch):
+    test_client, tmp_path = client
+    folder = tmp_path / "13116-0.1 M NH3_CO_600_1us-x0"
+    folder.mkdir()
+    abs_h5 = folder / "ABS13116.h5"
+    base_h5 = folder / "BASE13116.h5"
+    base_his = folder / "BASE13116.his"
+    _write_gzip_h5(abs_h5, compression_level=4)
+    _write_gzip_h5(base_h5, compression_level=4)
+    base_his.write_bytes(b"new base his")
+
+    def fake_convert(source_path, output_path, progress_callback=None):
+        if progress_callback:
+            progress_callback(1, 1)
+        source = Path(source_path)
+        Path(output_path).write_bytes(f"converted {source.stem}".encode("ascii"))
+        return {
+            "source_path": str(source_path),
+            "output_path": str(output_path),
+            "original_measurements": 1,
+            "compression": "gzip",
+            "compression_level": 4,
+        }
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(folder), "convert": True},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert not base_his.exists()
+    assert base_h5.read_bytes() == b"converted BASE13116"
+    assert payload["session"]["exp_type"] == "ABS+BASE+NOISE"
+    assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["converted"] is True
+    assert payload["folder_set"]["conversions"]["BASE"]["overwritten"] is True
     assert payload["session"]["path_sources"]["ABS"] == str(abs_h5)
     assert payload["session"]["path_sources"]["BASE"] == str(base_h5)
 
@@ -786,12 +1360,18 @@ def test_folder_set_start_reports_job_progress(client, monkeypatch):
     )
     assert config_response.status_code == 200
 
-    def fake_convert(source_path):
+    def fake_convert(source_path, progress_callback=None):
         source = Path(source_path)
         output = source.with_suffix(".h5")
+        if progress_callback:
+            progress_callback("download", 1, 3, "Reading source file")
         time.sleep(0.1)
+        if progress_callback:
+            progress_callback("convert", 1, 2, "Compressing map 1/2")
         output.write_bytes(f"h5 {source.stem}".encode("ascii"))
         source.unlink()
+        if progress_callback:
+            progress_callback("upload", 3, 3, "Writing compressed H5")
         return {
             "source_path": str(source),
             "output_path": str(output),
@@ -817,17 +1397,24 @@ def test_folder_set_start_reports_job_progress(client, monkeypatch):
 
     status_payload = None
     observed_progress = False
+    observed_inner_phase = False
     for _attempt in range(20):
         status_response = test_client.get(f"/api/treatment/session/folder-set/status/{job_id}")
         status_payload = status_response.get_json()
         job = status_payload["folder_set_job"]
         observed_progress = observed_progress or bool(job.get("files"))
+        observed_inner_phase = observed_inner_phase or any(
+            item.get("phase") in {"download", "convert", "upload"}
+            and item.get("total", 0) > 0
+            for item in job.get("files", {}).values()
+        )
         if job["status"] == "complete":
             break
         time.sleep(0.05)
 
     job = status_payload["folder_set_job"]
     assert observed_progress is True
+    assert observed_inner_phase is True
     assert job["status"] == "complete"
     assert job["payload"]["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
     assert job["payload"]["session"]["path_sources"]["ABS"] == str(folder / "ABS001.h5")
@@ -921,7 +1508,7 @@ def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
     assert payload["auto_assign_missing"] == []
     assert payload["session"]["ready_for_calc"] is True
     assert payload["session"]["save_folder"] == f"{smb_root}/20260127"
-    assert payload["session"]["save_file_name"] == "water_test.dat"
+    assert payload["session"]["save_file_name"] == "water.dat"
     assert payload["auto_assigned_cached_files"]["ABS"]["source_path"] == abs_file
     assert payload["auto_assigned_cached_files"]["BASE"]["source_path"] == base_file
     assert payload["auto_assigned_cached_files"]["NOISE"]["source_path"] == bruit_file
@@ -1040,6 +1627,37 @@ def test_auto_assign_abs_base_noise_files_from_current_folder(client):
     assert payload["session"]["ready_for_calc"] is True
 
 
+def test_folder_set_auto_calculates_od_when_inputs_ready(client):
+    test_client, tmp_path = client
+    data_dir = tmp_path / "folder_auto_calc"
+    data_dir.mkdir()
+    abs_data = np.array([[1.0, 2.0], [3.0, 4.0]])
+    base_data = np.array([[2.0, 3.0], [4.0, 5.0]])
+    noise_data = np.array([[0.1, 0.2], [0.3, 0.4]])
+    _write_dat(data_dir / "ABS001.dat", abs_data)
+    _write_dat(data_dir / "BASE001.dat", base_data)
+    _write_dat(data_dir / "BRUIT001.dat", noise_data)
+
+    config_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"exp_type": "ABS+BASE+NOISE"},
+    )
+    assert config_response.status_code == 200
+
+    response = test_client.post(
+        "/api/treatment/session/folder-set",
+        json={"folder_path": str(data_dir)},
+    )
+    payload = response.get_json()
+    expected = np.log10((base_data - noise_data) / (abs_data - noise_data))
+
+    assert response.status_code == 200
+    assert payload["folder_set"]["auto_calculated"] is True
+    assert payload["session"]["active_data_type"] == "OD"
+    assert payload["session"]["result_ready"] is True
+    assert np.allclose(np.asarray(payload["result"]["sample"]), expected)
+
+
 def test_auto_assign_his_noise_uses_abs_base_plus_noise(client):
     test_client, tmp_path = client
     data_dir = tmp_path / "run_his_noise"
@@ -1155,11 +1773,22 @@ def test_preview_and_calc_abs_work_with_server_local_files(client):
     assert calc_payload["session"]["result_shape"] == [2, 2]
     assert np.allclose(np.array(calc_payload["result"]["sample"]), expected)
 
+    rename_response = test_client.post(
+        "/api/treatment/session/config",
+        json={"save_file_name": "od_result_b.dat", "calc_mode": "averaged"},
+    )
+    rename_payload = rename_response.get_json()
+
+    assert rename_response.status_code == 200
+    assert rename_payload["session"]["save_file_name"] == "od_result_b.dat"
+    assert rename_payload["session"]["result_ready"] is True
+
     save_response = test_client.post("/api/treatment/save")
     save_payload = save_response.get_json()
     save_path = Path(save_payload["saved"]["save_path"])
 
     assert save_response.status_code == 200
+    assert save_path.name == "od_result_b.dat"
     assert save_path.is_file()
     saved = np.loadtxt(save_path)
     assert saved.shape == (3, 3)
@@ -1206,6 +1835,48 @@ def test_selection_view_uses_active_file_and_cursor_ranges(client):
     assert view_payload["selection"]["map_index"] == 0
     assert view_payload["selection"]["kinetics"]["y"] == [4.0, 5.0, 6.0]
     assert view_payload["selection"]["spectrum"]["y"] == [1.0, 4.0, 7.0]
+
+
+def test_assigning_new_file_preserves_selection_cursors(client):
+    test_client, tmp_path = client
+    first_path = tmp_path / "selection_first.dat"
+    second_path = tmp_path / "selection_second.dat"
+    _write_dat(
+        first_path,
+        np.ones((3, 3)),
+        wavelengths=[500, 550, 600],
+        timedelays=[1, 2, 3],
+    )
+    _write_dat(
+        second_path,
+        np.ones((3, 3)) * 2,
+        wavelengths=[500, 550, 600],
+        timedelays=[1, 2, 3],
+    )
+
+    assign_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(first_path)},
+    )
+    assert assign_response.status_code == 200
+
+    selection_response = test_client.post(
+        "/api/treatment/session/selection",
+        json={
+            "active_data_type": "ABS",
+            "selection": {"x1": 1, "x2": 2, "y1": 0, "y2": 1},
+        },
+    )
+    assert selection_response.status_code == 200
+
+    second_assign_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(second_path)},
+    )
+    second_payload = second_assign_response.get_json()
+
+    assert second_assign_response.status_code == 200
+    assert second_payload["session"]["selection"] == {"x1": 1, "x2": 2, "y1": 0, "y2": 1}
 
 
 def test_selection_export_writes_averaged_kinetics_file(client):

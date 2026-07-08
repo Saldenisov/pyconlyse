@@ -8,6 +8,7 @@ Created on 05 june 2024
 import logging
 from functools import lru_cache
 from pathlib import Path
+import re
 from typing import Union, Tuple
 import h5py
 import numpy as np
@@ -22,6 +23,7 @@ module_logger = logging.getLogger(__name__)
 
 class H5Opener(Opener):
     ALLOWED_FILES_TYPES = ['.h5']
+    TIME_UNIT_RE = re.compile(r"(?<![A-Za-z])(?:\d+(?:\.\d+)?)\s*(fs|ps|ns|us|µs|ms|s)(?![A-Za-z])", re.IGNORECASE)
 
     @staticmethod
     def _data_key(h5_file) -> str:
@@ -43,6 +45,47 @@ class H5Opener(Opener):
             return None
         return int(h5_file["metadata"].attrs["original_measurements"])
 
+    @staticmethod
+    def _as_text(value) -> str:
+        if isinstance(value, bytes):
+            return value.decode("utf-8", errors="ignore")
+        if hasattr(value, "item"):
+            try:
+                return H5Opener._as_text(value.item())
+            except Exception:
+                pass
+        return str(value or "")
+
+    @classmethod
+    def _time_unit_from_path(cls, file_path: Path) -> str:
+        normalized = str(file_path).replace("\\", "/")
+        match = cls.TIME_UNIT_RE.search(normalized)
+        if not match:
+            return ""
+        unit = match.group(1).replace("µ", "u").lower()
+        return unit
+
+    @classmethod
+    def _time_unit_from_metadata(cls, h5_file, file_path: Path) -> str:
+        comments = ""
+        if "metadata" in h5_file:
+            md = h5_file["metadata"]
+            for attr_name in ("time_scale", "scaling_yunit", "scaling_yunit_original"):
+                if attr_name in md.attrs:
+                    value = cls._as_text(md.attrs[attr_name]).strip()
+                    if value and value != "??":
+                        return value
+            if "description" in md.attrs:
+                comments = cls._as_text(md.attrs["description"])
+
+        if "ScalingYUnit=" in comments:
+            try:
+                return comments.split("ScalingYUnit=")[1][1:].split(",")[0].strip().strip('"')[:3]
+            except Exception:
+                pass
+
+        return cls._time_unit_from_path(file_path) or "??"
+
     def read_critical_info(self, file_path: Path) -> CriticalInfo:
         """Read axes and basic info from an HDF5 file.
 
@@ -57,17 +100,11 @@ class H5Opener(Opener):
                 n_maps = f[self._data_key(f)].shape[0]
 
                 comments = ""
+                scalingyunit = self._time_unit_from_metadata(f, file_path)
                 if "metadata" in f:
                     md = f["metadata"]
                     if "description" in md.attrs:
-                        comments = md.attrs["description"]
-
-            scalingyunit = "??"
-            if "ScalingYUnit=" in comments:
-                try:
-                    scalingyunit = comments.split("ScalingYUnit=")[1][1:3]
-                except Exception:
-                    pass
+                        comments = self._as_text(md.attrs["description"])
 
             return CriticalInfo(
                 file_path=file_path,
@@ -141,16 +178,11 @@ class H5Opener(Opener):
                 original_measurements = self._original_measurements(f)
                 comments = ""
                 if "metadata" in f and "description" in f["metadata"].attrs:
-                    comments = f["metadata"].attrs["description"]
+                    comments = self._as_text(f["metadata"].attrs["description"])
 
             data = self._reorient_data2d(data, info)
 
             scalingyunit = info.scaling_yunit
-            if "ScalingYUnit=" in comments:
-                try:
-                    scalingyunit = comments.split("ScalingYUnit=")[1][1:3]
-                except Exception:
-                    pass
 
             measurement = Measurement(
                 type=file_path.suffix,

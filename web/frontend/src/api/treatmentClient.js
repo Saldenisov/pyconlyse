@@ -63,6 +63,8 @@ export function postTreatment(sessionId, url, body = {}) {
     '/api/treatment/average-noise',
     '/api/treatment/calc-abs',
     '/api/treatment/cleaning/save',
+    '/api/treatment/stitch/od',
+    '/api/treatment/stitch/od/preview',
     '/api/treatment/save',
   ].includes(url)
     ? LONG_TREATMENT_TIMEOUT_MS

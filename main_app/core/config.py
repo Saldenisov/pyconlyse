@@ -43,6 +43,7 @@ DEVICE_SERVER_CONFIGS = {
         "script": "STANDA",
     },
     "NETIO": {"instances": ["all", "V0", "VD2"], "script": "NETIO"},
+    "DG645": {"instances": ["1_DG645"], "script": "DG645"},
     "TOPDIRECT": {"instances": ["VD2", "all"], "script": "TOPDIRECT"},
     "LASER_POINTING": {
         "instances": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
@@ -69,6 +70,7 @@ SERVER_CLASS_BY_TYPE: Dict[str, str] = {
     "OWIS": "DS_OWIS_PS90",
     "STANDA": "DS_Standa_Motor",
     "NETIO": "DS_Netio_pdu",
+    "DG645": "DS_DG645",
     "TOPDIRECT": "DS_TopDirect_Motor",
     "LASER_POINTING": "DS_LaserPointing",
     "ML_STABILITY": "DS_ML_Stability",

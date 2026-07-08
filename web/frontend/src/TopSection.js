@@ -223,19 +223,21 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
           title: 'Wavelength, nm',
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+          fixedrange: true,
         },
         yaxis: {
           domain: HEATMAP_Y_DOMAIN,
           title: `Time delay, ${timeScaleForPlot}`.trim(),
           gridcolor: 'rgba(148, 163, 184, 0.26)',
           zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+          fixedrange: true,
         },
-        dragmode: 'zoom',
+        dragmode: false,
       },
       {
         responsive: true,
         displayModeBar: false,
-        doubleClick: 'reset',
+        doubleClick: false,
         scrollZoom: false,
       }
     );
@@ -258,45 +260,6 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
     timeScaleForPlot,
     updateMetricsFromShell,
   ]);
-
-  const relayoutHeatmap = (layoutUpdate) => {
-    const plotNode = plotRef.current;
-    if (!plotNode?._fullLayout) {
-      return;
-    }
-    Plotly.relayout(plotNode, layoutUpdate)
-      .then(() => window.requestAnimationFrame(updateMetricsFromShell))
-      .catch(() => undefined);
-  };
-
-  const resetZoom = () => {
-    relayoutHeatmap({
-      'xaxis.autorange': true,
-      'yaxis.autorange': true,
-    });
-  };
-
-  const zoomBy = (factor) => {
-    const plotNode = plotRef.current;
-    const xAxis = plotNode?._fullLayout?.xaxis;
-    const yAxis = plotNode?._fullLayout?.yaxis;
-    const xRange = xAxis?.range;
-    const yRange = yAxis?.range;
-    if (!Array.isArray(xRange) || !Array.isArray(yRange)) {
-      return;
-    }
-
-    const zoomRange = (range) => {
-      const center = (range[0] + range[1]) / 2;
-      const halfWidth = Math.abs(range[1] - range[0]) * factor / 2;
-      return [center - halfWidth, center + halfWidth];
-    };
-
-    relayoutHeatmap({
-      'xaxis.range': zoomRange(xRange),
-      'yaxis.range': zoomRange(yRange),
-    });
-  };
 
   const getClampedLocalPoint = (event) => {
     const shellNode = shellRef.current;
@@ -586,17 +549,6 @@ function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
 
   return (
     <div className="selection-heatmap-shell" ref={shellRef}>
-      <div className="selection-toolbar" aria-label="Optical density view controls">
-        <button type="button" onClick={() => zoomBy(0.75)} title="Zoom in">
-          +
-        </button>
-        <button type="button" onClick={() => zoomBy(1.35)} title="Zoom out">
-          -
-        </button>
-        <button type="button" onClick={resetZoom} title="Reset zoom">
-          Reset
-        </button>
-      </div>
       <div className="imshow-graph" ref={plotRef}></div>
       <div
         className="selection-overlay"

@@ -79,10 +79,50 @@ def _critical_info(file_path, number_maps, wavelengths, timedelays):
     )
 
 
+def _write_od_dat(file_path, data, wavelengths, timedelays):
+    payload = np.zeros((len(wavelengths) + 1, len(timedelays) + 1), dtype=float)
+    payload[0, 1:] = np.asarray(timedelays, dtype=float)
+    payload[1:, 0] = np.asarray(wavelengths, dtype=float)
+    payload[1:, 1:] = np.asarray(data, dtype=float)
+    np.savetxt(file_path, payload, delimiter="\t", fmt="%.6g")
+
+
 def test_parse_average_ranges_supports_desktop_formats(service):
     parsed = service._parse_average_ranges("500+-10; 600 5; 700")
 
     assert parsed == [(500.0, 10.0), (600.0, 5.0), (700.0, 3.0)]
+
+
+def test_stitch_od_dat_files_joins_same_delay_axis(service, tmp_path):
+    first = tmp_path / "blue.dat"
+    second = tmp_path / "red.dat"
+    output = tmp_path / "stitched.dat"
+    delays = [1.0, 2.0, 3.0]
+    _write_od_dat(first, [[1, 2, 3], [4, 5, 6], [10, 20, 30]], [420.0, 430.0, 440.0], delays)
+    _write_od_dat(second, [[30, 40, 50], [50, 60, 70], [70, 80, 90]], [435.0, 440.0, 450.0], delays)
+
+    summary = service.stitch_od_dat_files(first, second, output)
+    payload = np.loadtxt(output)
+
+    assert summary["wavelengths"] == 4
+    assert summary["timedelays"] == 3
+    assert summary["wavelength_min"] == 420.0
+    assert summary["wavelength_max"] == 450.0
+    assert summary["overlap_range"] == [435.0, 440.0]
+    assert payload.shape == (5, 4)
+    assert payload[0, 1:].tolist() == delays
+    assert payload[1:, 0].tolist() == [420.0, 430.0, 440.0, 450.0]
+    assert payload[3, 1:].tolist() == [30.0, 40.0, 50.0]
+
+
+def test_stitch_od_dat_files_rejects_mismatched_delay_axis(service, tmp_path):
+    first = tmp_path / "a.dat"
+    second = tmp_path / "b.dat"
+    _write_od_dat(first, [[1, 2]], [420.0], [1.0, 2.0])
+    _write_od_dat(second, [[1, 2]], [700.0], [1.0, 3.0])
+
+    with pytest.raises(ValueError, match="identical delay axes"):
+        service.stitch_od_dat_files(first, second, tmp_path / "out.dat")
 
 
 def test_normalize_bounds_swaps_and_clamps_invalid_values(service):
@@ -178,7 +218,7 @@ def test_analyze_sam_cleaning_filters_by_angle_and_surface(service, monkeypatch)
     assert 30.0 < summary["sam_angle_max"] < 40.0
 
 
-def test_analyze_sam_cleaning_reuses_current_cleaned_state_until_reset(service, monkeypatch):
+def test_analyze_sam_cleaning_recomputes_from_original_for_new_thresholds(service, monkeypatch):
     file_path = Path("/tmp/sam_iterative_unit.dat")
     measurements = [
         _measurement([[1.0, 1.0], [1.0, 1.0]]),
@@ -219,11 +259,55 @@ def test_analyze_sam_cleaning_reuses_current_cleaned_state_until_reset(service, 
     assert first["source_measurements"] == 4
     assert first["cleaned_measurements"] == 3
     assert first["state_updated"] is True
-    assert second["source_measurements"] == 3
+    assert second["source_measurements"] == 4
     assert second["original_measurements"] == 4
     assert reset_summary["reset"] is True
     assert reset_summary["discarded_measurements"] == 3
     assert after_reset["source_measurements"] == 4
+
+
+def test_save_sam_cleaning_recomputes_when_thresholds_changed(service, monkeypatch, tmp_path):
+    if treatment_service_module.h5py is None:
+        pytest.skip("h5py is not available")
+
+    file_path = tmp_path / "sam_save_thresholds.h5"
+    output_path = tmp_path / "sam_save_thresholds_cleaned.h5"
+    measurements = [
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[0.0, 2.0], [0.0, 2.0]]),
+    ]
+    info = _critical_info(file_path, 3, [500.0, 550.0], [1.0, 2.0])
+    opener = FakeOpener(measurements)
+    opener.paths[file_path] = info
+
+    monkeypatch.setattr(service, "_resolve_active_path", lambda state: ("ABS", file_path))
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
+    monkeypatch.setattr(
+        service,
+        "_cleaning_output_target",
+        lambda _state, _source_path, _file_name: str(output_path),
+    )
+
+    session_state = {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}}
+    first = service.analyze_sam_cleaning(
+        "session-save-thresholds",
+        session_state,
+        angle_threshold=20.0,
+        surface_threshold=10.0,
+    )
+    saved = service.save_sam_cleaned_h5(
+        "session-save-thresholds",
+        session_state,
+        angle_threshold=180.0,
+        surface_threshold=100.0,
+        output_file_name="sam_save_thresholds_cleaned.h5",
+    )
+
+    assert first["cleaned_measurements"] == 2
+    assert saved["source_measurements"] == 3
+    assert saved["cleaned_measurements"] == 3
+    assert saved["angle_threshold"] == 180.0
 
 
 def test_get_cleaning_view_returns_cleaned_kinetics(service, monkeypatch):
@@ -259,6 +343,81 @@ def test_get_cleaning_view_returns_cleaned_kinetics(service, monkeypatch):
     assert view["x"] == [10.0, 20.0]
     assert view["average"] == [3.5, 5.5]
     assert view["y_axis_type"] == "log"
+
+
+def test_cleaning_view_for_cleaned_h5_includes_deleted_frames(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    file_path = tmp_path / "ABS13113.h5"
+    kept0 = np.asarray([[1.0, 3.0, 5.0], [7.0, 9.0, 11.0]])
+    kept2 = np.asarray([[3.0, 5.0, 7.0], [9.0, 11.0, 13.0]])
+    deleted1 = np.asarray([[2.0, 4.0, 6.0], [8.0, 10.0, 12.0]])
+    with h5py.File(file_path, "w") as h5_file:
+        metadata = h5_file.create_group("metadata")
+        deleted = h5_file.create_group("deleted")
+        h5_file.create_dataset("timedelays", data=np.asarray([10.0, 20.0, 30.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([500.0, 550.0]))
+        h5_file.create_dataset("raw_data", data=np.asarray([kept0, kept2]))
+        deleted.create_dataset("data", data=np.asarray([deleted1]))
+        deleted.attrs["indices"] = np.asarray([1], dtype=np.int64)
+        deleted.attrs["records_json"] = "[]"
+        metadata.attrs["kept_indices"] = np.asarray([0, 2], dtype=np.int64)
+        metadata.attrs["original_measurements"] = 3
+        metadata.attrs["time_scale"] = "us"
+        metadata.attrs["scaling_yunit"] = "us"
+
+    session_state = {"active_data_type": "ABS", "paths": {"ABS": str(file_path)}}
+    view = service.get_cleaning_view("session-cleaned-h5-view", session_state, trace_limit=10)
+    file_info = service.get_file_info(file_path)
+
+    assert view["includes_deleted_measurements"] is True
+    assert view["current_measurements"] == 3
+    assert view["original_measurements"] == 3
+    assert [trace["index"] for trace in view["traces"]] == [0, 1, 2]
+    assert view["average"] == [5.0, 7.0, 9.0]
+    assert file_info["number_maps"] == 2
+    assert file_info["original_number_maps"] == 3
+
+
+def test_restore_cleaned_h5_file_moves_deleted_back_to_raw_data(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    file_path = tmp_path / "ABS13113.h5"
+    kept0 = np.asarray([[1.0, 3.0], [5.0, 7.0]])
+    kept2 = np.asarray([[3.0, 5.0], [7.0, 9.0]])
+    deleted1 = np.asarray([[2.0, 4.0], [6.0, 8.0]])
+    with h5py.File(file_path, "w") as h5_file:
+        metadata = h5_file.create_group("metadata")
+        deleted = h5_file.create_group("deleted")
+        h5_file.create_dataset("timedelays", data=np.asarray([10.0, 20.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([500.0, 550.0]))
+        h5_file.create_dataset("raw_data", data=np.asarray([kept0, kept2]))
+        deleted.create_dataset("data", data=np.asarray([deleted1]))
+        deleted.attrs["indices"] = np.asarray([1], dtype=np.int64)
+        deleted.attrs["records_json"] = '[{"index":1,"reason":"angle"}]'
+        metadata.attrs["kept_indices"] = np.asarray([0, 2], dtype=np.int64)
+        metadata.attrs["original_measurements"] = 3
+        metadata.attrs["cleaned_measurements"] = 2
+        metadata.attrs["time_scale"] = "us"
+        metadata.attrs["scaling_yunit"] = "us"
+
+    restored = service.restore_cleaned_h5_file(file_path)
+
+    assert restored["restored"] is True
+    assert restored["restored_measurements"] == 1
+    assert restored["current_measurements"] == 3
+    with h5py.File(file_path, "r") as h5_file:
+        np.testing.assert_allclose(h5_file["raw_data"][0], kept0)
+        np.testing.assert_allclose(h5_file["raw_data"][1], deleted1)
+        np.testing.assert_allclose(h5_file["raw_data"][2], kept2)
+        assert h5_file["metadata"].attrs["cleaned_measurements"] == 3
+        assert bool(h5_file["metadata"].attrs["restored_from_deleted"]) is True
+        assert h5_file["deleted"]["data"].shape[0] == 0
+        assert list(h5_file["deleted"].attrs["indices"]) == []
 
 
 def test_save_sam_cleaned_h5_defaults_to_source_folder_and_stem(
@@ -340,6 +499,8 @@ def test_convert_file_to_h5_uses_gzip_level_4(service, monkeypatch, tmp_path):
         assert raw_data.compression_opts == 4
         assert h5_file["metadata"].attrs["compression"] == "gzip"
         assert h5_file["metadata"].attrs["compression_level"] == 4
+        assert h5_file["metadata"].attrs["time_scale"] == "ps"
+        assert h5_file["metadata"].attrs["scaling_yunit"] == "ps"
 
     overwrite_summary = service.convert_file_to_h5(output_path, output_path)
     assert overwrite_summary["output_path"] == str(output_path)
@@ -347,6 +508,79 @@ def test_convert_file_to_h5_uses_gzip_level_4(service, monkeypatch, tmp_path):
         raw_data = h5_file["raw_data"]
         assert raw_data.compression == "gzip"
         assert raw_data.compression_opts == 4
+
+
+def test_convert_hamamatsu_his_to_h5_streams_directly(service, monkeypatch, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    source_path = tmp_path / "ABS12886.his"
+    output_path = tmp_path / "ABS12886.h5"
+    data_pos = 8
+    first_map = np.asarray([[1, 2, 3], [4, 5, 6]], dtype=np.int16)
+    second_map = np.asarray([[7, 8, 9], [10, 11, 12]], dtype=np.int16)
+    source_path.write_bytes(
+        b"H" * data_pos
+        + first_map.tobytes()
+        + b"M" * 64
+        + second_map.tobytes()
+    )
+
+    class FastPathOnlyOpener:
+        def give_all_maps(self, _path):
+            raise AssertionError("Hamamatsu fast path should not materialize maps")
+
+    info = SimpleNamespace(
+        file_path=source_path,
+        number_maps=2,
+        wavelengths=np.asarray([500.0, 550.0, 600.0]),
+        timedelays=np.asarray([1.0, 2.0]),
+        wavelengths_length=3,
+        timedelays_length=2,
+        scaling_yunit="ps",
+        header="fake header",
+        bytes_per_point=2,
+        data_pos=data_pos,
+    )
+
+    monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (FastPathOnlyOpener(), info))
+
+    progress = []
+    summary = service.convert_file_to_h5(
+        source_path,
+        output_path,
+        progress_callback=lambda current, total: progress.append((current, total)),
+    )
+
+    assert summary["original_measurements"] == 2
+    assert progress == [(1, 2), (2, 2)]
+    with h5py.File(output_path, "r") as h5_file:
+        raw_data = h5_file["raw_data"]
+        assert raw_data.shape == (2, 3, 2)
+        assert raw_data.compression == "gzip"
+        assert h5_file["metadata"].attrs["time_scale"] == "ps"
+        assert h5_file["metadata"].attrs["scaling_yunit"] == "ps"
+        np.testing.assert_allclose(raw_data[0], first_map.transpose())
+        np.testing.assert_allclose(raw_data[1], second_map.transpose())
+
+
+def test_h5_file_info_infers_time_scale_from_path_for_legacy_h5(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    folder = tmp_path / "13113-water_600_1us-x0"
+    folder.mkdir()
+    file_path = folder / "ABS13113.h5"
+    with h5py.File(file_path, "w") as h5_file:
+        h5_file.create_dataset("timedelays", data=np.asarray([1.0, 2.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([421.0, 778.0]))
+        h5_file.create_dataset("raw_data", data=np.ones((2, 2, 2), dtype=float))
+
+    file_info = service.get_file_info(file_path)
+
+    assert file_info["time_scale"] == "us"
 
 
 def test_calc_abs_supports_his_mode_with_abs_base_noise_pairs(service, monkeypatch, tmp_path):

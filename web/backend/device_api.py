@@ -626,6 +626,11 @@ def _find_starter_for_server(server_name):
     raise Exception(f"No Starter manages server {server_name}")
 
 
+def _is_already_running_error(exc):
+    text = str(exc).lower()
+    return 'already_running' in text or 'already running' in text
+
+
 def _resolve_server_name(device_name):
     db = tango.Database()
     try:
@@ -742,7 +747,11 @@ def control_server():
 
         if action == 'start':
             if server_name not in running_before:
-                starter.command_inout('DevStart', server_name)
+                try:
+                    starter.command_inout('DevStart', server_name)
+                except Exception as exc:
+                    if not _is_already_running_error(exc):
+                        raise
                 time.sleep(2)
         elif action == 'hard_kill':
             starter.command_inout('HardKillServer', server_name)
@@ -760,7 +769,11 @@ def control_server():
                     starter.command_inout('HardKillServer', server_name)
                     time.sleep(2)
 
-            starter.command_inout('DevStart', server_name)
+            try:
+                starter.command_inout('DevStart', server_name)
+            except Exception as exc:
+                if not _is_already_running_error(exc):
+                    raise
             time.sleep(2)
 
         _, running_after, stopped_after = _get_starter_server_lists(starter_name)

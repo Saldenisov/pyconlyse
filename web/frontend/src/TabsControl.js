@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -40,6 +41,35 @@ const REQUIRED_DATA_TYPES = {
   'HIS+NOISE': ['ABS+BASE', 'NOISE'],
   'ABS+BASE+NOISE': ['ABS', 'BASE', 'NOISE'],
 };
+const FILES_LAYOUT_STORAGE_KEY = 'pyconlyse.treatment.filesLayout';
+const DEFAULT_FILES_LAYOUT = {
+  parameters: 300,
+  selected: 320,
+};
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function readFilesLayout() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(FILES_LAYOUT_STORAGE_KEY) || '{}');
+    return {
+      parameters: clampNumber(Number(saved.parameters) || DEFAULT_FILES_LAYOUT.parameters, 240, 520),
+      selected: clampNumber(Number(saved.selected) || DEFAULT_FILES_LAYOUT.selected, 260, 520),
+    };
+  } catch (_error) {
+    return DEFAULT_FILES_LAYOUT;
+  }
+}
+
+function saveFilesLayout(layout) {
+  try {
+    window.localStorage.setItem(FILES_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
+  } catch (_error) {
+    // localStorage may be unavailable in private or restricted browser contexts.
+  }
+}
 
 function requiredDataTypesForExpType(expType) {
   return REQUIRED_DATA_TYPES[String(expType || '').trim().toUpperCase()] || [];
@@ -73,8 +103,6 @@ const ParametersZone = ({
   onCommitSaveFileName,
   onReset,
   profileName,
-  onApplyProfilePreset,
-  isBusy,
 }) => {
   const isAbsBaseNoiseMode = session.exp_type === 'ABS+BASE+NOISE';
 
@@ -143,7 +171,7 @@ const ParametersZone = ({
           First map with electrons
         </label>
       </div>
-      <div className="parameter-field">
+      <div className="parameter-field parameter-field-wide">
         <label>Save Folder:</label>
         <input
           type="text"
@@ -153,7 +181,7 @@ const ParametersZone = ({
           placeholder="Select a folder inside the treatment root"
         />
       </div>
-      <div className="parameter-field">
+      <div className="parameter-field parameter-field-wide">
         <label>Save File Name:</label>
         <input
           type="text"
@@ -164,9 +192,6 @@ const ParametersZone = ({
         />
       </div>
       <div className="parameter-actions">
-        <button onClick={onApplyProfilePreset} disabled={isBusy}>
-          Apply {profileName} Preset
-        </button>
         <button onClick={onReset}>Reset Session</button>
       </div>
     </div>
@@ -191,6 +216,25 @@ function getParentFolder(folderPath, allowedRoot) {
   return parent;
 }
 
+function getPathParent(pathValue) {
+  const trimmed = String(pathValue || '').replace(/[\\/]+$/, '');
+  const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+  if (lastSeparator < 0) {
+    return '';
+  }
+  return trimmed.slice(0, lastSeparator);
+}
+
+function joinPath(folderPath, fileName) {
+  const folder = String(folderPath || '').replace(/[\\/]+$/, '');
+  const name = String(fileName || '').replace(/^[\\/]+/, '');
+  if (!folder || !name) {
+    return '';
+  }
+  const separator = folder.includes('\\') && !folder.includes('/') ? '\\' : '/';
+  return `${folder}${separator}${name}`;
+}
+
 function pathName(folderPath) {
   const trimmed = String(folderPath || '').replace(/[\\/]+$/, '');
   const lastSeparator = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
@@ -211,6 +255,128 @@ function pathStem(filePath) {
 function h5NameForPath(filePath) {
   const stem = pathStem(filePath);
   return stem ? `${stem}.h5` : '';
+}
+
+function stitchedNameForPaths(firstPath, secondPath, stitchedMap = null) {
+  const firstStem = pathStem(firstPath);
+  const secondStem = pathStem(secondPath);
+  if (!firstStem && !secondStem) {
+    return 'stitched_od.dat';
+  }
+  if (!firstStem || !secondStem) {
+    return `${firstStem || secondStem}_stitched.dat`;
+  }
+  const firstParts = firstStem.split(/[_\-\s]+/);
+  const secondParts = secondStem.split(/[_\-\s]+/);
+  const sharedParts = [];
+  for (let index = 0; index < Math.min(firstParts.length, secondParts.length); index += 1) {
+    if (firstParts[index] !== secondParts[index]) {
+      break;
+    }
+    sharedParts.push(firstParts[index]);
+  }
+  const sharedStem = sharedParts.join('_') || `${firstStem}_${secondStem}`;
+  const wavelengthMin = stitchedMap?.wavelength_min;
+  const wavelengthMax = stitchedMap?.wavelength_max;
+  if (Number.isFinite(Number(wavelengthMin)) && Number.isFinite(Number(wavelengthMax))) {
+    return `${sharedStem}_${Number(wavelengthMin).toFixed(0)}-${Number(wavelengthMax).toFixed(0)}nm_stitched.dat`;
+  }
+  return `${sharedStem}_stitched.dat`;
+}
+
+function stitchRegionsToShapes(regions, side = 'left') {
+  return (regions || []).map((region) => ({
+    type: 'rect',
+    name: 'stitch-region',
+    xref: 'x',
+    yref: 'y',
+    x0: region[`${side}_wavelength_start`] ?? region.wavelength_start,
+    x1: region[`${side}_wavelength_end`] ?? region.wavelength_end,
+    y0: region.delay_start,
+    y1: region.delay_end,
+    fillcolor: 'rgba(250, 204, 21, 0.16)',
+    line: { color: 'rgba(250, 204, 21, 0.95)', width: 1.5 },
+  }));
+}
+
+function shapesToStitchRegions(shapes, previousRegions = [], side = 'left') {
+  return (shapes || [])
+    .filter((shape) => shape?.type === 'rect' && shape.xref === 'x' && shape.yref === 'y')
+    .map((shape, index) => {
+      const previous = previousRegions[index] || {};
+      const next = {
+        ...previous,
+        [`${side}_wavelength_start`]: Number(shape.x0),
+        [`${side}_wavelength_end`]: Number(shape.x1),
+        delay_start: Number(shape.y0),
+        delay_end: Number(shape.y1),
+        label: previous.label || `Region ${index + 1}`,
+      };
+      const otherSide = side === 'left' ? 'right' : 'left';
+      if (next[`${otherSide}_wavelength_start`] === undefined) {
+        next[`${otherSide}_wavelength_start`] = Number(shape.x0);
+      }
+      if (next[`${otherSide}_wavelength_end`] === undefined) {
+        next[`${otherSide}_wavelength_end`] = Number(shape.x1);
+      }
+      return next;
+    })
+    .filter((region) => (
+      Number.isFinite(region[`${side}_wavelength_start`]) &&
+      Number.isFinite(region[`${side}_wavelength_end`]) &&
+      Number.isFinite(region.delay_start) &&
+      Number.isFinite(region.delay_end)
+    ));
+}
+
+function cropHeatmapMap(map, wavelengthRange, delayRange) {
+  if (!map) {
+    return map;
+  }
+  const x = map.x || [];
+  const y = map.y || [];
+  const z = map.z || [];
+  const xMin = Number(wavelengthRange?.[0]);
+  const xMax = Number(wavelengthRange?.[1]);
+  const yMin = Number(delayRange?.[0]);
+  const yMax = Number(delayRange?.[1]);
+  const xIndices = x
+    .map((value, index) => ({ value: Number(value), index }))
+    .filter(({ value }) => (
+      !Number.isFinite(xMin) ||
+      !Number.isFinite(xMax) ||
+      (value >= Math.min(xMin, xMax) && value <= Math.max(xMin, xMax))
+    ))
+    .map(({ index }) => index);
+  const yIndices = y
+    .map((value, index) => ({ value: Number(value), index }))
+    .filter(({ value }) => (
+      !Number.isFinite(yMin) ||
+      !Number.isFinite(yMax) ||
+      (value >= Math.min(yMin, yMax) && value <= Math.max(yMin, yMax))
+    ))
+    .map(({ index }) => index);
+  if (xIndices.length === 0 || yIndices.length === 0) {
+    return map;
+  }
+  let croppedZ = z;
+  if (z.length === x.length) {
+    croppedZ = xIndices.map((xIndex) => yIndices.map((yIndex) => z[xIndex]?.[yIndex]));
+  } else if (z.length === y.length) {
+    croppedZ = yIndices.map((yIndex) => xIndices.map((xIndex) => z[yIndex]?.[xIndex]));
+  }
+  return {
+    ...map,
+    x: xIndices.map((index) => x[index]),
+    y: yIndices.map((index) => y[index]),
+    z: croppedZ,
+  };
+}
+
+function sortStitchDatFiles(files) {
+  return [...(files || [])].sort((first, second) => {
+    return String(first.name || '').localeCompare(String(second.name || ''));
+  });
 }
 
 function formatFileSize(bytes) {
@@ -244,6 +410,42 @@ function formatWavelengthRange(summary) {
     return '...';
   }
   return `${Math.round(low)}-${Math.round(high)}nm`;
+}
+
+function formatAxisValue(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return '';
+  }
+  if (Math.abs(numeric) >= 100 || Number.isInteger(numeric)) {
+    return String(Math.round(numeric));
+  }
+  return String(Number(numeric.toFixed(3)));
+}
+
+function formatTimeRange(summary) {
+  const low = Number(summary?.timedelay_min);
+  const high = Number(summary?.timedelay_max);
+  const unit = summary?.time_scale || '';
+  if (!Number.isFinite(low) || !Number.isFinite(high)) {
+    return unit || '...';
+  }
+  if (Math.abs(low - high) < Number.EPSILON) {
+    return `${formatAxisValue(low)}${unit}`;
+  }
+  return `${formatAxisValue(low)}-${formatAxisValue(high)}${unit}`;
+}
+
+function formatFrameCount(summary) {
+  const current = Number(summary?.number_maps);
+  const original = Number(summary?.original_number_maps);
+  if (!Number.isFinite(current) || current <= 0) {
+    return '...';
+  }
+  if (Number.isFinite(original) && original > current) {
+    return `${Math.round(current)}/${Math.round(original)}`;
+  }
+  return String(Math.round(current));
 }
 
 function summarizeFolderSet(payload, label, folderPath) {
@@ -286,6 +488,12 @@ function summarizeFolderSet(payload, label, folderPath) {
   }
   if (cleanedTypes.length) {
     lines.push(`Cleaned: ${cleanedTypes.join(', ')}.`);
+  }
+  if (folderSet.auto_calculated) {
+    lines.push('OD calculated and displayed.');
+  }
+  if (folderSet.auto_calc_error) {
+    lines.push(`OD calculation skipped: ${folderSet.auto_calc_error}`);
   }
   return lines.join('\n');
 }
@@ -347,7 +555,20 @@ function summarizeFolderSetProgress(job, label, folderPath) {
   files.forEach(([dataType, item]) => {
     const source = item?.output_path || item?.source_path || '';
     const status = item?.status || 'queued';
-    lines.push(`${dataType}: ${status}${source ? ` - ${pathName(source)}` : ''}`);
+    const phase = item?.phase ? `/${item.phase}` : '';
+    const itemCurrent = Number(item?.current || 0);
+    const itemTotal = Number(item?.total || 0);
+    const itemPercent = itemTotal > 0
+      ? ` (${Math.min(100, (itemCurrent / itemTotal) * 100).toFixed(1)}%)`
+      : '';
+    let progress = '';
+    if (itemTotal > 0 && item?.phase === 'convert') {
+      progress = ` ${itemCurrent}/${itemTotal} maps${itemPercent}`;
+    } else if (itemTotal > 0) {
+      progress = ` ${formatFileSize(itemCurrent)}/${formatFileSize(itemTotal)}${itemPercent}`;
+    }
+    const message = item?.message ? ` - ${item.message}` : '';
+    lines.push(`${dataType}: ${status}${phase}${progress}${message}${source ? ` - ${pathName(source)}` : ''}`);
   });
   if (job?.phase === 'converting') {
     lines.push('H5 raw_data compression: gzip level 4.');
@@ -521,6 +742,201 @@ function CleaningKineticsPreview({ view }) {
   );
 }
 
+function StitchHeatmap({ map, title, overlapRange, regions = [], regionSide = 'left', onRegionsChange = null }) {
+  const plotRef = useRef(null);
+
+  useEffect(() => {
+    const plotNode = plotRef.current;
+    if (!plotNode || !map) {
+      return undefined;
+    }
+
+    const shapes = overlapRange
+      ? [{
+          type: 'rect',
+          name: 'stitch-overlap',
+          xref: 'x',
+          yref: 'paper',
+          x0: overlapRange[0],
+          x1: overlapRange[1],
+          y0: 0,
+          y1: 1,
+          fillcolor: 'rgba(244, 114, 182, 0.12)',
+          line: { color: 'rgba(244, 114, 182, 0.78)', width: 1 },
+        }]
+      : [];
+    shapes.push(...stitchRegionsToShapes(regions, regionSide));
+
+    Plotly.react(
+      plotNode,
+      [{
+        x: map.x || [],
+        y: map.y || [],
+        z: map.z || [],
+        type: 'heatmap',
+        colorscale: 'Viridis',
+        colorbar: { thickness: 10 },
+        hovertemplate: 'W:%{x}<br>T:%{y}<br>OD:%{z}<extra></extra>',
+      }],
+      {
+        title: { text: title, font: { size: 13 } },
+        margin: { t: 34, r: 10, b: 42, l: 54 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
+        xaxis: { title: 'Wavelength, nm', gridcolor: 'rgba(148, 163, 184, 0.24)' },
+        yaxis: { title: 'Delay', gridcolor: 'rgba(148, 163, 184, 0.24)' },
+        shapes,
+        dragmode: onRegionsChange ? 'drawrect' : 'zoom',
+        newshape: {
+          fillcolor: 'rgba(250, 204, 21, 0.16)',
+          line: { color: 'rgba(250, 204, 21, 0.95)', width: 1.5 },
+        },
+      },
+      {
+        responsive: true,
+        displayModeBar: true,
+        editable: false,
+        edits: onRegionsChange ? { shapePosition: true } : undefined,
+        modeBarButtonsToAdd: onRegionsChange ? ['drawrect', 'eraseshape'] : [],
+      }
+    ).catch(() => undefined);
+
+    const handleRelayout = (eventData) => {
+      if (!onRegionsChange || !eventData) {
+        return;
+      }
+      const shapeChanged = Object.keys(eventData).some((key) => key.startsWith('shapes'));
+      if (!shapeChanged) {
+        return;
+      }
+      window.setTimeout(() => {
+        const editableShapes = (plotNode.layout?.shapes || []).filter((shape) => shape.yref === 'y');
+        const nextRegions = shapesToStitchRegions(editableShapes, regions, regionSide);
+        onRegionsChange(nextRegions);
+      }, 0);
+    };
+    if (plotNode.on) {
+      plotNode.on('plotly_relayout', handleRelayout);
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (plotNode?._fullLayout) {
+        Plotly.Plots.resize(plotNode);
+      }
+    });
+    resizeObserver.observe(plotNode);
+    return () => {
+      resizeObserver.disconnect();
+      try {
+        if (plotNode.removeListener) {
+          plotNode.removeListener('plotly_relayout', handleRelayout);
+        }
+        Plotly.purge(plotNode);
+      } catch (_error) {
+        // Ignore Plotly teardown races.
+      }
+    };
+  }, [map, overlapRange, regions, regionSide, onRegionsChange, title]);
+
+  return <div className="stitch-heatmap" ref={plotRef} />;
+}
+
+function StitchProfilePlot({ spectra, title, mode = 'selected' }) {
+  const plotRef = useRef(null);
+
+  useEffect(() => {
+    const plotNode = plotRef.current;
+    if (!plotNode || !spectra) {
+      return undefined;
+    }
+
+    const traces = [];
+    spectra.forEach((region) => {
+      if (mode === 'overlap') {
+        traces.push(
+          {
+            x: region.left_overlap?.x || [],
+            y: region.left_overlap?.y || [],
+            type: 'scatter',
+            mode: 'lines',
+            name: `${region.label} left overlap`,
+            line: { color: '#facc15', width: 2.8 },
+          },
+          {
+            x: region.right_overlap?.x || [],
+            y: region.right_overlap?.y || [],
+            type: 'scatter',
+            mode: 'lines',
+            name: `${region.label} right overlap`,
+            line: { color: '#38bdf8', width: 2.8 },
+          }
+        );
+        return;
+      }
+      traces.push(
+        {
+          x: region.left_selected?.x || [],
+          y: region.left_selected?.y || [],
+          type: 'scatter',
+          mode: 'lines',
+          name: `${region.label} left selected`,
+          line: { color: '#facc15', width: 2.2 },
+        },
+        {
+          x: region.right_selected?.x || [],
+          y: region.right_selected?.y || [],
+          type: 'scatter',
+          mode: 'lines',
+          name: `${region.label} right selected`,
+          line: { color: '#38bdf8', width: 2.2 },
+        },
+        {
+          x: region.stitched_selected?.x || [],
+          y: region.stitched_selected?.y || [],
+          type: 'scatter',
+          mode: 'lines',
+          name: `${region.label} stitched`,
+          line: { color: region.color || '#22c55e', width: 1.8, dash: 'dot' },
+        }
+      );
+    });
+
+    Plotly.react(
+      plotNode,
+      traces,
+      {
+        title: { text: title, font: { size: 13 } },
+        margin: { t: 34, r: 16, b: 44, l: 54 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
+        xaxis: { title: 'Wavelength, nm', gridcolor: 'rgba(148, 163, 184, 0.24)' },
+        yaxis: { title: 'OD', gridcolor: 'rgba(148, 163, 184, 0.24)' },
+        legend: { orientation: 'h', y: -0.24 },
+      },
+      { responsive: true, displayModeBar: true }
+    ).catch(() => undefined);
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (plotNode?._fullLayout) {
+        Plotly.Plots.resize(plotNode);
+      }
+    });
+    resizeObserver.observe(plotNode);
+    return () => {
+      resizeObserver.disconnect();
+      try {
+        Plotly.purge(plotNode);
+      } catch (_error) {
+        // Ignore Plotly teardown races.
+      }
+    };
+  }, [spectra, title, mode]);
+
+  return <div className="stitch-profile" ref={plotRef} />;
+}
+
 const TabsControl = () => {
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
@@ -528,6 +944,10 @@ const TabsControl = () => {
   const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
+  const filesLayoutRef = useRef(null);
+  const stitchAutoPreviewAttemptKeyRef = useRef('');
+  const skipNextStitchCoefficientRefreshRef = useRef(false);
+  const [filesLayout, setFilesLayout] = useState(readFilesLayout);
   const [folderTreeCache, setFolderTreeCache] = useState({});
   const [fileSummaryCache, setFileSummaryCache] = useState({});
   const [expandedFolders, setExpandedFolders] = useState(() => new Set());
@@ -549,10 +969,28 @@ const TabsControl = () => {
   const [cleaningSummary, setCleaningSummary] = useState(null);
   const [cleaningView, setCleaningView] = useState(null);
   const [isCleaningViewLoading, setIsCleaningViewLoading] = useState(false);
+  const [stitchFileA, setStitchFileA] = useState('');
+  const [stitchFileB, setStitchFileB] = useState('');
+  const [stitchOutputName, setStitchOutputName] = useState('stitched_od.dat');
+  const [stitchLeftScale, setStitchLeftScale] = useState('1');
+  const [stitchLeftOffset, setStitchLeftOffset] = useState('0');
+  const [stitchRightScale, setStitchRightScale] = useState('1');
+  const [stitchRightOffset, setStitchRightOffset] = useState('0');
+  const [stitchRightDelayShift, setStitchRightDelayShift] = useState('0');
+  const [stitchLeftWavelengthStart, setStitchLeftWavelengthStart] = useState('');
+  const [stitchLeftWavelengthEnd, setStitchLeftWavelengthEnd] = useState('');
+  const [stitchRightWavelengthStart, setStitchRightWavelengthStart] = useState('');
+  const [stitchRightWavelengthEnd, setStitchRightWavelengthEnd] = useState('');
+  const [stitchRegionStart, setStitchRegionStart] = useState('');
+  const [stitchRegionEnd, setStitchRegionEnd] = useState('');
+  const [stitchRegions, setStitchRegions] = useState([]);
+  const [stitchPreview, setStitchPreview] = useState(null);
+  const [stitchSummary, setStitchSummary] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
   const [busyStartedAt, setBusyStartedAt] = useState(null);
   const [busyNow, setBusyNow] = useState(Date.now());
   const profilePreset = PROFILE_PRESETS[treatmentProfile] || PROFILE_PRESETS.VD2;
+  const isV0Profile = treatmentProfile === 'V0';
 
   const session = treatment ? treatment.session : null;
   const requiredDataTypes =
@@ -572,6 +1010,52 @@ const TabsControl = () => {
   const cleaningOutputName = h5NameForPath(cleaningSourcePath);
   const busyElapsedSeconds =
     isBusy && busyStartedAt ? Math.max(0, Math.floor((busyNow - busyStartedAt) / 1000)) : 0;
+  const filesGridTemplate = `${filesLayout.parameters}px 6px minmax(620px, 1fr) 6px ${filesLayout.selected}px`;
+
+  const handleFilesColumnResizeStart = useCallback((edge, event) => {
+    event.preventDefault();
+    const containerWidth =
+      filesLayoutRef.current?.getBoundingClientRect().width || window.innerWidth || 1280;
+    const startX = event.clientX;
+    const startLayout = { ...filesLayout };
+    const minTree = 620;
+    const gutters = 12;
+    const minParameters = 240;
+    const maxParameters = Math.max(
+      minParameters,
+      containerWidth - startLayout.selected - minTree - gutters
+    );
+    const minSelected = 260;
+    const maxSelected = Math.max(
+      minSelected,
+      containerWidth - startLayout.parameters - minTree - gutters
+    );
+    let nextLayout = startLayout;
+
+    const onMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      nextLayout = {
+        parameters:
+          edge === 'parameters'
+            ? clampNumber(startLayout.parameters + delta, minParameters, maxParameters)
+            : startLayout.parameters,
+        selected:
+          edge === 'selected'
+            ? clampNumber(startLayout.selected - delta, minSelected, maxSelected)
+            : startLayout.selected,
+      };
+      setFilesLayout(nextLayout);
+    };
+
+    const onUp = () => {
+      saveFilesLayout(nextLayout);
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [filesLayout]);
 
   useEffect(() => {
     if (!isBusy) {
@@ -589,6 +1073,12 @@ const TabsControl = () => {
       setBusyStartedAt(null);
     }
   }, [isBusy]);
+
+  useEffect(() => {
+    if (activeTab === 'selection' || (isV0Profile && activeTab !== 'files')) {
+      setActiveTab('files');
+    }
+  }, [activeTab, isV0Profile]);
 
   const refreshSession = async () => {
     const payload = await fetchTreatmentSession(treatmentSessionId);
@@ -858,7 +1348,10 @@ const TabsControl = () => {
       }
     }
 
-    if (nextExpType === 'ABS+BASE+NOISE') {
+    if (
+      nextExpType === 'ABS+BASE+NOISE' &&
+      Object.prototype.hasOwnProperty.call(normalizedPatch, 'exp_type')
+    ) {
       normalizedPatch.calc_mode = 'averaged';
     }
 
@@ -939,6 +1432,21 @@ const TabsControl = () => {
       setFileContextMenu(null);
       setIsBusy(false);
     }
+  };
+
+  const handleSetStitchFile = (filePath, side) => {
+    if (!filePath) {
+      return;
+    }
+    if (side === 'A') {
+      setStitchFileA(filePath);
+    } else {
+      setStitchFileB(filePath);
+    }
+    setStitchPreview(null);
+    setStitchSummary(null);
+    setFileContextMenu(null);
+    setOperationMessage(`Set Stitch ${side}: ${pathName(filePath)}`);
   };
 
   const handleCompressFile = async (filePath) => {
@@ -1202,28 +1710,6 @@ const TabsControl = () => {
     handleConfigChange({ save_file_name: draftSaveFileName });
   };
 
-  const handleApplyProfilePreset = async () => {
-    setError('');
-    setIsBusy(true);
-    setOperationMessage('');
-    try {
-      const payload = await postTreatment(
-        treatmentSessionId,
-        '/api/treatment/session/config',
-        profilePreset
-      );
-      setTreatment(payload);
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
-      setOperationMessage(`${treatmentProfile} preset applied.`);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setIsBusy(false);
-    }
-  };
-
   const formatExportRanges = (ranges) =>
     (ranges || [])
       .map((item) => `${item.center} ${item.width}`)
@@ -1335,6 +1821,8 @@ const TabsControl = () => {
       let payload;
       if (mode === 'reset') {
         payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/reset');
+      } else if (mode === 'restore') {
+        payload = await postTreatment(treatmentSessionId, '/api/treatment/cleaning/restore');
       } else {
         payload = await postTreatment(
           treatmentSessionId,
@@ -1359,6 +1847,27 @@ const TabsControl = () => {
             ? `Cleaning state reset for ${payload.cleaning.file_path}.`
             : 'Cleaning state was already empty.'
         );
+      } else if (mode === 'restore') {
+        setTreatment(payload);
+        setCleaningSummary(payload.cleaning);
+        if (payload.cleaning_view) {
+          setCleaningView(payload.cleaning_view);
+        }
+        if (payload.cleaning?.output_path) {
+          setFileSummaryCache((current) => {
+            const next = { ...current };
+            delete next[payload.cleaning.output_path];
+            return next;
+          });
+        }
+        setOperationMessage(
+          payload.cleaning?.restored
+            ? `Denoising restored ${payload.cleaning.restored_measurements} maps into raw_data.`
+            : 'No deleted maps were stored in this H5.'
+        );
+        if (requestSelectionRefresh) {
+          requestSelectionRefresh();
+        }
       } else {
         setCleaningSummary(payload.cleaning);
         if (payload.cleaning_view) {
@@ -1390,30 +1899,217 @@ const TabsControl = () => {
     }
   };
 
+  const stitchRequestPayload = () => ({
+    file_a: stitchFileA,
+    file_b: stitchFileB,
+    time_regions: stitchRegions,
+    left_scale: Number.parseFloat(stitchLeftScale),
+    left_offset: Number.parseFloat(stitchLeftOffset),
+    right_scale: Number.parseFloat(stitchRightScale),
+    right_offset: Number.parseFloat(stitchRightOffset),
+    right_delay_shift_pixels: Number.parseInt(stitchRightDelayShift, 10) || 0,
+  });
+
+  const syncStitchRegionInputs = useCallback((region) => {
+    if (!region) {
+      return;
+    }
+    setStitchLeftWavelengthStart(String(region.left_wavelength_start ?? region.wavelength_start ?? ''));
+    setStitchLeftWavelengthEnd(String(region.left_wavelength_end ?? region.wavelength_end ?? ''));
+    setStitchRightWavelengthStart(String(region.right_wavelength_start ?? region.wavelength_start ?? ''));
+    setStitchRightWavelengthEnd(String(region.right_wavelength_end ?? region.wavelength_end ?? ''));
+    setStitchRegionStart(String(region.delay_start ?? ''));
+    setStitchRegionEnd(String(region.delay_end ?? ''));
+  }, []);
+
+  const handleStitchRegionsChange = useCallback((regions) => {
+    setStitchRegions(regions);
+    syncStitchRegionInputs(regions?.[regions.length - 1]);
+  }, [syncStitchRegionInputs]);
+
+  const refreshStitchPreview = async (fitRight = false, silent = false, auto = false, coefficientOverrides = null) => {
+    setError('');
+    if (!silent) {
+      setOperationMessage('');
+    }
+    if (!stitchFileA || !stitchFileB) {
+      setError('Select two OD DAT files.');
+      return;
+    }
+    const attemptKey = `${stitchFileA}|${stitchFileB}`;
+    if (auto) {
+      if (stitchAutoPreviewAttemptKeyRef.current === attemptKey) {
+        return;
+      }
+      stitchAutoPreviewAttemptKeyRef.current = attemptKey;
+    } else {
+      stitchAutoPreviewAttemptKeyRef.current = '';
+    }
+    if (!silent) {
+      setIsBusy(true);
+    }
+    try {
+      const requestPayload = {
+        ...stitchRequestPayload(),
+        ...(coefficientOverrides || {}),
+        fit_right: fitRight,
+      };
+      if (fitRight) {
+        requestPayload.right_scale = 1;
+        requestPayload.right_offset = 0;
+      }
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/stitch/od/preview', requestPayload);
+      const preview = payload.stitch_preview;
+      if (stitchRegions.length === 0 && preview.overlap_range && preview.timedelay_min !== null && preview.timedelay_max !== null) {
+        const defaultRegion = {
+          left_wavelength_start: preview.overlap_range[0],
+          left_wavelength_end: preview.overlap_range[1],
+          right_wavelength_start: preview.overlap_range[0],
+          right_wavelength_end: preview.overlap_range[1],
+          delay_start: preview.timedelay_min,
+          delay_end: preview.timedelay_max,
+          label: 'Region 1',
+        };
+        setStitchRegions([defaultRegion]);
+        syncStitchRegionInputs(defaultRegion);
+      }
+      setStitchPreview(preview);
+      if (preview.suggested_output_file_name && stitchOutputName === 'stitched_od.dat') {
+        setStitchOutputName(preview.suggested_output_file_name);
+      }
+      if (preview.fit) {
+        skipNextStitchCoefficientRefreshRef.current = true;
+        setStitchRightScale(String(Number(preview.fit.right_scale).toPrecision(8)));
+        setStitchRightOffset(String(Number(preview.fit.right_offset).toPrecision(8)));
+      }
+      if (!silent) {
+        setOperationMessage(
+          fitRight
+            ? `Right map fitted by integrated profile: scale ${Number(preview.coefficients.right_scale).toPrecision(6)}.`
+            : coefficientOverrides
+              ? 'Stitch fit reverted.'
+              : 'Stitch pair loaded.'
+        );
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      if (!silent) {
+        setIsBusy(false);
+      }
+    }
+  };
+
+  const handleRevertStitchFit = () => {
+    skipNextStitchCoefficientRefreshRef.current = true;
+    setStitchRightScale('1');
+    setStitchRightOffset('0');
+    refreshStitchPreview(false, false, false, { right_scale: 1, right_offset: 0 });
+  };
+
+  const handleAddStitchRegion = () => {
+    const leftWavelengthStart = Number.parseFloat(stitchLeftWavelengthStart);
+    const leftWavelengthEnd = Number.parseFloat(stitchLeftWavelengthEnd);
+    const rightWavelengthStart = Number.parseFloat(stitchRightWavelengthStart);
+    const rightWavelengthEnd = Number.parseFloat(stitchRightWavelengthEnd);
+    const delayStart = Number.parseFloat(stitchRegionStart);
+    const delayEnd = Number.parseFloat(stitchRegionEnd);
+    if (
+      !Number.isFinite(leftWavelengthStart) ||
+      !Number.isFinite(leftWavelengthEnd) ||
+      !Number.isFinite(rightWavelengthStart) ||
+      !Number.isFinite(rightWavelengthEnd) ||
+      !Number.isFinite(delayStart) ||
+      !Number.isFinite(delayEnd)
+    ) {
+      setError('Left/right wavelength and delay bounds must be numeric.');
+      return;
+    }
+    setError('');
+    setStitchRegions((current) => [
+      ...current,
+      {
+        left_wavelength_start: leftWavelengthStart,
+        left_wavelength_end: leftWavelengthEnd,
+        right_wavelength_start: rightWavelengthStart,
+        right_wavelength_end: rightWavelengthEnd,
+        delay_start: delayStart,
+        delay_end: delayEnd,
+        label: `Region ${current.length + 1}`,
+      },
+    ]);
+  };
+
+  const handleRemoveStitchRegion = (indexToRemove) => {
+    setStitchRegions((current) => current.filter((_item, index) => index !== indexToRemove));
+  };
+
+  const handleStitchOd = async () => {
+    setError('');
+    setOperationMessage('');
+    setStitchSummary(null);
+    setIsBusy(true);
+    try {
+      const payload = await postTreatment(treatmentSessionId, '/api/treatment/stitch/od', {
+        ...stitchRequestPayload(),
+        output_folder: stitchOutputFolder,
+        output_file_name: stitchOutputName,
+        fit: stitchPreview?.fit || null,
+      });
+      setTreatment(payload);
+      setStitchSummary(payload.stitched);
+      setOperationMessage(`Stitched OD saved to ${payload.stitched.output_path}.`);
+      if (stitchOutputFolder) {
+        try {
+          await refreshFolderListing(stitchOutputFolder);
+        } catch (_refreshError) {
+          // Saving succeeded; tree refresh is best effort for remote shares.
+        }
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
+  const activeStitchRegion = stitchRegions[stitchRegions.length - 1] || stitchRegions[0] || null;
+  const stitchOutputFolder = getPathParent(stitchFileA) || session?.save_folder || session?.folder_path || '';
+  const stitchOutputPath = joinPath(stitchOutputFolder, stitchOutputName);
+  const stitchZoneMap = useMemo(() => {
+    if (!stitchPreview?.stitched) {
+      return null;
+    }
+    const delayRange = activeStitchRegion
+      ? [activeStitchRegion.delay_start, activeStitchRegion.delay_end]
+      : [stitchPreview.timedelay_min, stitchPreview.timedelay_max];
+    return cropHeatmapMap(stitchPreview.stitched, stitchPreview.overlap_range, delayRange);
+  }, [activeStitchRegion, stitchPreview]);
+
   const renderFolderTreeFiles = (files, level = 1) =>
     (files || []).map((file) => {
       const summary = fileSummaryCache[file.path] || {};
-      const frames = summary.number_maps ? String(summary.number_maps) : '...';
-      const timeScale = summary.time_scale || '...';
+      const frames = formatFrameCount(summary);
+      const timeRange = formatTimeRange(summary);
       const wavelengths = formatWavelengthRange(summary);
       return (
         <div
           key={file.path}
           className={`explorer-tree-file-row ${file.supported ? '' : 'is-disabled'}`}
           style={{ paddingLeft: `${level * 14 + 28}px` }}
-          onContextMenu={(event) => handleFileContextMenu(event, file)}
+          onContextMenu={isV0Profile ? undefined : (event) => handleFileContextMenu(event, file)}
           title={file.path}
         >
           <button
             className="explorer-tree-file-name"
-            onContextMenu={(event) => handleFileContextMenu(event, file)}
+            onContextMenu={isV0Profile ? undefined : (event) => handleFileContextMenu(event, file)}
             disabled={!file.supported || isBusy}
           >
             {file.name}
           </button>
           <span className="explorer-file-meta">S:{formatFileSize(file.size_bytes)}</span>
           <span className="explorer-file-meta">F:{frames}</span>
-          <span className="explorer-file-meta">T:{timeScale}</span>
+          <span className="explorer-file-meta">T:{timeRange}</span>
           <span className="explorer-file-meta">W:{wavelengths}</span>
         </div>
       );
@@ -1430,7 +2126,7 @@ const TabsControl = () => {
           <div
             className={`explorer-tree-row ${isSelected ? 'is-selected' : ''}`}
             style={{ paddingLeft: `${level * 14}px` }}
-            onContextMenu={(event) => handleFolderContextMenu(event, folder)}
+            onContextMenu={isV0Profile ? undefined : (event) => handleFolderContextMenu(event, folder)}
           >
             <button
               className="explorer-tree-toggle"
@@ -1459,6 +2155,59 @@ const TabsControl = () => {
 
   const explorerRoot = treeRoot || session?.folder_path || treatment?.allowed_root || '';
   const explorerRootListing = folderTreeCache[explorerRoot] || { folders: [], files: [] };
+  const stitchDatFiles = useMemo(() => {
+    const byPath = new Map();
+    Object.values(folderTreeCache).forEach((listing) => {
+      (listing?.files || []).forEach((file) => {
+        if (String(file.suffix || '').toLowerCase() === '.dat') {
+          byPath.set(file.path, file);
+        }
+      });
+    });
+    return sortStitchDatFiles(Array.from(byPath.values()));
+  }, [folderTreeCache]);
+
+  useEffect(() => {
+    if (activeTab !== 'stitch' || !stitchFileA || !stitchFileB || stitchPreview || isBusy) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => {
+      refreshStitchPreview(false, true, true);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, stitchFileA, stitchFileB, stitchPreview, isBusy]);
+
+  useEffect(() => {
+    if (!stitchFileA || !stitchFileB || stitchOutputName !== 'stitched_od.dat') {
+      return;
+    }
+    setStitchOutputName(stitchedNameForPaths(stitchFileA, stitchFileB, stitchPreview?.stitched));
+  }, [stitchFileA, stitchFileB, stitchOutputName, stitchPreview]);
+
+  useEffect(() => {
+    if (!stitchPreview || isBusy || !stitchFileA || !stitchFileB) {
+      return undefined;
+    }
+    if (skipNextStitchCoefficientRefreshRef.current) {
+      skipNextStitchCoefficientRefreshRef.current = false;
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => {
+      refreshStitchPreview(false, true, false);
+    }, 600);
+    return () => window.clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    stitchLeftScale,
+    stitchLeftOffset,
+    stitchRightScale,
+    stitchRightOffset,
+    stitchRightDelayShift,
+    stitchRegions,
+    stitchFileA,
+    stitchFileB,
+  ]);
 
   if (!session) {
     return (
@@ -1471,34 +2220,52 @@ const TabsControl = () => {
 
   return (
     <div className="tabs-control">
-      <div className="tabs">
-        <button onClick={() => setActiveTab('files')}>Files</button>
-        <button onClick={() => setActiveTab('cleaning')}>Cleaning</button>
-        <button onClick={() => setActiveTab('info')}>Info</button>
-        <button onClick={() => setActiveTab('selection')}>Selection</button>
-      </div>
+      {!isV0Profile && (
+        <div className="tabs">
+          <button onClick={() => setActiveTab('files')}>Files</button>
+          <button onClick={() => setActiveTab('cleaning')} disabled={isBusy}>
+            Cleaning
+          </button>
+          <button onClick={() => setActiveTab('stitch')} disabled={isBusy}>
+            Stitch
+          </button>
+          <button onClick={() => setActiveTab('info')}>Info</button>
+        </div>
+      )}
       <div className="tab-content">
         {activeTab === 'files' && (
-          <div className="files-tab horizontal-layout">
-            <div className="zone parameters">
-              <ParametersZone
-                session={session}
-                expTypes={treatment.exp_types}
-                dataTypes={assignableDataTypes}
-                calcModes={treatment.calc_modes}
-                draftSaveFolder={draftSaveFolder}
-                draftSaveFileName={draftSaveFileName}
-                onConfigChange={handleConfigChange}
-                onDraftSaveFolderChange={setDraftSaveFolder}
-                onDraftSaveFileNameChange={setDraftSaveFileName}
-                onCommitSaveFolder={handleCommitSaveFolder}
-                onCommitSaveFileName={handleCommitSaveFileName}
-                onReset={handleReset}
-                profileName={treatmentProfile}
-                onApplyProfilePreset={handleApplyProfilePreset}
-                isBusy={isBusy}
-              />
-            </div>
+          <div
+            className={`files-tab horizontal-layout ${isV0Profile ? 'is-v0-profile' : ''}`}
+            ref={filesLayoutRef}
+            style={isV0Profile ? undefined : { gridTemplateColumns: filesGridTemplate }}
+          >
+            {!isV0Profile && (
+              <>
+                <div className="zone parameters">
+                  <ParametersZone
+                    session={session}
+                    expTypes={treatment.exp_types}
+                    dataTypes={assignableDataTypes}
+                    calcModes={treatment.calc_modes}
+                    draftSaveFolder={draftSaveFolder}
+                    draftSaveFileName={draftSaveFileName}
+                    onConfigChange={handleConfigChange}
+                    onDraftSaveFolderChange={setDraftSaveFolder}
+                    onDraftSaveFileNameChange={setDraftSaveFileName}
+                    onCommitSaveFolder={handleCommitSaveFolder}
+                    onCommitSaveFileName={handleCommitSaveFileName}
+                    onReset={handleReset}
+                    profileName={treatmentProfile}
+                  />
+                </div>
+                <div
+                  className="column-resizer"
+                  role="separator"
+                  aria-label="Resize Treatment Session"
+                  onMouseDown={(event) => handleFilesColumnResizeStart('parameters', event)}
+                />
+              </>
+            )}
             <div className="zone files-folder">
               <div className="data-root-control">
                 <label>
@@ -1526,11 +2293,14 @@ const TabsControl = () => {
                     className={`explorer-tree-row ${
                       session.folder_path === explorerRoot ? 'is-selected' : ''
                     }`}
-                    onContextMenu={(event) =>
-                      handleFolderContextMenu(event, {
-                        name: pathName(explorerRoot) || explorerRoot,
-                        path: explorerRoot,
-                      })
+                    onContextMenu={
+                      isV0Profile
+                        ? undefined
+                        : (event) =>
+                            handleFolderContextMenu(event, {
+                              name: pathName(explorerRoot) || explorerRoot,
+                              path: explorerRoot,
+                            })
                     }
                   >
                     <button
@@ -1558,7 +2328,7 @@ const TabsControl = () => {
                 </div>
               </div>
               )}
-              {fileContextMenu && (
+              {!isV0Profile && fileContextMenu && (
                 <div
                   className="file-context-menu"
                   style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
@@ -1580,9 +2350,33 @@ const TabsControl = () => {
                   >
                     Convert/Compress
                   </button>
+                  {String(fileContextMenu.file.suffix || '').toLowerCase() === '.dat' && (
+                    <>
+                      <div className="file-context-menu-separator" />
+                      <div className="file-context-submenu">
+                        <button type="button" disabled={isBusy}>
+                          Stitch
+                        </button>
+                        <div className="file-context-submenu-panel">
+                          <button
+                            onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'A')}
+                            disabled={isBusy}
+                          >
+                            Stitch A
+                          </button>
+                          <button
+                            onClick={() => handleSetStitchFile(fileContextMenu.file.path, 'B')}
+                            disabled={isBusy}
+                          >
+                            Stitch B
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-              {folderContextMenu && (
+              {!isV0Profile && folderContextMenu && (
                 <div
                   className="file-context-menu"
                   style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
@@ -1609,32 +2403,42 @@ const TabsControl = () => {
                 </div>
               )}
             </div>
-            <div className="zone raw-data-kinetics">
-              <h3>Selected Files</h3>
-              <AssignedPaths session={session} />
-              <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
-                  Average Noise
-                </button>
-                <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc}>
-                  Calculate OD
-                </button>
-                <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
-                  Save Result
-                </button>
-              </div>
-              {operationMessage && (
-                <p className={`treatment-operation-message ${isBusy ? 'is-active' : ''}`}>
-                  {isBusy && (
-                    <span className="treatment-operation-live">
-                      <span className="treatment-operation-spinner" aria-hidden="true"></span>
-                      <span>{busyElapsedSeconds}s</span>
-                    </span>
+            {!isV0Profile && (
+              <>
+                <div
+                  className="column-resizer"
+                  role="separator"
+                  aria-label="Resize Selected Files"
+                  onMouseDown={(event) => handleFilesColumnResizeStart('selected', event)}
+                />
+                <div className="zone raw-data-kinetics">
+                  <h3>Selected Files</h3>
+                  <AssignedPaths session={session} />
+                  <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
+                      Average Noise
+                    </button>
+                    <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc}>
+                      Calculate OD
+                    </button>
+                    <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
+                      Save Result
+                    </button>
+                  </div>
+                  {operationMessage && (
+                    <p className={`treatment-operation-message ${isBusy ? 'is-active' : ''}`}>
+                      {isBusy && (
+                        <span className="treatment-operation-live">
+                          <span className="treatment-operation-spinner" aria-hidden="true"></span>
+                          <span>{busyElapsedSeconds}s</span>
+                        </span>
+                      )}
+                      {operationMessage}
+                    </p>
                   )}
-                  {operationMessage}
-                </p>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </div>
         )}
         {activeTab === 'cleaning' && (
@@ -1699,6 +2503,9 @@ const TabsControl = () => {
                   <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
                     Reset
                   </button>
+                  <button onClick={() => handleCleaningAction('restore')} disabled={isBusy || !String(cleaningSourcePath || '').toLowerCase().endsWith('.h5')}>
+                    Restore H5
+                  </button>
                   <button onClick={() => handleCleaningAction('save')} disabled={isBusy}>
                     Clean and Save
                   </button>
@@ -1735,6 +2542,234 @@ const TabsControl = () => {
                   )}
                 </div>
               )}
+          </div>
+        )}
+        {activeTab === 'stitch' && (
+          <div className="tab-panel stitch-tab">
+            {error && <p className="treatment-error">{error}</p>}
+            <div className="stitch-controls">
+              <div className="stitch-control-grid stitch-control-grid-wide">
+                <label>
+                  OD Map A
+                  <input
+                    list="stitch-dat-files"
+                    type="text"
+                    value={stitchFileA}
+                    onChange={(event) => setStitchFileA(event.target.value)}
+                    placeholder="smb://.../first.dat"
+                  />
+                </label>
+                <label>
+                  OD Map B
+                  <input
+                    list="stitch-dat-files"
+                    type="text"
+                    value={stitchFileB}
+                    onChange={(event) => setStitchFileB(event.target.value)}
+                    placeholder="smb://.../second.dat"
+                  />
+                </label>
+              </div>
+              <datalist id="stitch-dat-files">
+                {stitchDatFiles.map((file) => (
+                  <option key={file.path} value={file.path}>
+                    {file.name}
+                  </option>
+                ))}
+              </datalist>
+              <div className="stitch-control-grid">
+                <label>
+                  Left Scale
+                  <input type="number" step="0.0001" value={stitchLeftScale} onChange={(event) => setStitchLeftScale(event.target.value)} />
+                </label>
+                <label>
+                  Left Offset
+                  <input type="number" step="0.0001" value={stitchLeftOffset} onChange={(event) => setStitchLeftOffset(event.target.value)} />
+                </label>
+                <label>
+                  Right Scale
+                  <input type="number" step="0.0001" value={stitchRightScale} onChange={(event) => setStitchRightScale(event.target.value)} />
+                </label>
+                <label>
+                  Right Offset
+                  <input type="number" step="0.0001" value={stitchRightOffset} onChange={(event) => setStitchRightOffset(event.target.value)} />
+                </label>
+                <label>
+                  Right Y Shift px
+                  <input type="number" step="1" value={stitchRightDelayShift} onChange={(event) => setStitchRightDelayShift(event.target.value)} />
+                </label>
+              </div>
+              <div className="stitch-control-grid">
+                <label>
+                  Left W Start
+                  <input type="number" step="any" value={stitchLeftWavelengthStart} onChange={(event) => setStitchLeftWavelengthStart(event.target.value)} />
+                </label>
+                <label>
+                  Left W End
+                  <input type="number" step="any" value={stitchLeftWavelengthEnd} onChange={(event) => setStitchLeftWavelengthEnd(event.target.value)} />
+                </label>
+                <label>
+                  Right W Start
+                  <input type="number" step="any" value={stitchRightWavelengthStart} onChange={(event) => setStitchRightWavelengthStart(event.target.value)} />
+                </label>
+                <label>
+                  Right W End
+                  <input type="number" step="any" value={stitchRightWavelengthEnd} onChange={(event) => setStitchRightWavelengthEnd(event.target.value)} />
+                </label>
+              </div>
+              <div className="stitch-control-grid">
+                <label>
+                  T Start
+                  <input type="number" step="any" value={stitchRegionStart} onChange={(event) => setStitchRegionStart(event.target.value)} />
+                </label>
+                <label>
+                  T End
+                  <input type="number" step="any" value={stitchRegionEnd} onChange={(event) => setStitchRegionEnd(event.target.value)} />
+                </label>
+              </div>
+              <div className="stitch-control-grid">
+                <button onClick={handleAddStitchRegion} disabled={isBusy}>
+                  Add Region
+                </button>
+                <button onClick={() => refreshStitchPreview(true)} disabled={isBusy || !stitchFileA || !stitchFileB}>
+                  Fit Right
+                </button>
+                <button onClick={handleRevertStitchFit} disabled={isBusy || !stitchPreview || !stitchFileA || !stitchFileB}>
+                  Revert
+                </button>
+              </div>
+              {stitchRegions.length > 0 && (
+                <div className="stitch-region-list">
+                  {stitchRegions.map((region, index) => (
+                    <button key={`${region.left_wavelength_start}-${region.right_wavelength_start}-${region.delay_start}-${index}`} onClick={() => handleRemoveStitchRegion(index)}>
+                      {region.label}: L {Number(region.left_wavelength_start).toFixed(1)}-{Number(region.left_wavelength_end).toFixed(1)}, R {Number(region.right_wavelength_start).toFixed(1)}-{Number(region.right_wavelength_end).toFixed(1)}, T {Number(region.delay_start).toFixed(3)}-{Number(region.delay_end).toFixed(3)} x
+                    </button>
+                  ))}
+                </div>
+              )}
+              <label>
+                Output DAT Name
+                <input
+                  type="text"
+                  value={stitchOutputName}
+                  onChange={(event) => setStitchOutputName(event.target.value)}
+                  placeholder="stitched_od.dat"
+                />
+              </label>
+              <div className="stitch-actions">
+                <button onClick={() => refreshStitchPreview(false)} disabled={isBusy || !stitchFileA || !stitchFileB}>
+                  Load Pair
+                </button>
+                <button onClick={handleStitchOd} disabled={isBusy || !stitchPreview || !stitchFileA || !stitchFileB}>
+                  OK and Save
+                </button>
+              </div>
+              <div className="stitch-summary">
+                <p>
+                  <strong>Save Folder:</strong> {stitchOutputFolder || 'Not set'}
+                </p>
+                <p>
+                  <strong>Output Path:</strong> {stitchOutputPath || 'Not set'}
+                </p>
+                <p>
+                  <strong>Visible DAT files:</strong> {stitchDatFiles.length}
+                </p>
+                {stitchPreview && (
+                  <>
+                    <p>
+                      <strong>Axis Overlap:</strong> {(stitchPreview.axis_overlap_range || stitchPreview.overlap_range)?.[0]}-{(stitchPreview.axis_overlap_range || stitchPreview.overlap_range)?.[1]} nm
+                    </p>
+                    <p>
+                      <strong>Trusted Overlap:</strong> {stitchPreview.overlap_range?.[0]}-{stitchPreview.overlap_range?.[1]} nm
+                    </p>
+                  </>
+                )}
+                {stitchPreview?.fit && (
+                  <p>
+                    <strong>Fit:</strong> scale {Number(stitchPreview.fit.right_scale).toPrecision(6)}
+                    {Number.isFinite(stitchPreview.fit.correlation)
+                      ? ` | corr ${Number(stitchPreview.fit.correlation).toFixed(3)}`
+                      : ''}
+                    {Number.isFinite(stitchPreview.fit.relative_rmse)
+                      ? ` | rel RMSE ${Number(stitchPreview.fit.relative_rmse).toFixed(3)}`
+                      : ''}
+                  </p>
+                )}
+                <p>
+                  <strong>Right Y Shift:</strong> {Number.parseInt(stitchRightDelayShift, 10) || 0} px
+                </p>
+                {stitchSummary && (
+                  <>
+                    <p>
+                      <strong>Saved:</strong> {stitchSummary.output_path}
+                    </p>
+                    {stitchSummary.manifest_path && (
+                      <p>
+                        <strong>Manifest:</strong> {stitchSummary.manifest_path}
+                      </p>
+                    )}
+                    <p>
+                      <strong>W:</strong> {Number(stitchSummary.wavelength_min).toFixed(1)}-{Number(stitchSummary.wavelength_max).toFixed(1)} nm
+                      {' | '}
+                      <strong>Delays:</strong> {stitchSummary.timedelays}
+                      {' | '}
+                      <strong>Rows:</strong> {stitchSummary.rows}
+                    </p>
+                  </>
+                )}
+                {!stitchSummary && (
+                  <p>
+                    <strong>Status:</strong> Not saved yet
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="stitch-preview">
+              {stitchPreview ? (
+                <div className="stitch-map-grid">
+                  <StitchHeatmap
+                    map={stitchPreview.left}
+                    title="Left / Short Wavelengths"
+                    overlapRange={stitchPreview.axis_overlap_range || stitchPreview.overlap_range}
+                    regions={stitchRegions}
+                    regionSide="left"
+                    onRegionsChange={handleStitchRegionsChange}
+                  />
+                  <StitchHeatmap
+                    map={stitchPreview.right}
+                    title="Right / Long Wavelengths"
+                    overlapRange={stitchPreview.axis_overlap_range || stitchPreview.overlap_range}
+                    regions={stitchRegions}
+                    regionSide="right"
+                    onRegionsChange={handleStitchRegionsChange}
+                  />
+                  <StitchProfilePlot
+                    spectra={stitchPreview.spectra}
+                    title="Selected Profiles"
+                    mode="selected"
+                  />
+                  <StitchProfilePlot
+                    spectra={stitchPreview.spectra}
+                    title="Overlap Fit Profiles"
+                    mode="overlap"
+                  />
+                  <StitchHeatmap
+                    map={stitchZoneMap || stitchPreview.stitched}
+                    title="Stitching Zone"
+                    overlapRange={null}
+                    regions={[]}
+                  />
+                  <StitchHeatmap
+                    map={stitchPreview.stitched}
+                    title="Stitched Map"
+                    overlapRange={null}
+                    regions={[]}
+                  />
+                </div>
+              ) : (
+                <div className="stitch-preview-empty">Load pair to preview maps and spectra.</div>
+              )}
+            </div>
           </div>
         )}
         {activeTab === 'info' && (

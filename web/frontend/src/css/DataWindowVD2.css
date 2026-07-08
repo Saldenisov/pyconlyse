@@ -50,12 +50,32 @@
 
 .horizontal-layout {
   display: grid;
-  grid-template-columns: minmax(250px, 0.62fr) minmax(380px, 1.38fr) minmax(280px, 0.92fr);
+  grid-template-columns: 300px 6px minmax(620px, 1fr) 6px 320px;
   align-items: stretch;
-  gap: 8px;
-  width: max(100%, 940px);
+  gap: 6px;
+  width: max(100%, 1260px);
   height: 100%;
   min-height: 430px;
+}
+
+.horizontal-layout.is-v0-profile {
+  grid-template-columns: minmax(620px, 1fr);
+  width: 100%;
+}
+
+.column-resizer {
+  align-self: stretch;
+  width: 6px;
+  min-width: 6px;
+  border-radius: 3px;
+  background: rgba(152, 162, 179, 0.45);
+  cursor: col-resize;
+}
+
+.column-resizer:hover,
+.column-resizer:focus {
+  background: #4a9eff;
+  outline: none;
 }
 
 .zone {
@@ -70,10 +90,15 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+.horizontal-layout > .zone.parameters {
+  display: block;
+}
+
 .parameters-zone {
   display: grid;
   align-content: start;
   gap: 6px;
+  width: 100%;
 }
 
 .parameters-zone h3,
@@ -107,14 +132,25 @@
 
 .parameter-field {
   display: grid;
-  grid-template-columns: 102px minmax(0, 1fr);
+  grid-template-columns: 118px minmax(0, 1fr);
   align-items: center;
   gap: 6px;
 }
 
+.parameter-field-wide {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 4px;
+}
+
+.parameter-field-wide input[type="text"] {
+  min-height: 30px;
+  font-size: 0.9rem;
+}
+
 .parameter-field label,
 .parameter-checkbox label {
-  color: #344054;
+  color: #d7dde6;
   font-size: 0.8rem;
 }
 
@@ -375,6 +411,101 @@
   overflow-wrap: anywhere;
 }
 
+.stitch-tab {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(640px, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.stitch-controls,
+.stitch-summary,
+.stitch-preview {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #98a2b3;
+  border-radius: 6px;
+  background: #303946;
+  color: #e5e7eb;
+}
+
+.stitch-controls label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  color: #d7dde6;
+  font-size: 0.86rem;
+}
+
+.stitch-controls input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  box-sizing: border-box;
+}
+
+.stitch-control-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.stitch-control-grid-wide {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stitch-actions,
+.stitch-region-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.stitch-region-list button {
+  min-height: 26px;
+  padding: 2px 8px;
+}
+
+.stitch-summary p {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.88rem;
+}
+
+.stitch-preview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.stitch-map-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.stitch-heatmap {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  min-height: 0;
+}
+
+.stitch-profile {
+  width: 100%;
+  min-height: 280px;
+}
+
+.stitch-preview-empty {
+  display: flex;
+  min-height: 360px;
+  align-items: center;
+  justify-content: center;
+  color: #cbd5e1;
+}
+
 .folder-browser-overlay {
   position: fixed;
   inset: 0;
@@ -529,7 +660,7 @@
 
 .explorer-tree-file-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px 58px 58px 118px;
+  grid-template-columns: minmax(0, 1fr) 86px 64px 64px 138px;
   align-items: center;
   gap: 8px;
   min-height: 30px;
@@ -612,6 +743,37 @@
   background: #eef4ff;
 }
 
+.file-context-submenu {
+  position: relative;
+}
+
+.file-context-submenu > button {
+  width: 100%;
+}
+
+.file-context-submenu > button::after {
+  float: right;
+  content: ">";
+}
+
+.file-context-submenu-panel {
+  position: absolute;
+  top: 0;
+  left: calc(100% + 4px);
+  display: none;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid #98a2b3;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.22);
+}
+
+.file-context-submenu:hover .file-context-submenu-panel,
+.file-context-submenu:focus-within .file-context-submenu-panel {
+  display: grid;
+}
+
 .file-context-menu-separator {
   height: 1px;
   margin: 4px 0;
@@ -619,6 +781,15 @@
 }
 
 @media (max-width: 1050px) {
+  .horizontal-layout {
+    grid-template-columns: 1fr !important;
+    width: 100%;
+  }
+
+  .column-resizer {
+    display: none;
+  }
+
   .cleaning-main {
     grid-template-columns: 1fr;
   }
