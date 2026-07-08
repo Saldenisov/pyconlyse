@@ -21,7 +21,12 @@ if str(_PYCONLYSE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PYCONLYSE_ROOT))
 
 import nidaqmx
-from nidaqmx.constants import AcquisitionType, Edge, TerminalConfiguration
+from nidaqmx.constants import (
+    AcquisitionType,
+    CurrentShuntResistorLocation,
+    Edge,
+    TerminalConfiguration,
+)
 from nidaqmx.system import Device as NIDAQmxDevice
 from nidaqmx.system import System
 from tango import AttrWriteType, DevState, DispLevel
@@ -55,6 +60,10 @@ class DaqmxChannel:
     samples: int = 1
     sample_rate: float = 1000.0
     digital_filter_min_pulse_width_s: float = 0.0
+    current_min: float = -0.01
+    current_max: float = 0.01
+    shunt_resistor_loc: str = "LET_DRIVER_CHOOSE"
+    ext_shunt_resistor_val: float = 249.0
 
     @property
     def is_digital(self) -> bool:
@@ -176,6 +185,18 @@ class DS_DAQmx(DS_General):
                             fallback=0.0,
                         ),
                     ),
+                    current_min=parser.getfloat(section, "current_min", fallback=-0.01),
+                    current_max=parser.getfloat(section, "current_max", fallback=0.01),
+                    shunt_resistor_loc=parser.get(
+                        section,
+                        "shunt_resistor_loc",
+                        fallback="LET_DRIVER_CHOOSE",
+                    ),
+                    ext_shunt_resistor_val=parser.getfloat(
+                        section,
+                        "ext_shunt_resistor_val",
+                        fallback=249.0,
+                    ),
                 )
             )
 
@@ -207,6 +228,17 @@ class DS_DAQmx(DS_General):
         if pseudo_diff is not None:
             configs["PSEUDODIFFERENTIAL"] = pseudo_diff
         return configs.get(name, TerminalConfiguration.RSE)
+
+    @staticmethod
+    def _get_current_shunt_resistor_loc(name: str) -> CurrentShuntResistorLocation:
+        clean_name = str(name or "LET_DRIVER_CHOOSE").strip().upper()
+        configs = {
+            "DEFAULT": CurrentShuntResistorLocation.LET_DRIVER_CHOOSE,
+            "LET_DRIVER_CHOOSE": CurrentShuntResistorLocation.LET_DRIVER_CHOOSE,
+            "INTERNAL": CurrentShuntResistorLocation.INTERNAL,
+            "EXTERNAL": CurrentShuntResistorLocation.EXTERNAL,
+        }
+        return configs.get(clean_name, CurrentShuntResistorLocation.LET_DRIVER_CHOOSE)
 
     def _device(self) -> NIDAQmxDevice:
         return NIDAQmxDevice(str(self.daq_device_name))
@@ -343,8 +375,13 @@ class DS_DAQmx(DS_General):
                 with nidaqmx.Task() as task:
                     task.ai_channels.add_ai_current_chan(
                         channel.channel,
-                        min_val=float(self.analog_min),
-                        max_val=float(self.analog_max),
+                        terminal_config=self._get_terminal_config(),
+                        min_val=float(channel.current_min),
+                        max_val=float(channel.current_max),
+                        shunt_resistor_loc=self._get_current_shunt_resistor_loc(
+                            channel.shunt_resistor_loc
+                        ),
+                        ext_shunt_resistor_val=float(channel.ext_shunt_resistor_val),
                     )
                     return float(task.read(timeout=float(self.analog_read_timeout_s)))
             except Exception as exc:
