@@ -21,7 +21,7 @@ if str(_PYCONLYSE_ROOT) not in sys.path:
     sys.path.insert(0, str(_PYCONLYSE_ROOT))
 
 import nidaqmx
-from nidaqmx.constants import Edge, TerminalConfiguration
+from nidaqmx.constants import AcquisitionType, Edge, TerminalConfiguration
 from nidaqmx.system import Device as NIDAQmxDevice
 from nidaqmx.system import System
 from tango import AttrWriteType, DevState, DispLevel
@@ -52,6 +52,9 @@ class DaqmxChannel:
     alarm_path: str = ""
     limit_alarm_min: Optional[float] = None
     limit_alarm_max: Optional[float] = None
+    samples: int = 1
+    sample_rate: float = 1000.0
+    digital_filter_min_pulse_width_s: float = 0.0
 
     @property
     def is_digital(self) -> bool:
@@ -129,6 +132,8 @@ class DS_DAQmx(DS_General):
 
         channels: List[DaqmxChannel] = []
         for section in parser.sections():
+            if not parser.getboolean(section, "enabled", fallback=True):
+                continue
             kind = parser.get(section, "type", fallback="").strip()
             if kind not in SUPPORTED_TYPES:
                 raise ValueError(
@@ -158,6 +163,19 @@ class DS_DAQmx(DS_General):
                     alarm_path=parser.get(section, "alarm_path", fallback=""),
                     limit_alarm_min=limit_min,
                     limit_alarm_max=limit_max,
+                    samples=max(1, parser.getint(section, "samples", fallback=1)),
+                    sample_rate=max(
+                        1.0,
+                        parser.getfloat(section, "sample_rate", fallback=1000.0),
+                    ),
+                    digital_filter_min_pulse_width_s=max(
+                        0.0,
+                        parser.getfloat(
+                            section,
+                            "digital_filter_min_pulse_width_s",
+                            fallback=0.0,
+                        ),
+                    ),
                 )
             )
 
@@ -268,6 +286,11 @@ class DS_DAQmx(DS_General):
             initial_count=0,
         )
         counter_channel.ci_count_edges_term = channel.channel
+        if channel.digital_filter_min_pulse_width_s > 0:
+            counter_channel.ci_count_edges_dig_fltr_enable = True
+            counter_channel.ci_count_edges_dig_fltr_min_pulse_width = (
+                channel.digital_filter_min_pulse_width_s
+            )
         task.start()
         self._counter_tasks[channel.name] = task
 
@@ -339,7 +362,19 @@ class DS_DAQmx(DS_General):
                 min_val=float(self.analog_min),
                 max_val=float(self.analog_max),
             )
-            return float(task.read(timeout=float(self.analog_read_timeout_s)))
+            samples = max(1, int(channel.samples))
+            if samples <= 1:
+                return float(task.read(timeout=float(self.analog_read_timeout_s)))
+            task.timing.cfg_samp_clk_timing(
+                rate=float(channel.sample_rate),
+                sample_mode=AcquisitionType.FINITE,
+                samps_per_chan=samples,
+            )
+            values = task.read(
+                number_of_samples_per_channel=samples,
+                timeout=float(self.analog_read_timeout_s),
+            )
+            return float(sum(values) / len(values))
 
     def _read_analog(self, channel: DaqmxChannel) -> float:
         return self._read_analog_raw(channel) * float(channel.multiplier)
