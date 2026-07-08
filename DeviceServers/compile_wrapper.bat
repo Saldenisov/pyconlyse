@@ -69,6 +69,19 @@ if exist DS_Netio_pdu_wrapper.cs (
 )
 
 echo.
+REM Compile direct DAQmx wrapper if present
+if exist DS_DAQmx_wrapper.cs (
+    echo Compiling DS_DAQmx_wrapper.cs...
+    csc /out:DS_DAQmx.exe /target:exe DS_DAQmx_wrapper.cs
+    if %errorlevel% neq 0 (
+        echo ERROR: DS_DAQmx compilation failed!
+        pause
+        exit /b 1
+    )
+    echo DS_DAQmx.exe created successfully!
+)
+
+echo.
 REM Compile OWIS wrapper if present
 if exist DS_OWIS_PS90_wrapper.cs (
     echo Compiling DS_OWIS_PS90_wrapper.cs...

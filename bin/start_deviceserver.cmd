@@ -62,6 +62,9 @@ set STANDA_SCRIPT=DS_Standa_Motor.py
 set NETIO_PATH=%PYCONLYSE%\DeviceServers\NETIO
 set NETIO_SCRIPT=DS_NetIO_PDU.py
 
+set DAQMX_PATH=%PYCONLYSE%\DeviceServers\control\daqmx
+set DAQMX_SCRIPT=DS_DAQmx.py
+
 set TOPDIRECT_PATH=%PYCONLYSE%\DeviceServers\TopDirect
 set TOPDIRECT_SCRIPT=DS_TopDirect_Motor.py
 
@@ -77,7 +80,7 @@ call set DEVICE_SCRIPT=%%!DEVICE_TYPE!_SCRIPT%%
 
 if "%DEVICE_PATH%"=="" (
     echo ERROR: Unknown device type '%DEVICE_TYPE%'
-    echo Supported types: ANDOR_CCD, BASLER, ARCHIVE, OWIS, STANDA, NETIO, TOPDIRECT, LASER_POINTING, ML_STABILITY
+    echo Supported types: ANDOR_CCD, BASLER, ARCHIVE, OWIS, STANDA, NETIO, DAQMX, TOPDIRECT, LASER_POINTING, ML_STABILITY
     pause
     exit /b 1
 )
