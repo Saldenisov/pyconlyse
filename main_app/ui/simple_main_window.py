@@ -250,6 +250,7 @@ class SimpleMainWindow(QMainWindow):
             "LASER_POINTING": ["Cam1", "Cam2", "Cam3", "V0", "3P"],
             "KEYSIGHT": ["laser"],
             "ITEST": ["ELYSE", "ITestPSU/test", "ITestPSU/bilt", "ITestPSU/lab", "ITestPSU/main"],
+            "DAQMX": ["DAQMX_1"],
             "DAQMX_ZMQ": ["DAQMX_ZMQ_1"],
             "SPECTROSCOPY": ["V0"],
             # Additional clients (not shown in UI rows yet)
@@ -321,6 +322,9 @@ class SimpleMainWindow(QMainWindow):
                 "ITestPSU/lab": "iTest PSU Lab Rack (8 slots): lab/itest/psu01",
                 "ITestPSU/main": "iTest PSU Main Rack (8 slots): manip/power/itest_psu01",
             },
+            "DAQMX": {
+                "DAQMX_1": "Direct local DAQmx controls: control/DAQ/DAQMX_1 (TRANCON-DAQ)",
+            },
             "DAQMX_ZMQ": {
                 "DAQMX_ZMQ_1": "DAQmx ZMQ Reader: control/DAQ/DAQMX_ZMQ_1 (receives from LabVIEW PSP)",
             },
@@ -356,6 +360,12 @@ class SimpleMainWindow(QMainWindow):
             (
                 "ITEST",
                 "iTest PSU",
+                self.icons_dir / "NETIO.png",
+                "client",
+            ),
+            (
+                "DAQMX",
+                "DAQmx",
                 self.icons_dir / "NETIO.png",
                 "client",
             ),
@@ -596,6 +606,7 @@ class SimpleMainWindow(QMainWindow):
             "ARCHIVE": "DeviceServers.data.archive.DS_ARCHIVE_client",
             "EXPERIMENT": "DeviceServers.control.experiment.DS_Experiment_client",
             "ITEST": "DeviceServers.power.iTest.DS_iTest_client",
+            "DAQMX": "DeviceServers.control.daqmx.DS_DAQmx_client",
         }
         for key, modname in module_map.items():
             try:
@@ -968,6 +979,9 @@ class SimpleMainWindow(QMainWindow):
                 "ITEST": (
                     "DeviceServers\\power\\iTest\\"
                     "DS_iTest_client.py"
+                ),
+                "DAQMX": (
+                    "DeviceServers\\control\\daqmx\\DS_DAQmx_client.py"
                 ),
                 "SPECTROSCOPY": (
                     "DeviceServers\\spectroscopy\\DS_SPECTROSCOPY_client.py"
