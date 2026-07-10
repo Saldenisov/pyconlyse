@@ -46,6 +46,7 @@ DEFAULT_DG645_RECALL_CONFIG = str(Path(__file__).resolve().parents[1] / "pump_pr
 DEFAULT_HARDWARE_CONFIG = {
     "control_mode": "emulator",
     "owis_aggregator_device": "manip/general/DS_OWIS_Aggregator",
+    "owis_backend_device": "manip/general/DS_OWIS_PS90_IP",
     "delay_line_axis": 3,
     "delay_line_label": "Delay line long",
     "delay_line_device_name": "manip/V0/DLl1_V0",
@@ -56,7 +57,16 @@ DEFAULT_HARDWARE_CONFIG = {
     "dg645_device": "manip/sync/DG645",
     "dg645_recall_config": DEFAULT_DG645_RECALL_CONFIG,
     "dg645_preflight_policy": "apply_recall_then_verify",
+    "daqmx_device": "control/DAQ/DAQMX_1",
+    "daqmx_counter_channel": "ELYSE Pulse Counter",
 }
+
+REQUIRED_NETIO_OUTPUTS = [
+    {"key": "uv_vis", "label": "UV-visible detector", "device": "manip/SD1/PDU_SD1", "output_id": 1},
+    {"key": "dg645", "label": "DG645", "device": "manip/SD2/PDU_SD2", "output_id": 2},
+    {"key": "power_control", "label": "Power control", "device": "manip/SD2/PDU_SD2", "output_id": 3},
+    {"key": "power_current", "label": "Power current", "device": "manip/SD2/PDU_SD2", "output_id": 4},
+]
 
 
 def _clamp(value, low, high):
@@ -111,6 +121,68 @@ def _load_dg645_recall_config(config_path):
     path = Path(str(config_path or DEFAULT_DG645_RECALL_CONFIG)).expanduser()
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _json_ok(label, detail=None, **extra):
+    return {"label": label, "ok": True, "detail": detail or "OK", **extra}
+
+
+def _json_fail(label, detail, **extra):
+    return {"label": label, "ok": False, "detail": str(detail), **extra}
+
+
+def _server_name_for_device(device_name):
+    import tango
+
+    db = tango.Database()
+    info = db.get_device_info(str(device_name))
+    server_name = getattr(info, "ds_full_name", None) or getattr(info, "server", None)
+    if not server_name:
+        raise RuntimeError(f"Could not resolve server for {device_name}")
+    return str(server_name)
+
+
+def _starter_devices():
+    import tango
+
+    db = tango.Database()
+    return [str(name) for name in db.get_device_exported("*") if str(name).startswith("tango/admin/")]
+
+
+def _starter_for_server(server_name):
+    for starter_name in _starter_devices():
+        try:
+            starter = _tango_proxy(starter_name, timeout_ms=5000)
+            running = set(starter.command_inout("DevGetRunningServers", False))
+            stopped = set(starter.command_inout("DevGetStopServers", False))
+            if server_name in running or server_name in stopped:
+                return starter_name, starter, running, stopped
+        except Exception:
+            continue
+    raise RuntimeError(f"No Starter manages server {server_name}")
+
+
+def _restart_server_for_device(device_name):
+    server_name = _server_name_for_device(device_name)
+    starter_name, starter, running, _stopped = _starter_for_server(server_name)
+    if server_name in running:
+        try:
+            starter.command_inout("DevStop", server_name)
+            time.sleep(2)
+        except Exception:
+            try:
+                starter.command_inout("HardKillServer", server_name)
+                time.sleep(2)
+            except Exception:
+                pass
+    try:
+        starter.command_inout("DevStart", server_name)
+    except Exception as exc:
+        text = str(exc).lower()
+        if "already_running" not in text and "already running" not in text:
+            raise
+    time.sleep(2)
+    return {"server": server_name, "starter": starter_name}
 
 
 def _linspace(start, stop, count):
@@ -407,6 +479,9 @@ class PumpProbeV0Emulator:
         self._sample_position_mm = 0.0
         self._sample_set_position_mm = 0.0
         self._sample_last_motion_update = time.monotonic()
+        self._counter_last_value = None
+        self._counter_last_time = None
+        self._counter_rate_hz = 0.0
         self._settings = {
             "point_count": 100,
             "scan_start_ps": -25.0,
@@ -766,6 +841,197 @@ class PumpProbeV0Emulator:
             suffix = f"; +{len(mismatches) - 5} more" if len(mismatches) > 5 else ""
             raise ValueError(f"DG645 recall {recall_slot} preflight failed: {preview}{suffix}")
 
+    def _check_device(self, label, device_name, fix=False):
+        try:
+            server_name = _server_name_for_device(device_name)
+            proxy = _tango_proxy(device_name, timeout_ms=5000)
+            state = str(proxy.state())
+            ok = state.upper() not in {"FAULT", "UNKNOWN", "OFF"}
+            if not ok and fix:
+                repair = _restart_server_for_device(device_name)
+                proxy = _tango_proxy(device_name, timeout_ms=5000)
+                state = str(proxy.state())
+                ok = state.upper() not in {"FAULT", "UNKNOWN", "OFF"}
+                return (_json_ok if ok else _json_fail)(
+                    label,
+                    f"state={state}",
+                    device=device_name,
+                    server=server_name,
+                    repair=repair,
+                )
+            return (_json_ok if ok else _json_fail)(label, f"state={state}", device=device_name, server=server_name)
+        except Exception as exc:
+            repair = None
+            if fix:
+                try:
+                    repair = _restart_server_for_device(device_name)
+                    proxy = _tango_proxy(device_name, timeout_ms=5000)
+                    state = str(proxy.state())
+                    ok = state.upper() not in {"FAULT", "UNKNOWN", "OFF"}
+                    return (_json_ok if ok else _json_fail)(
+                        label,
+                        f"state={state}",
+                        device=device_name,
+                        repair=repair,
+                    )
+                except Exception as repair_exc:
+                    return _json_fail(label, repair_exc, device=device_name, repair=repair)
+            return _json_fail(label, exc, device=device_name)
+
+    def _netio_outputs_for_device(self, device_name):
+        proxy = _tango_proxy(device_name, timeout_ms=5000)
+        ids = [int(value) for value in list(proxy.read_attribute("ids").value)]
+        names = [str(value) for value in list(proxy.read_attribute("names").value)]
+        states = [int(value) for value in list(proxy.read_attribute("states").value)]
+        return proxy, ids, names, states
+
+    def _check_netio_output(self, item, fix=False):
+        try:
+            proxy, ids, names, states = self._netio_outputs_for_device(item["device"])
+            output_id = int(item["output_id"])
+            index = ids.index(output_id) if output_id in ids else output_id - 1
+            state = int(states[index]) if 0 <= index < len(states) else 0
+            name = names[index] if 0 <= index < len(names) else f"Output {output_id}"
+            if state != 1 and fix:
+                next_states = list(states)
+                while len(next_states) <= index:
+                    next_states.append(0)
+                next_states[index] = 1
+                proxy.command_inout("set_channels_states", next_states)
+                time.sleep(0.5)
+                _proxy, _ids, _names, states = self._netio_outputs_for_device(item["device"])
+                state = int(states[index]) if 0 <= index < len(states) else 0
+            ok = state == 1
+            return (_json_ok if ok else _json_fail)(
+                item["label"],
+                f"{name} output {output_id} is {'ON' if ok else 'OFF'}",
+                device=item["device"],
+                output_id=output_id,
+                state=state,
+            )
+        except Exception as exc:
+            return _json_fail(item["label"], exc, device=item["device"], output_id=item["output_id"])
+
+    def _check_owis_axes(self, fix=False):
+        checks = []
+        aggregator = self._hardware_config["owis_aggregator_device"]
+        backend = self._hardware_config["owis_backend_device"]
+        axes = [
+            ("Sample holder V0 axis", int(self._hardware_config["sample_stage_axis"])),
+            ("Delay line long axis", int(self._hardware_config["delay_line_axis"])),
+        ]
+        checks.append(self._check_device("OWIS aggregator", aggregator, fix=fix))
+        checks.append(self._check_device("OWIS backend", backend, fix=fix))
+        for label, axis in axes:
+            try:
+                proxy = _tango_proxy(backend, timeout_ms=5000)
+                state = str(proxy.command_inout("get_status_axis", axis))
+                position = float(proxy.command_inout("read_position_axis", axis))
+                ok = "FAULT" not in state.upper() and "ERROR" not in state.upper()
+                if not ok and fix:
+                    try:
+                        proxy.command_inout("turn_on_axis", axis)
+                        time.sleep(0.5)
+                        state = str(proxy.command_inout("get_status_axis", axis))
+                        ok = "FAULT" not in state.upper() and "ERROR" not in state.upper()
+                    except Exception:
+                        pass
+                checks.append((_json_ok if ok else _json_fail)(label, f"axis {axis}: {state}, {position:.4f} mm", axis=axis))
+            except Exception as exc:
+                checks.append(_json_fail(label, exc, axis=axis))
+        return checks
+
+    def _read_daq_counter(self, timeout_ms=5000):
+        proxy = _tango_proxy(self._hardware_config["daqmx_device"], timeout_ms=timeout_ms)
+        return int(float(proxy.command_inout("read_counter", self._hardware_config["daqmx_counter_channel"])))
+
+    def _counter_status_locked(self):
+        try:
+            value = self._read_daq_counter(timeout_ms=700)
+            now = time.monotonic()
+            rate = self._counter_rate_hz
+            active = False
+            if self._counter_last_value is not None and self._counter_last_time is not None:
+                dt = max(1e-6, now - self._counter_last_time)
+                delta = value - self._counter_last_value
+                rate = max(0.0, delta / dt)
+                self._counter_rate_hz = 0.65 * self._counter_rate_hz + 0.35 * rate
+                active = delta > 0
+            self._counter_last_value = value
+            self._counter_last_time = now
+            return {
+                "value": value,
+                "rate_hz": round(self._counter_rate_hz if rate is not None else 0.0, 3),
+                "active": active or self._counter_rate_hz > 1.0,
+                "error": "",
+            }
+        except Exception as exc:
+            return {"value": None, "rate_hz": 0.0, "active": False, "error": str(exc)}
+
+    def _check_counter_activity(self, seconds=1.25):
+        try:
+            first = self._read_daq_counter(timeout_ms=5000)
+            time.sleep(max(0.5, float(seconds)))
+            second = self._read_daq_counter(timeout_ms=5000)
+            rate = (second - first) / max(0.5, float(seconds))
+            ok = second > first and rate >= 1.0
+            return (_json_ok if ok else _json_fail)(
+                "ELYSE pulse counter",
+                f"{first} -> {second}, {rate:.2f} Hz",
+                value=second,
+                rate_hz=round(rate, 3),
+            )
+        except Exception as exc:
+            return _json_fail("ELYSE pulse counter", exc)
+
+    def _check_dg645_recall(self, apply_recall=False):
+        try:
+            config = _load_dg645_recall_config(self._hardware_config.get("dg645_recall_config"))
+            dg645 = _tango_proxy(self._hardware_config.get("dg645_device") or config.get("device"), timeout_ms=8000)
+            recall_slot = int(config.get("recall_slot", 8))
+            if apply_recall:
+                dg645.command_inout("scpi_write", f"*RCL {recall_slot}")
+                time.sleep(1.0)
+                try:
+                    dg645.command_inout("scpi_query", "*OPC?")
+                except Exception:
+                    pass
+            expected_queries = dict(config.get("snapshot", {}).get("raw_queries") or {})
+            expected_queries.pop("*IDN?", None)
+            mismatches = []
+            for command, expected in expected_queries.items():
+                actual = str(dg645.command_inout("scpi_query", command)).strip()
+                if not _values_match(expected, actual):
+                    mismatches.append(f"{command}: expected {expected!r}, got {actual!r}")
+            if mismatches:
+                preview = "; ".join(mismatches[:5])
+                return _json_fail("DG645 recall 8", preview, mismatch_count=len(mismatches))
+            return _json_ok("DG645 recall 8", "Recall 8 matches V0 DirectLine preset", recall_slot=recall_slot)
+        except Exception as exc:
+            return _json_fail("DG645 recall 8", exc)
+
+    def hardware_preflight(self, fix=False):
+        with self._lock:
+            self._sync_locked()
+            checks = []
+            checks.extend(self._check_owis_axes(fix=fix))
+            checks.append(self._check_device("Andor UV-visible detector", self._hardware_config["andor_device"], fix=fix))
+            checks.append(self._check_device("DAQmx card", self._hardware_config["daqmx_device"], fix=fix))
+            checks.append(self._check_device("DG645 Tango server", self._hardware_config["dg645_device"], fix=fix))
+            for item in REQUIRED_NETIO_OUTPUTS:
+                checks.append(self._check_netio_output(item, fix=fix))
+            checks.append(self._check_dg645_recall(apply_recall=fix))
+            checks.append(self._check_counter_activity())
+            ok = all(check.get("ok") for check in checks)
+            return {
+                "success": ok,
+                "fixed": bool(fix),
+                "message": "Hardware initialized" if ok else "Hardware initialization failed",
+                "recommendation": "" if ok else "Use auto-fix once. If this still fails, restart the Windows/Tango computer.",
+                "checks": checks,
+                "counter": self._counter_status_locked(),
+            }
+
     def _read_tango_motion_state_locked(self, state):
         if self._control_mode_locked() != "tango":
             return state
@@ -825,6 +1091,12 @@ class PumpProbeV0Emulator:
                 "pulses_at_point": self._pulses_at_point,
                 "total_pulses": self._total_pulses,
                 "spectrometer_frames": self._spectrometer_frames,
+                "daq_counter": self._counter_status_locked() if self._control_mode_locked() == "tango" else {
+                    "value": None,
+                    "rate_hz": 0.0,
+                    "active": False,
+                    "error": "",
+                },
                 "position_mm": round(self._position_mm, 5),
                 "set_position_mm": round(self._set_position_mm, 5),
                 "stage_moving": abs(self._set_position_mm - self._position_mm) > 0.0005,
@@ -865,6 +1137,22 @@ def pump_probe_hardware_config():
         "success": True,
         "hardware_config": _emulator.hardware_config(),
     })
+
+
+@pump_probe_v0_api.route("/hardware/preflight", methods=["GET", "POST"])
+def pump_probe_hardware_preflight():
+    try:
+        return jsonify(_emulator.hardware_preflight(fix=False))
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
+
+
+@pump_probe_v0_api.route("/hardware/initialize", methods=["POST"])
+def pump_probe_hardware_initialize():
+    try:
+        return jsonify(_emulator.hardware_preflight(fix=True))
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
 
 @pump_probe_v0_api.route("/run", methods=["POST"])

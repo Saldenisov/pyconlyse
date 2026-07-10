@@ -341,6 +341,7 @@ function hardwareConfigToApi(hardwareConfig, deviceConfig) {
   return {
     control_mode: hardwareConfig.controlMode || 'emulator',
     owis_aggregator_device: deviceConfig.delayLine.tangoDevice || 'manip/general/DS_OWIS_Aggregator',
+    owis_backend_device: 'manip/general/DS_OWIS_PS90_IP',
     delay_line_axis: Number(deviceConfig.delayLine.axis) || 3,
     delay_line_label: deviceConfig.delayLine.hardwareLabel || 'Delay line long',
     delay_line_device_name: deviceConfig.delayLine.backendDeviceName || 'manip/V0/DLl1_V0',
@@ -348,6 +349,9 @@ function hardwareConfigToApi(hardwareConfig, deviceConfig) {
     sample_stage_label: deviceConfig.sampleStage.hardwareLabel || 'Sample holder V0',
     sample_stage_device_name: deviceConfig.sampleStage.backendDeviceName || 'manip/V0/DLs_V0',
     andor_device: deviceConfig.spectrometer.tangoDevice || 'manip/CR/ANDOR_CCD1',
+    dg645_device: 'manip/sync/DG645',
+    daqmx_device: 'control/DAQ/DAQMX_1',
+    daqmx_counter_channel: 'ELYSE Pulse Counter',
   };
 }
 
@@ -1512,6 +1516,8 @@ function PumpProbeV0() {
   const [tangoStates, setTangoStates] = useState({});
   const [tangoLoading, setTangoLoading] = useState(false);
   const [tangoError, setTangoError] = useState('');
+  const [hardwareInitStatus, setHardwareInitStatus] = useState(null);
+  const [hardwareInitLoading, setHardwareInitLoading] = useState(false);
   const [sampleName, setSampleName] = useState('');
   const [dataBrowserOpen, setDataBrowserOpen] = useState(false);
   const [dataRoot, setDataRoot] = useState('');
@@ -1567,6 +1573,26 @@ function PumpProbeV0() {
       return null;
     }
   }, []);
+
+  const runHardwareInitialization = useCallback(async (fix = true) => {
+    setHardwareInitLoading(true);
+    try {
+      const status = await pumpProbeRequest(fix ? '/hardware/initialize' : '/hardware/preflight', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+      setHardwareInitStatus(status);
+      setBackendError(status.success ? '' : (status.recommendation || status.message || 'Hardware initialization failed'));
+      await refreshState();
+      return status;
+    } catch (error) {
+      setHardwareInitStatus({ success: false, message: error.message, checks: [] });
+      setBackendError(error.message);
+      return null;
+    } finally {
+      setHardwareInitLoading(false);
+    }
+  }, [refreshState]);
 
   const loadNetioOutputs = useCallback(async () => {
     const deviceNames = [...new Set(NETIO_POWER_CHANNELS.map((channel) => channel.device))];
@@ -2054,6 +2080,11 @@ function PumpProbeV0() {
   const positionMm = backendState?.position_mm ?? localPositionMm;
   const setPositionMm = backendState?.set_position_mm ?? localPositionMm;
   const activeControlMode = hardwareConfig.controlMode || backendState?.control_mode || 'emulator';
+  const daqCounter = backendState?.daq_counter || {};
+  const counterActive = Boolean(daqCounter.active);
+  const counterRateHz = Number(daqCounter.rate_hz || 0);
+  const hardwareChecks = hardwareInitStatus?.checks || [];
+  const failedHardwareChecks = hardwareChecks.filter((check) => !check.ok);
   const sampleDisplayPositionMm = activeControlMode === 'tango'
     ? (backendState?.sample_position_mm ?? samplePositionMm)
     : samplePositionMm;
@@ -2428,6 +2459,15 @@ function PumpProbeV0() {
           </button>
           <button
             type="button"
+            className={hardwareInitStatus?.success ? 'pp-action-ok' : ''}
+            disabled={hardwareInitLoading}
+            onClick={() => runHardwareInitialization(true)}
+            title="Check Tango servers, NETIO power, OWIS axes, DG645 recall 8, and DAQmx counter"
+          >
+            {hardwareInitLoading ? 'Init...' : 'Initialize HW'}
+          </button>
+          <button
+            type="button"
             onClick={() => {
               postAndRefresh('/run', { running: !running });
             }}
@@ -2503,9 +2543,37 @@ function PumpProbeV0() {
           {backendState?.spectrometer_frames ?? 0} @ {backendState?.spectrometer_hz ?? 15} Hz
           / burst {backendState?.spectrometer_burst ?? 3}
         </div>
+        <div className="pp-counter-status">
+          <span>counter</span>
+          <i className={`pp-counter-led ${counterActive ? 'pp-counter-led-active' : ''}`} />
+          {daqCounter.value ?? '-'} @ {counterRateHz.toFixed(2)} Hz
+        </div>
       </section>
       {backendError ? <div className="pp-api-error">{backendError}</div> : null}
       {backendState?.hardware_error ? <div className="pp-api-error">{backendState.hardware_error}</div> : null}
+      {hardwareInitStatus ? (
+        <section className={`pp-hw-init ${hardwareInitStatus.success ? 'pp-hw-init-ok' : 'pp-hw-init-fail'}`}>
+          <div className="pp-hw-init-head">
+            <strong>{hardwareInitStatus.message || (hardwareInitStatus.success ? 'Hardware initialized' : 'Hardware initialization failed')}</strong>
+            <span>{failedHardwareChecks.length ? `${failedHardwareChecks.length} problem(s)` : 'all checks OK'}</span>
+            {!hardwareInitStatus.success ? (
+              <button type="button" disabled={hardwareInitLoading} onClick={() => runHardwareInitialization(true)}>
+                Resolve automatically
+              </button>
+            ) : null}
+          </div>
+          <div className="pp-hw-init-list">
+            {hardwareChecks.map((check) => (
+              <div key={`${check.label}-${check.device || check.axis || check.output_id || ''}`} className={check.ok ? 'pp-hw-check-ok' : 'pp-hw-check-fail'}>
+                <b>{check.ok ? 'OK' : 'ERR'}</b>
+                <span>{check.label}</span>
+                <small>{check.detail}</small>
+              </div>
+            ))}
+          </div>
+          {hardwareInitStatus.recommendation ? <p>{hardwareInitStatus.recommendation}</p> : null}
+        </section>
+      ) : null}
       <section className="pp-selection-strip">
         <div><span>wavelength range</span>{selectedWavelengthLabel}</div>
         <div><span>delay range</span>{selectedDelayLabel}</div>
