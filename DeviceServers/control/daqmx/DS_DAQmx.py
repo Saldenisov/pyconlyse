@@ -98,7 +98,7 @@ class DS_DAQmx(DS_General):
 
     daq_device_name = device_property(dtype=str, default_value="TRANCON-DAQ")
     channel_config_path = device_property(dtype=str, default_value="")
-    terminal_config = device_property(dtype=str, default_value="RSE")
+    terminal_config = device_property(dtype=str, default_value="DEFAULT")
     analog_min = device_property(dtype=float, default_value=-10.0)
     analog_max = device_property(dtype=float, default_value=10.0)
     digital_read_timeout_s = device_property(dtype=float, default_value=1.0)
@@ -217,8 +217,9 @@ class DS_DAQmx(DS_General):
         return float(value)
 
     def _get_terminal_config(self) -> TerminalConfiguration:
-        name = str(self.terminal_config or "RSE").strip().upper()
+        name = str(self.terminal_config or "DEFAULT").strip().upper()
         configs = {
+            "DEFAULT": TerminalConfiguration.DEFAULT,
             "RSE": TerminalConfiguration.RSE,
             "NRSE": TerminalConfiguration.NRSE,
             "DIFF": TerminalConfiguration.DIFF,
@@ -227,7 +228,7 @@ class DS_DAQmx(DS_General):
         pseudo_diff = getattr(TerminalConfiguration, "PSEUDODIFFERENTIAL", None)
         if pseudo_diff is not None:
             configs["PSEUDODIFFERENTIAL"] = pseudo_diff
-        return configs.get(name, TerminalConfiguration.RSE)
+        return configs.get(name, TerminalConfiguration.DEFAULT)
 
     @staticmethod
     def _get_current_shunt_resistor_loc(name: str) -> CurrentShuntResistorLocation:
