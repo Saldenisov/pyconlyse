@@ -7,7 +7,7 @@ if "%INSTANCE_NAME%"=="" set "INSTANCE_NAME=1_DG645"
 
 if "%PYCONLYSE%"=="" set "PYCONLYSE=C:\dev\pyconlyse"
 if "%PYCONLYSE_ENV%"=="" set "PYCONLYSE_ENV=pyconlyse39"
-if "%ANACONDA%"=="" set "ANACONDA=C:\Users\denisov\miniconda3"
+if "%ANACONDA%"=="" set "ANACONDA=C:\Users\elyse\miniconda3"
 
 set "DEVICE_DIR=%PYCONLYSE%\DeviceServers\instruments\dg645"
 set "DS_TITLE=DS_DG645 [%INSTANCE_NAME%]"
@@ -25,4 +25,3 @@ if %ERRORLEVEL% EQU 0 (
 
 echo Device server start requested.
 endlocal
-
