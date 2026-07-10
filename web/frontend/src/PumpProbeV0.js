@@ -31,6 +31,34 @@ async function pumpProbeRequest(path, options = {}) {
   return response.json();
 }
 
+function isTransientTangoError(message) {
+  const text = String(message || '').toLowerCase();
+  return text.includes('connection request was delayed')
+    || text.includes('api_cantconnecttodevice')
+    || text.includes('last connection request was done less than');
+}
+
+async function fetchJsonWithRetry(url, options = {}, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      const payload = await response.json();
+      if (!response.ok || payload.success === false) {
+        throw new Error(payload.error || `Request failed: ${response.status}`);
+      }
+      return payload;
+    } catch (error) {
+      lastError = error;
+      if (!isTransientTangoError(error.message) || attempt + 1 >= attempts) {
+        throw error;
+      }
+      await new Promise((resolve) => { window.setTimeout(resolve, 1100); });
+    }
+  }
+  throw lastError;
+}
+
 function linspace(start, stop, count) {
   if (count <= 1) {
     return [start];
@@ -701,7 +729,7 @@ function HardwareModal({
 
   const channelState = (channel) => {
     const output = devices[channel.device]?.outputs?.find((item) => item.id === channel.outputId);
-    return output ? Number(output.state) === 1 : false;
+    return output ? Number(output.state) === 1 : null;
   };
 
   return (
@@ -736,11 +764,11 @@ function HardwareModal({
                     type="button"
                     className={`pp-hardware-toggle ${isOn ? 'pp-hardware-toggle-on' : ''}`}
                     onClick={() => onToggle(channel, !isOn)}
-                    disabled={loading}
+                    disabled={loading || isOn === null}
                   >
                     <span>{channel.label}</span>
                     <small>{channel.device} / out {channel.outputId}</small>
-                    <strong>{isOn ? 'ON' : 'OFF'}</strong>
+                    <strong>{isOn === null ? 'UNKNOWN' : (isOn ? 'ON' : 'OFF')}</strong>
                   </button>
                 );
               })}
@@ -1598,26 +1626,26 @@ function PumpProbeV0() {
     const deviceNames = [...new Set(NETIO_POWER_CHANNELS.map((channel) => channel.device))];
     setNetioLoading(true);
     setNetioError('');
-    try {
-      const entries = await Promise.all(deviceNames.map(async (deviceName) => {
-        const response = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
+    const entries = [];
+    const errors = [];
+    await Promise.all(deviceNames.map(async (deviceName) => {
+      try {
+        const payload = await fetchJsonWithRetry(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
           credentials: 'include',
         });
-        const payload = await response.json();
-        if (!response.ok || payload.success === false) {
-          throw new Error(payload.error || `Failed to read ${deviceName}`);
-        }
-        return [deviceName, {
+        entries.push([deviceName, {
           state: payload.state,
           outputs: normalizeNetioOutputs(payload.outputs),
-        }];
-      }));
-      setNetioDevices(Object.fromEntries(entries));
-    } catch (error) {
-      setNetioError(error.message);
-    } finally {
-      setNetioLoading(false);
+        }]);
+      } catch (error) {
+        errors.push(`${deviceName}: ${error.message}`);
+      }
+    }));
+    if (entries.length) {
+      setNetioDevices((current) => ({ ...current, ...Object.fromEntries(entries) }));
     }
+    setNetioError(errors.join('\n'));
+    setNetioLoading(false);
   }, []);
 
   const toggleNetioChannel = useCallback(async (channel, enabled) => {
@@ -1634,24 +1662,16 @@ function PumpProbeV0() {
     setNetioLoading(true);
     setNetioError('');
     try {
-      const response = await fetch(`/api/device/${devicePath(channel.device)}/command/set_channels_states`, {
+      await fetchJsonWithRetry(`/api/device/${devicePath(channel.device)}/command/set_channels_states`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: nextStates }),
       });
-      const payload = await response.json();
-      if (!response.ok || payload.success === false) {
-        throw new Error(payload.error || `Failed to set ${channel.label}`);
-      }
 
-      const verify = await fetch(`/api/device/${devicePath(channel.device)}/pdu/outputs`, {
+      const verifyPayload = await fetchJsonWithRetry(`/api/device/${devicePath(channel.device)}/pdu/outputs`, {
         credentials: 'include',
       });
-      const verifyPayload = await verify.json();
-      if (!verify.ok || verifyPayload.success === false) {
-        throw new Error(verifyPayload.error || `Failed to verify ${channel.label}`);
-      }
       setNetioDevices((current) => ({
         ...current,
         [channel.device]: {
@@ -1670,15 +1690,13 @@ function PumpProbeV0() {
     const deviceNames = [...new Set(NETIO_POWER_CHANNELS.map((channel) => channel.device))];
     setNetioLoading(true);
     setNetioError('');
-    try {
-      const entries = await Promise.all(deviceNames.map(async (deviceName) => {
-        const readResponse = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
+    const entries = [];
+    const errors = [];
+    await Promise.all(deviceNames.map(async (deviceName) => {
+      try {
+        const readPayload = await fetchJsonWithRetry(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
           credentials: 'include',
         });
-        const readPayload = await readResponse.json();
-        if (!readResponse.ok || readPayload.success === false) {
-          throw new Error(readPayload.error || `Failed to read ${deviceName}`);
-        }
 
         const targetOutputIds = new Set(
           NETIO_POWER_CHANNELS
@@ -1690,35 +1708,29 @@ function PumpProbeV0() {
           targetOutputIds.has(output.id) ? (enabled ? 1 : 0) : output.state
         ));
 
-        const writeResponse = await fetch(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
+        await fetchJsonWithRetry(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
           body: JSON.stringify({ args: nextStates }),
         });
-        const writePayload = await writeResponse.json();
-        if (!writeResponse.ok || writePayload.success === false) {
-          throw new Error(writePayload.error || `Failed to set ${deviceName}`);
-        }
 
-        const verifyResponse = await fetch(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
+        const verifyPayload = await fetchJsonWithRetry(`/api/device/${devicePath(deviceName)}/pdu/outputs`, {
           credentials: 'include',
         });
-        const verifyPayload = await verifyResponse.json();
-        if (!verifyResponse.ok || verifyPayload.success === false) {
-          throw new Error(verifyPayload.error || `Failed to verify ${deviceName}`);
-        }
-        return [deviceName, {
+        entries.push([deviceName, {
           state: verifyPayload.state,
           outputs: normalizeNetioOutputs(verifyPayload.outputs),
-        }];
-      }));
+        }]);
+      } catch (error) {
+        errors.push(`${deviceName}: ${error.message}`);
+      }
+    }));
+    if (entries.length) {
       setNetioDevices((current) => ({ ...current, ...Object.fromEntries(entries) }));
-    } catch (error) {
-      setNetioError(error.message);
-    } finally {
-      setNetioLoading(false);
     }
+    setNetioError(errors.join('\n'));
+    setNetioLoading(false);
   }, []);
 
   const loadTangoStates = useCallback(async () => {
@@ -1728,13 +1740,9 @@ function PumpProbeV0() {
     try {
       const entries = await Promise.all(servers.map(async (server) => {
         try {
-          const response = await fetch(`/api/device/${devicePath(server.device)}/state`, {
+          const payload = await fetchJsonWithRetry(`/api/device/${devicePath(server.device)}/state`, {
             credentials: 'include',
           });
-          const payload = await response.json();
-          if (!response.ok || payload.success === false) {
-            throw new Error(payload.error || `Failed to read ${server.device}`);
-          }
           return [server.device, {
             ok: true,
             state: String(payload.state || 'UNKNOWN').replace(/^DevState\./, ''),

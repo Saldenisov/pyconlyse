@@ -47,6 +47,15 @@ def _read_attr_sequence(device, attr_name):
     except Exception:
         return []
 
+    return _sequence_from_value(value)
+
+
+def _read_attr_sequence_strict(device, attr_name):
+    """Read an attribute as a Python list, preserving Tango read errors for retry."""
+    return _sequence_from_value(make_json_safe(device.read_attribute(attr_name).value))
+
+
+def _sequence_from_value(value):
     if value is None:
         return []
     if isinstance(value, list):
@@ -61,6 +70,28 @@ def _as_int(value, fallback=0):
         return int(float(value))
     except Exception:
         return fallback
+
+
+def _is_delayed_tango_reconnect(exc):
+    text = str(exc).lower()
+    return (
+        "connection request was delayed" in text
+        or "last connection request was done less than" in text
+        or "api_cantconnecttodevice" in text
+    )
+
+
+def _with_tango_retry(operation, attempts=4, delay=1.05):
+    last_exc = None
+    for attempt in range(max(1, int(attempts))):
+        try:
+            return operation()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_delayed_tango_reconnect(exc) or attempt + 1 >= attempts:
+                raise
+            time.sleep(delay)
+    raise last_exc
 
 
 def _coerce_binary_state_args(args):
@@ -909,14 +940,16 @@ def execute_command(device_name, command_name):
     """Execute a device command"""
     try:
         _maybe_require_auth()
-        device = DeviceManager.get_device(device_name)
         data = request.get_json() or {}
         args = data.get('args')
-        
-        if args is not None:
-            result = device.command_inout(command_name, args)
-        else:
-            result = device.command_inout(command_name)
+
+        def run_command():
+            device = DeviceManager.get_device(device_name)
+            if args is not None:
+                return device, device.command_inout(command_name, args)
+            return device, device.command_inout(command_name)
+
+        device, result = _with_tango_retry(run_command)
 
         # DS_Netio_pdu can return "success" even when hardware state does not change.
         # For set_channels_states, verify readback and surface mismatch as an API error.
@@ -953,11 +986,15 @@ def execute_command(device_name, command_name):
 def get_device_state(device_name):
     """Get device state and status"""
     try:
-        device = DeviceManager.get_device(device_name)
+        def read_state():
+            device = DeviceManager.get_device(device_name)
+            return device, str(device.state()), device.status()
+
+        device, state, status = _with_tango_retry(read_state)
         return jsonify({
             'device': device_name,
-            'state': str(device.state()),
-            'status': device.status(),
+            'state': state,
+            'status': status,
             'timestamp': datetime.now().isoformat(),
             'success': True
         })
@@ -980,13 +1017,16 @@ def get_device_properties(device_name):
 def get_pdu_outputs(device_name):
     """Read NETIO/PDU output table using normalized output objects."""
     try:
-        device = DeviceManager.get_device(device_name)
+        def read_outputs():
+            device = DeviceManager.get_device(device_name)
+            ids = _read_attr_sequence_strict(device, 'ids')
+            names = _read_attr_sequence_strict(device, 'names')
+            states = _read_attr_sequence_strict(device, 'states')
+            if not states:
+                states = _read_attr_sequence_strict(device, 'output_statuses')
+            return device, ids, names, states
 
-        ids = _read_attr_sequence(device, 'ids')
-        names = _read_attr_sequence(device, 'names')
-        states = _read_attr_sequence(device, 'states')
-        if not states:
-            states = _read_attr_sequence(device, 'output_statuses')
+        device, ids, names, states = _with_tango_retry(read_outputs)
 
         output_count = max(len(ids), len(names), len(states), 4)
         if not ids:

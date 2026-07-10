@@ -656,6 +656,7 @@
   background: #2a1d0b;
   color: #f1c84b;
   font-size: 12px;
+  white-space: pre-wrap;
 }
 
 .pp-hardware-columns {
