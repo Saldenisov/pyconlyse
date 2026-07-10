@@ -1,6 +1,7 @@
 import math
 import os
 import random
+import json
 import threading
 import time
 from io import BytesIO, TextIOWrapper
@@ -41,6 +42,7 @@ BACKGROUND_RANDOM_COUNTS = 3
 OD_NOISE_SCALE = 0.0020
 OD_COMMON_OSCILLATION = 0.0011
 DEFAULT_DATA_ROOT = "smb://10.20.30.202/e/DATA_VD"
+DEFAULT_DG645_RECALL_CONFIG = str(Path(__file__).resolve().parents[1] / "pump_probe" / "config" / "v0_directline_dg645_recall8.json")
 DEFAULT_HARDWARE_CONFIG = {
     "control_mode": "emulator",
     "owis_aggregator_device": "manip/general/DS_OWIS_Aggregator",
@@ -51,6 +53,9 @@ DEFAULT_HARDWARE_CONFIG = {
     "sample_stage_label": "Sample holder V0",
     "sample_stage_device_name": "manip/V0/DLs_V0",
     "andor_device": "manip/CR/ANDOR_CCD1",
+    "dg645_device": "manip/sync/DG645",
+    "dg645_recall_config": DEFAULT_DG645_RECALL_CONFIG,
+    "dg645_preflight_policy": "apply_recall_then_verify",
 }
 
 
@@ -83,6 +88,29 @@ def _tango_proxy(device_name, timeout_ms=3000):
     proxy = tango.DeviceProxy(str(device_name))
     proxy.set_timeout_millis(int(timeout_ms))
     return proxy
+
+
+def _numeric_list(value):
+    try:
+        return [float(part.strip()) for part in str(value).split(",")]
+    except ValueError:
+        return None
+
+
+def _values_match(expected, actual, tolerance=1e-9):
+    expected_numbers = _numeric_list(expected)
+    actual_numbers = _numeric_list(actual)
+    if expected_numbers is not None and actual_numbers is not None:
+        if len(expected_numbers) != len(actual_numbers):
+            return False
+        return all(abs(left - right) <= tolerance for left, right in zip(expected_numbers, actual_numbers))
+    return str(expected).strip() == str(actual).strip()
+
+
+def _load_dg645_recall_config(config_path):
+    path = Path(str(config_path or DEFAULT_DG645_RECALL_CONFIG)).expanduser()
+    with open(path, "r", encoding="utf-8") as handle:
+        return json.load(handle)
 
 
 def _linspace(start, stop, count):
@@ -626,6 +654,8 @@ class PumpProbeV0Emulator:
         with self._lock:
             self._sync_locked()
             next_running = bool(running)
+            if next_running and self._control_mode_locked() == "tango":
+                self._preflight_dg645_locked()
             self._running = next_running
             if next_running:
                 self._real_time = False
@@ -703,6 +733,38 @@ class PumpProbeV0Emulator:
     def _stop_owis_axis_locked(self, axis):
         proxy = self._owis_aggregator_locked()
         proxy.command_inout("stop_axis", int(axis))
+
+    def _preflight_dg645_locked(self):
+        policy = str(self._hardware_config.get("dg645_preflight_policy") or "apply_recall_then_verify").strip().lower()
+        if policy in {"off", "skip", "disabled"}:
+            return
+
+        config = _load_dg645_recall_config(self._hardware_config.get("dg645_recall_config"))
+        dg645 = _tango_proxy(self._hardware_config.get("dg645_device") or config.get("device"), timeout_ms=8000)
+        recall_slot = int(config.get("recall_slot", 8))
+
+        if policy in {"apply_recall_then_verify", "recall_then_verify", "apply"}:
+            dg645.command_inout("scpi_write", f"*RCL {recall_slot}")
+            time.sleep(1.0)
+            try:
+                dg645.command_inout("scpi_query", "*OPC?")
+            except Exception:
+                pass
+        elif policy not in {"verify", "verify_only"}:
+            raise ValueError(f"Unsupported DG645 preflight policy: {policy}")
+
+        expected_queries = dict(config.get("snapshot", {}).get("raw_queries") or {})
+        expected_queries.pop("*IDN?", None)
+        mismatches = []
+        for command, expected in expected_queries.items():
+            actual = str(dg645.command_inout("scpi_query", command)).strip()
+            if not _values_match(expected, actual):
+                mismatches.append(f"{command} expected {expected!r} got {actual!r}")
+
+        if mismatches:
+            preview = "; ".join(mismatches[:5])
+            suffix = f"; +{len(mismatches) - 5} more" if len(mismatches) > 5 else ""
+            raise ValueError(f"DG645 recall {recall_slot} preflight failed: {preview}{suffix}")
 
     def _read_tango_motion_state_locked(self, state):
         if self._control_mode_locked() != "tango":
@@ -808,7 +870,10 @@ def pump_probe_hardware_config():
 @pump_probe_v0_api.route("/run", methods=["POST"])
 def pump_probe_run():
     payload = request.get_json(silent=True) or {}
-    return jsonify(_emulator.set_running(payload.get("running", True)))
+    try:
+        return jsonify(_emulator.set_running(payload.get("running", True)))
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 400
 
 
 @pump_probe_v0_api.route("/realtime", methods=["POST"])

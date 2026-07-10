@@ -19,7 +19,14 @@ async function pumpProbeRequest(path, options = {}) {
     ...options,
   });
   if (!response.ok) {
-    throw new Error(`Pump-probe V0 API failed: ${response.status}`);
+    let message = `Pump-probe V0 API failed: ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = payload.error || payload.msg || message;
+    } catch (_error) {
+      // Keep HTTP status fallback for non-JSON failures.
+    }
+    throw new Error(message);
   }
   return response.json();
 }
