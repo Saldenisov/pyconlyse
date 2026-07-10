@@ -2057,11 +2057,6 @@ function PumpProbeV0() {
   }, [settings, hardwareConfig, deviceConfig, postAndRefresh]);
 
   useEffect(() => {
-    loadNetioOutputs();
-    loadTangoStates();
-  }, [loadNetioOutputs, loadTangoStates]);
-
-  useEffect(() => {
     if (netioOpen) {
       loadNetioOutputs();
       loadTangoStates();

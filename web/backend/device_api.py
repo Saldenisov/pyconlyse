@@ -78,6 +78,8 @@ def _is_delayed_tango_reconnect(exc):
         "connection request was delayed" in text
         or "last connection request was done less than" in text
         or "api_cantconnecttodevice" in text
+        or "api_cantconnecttodatabase" in text
+        or "transient_connectfailed" in text
     )
 
 
@@ -92,6 +94,22 @@ def _with_tango_retry(operation, attempts=4, delay=1.05):
                 raise
             time.sleep(delay)
     raise last_exc
+
+
+def _with_device_retry(device_name, operation, attempts=4, delay=1.05):
+    """Retry one device serially and replace its proxy after a transient reconnect error."""
+    with DeviceManager.operation_lock(device_name):
+        last_exc = None
+        for attempt in range(max(1, int(attempts))):
+            try:
+                return operation()
+            except Exception as exc:
+                last_exc = exc
+                if not _is_delayed_tango_reconnect(exc) or attempt + 1 >= attempts:
+                    raise
+                DeviceManager.discard_device(device_name)
+                time.sleep(delay)
+        raise last_exc
 
 
 def _coerce_binary_state_args(args):
@@ -549,9 +567,19 @@ def debug_monitor_device(device_name):
 
 # Global device proxy cache and monitoring
 device_cache = {}
+device_cache_lock = threading.RLock()
+device_operation_locks = {}
 monitoring_threads = {}
 monitoring_active = {}
 _device_list_cache = {}
+
+
+def _device_proxy_target(device_name):
+    name = str(device_name)
+    if name.startswith("tango://"):
+        return name
+    tango_host = os.environ.get("TANGO_HOST", "").strip()
+    return f"tango://{tango_host}/{name}" if tango_host else name
 
 class DeviceManager:
     """Manages Tango device connections and operations"""
@@ -559,12 +587,25 @@ class DeviceManager:
     @staticmethod
     def get_device(device_name):
         """Get or create device proxy with caching"""
-        if device_name not in device_cache:
-            try:
-                device_cache[device_name] = tango.DeviceProxy(device_name)
-            except Exception as e:
-                raise Exception(f"Could not connect to device {device_name}: {str(e)}")
-        return device_cache[device_name]
+        with device_cache_lock:
+            if device_name not in device_cache:
+                try:
+                    device_cache[device_name] = tango.DeviceProxy(_device_proxy_target(device_name))
+                except Exception as e:
+                    raise Exception(f"Could not connect to device {device_name}: {str(e)}")
+            return device_cache[device_name]
+
+    @staticmethod
+    def discard_device(device_name):
+        """Forget a proxy whose CORBA connection became stale."""
+        with device_cache_lock:
+            device_cache.pop(device_name, None)
+
+    @staticmethod
+    def operation_lock(device_name):
+        """Serialize calls for one Tango proxy; DeviceProxy is not request-thread safe."""
+        with device_cache_lock:
+            return device_operation_locks.setdefault(device_name, threading.RLock())
 
     @staticmethod
     def get_device_summary(device_name):
@@ -949,7 +990,7 @@ def execute_command(device_name, command_name):
                 return device, device.command_inout(command_name, args)
             return device, device.command_inout(command_name)
 
-        device, result = _with_tango_retry(run_command)
+        device, result = _with_device_retry(device_name, run_command)
 
         # DS_Netio_pdu can return "success" even when hardware state does not change.
         # For set_channels_states, verify readback and surface mismatch as an API error.
@@ -990,7 +1031,7 @@ def get_device_state(device_name):
             device = DeviceManager.get_device(device_name)
             return device, str(device.state()), device.status()
 
-        device, state, status = _with_tango_retry(read_state)
+        device, state, status = _with_device_retry(device_name, read_state)
         return jsonify({
             'device': device_name,
             'state': state,
@@ -1026,7 +1067,7 @@ def get_pdu_outputs(device_name):
                 states = _read_attr_sequence_strict(device, 'output_statuses')
             return device, ids, names, states
 
-        device, ids, names, states = _with_tango_retry(read_outputs)
+        device, ids, names, states = _with_device_retry(device_name, read_outputs)
 
         output_count = max(len(ids), len(names), len(states), 4)
         if not ids:
