@@ -1,10 +1,48 @@
-import React, { useContext, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import Plotly from 'plotly.js-dist';
 import { TreatmentContext } from './DataWindowVD2';
 import { fetchSelection, updateSelectionConfig } from './api/treatmentClient';
 import './css/TopSection.css';
 
-const HEATMAP_MARGIN = { t: 24, r: 16, b: 48, l: 56 };
+const HEATMAP_MARGIN = { t: 14, r: 8, b: 8, l: 8 };
+const HEATMAP_X_DOMAIN = [0.15, 0.83];
+const HEATMAP_Y_DOMAIN = [0.18, 0.8];
+
+function safePlot(plotNode, traces, layout, config) {
+  if (!plotNode?.isConnected) {
+    return Promise.resolve();
+  }
+  return Plotly.react(plotNode, traces, layout, config).catch(() => undefined);
+}
+
+function safeResize(plotNode) {
+  if (!plotNode?.isConnected || !plotNode._fullLayout) {
+    return;
+  }
+  try {
+    Plotly.Plots.resize(plotNode);
+  } catch (_error) {
+    // Plotly can briefly lose internal layout while React/hot reload redraws.
+  }
+}
+
+function safePurge(plotNode) {
+  if (!plotNode) {
+    return;
+  }
+  try {
+    Plotly.purge(plotNode);
+  } catch (_error) {
+    // Ignore Plotly teardown races.
+  }
+}
+
+function safeRestyle(plotNode, update) {
+  if (!plotNode?.isConnected || !plotNode._fullLayout) {
+    return Promise.resolve();
+  }
+  return Plotly.restyle(plotNode, update, [0]).catch(() => undefined);
+}
 
 function clampCursor(value, fallback) {
   const parsed = Number.parseInt(value, 10);
@@ -14,106 +52,251 @@ function clampCursor(value, fallback) {
   return parsed;
 }
 
-function findClosestIndex(values, target) {
-  if (!Array.isArray(values) || values.length === 0) {
-    return 0;
+function interpolateValue(index, fullLength, values) {
+  if (!values?.length) {
+    return index;
+  }
+  if (values.length === 1 || fullLength <= 1) {
+    return values[0];
   }
 
-  let bestIndex = 0;
-  let bestDistance = Math.abs(values[0] - target);
+  const position = (Math.max(0, Math.min(fullLength - 1, index)) / (fullLength - 1)) *
+    (values.length - 1);
+  const left = Math.floor(position);
+  const right = Math.min(values.length - 1, left + 1);
+  const fraction = position - left;
+  return values[left] + (values[right] - values[left]) * fraction;
+}
 
-  for (let index = 1; index < values.length; index += 1) {
-    const distance = Math.abs(values[index] - target);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestIndex = index;
+function nearestFullIndex(value, fullLength, values) {
+  if (!values?.length || fullLength <= 1) {
+    return Math.max(0, Math.round(value || 0));
+  }
+
+  let nearestIndex = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  values.forEach((candidate, index) => {
+    const distance = Math.abs(candidate - value);
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
     }
-  }
+  });
 
-  return bestIndex;
+  const ratio = values.length <= 1 ? 0 : nearestIndex / (values.length - 1);
+  return Math.max(0, Math.min(fullLength - 1, Math.round(ratio * (fullLength - 1))));
 }
 
-function interpolate(fromValue, toValue, ratio) {
-  return fromValue + (toValue - fromValue) * ratio;
-}
-
-function SelectionHeatmap({ selection, onSelectRange }) {
+function SelectionHeatmap({ selection, onSelectRange, onPreviewRange }) {
   const shellRef = useRef(null);
   const plotRef = useRef(null);
   const dragStateRef = useRef(null);
-  const [dragRect, setDragRect] = useState(null);
+  const visualSelectionRef = useRef(null);
+  const pendingPreviewRef = useRef(null);
+  const previewFrameRef = useRef(null);
+  const [metrics, setMetrics] = useState(null);
+  const [visualSelection, setVisualSelection] = useState(null);
+
+  const readPlotMetrics = useCallback((rect) => {
+    const plotNode = plotRef.current;
+    const xAxis = plotNode?._fullLayout?.xaxis;
+    const yAxis = plotNode?._fullLayout?.yaxis;
+    const xOffset = Number.isFinite(xAxis?._offset) ? xAxis._offset : HEATMAP_MARGIN.l;
+    const yOffset = Number.isFinite(yAxis?._offset) ? yAxis._offset : HEATMAP_MARGIN.t;
+    const innerWidth = Number.isFinite(xAxis?._length)
+      ? xAxis._length
+      : rect.width - HEATMAP_MARGIN.l - HEATMAP_MARGIN.r;
+    const innerHeight = Number.isFinite(yAxis?._length)
+      ? yAxis._length
+      : rect.height - HEATMAP_MARGIN.t - HEATMAP_MARGIN.b;
+
+    return {
+      width: rect.width,
+      height: rect.height,
+      xOffset,
+      yOffset,
+      innerWidth: Math.max(1, innerWidth),
+      innerHeight: Math.max(1, innerHeight),
+    };
+  }, []);
 
   useEffect(() => {
-    const plotNode = plotRef.current;
-    if (!plotNode || !selection) {
+    if (dragStateRef.current) {
+      return;
+    }
+    if (!selection?.cursors) {
+      visualSelectionRef.current = null;
+      setVisualSelection(null);
+      return;
+    }
+
+    const nextVisualSelection = {
+      x1: selection.cursors.x1,
+      x2: selection.cursors.x2,
+      y1: selection.cursors.y1,
+      y2: selection.cursors.y2,
+    };
+    visualSelectionRef.current = nextVisualSelection;
+    setVisualSelection(nextVisualSelection);
+  }, [selection]);
+
+  useEffect(() => () => {
+    if (previewFrameRef.current) {
+      window.cancelAnimationFrame(previewFrameRef.current);
+    }
+  }, []);
+
+  const schedulePreview = (nextSelection) => {
+    if (!onPreviewRange) {
+      return;
+    }
+
+    pendingPreviewRef.current = nextSelection;
+    if (previewFrameRef.current) {
+      return;
+    }
+
+    previewFrameRef.current = window.requestAnimationFrame(() => {
+      previewFrameRef.current = null;
+      if (pendingPreviewRef.current) {
+        onPreviewRange(pendingPreviewRef.current);
+      }
+    });
+  };
+
+  useEffect(() => {
+    const shellNode = shellRef.current;
+    if (!shellNode) {
       return undefined;
     }
 
-    const { heatmap, cursors, kinetics } = selection;
+    const updateMetrics = () => {
+      const rect = shellNode.getBoundingClientRect();
+      setMetrics(readPlotMetrics(rect));
+    };
 
-    Plotly.newPlot(
+    updateMetrics();
+    const resizeObserver = new ResizeObserver(updateMetrics);
+    resizeObserver.observe(shellNode);
+    return () => resizeObserver.disconnect();
+  }, [readPlotMetrics]);
+
+  const heatmapForPlot = selection?.heatmap;
+  const timeScaleForPlot = selection?.kinetics?.time_scale || '';
+  const updateMetricsFromShell = useCallback(() => {
+    const shellNode = shellRef.current;
+    if (shellNode) {
+      setMetrics(readPlotMetrics(shellNode.getBoundingClientRect()));
+    }
+  }, [readPlotMetrics]);
+
+  useEffect(() => {
+    const plotNode = plotRef.current;
+    if (!plotNode || !heatmapForPlot) {
+      return undefined;
+    }
+
+    safePlot(
       plotNode,
       [
         {
-          z: heatmap.z,
-          x: heatmap.wavelengths,
-          y: heatmap.timedelays,
+          z: heatmapForPlot.z,
+          x: heatmapForPlot.wavelengths,
+          y: heatmapForPlot.timedelays,
           type: 'heatmap',
           colorscale: 'Viridis',
+          colorbar: {
+            x: 0.9,
+            y: 0.49,
+            len: 0.62,
+            thickness: 22,
+          },
         },
       ],
       {
         margin: HEATMAP_MARGIN,
-        xaxis: { title: 'Wavelength, nm' },
-        yaxis: { title: `Time delay, ${kinetics.time_scale || ''}`.trim() },
-        shapes: [
-          {
-            type: 'line',
-            x0: cursors.x1_value,
-            x1: cursors.x1_value,
-            y0: heatmap.timedelays[0],
-            y1: heatmap.timedelays[heatmap.timedelays.length - 1],
-            line: { color: '#ef4444', width: 2 },
-          },
-          {
-            type: 'line',
-            x0: cursors.x2_value,
-            x1: cursors.x2_value,
-            y0: heatmap.timedelays[0],
-            y1: heatmap.timedelays[heatmap.timedelays.length - 1],
-            line: { color: '#ef4444', width: 2 },
-          },
-          {
-            type: 'line',
-            x0: heatmap.wavelengths[0],
-            x1: heatmap.wavelengths[heatmap.wavelengths.length - 1],
-            y0: cursors.y1_value,
-            y1: cursors.y1_value,
-            line: { color: '#f97316', width: 2 },
-          },
-          {
-            type: 'line',
-            x0: heatmap.wavelengths[0],
-            x1: heatmap.wavelengths[heatmap.wavelengths.length - 1],
-            y0: cursors.y2_value,
-            y1: cursors.y2_value,
-            line: { color: '#f97316', width: 2 },
-          },
-        ],
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
+        xaxis: {
+          domain: HEATMAP_X_DOMAIN,
+          title: 'Wavelength, nm',
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
+        yaxis: {
+          domain: HEATMAP_Y_DOMAIN,
+          title: `Time delay, ${timeScaleForPlot}`.trim(),
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
+        dragmode: 'zoom',
       },
-      { responsive: true, displayModeBar: false }
+      {
+        responsive: true,
+        displayModeBar: false,
+        doubleClick: 'reset',
+        scrollZoom: false,
+      }
     );
 
     const resizeObserver = new ResizeObserver(() => {
-      Plotly.Plots.resize(plotNode);
+      safeResize(plotNode);
+      window.requestAnimationFrame(updateMetricsFromShell);
     });
     resizeObserver.observe(plotNode);
 
+    window.requestAnimationFrame(updateMetricsFromShell);
+
     return () => {
       resizeObserver.disconnect();
-      Plotly.purge(plotNode);
+      safePurge(plotNode);
     };
-  }, [selection]);
+  }, [
+    heatmapForPlot,
+    readPlotMetrics,
+    timeScaleForPlot,
+    updateMetricsFromShell,
+  ]);
+
+  const relayoutHeatmap = (layoutUpdate) => {
+    const plotNode = plotRef.current;
+    if (!plotNode?._fullLayout) {
+      return;
+    }
+    Plotly.relayout(plotNode, layoutUpdate)
+      .then(() => window.requestAnimationFrame(updateMetricsFromShell))
+      .catch(() => undefined);
+  };
+
+  const resetZoom = () => {
+    relayoutHeatmap({
+      'xaxis.autorange': true,
+      'yaxis.autorange': true,
+    });
+  };
+
+  const zoomBy = (factor) => {
+    const plotNode = plotRef.current;
+    const xAxis = plotNode?._fullLayout?.xaxis;
+    const yAxis = plotNode?._fullLayout?.yaxis;
+    const xRange = xAxis?.range;
+    const yRange = yAxis?.range;
+    if (!Array.isArray(xRange) || !Array.isArray(yRange)) {
+      return;
+    }
+
+    const zoomRange = (range) => {
+      const center = (range[0] + range[1]) / 2;
+      const halfWidth = Math.abs(range[1] - range[0]) * factor / 2;
+      return [center - halfWidth, center + halfWidth];
+    };
+
+    relayoutHeatmap({
+      'xaxis.range': zoomRange(xRange),
+      'yaxis.range': zoomRange(yRange),
+    });
+  };
 
   const getClampedLocalPoint = (event) => {
     const shellNode = shellRef.current;
@@ -122,24 +305,26 @@ function SelectionHeatmap({ selection, onSelectRange }) {
     }
 
     const rect = shellNode.getBoundingClientRect();
-    const innerWidth = rect.width - HEATMAP_MARGIN.l - HEATMAP_MARGIN.r;
-    const innerHeight = rect.height - HEATMAP_MARGIN.t - HEATMAP_MARGIN.b;
+    const plotMetrics = readPlotMetrics(rect);
+    const { xOffset, yOffset, innerWidth, innerHeight } = plotMetrics;
     if (innerWidth <= 0 || innerHeight <= 0) {
       return null;
     }
 
     const localX = Math.min(
-      Math.max(event.clientX - rect.left, HEATMAP_MARGIN.l),
-      rect.width - HEATMAP_MARGIN.r
+      Math.max(event.clientX - rect.left, xOffset),
+      xOffset + innerWidth
     );
     const localY = Math.min(
-      Math.max(event.clientY - rect.top, HEATMAP_MARGIN.t),
-      rect.height - HEATMAP_MARGIN.b
+      Math.max(event.clientY - rect.top, yOffset),
+      yOffset + innerHeight
     );
 
     return {
       localX,
       localY,
+      xOffset,
+      yOffset,
       innerWidth,
       innerHeight,
       rectWidth: rect.width,
@@ -147,64 +332,102 @@ function SelectionHeatmap({ selection, onSelectRange }) {
     };
   };
 
-  const toSelectionIndexes = (startPoint, endPoint) => {
-    const wavelengths = selection?.heatmap?.wavelengths || [];
-    const timedelays = selection?.heatmap?.timedelays || [];
-    if (wavelengths.length === 0 || timedelays.length === 0) {
+  const normalizeSelectionIndexes = (nextSelection) => {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (xLength === 0 || yLength === 0) {
       return null;
     }
 
-    const xMin = Math.min(wavelengths[0], wavelengths[wavelengths.length - 1]);
-    const xMax = Math.max(wavelengths[0], wavelengths[wavelengths.length - 1]);
-    const yMin = Math.min(timedelays[0], timedelays[timedelays.length - 1]);
-    const yMax = Math.max(timedelays[0], timedelays[timedelays.length - 1]);
-
-    const startXRatio =
-      (startPoint.localX - HEATMAP_MARGIN.l) / Math.max(1, startPoint.innerWidth);
-    const endXRatio =
-      (endPoint.localX - HEATMAP_MARGIN.l) / Math.max(1, endPoint.innerWidth);
-    const startYRatio =
-      (startPoint.localY - HEATMAP_MARGIN.t) / Math.max(1, startPoint.innerHeight);
-    const endYRatio =
-      (endPoint.localY - HEATMAP_MARGIN.t) / Math.max(1, endPoint.innerHeight);
-
-    const startXValue = interpolate(xMin, xMax, startXRatio);
-    const endXValue = interpolate(xMin, xMax, endXRatio);
-    const startYValue = interpolate(yMin, yMax, 1 - startYRatio);
-    const endYValue = interpolate(yMin, yMax, 1 - endYRatio);
-
-    const x1 = findClosestIndex(wavelengths, startXValue);
-    const x2 = findClosestIndex(wavelengths, endXValue);
-    const y1 = findClosestIndex(timedelays, startYValue);
-    const y2 = findClosestIndex(timedelays, endYValue);
-
-    return {
-      x1: Math.min(x1, x2),
-      x2: Math.max(x1, x2),
-      y1: Math.min(y1, y2),
-      y2: Math.max(y1, y2),
+    const normalizePair = (start, end, length) => {
+      let left = Math.max(0, Math.min(length - 1, start));
+      let right = Math.max(0, Math.min(length - 1, end));
+      if (left > right) {
+        [left, right] = [right, left];
+      }
+      if (left === right) {
+        if (right < length - 1) {
+          right += 1;
+        } else if (left > 0) {
+          left -= 1;
+        }
+      }
+      return [left, right];
     };
+
+    const [x1, x2] = normalizePair(nextSelection.x1, nextSelection.x2, xLength);
+    const [y1, y2] = normalizePair(nextSelection.y1, nextSelection.y2, yLength);
+    return { x1, x2, y1, y2 };
   };
 
-  const handlePointerDown = (event) => {
+  const xIndexFromPoint = (point) => {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    if (xLength === 0 || !point) {
+      return 0;
+    }
+
+    const xAxis = plotRef.current?._fullLayout?.xaxis;
+    const xValues = selection?.heatmap?.wavelengths || [];
+    if (xAxis?.p2l && xValues.length > 0) {
+      return nearestFullIndex(xAxis.p2l(point.localX - point.xOffset), xLength, xValues);
+    }
+
+    const ratio = (point.localX - point.xOffset) / Math.max(1, point.innerWidth);
+    return Math.round(Math.max(0, Math.min(1, ratio)) * (xLength - 1));
+  };
+
+  const yIndexFromPoint = (point) => {
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (yLength === 0 || !point) {
+      return 0;
+    }
+
+    const yAxis = plotRef.current?._fullLayout?.yaxis;
+    const yValues = selection?.heatmap?.timedelays || [];
+    if (yAxis?.p2l && yValues.length > 0) {
+      return nearestFullIndex(yAxis.p2l(point.localY - point.yOffset), yLength, yValues);
+    }
+
+    const ratio = (point.localY - point.yOffset) / Math.max(1, point.innerHeight);
+    return Math.round((1 - Math.max(0, Math.min(1, ratio))) * (yLength - 1));
+  };
+
+  const clampMovedRange = (start, end, delta, length) => {
+    const width = Math.max(1, end - start);
+    const nextStart = Math.max(0, Math.min(length - 1 - width, start + delta));
+    return [nextStart, nextStart + width];
+  };
+
+  const handleRegionPointerDown = (event, axis, mode) => {
     if (event.button !== 0) {
       return;
     }
 
+    event.preventDefault();
     const point = getClampedLocalPoint(event);
     if (!point) {
       return;
     }
 
-    dragStateRef.current = point;
-    setDragRect({
-      left: point.localX,
-      top: point.localY,
-      width: 1,
-      height: 1,
-    });
+    const startSelection = visualSelection || {
+      x1: selection.cursors.x1,
+      x2: selection.cursors.x2,
+      y1: selection.cursors.y1,
+      y2: selection.cursors.y2,
+    };
 
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const captureTarget = event.currentTarget;
+    dragStateRef.current = {
+      axis,
+      mode,
+      point,
+      pointerId: event.pointerId,
+      captureTarget,
+      selection: startSelection,
+      startXIndex: xIndexFromPoint(point),
+      startYIndex: yIndexFromPoint(point),
+    };
+    captureTarget.setPointerCapture?.(event.pointerId);
   };
 
   const handlePointerMove = (event) => {
@@ -217,51 +440,223 @@ function SelectionHeatmap({ selection, onSelectRange }) {
       return;
     }
 
-    const startPoint = dragStateRef.current;
-    setDragRect({
-      left: Math.min(startPoint.localX, point.localX),
-      top: Math.min(startPoint.localY, point.localY),
-      width: Math.max(1, Math.abs(point.localX - startPoint.localX)),
-      height: Math.max(1, Math.abs(point.localY - startPoint.localY)),
-    });
+    const dragState = dragStateRef.current;
+    const startSelection = dragState.selection;
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    let nextSelection = { ...startSelection };
+
+    if (dragState.axis === 'x') {
+      const nextIndex = xIndexFromPoint(point);
+      if (dragState.mode === 'start') {
+        nextSelection.x1 = nextIndex;
+      } else if (dragState.mode === 'end') {
+        nextSelection.x2 = nextIndex;
+      } else {
+        const [x1, x2] = clampMovedRange(
+          startSelection.x1,
+          startSelection.x2,
+          nextIndex - dragState.startXIndex,
+          xLength
+        );
+        nextSelection.x1 = x1;
+        nextSelection.x2 = x2;
+      }
+    } else {
+      const nextIndex = yIndexFromPoint(point);
+      if (dragState.mode === 'start') {
+        nextSelection.y1 = nextIndex;
+      } else if (dragState.mode === 'end') {
+        nextSelection.y2 = nextIndex;
+      } else {
+        const [y1, y2] = clampMovedRange(
+          startSelection.y1,
+          startSelection.y2,
+          nextIndex - dragState.startYIndex,
+          yLength
+        );
+        nextSelection.y1 = y1;
+        nextSelection.y2 = y2;
+      }
+    }
+
+    const normalizedSelection = normalizeSelectionIndexes(nextSelection);
+    if (normalizedSelection) {
+      visualSelectionRef.current = normalizedSelection;
+      setVisualSelection(normalizedSelection);
+      schedulePreview(normalizedSelection);
+    }
   };
 
   const finishDrag = (event) => {
-    if (!dragStateRef.current) {
+    const dragState = dragStateRef.current;
+    if (!dragState) {
       return;
     }
 
-    const startPoint = dragStateRef.current;
-    const endPoint = getClampedLocalPoint(event) || startPoint;
+    const captureTarget = dragState.captureTarget;
+    if (
+      captureTarget?.hasPointerCapture?.(dragState.pointerId) &&
+      (!event?.pointerId || event.pointerId === dragState.pointerId)
+    ) {
+      captureTarget.releasePointerCapture(dragState.pointerId);
+    }
     dragStateRef.current = null;
-    setDragRect(null);
 
-    const nextSelection = toSelectionIndexes(startPoint, endPoint);
+    const nextSelection = normalizeSelectionIndexes(
+      visualSelectionRef.current || visualSelection || selection.cursors
+    );
     if (nextSelection && onSelectRange) {
       onSelectRange(nextSelection);
     }
   };
 
+  useEffect(() => {
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', finishDrag);
+    window.addEventListener('pointercancel', finishDrag);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', finishDrag);
+      window.removeEventListener('pointercancel', finishDrag);
+    };
+  });
+
+  const valueToX = (value) => {
+    const xLength = selection?.file_info?.wavelengths_length || 0;
+    if (!metrics || xLength === 0) {
+      return HEATMAP_MARGIN.l;
+    }
+    if (xLength <= 1) {
+      return metrics.xOffset;
+    }
+    const xAxis = plotRef.current?._fullLayout?.xaxis;
+    if (xAxis?.l2p) {
+      return metrics.xOffset + xAxis.l2p(
+        interpolateValue(value, xLength, selection?.heatmap?.wavelengths || [])
+      );
+    }
+    return metrics.xOffset + (value / (xLength - 1)) * metrics.innerWidth;
+  };
+
+  const valueToY = (value) => {
+    const yLength = selection?.file_info?.timedelays_length || 0;
+    if (!metrics || yLength === 0) {
+      return HEATMAP_MARGIN.t;
+    }
+    if (yLength <= 1) {
+      return metrics.yOffset;
+    }
+    const yAxis = plotRef.current?._fullLayout?.yaxis;
+    if (yAxis?.l2p) {
+      return metrics.yOffset + yAxis.l2p(
+        interpolateValue(value, yLength, selection?.heatmap?.timedelays || [])
+      );
+    }
+    return metrics.yOffset + (1 - value / (yLength - 1)) * metrics.innerHeight;
+  };
+
+  const buildRegionStyle = () => {
+    if (!metrics || !visualSelection) {
+      return null;
+    }
+
+    const xStart = valueToX(visualSelection.x1);
+    const xEnd = valueToX(visualSelection.x2);
+    const yStart = valueToY(visualSelection.y1);
+    const yEnd = valueToY(visualSelection.y2);
+
+    return {
+      x: {
+        left: Math.min(xStart, xEnd),
+        top: metrics.yOffset,
+        width: Math.max(6, Math.abs(xEnd - xStart)),
+        height: metrics.innerHeight,
+      },
+      y: {
+        left: metrics.xOffset,
+        top: Math.min(yStart, yEnd),
+        width: metrics.innerWidth,
+        height: Math.max(6, Math.abs(yEnd - yStart)),
+      },
+    };
+  };
+
+  const regionStyle = buildRegionStyle();
+
   return (
     <div className="selection-heatmap-shell" ref={shellRef}>
+      <div className="selection-toolbar" aria-label="Optical density view controls">
+        <button type="button" onClick={() => zoomBy(0.75)} title="Zoom in">
+          +
+        </button>
+        <button type="button" onClick={() => zoomBy(1.35)} title="Zoom out">
+          -
+        </button>
+        <button type="button" onClick={resetZoom} title="Reset zoom">
+          Reset
+        </button>
+      </div>
       <div className="imshow-graph" ref={plotRef}></div>
       <div
         className="selection-overlay"
-        onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
       >
-        {dragRect && (
-          <div
-            className="selection-rect"
-            style={{
-              left: `${dragRect.left}px`,
-              top: `${dragRect.top}px`,
-              width: `${dragRect.width}px`,
-              height: `${dragRect.height}px`,
-            }}
-          />
+        {regionStyle && (
+          <>
+            <div
+              className="selection-region selection-region-x"
+              style={{
+                left: `${regionStyle.x.left}px`,
+                top: `${regionStyle.x.top}px`,
+                width: `${regionStyle.x.width}px`,
+                height: `${regionStyle.x.height}px`,
+              }}
+              onPointerDown={(event) => handleRegionPointerDown(event, 'x', 'move')}
+            >
+              <span
+                className="selection-region-handle selection-region-handle-start"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  handleRegionPointerDown(event, 'x', 'start');
+                }}
+              />
+              <span
+                className="selection-region-handle selection-region-handle-end"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  handleRegionPointerDown(event, 'x', 'end');
+                }}
+              />
+            </div>
+            <div
+              className="selection-region selection-region-y"
+              style={{
+                left: `${regionStyle.y.left}px`,
+                top: `${regionStyle.y.top}px`,
+                width: `${regionStyle.y.width}px`,
+                height: `${regionStyle.y.height}px`,
+              }}
+              onPointerDown={(event) => handleRegionPointerDown(event, 'y', 'move')}
+            >
+              <span
+                className="selection-region-handle selection-region-handle-start"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  handleRegionPointerDown(event, 'y', 'end');
+                }}
+              />
+              <span
+                className="selection-region-handle selection-region-handle-end"
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  handleRegionPointerDown(event, 'y', 'start');
+                }}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>
@@ -277,12 +672,12 @@ function LinePlot({ x, y, title, xTitle, className }) {
       return undefined;
     }
 
-    Plotly.newPlot(
+    safePlot(
       plotNode,
       [
         {
-          x,
-          y,
+          x: [],
+          y: [],
           type: 'scatter',
           mode: 'lines',
           line: { color: '#dc2626', width: 2 },
@@ -290,25 +685,102 @@ function LinePlot({ x, y, title, xTitle, className }) {
       ],
       {
         margin: { t: 28, r: 16, b: 40, l: 48 },
+        paper_bgcolor: 'rgba(0,0,0,0)',
+        plot_bgcolor: 'rgba(0,0,0,0)',
+        font: { color: '#e5e7eb' },
         title,
-        xaxis: { title: xTitle },
-        yaxis: { title: 'Intensity' },
+        xaxis: {
+          title: xTitle,
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
+        yaxis: {
+          title: 'Intensity',
+          gridcolor: 'rgba(148, 163, 184, 0.26)',
+          zerolinecolor: 'rgba(148, 163, 184, 0.35)',
+        },
       },
       { responsive: true, displayModeBar: false }
     );
 
     const resizeObserver = new ResizeObserver(() => {
-      Plotly.Plots.resize(plotNode);
+      safeResize(plotNode);
     });
     resizeObserver.observe(plotNode);
 
     return () => {
       resizeObserver.disconnect();
-      Plotly.purge(plotNode);
+      safePurge(plotNode);
     };
-  }, [className, title, x, xTitle, y]);
+  }, [className, title, xTitle]);
+
+  useEffect(() => {
+    const plotNode = ref.current;
+    if (!plotNode) {
+      return;
+    }
+    safeRestyle(plotNode, { x: [x], y: [y] });
+  }, [x, y]);
 
   return <div className={className} ref={ref}></div>;
+}
+
+function clampSampleIndex(fullIndex, fullLength, sampleLength) {
+  if (sampleLength <= 1 || fullLength <= 1) {
+    return 0;
+  }
+  const ratio = Math.max(0, Math.min(1, fullIndex / (fullLength - 1)));
+  return Math.round(ratio * (sampleLength - 1));
+}
+
+function mean(values) {
+  const finiteValues = values.filter((value) => Number.isFinite(value));
+  if (finiteValues.length === 0) {
+    return null;
+  }
+  return finiteValues.reduce((total, value) => total + value, 0) / finiteValues.length;
+}
+
+function buildPreviewCurves(selection, selectedRange) {
+  const z = selection?.heatmap?.z || [];
+  const wavelengths = selection?.heatmap?.wavelengths || [];
+  const timedelays = selection?.heatmap?.timedelays || [];
+  const xLength = selection?.file_info?.wavelengths_length || wavelengths.length;
+  const yLength = selection?.file_info?.timedelays_length || timedelays.length;
+
+  if (!selectedRange || z.length === 0 || wavelengths.length === 0 || timedelays.length === 0) {
+    return null;
+  }
+
+  const x1 = clampSampleIndex(selectedRange.x1, xLength, wavelengths.length);
+  const x2 = clampSampleIndex(selectedRange.x2, xLength, wavelengths.length);
+  const y1 = clampSampleIndex(selectedRange.y1, yLength, timedelays.length);
+  const y2 = clampSampleIndex(selectedRange.y2, yLength, timedelays.length);
+  const xStart = Math.min(x1, x2);
+  const xEnd = Math.max(x1, x2);
+  const yStart = Math.min(y1, y2);
+  const yEnd = Math.max(y1, y2);
+
+  const kinetics = z.map((row) => mean((row || []).slice(xStart, xEnd + 1)) ?? 0);
+  const spectrum = wavelengths.map((_, colIndex) => {
+    const values = [];
+    for (let rowIndex = yStart; rowIndex <= yEnd; rowIndex += 1) {
+      values.push(z[rowIndex]?.[colIndex]);
+    }
+    return mean(values) ?? 0;
+  });
+
+  return {
+    kinetics: {
+      x: timedelays,
+      y: kinetics,
+      time_scale: selection.kinetics?.time_scale || '',
+    },
+    spectrum: {
+      x: wavelengths,
+      y: spectrum,
+    },
+  };
 }
 
 const TopSection = () => {
@@ -321,6 +793,7 @@ const TopSection = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [previewRange, setPreviewRange] = useState(null);
   const [draft, setDraft] = useState({
     activeDataType: '',
     mapIndex: 0,
@@ -350,6 +823,7 @@ const TopSection = () => {
           y1: nextSelection.cursors.y1,
           y2: nextSelection.cursors.y2,
         });
+        setPreviewRange(null);
         setError('');
       })
       .catch((err) => {
@@ -398,6 +872,7 @@ const TopSection = () => {
       return;
     }
 
+    setPreviewRange(null);
     setDraft((current) => ({
       ...current,
       x1: nextSelection.x1,
@@ -405,6 +880,14 @@ const TopSection = () => {
       y1: nextSelection.y1,
       y2: nextSelection.y2,
     }));
+    setSelection((current) =>
+      current
+        ? {
+            ...current,
+            cursors: nextSelection,
+          }
+        : current
+    );
 
     setIsSaving(true);
     try {
@@ -414,14 +897,22 @@ const TopSection = () => {
         selection: nextSelection,
       });
       setError('');
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
     } catch (err) {
       setError(err.message);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleHeatmapPreview = (nextSelection) => {
+    setPreviewRange(nextSelection);
+    setDraft((current) => ({
+      ...current,
+      x1: nextSelection.x1,
+      x2: nextSelection.x2,
+      y1: nextSelection.y1,
+      y2: nextSelection.y2,
+    }));
   };
 
   const stepMap = async (direction) => {
@@ -478,6 +969,10 @@ const TopSection = () => {
       );
     }
 
+    const previewCurves = buildPreviewCurves(selection, previewRange);
+    const shownKinetics = previewCurves?.kinetics || selection.kinetics;
+    const shownSpectrum = previewCurves?.spectrum || selection.spectrum;
+
     return (
       <>
         <div className="selection-controls">
@@ -514,66 +1009,6 @@ const TopSection = () => {
               }
             />
           </label>
-          <label>
-            x1
-            <input
-              type="number"
-              min="0"
-              max={Math.max(0, selection.file_info.wavelengths_length - 1)}
-              value={draft.x1}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  x1: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            x2
-            <input
-              type="number"
-              min="0"
-              max={Math.max(0, selection.file_info.wavelengths_length - 1)}
-              value={draft.x2}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  x2: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            y1
-            <input
-              type="number"
-              min="0"
-              max={Math.max(0, selection.file_info.timedelays_length - 1)}
-              value={draft.y1}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  y1: event.target.value,
-                }))
-              }
-            />
-          </label>
-          <label>
-            y2
-            <input
-              type="number"
-              min="0"
-              max={Math.max(0, selection.file_info.timedelays_length - 1)}
-              value={draft.y2}
-              onChange={(event) =>
-                setDraft((current) => ({
-                  ...current,
-                  y2: event.target.value,
-                }))
-              }
-              />
-          </label>
           <button
             onClick={() => stepMap(-1)}
             disabled={isSaving || selection.file_info.number_maps <= 1}
@@ -598,6 +1033,7 @@ const TopSection = () => {
               <SelectionHeatmap
                 selection={selection}
                 onSelectRange={handleHeatmapSelection}
+                onPreviewRange={handleHeatmapPreview}
               />
             </div>
           </div>
@@ -605,15 +1041,15 @@ const TopSection = () => {
             <div className="vertical-layout">
               <LinePlot
                 className="xy-plot kinetics-plot"
-                x={selection.kinetics.x}
-                y={selection.kinetics.y}
+                x={shownKinetics.x}
+                y={shownKinetics.y}
                 title="Kinetics"
-                xTitle={`Time Delay, ${selection.kinetics.time_scale || ''}`.trim()}
+                xTitle={`Time Delay, ${shownKinetics.time_scale || ''}`.trim()}
               />
               <LinePlot
                 className="xy-plot spectrum-plot"
-                x={selection.spectrum.x}
-                y={selection.spectrum.y}
+                x={shownSpectrum.x}
+                y={shownSpectrum.y}
                 title="Spectrum"
                 xTitle="Wavelength, nm"
               />

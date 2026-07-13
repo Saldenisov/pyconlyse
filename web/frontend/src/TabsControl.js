@@ -71,11 +71,13 @@ const ParametersZone = ({
 
   return (
     <div className="parameters-zone">
-      <h3>Treatment Session</h3>
-      <div style={{ marginBottom: '8px', color: '#475467', fontSize: '0.9rem' }}>
-        Profile: <strong>{profileName}</strong>
+      <div className="parameters-zone-header">
+        <h3>Treatment Session</h3>
+        <span>
+          Profile: <strong>{profileName}</strong>
+        </span>
       </div>
-      <div>
+      <div className="parameter-field">
         <label>Experiment Type:</label>
         <select
           value={session.exp_type}
@@ -88,7 +90,7 @@ const ParametersZone = ({
           ))}
         </select>
       </div>
-      <div>
+      <div className="parameter-field">
         <label>Assign As:</label>
         <select
           value={session.selected_data_type}
@@ -103,7 +105,7 @@ const ParametersZone = ({
           ))}
         </select>
       </div>
-      <div>
+      <div className="parameter-field">
         <label>Calculation Mode:</label>
         <select
           value={session.calc_mode}
@@ -117,7 +119,7 @@ const ParametersZone = ({
           ))}
         </select>
       </div>
-      <div>
+      <div className="parameter-checkbox">
         <label>
           <input
             type="checkbox"
@@ -132,7 +134,7 @@ const ParametersZone = ({
           First map with electrons
         </label>
       </div>
-      <div>
+      <div className="parameter-field">
         <label>Save Folder:</label>
         <input
           type="text"
@@ -142,7 +144,7 @@ const ParametersZone = ({
           placeholder="Select a folder inside the treatment root"
         />
       </div>
-      <div>
+      <div className="parameter-field">
         <label>Save File Name:</label>
         <input
           type="text"
@@ -152,12 +154,10 @@ const ParametersZone = ({
           placeholder="result.dat"
         />
       </div>
-      <div>
+      <div className="parameter-actions">
         <button onClick={onApplyProfilePreset} disabled={isBusy}>
           Apply {profileName} Preset
         </button>
-      </div>
-      <div>
         <button onClick={onReset}>Reset Session</button>
       </div>
     </div>

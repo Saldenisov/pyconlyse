@@ -1,17 +1,17 @@
 .graph-window {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   min-width: 0;
   padding: 8px;
-  overflow: hidden;
+  overflow: visible;
   box-sizing: border-box;
 }
 
 .bottom-section {
-  flex: 1;
+  flex: 1 1 auto;
   min-width: 0;
-  min-height: 0;
+  min-height: 360px;
   padding-top: 8px;
   overflow: auto;
   border-top: 1px solid #98a2b3;
@@ -50,7 +50,7 @@
 
 .horizontal-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 0.72fr) minmax(360px, 1.28fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(250px, 0.62fr) minmax(380px, 1.38fr) minmax(280px, 0.92fr);
   align-items: stretch;
   gap: 8px;
   width: max(100%, 940px);
@@ -73,13 +73,72 @@
 .parameters-zone {
   display: grid;
   align-content: start;
-  gap: 7px;
+  gap: 6px;
 }
 
 .parameters-zone h3,
 .zone h3,
 .zone h4 {
   margin-top: 0;
+}
+
+.parameters-zone-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.parameters-zone-header h3 {
+  margin-bottom: 0;
+  font-size: 1rem;
+  white-space: nowrap;
+}
+
+.parameters-zone-header span {
+  min-width: 0;
+  overflow: hidden;
+  color: #475467;
+  font-size: 0.82rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.parameter-field {
+  display: grid;
+  grid-template-columns: 102px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.parameter-field label,
+.parameter-checkbox label {
+  color: #344054;
+  font-size: 0.8rem;
+}
+
+.parameter-field select,
+.parameter-field input {
+  min-height: 26px;
+  font-size: 0.84rem;
+}
+
+.parameter-checkbox {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+}
+
+.parameter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.parameter-actions button {
+  min-height: 26px;
+  padding: 3px 8px;
 }
 
 .parameters-zone input[type="text"],
@@ -94,6 +153,10 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.parameters-zone .parameter-field label {
+  display: block;
 }
 
 .parameters-zone > div {

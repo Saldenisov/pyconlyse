@@ -25,6 +25,7 @@ Usage:
 """
 
 import json
+import os
 import sys
 from pathlib import Path
 import time
@@ -37,25 +38,36 @@ from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QLineEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QGroupBox, QGridLayout, QFileDialog, QMessageBox,
-    QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout
+    QCheckBox, QSplitter, QMenu, QDialog, QDialogButtonBox, QFormLayout,
+    QSizePolicy
 )
 from PyQt5.QtCore import QTimer, Qt, pyqtSignal, QThread
 from PyQt5.QtGui import QFont
 
 import pyqtgraph as pg
 
-# Add project path for imports
-project_root = Path(__file__).resolve().parents[3]
-sys.path.insert(0, str(project_root))
+try:
+    from msl.equipment import Connection
+except ImportError:
+    from msl.equipment import ConnectionRecord, EquipmentRecord
+    msl_avantes = None
+    MSL_EQUIPMENT_API = "legacy"
+else:
+    try:
+        from msl.equipment.resources import avantes as msl_avantes
+    except ImportError as exc:
+        raise ImportError(
+            "Modern msl-equipment requires msl-equipment-resources for Avantes support"
+        ) from exc
 
-from msl.equipment import Backend, ConnectionRecord, EquipmentRecord
-from DeviceServers.cameras.avantes.avantes_parallel import (
+    MSL_EQUIPMENT_API = "modern"
+from avantes_parallel import (
     parallel_prepare_measure,
     parallel_measure,
     parallel_poll_and_get_data
 )
-from DeviceServers.cameras.avantes.arduino_trigger_controller import ArduinoTriggerController
-from DeviceServers.cameras.avantes.avantes_emulator import (
+from arduino_trigger_controller import ArduinoTriggerController
+from avantes_emulator import (
     ARDUINO_TRIGGER_HZ,
     EmulatedArduinoTriggerController,
     EmulatedAvantesSpectrometer,
@@ -64,6 +76,13 @@ from DeviceServers.cameras.avantes.avantes_emulator import (
 
 
 DEFAULT_SETTINGS_JSON = Path(__file__).with_name("avantes_dual_viewer_settings.json")
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
 
 
 class WavelengthTrackerWindow(QMainWindow):
@@ -251,6 +270,13 @@ class ODHeatmapWindow(QMainWindow):
         profile_splitter.addWidget(self.spectrum_plot)
         central_layout.addWidget(profile_splitter, stretch=1)
 
+    def closeEvent(self, event):
+        """Keep the parent Show/Hide button in sync."""
+        self.parent_viewer.od_heatmap_window = None
+        if hasattr(self.parent_viewer, "show_od_map_btn"):
+            self.parent_viewer.show_od_map_btn.setText("Show")
+        super().closeEvent(event)
+
     def set_heatmap(self, wavelengths, rows, times):
         """Render OD rows as wavelength x elapsed-time image."""
         if wavelengths is None or not rows:
@@ -371,6 +397,13 @@ class CollectionSettingsDialog(QDialog):
         self.warmup_spin.setSingleStep(10.0)
         self.warmup_spin.setValue(parent.lamp_warmup_seconds)
         form.addRow("Lamp warmup lead (s):", self.warmup_spin)
+
+        self.min_off_spin = QDoubleSpinBox()
+        self.min_off_spin.setRange(0.0, 3600.0)
+        self.min_off_spin.setDecimals(1)
+        self.min_off_spin.setSingleStep(10.0)
+        self.min_off_spin.setValue(parent.lamp_min_off_seconds)
+        form.addRow("Minimum lamp-off gap (s):", self.min_off_spin)
 
         self.auto_lamp_check = QCheckBox("Auto-control lamp during data collection")
         self.auto_lamp_check.setChecked(parent.auto_lamp_management_enabled)
@@ -515,6 +548,7 @@ class SpectrometerWidget(QGroupBox):
         layout.addWidget(self.max_label, 8, 1)
 
         self.setLayout(layout)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Maximum)
 
     def connect_spectrometer(self):
         """Connect to the Avantes spectrometer."""
@@ -529,17 +563,26 @@ class SpectrometerWidget(QGroupBox):
             else:
                 dll_path = Path(__file__).parent / "drivers" / "avaspecx64.dll"
 
-                record = EquipmentRecord(
-                    manufacturer="Avantes",
-                    model="AvaSpec-2048L",
-                    serial=serial,
-                    connection=ConnectionRecord(
-                        address=f"SDK::{dll_path}"
-                    ),
-                )
+                if MSL_EQUIPMENT_API == "modern":
+                    connection = Connection(
+                        f"SDK::{dll_path}",
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                    )
+                    self.spec = self._connect_with_discovery_retry(connection, serial)
+                else:
+                    record = EquipmentRecord(
+                        manufacturer="Avantes",
+                        model="AvaSpec-2048L",
+                        serial=serial,
+                        connection=ConnectionRecord(
+                            address=f"SDK::{dll_path}"
+                        ),
+                    )
+                    self.spec = self._connect_with_discovery_retry(record, serial)
 
-                self.spec = record.connect()
-            self.spec.use_high_res_adc(True)
+            self.enable_high_res_adc_if_supported()
 
             # Get wavelength calibration
             self.wavelengths = self.spec.get_lambda()
@@ -562,6 +605,53 @@ class SpectrometerWidget(QGroupBox):
         except Exception as e:
             logging.error(f"Spec {self.spec_id}: Connection failed - {str(e)}")
             QMessageBox.critical(self, "Connection Error", f"Failed to connect:\n{str(e)}")
+
+    def _connect_with_discovery_retry(self, connector, serial, attempts=6, delay_s=2.0):
+        """Connect to an Ethernet AvaSpec, retrying transient discovery misses.
+
+        ``AVS_Init`` runs a fresh Ethernet discovery scan on every call. The first
+        scan after process start (or right after the network interface comes up)
+        often returns zero devices, which msl-equipment raises as "No Avantes
+        devices were found". Because each spectrometer is connected with its own
+        ``record.connect()`` call, whichever unit is connected first loses this
+        race. Retrying a few times lets a cold scan settle so both units connect
+        regardless of order.
+        """
+        transient_errors = (
+            "Cannot activate. No devices found",
+            "No Avantes devices were found",
+            "Did not find the Avantes serial",
+        )
+        last_error = None
+        for attempt in range(1, attempts + 1):
+            try:
+                return connector.connect()
+            except Exception as exc:
+                if not any(token in str(exc) for token in transient_errors):
+                    raise
+                last_error = exc
+                logging.warning(
+                    f"Spec {self.spec_id}: '{serial}' not discovered yet "
+                    f"(attempt {attempt}/{attempts}); waiting {delay_s:.0f}s for "
+                    f"Ethernet discovery to populate..."
+                )
+                if attempt < attempts:
+                    time.sleep(delay_s)
+        raise last_error
+
+    def enable_high_res_adc_if_supported(self):
+        """Enable high-resolution ADC only when this SDK exposes it."""
+        method = getattr(self.spec, "use_high_res_adc", None)
+        if not callable(method):
+            logging.warning(f"Spec {self.spec_id}: High-resolution ADC method not available; continuing")
+            return
+
+        try:
+            method(True)
+        except AttributeError as exc:
+            logging.warning(f"Spec {self.spec_id}: High-resolution ADC not supported by this SDK: {exc}")
+        except Exception as exc:
+            logging.warning(f"Spec {self.spec_id}: Could not enable high-resolution ADC: {exc}")
 
     def disconnect_spectrometer(self):
         """Disconnect from the spectrometer."""
@@ -593,12 +683,12 @@ class SpectrometerWidget(QGroupBox):
             return None
 
         try:
-            cfg = self.spec.MeasConfigType()
+            cfg = self.create_meas_config()
             cfg.m_StopPixel = self.spec.get_num_pixels() - 1
             cfg.m_IntegrationTime = float(self.integration_spin.value())
             cfg.m_NrAverages = self.averages_spin.value()
 
-            trigger = self.spec.TriggerType()
+            trigger = self.create_trigger_config()
             trigger_mode = self.trigger_combo.currentIndex()
             trigger.m_Mode = trigger_mode
             trigger.m_Source = 0
@@ -613,6 +703,16 @@ class SpectrometerWidget(QGroupBox):
             self.status_label.setText("Connection Lost")
             self.status_label.setStyleSheet("color: orange; font-weight: bold;")
             raise
+
+    def create_meas_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.MeasConfigType()
+        return self.spec.MeasConfigType()
+
+    def create_trigger_config(self):
+        if msl_avantes is not None and not self.emulate_hardware:
+            return msl_avantes.TriggerType()
+        return self.spec.TriggerType()
 
     def on_settings_changed(self):
         """Called when integration time, averages, or trigger mode changes."""
@@ -664,13 +764,19 @@ class AvantesDualViewer(QMainWindow):
         self.measuring_background = False
         self.reference_measurements = []
         self.background_measurements = []
+        self.reference_target_blocks = 1
+        self.background_target_blocks = 1
+        self.pending_ref_bg_role = None
         self.collection_data = []
         self.collection_point_index = 0
         self.collection_start_time = None
         self.collection_point_start_time = None
         self.collection_file_path = None
+        self.loaded_collection_file_path = None
         self.collection_next_due_time = None
+        self.collection_time_offset_s = 0.0
         self.lamp_warmup_seconds = 120.0
+        self.lamp_min_off_seconds = 60.0
         self.arduino_frequency_hz = ARDUINO_TRIGGER_HZ
         self.auto_lamp_management_enabled = True
         self.lamp_off_between_points_enabled = True
@@ -683,6 +789,9 @@ class AvantesDualViewer(QMainWindow):
         self._measurement_count = 0
         self.wavelength_tracker_window = None
         self.emulate_hardware = should_use_avantes_emulator()
+        self.demo_kinetics_enabled = self.emulate_hardware and _env_bool("AVANTES_DEMO_KINETICS", False)
+        self.demo_kinetics_duration_s = float(os.environ.get("AVANTES_DEMO_DURATION_S", "40"))
+        self.demo_kinetics_max_od = float(os.environ.get("AVANTES_DEMO_MAX_OD", "0.95"))
 
         # Arduino controller
         if self.emulate_hardware:
@@ -716,8 +825,10 @@ class AvantesDualViewer(QMainWindow):
         title = "Avantes Dual Spectrometer Viewer"
         if self.emulate_hardware:
             title += " [EMULATOR]"
+        if self.demo_kinetics_enabled:
+            title += " [DEMO KINETICS]"
         self.setWindowTitle(title)
-        self.setGeometry(100, 100, 1400, 900)
+        self.setGeometry(80, 80, 1180, 820)
         self.create_menu_bar()
 
         # Central widget
@@ -739,6 +850,7 @@ class AvantesDualViewer(QMainWindow):
         # Spectrometer 2 controls
         self.spec2_widget = SpectrometerWidget(2, emulate_hardware=self.emulate_hardware)
         controls_splitter.addWidget(self.spec2_widget)
+        controls_splitter.setSizes([590, 590])
         self.link_detector_averages()
 
         main_layout.addWidget(controls_splitter)
@@ -748,12 +860,14 @@ class AvantesDualViewer(QMainWindow):
 
         # Left side: Channel spectra (vertical split)
         left_plot_splitter = QSplitter(Qt.Vertical)
+        left_plot_splitter.setMinimumWidth(260)
 
         # Ch1 plot (top left)
         self.plot1 = pg.PlotWidget(title="Channel 1 Spectrum")
         self.plot1.setLabel('left', 'Intensity', units='counts')
         self.plot1.setLabel('bottom', 'Wavelength', units='nm')
         self.plot1.showGrid(x=True, y=True)
+        self.plot1.setMinimumWidth(260)
         self.curve1 = self.plot1.plot(pen=pg.mkPen('w', width=2), name='RT')  # White for real-time
         self.ref_curve1 = self.plot1.plot(pen=pg.mkPen('m', width=2, style=Qt.DashLine), name='REF')  # Magenta for reference
         self.bg_curve1 = self.plot1.plot(pen=pg.mkPen('b', width=2, style=Qt.DashLine), name='BG')  # Blue for background
@@ -764,6 +878,7 @@ class AvantesDualViewer(QMainWindow):
         self.plot2.setLabel('left', 'Intensity', units='counts')
         self.plot2.setLabel('bottom', 'Wavelength', units='nm')
         self.plot2.showGrid(x=True, y=True)
+        self.plot2.setMinimumWidth(260)
         self.curve2 = self.plot2.plot(pen=pg.mkPen('w', width=2), name='RT')  # White for real-time
         self.ref_curve2 = self.plot2.plot(pen=pg.mkPen('m', width=2, style=Qt.DashLine), name='REF')  # Magenta for reference
         self.bg_curve2 = self.plot2.plot(pen=pg.mkPen('b', width=2, style=Qt.DashLine), name='BG')  # Blue for background
@@ -773,6 +888,7 @@ class AvantesDualViewer(QMainWindow):
 
         # Right side: OD spectrum plot with controls
         od_widget = QWidget()
+        od_widget.setMinimumWidth(520)
         od_layout = QVBoxLayout(od_widget)
         od_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -855,8 +971,9 @@ class AvantesDualViewer(QMainWindow):
 
         plot_main_splitter.addWidget(od_widget)
 
-        # Set initial splitter ratio: 50% left (spectra), 50% right (OD)
-        plot_main_splitter.setSizes([700, 700])
+        plot_main_splitter.setStretchFactor(0, 1)
+        plot_main_splitter.setStretchFactor(1, 2)
+        plot_main_splitter.setSizes([390, 760])
 
         main_layout.addWidget(plot_main_splitter, stretch=3)
 
@@ -866,6 +983,8 @@ class AvantesDualViewer(QMainWindow):
         self.background_ch1 = None
         self.background_ch2 = None
         self.reference_wavelengths = None
+        self.zero_baseline_wavelengths = None
+        self.zero_baseline_od = None
         self.has_reference = False
         self.has_background = False
 
@@ -917,27 +1036,34 @@ class AvantesDualViewer(QMainWindow):
         ref_bg_group = QGroupBox("Reference & Background")
         ref_bg_layout = QVBoxLayout()
 
-        # Averages control (shared by both)
+        # Block averaging for reference/background. Avantes hardware averages
+        # are controlled in the spectrometer panels.
         avg_layout = QHBoxLayout()
-        avg_layout.addWidget(QLabel("Averages:"))
-        self.ref_averages_spin = QSpinBox()
-        self.ref_averages_spin.setRange(1, 100)
-        self.ref_averages_spin.setValue(40)
-        self.ref_averages_spin.setToolTip("Avantes hardware trigger averages")
-        avg_layout.addWidget(self.ref_averages_spin)
+        avg_layout.addWidget(QLabel("Blocks:"))
+        self.ref_blocks_spin = QSpinBox()
+        self.ref_blocks_spin.setRange(1, 100)
+        self.ref_blocks_spin.setValue(3)
+        self.ref_blocks_spin.setToolTip("Number of spectra, already averaged by Avantes, to average in Python")
+        avg_layout.addWidget(self.ref_blocks_spin)
         ref_bg_layout.addLayout(avg_layout)
 
         # Buttons
         btn_layout = QHBoxLayout()
-        self.measure_ref_btn = QPushButton("Measure Reference")
+        self.measure_ref_btn = QPushButton("Reference")
         self.measure_ref_btn.clicked.connect(self.measure_reference)
         self.measure_ref_btn.setToolTip("Measure reference with lamp ON")
         btn_layout.addWidget(self.measure_ref_btn)
 
-        self.measure_bg_btn = QPushButton("Measure Background")
+        self.measure_bg_btn = QPushButton("Background")
         self.measure_bg_btn.clicked.connect(self.measure_background)
         self.measure_bg_btn.setToolTip("Measure background with lamp OFF")
         btn_layout.addWidget(self.measure_bg_btn)
+
+        self.zero_reference_btn = QPushButton("Set Zero")
+        self.zero_reference_btn.clicked.connect(self.set_zero_baseline_from_current)
+        self.zero_reference_btn.setEnabled(False)
+        self.zero_reference_btn.setToolTip("Store current no-sample OD as a zero baseline spectrum")
+        btn_layout.addWidget(self.zero_reference_btn)
 
         self.stop_measure_btn = QPushButton("Stop Measurement")
         self.stop_measure_btn.clicked.connect(self.stop_measurement)
@@ -969,7 +1095,7 @@ class AvantesDualViewer(QMainWindow):
         data_layout.addWidget(self.start_collection_btn, 0, 2)
 
         self.show_od_map_btn = QPushButton("Show")
-        self.show_od_map_btn.clicked.connect(self.show_od_heatmap_window)
+        self.show_od_map_btn.clicked.connect(self.toggle_od_heatmap_window)
         self.show_od_map_btn.setToolTip("Show OD time map")
         data_layout.addWidget(self.show_od_map_btn, 0, 3)
 
@@ -989,6 +1115,11 @@ class AvantesDualViewer(QMainWindow):
         self.save_name_input = QLineEdit("avantes_measurement")
         self.save_name_input.setToolTip("Base file name without extension")
         data_layout.addWidget(self.save_name_input, 2, 1, 1, 4)
+
+        data_layout.addWidget(QLabel("Loaded:"), 3, 0)
+        self.loaded_collection_label = QLabel("No DAT loaded")
+        self.loaded_collection_label.setWordWrap(True)
+        data_layout.addWidget(self.loaded_collection_label, 3, 1, 1, 4)
 
         data_group.setLayout(data_layout)
         layout.addWidget(data_group)
@@ -1039,6 +1170,9 @@ class AvantesDualViewer(QMainWindow):
 
     def create_menu_bar(self):
         """Create top-level application menus."""
+        data_menu = self.menuBar().addMenu("Data")
+        data_menu.addAction("Load DAT...", self.load_collection_dat)
+
         settings_menu = self.menuBar().addMenu("Settings")
         self.populate_settings_menu(settings_menu)
 
@@ -1208,6 +1342,11 @@ class AvantesDualViewer(QMainWindow):
             self.current_measurement_role = measurement_role
         else:
             self.current_measurement_role = "preview" if self.continuous_mode else "manual"
+        if self.current_measurement_role in {"reference", "background", "collection"}:
+            self.logger.info(
+                f"MEASUREMENT: role={self.current_measurement_role}, "
+                f"Avantes averages ch1={int(cfg1.m_NrAverages)}, ch2={int(cfg2.m_NrAverages)}"
+            )
         self.statusBar().showMessage("Measuring...")
 
         # Start measurement thread
@@ -1265,6 +1404,7 @@ class AvantesDualViewer(QMainWindow):
             return
 
         self.lamp_warmup_seconds = float(dialog.warmup_spin.value())
+        self.lamp_min_off_seconds = float(dialog.min_off_spin.value())
         self.auto_lamp_management_enabled = dialog.auto_lamp_check.isChecked()
         self.lamp_off_between_points_enabled = dialog.lamp_off_between_check.isChecked()
         self.set_arduino_frequency_hz(dialog.frequency_spin.value())
@@ -1279,6 +1419,7 @@ class AvantesDualViewer(QMainWindow):
             "arduino": {
                 "frequency_hz": float(self.arduino_frequency_hz),
                 "lamp_warmup_seconds": float(self.lamp_warmup_seconds),
+                "lamp_min_off_seconds": float(self.lamp_min_off_seconds),
                 "auto_lamp_management_enabled": bool(self.auto_lamp_management_enabled),
                 "lamp_off_between_points_enabled": bool(self.lamp_off_between_points_enabled),
             },
@@ -1287,7 +1428,7 @@ class AvantesDualViewer(QMainWindow):
                 "2": self.get_spectrometer_settings(self.spec2_widget),
             },
             "reference_background": {
-                "averages": int(self.ref_averages_spin.value()),
+                "blocks": int(self.ref_blocks_spin.value()),
             },
             "data_collection": {
                 "rate_s": float(self.collection_rate_spin.value()),
@@ -1321,6 +1462,8 @@ class AvantesDualViewer(QMainWindow):
         arduino = settings.get("arduino", {})
         if "lamp_warmup_seconds" in arduino:
             self.lamp_warmup_seconds = float(arduino["lamp_warmup_seconds"])
+        if "lamp_min_off_seconds" in arduino:
+            self.lamp_min_off_seconds = float(arduino["lamp_min_off_seconds"])
         if "auto_lamp_management_enabled" in arduino:
             self.auto_lamp_management_enabled = bool(arduino["auto_lamp_management_enabled"])
         if "lamp_off_between_points_enabled" in arduino:
@@ -1335,8 +1478,12 @@ class AvantesDualViewer(QMainWindow):
         self.apply_spectrometer_settings(self.spec2_widget, spectrometers.get("2", {}))
 
         ref_bg = settings.get("reference_background", {})
-        if "averages" in ref_bg:
-            self.ref_averages_spin.setValue(int(ref_bg["averages"]))
+        if "blocks" in ref_bg:
+            self.ref_blocks_spin.setValue(int(ref_bg["blocks"]))
+        elif "averages" in ref_bg:
+            legacy_averages = int(ref_bg["averages"])
+            self.spec1_widget.averages_spin.setValue(legacy_averages)
+            self.spec2_widget.averages_spin.setValue(legacy_averages)
 
         data_collection = settings.get("data_collection", {})
         if "rate_s" in data_collection:
@@ -1440,10 +1587,19 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"SETTINGS: Failed to save {path} - {e}")
             QMessageBox.critical(self, "Settings Error", f"Failed to save settings:\n{e}")
 
-    def is_lamp_enabled(self) -> bool:
+    def is_lamp_enabled(self, poll: bool = False) -> bool:
         """Check whether lamp TTL is enabled."""
-        lamp_enabled, _ = self.get_arduino_state()
-        return bool(lamp_enabled)
+        if poll:
+            lamp_enabled, _ = self.get_arduino_state()
+            return bool(lamp_enabled)
+        return bool(getattr(self.arduino, "lamp_enabled", False))
+
+    def is_avantes_enabled(self, poll: bool = False) -> bool:
+        """Check whether Avantes TTL is enabled."""
+        if poll:
+            _, avantes_enabled = self.get_arduino_state()
+            return bool(avantes_enabled)
+        return bool(getattr(self.arduino, "avantes_enabled", False))
 
     def set_lamp_on(self):
         """Enable lamp and Avantes TTL pulses."""
@@ -1464,7 +1620,11 @@ class AvantesDualViewer(QMainWindow):
         wait_for_thermalization : bool
             If True, wait 1 second after enabling lamp for thermalization
         """
-        # Always send command to ensure mode is set correctly
+        if self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Lamp + Avantes")
+            self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("LAMP AND AVANTES"):
             self.arduino_status_label.setText("Status: Lamp + Avantes")
             self.arduino_status_label.setStyleSheet("color: green; font-weight: bold;")
@@ -1489,7 +1649,11 @@ class AvantesDualViewer(QMainWindow):
 
     def set_avantes_only(self):
         """Set Arduino to trigger only Avantes (no lamp)."""
-        # Always send command to ensure mode is set correctly
+        if not self.is_lamp_enabled() and self.is_avantes_enabled():
+            self.arduino_status_label.setText("Status: Avantes Only")
+            self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
+            return True
+
         if self.arduino.set_mode("ONLY AVANTES"):
             self.arduino_status_label.setText("Status: Avantes Only")
             self.arduino_status_label.setStyleSheet("color: orange; font-weight: bold;")
@@ -1539,13 +1703,19 @@ class AvantesDualViewer(QMainWindow):
     def stop_measurement(self):
         """Stop current reference or background measurement."""
         if self.measuring_reference:
-            self.logger.info(f"REFERENCE: Measurement aborted by user ({len(self.reference_measurements)} of {self.ref_averages_spin.value()} collected)")
+            self.logger.info(
+                f"REFERENCE: Measurement aborted by user "
+                f"({len(self.reference_measurements)} of {self.reference_target_blocks} blocks collected)"
+            )
             self.measuring_reference = False
             self.reference_measurements = []
             self.statusBar().showMessage("Reference measurement aborted")
 
         if self.measuring_background:
-            self.logger.info(f"BACKGROUND: Measurement aborted by user ({len(self.background_measurements)} of {self.ref_averages_spin.value()} collected)")
+            self.logger.info(
+                f"BACKGROUND: Measurement aborted by user "
+                f"({len(self.background_measurements)} of {self.background_target_blocks} blocks collected)"
+            )
             self.measuring_background = False
             self.background_measurements = []
             self.statusBar().showMessage("Background measurement aborted")
@@ -1554,6 +1724,7 @@ class AvantesDualViewer(QMainWindow):
         self.measure_ref_btn.setEnabled(True)
         self.measure_bg_btn.setEnabled(True)
         self.stop_measure_btn.setEnabled(False)
+        self.pending_ref_bg_role = None
 
     def measure_reference(self):
         """Measure reference spectra by averaging N measurements (with lamp ON)."""
@@ -1567,17 +1738,23 @@ class AvantesDualViewer(QMainWindow):
             QMessageBox.warning(self, "Error", "Failed to enable lamp")
             return
 
-        n_avg = self.ref_averages_spin.value()
+        n_avg = self.get_detector_average_count()
+        n_blocks = self.ref_blocks_spin.value()
+        self.reference_target_blocks = n_blocks
+        self.pending_ref_bg_role = None
         self.measuring_reference = True
         self.reference_measurements = []
         self.measure_ref_btn.setEnabled(False)
         self.measure_bg_btn.setEnabled(False)
         self.stop_measure_btn.setEnabled(True)  # Enable stop button
 
-        self.logger.info(f"REFERENCE: Starting measurement (lamp ON, hardware averaging {n_avg} pulses)")
-        self.statusBar().showMessage(f"Measuring reference (hardware avg={n_avg})...")
+        self.logger.info(
+            f"REFERENCE: Starting measurement (lamp ON, hardware avg={n_avg} pulses, "
+            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
+        )
+        self.statusBar().showMessage(f"Measuring reference block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(averages_override=n_avg, measurement_role="reference")
+        self.single_measurement(measurement_role="reference")
 
     def measure_background(self):
         """Measure background spectra by averaging N measurements (with lamp OFF)."""
@@ -1588,24 +1765,31 @@ class AvantesDualViewer(QMainWindow):
         # Ensure lamp is OFF
         self.set_avantes_only()
 
-        n_avg = self.ref_averages_spin.value()
+        n_avg = self.get_detector_average_count()
+        n_blocks = self.ref_blocks_spin.value()
+        self.background_target_blocks = n_blocks
+        self.pending_ref_bg_role = None
         self.measuring_background = True
         self.background_measurements = []
         self.measure_ref_btn.setEnabled(False)
         self.measure_bg_btn.setEnabled(False)
         self.stop_measure_btn.setEnabled(True)  # Enable stop button
 
-        self.logger.info(f"BACKGROUND: Starting measurement (lamp OFF, hardware averaging {n_avg} pulses)")
-        self.statusBar().showMessage(f"Measuring background (hardware avg={n_avg})...")
+        self.logger.info(
+            f"BACKGROUND: Starting measurement (lamp OFF, hardware avg={n_avg} pulses, "
+            f"blocks={n_blocks}, total pulses={n_avg * n_blocks})"
+        )
+        self.statusBar().showMessage(f"Measuring background block 1/{n_blocks} (Avantes avg={n_avg})...")
 
-        self.single_measurement(averages_override=n_avg, measurement_role="background")
+        self.single_measurement(measurement_role="background")
 
     def measure_reference_complete(self):
         """Called when reference measurement is complete."""
         if self.reference_measurements:
-            self.reference_ch1 = self.reference_measurements[-1]['ch1']
-            self.reference_ch2 = self.reference_measurements[-1]['ch2']
+            self.reference_ch1 = np.mean([m['ch1'] for m in self.reference_measurements], axis=0)
+            self.reference_ch2 = np.mean([m['ch2'] for m in self.reference_measurements], axis=0)
             self.reference_wavelengths = self.spec1_widget.wavelengths
+            self.clear_zero_baseline()
             self.has_reference = True
 
             # Display reference lines on plots (magenta/purple)
@@ -1613,8 +1797,13 @@ class AvantesDualViewer(QMainWindow):
                 self.ref_curve1.setData(self.reference_wavelengths, self.reference_ch1)
                 self.ref_curve2.setData(self.reference_wavelengths, self.reference_ch2)
 
-            self.logger.info("REFERENCE: Measurement complete (lamp ON)")
-            self.statusBar().showMessage("Reference measured")
+            n_blocks = len(self.reference_measurements)
+            n_avg = self.get_detector_average_count()
+            self.logger.info(
+                f"REFERENCE: Measurement complete (lamp ON, blocks={n_blocks}, "
+                f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
+            )
+            self.statusBar().showMessage(f"Reference measured ({n_blocks} blocks x {n_avg} pulses)")
 
             # Enable data collection and tracking after reference and background exist.
             self.update_analysis_buttons()
@@ -1628,12 +1817,39 @@ class AvantesDualViewer(QMainWindow):
         self.measure_ref_btn.setEnabled(True)
         self.measure_bg_btn.setEnabled(True)
         self.stop_measure_btn.setEnabled(False)  # Disable stop button
+        self.update_analysis_buttons()
+
+    def set_zero_baseline_from_current(self):
+        """Store current no-sample OD as a baseline to subtract from future OD."""
+        data1 = self.spec1_widget.last_data
+        data2 = self.spec2_widget.last_data
+        wavelengths = self.spec1_widget.wavelengths
+
+        if data1 is None or data2 is None or wavelengths is None:
+            QMessageBox.warning(self, "Set Zero", "No current spectra available")
+            return
+
+        if not self.has_reference or not self.has_background:
+            QMessageBox.warning(self, "Set Zero", "Measure background and reference first")
+            return
+
+        od_spectrum = self.calculate_optical_density(data1, data2, apply_zero_baseline=False)
+        if od_spectrum is not None:
+            self.zero_baseline_wavelengths = np.array(wavelengths, dtype=float, copy=True)
+            self.zero_baseline_od = np.array(od_spectrum, dtype=float, copy=True)
+            corrected_od = od_spectrum - self.zero_baseline_od
+            self.curve_od.setData(self.zero_baseline_wavelengths, corrected_od)
+
+        self.update_analysis_buttons()
+        self.logger.info("ZERO: Baseline OD set from current spectra")
+        self.statusBar().showMessage("Zero baseline set from current spectra")
 
     def measure_background_complete(self):
         """Called when background measurement is complete."""
         if self.background_measurements:
-            self.background_ch1 = self.background_measurements[-1]['ch1']
-            self.background_ch2 = self.background_measurements[-1]['ch2']
+            self.background_ch1 = np.mean([m['ch1'] for m in self.background_measurements], axis=0)
+            self.background_ch2 = np.mean([m['ch2'] for m in self.background_measurements], axis=0)
+            self.clear_zero_baseline()
             self.has_background = True
 
             # Display background lines on plots (blue)
@@ -1642,11 +1858,16 @@ class AvantesDualViewer(QMainWindow):
             if wavelengths is not None:
                 self.bg_curve1.setData(wavelengths, self.background_ch1)
                 self.bg_curve2.setData(wavelengths, self.background_ch2)
-                self.logger.info("BACKGROUND: Measurement complete (lamp OFF) - blue lines displayed")
+                n_blocks = len(self.background_measurements)
+                n_avg = self.get_detector_average_count()
+                self.logger.info(
+                    f"BACKGROUND: Measurement complete (lamp OFF, blocks={n_blocks}, "
+                    f"hardware avg={n_avg}, total pulses={n_blocks * n_avg})"
+                )
             else:
                 self.logger.warning("BACKGROUND: Wavelengths not available for plotting")
 
-            self.statusBar().showMessage("Background measured")
+            self.statusBar().showMessage(f"Background measured ({len(self.background_measurements)} blocks)")
             self.update_analysis_buttons()
 
         else:
@@ -1687,24 +1908,65 @@ class AvantesDualViewer(QMainWindow):
                 return
 
             base_name = self.save_name_input.text().strip() or "avantes_measurement"
+            previous_collection_file_path = self.collection_file_path
             self.collection_file_path = save_dir / f"{base_name}.dat"
+            resume_collection = False
+            has_loaded_points = bool(self.collection_data)
+            target_is_loaded = (
+                self.loaded_collection_file_path is not None
+                and self.collection_file_path == self.loaded_collection_file_path
+            )
+            target_is_current = (
+                self.collection_file_path.exists()
+                and has_loaded_points
+                and previous_collection_file_path is not None
+                and self.collection_file_path == previous_collection_file_path
+            )
+            if target_is_loaded or target_is_current:
+                start_mode = self.ask_collection_start_mode(self.collection_file_path, len(self.collection_data))
+                if start_mode is None:
+                    return
+                resume_collection = start_mode == "resume"
+                if resume_collection and not self.can_resume_collection_wavelengths():
+                    return
+                if not resume_collection:
+                    new_path = self.choose_new_collection_file_path(self.collection_file_path)
+                    if new_path is None:
+                        return
+                    self.collection_file_path = new_path
+                    self.save_folder_input.setText(str(new_path.parent))
+                    self.save_name_input.setText(new_path.stem)
+
+            if self.continuous_mode:
+                self.stop_live_preview()
 
             self.data_collection_active = True
-            self.collection_data = []
-            self.collection_point_index = 0
+            if resume_collection:
+                self.collection_point_index = len(self.collection_data)
+                existing_times = [float(point.get("time", 0.0)) for point in self.collection_data]
+                self.collection_time_offset_s = self.get_resume_collection_time_offset(existing_times)
+                self.loaded_collection_file_path = self.collection_file_path
+                self.update_loaded_collection_label(self.collection_file_path)
+            else:
+                self.collection_data = []
+                self.collection_point_index = 0
+                self.collection_time_offset_s = 0.0
+                self.loaded_collection_file_path = None
+                self.update_loaded_collection_label(None)
+                self.reset_od_heatmap()
+                if self.collection_file_path.exists():
+                    self.collection_file_path.unlink()
             self.collection_start_time = time.time()
             self.collection_point_start_time = None
             self.collection_next_due_time = None
-            self.reset_od_heatmap()
-            if self.collection_file_path.exists():
-                self.collection_file_path.unlink()
 
             self.start_collection_btn.setText("Stop DC")
             self.collection_countdown_timer.start()
             self.update_collection_countdown_label()
             self.logger.info(
-                f"DATA COLLECTION: Started (rate={self.collection_rate_spin.value()}s, "
-                f"detector_avg={self.get_detector_average_count()}, file={self.collection_file_path})"
+                f"DATA COLLECTION: Started ({'resume' if resume_collection else 'new'}, "
+                f"rate={self.collection_rate_spin.value()}s, detector_avg={self.get_detector_average_count()}, "
+                f"file={self.collection_file_path})"
             )
             self.statusBar().showMessage(f"Data collection active ({self.collection_rate_spin.value()}s interval)")
             self.collect_data_point()
@@ -1726,6 +1988,7 @@ class AvantesDualViewer(QMainWindow):
         if not self.data_collection_active or not self.has_reference or not self.has_background:
             return
         if self.measurement_thread and self.measurement_thread.isRunning():
+            QTimer.singleShot(50, self.collect_data_point)
             return
 
         n_avg = self.get_detector_average_count()
@@ -1777,25 +2040,41 @@ class AvantesDualViewer(QMainWindow):
 
         now = time.time()
         seconds_until_due = max(0.0, due_time - now)
-        warmup_s = self.lamp_warmup_seconds
+        warmup_s = max(0.0, float(self.lamp_warmup_seconds))
+        lamp_off_gap_s = seconds_until_due - warmup_s
+        min_off_s = max(0.0, float(self.lamp_min_off_seconds))
+        can_save_lamp = (
+            self.auto_lamp_management_enabled
+            and self.lamp_off_between_points_enabled
+            and lamp_off_gap_s >= min_off_s
+        )
 
         if not self.auto_lamp_management_enabled:
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s")
-        elif seconds_until_due > warmup_s and self.lamp_off_between_points_enabled:
+        elif can_save_lamp:
             if self.is_lamp_enabled():
                 self.set_lamp_off(reschedule=False)
-            warmup_delay_ms = int((seconds_until_due - warmup_s) * 1000)
+            warmup_delay_ms = int(lamp_off_gap_s * 1000)
             self.lamp_warmup_timer.start(warmup_delay_ms)
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(
-                f"Next point in {seconds_until_due:.0f}s; lamp warmup starts in {seconds_until_due - warmup_s:.0f}s"
+                f"Next point in {seconds_until_due:.0f}s; lamp warmup starts in {lamp_off_gap_s:.0f}s"
             )
         else:
             if not self.is_lamp_enabled():
                 self.prepare_lamp_for_collection()
             self.collection_timer.start(int(seconds_until_due * 1000))
             self.statusBar().showMessage(f"Next point in {seconds_until_due:.0f}s; lamp stays on")
+            if (
+                self.auto_lamp_management_enabled
+                and self.lamp_off_between_points_enabled
+                and lamp_off_gap_s > 0
+            ):
+                self.logger.info(
+                    f"DATA COLLECTION: Lamp stays on; off gap {lamp_off_gap_s:.1f}s "
+                    f"is shorter than minimum {min_off_s:.1f}s"
+                )
         self.update_collection_countdown_label()
 
     def prepare_lamp_for_collection(self):
@@ -1838,8 +2117,8 @@ class AvantesDualViewer(QMainWindow):
         text = f"Next: {self.format_seconds_for_countdown(remaining)} | Points: {points}"
 
         if self.auto_lamp_management_enabled and self.lamp_off_between_points_enabled:
-            warmup_start_in = remaining - self.lamp_warmup_seconds
-            if warmup_start_in > 0:
+            warmup_start_in = remaining - max(0.0, float(self.lamp_warmup_seconds))
+            if warmup_start_in >= max(0.0, float(self.lamp_min_off_seconds)):
                 text += f" | Lamp in {self.format_seconds_for_countdown(warmup_start_in)}"
             else:
                 text += " | Lamp on"
@@ -1852,11 +2131,194 @@ class AvantesDualViewer(QMainWindow):
         if folder:
             self.save_folder_input.setText(folder)
 
+    def update_loaded_collection_label(self, path: Optional[Path]):
+        """Show loaded collection path in the Data Collection panel."""
+        if not hasattr(self, "loaded_collection_label"):
+            return
+        if path is None:
+            self.loaded_collection_label.setText("No DAT loaded")
+            self.loaded_collection_label.setToolTip("")
+            return
+        text = str(path)
+        self.loaded_collection_label.setText(text)
+        self.loaded_collection_label.setToolTip(text)
+
+    def ask_collection_start_mode(self, path: Path, n_points: int) -> Optional[str]:
+        """Ask whether to append to a loaded DAT file or start from scratch."""
+        msg = QMessageBox(self)
+        msg.setIcon(QMessageBox.Question)
+        msg.setWindowTitle("Start Data Collection")
+        msg.setText(f"DAT file already loaded:\n{path}")
+        msg.setInformativeText(f"{n_points} existing points found. Continue writing this file?")
+        resume_btn = msg.addButton("Resume", QMessageBox.AcceptRole)
+        new_btn = msg.addButton("Start New", QMessageBox.DestructiveRole)
+        msg.addButton("Cancel", QMessageBox.RejectRole)
+        msg.exec_()
+        clicked = msg.clickedButton()
+        if clicked == resume_btn:
+            return "resume"
+        if clicked == new_btn:
+            return "new"
+        return None
+
+    def suggest_new_collection_file_path(self, path: Path) -> Path:
+        """Return an unused DAT path next to the loaded file."""
+        for index in range(1, 1000):
+            suffix = "_new" if index == 1 else f"_new_{index}"
+            candidate = path.with_name(f"{path.stem}{suffix}.dat")
+            if not candidate.exists():
+                return candidate
+        return path.with_name(f"{path.stem}_{datetime.now():%Y%m%d_%H%M%S}.dat")
+
+    def choose_new_collection_file_path(self, current_path: Path) -> Optional[Path]:
+        """Choose a new DAT path and reflect it in the main collection controls."""
+        default_path = self.suggest_new_collection_file_path(current_path)
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Start New DAT",
+            str(default_path),
+            "Avantes DAT (*.dat);;All Files (*)",
+        )
+        if not filename:
+            return None
+
+        path = Path(filename).expanduser()
+        if path.suffix.lower() != ".dat":
+            path = path.with_suffix(".dat")
+
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Save Folder Error", f"Cannot use save folder:\n{e}")
+            return None
+
+        if path.exists():
+            reply = QMessageBox.question(
+                self,
+                "Overwrite DAT?",
+                f"File exists:\n{path}\n\nOverwrite it?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return None
+
+        self.save_folder_input.setText(str(path.parent))
+        self.save_name_input.setText(path.stem)
+        return path
+
+    def can_resume_collection_wavelengths(self) -> bool:
+        """Ensure current spectrometer wavelengths match loaded DAT columns."""
+        current = self.spec1_widget.wavelengths if self.spec1_widget else None
+        loaded = self.od_heatmap_wavelengths
+        if current is None or loaded is None:
+            return True
+
+        current = np.asarray(current, dtype=float)
+        loaded = np.asarray(loaded, dtype=float)
+        if current.shape != loaded.shape or not np.allclose(current, loaded, atol=1e-3, rtol=0):
+            QMessageBox.warning(
+                self,
+                "Resume Error",
+                "Cannot resume this DAT file: current wavelength grid differs from loaded file.",
+            )
+            return False
+        return True
+
+    def get_resume_collection_time_offset(self, times) -> float:
+        """Return first resumed timestamp anchor: last time plus last positive delta."""
+        if not times:
+            return 0.0
+        clean_times = sorted(float(value) for value in times)
+        last_time = clean_times[-1]
+        if len(clean_times) < 2:
+            return last_time + float(self.collection_rate_spin.value())
+
+        deltas = [
+            clean_times[index] - clean_times[index - 1]
+            for index in range(1, len(clean_times))
+            if clean_times[index] > clean_times[index - 1]
+        ]
+        if not deltas:
+            return last_time + float(self.collection_rate_spin.value())
+        return last_time + deltas[-1]
+
+    def load_collection_dat(self):
+        """Load a saved data-collection DAT file and display it as an OD map."""
+        filename, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Avantes Measurement DAT",
+            self.save_folder_input.text(),
+            "Avantes DAT (*.dat);;All Files (*)",
+        )
+        if not filename:
+            return
+
+        try:
+            self.load_collection_dat_file(Path(filename))
+        except Exception as e:
+            self.logger.error(f"DATA LOAD: Failed to load {filename} - {e}")
+            QMessageBox.critical(self, "Load DAT Error", f"Failed to load DAT file:\n{e}")
+
+    def load_collection_dat_file(self, path: Path):
+        """Load one DAT file written by save_collection_point()."""
+        path = Path(path)
+        with path.open("r", encoding="utf-8") as f:
+            header = f.readline().strip().split("\t")
+
+        if len(header) < 2 or header[0] != "time_s":
+            raise ValueError("Expected first header column to be time_s")
+
+        wavelengths = np.array([float(value) for value in header[1:]], dtype=float)
+        data = np.loadtxt(path, delimiter="\t", skiprows=1)
+        data = np.atleast_2d(data)
+        if data.shape[1] != len(wavelengths) + 1:
+            raise ValueError(
+                f"DAT column count mismatch: expected {len(wavelengths) + 1}, got {data.shape[1]}"
+            )
+
+        times = np.asarray(data[:, 0], dtype=float)
+        rows = np.asarray(data[:, 1:], dtype=float)
+        self.od_heatmap_wavelengths = wavelengths
+        self.od_heatmap_times = [float(value) for value in times]
+        self.od_heatmap_rows = [np.array(row, dtype=float) for row in rows]
+        self.collection_data = [
+            {"time": float(t), "od": np.array(row, dtype=float)}
+            for t, row in zip(times, rows)
+        ]
+        self.collection_point_index = len(self.collection_data)
+        self.collection_time_offset_s = self.get_resume_collection_time_offset(self.od_heatmap_times)
+        self.collection_file_path = path
+        self.loaded_collection_file_path = path
+        self.save_folder_input.setText(str(path.parent))
+        self.save_name_input.setText(path.stem)
+        self.update_loaded_collection_label(path)
+
+        if len(rows):
+            self.curve_od.setData(wavelengths, rows[-1])
+            if not self.od_x_auto_check.isChecked():
+                self.plot_od.setXRange(self.od_x_min_spin.value(), self.od_x_max_spin.value(), padding=0)
+            if not self.od_y_auto_check.isChecked():
+                self.plot_od.setYRange(self.od_y_min_spin.value(), self.od_y_max_spin.value(), padding=0)
+
+        self.show_od_heatmap_window()
+        if self.od_heatmap_window is not None:
+            self.od_heatmap_window.setWindowTitle(f"OD Time Map - {path.name}")
+        self.statusBar().showMessage(f"Loaded DAT: {path.name} ({len(rows)} points)")
+        self.logger.info(f"DATA LOAD: Loaded {path} ({len(rows)} points, {len(wavelengths)} wavelengths)")
+
     def update_analysis_buttons(self):
         """Enable controls that require complete OD prerequisites."""
         enabled = self.has_reference and self.has_background
         self.start_collection_btn.setEnabled(enabled)
         self.track_wl_btn.setEnabled(enabled)
+        has_current = self.spec1_widget.last_data is not None and self.spec2_widget.last_data is not None
+        self.zero_reference_btn.setEnabled(enabled and has_current)
+
+    def clear_zero_baseline(self):
+        """Clear the stored OD zero baseline."""
+        self.zero_baseline_wavelengths = None
+        self.zero_baseline_od = None
 
     def reset_od_heatmap(self):
         """Clear OD time map for a new data collection run."""
@@ -1891,6 +2353,17 @@ class AvantesDualViewer(QMainWindow):
                 self.od_heatmap_times,
             )
 
+    def toggle_od_heatmap_window(self):
+        """Open the floating OD time map, or close it if already visible."""
+        if self.od_heatmap_window is not None:
+            window = self.od_heatmap_window
+            self.od_heatmap_window = None
+            self.show_od_map_btn.setText("Show")
+            window.close()
+            return
+
+        self.show_od_heatmap_window()
+
     def show_od_heatmap_window(self):
         """Open or raise the floating OD time map window."""
         if self.od_heatmap_window is None:
@@ -1899,6 +2372,7 @@ class AvantesDualViewer(QMainWindow):
         self.od_heatmap_window.show()
         self.od_heatmap_window.raise_()
         self.od_heatmap_window.activateWindow()
+        self.show_od_map_btn.setText("Hide")
 
     def get_export_base_path(self) -> Path:
         """Return base path for manual export files."""
@@ -1953,8 +2427,15 @@ class AvantesDualViewer(QMainWindow):
         skip_normal_status = False
         if measurement_role == "reference" and self.measuring_reference and data1 is not None and data2 is not None:
             self.reference_measurements.append({'ch1': data1, 'ch2': data2})
-            self.statusBar().showMessage("Reference measured")
             skip_normal_status = True
+            count = len(self.reference_measurements)
+            target = max(1, int(self.reference_target_blocks))
+            if count < target:
+                self.statusBar().showMessage(f"Measuring reference block {count + 1}/{target}...")
+                self.logger.info(f"REFERENCE: Block {count}/{target} collected")
+                self.pending_ref_bg_role = "reference"
+                return
+            self.statusBar().showMessage("Reference measured")
             self.measure_reference_complete()
             skip_normal_status = False
 
@@ -1963,8 +2444,15 @@ class AvantesDualViewer(QMainWindow):
         if measurement_role == "background" and self.measuring_background:
             if data1 is not None and data2 is not None:
                 self.background_measurements.append({'ch1': data1, 'ch2': data2})
-                self.statusBar().showMessage("Background measured")
                 skip_normal_status = True
+                count = len(self.background_measurements)
+                target = max(1, int(self.background_target_blocks))
+                if count < target:
+                    self.statusBar().showMessage(f"Measuring background block {count + 1}/{target}...")
+                    self.logger.info(f"BACKGROUND: Block {count}/{target} collected")
+                    self.pending_ref_bg_role = "background"
+                    return
+                self.statusBar().showMessage("Background measured")
                 self.measure_background_complete()
                 skip_normal_status = False
 
@@ -1972,17 +2460,21 @@ class AvantesDualViewer(QMainWindow):
         collection_elapsed = None
         collection_pulses = self.get_detector_average_count() if completed_collection_point else 0
         if completed_collection_point:
-            if self.collection_point_index == 0:
+            if self.collection_point_index == 0 and self.collection_time_offset_s <= 0:
                 collection_elapsed = 0.0
             else:
-                collection_elapsed = time.time() - self.collection_start_time
+                collection_elapsed = self.collection_time_offset_s + (time.time() - self.collection_start_time)
             skip_normal_status = True
 
         # Calculate and plot Optical Density (only if both reference AND background exist)
         od_spectrum = None
         if data1 is not None and data2 is not None and wavelengths1 is not None:
             if self.has_reference and self.has_background:
-                od_spectrum = self.calculate_optical_density(data1, data2)
+                od_spectrum = self.calculate_optical_density(
+                    data1,
+                    data2,
+                    elapsed_time=collection_elapsed if completed_collection_point else None,
+                )
                 if od_spectrum is not None:
                     self.curve_od.setData(wavelengths1, od_spectrum)
                     # Apply manual limits if not in auto mode
@@ -1998,6 +2490,7 @@ class AvantesDualViewer(QMainWindow):
         if not hasattr(self, '_measurement_count'):
             self._measurement_count = 0
         self._measurement_count += 1
+        self.update_analysis_buttons()
 
         # Update wavelength tracker if active
         if self.wavelength_tracker_window and od_spectrum is not None:
@@ -2045,6 +2538,7 @@ class AvantesDualViewer(QMainWindow):
     def on_measurement_error(self, error_msg: str):
         """Handle measurement error."""
         self.logger.error(f"Measurement error: {error_msg}")
+        self.pending_ref_bg_role = None
 
         if getattr(self, "current_measurement_role", None) == "collection" and self.data_collection_active:
             self.statusBar().showMessage(f"Collection warning: {error_msg[:50]}...")
@@ -2071,7 +2565,15 @@ class AvantesDualViewer(QMainWindow):
 
     def on_measurement_finished(self):
         """Handle measurement thread finished."""
+        pending_role = self.pending_ref_bg_role
+        self.pending_ref_bg_role = None
         self.current_measurement_role = None
+        if pending_role == "reference" and self.measuring_reference:
+            self.single_measurement(measurement_role="reference")
+            return
+        if pending_role == "background" and self.measuring_background:
+            self.single_measurement(measurement_role="background")
+            return
         if self.data_collection_active:
             self.update_collection_countdown_label()
 
@@ -2159,7 +2661,13 @@ class AvantesDualViewer(QMainWindow):
             self.logger.error(f"Export failed: {str(e)}")
             QMessageBox.critical(self, "Export Error", f"Failed to export data:\n{str(e)}")
 
-    def calculate_optical_density(self, ch1_current: np.ndarray, ch2_current: np.ndarray) -> Optional[np.ndarray]:
+    def calculate_optical_density(
+        self,
+        ch1_current: np.ndarray,
+        ch2_current: np.ndarray,
+        elapsed_time: Optional[float] = None,
+        apply_zero_baseline: bool = True,
+    ) -> Optional[np.ndarray]:
         """Calculate optical density using ratio of ratios method with background subtraction.
 
         OD = log10((I0_ch1 - BG_ch1) / (I0_ch2 - BG_ch2)) / ((I_ch1 - BG_ch1) / (I_ch2 - BG_ch2)))
@@ -2204,6 +2712,16 @@ class AvantesDualViewer(QMainWindow):
                 # OD = log10(ref_ratio / curr_ratio)
                 od = np.log10(ref_ratio / curr_ratio)
 
+                if elapsed_time is not None and self.demo_kinetics_enabled:
+                    od += self.get_demo_species_od(np.asarray(self.spec1_widget.wavelengths), elapsed_time)
+
+                if (
+                    apply_zero_baseline
+                    and self.zero_baseline_od is not None
+                    and len(self.zero_baseline_od) == len(od)
+                ):
+                    od = od - self.zero_baseline_od
+
                 # Replace inf and nan with 0
                 od[~np.isfinite(od)] = 0
 
@@ -2212,6 +2730,29 @@ class AvantesDualViewer(QMainWindow):
         except Exception as e:
             self.logger.error(f"Failed to calculate OD: {e}")
             return None
+
+    def get_demo_species_od(self, wavelengths: np.ndarray, elapsed_time: float) -> np.ndarray:
+        """Return a synthetic growing UV-visible species OD spectrum."""
+        if wavelengths is None:
+            return 0.0
+
+        duration_s = max(1.0, self.demo_kinetics_duration_s)
+        progress = np.clip(float(elapsed_time) / duration_s, 0.0, 1.0)
+        growth = 1.0 - np.exp(-4.2 * progress)
+        slow_growth = progress * progress * (3.0 - 2.0 * progress)
+        wl = np.asarray(wavelengths, dtype=float)
+
+        # Broad product bands spanning UV to visible, with a later visible shoulder.
+        species_shape = (
+            0.32 * np.exp(-0.5 * ((wl - 285.0) / 34.0) ** 2)
+            + 0.46 * np.exp(-0.5 * ((wl - 365.0) / 58.0) ** 2)
+            + 0.58 * np.exp(-0.5 * ((wl - 525.0) / 120.0) ** 2)
+            + 0.25 * np.exp(-0.5 * ((wl - 705.0) / 170.0) ** 2)
+        )
+        late_visible = 0.24 * slow_growth * np.exp(-0.5 * ((wl - 610.0) / 95.0) ** 2)
+        baseline = 0.025 * growth * np.exp(-0.5 * ((wl - 480.0) / 360.0) ** 2)
+        species_shape = species_shape / max(float(np.max(species_shape)), 1e-12)
+        return self.demo_kinetics_max_od * growth * species_shape + late_visible + baseline
 
     def clear_plots(self):
         """Clear all plots and reset reference and background."""
@@ -2237,6 +2778,7 @@ class AvantesDualViewer(QMainWindow):
         self.background_ch1 = None
         self.background_ch2 = None
         self.reference_wavelengths = None
+        self.clear_zero_baseline()
         self.has_reference = False
         self.has_background = False
 
