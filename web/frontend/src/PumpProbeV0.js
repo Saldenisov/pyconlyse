@@ -38,6 +38,19 @@ function isTransientTangoError(message) {
     || text.includes('last connection request was done less than');
 }
 
+function compactHardwareError(errors) {
+  if (!errors.length) {
+    return '';
+  }
+
+  const details = errors.join('\n');
+  if (details.includes('API_CantConnectToDatabase')) {
+    return 'Tango Database unavailable: 10.20.30.202:10000. Check ELYSE Ethernet connection and the Windows Tango host.';
+  }
+
+  return errors.length === 1 ? errors[0] : `${errors.length} hardware requests failed. ${errors[0]}`;
+}
+
 async function fetchJsonWithRetry(url, options = {}, attempts = 3) {
   let lastError = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -723,6 +736,19 @@ function HardwareModal({
   onStartTango,
   onRestartTango,
 }) {
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [open, onClose]);
+
   if (!open) {
     return null;
   }
@@ -739,20 +765,21 @@ function HardwareModal({
           <span>Hardware</span>
           <button type="button" onClick={onClose}>Close</button>
         </div>
-        <div className="pp-hardware-toolbar">
-          <button type="button" onClick={() => onBulkPower(true)} disabled={loading}>
-            Turn all necessary ON
-          </button>
-          <button type="button" onClick={() => onBulkPower(false)} disabled={loading}>
-            Turn all OFF
-          </button>
-          <button type="button" onClick={onRefresh} disabled={loading}>
-            Refresh
-          </button>
-        </div>
-        {error ? <div className="pp-hardware-error">{error}</div> : null}
-        {tangoError ? <div className="pp-hardware-error">{tangoError}</div> : null}
-        <div className="pp-hardware-columns">
+        <div className="pp-hardware-content">
+          <div className="pp-hardware-toolbar">
+            <button type="button" onClick={() => onBulkPower(true)} disabled={loading}>
+              Turn all necessary ON
+            </button>
+            <button type="button" onClick={() => onBulkPower(false)} disabled={loading}>
+              Turn all OFF
+            </button>
+            <button type="button" onClick={onRefresh} disabled={loading}>
+              Refresh
+            </button>
+          </div>
+          {error ? <div className="pp-hardware-error">{error}</div> : null}
+          {tangoError ? <div className="pp-hardware-error">{tangoError}</div> : null}
+          <div className="pp-hardware-columns">
           <div className="pp-hardware-column">
             <div className="pp-hardware-section-title">NETIO</div>
             <div className="pp-hardware-list">
@@ -805,6 +832,7 @@ function HardwareModal({
                 );
               })}
             </div>
+          </div>
           </div>
         </div>
       </section>
@@ -1564,6 +1592,12 @@ function PumpProbeV0() {
   const [odSpectrumCounter, setOdSpectrumCounter] = useState(1);
   const refreshRequestRef = useRef({ inFlight: false, controller: null });
 
+  const closeHardwareModal = useCallback(() => {
+    setNetioOpen(false);
+    setNetioError('');
+    setTangoError('');
+  }, []);
+
   const refreshState = useCallback(async () => {
     if (refreshRequestRef.current.inFlight) {
       return;
@@ -1644,7 +1678,7 @@ function PumpProbeV0() {
     if (entries.length) {
       setNetioDevices((current) => ({ ...current, ...Object.fromEntries(entries) }));
     }
-    setNetioError(errors.join('\n'));
+    setNetioError(compactHardwareError(errors));
     setNetioLoading(false);
   }, []);
 
@@ -1729,7 +1763,7 @@ function PumpProbeV0() {
     if (entries.length) {
       setNetioDevices((current) => ({ ...current, ...Object.fromEntries(entries) }));
     }
-    setNetioError(errors.join('\n'));
+    setNetioError(compactHardwareError(errors));
     setNetioLoading(false);
   }, []);
 
@@ -2803,7 +2837,7 @@ function PumpProbeV0() {
         tangoLoading={tangoLoading}
         error={netioError}
         tangoError={tangoError}
-        onClose={() => setNetioOpen(false)}
+        onClose={closeHardwareModal}
         onRefresh={() => {
           loadNetioOutputs();
           loadTangoStates();
