@@ -39,6 +39,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     ini_path = device_property(dtype=str, default_value="")
     width = device_property(dtype=int, default_value=1064)
     wavelengths = device_property(dtype=str, default_value="[]")
+    wavelengths_file = device_property(dtype=str, default_value="")
     camera_index = device_property(dtype=int, default_value=0)
     fan_mode = device_property(dtype=str, default_value="off")
     default_temperature = device_property(dtype=int, default_value=-50)
@@ -132,7 +133,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.abort = False
         self.n_kinetics = 1
         self.camera = None
-        self._default_wavelengths = self._parse_array_property(self.wavelengths)
+        self._default_wavelengths = self._parse_wavelengths()
         self.wavelengths_axis_value = np.array([], dtype=np.float32)
 
         super().init_device()
@@ -208,6 +209,17 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             return np.asarray(parsed, dtype=np.float32).reshape(-1)
         except Exception:
             return np.array([], dtype=np.float32)
+
+    def _parse_wavelengths(self) -> np.ndarray:
+        calibration_path = self._coerce_str(self.wavelengths_file, "").strip()
+        if calibration_path:
+            try:
+                return np.loadtxt(calibration_path, dtype=np.float32).reshape(-1)
+            except Exception as exc:
+                self.warn(
+                    f"Could not read wavelength calibration from {calibration_path}: {exc}"
+                )
+        return self._parse_array_property(self.wavelengths)
 
     def _create_camera(self):
         Andor = get_andor_module(sdk_path=self.dll_path)
