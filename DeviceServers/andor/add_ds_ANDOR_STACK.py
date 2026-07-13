@@ -16,7 +16,7 @@ CCD_DEVICE = {
         "camera_index": 0,
         "width": 1064,
         "wavelengths": "[]",
-        "fan_mode": "off",
+        "fan_mode": "full",
         "default_temperature": -50,
         "linked_spectrograph_ds": "manip/CR/ANDOR_SHAMROCK1",
         "start_grabbing_on_init": 0,

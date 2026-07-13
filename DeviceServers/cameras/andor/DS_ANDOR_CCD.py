@@ -40,7 +40,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     width = device_property(dtype=int, default_value=1064)
     wavelengths = device_property(dtype=str, default_value="[]")
     camera_index = device_property(dtype=int, default_value=0)
-    fan_mode = device_property(dtype=str, default_value="off")
+    fan_mode = device_property(dtype=str, default_value="full")
     default_temperature = device_property(dtype=int, default_value=-50)
     linked_spectrograph_ds = device_property(dtype=str, default_value="")
     start_grabbing_on_init = device_property(dtype=int, default_value=0)
@@ -216,7 +216,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             idx=self._coerce_int(self.camera_index, 0),
             ini_path=ini_path,
             temperature=self._coerce_int(self.default_temperature, -50),
-            fan_mode=self._coerce_str(self.fan_mode, "off"),
+            fan_mode=self._coerce_str(self.fan_mode, "full"),
         )
 
     def _with_temp_camera(self):
