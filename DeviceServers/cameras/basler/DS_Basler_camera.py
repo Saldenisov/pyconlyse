@@ -99,10 +99,10 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         was_grabbing = False
         if self.grabbing:
             was_grabbing = True
-            self.stop_grabbing
+            self.stop_grabbing()
         self.camera.Width.SetValue(value)
         if was_grabbing:
-            self.start_grabbing
+            self.start_grabbing()
 
     def get_width_min(self):
         return self.camera.Width.Min
@@ -114,10 +114,10 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         was_grabbing = False
         if self.grabbing:
             was_grabbing = True
-            self.stop_grabbing
+            self.stop_grabbing()
         self.camera.Height.SetValue(value)
         if was_grabbing:
-            self.start_grabbing
+            self.start_grabbing()
 
     def get_height(self) -> int:
         return self.camera.Height()
@@ -176,6 +176,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.converter: pylon.ImageFormatConverter = None
         self.device = None
         self.grabbing_thread = None
+        self._last_trigger_timeout_warning = 0.0
         super().init_device()
         self.register_variables_for_archive()
         if hasattr(self, "camera") and self.camera and self.camera.IsOpen():
@@ -316,13 +317,18 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def _set_parameters(self, formed_parameters_dict):
         if self.camera.IsOpen():
+            restart_grabbing = self.grabbing
             if self.grabbing:
                 self.stop_grabbing()
             try:
                 for param_name, param_value in formed_parameters_dict.items():
                     setattr(self.camera, param_name, param_value)
+                if restart_grabbing:
+                    self.start_grabbing()
                 return 0
             except (genicam.GenericException, Exception) as e:
+                if restart_grabbing and not self.grabbing:
+                    self.start_grabbing()
                 return f'Error appeared: {e} when setting parameter "{param_name}" for camera {self.device_name}.'
         else:
             return (
@@ -374,11 +380,29 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def register_variables_for_archive(self):
         super().register_variables_for_archive()
 
-    def wait(self, timeout):
-        def image_treat(image):
-            img = cv2.GaussianBlur(image, (3, 3), 0)
-            return img
+    def _awaiting_external_trigger(self) -> bool:
+        """Return whether acquisition is intentionally waiting for a line trigger."""
+        try:
+            return (
+                self.camera.TriggerMode.GetValue() == "On"
+                and self.camera.TriggerSource.GetValue() != "Software"
+            )
+        except genicam.GenericException:
+            return False
 
+    def _log_trigger_timeout(self, timeout: int):
+        """Warn at a bounded rate while an externally triggered camera is idle."""
+        now = time.monotonic()
+        if now - self._last_trigger_timeout_warning >= 60:
+            source = self.camera.TriggerSource.GetValue()
+            self.warn(
+                f"No frame received for {timeout} ms; awaiting external trigger "
+                f"on {source}. Acquisition remains active.",
+                True,
+            )
+            self._last_trigger_timeout_warning = now
+
+    def wait(self, timeout):
         i = 0
         max_errors = 10
         error_count = 0
@@ -397,17 +421,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
             i += 1
             self.info(f"Grabbing: {i}", False)
+            grab_result = None
             try:
-                grabResult = self.camera.RetrieveResult(
-                    timeout, pylon.TimeoutHandling_ThrowException
+                grab_result = self.camera.RetrieveResult(
+                    timeout, pylon.TimeoutHandling_Return
                 )
-                if grabResult.GrabSucceeded():
-                    image = self.converter.Convert(grabResult)
-                    grabResult.Release()
-                    image = np.ndarray(
-                        buffer=image.GetBuffer(),
-                        shape=(image.GetHeight(), image.GetWidth(), 3),
-                        dtype="uint8",
+                if grab_result is not None and grab_result.IsValid() and grab_result.GrabSucceeded():
+                    image = np.array(
+                        self.converter.Convert(grab_result).GetArray(), copy=True
                     )
                     self.calc_cg(image)
                     # data = self.form_archive_data(image, f'image', dt='uint8')
@@ -417,6 +438,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.info("Image is received...")
                     self.last_image = image2D
                     error_count = 0  # Reset error count on success
+                elif self._awaiting_external_trigger():
+                    self._log_trigger_timeout(timeout)
                 else:
                     raise pylon.GenericException("Grab failed")
             except (pylon.GenericException, pylon.TimeoutException) as e:
@@ -427,8 +450,13 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     break
                 # Small delay before retrying
                 time.sleep(0.1)
+            finally:
+                if grab_result is not None and grab_result.IsValid():
+                    grab_result.Release()
 
         # Clean exit
+        if self.camera and self.camera.IsGrabbing():
+            self.stop_grabbing_local()
         self.info("Wait thread exiting")
 
     def get_controller_status_local(self) -> Union[int, str]:
@@ -447,6 +475,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def start_grabbing_local(self):
         if not self.camera or not self.camera.IsOpen():
             return "Camera not available or not open"
+        if self.camera.IsGrabbing():
+            return 0
 
         try:
             if self.latestimage:
@@ -476,7 +506,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def stop_grabbing_local(self):
         try:
-            self.camera.StopGrabbing()
+            if self.camera and self.camera.IsGrabbing():
+                self.camera.StopGrabbing()
             return 0
         except Exception as e:
             return str(e)
@@ -487,7 +518,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return False
 
     def get_trigger_mode(self) -> int:
-        return 1 if self.camera.TriggerMode == "On" else 0
+        return 1 if self.camera.TriggerMode.GetValue() == "On" else 0
 
     def set_trigger_mode(self, value: int):
         state = "On" if value else "Off"
