@@ -39,6 +39,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
     ini_path = device_property(dtype=str, default_value="")
     width = device_property(dtype=int, default_value=1064)
     wavelengths = device_property(dtype=str, default_value="[]")
+    wavelengths_file = device_property(dtype=str, default_value="")
     camera_index = device_property(dtype=int, default_value=0)
     fan_mode = device_property(dtype=str, default_value="full")
     default_temperature = device_property(dtype=int, default_value=-50)
@@ -132,7 +133,7 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.abort = False
         self.n_kinetics = 1
         self.camera = None
-        self._default_wavelengths = self._parse_array_property(self.wavelengths)
+        self._default_wavelengths = self._parse_wavelengths()
         self.wavelengths_axis_value = np.array([], dtype=np.float32)
 
         super().init_device()
@@ -208,6 +209,17 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             return np.asarray(parsed, dtype=np.float32).reshape(-1)
         except Exception:
             return np.array([], dtype=np.float32)
+
+    def _parse_wavelengths(self) -> np.ndarray:
+        calibration_path = self._coerce_str(self.wavelengths_file, "").strip()
+        if calibration_path:
+            try:
+                return np.loadtxt(calibration_path, dtype=np.float32).reshape(-1)
+            except Exception as exc:
+                self.warn(
+                    f"Could not read wavelength calibration from {calibration_path}: {exc}"
+                )
+        return self._parse_array_property(self.wavelengths)
 
     def _create_camera(self):
         Andor = get_andor_module(sdk_path=self.dll_path)
@@ -338,6 +350,10 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
 
         if axis.size == 0:
             axis = np.asarray(self._default_wavelengths, dtype=np.float32).reshape(-1)
+            if axis.size != width and self._coerce_str(self.wavelengths_file, "").strip():
+                axis = self._parse_wavelengths()
+                if axis.size:
+                    self._default_wavelengths = axis
 
         if axis.size != width:
             axis = np.arange(width, dtype=np.float32)
@@ -384,26 +400,14 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
             self.orders.pop(order_name, None)
 
     def find_device(self) -> Tuple[int, str]:
-        self.info(f"Searching for Andor camera {self.device_name}", True)
-        argreturn = -1, b""
-        try:
-            camera = self._create_camera()
-            try:
-                self._sync_from_camera(camera)
-                self._refresh_wavelengths_axis(expected_width=self.current_width)
-                uri = (
-                    f"andor-sdk2://camera/{self.serial_number_real}"
-                    if self.serial_number_real != -1
-                    else f"andor-sdk2://index/{self._coerce_int(self.camera_index, 0)}"
-                )
-                argreturn = self._coerce_int(self.camera_index, 0), uri.encode("utf-8")
-            finally:
-                camera.close()
-        except Exception as exc:
-            self.error(f"Could not initialize Andor camera via pylablib: {exc}")
-
-        self._device_id_internal, self._uri = argreturn
-        return argreturn
+        # Do not open and immediately close the USB camera just to probe it.
+        # ``turn_on_local`` performs the single SDK initialization and then
+        # reads the camera identity, which avoids an extra USB re-enumeration.
+        camera_index = self._coerce_int(self.camera_index, 0)
+        self.info(f"Deferring Andor camera initialization for {self.device_name}", True)
+        self._device_id_internal = camera_index
+        self._uri = f"andor-sdk2://index/{camera_index}".encode("utf-8")
+        return self._device_id_internal, self._uri
 
     def get_camera_friendly_name(self):
         return self.friendly_name
