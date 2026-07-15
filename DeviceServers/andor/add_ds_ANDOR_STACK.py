@@ -17,7 +17,7 @@ CCD_DEVICE = {
         "width": 1024,
         "wavelengths": "[]",
         "wavelengths_file": r"C:\dev\Trancon\calibration\calibrationUV-VIS140324.txt",
-        "fan_mode": "off",
+        "fan_mode": "full",
         "default_temperature": -50,
         "linked_spectrograph_ds": "",
         "start_grabbing_on_init": 0,
