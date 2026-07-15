@@ -2307,14 +2307,14 @@ function PumpProbeV0() {
         name: 'Ir',
         line: { color: '#33c5ff', width: 2 },
       },
-      {
+      ...(spectra.background_available === false ? [] : [{
         x: wavelengths,
         y: spectra.background,
         type: 'scatter',
         mode: 'lines',
         name: 'BG',
         line: { color: '#f1c84b', width: 1.5 },
-      },
+      }]),
     ];
   const spectraTitle = showRawSpectra
     ? `Raw spectrum (${rawDataset.file_name || 'ZIP'})`

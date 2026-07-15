@@ -1,13 +1,17 @@
+import ast
 import math
 import os
 import random
 import json
 import threading
 import time
+import zlib
 from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from urllib.parse import unquote
 from zipfile import ZipFile
+
+import numpy as np
 
 from flask import Blueprint, jsonify, request
 
@@ -31,7 +35,8 @@ STAGE_MAX_MM = 100.0
 MM_PER_PS = 0.0749481145
 STAGE_SPEED_MM_PER_SEC = 1.0
 ACCELERATOR_HZ = 5.0
-SPECTROMETER_HZ = 15.0
+# The CCD is triggered at accelerator cadence; each trigger produces a 3-shot burst.
+SPECTROMETER_HZ = 5.0
 SPECTROMETER_BURST = 3
 LAMP_DRIFT_FRACTION = 0.00015
 DARK_DRIFT_COUNTS = 3.5
@@ -482,6 +487,8 @@ class PumpProbeV0Emulator:
         self._counter_last_value = None
         self._counter_last_time = None
         self._counter_rate_hz = 0.0
+        self._andor_order = None
+        self._andor_error = ""
         self._settings = {
             "point_count": 100,
             "scan_start_ps": -25.0,
@@ -615,6 +622,10 @@ class PumpProbeV0Emulator:
         }
 
     def _sync_locked(self):
+        if self._control_mode_locked() == "tango":
+            self._sync_andor_spectra_locked()
+            return
+
         now = time.monotonic()
         motion_elapsed = max(0.0, now - self._last_motion_update)
         self._last_motion_update = now
@@ -634,6 +645,61 @@ class PumpProbeV0Emulator:
         self._last_pulse_update += pulse_count / ACCELERATOR_HZ
         for _ in range(pulse_count):
             self._apply_pulse_locked()
+
+    def _decode_andor_order_locked(self, payload, width):
+        raw = zlib.decompress(ast.literal_eval(str(payload)))
+        data = np.frombuffer(raw, dtype=np.float32)
+        if width <= 0 or data.size < width * 3 or data.size % width:
+            raise ValueError(f"Invalid Andor order shape: {data.size} values, width={width}")
+
+        rows = data.reshape(-1, width)
+        wavelengths = rows[0]
+        payload_rows = rows[1:]
+        track_count = 2
+        frame_count = payload_rows.shape[0] // track_count
+        if frame_count < 1:
+            raise ValueError("Andor order contains no spectra")
+        tracks = payload_rows[: frame_count * track_count].reshape(frame_count, track_count, width)
+        return wavelengths, tracks
+
+    def _sync_andor_spectra_locked(self):
+        """Pull completed three-shot Andor orders without fabricating spectra."""
+        try:
+            camera = _tango_proxy(self._hardware_config["andor_device"], timeout_ms=5000)
+            if "FAULT" in str(camera.state()).upper() or "OFF" in str(camera.state()).upper():
+                raise RuntimeError(f"Andor state is {camera.state()}")
+
+            if self._andor_order is None:
+                camera.command_inout("start_grabbing")
+                self._andor_order = camera.command_inout("register_order", [SPECTROMETER_BURST])
+                self._andor_error = ""
+                return
+
+            if not camera.command_inout("is_order_ready", self._andor_order):
+                return
+
+            axis = np.asarray(camera.read_attribute("wavelengths_axis").value, dtype=np.float32)
+            wavelengths, frames = self._decode_andor_order_locked(
+                camera.command_inout("give_order", self._andor_order), axis.size
+            )
+            self._andor_order = None
+            if self._wavelengths != wavelengths.tolist():
+                self._wavelengths = [float(value) for value in wavelengths]
+                self._heatmap = [[None for _ in self._wavelengths] for _ in self._delays]
+                self._live_od = [None for _ in self._wavelengths]
+
+            averaged = np.mean(frames, axis=0)
+            self._last_spectra = {
+                "reference": [float(value) for value in averaged[0]],
+                "signal": [float(value) for value in averaged[1]],
+                # Dark/background has to be acquired separately; do not emulate it in Tango mode.
+                "background": [0.0 for _ in self._wavelengths],
+                "background_available": False,
+            }
+            self._spectrometer_frames += int(frames.shape[0])
+            self._andor_error = ""
+        except Exception as exc:
+            self._andor_error = str(exc)
 
     def _sync_sample_stage_locked(self):
         now = time.monotonic()
@@ -1091,6 +1157,7 @@ class PumpProbeV0Emulator:
                 "pulses_at_point": self._pulses_at_point,
                 "total_pulses": self._total_pulses,
                 "spectrometer_frames": self._spectrometer_frames,
+                "andor_error": self._andor_error,
                 "daq_counter": self._counter_status_locked() if self._control_mode_locked() == "tango" else {
                     "value": None,
                     "rate_hz": 0.0,
