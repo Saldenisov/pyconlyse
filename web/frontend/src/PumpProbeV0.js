@@ -375,6 +375,13 @@ function PumpProbeV0() {
       } else if (payload.kind === 'raw') {
         setRawDataset(payload);
         setSpectraViewMode('raw');
+      } else if (payload.kind === 'h5') {
+        setLoadedOdDataset(payload);
+        setRawDataset(payload);
+        setSelectedWavelengthRange(null);
+        setSelectedDelayRange(null);
+        setSpectraViewMode('raw');
+        setPlotRevision((value) => value + 1);
       }
     } catch (error) {
       setDataError(error.message);
@@ -576,7 +583,7 @@ function PumpProbeV0() {
     }
   }, [dataBrowserOpen, dataLoading, dataPath, dataSelectedPath, loadDataPath]);
 
-  const fileOdLoaded = loadedOdDataset?.kind === 'od';
+  const fileOdLoaded = ['od', 'h5'].includes(loadedOdDataset?.kind);
   const wavelengths = fileOdLoaded ? loadedOdDataset.wavelengths : (backendState?.wavelengths || fallbackRun.wavelengths);
   const delays = fileOdLoaded ? loadedOdDataset.delays : (backendState?.delays || fallbackRun.delays);
   const heatmap = fileOdLoaded ? loadedOdDataset.heatmap : (backendState?.heatmap || fallbackRun.heatmap);
@@ -979,7 +986,11 @@ function PumpProbeV0() {
           <button
             type="button"
             onClick={() => {
-              postAndRefresh('/run', { running: !running });
+              postAndRefresh('/run', running ? { running: false } : {
+                running: true,
+                save_path: dataSelectedPath || dataPath || dataRoot,
+                sample_name: sampleName,
+              });
             }}
           >
             {running ? 'Stop' : 'Start'}
@@ -1058,6 +1069,7 @@ function PumpProbeV0() {
           <i className={`pp-counter-led ${counterActive ? 'pp-counter-led-active' : ''}`} />
           {daqCounter.value ?? '-'} @ {counterRateHz.toFixed(2)} Hz
         </div>
+        <div><span>run</span>{backendState?.run?.status || 'idle'}</div>
       </section>
       {backendError ? <div className="pp-api-error">{backendError}</div> : null}
       {backendState?.hardware_error ? <div className="pp-api-error">{backendState.hardware_error}</div> : null}

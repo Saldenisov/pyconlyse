@@ -358,6 +358,22 @@ GET  /api/pump-probe/runs/{run_id}/raw
 9. Test with real Andor only.
 10. Run full pump-probe hardware test.
 
+## Emulator Trial Run
+
+The V0 web `Start` control runs the emulator acquisition when `control=emulator`.
+Choose or create a data folder first. The run waits for each virtual delay-line move,
+writes `Pulses / point` unaveraged cycles for every delay, then publishes:
+
+```text
+v0_*.h5      canonical raw HDF5 run
+v0_*.dat     computed OD matrix
+v0_*.jsonl   frame-level acquisition manifest
+```
+
+Each emulator cycle records all six groups in `raw_data`:
+`BG1, Ir1, Is1, BG2, Ir2, Is2`. Loading the generated `.h5` in the V0 Files window
+shows both the OD heatmap and the raw-group spectra.
+
 ## Open Decisions
 
 - Real Tango device names for delay line and Andor CCD.

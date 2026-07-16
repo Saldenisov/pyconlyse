@@ -3,6 +3,7 @@ import math
 import os
 import random
 import json
+import shutil
 import threading
 import time
 import zlib
@@ -35,7 +36,8 @@ from pump_probe_v0_config import (
     STAGE_MIN_MM,
     STAGE_SPEED_MM_PER_SEC,
 )
-from pump_probe_v0_data import parse_dat_payload, parse_zip_payload
+from pump_probe_v0_data import parse_dat_payload, parse_h5_payload, parse_zip_payload
+from pump_probe_v0_storage import RAW_GROUPS, V0EmulatorRunWriter
 
 from treatment_network_path import (
     is_smb_path,
@@ -284,6 +286,33 @@ def _read_data_file(path):
         return normalized, handle.read()
 
 
+def _publish_data_file(directory, source_path):
+    """Copy a staged run artifact to the selected local or SMB data folder."""
+    target_directory = _normalize_data_path(directory)
+    if not _is_data_path_allowed(target_directory):
+        raise ValueError("Run output path is outside pump-probe data root")
+
+    source = Path(source_path)
+    target_name = source.name
+    if is_smb_path(target_directory):
+        import smbclient
+
+        server, _share, _remote_path = split_smb_path(target_directory)
+        from treatment_network_path import _register_session
+
+        _register_session(server)
+        target = smb_join(target_directory, target_name)
+        with open(source, "rb") as input_handle:
+            with smbclient.open_file(smb_to_unc(target), mode="wb") as output_handle:
+                shutil.copyfileobj(input_handle, output_handle)
+        return target
+
+    Path(target_directory).mkdir(parents=True, exist_ok=True)
+    target = Path(target_directory) / target_name
+    shutil.copy2(source, target)
+    return str(target)
+
+
 def _data_file_name(path):
     if is_smb_path(path):
         return unquote(path.rstrip("/").split("/")[-1])
@@ -306,6 +335,12 @@ class PumpProbeV0Controller:
         self._counter_rate_hz = 0.0
         self._andor_order = None
         self._andor_error = ""
+        self._run_writer = None
+        self._run_status = "idle"
+        self._run_error = ""
+        self._run_artifacts = {}
+        self._run_output_dir = ""
+        self._run_sample_name = ""
         self._settings = {
             "point_count": 100,
             "scan_start_ps": -25.0,
@@ -531,8 +566,116 @@ class PumpProbeV0Controller:
         else:
             self._sample_position_mm -= max_step
 
+    def _emulator_raw_cycle_locked(self, delay_index):
+        """Generate one unaveraged frame for each legacy V0 raw group."""
+        off = self._make_spectra_locked(delay_index, electron_on=False)
+        on = self._make_spectra_locked(delay_index, electron_on=True)
+        return [
+            off["background"],
+            off["reference"],
+            off["signal"],
+            on["background"],
+            on["reference"],
+            on["signal"],
+        ]
+
+    def _start_emulator_run_locked(self, payload):
+        output_dir = str(payload.get("save_path") or "").strip()
+        if not output_dir:
+            raise ValueError("Choose a data folder before starting an emulator run")
+        output_dir = _normalize_data_path(output_dir)
+        if not _is_data_path_allowed(output_dir):
+            raise ValueError("Run output path is outside pump-probe data root")
+
+        self._reset_locked()
+        self._run_output_dir = output_dir
+        self._run_sample_name = str(payload.get("sample_name") or "").strip()
+        positions = [self._delay_to_mm(delay) for delay in self._delays]
+        run_config = {
+            "experiment": "V0 DirectLine pump-probe",
+            "mode": "emulator",
+            "sample_name": self._run_sample_name,
+            "settings": dict(self._settings),
+            "hardware_config": dict(self._hardware_config),
+            "raw_groups": list(RAW_GROUPS),
+            "spectrometer": {"rate_hz": SPECTROMETER_HZ, "burst": SPECTROMETER_BURST},
+            "accelerator_hz": ACCELERATOR_HZ,
+        }
+        self._run_writer = V0EmulatorRunWriter(
+            self._wavelengths,
+            self._delays,
+            positions,
+            self._settings["pulses_per_point"],
+            run_config,
+        )
+        self._run_status = "running"
+        self._run_error = ""
+        self._run_artifacts = {}
+        self._running = True
+        self._real_time = False
+        self._last_pulse_update = time.monotonic()
+
+    def _finalize_run_locked(self, status, error=""):
+        writer = self._run_writer
+        self._running = False
+        if writer is None:
+            self._run_status = status
+            self._run_error = str(error)
+            return
+        try:
+            staged = writer.finalize(status=status, error=error)
+            self._run_artifacts = {
+                "run_id": staged["run_id"],
+                "h5": _publish_data_file(self._run_output_dir, staged["h5_path"]),
+                "dat": _publish_data_file(self._run_output_dir, staged["dat_path"]),
+                "manifest": _publish_data_file(self._run_output_dir, staged["manifest_path"]),
+                "frame_counts": staged["frame_counts"],
+            }
+            self._run_status = status
+            self._run_error = str(error)
+        except Exception as exc:
+            self._run_status = "fault"
+            self._run_error = f"Run storage failed: {exc}"
+        finally:
+            self._run_writer = None
+
     def _apply_pulse_locked(self):
         if not self._running and not self._real_time:
+            return
+
+        if self._running and self._run_writer is not None:
+            if abs(self._set_position_mm - self._position_mm) > 0.0005:
+                return
+            try:
+                frames = self._emulator_raw_cycle_locked(self._current_index)
+                self._total_pulses += 1
+                self._spectrometer_frames += len(frames)
+                self._live_od = self._run_writer.record_cycle(
+                    self._current_index,
+                    frames,
+                    self._set_position_mm,
+                    self._position_mm,
+                )
+                self._last_spectra = {
+                    "background": frames[0],
+                    "reference": frames[1],
+                    "signal": frames[2],
+                    "background_available": True,
+                }
+                self._heatmap[self._current_index] = self._live_od
+                self._pulses_at_point += 1
+            except Exception as exc:
+                self._finalize_run_locked("fault", str(exc))
+                return
+
+            if self._pulses_at_point < int(self._settings["pulses_per_point"]):
+                return
+            self._pulses_at_point = 0
+            if self._current_index + 1 >= len(self._delays):
+                self._finalize_run_locked("completed")
+                return
+            self._current_index += 1
+            self._set_position_mm = self._delay_to_mm(self._delays[self._current_index])
             return
 
         self._total_pulses += 1
@@ -568,6 +711,8 @@ class PumpProbeV0Controller:
         with self._lock:
             self._sync_locked()
             self._sync_sample_stage_locked()
+            if self._running and self._run_writer is not None:
+                raise RuntimeError("Stop the active run before changing scan settings")
             self._configure_hardware_locked(payload)
             if "delay_points_ps" in payload:
                 raw_delays = payload["delay_points_ps"]
@@ -608,10 +753,18 @@ class PumpProbeV0Controller:
         with self._lock:
             return dict(self._hardware_config)
 
-    def set_running(self, running):
+    def set_running(self, running, payload=None):
         with self._lock:
             self._sync_locked()
             next_running = bool(running)
+            payload = payload or {}
+            if not next_running and self._run_writer is not None:
+                self._finalize_run_locked("stopped")
+                return self.state()
+            if next_running and self._control_mode_locked() == "emulator":
+                if self._run_writer is None:
+                    self._start_emulator_run_locked(payload)
+                return self.state()
             if next_running and self._control_mode_locked() == "tango":
                 self._preflight_dg645_locked()
             self._running = next_running
@@ -954,7 +1107,11 @@ class PumpProbeV0Controller:
 
     def reset(self):
         with self._lock:
+            if self._run_writer is not None:
+                self._finalize_run_locked("aborted", "Reset requested")
             self._reset_locked()
+            self._run_status = "idle"
+            self._run_error = ""
             return self.state()
 
     def state(self):
@@ -991,6 +1148,15 @@ class PumpProbeV0Controller:
                 "sample_set_position_mm": round(self._sample_set_position_mm, 5),
                 "sample_stage_moving": abs(self._sample_set_position_mm - self._sample_position_mm) > 0.0005,
                 "settings": dict(self._settings),
+                "run": {
+                    "id": self._run_writer.run_id if self._run_writer is not None else self._run_artifacts.get("run_id"),
+                    "status": self._run_status,
+                    "error": self._run_error,
+                    "sample_name": self._run_sample_name,
+                    "output_dir": self._run_output_dir,
+                    "artifacts": dict(self._run_artifacts),
+                    "raw_groups": list(RAW_GROUPS),
+                },
                 "wavelengths": self._wavelengths,
                 "delays": self._delays,
                 "heatmap": self._heatmap,
@@ -1043,7 +1209,7 @@ def pump_probe_hardware_initialize():
 def pump_probe_run():
     payload = request.get_json(silent=True) or {}
     try:
-        return jsonify(_emulator.set_running(payload.get("running", True)))
+        return jsonify(_emulator.set_running(payload.get("running", True), payload))
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -1150,6 +1316,8 @@ def pump_probe_data_load():
             return jsonify(parse_dat_payload(normalized, file_payload))
         if suffix == ".zip":
             return jsonify(parse_zip_payload(normalized, file_payload))
-        raise ValueError("Only .dat and .zip files can be loaded")
+        if suffix in {".h5", ".hdf5"}:
+            return jsonify(parse_h5_payload(normalized, file_payload))
+        raise ValueError("Only .dat, .zip, and V0 .h5 files can be loaded")
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400

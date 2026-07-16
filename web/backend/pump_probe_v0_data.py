@@ -5,6 +5,7 @@ from pathlib import Path
 from urllib.parse import unquote
 from zipfile import ZipFile
 
+import h5py
 import numpy as np
 
 
@@ -21,7 +22,10 @@ def _to_float_list(values, precision=6):
 
 
 def _to_matrix(values, precision=6):
-    return [[round(float(value), precision) for value in row] for row in values]
+    return [
+        [round(float(value), precision) if np.isfinite(value) else None for value in row]
+        for row in values
+    ]
 
 
 def parse_dat_payload(path, payload):
@@ -164,4 +168,47 @@ def parse_zip_payload(path, payload):
             for channel in parsed["channels"]
         ],
         "raw_trace_count": int(parsed["raw_trace_count"]),
+    }
+
+
+def parse_h5_payload(path, payload):
+    """Load V0 HDF5 output for OD-map and raw-group viewing."""
+    with h5py.File(BytesIO(payload), "r") as h5_file:
+        required = {"od", "wavelength_nm", "delay_ps", "raw_data", "raw_group_names"}
+        if not required.issubset(h5_file.keys()):
+            raise ValueError("H5 file is not a V0 pump-probe run")
+        wavelengths = np.asarray(h5_file["wavelength_nm"], dtype=np.float32)
+        delays = np.asarray(h5_file["delay_ps"], dtype=np.float32)
+        od = np.asarray(h5_file["od"], dtype=np.float32).T
+        raw_data = np.asarray(h5_file["raw_data"], dtype=np.float32)
+        frame_counts = np.asarray(h5_file.get("frame_counts", []), dtype=np.int32)
+        group_names = [
+            value.decode("utf-8") if isinstance(value, bytes) else str(value)
+            for value in h5_file["raw_group_names"]
+        ]
+
+    channels = []
+    raw_trace_count = 0
+    for group_index, group_name in enumerate(group_names):
+        channel = np.full((len(delays), len(wavelengths)), np.nan, dtype=np.float32)
+        for delay_index, count in enumerate(frame_counts):
+            if count > 0:
+                channel[delay_index] = np.nanmean(raw_data[delay_index, group_index, :int(count)], axis=0)
+                raw_trace_count = max(raw_trace_count, int(count))
+        channels.append({
+            "key": group_name,
+            "label": group_name,
+            "values": _to_matrix(channel, 2),
+        })
+
+    return {
+        "success": True,
+        "kind": "h5",
+        "file_name": _file_name(path),
+        "path": path,
+        "wavelengths": _to_float_list(wavelengths, 5),
+        "delays": _to_float_list(delays, 5),
+        "heatmap": _to_matrix(od, 6),
+        "channels": channels,
+        "raw_trace_count": raw_trace_count,
     }
