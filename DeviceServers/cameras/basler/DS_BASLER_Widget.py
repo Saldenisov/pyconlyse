@@ -147,6 +147,9 @@ class Basler_camera(DS_General_Widget):
         self.trigger_mode = TaurusValueComboBox()
         self.trigger_mode.addItems(["On", "Off"])
         self.trigger_mode.currentIndexChanged.connect(self.trigger_mode_changed)
+        self.trigger_mode.blockSignals(True)
+        self.trigger_mode.setCurrentText("On" if ds.trigger_mode else "Off")
+        self.trigger_mode.blockSignals(False)
 
         self.trigger_delay = TaurusValueSpinBox()
         self.trigger_delay.model = f"{dev_name}/trigger_delay"
@@ -239,7 +242,7 @@ class Basler_camera(DS_General_Widget):
 
     def trigger_mode_changed(self):
         state = self.trigger_mode.currentText()
-        self.ds.set_trigger_mode = 1 if state == "On" else 0
+        self.ds.trigger_mode = 1 if state == "On" else 0
 
     def width_change(self):
         print(self.width.getValue())
