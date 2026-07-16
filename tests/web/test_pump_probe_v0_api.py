@@ -1,4 +1,5 @@
 import sys
+import time
 from pathlib import Path
 
 from flask import Flask
@@ -36,12 +37,8 @@ def test_emulator_run_publishes_h5_dat_and_manifest(monkeypatch, tmp_path):
         })
         assert started.status_code == 200
 
-        for _ in range(4):
-            v0_api_module._emulator._last_motion_update -= 1.0
-            v0_api_module._emulator._last_pulse_update -= 1.0
-            state = client.get("/api/pump-probe-v0/state").get_json()
-            if state["run"]["status"] == "completed":
-                break
+        time.sleep(1.0)
+        state = client.get("/api/pump-probe-v0/state").get_json()
 
         assert state["run"]["status"] == "completed"
         artifacts = state["run"]["artifacts"]

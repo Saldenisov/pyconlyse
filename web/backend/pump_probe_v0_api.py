@@ -341,6 +341,7 @@ class PumpProbeV0Controller:
         self._run_artifacts = {}
         self._run_output_dir = ""
         self._run_sample_name = ""
+        self._run_thread = None
         self._settings = {
             "point_count": 100,
             "scan_start_ps": -25.0,
@@ -614,6 +615,21 @@ class PumpProbeV0Controller:
         self._running = True
         self._real_time = False
         self._last_pulse_update = time.monotonic()
+        self._run_thread = threading.Thread(
+            target=self._run_emulator_loop,
+            name=f"pump-probe-v0-{self._run_writer.run_id}",
+            daemon=True,
+        )
+        self._run_thread.start()
+
+    def _run_emulator_loop(self):
+        """Advance a scan independently from HTTP state polling."""
+        while True:
+            with self._lock:
+                if not self._running or self._run_writer is None:
+                    return
+                self._sync_locked()
+            time.sleep(0.02)
 
     def _finalize_run_locked(self, status, error=""):
         writer = self._run_writer
