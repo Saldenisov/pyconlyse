@@ -67,8 +67,8 @@ echo [%date% %time%] === STARTING TANGO DATABASE ===
 echo [%date% %time%] === STARTING TANGO DATABASE === >> "%LOG_FILE%"
 echo Starting Tango Database in separate terminal...
 
-REM Start database with proper arguments
-start "Tango-Database-Service" cmd /k "cd /d %TANGO_ROOT%\bin && Databaseds.exe 2 -ORBendPoint giop:tcp::%DB_PORT%"
+REM Start database with proper arguments (minimized to avoid distraction)
+start "Tango-Database-Service" /MIN cmd /k "cd /d %TANGO_ROOT%\bin && Databaseds.exe 2 -ORBendPoint giop:tcp::%DB_PORT%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to start Tango Database terminal
     echo [%date% %time%] ERROR: Failed to start Tango Database >> "%LOG_FILE%"
@@ -91,8 +91,8 @@ REM Get hostname for starter
 for /f "tokens=*" %%i in ('hostname') do set HOSTNAME=%%i
 echo Using hostname: %HOSTNAME%
 
-REM Start Starter with proper arguments
-start "Tango-Starter-%HOSTNAME%" cmd /k "cd /d %TANGO_ROOT%\bin && Starter.exe %HOSTNAME%"
+REM Start Starter with proper arguments (minimized to avoid distraction)
+start "Tango-Starter-%HOSTNAME%" /MIN cmd /k "cd /d %TANGO_ROOT%\bin && Starter.exe %HOSTNAME%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to start Tango Starter terminal
     echo [%date% %time%] ERROR: Failed to start Tango Starter >> "%LOG_FILE%"
@@ -110,13 +110,13 @@ echo.
 echo =====================================================
 echo TANGO INFRASTRUCTURE STATUS:
 echo =====================================================
-echo - Database: Running in separate terminal (Tango-Database-Service)
-echo - Starter:  Running in separate terminal (Tango-Starter-%HOSTNAME%)
+echo - Database: Running in separate minimized terminal (Tango-Database-Service)
+echo - Starter:  Running in separate minimized terminal (Tango-Starter-%HOSTNAME%)
 echo - Log file: %LOG_FILE%
 echo - Database port: %DB_PORT%
 echo - Hostname: %HOSTNAME%
 echo.
-echo You should now see 2 additional terminal windows:
+echo You should now see 2 additional terminal windows (minimized in the taskbar):
 echo   1. Tango Database (running Databaseds.exe)
 echo   2. Tango Starter (running Starter.exe)
 echo.
