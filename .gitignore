@@ -1,5 +1,8 @@
 *.log
 
+/LOGS/
+/DeviceServers/motion/owis/captures/
+
 /.mypy_cache
 /.tmp/treatment_smb_cache/
 
