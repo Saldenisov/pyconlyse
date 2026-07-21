@@ -547,7 +547,12 @@ function PumpProbeVD2() {
         setPreviewEnabled(true);
         setPreviewError('');
       }
-      if (path === '/command/StopAcquisition' || path === '/command/StopSequence') {
+      if (
+        path === '/command/StopAcquisition'
+        || path === '/command/StopSequence'
+        || path === '/command/StopApplication'
+        || path === '/command/ShutdownRemoteEx'
+      ) {
         setPreview(null);
         setPreviewEnabled(false);
         setPreviewError('');
@@ -744,6 +749,8 @@ function PumpProbeVD2() {
           <button type="button" onClick={loadState} disabled={busy}>Refresh</button>
           <button type="button" onClick={() => runCommand('Connect')} disabled={busy}>Connect</button>
           <button type="button" onClick={() => runCommand('StartApplication')} disabled={busy}>Start HPD-TA</button>
+          <button type="button" className="vd2-stop" onClick={() => runCommand('StopApplication')} disabled={busy || !state?.application_running}>Close HPD-TA</button>
+          <button type="button" className="vd2-stop" onClick={() => runCommand('ShutdownRemoteEx')} disabled={busy || !state?.connected}>Stop RemoteEx</button>
           <button type="button" onClick={() => runCommand('Disconnect')} disabled={busy}>Disconnect</button>
         </div>
       </header>

@@ -106,6 +106,8 @@ ALLOWED_COMMANDS = {
     "Disconnect",
     "RefreshStatus",
     "StartApplication",
+    "StopApplication",
+    "ShutdownRemoteEx",
     "StartLive",
     "AcquireSingle",
     "Acquire",

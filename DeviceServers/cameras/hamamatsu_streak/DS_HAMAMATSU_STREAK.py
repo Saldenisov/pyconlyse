@@ -778,12 +778,22 @@ class DS_HAMAMATSU_STREAK(DS_General):
         controller = self._require_controller()
         controller.stop_application()
         self.application_running_value = False
+        self.remoteex_status_value = "idle"
+        self.busy_command_value = ""
+        self.last_command_value = controller.last_command
+        self.last_response_value = controller.last_response_text
+        self.set_state(DevState.ON)
 
     @command
     def ShutdownRemoteEx(self):
         controller = self._require_controller()
         controller.shutdown_remoteex()
         self.application_running_value = False
+        self.remoteex_status_value = "disconnected"
+        self.busy_command_value = ""
+        self.last_command_value = controller.last_command
+        self.last_response_value = controller.last_response_text
+        self.set_state(DevState.ON)
 
     @command
     def AcquireSingle(self):

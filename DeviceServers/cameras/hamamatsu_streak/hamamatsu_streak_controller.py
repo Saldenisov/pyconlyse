@@ -183,6 +183,9 @@ class HamamatsuStreakController:
 
     def shutdown_remoteex(self) -> RemoteExResponse:
         response = self.execute_raw("Shutdown()")
+        self.client.close()
+        self.snapshot.remoteex_status = "disconnected"
+        self.snapshot.busy_command = ""
         self.snapshot.application_running = False
         return response
 

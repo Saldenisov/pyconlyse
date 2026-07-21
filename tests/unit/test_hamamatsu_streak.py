@@ -160,6 +160,28 @@ class TestHamamatsuStreakController(unittest.TestCase):
         self.assertEqual(controller.snapshot.remoteex_status, "busy")
         self.assertEqual(controller.last_response_text, "7,AcqStart,async command pending,HAcq_mLive")
 
+    def test_shutdown_remoteex_closes_the_local_control_socket(self):
+        fake = FakeRemoteExClient(
+            {
+                "Shutdown()": [
+                    RemoteExResponse(
+                        raw_line="0,Shutdown",
+                        error_code=0,
+                        command_name="Shutdown",
+                        parameters=[],
+                    )
+                ]
+            }
+        )
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        controller.shutdown_remoteex()
+
+        self.assertEqual(fake.sent_commands, ["Shutdown()"])
+        self.assertFalse(fake.is_connected)
+        self.assertEqual(controller.snapshot.remoteex_status, "disconnected")
+
     def test_save_current_sequence_uses_his(self):
         fake = FakeRemoteExClient(
             {
