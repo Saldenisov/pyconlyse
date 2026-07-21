@@ -13,6 +13,7 @@ const Navbar = () => {
         <li><Link to="/elyse">Elyse</Link></li>
         <li><Link to="/datatreatment">Data Treatment</Link></li>
         <li><Link to="/pump-probe-v0">Pump-Probe V0</Link></li>
+        <li><Link to="/pump-probe-vd2">Pump-Probe VD2</Link></li>
         <li><Link to="/device-clients">Device Clients</Link></li>
         <li><Link to="/login">Login</Link></li>
       </ul>

@@ -8,6 +8,7 @@ from .remoteex_client import RemoteExClient
 from .remoteex_protocol import (
     RemoteExCommandError,
     RemoteExResponse,
+    RemoteExTransportError,
     build_app_start_command,
     build_command,
 )
@@ -108,7 +109,16 @@ class HamamatsuStreakController:
         self.snapshot.application_running = False
 
     def execute_raw(self, command: str) -> RemoteExResponse:
-        response = self.client.send_command_checked(command)
+        if not self.client.is_connected:
+            self.client.connect()
+        try:
+            response = self.client.send_command_checked(command)
+        except RemoteExTransportError:
+            # Recover only after a genuine transport failure. Reconnecting for
+            # every command makes TaRemoteEx show its TCP_NODELAY error dialog.
+            self.client.close()
+            self.client.connect()
+            response = self.client.send_command_checked(command)
         self.last_command = command
         self.last_response_text = response.raw_line
         self.last_messages = [message.raw_line for message in self.client.last_messages]
@@ -128,9 +138,43 @@ class HamamatsuStreakController:
             no_dialogs=no_dialogs,
             encoding=encoding,
         )
-        response = self.execute_raw(command)
+        if not self.client.is_connected:
+            self.client.connect()
+        try:
+            # TaRemoteEx may intentionally reset its client sockets while it
+            # attaches HPD-TA. That reset is part of AppStart, not a device
+            # failure and must not trigger a second AppStart command.
+            response = self.client.send_command_checked(command)
+        except RemoteExTransportError:
+            response = self._reconnect_after_application_start()
+        self.last_command = command
+        self.last_response_text = response.raw_line
+        self.last_messages = [message.raw_line for message in self.client.last_messages]
         self.snapshot.application_running = True
         return response
+
+    def _reconnect_after_application_start(self) -> RemoteExResponse:
+        self.client.close()
+        deadline = time.monotonic() + 20.0
+        last_error: Optional[Exception] = None
+        while time.monotonic() < deadline:
+            try:
+                self.client.connect()
+                version = self.client.send_command_checked("AppInfo(Version)", timeout=3.0)
+                self.snapshot.application_version = version.parameter(0, "") or ""
+                return RemoteExResponse(
+                    raw_line="0,AppStart,reconnected",
+                    error_code=0,
+                    command_name="AppStart",
+                    parameters=["reconnected"],
+                )
+            except (RemoteExTransportError, RemoteExCommandError) as exc:
+                last_error = exc
+                self.client.close()
+                time.sleep(0.5)
+        raise RemoteExTransportError(
+            f"RemoteEx did not return after AppStart: {last_error}"
+        )
 
     def stop_application(self) -> RemoteExResponse:
         response = self.execute_raw("AppEnd()")
@@ -144,7 +188,12 @@ class HamamatsuStreakController:
 
     def status(self) -> HamamatsuStreakSnapshot:
         response = self.execute_raw("Status()")
-        self.snapshot.remoteex_status = response.parameter(0, "unknown") or "unknown"
+        self.snapshot.application_running = True
+        raw_status = response.parameter(0, "unknown") or "unknown"
+        self.snapshot.remoteex_status = {
+            "0": "idle",
+            "1": "busy",
+        }.get(raw_status.lower(), raw_status)
         self.snapshot.busy_command = response.parameter(1, "") or ""
         return self.snapshot
 
@@ -432,7 +481,27 @@ class HamamatsuStreakController:
             self.wait_for_async_idle()
 
     def start_live(self) -> None:
-        self.execute_raw("AcqStart(Live)")
+        try:
+            self.execute_raw("AcqStart(Live)")
+        except RemoteExCommandError as exc:
+            response = exc.response
+            details = ",".join(response.parameters).lower()
+            # HPD-TA can acknowledge a Live transition with error code 7 while
+            # its HAcq_mLive worker is already active. This is a normal
+            # asynchronous transition, not a failed acquisition.
+            if response.error_code == 7 and "async command pending" in details and "hacq_mlive" in details:
+                self.last_command = "AcqStart(Live)"
+                self.last_response_text = response.raw_line
+                self.snapshot.remoteex_status = "busy"
+                self.snapshot.busy_command = "AcqStart(Live)"
+                return
+            raise
+
+    def get_current_display_image(self):
+        """Read the current display frame over the controller's RemoteEx session."""
+        if not self.client.is_connected:
+            self.client.connect(connect_data_port=True)
+        return self.client.get_current_image("Display")
 
     def start_analog_integration(self, wait: bool = True) -> None:
         self.execute_raw("AcqStart(AI)")
@@ -469,6 +538,12 @@ class HamamatsuStreakController:
 
     def refresh_cached_state(self) -> HamamatsuStreakSnapshot:
         self.status()
+        # HPD-TA only services RemoteEx during brief DoEvents while Live/Sequence
+        # runs. Querying every control there can stall the acquisition and loses the
+        # persistent command connection. Cached setup values remain valid instead.
+        if self.snapshot.remoteex_status.lower() == "busy":
+            return self.snapshot
+
         self.snapshot.application_version = self._safe_query(self.get_app_info, "Version")
         self.snapshot.application_running = bool(self.snapshot.application_version)
         self.snapshot.live_exposure_time = self._safe_query(

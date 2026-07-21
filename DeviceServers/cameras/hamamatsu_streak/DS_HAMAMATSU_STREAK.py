@@ -1,8 +1,10 @@
 #!/usr/bin/python3 -u
 from __future__ import annotations
 
+import base64
 import json
 import sys
+import threading
 from pathlib import Path
 from typing import Union
 
@@ -45,6 +47,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def init_device(self):
         self.client = None
         self.controller = None
+        self._application_start_thread = None
+        self._live_start_thread = None
         self.connected_value = False
         self.application_running_value = False
         self.remoteex_status_value = "disconnected"
@@ -98,6 +102,12 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.last_command_value = ""
         self.last_response_value = ""
         super().init_device()
+        try:
+            # DS_General declares this command at 300 ms. HPD-TA RemoteEx cannot
+            # service that rate while acquiring; the web API requests refreshes.
+            self.stop_poll_command("get_controller_status")
+        except Exception:
+            pass
         self.register_variables_for_archive()
         if bool(int(self.start_on_init or 0)) and self._device_id_internal != -1:
             try:
@@ -128,6 +138,20 @@ class DS_HAMAMATSU_STREAK(DS_General):
         except Exception as exc:
             self.warn(f"RemoteEx discovery failed: {exc}", True)
         self._device_id_internal, self._uri = arg_return
+
+    @command(polling_period=0)
+    def get_controller_status(self):
+        """Refresh only on demand without DS_General's auto-turn-on loop.
+
+        A streak acquisition is legitimately RUNNING. The generic implementation
+        treats every non-ON state as a failed power-up and reconnects RemoteEx,
+        which interrupts the web control state while Live is active.
+        """
+        result = self.get_controller_status_local()
+        self.send_state_archive()
+        if result != 0:
+            self.error(str(result))
+        return result
 
     def get_controller_status_local(self) -> Union[int, str]:
         if self.controller is None or not self.controller.is_connected:
@@ -165,10 +189,14 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
             if bool(int(self.start_application_on_turn_on or 0)):
                 self.controller.start_application()
-
-            snapshot = self.controller.refresh_cached_state()
-            self._sync_from_snapshot(snapshot)
-            self.set_state(DevState.ON)
+            else:
+                # RemoteEx can accept TCP connections while HPD-TA is stopped.
+                # ``Status()`` blocks in that state, so a successful connect must
+                # remain ON instead of being misreported as a Tango fault.
+                self.application_running_value = False
+                self.remoteex_status_value = "idle"
+                self.busy_command_value = ""
+                self.set_state(DevState.ON)
             return 0
         except Exception as exc:
             self.client = None
@@ -685,6 +713,15 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def RefreshStatus(self):
+        if self._live_start_thread is not None and self._live_start_thread.is_alive():
+            return json.dumps(
+                {
+                    "connected": self.connected_value,
+                    "application_running": self.application_running_value,
+                    "remoteex_status": self.remoteex_status_value,
+                    "busy_command": self.busy_command_value,
+                }
+            )
         controller = self._require_controller()
         snapshot = controller.refresh_cached_state()
         self._sync_from_snapshot(snapshot)
@@ -699,11 +736,42 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def StartApplication(self):
+        if (
+            self._application_start_thread is not None
+            and self._application_start_thread.is_alive()
+        ):
+            return self.application_version_value
+
         controller = self._require_controller()
-        controller.start_application()
-        snapshot = controller.refresh_cached_state()
-        self._sync_from_snapshot(snapshot)
+        self.remoteex_status_value = "starting"
+        self.busy_command_value = "AppStart()"
+        self.set_state(DevState.RUNNING)
+        self._application_start_thread = threading.Thread(
+            target=self._start_application_background,
+            args=(controller,),
+            daemon=True,
+            name="hamamatsu-start-application",
+        )
+        self._application_start_thread.start()
         return self.application_version_value
+
+    def _start_application_background(
+        self, controller: HamamatsuStreakController
+    ) -> None:
+        try:
+            controller.start_application()
+            snapshot = controller.refresh_cached_state()
+            self._sync_from_snapshot(snapshot)
+            self.last_command_value = controller.last_command
+            self.last_response_value = controller.last_response_text
+            self.application_running_value = True
+            self.remoteex_status_value = "idle"
+            self.busy_command_value = ""
+            self.set_state(DevState.ON)
+        except Exception as exc:
+            self.last_response_value = f"StartApplication failed: {exc}"
+            self.remoteex_status_value = "fault"
+            self.set_state(DevState.FAULT)
 
     @command
     def StopApplication(self):
@@ -733,10 +801,31 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def StartLive(self):
+        if self._live_start_thread is not None and self._live_start_thread.is_alive():
+            return
+
         controller = self._require_controller()
-        controller.start_live()
-        self.remoteex_status_value = "busy"
+        self.remoteex_status_value = "starting"
+        self.busy_command_value = "AcqStart(Live)"
         self.set_state(DevState.RUNNING)
+        self._live_start_thread = threading.Thread(
+            target=self._start_live_background,
+            args=(controller,),
+            daemon=True,
+            name="hamamatsu-start-live",
+        )
+        self._live_start_thread.start()
+
+    def _start_live_background(self, controller: HamamatsuStreakController) -> None:
+        try:
+            controller.start_live()
+            self.last_command_value = controller.last_command
+            self.last_response_value = controller.last_response_text
+            self.remoteex_status_value = "busy"
+        except Exception as exc:
+            self.last_response_value = f"StartLive failed: {exc}"
+            self.remoteex_status_value = "fault"
+            self.set_state(DevState.FAULT)
 
     @command
     def StartAnalogIntegration(self):
@@ -756,13 +845,36 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def StopAcquisition(self):
         controller = self._require_controller()
         controller.stop_acquisition()
-        self.get_controller_status()
+        self.last_command_value = controller.last_command
+        self.last_response_value = controller.last_response_text
+        self.remoteex_status_value = "idle"
+        self.busy_command_value = ""
+        self.set_state(DevState.ON)
 
     @command
     def StopSequence(self):
         controller = self._require_controller()
         controller.stop_sequence()
-        self.get_controller_status()
+        self.last_command_value = controller.last_command
+        self.last_response_value = controller.last_response_text
+        self.remoteex_status_value = "idle"
+        self.busy_command_value = ""
+        self.set_state(DevState.ON)
+
+    @command(dtype_out=str)
+    def GetCurrentDisplayFrame(self):
+        """Return one rendered HPD-TA frame through the sole RemoteEx client."""
+        controller = self._require_controller()
+        frame = controller.get_current_display_image()
+        return json.dumps(
+            {
+                "width": frame.width,
+                "height": frame.height,
+                "bytes_per_pixel": frame.bytes_per_pixel,
+                "data_type": frame.data_type,
+                "pixels_b64": base64.b64encode(frame.pixels).decode("ascii"),
+            }
+        )
 
     @command
     def WaitForIdle(self):

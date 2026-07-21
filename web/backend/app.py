@@ -48,6 +48,7 @@ from folder_api import folder_api  # Folder-related endpoints
 from device_api import device_api  # Device control API endpoints
 from treatment_api import treatment_api  # Treatment workflow API
 from pump_probe_v0_api import pump_probe_v0_api  # Pump-probe V0 emulator API
+from pump_probe_vd2_api import pump_probe_vd2_api  # VD2 streak-camera control API
 from auth import auth            # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
@@ -68,6 +69,7 @@ app.register_blueprint(folder_api)
 app.register_blueprint(device_api)  # Add device API
 app.register_blueprint(treatment_api)  # Add treatment API
 app.register_blueprint(pump_probe_v0_api)  # Add pump-probe V0 emulator API
+app.register_blueprint(pump_probe_vd2_api)
 app.register_blueprint(auth)        # Add auth API
 
 # Initialize WebSocket support

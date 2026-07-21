@@ -11,6 +11,7 @@ from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import (
+    RemoteExCommandError,
     RemoteExResponse,
     build_app_start_command,
     parse_response_line,
@@ -38,6 +39,8 @@ class FakeRemoteExClient:
             raise AssertionError(f"No fake response configured for {command!r}")
         response = queue.pop(0)
         self.last_response = response
+        if not response.is_ok:
+            raise RemoteExCommandError("fake RemoteEx command error", response)
         return response
 
 
@@ -63,6 +66,28 @@ class TestRemoteExProtocol(unittest.TestCase):
 
 
 class TestHamamatsuStreakController(unittest.TestCase):
+    def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
+        fake = FakeRemoteExClient(
+            {
+                "Status()": [
+                    RemoteExResponse(
+                        raw_line="0,Status,1,AcqStart(Live)",
+                        error_code=0,
+                        command_name="Status",
+                        parameters=["1", "AcqStart(Live)"],
+                    )
+                ]
+            }
+        )
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        snapshot = controller.refresh_cached_state()
+
+        self.assertEqual(snapshot.remoteex_status, "busy")
+        self.assertEqual(snapshot.busy_command, "AcqStart(Live)")
+        self.assertEqual(fake.sent_commands, ["Status()"])
+
     def test_wait_for_async_idle(self):
         fake = FakeRemoteExClient(
             {
@@ -90,6 +115,50 @@ class TestHamamatsuStreakController(unittest.TestCase):
             fake.sent_commands,
             ["AsyncCommandStatus()", "AsyncCommandStatus()"],
         )
+
+    def test_start_live_uses_remoteex_live_command(self):
+        fake = FakeRemoteExClient(
+            {
+                "AcqStart(Live)": [
+                    RemoteExResponse(
+                        raw_line="0,AcqStart",
+                        error_code=0,
+                        command_name="AcqStart",
+                        parameters=[],
+                    )
+                ]
+            }
+        )
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        controller.start_live()
+
+        self.assertEqual(
+            fake.sent_commands,
+            ["AcqStart(Live)"],
+        )
+
+    def test_start_live_accepts_hpdta_async_live_transition(self):
+        fake = FakeRemoteExClient(
+            {
+                "AcqStart(Live)": [
+                    RemoteExResponse(
+                        raw_line="7,AcqStart,async command pending,HAcq_mLive",
+                        error_code=7,
+                        command_name="AcqStart",
+                        parameters=["async command pending", "HAcq_mLive"],
+                    )
+                ]
+            }
+        )
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        controller.start_live()
+
+        self.assertEqual(controller.snapshot.remoteex_status, "busy")
+        self.assertEqual(controller.last_response_text, "7,AcqStart,async command pending,HAcq_mLive")
 
     def test_save_current_sequence_uses_his(self):
         fake = FakeRemoteExClient(

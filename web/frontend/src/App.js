@@ -18,6 +18,7 @@ import DAQmxClients from './DAQmxClients';
 import VacuumClients from './VacuumClients';
 import Login from './Login';
 import PumpProbeV0 from './PumpProbeV0';
+import PumpProbeVD2 from './PumpProbeVD2';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 function App() {
@@ -41,6 +42,7 @@ function App() {
           <Route path="/daqmx-clients" element={<DAQmxClients />} />
           <Route path="/vacuum-clients" element={<VacuumClients />} />
           <Route path="/pump-probe-v0" element={<PumpProbeV0 />} />
+          <Route path="/pump-probe-vd2" element={<PumpProbeVD2 />} />
           <Route path="/login" element={<Login />} />
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" />} />
