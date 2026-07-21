@@ -552,6 +552,7 @@ function PumpProbeVD2() {
         || path === '/command/StopSequence'
         || path === '/command/StopApplication'
         || path === '/command/ShutdownRemoteEx'
+        || path === '/command/Disconnect'
       ) {
         setPreview(null);
         setPreviewEnabled(false);
@@ -567,6 +568,10 @@ function PumpProbeVD2() {
 
   const writeParameter = useCallback((name, value) => runRequest(`/parameter/${name}`, { value }), [runRequest]);
   const runCommand = useCallback((name) => runRequest(`/command/${name}`), [runRequest]);
+  const refreshStatus = useCallback(() => {
+    if (state?.connected) return runCommand('RefreshStatus');
+    return loadState();
+  }, [loadState, runCommand, state?.connected]);
 
   const loadHardware = useCallback(async () => {
     setHardwareLoading(true);
@@ -746,12 +751,19 @@ function PumpProbeVD2() {
         </div>
         <div className="vd2-header-actions">
           <button type="button" onClick={() => setHardwareOpen(true)} disabled={busy}>Hardware</button>
-          <button type="button" onClick={loadState} disabled={busy}>Refresh</button>
-          <button type="button" onClick={() => runCommand('Connect')} disabled={busy}>Connect</button>
-          <button type="button" onClick={() => runCommand('StartApplication')} disabled={busy}>Start HPD-TA</button>
-          <button type="button" className="vd2-stop" onClick={() => runCommand('StopApplication')} disabled={busy || !state?.application_running}>Close HPD-TA</button>
+          <button type="button" onClick={refreshStatus} disabled={busy}>Refresh</button>
+          <button type="button" onClick={() => runCommand(state?.connected ? 'Disconnect' : 'Connect')} disabled={busy}>
+            {state?.connected ? 'Disconnect' : 'Connect'}
+          </button>
+          <button
+            type="button"
+            className={state?.application_running ? 'vd2-stop' : ''}
+            onClick={() => runCommand(state?.application_running ? 'StopApplication' : 'StartApplication')}
+            disabled={busy || (!state?.application_running && !state?.connected)}
+          >
+            {state?.application_running ? 'Close HPD-TA' : 'Start HPD-TA'}
+          </button>
           <button type="button" className="vd2-stop" onClick={() => runCommand('ShutdownRemoteEx')} disabled={busy || !state?.connected}>Stop RemoteEx</button>
-          <button type="button" onClick={() => runCommand('Disconnect')} disabled={busy}>Disconnect</button>
         </div>
       </header>
 

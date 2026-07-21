@@ -191,12 +191,22 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 self.controller.start_application()
             else:
                 # RemoteEx can accept TCP connections while HPD-TA is stopped.
-                # ``Status()`` blocks in that state, so a successful connect must
-                # remain ON instead of being misreported as a Tango fault.
-                self.application_running_value = False
-                self.remoteex_status_value = "idle"
-                self.busy_command_value = ""
-                self.set_state(DevState.ON)
+                # Probe once after an explicit connection so the web UI is not
+                # left with the default "stopped" cache when HPD-TA is already
+                # running. A failed probe still leaves the RemoteEx layer ON.
+                try:
+                    snapshot = self.controller.refresh_cached_state()
+                    self._sync_from_snapshot(snapshot)
+                    self.set_state(
+                        DevState.RUNNING
+                        if self.remoteex_status_value.lower() == "busy"
+                        else DevState.ON
+                    )
+                except Exception:
+                    self.application_running_value = False
+                    self.remoteex_status_value = "idle"
+                    self.busy_command_value = ""
+                    self.set_state(DevState.ON)
             return 0
         except Exception as exc:
             self.client = None
