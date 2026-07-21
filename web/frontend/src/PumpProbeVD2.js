@@ -71,6 +71,16 @@ const ACQUISITION_FIELDS = [
   { key: 'sequence_loops', label: 'Sequence loops', type: 'number', min: 1, step: 1 },
 ];
 
+const VD2_POWER_CHANNELS = [
+  { key: 'streak-camera', label: 'Streak camera / spectrograph', device: 'manip/SD2/PDU_SD2', outputId: 1 },
+  { key: 'dg645-power', label: 'DG645', device: 'manip/SD2/PDU_SD2', outputId: 2 },
+];
+
+const VD2_TANGO_SERVERS = [
+  { key: 'streak-tango', label: 'Hamamatsu streak / HPD-TA', device: 'manip/camera/hamamatsu_streak_main' },
+  { key: 'dg645-tango', label: 'DG645 digital generator', device: 'manip/sync/DG645' },
+];
+
 function valueText(value) {
   return value === null || value === undefined || value === '' ? '-' : String(value);
 }
@@ -367,6 +377,67 @@ function RoiProfiles({ preview, roi }) {
   );
 }
 
+function Vd2HardwareModal({ open, power, tango, loading, error, onClose, onRefresh, onToggle, onAllPower, onServer }) {
+  if (!open) return null;
+  const outputFor = (channel) => power.outputs.find((output) => Number(output.id) === channel.outputId);
+  return (
+    <div className="vd2-modal-backdrop" onClick={onClose}>
+      <section className="vd2-hardware-modal" onClick={(event) => event.stopPropagation()} aria-label="VD2 hardware">
+        <header>
+          <h2>Hardware</h2>
+          <button type="button" onClick={onClose}>Close</button>
+        </header>
+        <div className="vd2-hardware-toolbar">
+          <button type="button" onClick={() => onAllPower(true)} disabled={loading}>Turn required ON</button>
+          <button type="button" onClick={() => onAllPower(false)} disabled={loading}>Turn required OFF</button>
+          <button type="button" onClick={onRefresh} disabled={loading}>Refresh</button>
+        </div>
+        {error && <div className="vd2-error" role="alert">{error}</div>}
+        <div className="vd2-hardware-columns">
+          <section>
+            <h3>NETIO PDU SD2</h3>
+            {VD2_POWER_CHANNELS.map((channel) => {
+              const output = outputFor(channel);
+              const isOn = output ? Number(output.state) === 1 : null;
+              return (
+                <button
+                  type="button"
+                  key={channel.key}
+                  className={`vd2-hardware-toggle ${isOn ? 'is-on' : ''}`}
+                  disabled={loading || isOn === null}
+                  onClick={() => onToggle(channel, !isOn)}
+                >
+                  <span>{channel.label}</span>
+                  <small>{channel.device} / out {channel.outputId}</small>
+                  <strong>{isOn === null ? 'UNKNOWN' : (isOn ? 'ON' : 'OFF')}</strong>
+                </button>
+              );
+            })}
+          </section>
+          <section>
+            <h3>Tango</h3>
+            {VD2_TANGO_SERVERS.map((server) => {
+              const status = tango[server.device] || { state: 'UNKNOWN', ok: false };
+              return (
+                <div className={`vd2-tango-row ${status.ok ? 'is-on' : ''}`} key={server.key}>
+                  <div>
+                    <strong>{server.label}</strong>
+                    <small>{server.device}</small>
+                    {status.error && <em>{status.error}</em>}
+                  </div>
+                  <b>{status.state}</b>
+                  <button type="button" disabled={loading} onClick={() => onServer(server, 'start')}>Start</button>
+                  <button type="button" disabled={loading} onClick={() => onServer(server, 'restart')}>Restart</button>
+                </div>
+              );
+            })}
+          </section>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function PumpProbeVD2() {
   const [state, setState] = useState(null);
   const [preview, setPreview] = useState(null);
@@ -381,6 +452,11 @@ function PumpProbeVD2() {
   const [rois, setRois] = useState([]);
   const [selectedRoiId, setSelectedRoiId] = useState(null);
   const [drawingRoi, setDrawingRoi] = useState(null);
+  const [hardwareOpen, setHardwareOpen] = useState(false);
+  const [hardwarePower, setHardwarePower] = useState({ outputs: [] });
+  const [hardwareTango, setHardwareTango] = useState({});
+  const [hardwareLoading, setHardwareLoading] = useState(false);
+  const [hardwareError, setHardwareError] = useState('');
   const requestActive = useRef(false);
   const previewRequestActive = useRef(false);
   const previewCanvas = useRef(null);
@@ -486,6 +562,99 @@ function PumpProbeVD2() {
 
   const writeParameter = useCallback((name, value) => runRequest(`/parameter/${name}`, { value }), [runRequest]);
   const runCommand = useCallback((name) => runRequest(`/command/${name}`), [runRequest]);
+
+  const loadHardware = useCallback(async () => {
+    setHardwareLoading(true);
+    setHardwareError('');
+    try {
+      const powerResponse = await fetch('/api/device/manip/SD2/PDU_SD2/pdu/outputs', { credentials: 'include' });
+      const powerPayload = await powerResponse.json();
+      if (!powerResponse.ok || powerPayload.success === false) throw new Error(powerPayload.error || 'Could not read PDU SD2');
+      setHardwarePower({ outputs: powerPayload.outputs || [] });
+      const entries = await Promise.all(VD2_TANGO_SERVERS.map(async (server) => {
+        try {
+          const response = await fetch(`/api/device/${server.device}/state`, { credentials: 'include' });
+          const payload = await response.json();
+          if (!response.ok || payload.success === false) throw new Error(payload.error || 'Offline');
+          return [server.device, { ok: true, state: String(payload.state || 'UNKNOWN').replace(/^DevState\./, '') }];
+        } catch (requestError) {
+          return [server.device, { ok: false, state: 'OFFLINE', error: requestError.message }];
+        }
+      }));
+      setHardwareTango(Object.fromEntries(entries));
+    } catch (requestError) {
+      setHardwareError(requestError.message);
+    } finally {
+      setHardwareLoading(false);
+    }
+  }, []);
+
+  const toggleHardwarePower = useCallback(async (channel, enabled) => {
+    const outputs = hardwarePower.outputs || [];
+    if (!outputs.length) return;
+    setHardwareLoading(true);
+    setHardwareError('');
+    try {
+      const nextStates = outputs.map((output) => Number(output.id) === channel.outputId ? (enabled ? 1 : 0) : Number(output.state));
+      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not switch ${channel.label}`);
+      await loadHardware();
+    } catch (requestError) {
+      setHardwareError(requestError.message);
+      setHardwareLoading(false);
+    }
+  }, [hardwarePower.outputs, loadHardware]);
+
+  const setAllHardwarePower = useCallback(async (enabled) => {
+    const outputs = hardwarePower.outputs || [];
+    if (!outputs.length) return;
+    setHardwareLoading(true);
+    setHardwareError('');
+    try {
+      const outputIds = new Set(VD2_POWER_CHANNELS.map((channel) => channel.outputId));
+      const nextStates = outputs.map((output) => outputIds.has(Number(output.id)) ? (enabled ? 1 : 0) : Number(output.state));
+      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.success === false) throw new Error(payload.error || 'Could not switch VD2 power');
+      await loadHardware();
+    } catch (requestError) {
+      setHardwareError(requestError.message);
+      setHardwareLoading(false);
+    }
+  }, [hardwarePower.outputs, loadHardware]);
+
+  const controlHardwareServer = useCallback(async (server, action) => {
+    setHardwareLoading(true);
+    setHardwareError('');
+    try {
+      const response = await fetch('/api/server/control', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+        body: JSON.stringify({ action, device_name: server.device }),
+      });
+      const payload = await response.json();
+      if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not ${action} ${server.label}`);
+      await loadHardware();
+      await loadState();
+    } catch (requestError) {
+      setHardwareError(requestError.message);
+      setHardwareLoading(false);
+    }
+  }, [loadHardware, loadState]);
+
+  useEffect(() => {
+    if (hardwareOpen) loadHardware();
+  }, [hardwareOpen, loadHardware]);
+
+  useEffect(() => {
+    if (activeTab === 'hardware' && state?.connected && state?.application_running) {
+      runCommand('RefreshStatus');
+    }
+  }, [activeTab, runCommand, state?.application_running, state?.connected]);
   const updateLutRange = useCallback((bound, value) => {
     setLutRange((previous) => {
       if (bound === 'minimum') {
@@ -571,6 +740,7 @@ function PumpProbeVD2() {
           <span className={`vd2-status ${state?.application_running ? 'online' : 'offline'}`}>HPD-TA {state?.application_running ? 'running' : 'stopped'}</span>
         </div>
         <div className="vd2-header-actions">
+          <button type="button" onClick={() => setHardwareOpen(true)} disabled={busy}>Hardware</button>
           <button type="button" onClick={loadState} disabled={busy}>Refresh</button>
           <button type="button" onClick={() => runCommand('Connect')} disabled={busy}>Connect</button>
           <button type="button" onClick={() => runCommand('StartApplication')} disabled={busy}>Start HPD-TA</button>
@@ -730,6 +900,18 @@ function PumpProbeVD2() {
           </section>
         </>
       )}
+      <Vd2HardwareModal
+        open={hardwareOpen}
+        power={hardwarePower}
+        tango={hardwareTango}
+        loading={hardwareLoading}
+        error={hardwareError}
+        onClose={() => setHardwareOpen(false)}
+        onRefresh={loadHardware}
+        onToggle={toggleHardwarePower}
+        onAllPower={setAllHardwarePower}
+        onServer={controlHardwareServer}
+      />
     </main>
   );
 }

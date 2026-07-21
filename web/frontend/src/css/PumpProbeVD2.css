@@ -73,6 +73,96 @@
 .vd2-header-actions button { min-width: 76px; }
 .vd2-error { margin-top: 10px; padding: 9px 12px; border: 1px solid #a06f28; background: #30240d; color: #ffd669; }
 
+.vd2-modal-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgb(4 7 10 / 78%);
+}
+
+.vd2-hardware-modal {
+  width: min(940px, 100%);
+  max-height: min(700px, calc(100vh - 36px));
+  overflow: auto;
+  border: 1px solid #68727d;
+  background: #252b32;
+  box-shadow: 0 16px 54px rgb(0 0 0 / 52%);
+}
+
+.vd2-hardware-modal > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #48515b;
+}
+
+.vd2-hardware-modal h2,
+.vd2-hardware-modal h3 { margin: 0; color: #f1c84b; }
+.vd2-hardware-modal h2 { font-size: 20px; }
+.vd2-hardware-modal h3 { margin-bottom: 8px; font-size: 13px; }
+
+.vd2-hardware-toolbar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  padding: 12px 14px 0;
+}
+
+.vd2-hardware-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.vd2-hardware-columns > section { min-width: 0; }
+
+.vd2-hardware-toggle,
+.vd2-tango-row {
+  width: 100%;
+  min-height: 70px;
+  margin-bottom: 8px;
+  border: 1px solid #59636d;
+  background: #343b44;
+}
+
+.vd2-hardware-toggle {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 10px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.vd2-hardware-toggle span,
+.vd2-tango-row strong { font-size: 15px; }
+.vd2-hardware-toggle small,
+.vd2-tango-row small,
+.vd2-tango-row em { color: #a9b3be; font-size: 11px; font-style: normal; overflow-wrap: anywhere; }
+.vd2-hardware-toggle small { grid-column: 1; }
+.vd2-hardware-toggle strong { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: #ff9696; }
+.vd2-hardware-toggle.is-on { border-color: #398e51; background: #1f6d36; }
+.vd2-hardware-toggle.is-on strong { color: #9bf0ac; }
+
+.vd2-tango-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.vd2-tango-row > div { display: grid; gap: 2px; }
+.vd2-tango-row > b { color: #ff9696; font-size: 12px; }
+.vd2-tango-row.is-on { border-color: #398e51; }
+.vd2-tango-row.is-on > b { color: #9bf0ac; }
+.vd2-tango-row button { min-width: 66px; }
+
 .vd2-tabs {
   display: flex;
   gap: 2px;

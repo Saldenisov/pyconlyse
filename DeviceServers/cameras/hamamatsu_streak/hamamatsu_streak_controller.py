@@ -540,9 +540,19 @@ class HamamatsuStreakController:
         self.status()
         # HPD-TA only services RemoteEx during brief DoEvents while Live/Sequence
         # runs. Querying every control there can stall the acquisition and loses the
-        # persistent command connection. Cached setup values remain valid instead.
-        if self.snapshot.remoteex_status.lower() == "busy":
+        # persistent command connection. ``Status()`` is obsolete and can retain
+        # a completed command such as ``AcqStop()``; only an active acquisition
+        # must suppress the hardware readback.
+        busy_command = self.snapshot.busy_command.lower()
+        acquisition_active = any(
+            marker in busy_command
+            for marker in ("acqstart", "seqstart", "hacq_mlive")
+        )
+        if self.snapshot.remoteex_status.lower() == "busy" and acquisition_active:
             return self.snapshot
+
+        self.snapshot.remoteex_status = "idle"
+        self.snapshot.busy_command = ""
 
         self.snapshot.application_version = self._safe_query(self.get_app_info, "Version")
         self.snapshot.application_running = bool(self.snapshot.application_version)
