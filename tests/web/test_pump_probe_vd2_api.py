@@ -79,3 +79,19 @@ def test_remoteex_routes_use_tango_commands(monkeypatch):
         assert stopped.get_json()["remoteex_running"] is False
 
     assert proxy.commands == [("StartRemoteEx", None), ("StopRemoteEx", None)]
+
+
+def test_initialize_route_returns_preflight_result(monkeypatch):
+    monkeypatch.setattr(
+        vd2_api_module,
+        "_initialize_experiment",
+        lambda: {"steps": [{"step": "DG645 Recall 9", "status": "applied; burst mode off"}]},
+    )
+    app = Flask(__name__)
+    app.register_blueprint(vd2_api_module.pump_probe_vd2_api)
+
+    with app.test_client() as client:
+        response = client.post("/api/pump-probe-vd2/initialize")
+
+    assert response.status_code == 200
+    assert response.get_json()["steps"][0]["step"] == "DG645 Recall 9"

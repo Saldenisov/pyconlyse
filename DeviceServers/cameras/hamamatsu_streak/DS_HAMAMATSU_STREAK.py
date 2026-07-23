@@ -824,6 +824,15 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.last_response_value = controller.last_response_text
         self.set_state(DevState.OFF)
 
+    @command(dtype_out=str)
+    def PrepareDG645ForHPDTA(self):
+        """Apply VD2 Recall 9 and verify that burst mode is disabled."""
+        self._prepare_dg645_for_hpdta()
+        self.last_response_value = (
+            f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)} applied; BURM=0"
+        )
+        return self.last_response_value
+
     @command
     def RefreshStatus(self):
         if self._live_start_thread is not None and self._live_start_thread.is_alive():

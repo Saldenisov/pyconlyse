@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from typing import Any, Callable, Dict
 
 from flask import Blueprint, jsonify, request
@@ -16,6 +17,16 @@ pump_probe_vd2_api = Blueprint(
 )
 
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
+DG645_DEVICE = "manip/sync/DG645"
+VD2_PDU_DEVICE = "manip/SD2/PDU_SD2"
+ASTOR_DEVICE = "tango/admin/everest"
+
+VD2_SERVERS = {
+    VD2_PDU_DEVICE: "DS_Netio_pdu/4_SD2",
+    DG645_DEVICE: "DS_DG645/1_DG645",
+    STREAK_DEVICE: "DS_HAMAMATSU_STREAK/1_hamamatsu_streak_main",
+}
+VD2_REQUIRED_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
 
 READ_ATTRIBUTES = {
     "connected": "connected",
@@ -112,6 +123,7 @@ ALLOWED_COMMANDS = {
     "ShutdownRemoteEx",
     "StartRemoteEx",
     "StopRemoteEx",
+    "PrepareDG645ForHPDTA",
     "StartLive",
     "AcquireSingle",
     "Acquire",
@@ -167,6 +179,114 @@ def _control_error(exc: Exception) -> str:
             "C13440 hardware profile in HPD-TA, then reconnect and start Live again."
         )
     return message
+
+
+def _astor() -> DeviceProxy:
+    proxy = DeviceProxy(ASTOR_DEVICE)
+    proxy.set_timeout_millis(15000)
+    return proxy
+
+
+def _wait_for_device(device: str, timeout_s: float = 15.0) -> DeviceProxy:
+    deadline = time.monotonic() + timeout_s
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            proxy = DeviceProxy(device)
+            proxy.set_timeout_millis(8000)
+            proxy.state()
+            return proxy
+        except Exception as exc:
+            last_error = exc
+            time.sleep(0.5)
+    raise RuntimeError(f"{device} did not become available: {last_error}")
+
+
+def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
+    try:
+        proxy = _wait_for_device(device, timeout_s=2.0)
+        state = str(proxy.state()).split(".")[-1].upper()
+        if state not in {"FAULT", "UNKNOWN"}:
+            steps.append({"step": f"Tango {device}", "status": "already running"})
+            return proxy
+    except Exception:
+        pass
+
+    server = VD2_SERVERS[device]
+    astor = _astor()
+    try:
+        astor.command_inout("DevStart", server)
+    except Exception as exc:
+        if "already running" not in str(exc).lower():
+            raise
+        try:
+            astor.command_inout("DevStop", server)
+        except Exception:
+            pass
+        time.sleep(1.0)
+        astor.command_inout("DevStart", server)
+    proxy = _wait_for_device(device)
+    steps.append({"step": f"Tango {device}", "status": "started by Astor"})
+    return proxy
+
+
+def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+    ids = [int(value) for value in pdu.read_attribute("ids").value]
+    states = [int(value) for value in pdu.read_attribute("states").value]
+    positions = {output_id: index for index, output_id in enumerate(ids)}
+    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    if missing:
+        raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
+    desired = list(states)
+    changed = []
+    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+        position = positions[output_id]
+        if desired[position] != 1:
+            desired[position] = 1
+            changed.append(label)
+    if changed:
+        pdu.command_inout("set_channels_states", desired)
+        time.sleep(2.0)
+    confirmed = [int(value) for value in pdu.read_attribute("states").value]
+    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+        if confirmed[positions[output_id]] != 1:
+            raise RuntimeError(f"PDU SD2 did not enable {label}")
+    steps.append(
+        {
+            "step": "VD2 power",
+            "status": "enabled" if changed else "already enabled",
+        }
+    )
+
+
+def _initialize_experiment() -> dict[str, Any]:
+    steps: list[dict[str, str]] = []
+    pdu = _ensure_server(VD2_PDU_DEVICE, steps)
+    _enable_vd2_power(pdu, steps)
+    _ensure_server(DG645_DEVICE, steps)
+    streak = _ensure_server(STREAK_DEVICE, steps)
+
+    streak.command_inout("PrepareDG645ForHPDTA")
+    steps.append({"step": "DG645 Recall 9", "status": "applied; burst mode off"})
+
+    if not bool(_value(streak, "connected")):
+        streak.command_inout("StartRemoteEx")
+    streak = _wait_for_device(STREAK_DEVICE)
+    if not bool(_value(streak, "connected")):
+        raise RuntimeError("RemoteEx did not connect after startup")
+    steps.append({"step": "RemoteEx", "status": "connected"})
+
+    if not bool(_value(streak, "application_running")):
+        streak.command_inout("StartApplication")
+    deadline = time.monotonic() + 45.0
+    while time.monotonic() < deadline:
+        if bool(_value(streak, "application_running")):
+            steps.append({"step": "HPD-TA", "status": "running"})
+            return {"steps": steps, "device": _snapshot(streak)}
+        time.sleep(1.0)
+    raise RuntimeError(
+        "HPD-TA did not become ready. Check the Everest desktop for a hardware-profile dialog."
+    )
 
 
 def _to_display_pixels(pixels: bytes, bytes_per_pixel: int) -> bytes:
@@ -263,6 +383,15 @@ def runtime_state():
                 "device": snapshot,
             }
         )
+    except Exception as exc:
+        return jsonify({"success": False, "error": _control_error(exc)}), 503
+
+
+@pump_probe_vd2_api.route("/initialize", methods=["POST"])
+def initialize_experiment():
+    try:
+        result = _initialize_experiment()
+        return jsonify({"success": True, **result})
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503
 

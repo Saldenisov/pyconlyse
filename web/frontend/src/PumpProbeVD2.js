@@ -740,6 +740,25 @@ function PumpProbeVD2() {
     await loadStartupReadiness();
   }, [loadStartupReadiness, refreshStatus]);
 
+  const initializeExperiment = useCallback(async () => {
+    setBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/initialize`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Experiment initialization failed');
+      if (payload.device) setState(payload.device);
+      await refreshAll();
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [refreshAll]);
+
   const controlRemoteEx = useCallback(async (action) => {
     setBusy(true);
     try {
@@ -1034,6 +1053,7 @@ function PumpProbeVD2() {
           <span className={`vd2-status ${state?.application_running ? 'online' : 'offline'}`}>HPD-TA {state?.application_running ? 'running' : 'stopped'}</span>
         </div>
         <div className="vd2-header-actions">
+          <button type="button" className="vd2-initialize" onClick={initializeExperiment} disabled={busy}>Initialize experiment</button>
           <button type="button" onClick={() => setHardwareOpen(true)} disabled={busy}>Hardware</button>
           <button type="button" onClick={refreshAll} disabled={busy}>Refresh</button>
           <button type="button" className={runtime?.remoteex_running ? 'vd2-stop' : ''} onClick={() => controlRemoteEx(runtime?.remoteex_running ? 'stop' : 'start')} disabled={busy}>
