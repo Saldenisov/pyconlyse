@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict
 from flask import Blueprint, jsonify, request
 from tango import DeviceProxy
 
+from everest_hpdta_runtime import EverestHpdtaRuntime, EverestRuntimeError
 from vd2_measurement_protocol import Vd2MeasurementProtocol, Vd2ProtocolError
 
 pump_probe_vd2_api = Blueprint(
@@ -127,6 +128,7 @@ def _proxy() -> DeviceProxy:
 
 
 _measurement_protocol = Vd2MeasurementProtocol(_proxy)
+_everest_runtime = EverestHpdtaRuntime()
 
 
 def _value(proxy: DeviceProxy, attribute: str) -> Any:
@@ -247,6 +249,37 @@ def protocol_start():
         return jsonify({"success": True, **state})
     except Vd2ProtocolError as exc:
         return jsonify({"success": False, "error": str(exc)}), 409
+
+
+@pump_probe_vd2_api.route("/runtime/state", methods=["GET"])
+def runtime_state():
+    try:
+        return jsonify({"success": True, **_everest_runtime.state()})
+    except EverestRuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+
+
+@pump_probe_vd2_api.route("/runtime/remoteex/<action>", methods=["POST"])
+def remoteex_runtime(action: str):
+    try:
+        if action == "start":
+            runtime = _everest_runtime.start_remoteex()
+            # The RemoteEx process is local to Everest. Connect its Tango wrapper
+            # only after the TCP listener is confirmed alive.
+            proxy = _proxy()
+            proxy.command_inout("Connect")
+            return jsonify({"success": True, **runtime, "device": _snapshot(proxy)})
+        if action == "stop":
+            try:
+                _proxy().command_inout("Disconnect")
+            except Exception:
+                pass
+            return jsonify({"success": True, **_everest_runtime.stop_remoteex()})
+        return jsonify({"success": False, "error": f"Unsupported RemoteEx action: {action}"}), 404
+    except EverestRuntimeError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 503
+    except Exception as exc:
+        return jsonify({"success": False, "error": _control_error(exc)}), 503
 
 
 @pump_probe_vd2_api.route("/parameter/<name>", methods=["POST"])

@@ -293,6 +293,8 @@
 .vd2-phase-dialog > p { margin: 0; padding: 18px 14px 6px; color: #d3dbe3; line-height: 1.45; }
 .vd2-phase-dialog > footer { justify-content: flex-end; border-top: 1px solid #48515b; }
 .vd2-countdown { display: block; padding: 10px 14px 18px; color: #ffe176; font-size: 28px; }
+.vd2-start-reasons { margin: 0; padding: 16px 22px 16px 34px; color: #d3dbe3; line-height: 1.5; }
+.vd2-start-reasons li + li { margin-top: 7px; }
 
 .vd2-control-strip {
   display: grid;
@@ -320,6 +322,8 @@
 
 .vd2-acquisition-actions button { min-width: 66px; }
 .vd2-stop { border-color: #b45050 !important; color: #ffb2b2 !important; }
+.vd2-guarded-disabled { border-color: #6e6262 !important; color: #b7a8a8 !important; opacity: 0.62; }
+.vd2-guarded-disabled:hover { background: #343b44 !important; }
 
 .vd2-remote-details {
   display: grid;

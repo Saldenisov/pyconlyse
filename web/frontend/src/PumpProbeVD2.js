@@ -476,6 +476,19 @@ function Vd2PhaseDialog({ prepared, remaining, starting, onCancel, onStart }) {
   );
 }
 
+function Vd2StartBlockedDialog({ reasons, onClose }) {
+  if (!reasons?.length) return null;
+  return (
+    <div className="vd2-modal-backdrop" onClick={onClose}>
+      <section className="vd2-phase-dialog" onClick={(event) => event.stopPropagation()} aria-label="HPD-TA start requirements">
+        <header><h2>HPD-TA unavailable</h2><button type="button" onClick={onClose}>Close</button></header>
+        <ul className="vd2-start-reasons">{reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+        <footer><button type="button" onClick={onClose}>Close</button></footer>
+      </section>
+    </div>
+  );
+}
+
 function Vd2HardwareModal({ open, power, tango, loading, error, onClose, onRefresh, onToggle, onAllPower, onServer }) {
   if (!open) return null;
   const outputFor = (channel) => power.outputs.find((output) => Number(output.id) === channel.outputId);
@@ -565,6 +578,8 @@ function PumpProbeVD2() {
   const [preparedPhase, setPreparedPhase] = useState(null);
   const [preparationTick, setPreparationTick] = useState(Date.now());
   const [protocolStarting, setProtocolStarting] = useState(false);
+  const [runtime, setRuntime] = useState(null);
+  const [startBlockReasons, setStartBlockReasons] = useState([]);
   const requestActive = useRef(false);
   const previewRequestActive = useRef(false);
   const previewCanvas = useRef(null);
@@ -699,6 +714,52 @@ function PumpProbeVD2() {
     return loadState();
   }, [loadState, runCommand, state?.connected]);
 
+  const loadStartupReadiness = useCallback(async () => {
+    try {
+      const [powerResponse, runtimeResponse] = await Promise.all([
+        fetch('/api/device/manip/SD2/PDU_SD2/pdu/outputs', { credentials: 'include' }),
+        fetch(`${API_BASE}/runtime/state`, { credentials: 'include' }),
+      ]);
+      const powerPayload = await powerResponse.json();
+      const runtimePayload = await runtimeResponse.json();
+      if (!powerResponse.ok || powerPayload.success === false) throw new Error(powerPayload.error || 'Could not read PDU SD2');
+      if (!runtimeResponse.ok || runtimePayload.success === false) throw new Error(runtimePayload.error || 'Could not read Everest runtime');
+      setHardwarePower({ outputs: powerPayload.outputs || [] });
+      setRuntime(runtimePayload);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadStartupReadiness();
+  }, [loadStartupReadiness]);
+
+  const refreshAll = useCallback(async () => {
+    await refreshStatus();
+    await loadStartupReadiness();
+  }, [loadStartupReadiness, refreshStatus]);
+
+  const controlRemoteEx = useCallback(async (action) => {
+    setBusy(true);
+    try {
+      const response = await fetch(`${API_BASE}/runtime/remoteex/${action}`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || `Could not ${action} RemoteEx`);
+      setRuntime(payload);
+      if (payload.device) setState(payload.device);
+      await loadState();
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setBusy(false);
+    }
+  }, [loadState]);
+
   const updateProtocolSetting = useCallback((name, value) => {
     setProtocolSettings((current) => ({ ...current, [name]: value }));
   }, []);
@@ -776,6 +837,9 @@ function PumpProbeVD2() {
       const powerPayload = await powerResponse.json();
       if (!powerResponse.ok || powerPayload.success === false) throw new Error(powerPayload.error || 'Could not read PDU SD2');
       setHardwarePower({ outputs: powerPayload.outputs || [] });
+      const runtimeResponse = await fetch(`${API_BASE}/runtime/state`, { credentials: 'include' });
+      const runtimePayload = await runtimeResponse.json();
+      if (runtimeResponse.ok && runtimePayload.success !== false) setRuntime(runtimePayload);
       const entries = await Promise.all(VD2_TANGO_SERVERS.map(async (server) => {
         try {
           const response = await fetch(`/api/device/${server.device}/state`, { credentials: 'include' });
@@ -930,6 +994,31 @@ function PumpProbeVD2() {
   const selectedRoi = rois.find((roi) => roi.id === selectedRoiId) || null;
   const values = state?.values || {};
   const statusClass = state?.state === 'ON' || state?.state === 'RUNNING' ? 'online' : 'offline';
+  const requiredPower = new Map((hardwarePower.outputs || []).map((output) => [Number(output.id), Number(output.state) === 1]));
+  const hpdtaStartReasons = [];
+  if (!runtime) {
+    hpdtaStartReasons.push('Runtime status is not available. Press Refresh.');
+  } else if (!runtime.remoteex_running) {
+    hpdtaStartReasons.push('Start RemoteEx first.');
+  }
+  if (!requiredPower.has(1) || !requiredPower.has(2)) {
+    hpdtaStartReasons.push('PDU SD2 status is not available. Press Refresh.');
+  } else {
+    if (!requiredPower.get(1)) hpdtaStartReasons.push('Turn on Streak camera / spectrograph in Hardware.');
+    if (!requiredPower.get(2)) hpdtaStartReasons.push('Turn on DG645 in Hardware.');
+  }
+  const hpdtaCanStart = hpdtaStartReasons.length === 0;
+  const handleHpdtaButton = () => {
+    if (state?.application_running) {
+      runCommand('StopApplication');
+      return;
+    }
+    if (!hpdtaCanStart) {
+      setStartBlockReasons(hpdtaStartReasons);
+      return;
+    }
+    runCommand('StartApplication');
+  };
 
   return (
     <main className="vd2-page">
@@ -946,19 +1035,19 @@ function PumpProbeVD2() {
         </div>
         <div className="vd2-header-actions">
           <button type="button" onClick={() => setHardwareOpen(true)} disabled={busy}>Hardware</button>
-          <button type="button" onClick={refreshStatus} disabled={busy}>Refresh</button>
-          <button type="button" onClick={() => runCommand(state?.connected ? 'Disconnect' : 'Connect')} disabled={busy}>
-            {state?.connected ? 'Disconnect' : 'Connect'}
+          <button type="button" onClick={refreshAll} disabled={busy}>Refresh</button>
+          <button type="button" className={runtime?.remoteex_running ? 'vd2-stop' : ''} onClick={() => controlRemoteEx(runtime?.remoteex_running ? 'stop' : 'start')} disabled={busy}>
+            {runtime?.remoteex_running ? 'Stop RemoteEx' : 'Start RemoteEx'}
           </button>
           <button
             type="button"
-            className={state?.application_running ? 'vd2-stop' : ''}
-            onClick={() => runCommand(state?.application_running ? 'StopApplication' : 'StartApplication')}
-            disabled={busy || (!state?.application_running && !state?.connected)}
+            className={`${state?.application_running ? 'vd2-stop' : ''} ${!state?.application_running && !hpdtaCanStart ? 'vd2-guarded-disabled' : ''}`}
+            aria-disabled={!state?.application_running && !hpdtaCanStart}
+            onClick={handleHpdtaButton}
+            disabled={busy}
           >
             {state?.application_running ? 'Close HPD-TA' : 'Start HPD-TA'}
           </button>
-          <button type="button" className="vd2-stop" onClick={() => runCommand('ShutdownRemoteEx')} disabled={busy || !state?.connected}>Stop RemoteEx</button>
         </div>
       </header>
 
@@ -1144,6 +1233,7 @@ function PumpProbeVD2() {
         onCancel={() => setPreparedPhase(null)}
         onStart={startProtocolPhase}
       />
+      <Vd2StartBlockedDialog reasons={startBlockReasons} onClose={() => setStartBlockReasons([])} />
     </main>
   );
 }
