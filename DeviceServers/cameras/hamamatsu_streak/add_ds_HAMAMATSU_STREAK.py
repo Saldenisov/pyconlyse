@@ -16,7 +16,7 @@ names = {
         "async_timeout_s": 120.0,
         "command_encoding": "ascii",
         "connect_data_port": 0,
-        "start_application_on_turn_on": 1,
+        "start_application_on_turn_on": 0,
         "start_on_init": 0,
     }
 }
