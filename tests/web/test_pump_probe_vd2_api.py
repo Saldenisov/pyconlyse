@@ -14,8 +14,14 @@ from vd2_measurement_protocol import Vd2MeasurementProtocol
 
 
 class FakeProxy:
+    def __init__(self):
+        self.commands = []
+
     def set_timeout_millis(self, value):
         return None
+
+    def state(self):
+        return "ON"
 
     def read_attribute(self, name):
         class Attribute:
@@ -26,6 +32,7 @@ class FakeProxy:
         return None
 
     def command_inout(self, name, value=None):
+        self.commands.append((name, value))
         return None
 
 
@@ -50,3 +57,25 @@ def test_protocol_routes_start_one_brew_his(monkeypatch):
 
     protocol.wait(1)
     assert protocol.status()["status"] == "completed"
+
+
+def test_remoteex_routes_use_tango_commands(monkeypatch):
+    proxy = FakeProxy()
+    monkeypatch.setattr(vd2_api_module, "_proxy", lambda: proxy)
+    app = Flask(__name__)
+    app.register_blueprint(vd2_api_module.pump_probe_vd2_api)
+
+    with app.test_client() as client:
+        state = client.get("/api/pump-probe-vd2/runtime/state")
+        assert state.status_code == 200
+        assert state.get_json()["remoteex_running"] is True
+
+        started = client.post("/api/pump-probe-vd2/runtime/remoteex/start")
+        assert started.status_code == 200
+        assert started.get_json()["remoteex_running"] is True
+
+        stopped = client.post("/api/pump-probe-vd2/runtime/remoteex/stop")
+        assert stopped.status_code == 200
+        assert stopped.get_json()["remoteex_running"] is False
+
+    assert proxy.commands == [("StartRemoteEx", None), ("StopRemoteEx", None)]

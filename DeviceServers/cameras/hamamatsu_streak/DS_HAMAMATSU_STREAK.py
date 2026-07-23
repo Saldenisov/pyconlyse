@@ -3,8 +3,10 @@ from __future__ import annotations
 
 import base64
 import json
+import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Union
 
@@ -43,6 +45,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
     connect_data_port = device_property(dtype=int, default_value=0)
     start_application_on_turn_on = device_property(dtype=int, default_value=1)
     start_on_init = device_property(dtype=int, default_value=0)
+    remoteex_task_name = device_property(
+        dtype=str, default_value="Pyconlyse-TaRemoteEx"
+    )
+    remoteex_start_timeout_s = device_property(dtype=float, default_value=12.0)
 
     def init_device(self):
         self.client = None
@@ -177,15 +183,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     def turn_on_local(self) -> Union[int, str]:
         try:
-            self.client = self._create_client()
-            self.controller = HamamatsuStreakController(
-                self.client,
-                ini_path=str(self.ini_path or ""),
-                default_save_dir=str(self.default_save_dir or ""),
-                async_timeout=float(self.async_timeout_s or 120.0),
-            )
-            self.controller.connect(connect_data_port=bool(int(self.connect_data_port or 0)))
-            self.connected_value = True
+            self._connect_remoteex()
 
             if bool(int(self.start_application_on_turn_on or 0)):
                 self.controller.start_application()
@@ -215,6 +213,24 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.application_running_value = False
             self.set_state(DevState.FAULT)
             return f"Could not start Hamamatsu streak RemoteEx layer: {exc}"
+
+    def _connect_remoteex(self) -> None:
+        """Attach this Tango device to an already-running local RemoteEx."""
+        client = self._create_client()
+        controller = HamamatsuStreakController(
+            client,
+            ini_path=str(self.ini_path or ""),
+            default_save_dir=str(self.default_save_dir or ""),
+            async_timeout=float(self.async_timeout_s or 120.0),
+        )
+        try:
+            controller.connect(connect_data_port=bool(int(self.connect_data_port or 0)))
+        except Exception:
+            client.close()
+            raise
+        self.client = client
+        self.controller = controller
+        self.connected_value = True
 
     def turn_off_local(self) -> Union[int, str]:
         try:
@@ -720,6 +736,65 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command
     def Disconnect(self):
         self.turn_off()
+
+    @command
+    def StartRemoteEx(self):
+        """Launch RemoteEx locally, then connect this Tango device to it.
+
+        The web application never starts Windows processes directly. Astor starts
+        this device server; this command starts only RemoteEx through its Windows
+        scheduled task. HPD-TA itself is started later by StartApplication.
+        """
+        if self.controller is not None and self.controller.is_connected:
+            return
+
+        task_name = str(self.remoteex_task_name or "Pyconlyse-TaRemoteEx")
+        completed = subprocess.run(
+            ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        if completed.returncode != 0:
+            detail = (completed.stderr or completed.stdout or "scheduled task failed").strip()
+            raise RuntimeError(f"Could not start RemoteEx task {task_name}: {detail}")
+
+        deadline = time.monotonic() + float(self.remoteex_start_timeout_s or 12.0)
+        last_error = None
+        while time.monotonic() < deadline:
+            try:
+                self._connect_remoteex()
+                self.application_running_value = False
+                self.remoteex_status_value = "idle"
+                self.busy_command_value = ""
+                self.set_state(DevState.ON)
+                return
+            except Exception as exc:
+                last_error = exc
+                time.sleep(0.4)
+        self.connected_value = False
+        self.application_running_value = False
+        self.remoteex_status_value = "disconnected"
+        self.set_state(DevState.FAULT)
+        raise RuntimeError(f"RemoteEx did not accept TCP connections: {last_error}")
+
+    @command
+    def StopRemoteEx(self):
+        """Stop RemoteEx after HPD-TA has been closed."""
+        if self.application_running_value:
+            raise RuntimeError("Close HPD-TA before stopping RemoteEx")
+        controller = self._require_controller()
+        controller.shutdown_remoteex()
+        self.controller = None
+        self.client = None
+        self.connected_value = False
+        self.application_running_value = False
+        self.remoteex_status_value = "disconnected"
+        self.busy_command_value = ""
+        self.last_command_value = controller.last_command
+        self.last_response_value = controller.last_response_text
+        self.set_state(DevState.OFF)
 
     @command
     def RefreshStatus(self):
