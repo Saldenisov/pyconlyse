@@ -262,6 +262,17 @@ class DS_HAMAMATSU_STREAK(DS_General):
             encoding=str(self.command_encoding or "ascii"),
         )
 
+    @staticmethod
+    def _windows_process_running(image_name: str) -> bool:
+        completed = subprocess.run(
+            ["tasklist.exe", "/fi", f"imagename eq {image_name}", "/nh"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return image_name.lower() in completed.stdout.lower()
+
     def _require_controller(self) -> HamamatsuStreakController:
         if self.controller is None or not self.controller.is_connected:
             raise RuntimeError("Hamamatsu streak controller is not connected")
@@ -811,10 +822,26 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command
     def StopRemoteEx(self):
         """Stop RemoteEx after HPD-TA has been closed."""
-        if self.application_running_value:
+        if self.application_running_value and self._windows_process_running("HPDTA95.exe"):
             raise RuntimeError("Close HPD-TA before stopping RemoteEx")
+        self.application_running_value = False
         controller = self._require_controller()
-        controller.shutdown_remoteex()
+        try:
+            controller.shutdown_remoteex()
+        except Exception as exc:
+            # AppEnd can make RemoteEx close its command socket before it sends
+            # the final reply. The local Tango server owns the process, so it
+            # can complete shutdown without relying on that broken socket.
+            completed = subprocess.run(
+                ["taskkill.exe", "/im", "TaRemoteEx.exe", "/f"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if completed.returncode != 0 and self._windows_process_running("TaRemoteEx.exe"):
+                detail = (completed.stderr or completed.stdout or str(exc)).strip()
+                raise RuntimeError(f"Could not stop TaRemoteEx: {detail}") from exc
         self.controller = None
         self.client = None
         self.connected_value = False
@@ -908,7 +935,15 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command
     def StopApplication(self):
         controller = self._require_controller()
-        controller.stop_application()
+        try:
+            controller.stop_application()
+        except Exception as exc:
+            # HPD-TA may have accepted AppEnd() and closed RemoteEx before the
+            # reply reaches us. Confirm the local process rather than leaving
+            # a stale application_running flag that blocks shutdown.
+            if self._windows_process_running("HPDTA95.exe"):
+                raise
+            self.last_response_value = f"AppEnd closed RemoteEx socket: {exc}"
         self.application_running_value = False
         self.remoteex_status_value = "idle"
         self.busy_command_value = ""
