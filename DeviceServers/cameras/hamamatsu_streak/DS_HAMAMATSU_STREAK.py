@@ -115,6 +115,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
         except Exception:
             pass
         self.register_variables_for_archive()
+        # This server can run before RemoteEx. It is the launcher for that
+        # process, so a closed TCP port is a normal initial state, not a Tango
+        # device fault.
+        self.set_state(DevState.ON)
         if bool(int(self.start_on_init or 0)) and self._device_id_internal != -1:
             try:
                 self.turn_on()
@@ -164,7 +168,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.connected_value = False
             self.application_running_value = False
             self.remoteex_status_value = "disconnected"
-            self.set_state(DevState.OFF)
+            self.set_state(DevState.ON)
             return 0
 
         try:
@@ -211,7 +215,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.controller = None
             self.connected_value = False
             self.application_running_value = False
-            self.set_state(DevState.FAULT)
+            self.remoteex_status_value = "disconnected"
+            self.set_state(DevState.ON)
             return f"Could not start Hamamatsu streak RemoteEx layer: {exc}"
 
     def _connect_remoteex(self) -> None:
