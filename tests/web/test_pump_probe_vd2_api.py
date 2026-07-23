@@ -95,3 +95,19 @@ def test_initialize_route_returns_preflight_result(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["steps"][0]["step"] == "DG645 Recall 9"
+
+
+def test_deinitialize_route_returns_shutdown_result(monkeypatch):
+    monkeypatch.setattr(
+        vd2_api_module,
+        "_deinitialize_experiment",
+        lambda: {"steps": [{"step": "VD2 power", "status": "disabled"}]},
+    )
+    app = Flask(__name__)
+    app.register_blueprint(vd2_api_module.pump_probe_vd2_api)
+
+    with app.test_client() as client:
+        response = client.post("/api/pump-probe-vd2/deinitialize")
+
+    assert response.status_code == 200
+    assert response.get_json()["steps"][0]["status"] == "disabled"

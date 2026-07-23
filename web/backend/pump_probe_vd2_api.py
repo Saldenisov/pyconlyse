@@ -259,6 +259,35 @@ def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
     )
 
 
+def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+    ids = [int(value) for value in pdu.read_attribute("ids").value]
+    states = [int(value) for value in pdu.read_attribute("states").value]
+    positions = {output_id: index for index, output_id in enumerate(ids)}
+    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    if missing:
+        raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
+    desired = list(states)
+    changed = []
+    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+        position = positions[output_id]
+        if desired[position] != 0:
+            desired[position] = 0
+            changed.append(label)
+    if changed:
+        pdu.command_inout("set_channels_states", desired)
+        time.sleep(1.0)
+    confirmed = [int(value) for value in pdu.read_attribute("states").value]
+    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+        if confirmed[positions[output_id]] != 0:
+            raise RuntimeError(f"PDU SD2 did not disable {label}")
+    steps.append(
+        {
+            "step": "VD2 power",
+            "status": "disabled" if changed else "already disabled",
+        }
+    )
+
+
 def _initialize_experiment() -> dict[str, Any]:
     steps: list[dict[str, str]] = []
     pdu = _ensure_server(VD2_PDU_DEVICE, steps)
@@ -287,6 +316,56 @@ def _initialize_experiment() -> dict[str, Any]:
     raise RuntimeError(
         "HPD-TA did not become ready. Check the Everest desktop for a hardware-profile dialog."
     )
+
+
+def _deinitialize_experiment() -> dict[str, Any]:
+    """Leave VD2 hardware dark and electrically de-energized."""
+    steps: list[dict[str, str]] = []
+    errors: list[str] = []
+
+    try:
+        streak = _wait_for_device(STREAK_DEVICE, timeout_s=5.0)
+        if bool(_value(streak, "application_running")):
+            try:
+                streak.command_inout("StopAcquisition")
+                steps.append({"step": "Streak acquisition", "status": "stopped"})
+            except Exception as exc:
+                errors.append(f"Stop acquisition: {exc}")
+
+            for attribute, label in (
+                ("streak_shutter", "Streak-camera shutter"),
+                ("spectrograph_shutter", "Kymera shutter"),
+            ):
+                try:
+                    streak.write_attribute(attribute, "Closed")
+                    steps.append({"step": label, "status": "closed"})
+                except Exception as exc:
+                    errors.append(f"{label}: {exc}")
+
+            try:
+                streak.command_inout("StopApplication")
+                steps.append({"step": "HPD-TA", "status": "closed"})
+            except Exception as exc:
+                errors.append(f"Close HPD-TA: {exc}")
+
+        if bool(_value(streak, "connected")):
+            try:
+                streak.command_inout("StopRemoteEx")
+                steps.append({"step": "RemoteEx", "status": "stopped"})
+            except Exception as exc:
+                errors.append(f"Stop RemoteEx: {exc}")
+    except Exception as exc:
+        errors.append(f"Hamamatsu Tango: {exc}")
+
+    try:
+        pdu = _ensure_server(VD2_PDU_DEVICE, steps)
+        _disable_vd2_power(pdu, steps)
+    except Exception as exc:
+        errors.append(f"VD2 power-down: {exc}")
+
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    return {"steps": steps}
 
 
 def _to_display_pixels(pixels: bytes, bytes_per_pixel: int) -> bytes:
@@ -391,6 +470,15 @@ def runtime_state():
 def initialize_experiment():
     try:
         result = _initialize_experiment()
+        return jsonify({"success": True, **result})
+    except Exception as exc:
+        return jsonify({"success": False, "error": _control_error(exc)}), 503
+
+
+@pump_probe_vd2_api.route("/deinitialize", methods=["POST"])
+def deinitialize_experiment():
+    try:
+        result = _deinitialize_experiment()
         return jsonify({"success": True, **result})
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503

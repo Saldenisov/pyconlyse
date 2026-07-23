@@ -72,6 +72,7 @@
 
 .vd2-header-actions button { min-width: 76px; }
 .vd2-header-actions .vd2-initialize { border-color: #3f9b66; color: #8ce8ad; }
+.vd2-header-actions .vd2-deinitialize { border-color: #a65757; color: #ffadad; }
 .vd2-error { margin-top: 10px; padding: 9px 12px; border: 1px solid #a06f28; background: #30240d; color: #ffd669; }
 
 .vd2-modal-backdrop {
