@@ -825,13 +825,19 @@ class DS_HAMAMATSU_STREAK(DS_General):
         if self.application_running_value and self._windows_process_running("HPDTA95.exe"):
             raise RuntimeError("Close HPD-TA before stopping RemoteEx")
         self.application_running_value = False
-        controller = self._require_controller()
-        try:
-            controller.shutdown_remoteex()
-        except Exception as exc:
+        controller = self.controller
+        shutdown_error = None
+        if controller is not None and controller.is_connected:
+            try:
+                controller.shutdown_remoteex()
+            except Exception as exc:
+                shutdown_error = exc
+
+        if self._windows_process_running("TaRemoteEx.exe"):
             # AppEnd can make RemoteEx close its command socket before it sends
             # the final reply. The local Tango server owns the process, so it
-            # can complete shutdown without relying on that broken socket.
+            # can complete shutdown without relying on that broken socket. This
+            # also handles a Tango-server restart between AppEnd and shutdown.
             completed = subprocess.run(
                 ["taskkill.exe", "/im", "TaRemoteEx.exe", "/f"],
                 capture_output=True,
@@ -840,16 +846,16 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 check=False,
             )
             if completed.returncode != 0 and self._windows_process_running("TaRemoteEx.exe"):
-                detail = (completed.stderr or completed.stdout or str(exc)).strip()
-                raise RuntimeError(f"Could not stop TaRemoteEx: {detail}") from exc
+                detail = (completed.stderr or completed.stdout or str(shutdown_error)).strip()
+                raise RuntimeError(f"Could not stop TaRemoteEx: {detail}") from shutdown_error
         self.controller = None
         self.client = None
         self.connected_value = False
         self.application_running_value = False
         self.remoteex_status_value = "disconnected"
         self.busy_command_value = ""
-        self.last_command_value = controller.last_command
-        self.last_response_value = controller.last_response_text
+        self.last_command_value = controller.last_command if controller is not None else "taskkill TaRemoteEx.exe"
+        self.last_response_value = controller.last_response_text if controller is not None else "TaRemoteEx stopped"
         self.set_state(DevState.OFF)
 
     @command(dtype_out=str)

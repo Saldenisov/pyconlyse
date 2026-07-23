@@ -348,12 +348,11 @@ def _deinitialize_experiment() -> dict[str, Any]:
             except Exception as exc:
                 errors.append(f"Close HPD-TA: {exc}")
 
-        if bool(_value(streak, "connected")):
-            try:
-                streak.command_inout("StopRemoteEx")
-                steps.append({"step": "RemoteEx", "status": "stopped"})
-            except Exception as exc:
-                errors.append(f"Stop RemoteEx: {exc}")
+        try:
+            streak.command_inout("StopRemoteEx")
+            steps.append({"step": "RemoteEx", "status": "stopped"})
+        except Exception as exc:
+            errors.append(f"Stop RemoteEx: {exc}")
     except Exception as exc:
         errors.append(f"Hamamatsu Tango: {exc}")
 
