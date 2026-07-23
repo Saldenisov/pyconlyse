@@ -914,6 +914,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command(dtype_in=str, dtype_out=str)
     def SaveCurrentSequence(self, path: str):
         controller = self._require_controller()
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
         saved = controller.save_current_sequence_his(path)
         self.last_saved_sequence_path_value = saved
         self.get_controller_status()

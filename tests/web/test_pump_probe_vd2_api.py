@@ -1,0 +1,52 @@
+import sys
+from pathlib import Path
+
+from flask import Flask
+
+
+ROOT = Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "web" / "backend"
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+
+import pump_probe_vd2_api as vd2_api_module
+from vd2_measurement_protocol import Vd2MeasurementProtocol
+
+
+class FakeProxy:
+    def set_timeout_millis(self, value):
+        return None
+
+    def read_attribute(self, name):
+        class Attribute:
+            value = True
+        return Attribute()
+
+    def write_attribute(self, name, value):
+        return None
+
+    def command_inout(self, name, value=None):
+        return None
+
+
+def test_protocol_routes_start_one_brew_his(monkeypatch):
+    protocol = Vd2MeasurementProtocol(FakeProxy)
+    monkeypatch.setattr(vd2_api_module, "_measurement_protocol", protocol)
+    app = Flask(__name__)
+    app.register_blueprint(vd2_api_module.pump_probe_vd2_api)
+
+    with app.test_client() as client:
+        initial = client.get("/api/pump-probe-vd2/protocol/state")
+        assert initial.get_json()["status"] == "idle"
+
+        started = client.post("/api/pump-probe-vd2/protocol/start", json={
+            "phase": "BREW",
+            "frames_per_his": 4,
+            "output_root": r"E:\\DATA_VD2",
+            "run_name": "test_run",
+        })
+        assert started.status_code == 200
+        assert started.get_json()["his_path"].endswith(r"test_run\NOISE.his")
+
+    protocol.wait(1)
+    assert protocol.status()["status"] == "completed"

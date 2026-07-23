@@ -9,6 +9,8 @@ from typing import Any, Callable, Dict
 from flask import Blueprint, jsonify, request
 from tango import DeviceProxy
 
+from vd2_measurement_protocol import Vd2MeasurementProtocol, Vd2ProtocolError
+
 pump_probe_vd2_api = Blueprint(
     "pump_probe_vd2_api", __name__, url_prefix="/api/pump-probe-vd2"
 )
@@ -124,6 +126,9 @@ def _proxy() -> DeviceProxy:
     return proxy
 
 
+_measurement_protocol = Vd2MeasurementProtocol(_proxy)
+
+
 def _value(proxy: DeviceProxy, attribute: str) -> Any:
     return proxy.read_attribute(attribute).value
 
@@ -222,6 +227,26 @@ def preview():
         return jsonify({"success": True, "frame_available": True, **frame})
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503
+
+
+@pump_probe_vd2_api.route("/protocol/state", methods=["GET"])
+def protocol_state():
+    return jsonify({"success": True, **_measurement_protocol.status()})
+
+
+@pump_probe_vd2_api.route("/protocol/start", methods=["POST"])
+def protocol_start():
+    payload = request.get_json(silent=True) or {}
+    try:
+        state = _measurement_protocol.start(
+            phase=payload.get("phase"),
+            frames_per_his=payload.get("frames_per_his"),
+            output_root=payload.get("output_root"),
+            run_name=payload.get("run_name"),
+        )
+        return jsonify({"success": True, **state})
+    except Vd2ProtocolError as exc:
+        return jsonify({"success": False, "error": str(exc)}), 409
 
 
 @pump_probe_vd2_api.route("/parameter/<name>", methods=["POST"])

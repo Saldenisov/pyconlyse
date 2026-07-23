@@ -71,6 +71,30 @@ const ACQUISITION_FIELDS = [
   { key: 'sequence_loops', label: 'Sequence loops', type: 'number', min: 1, step: 1 },
 ];
 
+const PHASE_PROTOCOLS = {
+  BREW: {
+    label: 'Brew',
+    file: 'NOISE.his',
+    instruction: 'Close beam. Wait for the beam indicator to stop, then start.',
+    preparationSeconds: 10,
+    tone: 'brew',
+  },
+  BASE: {
+    label: 'Base',
+    file: 'BASE.his',
+    instruction: 'Close Faraday cup, then start.',
+    preparationSeconds: 0,
+    tone: 'base',
+  },
+  ABSORPTION: {
+    label: 'Absorption',
+    file: 'ABS.his',
+    instruction: 'Open Faraday cup, then start.',
+    preparationSeconds: 0,
+    tone: 'absorption',
+  },
+};
+
 const VD2_POWER_CHANNELS = [
   { key: 'streak-camera', label: 'Streak camera / spectrograph', device: 'manip/SD2/PDU_SD2', outputId: 1 },
   { key: 'dg645-power', label: 'DG645', device: 'manip/SD2/PDU_SD2', outputId: 2 },
@@ -83,6 +107,13 @@ const VD2_TANGO_SERVERS = [
 
 function valueText(value) {
   return value === null || value === undefined || value === '' ? '-' : String(value);
+}
+
+function defaultVd2RunName() {
+  const now = new Date();
+  const date = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('');
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()].map((value) => String(value).padStart(2, '0')).join('');
+  return `VD2_${date}_${time}`;
 }
 
 function EditableField({ field, value, onApply, busy }) {
@@ -377,6 +408,74 @@ function RoiProfiles({ preview, roi }) {
   );
 }
 
+function Vd2PhaseProtocol({ protocol, settings, disabled, onChange, onPhaseClick, onPhaseDoubleClick }) {
+  const active = protocol?.status === 'acquiring';
+  return (
+    <section className="vd2-phase-protocol" aria-label="VD2 Brew Base Absorption protocol">
+      <header>
+        <div>
+          <h2>Measurement protocol</h2>
+          <p>Brew / Base / Absorption HIS acquisition</p>
+        </div>
+        <div className={`vd2-protocol-state is-${protocol?.status || 'idle'}`}>
+          {active ? `${protocol.phase_label || protocol.phase} acquiring` : (protocol?.status || 'idle')}
+        </div>
+      </header>
+      <div className="vd2-protocol-settings">
+        <label>
+          <span>Frames / HIS</span>
+          <input type="number" min="1" max="100000" step="1" value={settings.framesPerHis} disabled={disabled || active} onChange={(event) => onChange('framesPerHis', event.target.value)} />
+        </label>
+        <label>
+          <span>Everest folder</span>
+          <input value={settings.outputRoot} disabled={disabled || active} onChange={(event) => onChange('outputRoot', event.target.value)} />
+        </label>
+        <label>
+          <span>Run name</span>
+          <input value={settings.runName} disabled={disabled || active} onChange={(event) => onChange('runName', event.target.value)} />
+        </label>
+      </div>
+      <div className="vd2-phase-buttons">
+        {Object.entries(PHASE_PROTOCOLS).map(([phase, definition]) => (
+          <button
+            type="button"
+            key={phase}
+            className={`vd2-phase-button is-${definition.tone}`}
+            disabled={disabled || active}
+            onClick={() => onPhaseClick(phase)}
+            onDoubleClick={() => onPhaseDoubleClick(phase)}
+          >
+            <strong>{definition.label}</strong>
+            <small>{definition.file}</small>
+          </button>
+        ))}
+      </div>
+      {protocol?.his_path && <footer><span>{protocol.his_path}</span>{protocol.error && <strong>{protocol.error}</strong>}</footer>}
+    </section>
+  );
+}
+
+function Vd2PhaseDialog({ prepared, remaining, starting, onCancel, onStart }) {
+  if (!prepared) return null;
+  const definition = PHASE_PROTOCOLS[prepared.phase];
+  const ready = remaining === 0;
+  return (
+    <div className="vd2-modal-backdrop" onClick={onCancel}>
+      <section className="vd2-phase-dialog" onClick={(event) => event.stopPropagation()} aria-label={`${definition.label} preparation`}>
+        <header><h2>{definition.label}</h2><button type="button" onClick={onCancel}>Cancel</button></header>
+        <p>{definition.instruction}</p>
+        {remaining > 0 && <strong className="vd2-countdown">{remaining} s</strong>}
+        <footer>
+          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="button" onClick={() => onStart(prepared.phase)} disabled={!ready || starting}>
+            Start {ready ? '(Space)' : ''}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function Vd2HardwareModal({ open, power, tango, loading, error, onClose, onRefresh, onToggle, onAllPower, onServer }) {
   if (!open) return null;
   const outputFor = (channel) => power.outputs.find((output) => Number(output.id) === channel.outputId);
@@ -457,11 +556,21 @@ function PumpProbeVD2() {
   const [hardwareTango, setHardwareTango] = useState({});
   const [hardwareLoading, setHardwareLoading] = useState(false);
   const [hardwareError, setHardwareError] = useState('');
+  const [protocol, setProtocol] = useState(null);
+  const [protocolSettings, setProtocolSettings] = useState(() => ({
+    framesPerHis: '10',
+    outputRoot: 'E:\\DATA_VD2',
+    runName: defaultVd2RunName(),
+  }));
+  const [preparedPhase, setPreparedPhase] = useState(null);
+  const [preparationTick, setPreparationTick] = useState(Date.now());
+  const [protocolStarting, setProtocolStarting] = useState(false);
   const requestActive = useRef(false);
   const previewRequestActive = useRef(false);
   const previewCanvas = useRef(null);
   const previewOverlay = useRef(null);
   const nextRoiId = useRef(1);
+  const phaseClickTimer = useRef(null);
 
   const loadState = useCallback(async () => {
     if (requestActive.current) return;
@@ -484,6 +593,23 @@ function PumpProbeVD2() {
     const interval = window.setInterval(loadState, 2500);
     return () => window.clearInterval(interval);
   }, [loadState]);
+
+  const loadProtocol = useCallback(async () => {
+    try {
+      const response = await fetch(`${API_BASE}/protocol/state`, { credentials: 'include' });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read VD2 protocol');
+      setProtocol(payload);
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadProtocol();
+    const interval = window.setInterval(loadProtocol, 1200);
+    return () => window.clearInterval(interval);
+  }, [loadProtocol]);
 
   const loadPreview = useCallback(async () => {
     if (previewRequestActive.current) return;
@@ -572,6 +698,75 @@ function PumpProbeVD2() {
     if (state?.connected) return runCommand('RefreshStatus');
     return loadState();
   }, [loadState, runCommand, state?.connected]);
+
+  const updateProtocolSetting = useCallback((name, value) => {
+    setProtocolSettings((current) => ({ ...current, [name]: value }));
+  }, []);
+
+  const startProtocolPhase = useCallback(async (phase) => {
+    setProtocolStarting(true);
+    try {
+      const response = await fetch(`${API_BASE}/protocol/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          phase,
+          frames_per_his: protocolSettings.framesPerHis,
+          output_root: protocolSettings.outputRoot,
+          run_name: protocolSettings.runName,
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.error || `Could not start ${phase}`);
+      setProtocol(payload);
+      setPreparedPhase(null);
+      setPreviewEnabled(false);
+      setPreviewError('');
+      setError('');
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setProtocolStarting(false);
+    }
+  }, [protocolSettings]);
+
+  const prepareProtocolPhase = useCallback((phase) => {
+    window.clearTimeout(phaseClickTimer.current);
+    phaseClickTimer.current = window.setTimeout(() => {
+      setPreparedPhase({ phase, readyAt: Date.now() + PHASE_PROTOCOLS[phase].preparationSeconds * 1000 });
+    }, 230);
+  }, []);
+
+  const startProtocolPhaseImmediately = useCallback((phase) => {
+    window.clearTimeout(phaseClickTimer.current);
+    startProtocolPhase(phase);
+  }, [startProtocolPhase]);
+
+  useEffect(() => () => window.clearTimeout(phaseClickTimer.current), []);
+
+  useEffect(() => {
+    if (!preparedPhase) return undefined;
+    setPreparationTick(Date.now());
+    const interval = window.setInterval(() => setPreparationTick(Date.now()), 200);
+    return () => window.clearInterval(interval);
+  }, [preparedPhase]);
+
+  const preparationRemaining = preparedPhase
+    ? Math.max(0, Math.ceil((preparedPhase.readyAt - preparationTick) / 1000))
+    : 0;
+
+  useEffect(() => {
+    if (!preparedPhase || preparationRemaining > 0 || protocolStarting) return undefined;
+    const onKeyDown = (event) => {
+      const tagName = event.target?.tagName;
+      if (event.code !== 'Space' || ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(tagName)) return;
+      event.preventDefault();
+      startProtocolPhase(preparedPhase.phase);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [preparationRemaining, preparedPhase, protocolStarting, startProtocolPhase]);
 
   const loadHardware = useCallback(async () => {
     setHardwareLoading(true);
@@ -775,6 +970,17 @@ function PumpProbeVD2() {
       </div>
 
       {activeTab === 'acquisition' && (
+        <Vd2PhaseProtocol
+          protocol={protocol}
+          settings={protocolSettings}
+          disabled={busy || protocolStarting || !state?.application_running || state?.remoteex_status === 'busy'}
+          onChange={updateProtocolSetting}
+          onPhaseClick={prepareProtocolPhase}
+          onPhaseDoubleClick={startProtocolPhaseImmediately}
+        />
+      )}
+
+      {activeTab === 'acquisition' && (
         <section className="vd2-control-strip" aria-label="Acquisition controls">
           <div className="vd2-acquisition-fields">
             {ACQUISITION_FIELDS.map((field) => (
@@ -930,6 +1136,13 @@ function PumpProbeVD2() {
         onToggle={toggleHardwarePower}
         onAllPower={setAllHardwarePower}
         onServer={controlHardwareServer}
+      />
+      <Vd2PhaseDialog
+        prepared={preparedPhase}
+        remaining={preparationRemaining}
+        starting={protocolStarting}
+        onCancel={() => setPreparedPhase(null)}
+        onStart={startProtocolPhase}
       />
     </main>
   );
