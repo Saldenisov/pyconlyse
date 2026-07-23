@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "experiment": "VD2 streak-camera pump-probe",
+  "description": "DG645 Recall 9 preset required before HPD-TA starts. It disables burst mode for VD2 streak acquisition.",
+  "device": "manip/sync/DG645",
+  "recall_slot": 9,
+  "required_queries": {
+    "BURM?": "0"
+  },
+  "verified_on_hardware": false,
+  "note": "Capture the complete Recall 9 parameter snapshot after Everest and DG645 are available."
+}

@@ -14,7 +14,7 @@ app_folder = Path(__file__).resolve().parents[3]
 if str(app_folder) not in sys.path:
     sys.path.append(str(app_folder))
 
-from tango import AttrWriteType, DevState
+from tango import AttrWriteType, DevState, DeviceProxy
 from tango.server import attribute, command, device_property
 
 from DeviceServers.base.general import DS_General
@@ -49,6 +49,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
         dtype=str, default_value="Pyconlyse-TaRemoteEx"
     )
     remoteex_start_timeout_s = device_property(dtype=float, default_value=12.0)
+    dg645_device = device_property(dtype=str, default_value="manip/sync/DG645")
+    dg645_hpdta_recall_slot = device_property(dtype=int, default_value=9)
+    dg645_recall_wait_s = device_property(dtype=float, default_value=1.0)
 
     def init_device(self):
         self.client = None
@@ -263,6 +266,26 @@ class DS_HAMAMATSU_STREAK(DS_General):
         if self.controller is None or not self.controller.is_connected:
             raise RuntimeError("Hamamatsu streak controller is not connected")
         return self.controller
+
+    def _prepare_dg645_for_hpdta(self) -> None:
+        """Apply the VD2 timing preset before HPD-TA starts.
+
+        Recall 9 is the VD2 preset. Its essential safety condition is disabled
+        burst mode: the streak acquisition must receive one normal trigger per
+        shot rather than a V0 burst train.
+        """
+        device = str(self.dg645_device or "manip/sync/DG645")
+        recall_slot = int(self.dg645_hpdta_recall_slot or 9)
+        dg645 = DeviceProxy(device)
+        dg645.set_timeout_millis(8000)
+        dg645.command_inout("scpi_write", f"*RCL {recall_slot}")
+        time.sleep(float(self.dg645_recall_wait_s or 1.0))
+        dg645.command_inout("scpi_query", "*OPC?")
+        burst_mode = str(dg645.command_inout("scpi_query", "BURM?")).strip()
+        if burst_mode not in {"0", "0.0", "+0", "+0.0"}:
+            raise RuntimeError(
+                f"DG645 recall {recall_slot} left burst mode enabled (BURM?={burst_mode})"
+            )
 
     def _sync_from_snapshot(self, snapshot) -> None:
         self.connected_value = self.controller is not None and self.controller.is_connected
@@ -833,6 +856,15 @@ class DS_HAMAMATSU_STREAK(DS_General):
             return self.application_version_value
 
         controller = self._require_controller()
+        self.busy_command_value = f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)}"
+        try:
+            self._prepare_dg645_for_hpdta()
+        except Exception as exc:
+            self.busy_command_value = ""
+            self.last_response_value = f"DG645 preflight failed: {exc}"
+            self.remoteex_status_value = "idle"
+            self.set_state(DevState.ON)
+            raise RuntimeError(self.last_response_value) from exc
         self.remoteex_status_value = "starting"
         self.busy_command_value = "AppStart()"
         self.set_state(DevState.RUNNING)
