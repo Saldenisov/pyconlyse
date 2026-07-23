@@ -270,9 +270,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
     def _prepare_dg645_for_hpdta(self) -> None:
         """Apply the VD2 timing preset before HPD-TA starts.
 
-        Recall 9 is the VD2 preset. Its essential safety condition is disabled
-        burst mode: the streak acquisition must receive one normal trigger per
-        shot rather than a V0 burst train.
+        Recall 9 is the VD2 timing preset. Burst mode is explicitly disabled
+        after recall: the streak acquisition must receive one normal trigger
+        per shot rather than a V0 burst train. This does not overwrite Recall 9.
         """
         device = str(self.dg645_device or "manip/sync/DG645")
         recall_slot = int(self.dg645_hpdta_recall_slot or 9)
@@ -280,6 +280,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         dg645.set_timeout_millis(8000)
         dg645.command_inout("scpi_write", f"*RCL {recall_slot}")
         time.sleep(float(self.dg645_recall_wait_s or 1.0))
+        dg645.command_inout("scpi_write", "BURM 0")
         dg645.command_inout("scpi_query", "*OPC?")
         burst_mode = str(dg645.command_inout("scpi_query", "BURM?")).strip()
         if burst_mode not in {"0", "0.0", "+0", "+0.0"}:
