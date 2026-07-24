@@ -551,6 +551,7 @@ function PumpProbeVD2() {
   const [state, setState] = useState(null);
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState('');
+  const [pollError, setPollError] = useState('');
   const [previewError, setPreviewError] = useState('');
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -592,9 +593,9 @@ function PumpProbeVD2() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read VD2 state');
       setState(payload);
-      setError('');
+      setPollError('');
     } catch (requestError) {
-      setError(requestError.message);
+      setPollError(requestError.message);
     } finally {
       requestActive.current = false;
     }
@@ -612,8 +613,9 @@ function PumpProbeVD2() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read VD2 protocol');
       setProtocol(payload);
+      setPollError('');
     } catch (requestError) {
-      setError(requestError.message);
+      setPollError(requestError.message);
     }
   }, []);
 
@@ -1090,7 +1092,7 @@ function PumpProbeVD2() {
         </div>
       </header>
 
-      {error && <div className="vd2-error" role="alert">{error}</div>}
+      {(error || pollError) && <div className="vd2-error" role="alert">{error || pollError}</div>}
 
       <div className="vd2-tabs" role="tablist" aria-label="VD2 control views">
         <button type="button" role="tab" aria-selected={activeTab === 'acquisition'} className={activeTab === 'acquisition' ? 'is-active' : ''} onClick={() => setActiveTab('acquisition')}>Acquisition</button>
