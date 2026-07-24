@@ -22,6 +22,7 @@ from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_client import RemoteExClient
+from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import RemoteExTransportError
 
 
 class DS_HAMAMATSU_STREAK(DS_General):
@@ -183,9 +184,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 self.set_state(DevState.ON)
             return 0
         except Exception as exc:
-            self.connected_value = False
-            self.application_running_value = False
-            self.set_state(DevState.FAULT)
+            self._reset_remoteex_connection(exc)
             return f"RemoteEx status refresh failed: {exc}"
 
     def turn_on_local(self) -> Union[int, str]:
@@ -277,6 +276,22 @@ class DS_HAMAMATSU_STREAK(DS_General):
         if self.controller is None or not self.controller.is_connected:
             raise RuntimeError("Hamamatsu streak controller is not connected")
         return self.controller
+
+    def _reset_remoteex_connection(self, reason: Exception | str) -> None:
+        """Discard a stale RemoteEx socket without faulting the Tango launcher."""
+        if self.controller is not None:
+            try:
+                self.controller.disconnect()
+            except Exception:
+                pass
+        self.controller = None
+        self.client = None
+        self.connected_value = False
+        self.application_running_value = False
+        self.remoteex_status_value = "disconnected"
+        self.busy_command_value = ""
+        self.last_response_value = f"RemoteEx unavailable: {reason}"
+        self.set_state(DevState.ON)
 
     def _prepare_dg645_for_hpdta(self) -> None:
         """Apply the VD2 timing preset before HPD-TA starts.
@@ -894,8 +909,11 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 }
             )
         controller = self._require_controller()
-        snapshot = controller.refresh_cached_state()
-        self._sync_from_snapshot(snapshot)
+        try:
+            snapshot = controller.refresh_cached_state()
+            self._sync_from_snapshot(snapshot)
+        except RemoteExTransportError as exc:
+            self._reset_remoteex_connection(exc)
         return json.dumps(
             {
                 "connected": self.connected_value,
@@ -949,9 +967,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.busy_command_value = ""
             self.set_state(DevState.ON)
         except Exception as exc:
-            self.last_response_value = f"StartApplication failed: {exc}"
-            self.remoteex_status_value = "fault"
-            self.set_state(DevState.FAULT)
+            self._reset_remoteex_connection(f"StartApplication failed: {exc}")
 
     @command
     def StopApplication(self):
