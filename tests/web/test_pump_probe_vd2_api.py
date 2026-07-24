@@ -36,6 +36,27 @@ class FakeProxy:
         return None
 
 
+class RecoverableDG645Proxy:
+    def __init__(self):
+        self.commands = []
+        self.current_state = "FAULT"
+
+    def set_timeout_millis(self, value):
+        return None
+
+    def state(self):
+        return self.current_state
+
+    def command_inout(self, name, value=None):
+        self.commands.append((name, value))
+        if name == "recover":
+            self.current_state = "ON"
+            return "Recovered"
+        if name == "scpi_query" and value == "*IDN?":
+            return "Stanford Research Systems,DG645,123,1.0"
+        return None
+
+
 def test_protocol_routes_start_one_brew_his(monkeypatch):
     protocol = Vd2MeasurementProtocol(FakeProxy)
     monkeypatch.setattr(vd2_api_module, "_measurement_protocol", protocol)
@@ -111,3 +132,23 @@ def test_deinitialize_route_returns_shutdown_result(monkeypatch):
 
     assert response.status_code == 200
     assert response.get_json()["steps"][0]["status"] == "disabled"
+
+
+def test_ensure_server_recovers_exported_dg645_before_astor_restart(monkeypatch):
+    proxy = RecoverableDG645Proxy()
+    steps = []
+    monkeypatch.setattr(vd2_api_module, "_wait_for_device", lambda *args, **kwargs: proxy)
+    monkeypatch.setattr(
+        vd2_api_module,
+        "_restart_server",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("restart not expected")),
+    )
+
+    result = vd2_api_module._ensure_server(vd2_api_module.DG645_DEVICE, steps)
+
+    assert result is proxy
+    assert proxy.commands == [
+        ("recover", None),
+        ("scpi_query", "*IDN?"),
+    ]
+    assert steps == [{"step": f"Tango {vd2_api_module.DG645_DEVICE}", "status": "recovered"}]

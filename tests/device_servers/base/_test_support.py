@@ -64,7 +64,12 @@ def _install_tango_stub():
         def debug_stream(self, *args, **kwargs):
             return None
 
+    class DeviceProxy:
+        def __init__(self, *args, **kwargs):
+            self.name = args[0] if args else ""
+
     tango.AttrWriteType = AttrWriteType
+    tango.DeviceProxy = DeviceProxy
     tango.DevFloat = float
     tango.DevState = DevState
     tango.DispLevel = DispLevel
@@ -80,29 +85,11 @@ def _install_tango_stub():
     sys.modules["tango.server"] = server
 
 
-def _install_taurus_stub():
-    if "taurus" in sys.modules:
-        return
-
-    taurus = types.ModuleType("taurus")
-
-    class MockDevice:
-        def __init__(self, *args, **kwargs):
-            self.state = 1
-
-        def archive_it(self, data):
-            return None
-
-    taurus.Device = MockDevice
-    sys.modules["taurus"] = taurus
-
-
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 _install_tango_stub()
-_install_taurus_stub()
 
 from DeviceServers.base import camera as camera_module
 from DeviceServers.base import general as general_module

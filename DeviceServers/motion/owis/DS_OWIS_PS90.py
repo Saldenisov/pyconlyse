@@ -974,6 +974,12 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
 
     def get_controller_status_local(self) -> Union[int, str]:
         now = time.monotonic()
+        next_recovery_attempt_ts = float(
+            getattr(self, "_next_recovery_attempt_ts", 0.0)
+        )
+        last_recovery_wait_log_ts = float(
+            getattr(self, "_last_recovery_wait_log_ts", 0.0)
+        )
         ser_num = self._get_serial_number_ps90(self.control_unit_id)
         if ser_num < 0:
             self._status_check_fault += 1
@@ -981,10 +987,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             if self._status_check_fault <= self.recovery_fault_threshold:
                 return "Connection with PS90 is lost"
 
-            if now < self._next_recovery_attempt_ts:
-                remaining = max(0.0, self._next_recovery_attempt_ts - now)
+            if now < next_recovery_attempt_ts:
+                remaining = max(0.0, next_recovery_attempt_ts - now)
                 # Throttle repetitive logs while status is polled frequently.
-                if now - self._last_recovery_wait_log_ts >= 1.0:
+                if now - last_recovery_wait_log_ts >= 1.0:
                     self.info(
                         f"Recovery cooldown for {self.device_name}: "
                         f"next attempt in {remaining:.1f}s.",
@@ -997,6 +1003,12 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 )
 
             if self._attempt_recover_connection():
+                # Keep the status command correct even when a backend supplies
+                # a lightweight recovery implementation without resetting its
+                # own counters.
+                self._status_check_fault = 0
+                self._next_recovery_attempt_ts = 0.0
+                self._last_recovery_wait_log_ts = 0.0
                 return 0
 
             pause = max(1.0, float(getattr(self, "recovery_pause_seconds", 8.0)))

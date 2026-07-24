@@ -4,7 +4,7 @@ import time
 import zlib
 from abc import abstractmethod
 from pathlib import Path
-from threading import Thread
+from threading import RLock, Thread
 from time import sleep
 from typing import Any, Dict, Union
 
@@ -106,8 +106,12 @@ class DS_General(Device):
     server_id = device_property(dtype=int)
     always_on = device_property(dtype=int, default_value=0)
     archive_enabled = device_property(dtype=int, default_value=0)
+    fault_recovery_enabled = device_property(dtype=int, default_value=1)
+    fault_recovery_cooldown_s = device_property(dtype=float, default_value=3.0)
     archive = "manip/general/archive"
-    polling_main = 300
+    # Health checks must not compete with commands that open, close, or
+    # configure a transport. Acquisition loops use their own explicit rates.
+    polling_main = 1000
 
     # Expose allowed global variable keys (for management commands)
     ALLOWED_GLOBAL_VARS = tuple(CONFIG_DEFAULTS.keys())
@@ -120,6 +124,7 @@ class DS_General(Device):
             DevState.MOVING,
             DevState.RUNNING,
             DevState.INIT,
+            DevState.FAULT,
         ],
     }
 
@@ -244,6 +249,10 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self._lifecycle_lock = RLock()
+        self._fault_recovery_attempts = 0
+        self._next_fault_recovery_at = 0.0
+        self._last_fault_recovery_error = ""
         self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
@@ -320,6 +329,47 @@ class DS_General(Device):
         else:
             self.error(f"Function {func} is not in RULES: {self.RULES}.")
         return state_ok
+
+    def _get_lifecycle_lock(self):
+        """Return a per-device reentrant lock for state-changing operations."""
+        lock = getattr(self, "_lifecycle_lock", None)
+        if lock is None:
+            lock = RLock()
+            self._lifecycle_lock = lock
+        return lock
+
+    def _fault_recovery_due(self, state) -> bool:
+        if state != DevState.FAULT:
+            return True
+        if not bool(int(getattr(self, "fault_recovery_enabled", 1) or 0)):
+            return False
+        now = time.monotonic()
+        if now < getattr(self, "_next_fault_recovery_at", 0.0):
+            return False
+        cooldown = max(0.1, float(getattr(self, "fault_recovery_cooldown_s", 3.0)))
+        self._next_fault_recovery_at = now + cooldown
+        self._fault_recovery_attempts = getattr(self, "_fault_recovery_attempts", 0) + 1
+        return True
+
+    def _record_controller_status(self, result) -> None:
+        if result == 0:
+            # Older adapters sometimes reported success but left their previous
+            # FAULT untouched. A successful health check is authoritative.
+            if self.get_state() == DevState.FAULT:
+                self.set_state(DevState.ON)
+            self._fault_recovery_attempts = 0
+            self._next_fault_recovery_at = 0.0
+            self._last_fault_recovery_error = ""
+            return
+        self._last_fault_recovery_error = str(result)
+        self.error(str(result))
+
+    @attribute(label="Fault recovery status", dtype=str, access=AttrWriteType.READ)
+    def fault_recovery_status(self) -> str:
+        return (
+            f"attempts={getattr(self, '_fault_recovery_attempts', 0)}; "
+            f"last_error={getattr(self, '_last_fault_recovery_error', '')}"
+        )
 
     def int_time(self):
         try:
@@ -402,18 +452,29 @@ class DS_General(Device):
 
     @property
     def device_name(self) -> str:
-        friendly_name = getattr(self, 'friendly_name', None) or self.__class__.__name__
+        friendly_name = getattr(self, "friendly_name", None)
+        if not friendly_name:
+            return f"Device Unknown {self.__class__.__name__}"
+        device_id = getattr(self, "device_id", None)
+        if device_id:
+            return f"Device {device_id} {friendly_name}"
         return f"Device {friendly_name}"
 
     @command(polling_period=polling_main)
     def get_controller_status(self):
-        state_ok = self.check_func_allowance(self.get_controller_status)
-        if state_ok == 1:
-            res = self.get_controller_status_local()
+        with self._get_lifecycle_lock():
+            state = self.get_state()
+            state_ok = self.check_func_allowance(self.get_controller_status)
+            if state_ok != 1 or not self._fault_recovery_due(state):
+                return
+
+            result = self.get_controller_status_local()
+            self._record_controller_status(result)
             self.send_state_archive()
-            if res != 0:
-                self.error(f"{res}")
-            if self.get_state() != DevState.ON and self.always_on == 1:
+            if (
+                self.get_state() not in {DevState.ON, DevState.MOVING, DevState.RUNNING}
+                and self.always_on == 1
+            ):
                 self.turn_on()
 
     @abstractmethod
@@ -422,19 +483,24 @@ class DS_General(Device):
 
     @command
     def turn_on(self):
-        state_ok = self.check_func_allowance(self.turn_on)
-        if state_ok == 1:
-            self.info(f"Turning ON {self.device_name}.", True)
-            res = self.turn_on_local()
-            if res != 0:
-                self.error(f"{res}")
+        with self._get_lifecycle_lock():
+            state_ok = self.check_func_allowance(self.turn_on)
+            if state_ok == 1:
+                self.info(f"Turning ON {self.device_name}.", True)
+                result = self.turn_on_local()
+                if result != 0:
+                    self._last_fault_recovery_error = str(result)
+                    self.error(f"{result}")
+                else:
+                    self._fault_recovery_attempts = 0
+                    self._next_fault_recovery_at = 0.0
+                    self._last_fault_recovery_error = ""
+                    self.info(f"{self.device_name} WAS turned ON.", True)
+                    self.fix_state()
             else:
-                self.info(f"{self.device_name} WAS turned ON.", True)
-                self.fix_state()
-        else:
-            self.error(
-                f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}."
-            )
+                self.error(
+                    f"Turning ON {self.device_name}, did not work, check state of the device {self.get_state()}."
+                )
 
     @abstractmethod
     def turn_on_local(self) -> Union[int, str]:
@@ -442,20 +508,33 @@ class DS_General(Device):
 
     @command
     def turn_off(self):
-        state_ok = self.check_func_allowance(self.turn_off)
-        if state_ok == 1:
-            self.info(f"Turning off device {self.device_name}.", True)
-            res = self.turn_off_local()
-            if res != 0:
-                self.error(f"{res}")
+        with self._get_lifecycle_lock():
+            state_ok = self.check_func_allowance(self.turn_off)
+            if state_ok == 1:
+                self.info(f"Turning off device {self.device_name}.", True)
+                result = self.turn_off_local()
+                if result != 0:
+                    self.error(f"{result}")
+                else:
+                    self.info(f"{self.device_name} is turned OFF.", True)
+                    data = self.form_archive_data(0, "State")
+                    self.write_to_archive(data)
             else:
-                self.info(f"{self.device_name} is turned OFF.", True)
-                data = self.form_archive_data(0, "State")
-                self.write_to_archive(data)
-        else:
-            self.error(
-                f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}."
-            )
+                self.error(
+                    f"Turning OFF {self.device_name}, did not work, check state of the device {self.get_state()}."
+                )
+
+    @command(dtype_out=str)
+    def recover(self):
+        """Run one immediate non-power-cycling health recovery attempt."""
+        with self._get_lifecycle_lock():
+            self._next_fault_recovery_at = 0.0
+            result = self.get_controller_status_local()
+            self._record_controller_status(result)
+            self.send_state_archive()
+            if result == 0:
+                return "Recovered"
+            return f"Recovery failed: {result}"
 
     @abstractmethod
     def turn_off_local(self) -> Union[int, str]:

@@ -320,6 +320,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._power_status = self.POWER_STATES[x_status.PWRSts]
 
             self._status_check_fault = 0
+            if self.get_state() == DevState.FAULT:
+                self.set_state(DevState.ON)
             return super().get_controller_status_local()
         self._status_check_fault += 1
         if self._status_check_fault > self.recovery_fault_threshold:

@@ -64,7 +64,12 @@ def _install_tango_stub():
         def debug_stream(self, *args, **kwargs):
             return None
 
+    class DeviceProxy:
+        def __init__(self, *args, **kwargs):
+            self.name = args[0] if args else ""
+
     tango.AttrWriteType = AttrWriteType
+    tango.DeviceProxy = DeviceProxy
     tango.DevState = DevState
     tango.DispLevel = DispLevel
     server.AttrWriteType = AttrWriteType

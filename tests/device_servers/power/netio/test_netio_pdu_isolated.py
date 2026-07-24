@@ -168,6 +168,22 @@ def test_get_request_returns_false_and_records_error_on_connection_error(monkeyp
     assert device.last_error() == "offline"
 
 
+def test_requests_use_a_bounded_timeout(monkeypatch):
+    device = DummyNetio()
+    device.request_timeout_s = 1.25
+    seen = {}
+
+    def fake_get(*args, **kwargs):
+        seen.update(kwargs)
+        return _response({"Outputs": []})
+
+    monkeypatch.setattr(netio_module.requests, "get", fake_get)
+
+    device._get_request()
+
+    assert seen["timeout"] == 1.25
+
+
 def test_send_request_returns_false_and_records_error_on_request_exception(
     monkeypatch,
 ):
@@ -246,6 +262,7 @@ def test_get_channel_state_returns_selected_index():
 def test_get_controller_status_local_resets_fault_counter_on_success():
     device = DummyNetio()
     device._status_check_fault = 3
+    device.set_state(netio_module.DevState.FAULT)
     device._get_request = lambda: _response({"Outputs": _outputs_payload(1, 1, 1, 1)})
 
     result = device.get_controller_status_local()
@@ -253,6 +270,7 @@ def test_get_controller_status_local_resets_fault_counter_on_success():
     assert result == 0
     assert device._status_check_fault == 0
     assert device._states == [1, 1, 1, 1]
+    assert device.get_state() == netio_module.DevState.ON
 
 
 def test_get_controller_status_local_faults_after_repeated_failures():

@@ -18,7 +18,7 @@ import requests
 
 
 from tango import AttrWriteType, DevState, DispLevel
-from tango.server import attribute
+from tango.server import attribute, device_property
 
 from DeviceServers.base.pdu import DS_PDU
 
@@ -30,6 +30,7 @@ class DS_Netio_pdu(DS_PDU):
     _version_ = "0.1"
     _model_ = "NETIO PDU"
     polling = 500
+    request_timeout_s = device_property(dtype=float, default_value=3.0)
 
     @attribute(
         label="Outputs actions",
@@ -120,8 +121,12 @@ class DS_Netio_pdu(DS_PDU):
 
     def _get_request(self) -> Union[requests.Response, bool]:
         try:
-            res = requests.get(self._addr(), auth=self._authentication())
-        except requests.ConnectionError as e:
+            res = requests.get(
+                self._addr(),
+                auth=self._authentication(),
+                timeout=max(0.1, float(getattr(self, "request_timeout_s", 3.0))),
+            )
+        except requests.RequestException as e:
             self.error(f"{e}")
             res = False
         return res
@@ -147,7 +152,10 @@ class DS_Netio_pdu(DS_PDU):
     def _send_request(self, j_string) -> Union[requests.Response, bool]:
         try:
             res = requests.post(
-                self._addr(), json=j_string, auth=self._authentication()
+                self._addr(),
+                json=j_string,
+                auth=self._authentication(),
+                timeout=max(0.1, float(getattr(self, "request_timeout_s", 3.0))),
             )
         except (requests.ConnectionError, requests.RequestException) as e:
             self.error(f"{e}")
@@ -195,6 +203,7 @@ class DS_Netio_pdu(DS_PDU):
                 res = self.__set_attributes_netio(res.json()["Outputs"])
                 if res == 0:
                     self._status_check_fault = min(self._status_check_fault, 0)
+                    self.set_state(DevState.ON)
                     return 0
                 return f"Could not get controller status of {self.device_name}: {res}."
             error(self)

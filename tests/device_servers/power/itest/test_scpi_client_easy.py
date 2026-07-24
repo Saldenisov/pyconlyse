@@ -11,6 +11,10 @@ from unittest.mock import Mock, patch, MagicMock
 import sys
 from pathlib import Path
 
+import pytest
+
+pytest.importorskip("easy_scpi")
+
 # Add project root to path for imports
 PROJECT_ROOT = Path(__file__).parents[4]
 sys.path.insert(0, str(PROJECT_ROOT))

@@ -788,6 +788,21 @@ class DS_HAMAMATSU_STREAK(DS_General):
         if self.controller is not None and self.controller.is_connected:
             return
 
+        # A Tango restart must not create a second RemoteEx process. Attach to
+        # the existing command socket first, then start the scheduled task only
+        # when no RemoteEx instance accepts connections.
+        try:
+            self._connect_remoteex()
+            self.application_running_value = False
+            self.remoteex_status_value = "idle"
+            self.busy_command_value = ""
+            self.set_state(DevState.ON)
+            return
+        except Exception:
+            self.client = None
+            self.controller = None
+            self.connected_value = False
+
         task_name = str(self.remoteex_task_name or "Pyconlyse-TaRemoteEx")
         completed = subprocess.run(
             ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],

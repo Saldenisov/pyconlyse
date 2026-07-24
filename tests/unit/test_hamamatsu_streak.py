@@ -1,6 +1,7 @@
 import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -9,6 +10,9 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,
+)
+from DeviceServers.cameras.hamamatsu_streak.DS_HAMAMATSU_STREAK import (
+    DS_HAMAMATSU_STREAK,
 )
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import (
     RemoteExCommandError,
@@ -66,6 +70,31 @@ class TestRemoteExProtocol(unittest.TestCase):
 
 
 class TestHamamatsuStreakController(unittest.TestCase):
+    def test_start_remoteex_attaches_before_starting_scheduled_task(self):
+        class AttachOnlyDevice:
+            controller = None
+            client = None
+            connected_value = False
+            application_running_value = True
+            remoteex_status_value = "disconnected"
+            busy_command_value = "old-command"
+
+            def _connect_remoteex(self):
+                self.controller = SimpleNamespace(is_connected=True)
+                self.connected_value = True
+
+            def set_state(self, state):
+                self.state = state
+
+        device = AttachOnlyDevice()
+
+        DS_HAMAMATSU_STREAK.StartRemoteEx(device)
+
+        self.assertTrue(device.connected_value)
+        self.assertFalse(device.application_running_value)
+        self.assertEqual(device.remoteex_status_value, "idle")
+        self.assertEqual(device.busy_command_value, "")
+
     def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
         fake = FakeRemoteExClient(
             {

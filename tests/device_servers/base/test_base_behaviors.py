@@ -482,6 +482,48 @@ def test_check_func_allowance_rejects_unknown_function():
     assert "not in RULES" in device.last_error()
 
 
+def test_faulted_device_runs_health_check_and_recovers_on_success():
+    device = DummyGeneral()
+    device.set_state(general_module.DevState.FAULT)
+
+    device.get_controller_status()
+
+    assert device.controller_status_calls == 1
+    assert device.get_state() == general_module.DevState.ON
+    assert device.fault_recovery_status() == "attempts=0; last_error="
+
+
+def test_fault_recovery_respects_cooldown():
+    device = DummyGeneral()
+    device.set_state(general_module.DevState.FAULT)
+    device._next_fault_recovery_at = 10**12
+
+    device.get_controller_status()
+
+    assert device.controller_status_calls == 0
+
+
+def test_always_on_does_not_reinitialize_running_device():
+    device = DummyGeneral()
+    device.always_on = 1
+    device.set_state(general_module.DevState.RUNNING)
+
+    device.get_controller_status()
+
+    assert device.controller_status_calls == 1
+    assert device.turn_on_calls == 0
+
+
+def test_recover_runs_immediate_health_check_from_fault():
+    device = DummyGeneral()
+    device.set_state(general_module.DevState.FAULT)
+    device._next_fault_recovery_at = 10**12
+
+    assert device.recover() == "Recovered"
+    assert device.controller_status_calls == 1
+    assert device.get_state() == general_module.DevState.ON
+
+
 def test_register_and_unregister_client_lock_toggle_flags():
     device = DummyGeneral()
 

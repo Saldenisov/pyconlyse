@@ -202,30 +202,90 @@ def _wait_for_device(device: str, timeout_s: float = 15.0) -> DeviceProxy:
     raise RuntimeError(f"{device} did not become available: {last_error}")
 
 
+def _is_healthy_device(proxy: DeviceProxy, device: str) -> bool:
+    state = str(proxy.state()).split(".")[-1].upper()
+    if state in {"FAULT", "UNKNOWN"}:
+        return False
+    if device == DG645_DEVICE:
+        return bool(str(proxy.command_inout("scpi_query", "*IDN?")).strip())
+    if device == VD2_PDU_DEVICE:
+        return bool(list(proxy.read_attribute("ids").value))
+    # RemoteEx may intentionally be stopped while its Tango launcher remains ON.
+    return True
+
+
+def _wait_for_healthy_device(device: str, timeout_s: float = 20.0) -> DeviceProxy:
+    deadline = time.monotonic() + timeout_s
+    last_error = None
+    while time.monotonic() < deadline:
+        try:
+            proxy = _wait_for_device(device, timeout_s=1.0)
+            if _is_healthy_device(proxy, device):
+                return proxy
+            last_error = f"{device} is exported but not healthy"
+        except Exception as exc:
+            last_error = exc
+        time.sleep(0.5)
+    raise RuntimeError(f"{device} did not pass health check: {last_error}")
+
+
+def _restart_server(device: str, server: str) -> DeviceProxy:
+    astor = _astor()
+    try:
+        astor.command_inout("DevStop", server)
+    except Exception as exc:
+        if "not running" not in str(exc).lower():
+            raise
+
+    # Astor acknowledges DevStop before the child Python process has unregistered.
+    # Waiting here prevents the misleading "already running" start failure.
+    stopped_deadline = time.monotonic() + 12.0
+    while time.monotonic() < stopped_deadline:
+        try:
+            _wait_for_device(device, timeout_s=0.5)
+        except Exception:
+            break
+        time.sleep(0.5)
+
+    astor.command_inout("DevStart", server)
+    return _wait_for_healthy_device(device)
+
+
 def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
     try:
         proxy = _wait_for_device(device, timeout_s=2.0)
-        state = str(proxy.state()).split(".")[-1].upper()
-        if state not in {"FAULT", "UNKNOWN"}:
+        if _is_healthy_device(proxy, device):
             steps.append({"step": f"Tango {device}", "status": "already running"})
             return proxy
     except Exception:
         pass
 
     server = VD2_SERVERS[device]
-    astor = _astor()
     try:
-        astor.command_inout("DevStart", server)
+        proxy = _wait_for_device(device, timeout_s=2.0)
+        proxy.command_inout("recover")
+        if _is_healthy_device(proxy, device):
+            steps.append({"step": f"Tango {device}", "status": "recovered"})
+            return proxy
+    except Exception:
+        pass
+
+    try:
+        proxy = _restart_server(device, server)
     except Exception as exc:
-        if "already running" not in str(exc).lower():
+        if "already running" in str(exc).lower():
+            # A stale process can retain Astor's running flag after its device
+            # has disappeared. One explicit stop/start resolves that state.
+            astor = _astor()
+            try:
+                astor.command_inout("DevStop", server)
+            except Exception:
+                pass
+            time.sleep(3.0)
+            astor.command_inout("DevStart", server)
+            proxy = _wait_for_healthy_device(device)
+        else:
             raise
-        try:
-            astor.command_inout("DevStop", server)
-        except Exception:
-            pass
-        time.sleep(1.0)
-        astor.command_inout("DevStart", server)
-    proxy = _wait_for_device(device)
     steps.append({"step": f"Tango {device}", "status": "started by Astor"})
     return proxy
 

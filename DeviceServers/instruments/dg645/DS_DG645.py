@@ -116,32 +116,41 @@ class DS_DG645(DS_General):
 
     def find_device(self):
         self._device_id_internal, self._uri = -1, ""
+        self._close_session()
         try:
             backend = str(self.driver_backend or "auto").strip().lower()
             if backend not in {"auto", "srsinst", "scpi"}:
                 raise ValueError("driver_backend must be auto, srsinst, or scpi")
 
+            candidates = []
             if backend in {"auto", "srsinst"}:
-                try:
-                    self._session, uri = self._open_srsinst_session()
-                    self._active_backend = "srsinst.dg645"
-                except Exception:
-                    if backend == "srsinst":
-                        raise
-                    self._session, uri = self._open_scpi_session()
-                    self._active_backend = "raw-scpi"
-            else:
-                self._session, uri = self._open_scpi_session()
-                self._active_backend = "raw-scpi"
+                candidates.append(("srsinst.dg645", self._open_srsinst_session))
+            if backend in {"auto", "scpi"}:
+                candidates.append(("raw-scpi", self._open_scpi_session))
 
-            idn = self._query("*IDN?")
-            self._idn_cache = idn
-            self._device_id_internal, self._uri = 1, uri
-            self.set_state(DevState.ON)
-            self.info(f"Found DG645 via {self._active_backend}: {idn}", True)
+            errors = []
+            for backend_name, opener in candidates:
+                try:
+                    session, uri = opener()
+                    self._session = session
+                    self._active_backend = backend_name
+                    # Opening a driver object alone is not a connection test.
+                    # Verify the transport before accepting it as the active one.
+                    idn = str(session.query("*IDN?")).strip()
+                    if not idn:
+                        raise RuntimeError("DG645 returned an empty *IDN? response")
+                    self._idn_cache = idn
+                    self._device_id_internal, self._uri = 1, uri
+                    self.set_state(DevState.ON)
+                    self.info(f"Found DG645 via {backend_name}: {idn}", True)
+                    return
+                except Exception as exc:
+                    errors.append(f"{backend_name}: {exc}")
+                    self._close_session()
+
+            raise RuntimeError("; ".join(errors) or "No DG645 backend is configured")
         except Exception as exc:
-            self._session = None
-            self._active_backend = ""
+            self._close_session()
             self.set_state(DevState.FAULT)
             self.error(f"DG645 discovery failed: {exc}")
 
@@ -166,13 +175,7 @@ class DS_DG645(DS_General):
 
     def turn_off_local(self) -> Union[int, str]:
         try:
-            if self._session is not None and hasattr(self._session, "close"):
-                self._session.close()
-            if self._rm is not None:
-                self._rm.close()
-            self._session = None
-            self._rm = None
-            self._active_backend = ""
+            self._close_session()
             self.set_state(DevState.OFF)
             return 0
         except Exception as exc:
@@ -244,7 +247,9 @@ class DS_DG645(DS_General):
 
     @command(dtype_in=str, dtype_out=str, doc_in="SCPI write command")
     def scpi_write(self, cmd: str) -> str:
-        self._write(cmd)
+        # Arbitrary SCPI may contain a non-idempotent action such as *TRG.
+        # Reconnect it, but never replay it automatically.
+        self._write(cmd, retry=False)
         return "OK"
 
     @command(dtype_in=str, dtype_out=str, doc_in="SCPI query command")
@@ -267,6 +272,45 @@ class DS_DG645(DS_General):
             self.find_device()
         if self._session is None:
             raise RuntimeError("No DG645 session")
+
+    def _close_session(self):
+        session, rm = self._session, self._rm
+        self._session = None
+        self._rm = None
+        self._active_backend = ""
+        if session is not None and hasattr(session, "close"):
+            try:
+                session.close()
+            except Exception:
+                pass
+        if rm is not None:
+            try:
+                rm.close()
+            except Exception:
+                pass
+
+    def _execute_with_reconnect(self, operation: str, command: str, retry: bool = True):
+        """Execute a command, reconnecting once only when replay is safe."""
+        self._ensure_session()
+        try:
+            return getattr(self._session, operation)(command)
+        except Exception as first_error:
+            # Power cycling a DG645 invalidates the driver socket without
+            # invalidating the Python object. Discard it before trying again.
+            self.warn(f"DG645 transport failed for {command!r}; reconnecting.", True)
+            self._close_session()
+            self.find_device()
+            if self._session is None:
+                raise RuntimeError(f"DG645 reconnect failed after {first_error}") from first_error
+            if not retry:
+                raise RuntimeError(
+                    f"DG645 transport reconnected; {command!r} was not replayed"
+                ) from first_error
+            try:
+                return getattr(self._session, operation)(command)
+            except Exception:
+                self._close_session()
+                raise
 
     def _open_srsinst_session(self):
         if self.resource:
@@ -302,13 +346,11 @@ class DS_DG645(DS_General):
             )
         raise RuntimeError("DG645 resource or host property is required")
 
-    def _write(self, cmd: str):
-        self._ensure_session()
-        self._session.write(cmd)
+    def _write(self, cmd: str, retry: bool = True):
+        self._execute_with_reconnect("write", cmd, retry=retry)
 
     def _query(self, cmd: str) -> str:
-        self._ensure_session()
-        return str(self._session.query(cmd)).strip()
+        return str(self._execute_with_reconnect("query", cmd)).strip()
 
     @staticmethod
     def _channel_id(value: str) -> int:

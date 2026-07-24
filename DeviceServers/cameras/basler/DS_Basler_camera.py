@@ -4,7 +4,10 @@ import sys
 import time
 from pathlib import Path
 
-import cv2
+try:
+    import cv2
+except ImportError:  # Optional: only used for center-of-gravity calculation.
+    cv2 = None
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
@@ -14,7 +17,12 @@ from threading import Thread
 from typing import Union
 
 import numpy as np
-from pypylon import genicam, pylon
+
+try:
+    from pypylon import genicam, pylon
+except ImportError:  # Allow the Tango server to report a recoverable SDK error.
+    genicam = None
+    pylon = None
 from tango import AttrWriteType, DevState
 
 # -----------------------------
@@ -172,8 +180,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def init_device(self):
         self.pixel_format = None
-        self.camera: pylon.InstantCamera = None
-        self.converter: pylon.ImageFormatConverter = None
+        self.camera = None
+        self.converter = None
         self.device = None
         self.grabbing_thread = None
         self._last_trigger_timeout_warning = 0.0
@@ -186,6 +194,10 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b""
         if state_ok:
+            if pylon is None:
+                self.error("Basler SDK unavailable: install pypylon on this host.")
+                self._device_id_internal, self._uri = argreturn
+                return argreturn
             self.device = self._get_camera_device()
             if self.device is not None:
                 try:
@@ -208,6 +220,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return argreturn
 
     def turn_on_local(self) -> Union[int, str]:
+        if pylon is None:
+            return "Basler SDK unavailable: install pypylon on this host."
         if self.camera and not self.camera.IsOpen():
             self.camera.Open()
             self.converter = pylon.ImageFormatConverter()
@@ -326,7 +340,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 if restart_grabbing:
                     self.start_grabbing()
                 return 0
-            except (genicam.GenericException, Exception) as e:
+            except Exception as e:
                 if restart_grabbing and not self.grabbing:
                     self.start_grabbing()
                 return f'Error appeared: {e} when setting parameter "{param_name}" for camera {self.device_name}.'
@@ -337,6 +351,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             )
 
     def _get_camera_device(self):
+        if pylon is None:
+            return None
         for device in pylon.TlFactory.GetInstance().EnumerateDevices():
             serial_number = device.GetSerialNumber()
             if serial_number == self.serial_number:
@@ -350,6 +366,10 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def calc_cg(self, image):
         # apply thresholding
         cX, cY = 1024, 1024
+        if cv2 is None:
+            self.warn("OpenCV unavailable; center-of-gravity calculation skipped.")
+            self.CG_position = {"X": cX, "Y": cY}
+            return
         img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
         ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
         contours, hierarchy = cv2.findContours(
@@ -387,7 +407,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 self.camera.TriggerMode.GetValue() == "On"
                 and self.camera.TriggerSource.GetValue() != "Software"
             )
-        except genicam.GenericException:
+        except Exception:
             return False
 
     def _log_trigger_timeout(self, timeout: int):
@@ -460,6 +480,8 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.info("Wait thread exiting")
 
     def get_controller_status_local(self) -> Union[int, str]:
+        if self.camera is None:
+            return "Basler camera is not initialized"
         r = 0
         if self.camera.IsOpen():
             self.set_status(DevState.ON)

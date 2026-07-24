@@ -84,7 +84,8 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
                             f"Arduino with {serial_number} was found, but port check was not passed: {comments}."
                         )
                     break
-        print(f"Result: {argreturn}")
+        self._device_id_internal, self._uri = argreturn
+        self.info(f"TOP_DIRECT discovery result: {argreturn}", True)
         return argreturn
 
     def read_position_local(self) -> Union[int, str]:
@@ -128,6 +129,12 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
             return f"Could NOT turn on {self.device_name}: Device could not be found."
 
         try:
+            if self.arduino_serial is not None:
+                try:
+                    self.arduino_serial.close()
+                except Exception:
+                    pass
+                self.arduino_serial = None
             self.arduino_serial = serial.Serial(
                 self._device_id_internal, timeout=self.timeout, baudrate=self.baudrate
             )
@@ -150,17 +157,17 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
         return f"Could NOT turn on {self.device_name}: {res}."
 
     def turn_off_local(self) -> Union[int, str]:
-        result = False
-        if result == 0:
-            self.set_state(DevState.OFF)
-            self._device_id_internal = -1
-            self._uri = ""
+        try:
             if self.arduino_serial:
                 self.arduino_serial.close()
                 self.arduino_serial = None
+            self.set_state(DevState.OFF)
+            self._device_id_internal = -1
+            self._uri = ""
             return 0
-        self.set_state(DevState.FAULT)
-        return self.error(f"Could not turn off device {self.device_name}: {result}.")
+        except Exception as exc:
+            self.set_state(DevState.FAULT)
+            return f"Could not turn off device {self.device_name}: {exc}."
 
     def _wait_unlock_arduino(self):
         i = 0
@@ -241,6 +248,8 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
         return "Cannot be stopped by user. Code on Arduino is wrong."
 
     def get_controller_status_local(self) -> Union[int, str]:
+        if self.arduino_serial is None or not self.arduino_serial.is_open:
+            return self.turn_on_local()
         if self.arduino_serial.is_open:
             self.set_state(DevState.ON)
             self._status_check_fault = min(self._status_check_fault, 0)
@@ -274,4 +283,3 @@ class DS_TopDirect_Motor(DS_MOTORIZED_MONO_AXIS):
 
 if __name__ == "__main__":
     DS_TopDirect_Motor.run_server()
-
