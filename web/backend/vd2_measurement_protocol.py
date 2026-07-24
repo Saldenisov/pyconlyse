@@ -11,7 +11,7 @@ from typing import Any, Callable, Mapping
 
 
 PHASES: Mapping[str, dict[str, str]] = {
-    "BREW": {"label": "Brew", "file_stem": "NOISE"},
+    "BRUIT": {"label": "Bruit", "file_stem": "BRUIT"},
     "BASE": {"label": "Base", "file_stem": "BASE"},
     "ABSORPTION": {"label": "Absorption", "file_stem": "ABS"},
 }
@@ -32,7 +32,7 @@ class PhaseRequest:
 
 
 class Vd2MeasurementProtocol:
-    """Serializes one prepared Brew/Base/Absorption HIS acquisition at a time."""
+    """Serializes one prepared Bruit/Base/Absorption HIS acquisition at a time."""
 
     def __init__(self, proxy_factory: Callable[[], Any]):
         self._proxy_factory = proxy_factory
@@ -119,6 +119,9 @@ class Vd2MeasurementProtocol:
         run_name: object,
     ) -> PhaseRequest:
         phase_name = str(phase).strip().upper()
+        # Keep the early UI spelling accepted for clients not yet upgraded.
+        if phase_name == "BREW":
+            phase_name = "BRUIT"
         if phase_name not in PHASES:
             raise Vd2ProtocolError(f"Unsupported VD2 phase: {phase}")
         try:

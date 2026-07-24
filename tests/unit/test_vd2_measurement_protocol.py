@@ -30,25 +30,34 @@ class FakeProxy:
         self.calls.append(("command", name, value))
 
 
-def test_phase_protocol_writes_noise_his_after_sequence():
+def test_phase_protocol_writes_bruit_his_after_sequence():
     proxy = FakeProxy()
     protocol = Vd2MeasurementProtocol(lambda: proxy)
 
     state = protocol.start(
-        phase="brew",
+        phase="bruit",
         frames_per_his=25,
         output_root=r"E:\DATA_VD2",
         run_name="LiCl_001",
     )
     protocol.wait(1)
 
-    assert state["phase"] == "BREW"
-    assert state["his_path"] == r"E:\DATA_VD2\LiCl_001\NOISE.his"
+    assert state["phase"] == "BRUIT"
+    assert state["his_path"] == r"E:\DATA_VD2\LiCl_001\BRUIT.his"
     assert protocol.status()["status"] == "completed"
     assert ("write", "sequence_loops", "25") in proxy.calls
     assert ("command", "StartSequence", None) in proxy.calls
     assert ("command", "WaitForIdle", None) in proxy.calls
-    assert ("command", "SaveCurrentSequence", r"E:\DATA_VD2\LiCl_001\NOISE.his") in proxy.calls
+    assert ("command", "SaveCurrentSequence", r"E:\DATA_VD2\LiCl_001\BRUIT.his") in proxy.calls
+
+
+def test_phase_protocol_accepts_legacy_brew_name_as_bruit():
+    protocol = Vd2MeasurementProtocol(FakeProxy)
+
+    state = protocol.start(phase="brew", frames_per_his=1, run_name="legacy")
+
+    assert state["phase"] == "BRUIT"
+    assert state["his_path"].endswith(r"legacy\BRUIT.his")
 
 
 def test_phase_protocol_rejects_invalid_run_name():

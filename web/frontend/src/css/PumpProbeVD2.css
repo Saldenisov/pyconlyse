@@ -256,10 +256,10 @@
 }
 .vd2-phase-button strong { font-size: 16px; }
 .vd2-phase-button small { color: #c3ccd5; font-size: 11px; font-weight: 400; }
-.vd2-phase-button.is-brew { border-color: #6c7d96; }
+.vd2-phase-button.is-bruit { border-color: #6c7d96; }
 .vd2-phase-button.is-base { border-color: #3c8f66; }
 .vd2-phase-button.is-absorption { border-color: #ba7044; }
-.vd2-phase-button.is-brew:hover:not(:disabled) { background: #34475c; }
+.vd2-phase-button.is-bruit:hover:not(:disabled) { background: #34475c; }
 .vd2-phase-button.is-base:hover:not(:disabled) { background: #276a4e; }
 .vd2-phase-button.is-absorption:hover:not(:disabled) { background: #75452d; }
 

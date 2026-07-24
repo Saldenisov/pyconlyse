@@ -72,12 +72,12 @@ const ACQUISITION_FIELDS = [
 ];
 
 const PHASE_PROTOCOLS = {
-  BREW: {
-    label: 'Brew',
-    file: 'NOISE.his',
-    instruction: 'Close beam. Wait for the beam indicator to stop, then start.',
+  BRUIT: {
+    label: 'Bruit',
+    file: 'BRUIT.his',
+    instruction: 'Close beam. You have 10 s to prepare. Press Space to start immediately.',
     preparationSeconds: 10,
-    tone: 'brew',
+    tone: 'bruit',
   },
   BASE: {
     label: 'Base',
@@ -411,11 +411,11 @@ function RoiProfiles({ preview, roi }) {
 function Vd2PhaseProtocol({ protocol, settings, disabled, onChange, onPhaseClick, onPhaseDoubleClick }) {
   const active = protocol?.status === 'acquiring';
   return (
-    <section className="vd2-phase-protocol" aria-label="VD2 Brew Base Absorption protocol">
+    <section className="vd2-phase-protocol" aria-label="VD2 Bruit Base Absorption protocol">
       <header>
         <div>
           <h2>Measurement protocol</h2>
-          <p>Brew / Base / Absorption HIS acquisition</p>
+          <p>Bruit / Base / Absorption HIS acquisition</p>
         </div>
         <div className={`vd2-protocol-state is-${protocol?.status || 'idle'}`}>
           {active ? `${protocol.phase_label || protocol.phase} acquiring` : (protocol?.status || 'idle')}
@@ -458,18 +458,15 @@ function Vd2PhaseProtocol({ protocol, settings, disabled, onChange, onPhaseClick
 function Vd2PhaseDialog({ prepared, remaining, starting, onCancel, onStart }) {
   if (!prepared) return null;
   const definition = PHASE_PROTOCOLS[prepared.phase];
-  const ready = remaining === 0;
   return (
     <div className="vd2-modal-backdrop" onClick={onCancel}>
-      <section className="vd2-phase-dialog" onClick={(event) => event.stopPropagation()} aria-label={`${definition.label} preparation`}>
+      <section className="vd2-phase-dialog" tabIndex="-1" onClick={(event) => event.stopPropagation()} aria-label={`${definition.label} preparation`}>
         <header><h2>{definition.label}</h2><button type="button" onClick={onCancel}>Cancel</button></header>
         <p>{definition.instruction}</p>
         {remaining > 0 && <strong className="vd2-countdown">{remaining} s</strong>}
         <footer>
           <button type="button" onClick={onCancel}>Cancel</button>
-          <button type="button" onClick={() => onStart(prepared.phase)} disabled={!ready || starting}>
-            Start {ready ? '(Space)' : ''}
-          </button>
+          <button type="button" onClick={() => onStart(prepared.phase)} disabled={starting}>Start (Space)</button>
         </footer>
       </section>
     </div>
@@ -848,6 +845,7 @@ function PumpProbeVD2() {
   useEffect(() => {
     if (!preparedPhase) return undefined;
     setPreparationTick(Date.now());
+    window.requestAnimationFrame(() => document.querySelector('.vd2-phase-dialog')?.focus());
     const interval = window.setInterval(() => setPreparationTick(Date.now()), 200);
     return () => window.clearInterval(interval);
   }, [preparedPhase]);
@@ -857,16 +855,16 @@ function PumpProbeVD2() {
     : 0;
 
   useEffect(() => {
-    if (!preparedPhase || preparationRemaining > 0 || protocolStarting) return undefined;
+    if (!preparedPhase || protocolStarting) return undefined;
     const onKeyDown = (event) => {
       const tagName = event.target?.tagName;
-      if (event.code !== 'Space' || ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(tagName)) return;
+      if (event.code !== 'Space' || ['INPUT', 'SELECT', 'TEXTAREA'].includes(tagName)) return;
       event.preventDefault();
       startProtocolPhase(preparedPhase.phase);
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [preparationRemaining, preparedPhase, protocolStarting, startProtocolPhase]);
+  }, [preparedPhase, protocolStarting, startProtocolPhase]);
 
   const loadHardware = useCallback(async () => {
     setHardwareLoading(true);

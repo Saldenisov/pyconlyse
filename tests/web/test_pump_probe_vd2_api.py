@@ -57,7 +57,7 @@ class RecoverableDG645Proxy:
         return None
 
 
-def test_protocol_routes_start_one_brew_his(monkeypatch):
+def test_protocol_routes_start_one_bruit_his(monkeypatch):
     protocol = Vd2MeasurementProtocol(FakeProxy)
     monkeypatch.setattr(vd2_api_module, "_measurement_protocol", protocol)
     app = Flask(__name__)
@@ -68,13 +68,13 @@ def test_protocol_routes_start_one_brew_his(monkeypatch):
         assert initial.get_json()["status"] == "idle"
 
         started = client.post("/api/pump-probe-vd2/protocol/start", json={
-            "phase": "BREW",
+            "phase": "BRUIT",
             "frames_per_his": 4,
             "output_root": r"E:\\DATA_VD2",
             "run_name": "test_run",
         })
         assert started.status_code == 200
-        assert started.get_json()["his_path"].endswith(r"test_run\NOISE.his")
+        assert started.get_json()["his_path"].endswith(r"test_run\BRUIT.his")
 
     protocol.wait(1)
     assert protocol.status()["status"] == "completed"
