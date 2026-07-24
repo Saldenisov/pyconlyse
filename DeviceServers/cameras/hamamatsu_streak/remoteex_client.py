@@ -83,7 +83,11 @@ class RemoteExClient:
         with self._lock:
             if self._command_socket is None:
                 self._command_socket = self._open_socket(self.command_port)
-                greeting = self._read_line(self._command_socket)
+                try:
+                    greeting = self._read_line(self._command_socket)
+                except Exception:
+                    self.close()
+                    raise
                 if greeting.strip() != READY_GREETING:
                     self.close()
                     raise RemoteExTransportError(
@@ -101,7 +105,11 @@ class RemoteExClient:
             if self._data_socket is not None:
                 return
             self._data_socket = self._open_socket(self.data_port)
-            greeting = self._read_line(self._data_socket)
+            try:
+                greeting = self._read_line(self._data_socket)
+            except Exception:
+                self.close_data_port()
+                raise
             if greeting.strip() != DATA_READY_GREETING:
                 self.close_data_port()
                 raise RemoteExTransportError(

@@ -1092,8 +1092,14 @@ class DS_HAMAMATSU_STREAK(DS_General):
     @command(dtype_in=str, dtype_out=str)
     def SaveCurrentSequence(self, path: str):
         controller = self._require_controller()
-        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        target = Path(path)
+        target.parent.mkdir(parents=True, exist_ok=True)
         saved = controller.save_current_sequence_his(path)
+        deadline = time.monotonic() + 5.0
+        while not target.is_file() and time.monotonic() < deadline:
+            time.sleep(0.2)
+        if not target.is_file():
+            raise RuntimeError(f"RemoteEx reported HIS save complete, but file is missing: {path}")
         self.last_saved_sequence_path_value = saved
         self.get_controller_status()
         return saved

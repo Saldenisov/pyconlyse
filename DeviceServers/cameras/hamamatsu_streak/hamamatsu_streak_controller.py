@@ -108,16 +108,44 @@ class HamamatsuStreakController:
         self.snapshot.remoteex_status = "disconnected"
         self.snapshot.application_running = False
 
-    def execute_raw(self, command: str) -> RemoteExResponse:
+    def _reconnect_transport(self, timeout: float) -> None:
+        """Reconnect without flooding RemoteEx while it is busy with a long action."""
+        deadline = time.monotonic() + max(0.1, float(timeout))
+        last_error: Optional[Exception] = None
+        while time.monotonic() < deadline:
+            self.client.close()
+            try:
+                self.client.connect()
+                return
+            except RemoteExTransportError as exc:
+                last_error = exc
+                time.sleep(0.5)
+        raise RemoteExTransportError(
+            f"RemoteEx did not accept a reconnect within {timeout:.1f}s: {last_error}"
+        )
+
+    def execute_raw(
+        self,
+        command: str,
+        *,
+        retry_on_transport: bool = False,
+        reconnect_timeout: float = 10.0,
+    ) -> RemoteExResponse:
+        """Execute one RemoteEx command.
+
+        Commands which change acquisition state or write files are never replayed
+        automatically: RemoteEx can close its socket after accepting such a
+        command. Read-only status calls opt into a reconnect-and-retry path.
+        """
         if not self.client.is_connected:
-            self.client.connect()
+            self._reconnect_transport(reconnect_timeout)
         try:
             response = self.client.send_command_checked(command)
         except RemoteExTransportError:
-            # Recover only after a genuine transport failure. Reconnecting for
-            # every command makes TaRemoteEx show its TCP_NODELAY error dialog.
             self.client.close()
-            self.client.connect()
+            if not retry_on_transport:
+                raise
+            self._reconnect_transport(reconnect_timeout)
             response = self.client.send_command_checked(command)
         self.last_command = command
         self.last_response_text = response.raw_line
@@ -190,7 +218,7 @@ class HamamatsuStreakController:
         return response
 
     def status(self) -> HamamatsuStreakSnapshot:
-        response = self.execute_raw("Status()")
+        response = self.execute_raw("Status()", retry_on_transport=True)
         self.snapshot.application_running = True
         raw_status = response.parameter(0, "unknown") or "unknown"
         self.snapshot.remoteex_status = {
@@ -201,7 +229,9 @@ class HamamatsuStreakController:
         return self.snapshot
 
     def get_async_status(self) -> AsyncStatus:
-        response = self.execute_raw("AsyncCommandStatus()")
+        response = self.execute_raw(
+            "AsyncCommandStatus()", retry_on_transport=True, reconnect_timeout=20.0
+        )
         return AsyncStatus(
             pending=bool(int(response.parameter(0, "0") or "0")),
             preparing=bool(int(response.parameter(1, "0") or "0")),
@@ -215,7 +245,15 @@ class HamamatsuStreakController:
         deadline = time.monotonic() + float(timeout or self.async_timeout)
         status = AsyncStatus()
         while time.monotonic() < deadline:
-            status = self.get_async_status()
+            try:
+                status = self.get_async_status()
+            except RemoteExTransportError:
+                # SeqSave can close its control socket while HPD-TA flushes a
+                # large HIS. Keep waiting; polling is idempotent and reconnects
+                # with backoff instead of issuing a second SeqSave.
+                self.snapshot.remoteex_status = "busy"
+                time.sleep(max(0.1, poll_interval))
+                continue
             if not status.pending:
                 return status
             time.sleep(poll_interval)
@@ -530,7 +568,15 @@ class HamamatsuStreakController:
         return path
 
     def save_current_sequence_his(self, path: str, overwrite: bool = True) -> str:
-        self.execute_raw(build_command("SeqSave", "HIS", path, int(bool(overwrite))))
+        try:
+            self.execute_raw(
+                build_command("SeqSave", "HIS", path, int(bool(overwrite))),
+                retry_on_transport=False,
+            )
+        except RemoteExTransportError:
+            # The command may already be accepted when RemoteEx resets the
+            # socket for the file writer. Never issue another SeqSave here.
+            self.last_response_text = "SeqSave socket closed; waiting for completion"
         self.wait_for_async_idle()
         self.snapshot.last_saved_sequence_path = path
         return path

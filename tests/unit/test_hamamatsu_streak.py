@@ -17,6 +17,7 @@ from DeviceServers.cameras.hamamatsu_streak.DS_HAMAMATSU_STREAK import (
 from DeviceServers.cameras.hamamatsu_streak.remoteex_protocol import (
     RemoteExCommandError,
     RemoteExResponse,
+    RemoteExTransportError,
     build_app_start_command,
     parse_response_line,
 )
@@ -241,6 +242,43 @@ class TestHamamatsuStreakController(unittest.TestCase):
             fake.sent_commands,
             [r"SeqSave(HIS,D:\Test\run01.his,1)", "AsyncCommandStatus()"],
         )
+
+    def test_save_sequence_waits_through_a_transport_reset_without_replaying(self):
+        class ResetDuringAsyncClient(FakeRemoteExClient):
+            def __init__(self):
+                super().__init__(
+                    {
+                        r"SeqSave(HIS,D:\Test\run02.his,1)": [
+                            RemoteExResponse("0,SeqSave", 0, "SeqSave", [])
+                        ],
+                        "AsyncCommandStatus()": [
+                            RemoteExResponse(
+                                "0,AsyncCommandStatus,0,0,0,SeqSave",
+                                0,
+                                "AsyncCommandStatus",
+                                ["0", "0", "0", "SeqSave"],
+                            )
+                        ],
+                    }
+                )
+                self.reset_once = True
+
+            def send_command_checked(self, command, timeout=None):
+                if command == "AsyncCommandStatus()" and self.reset_once:
+                    self.reset_once = False
+                    self.is_connected = False
+                    raise RemoteExTransportError("socket reset during HIS flush")
+                return super().send_command_checked(command, timeout=timeout)
+
+        fake = ResetDuringAsyncClient()
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+
+        saved = controller.save_current_sequence_his(r"D:\Test\run02.his")
+
+        self.assertEqual(saved, r"D:\Test\run02.his")
+        self.assertEqual(fake.sent_commands.count(r"SeqSave(HIS,D:\Test\run02.his,1)"), 1)
+        self.assertEqual(fake.sent_commands.count("AsyncCommandStatus()"), 1)
 
     def test_refresh_cached_state_reads_key_parameters(self):
         fake = FakeRemoteExClient(
