@@ -135,6 +135,7 @@ class TestHamamatsuStreakController(unittest.TestCase):
         )
         self.assertFalse(device.connected_value)
         self.assertEqual(device.remoteex_status_value, "disconnected")
+        self.assertEqual(str(device.state).split(".")[-1], "ON")
 
     def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
         fake = FakeRemoteExClient(

@@ -243,6 +243,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.connected_value = True
 
     def turn_off_local(self) -> Union[int, str]:
+        """Detach RemoteEx without stopping the Tango device server."""
         try:
             if self.controller is not None:
                 self.controller.disconnect()
@@ -252,7 +253,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.connected_value = False
             self.application_running_value = False
             self.remoteex_status_value = "disconnected"
-            self.set_state(DevState.OFF)
+            self.set_state(DevState.ON)
         return 0
 
     def _create_client(self) -> RemoteExClient:
@@ -904,7 +905,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
             else "schtasks /run stop TaRemoteEx"
         )
         self.last_response_value = controller.last_response_text if controller is not None else "TaRemoteEx stopped"
-        self.set_state(DevState.OFF)
+        # RemoteEx is an optional companion process. Its absence must not make
+        # this still-running Tango device appear offline in the web control.
+        self.set_state(DevState.ON)
 
     @command(dtype_out=str)
     def PrepareDG645ForHPDTA(self):
