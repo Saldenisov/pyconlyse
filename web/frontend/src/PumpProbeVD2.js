@@ -486,6 +486,29 @@ function Vd2StartBlockedDialog({ reasons, onClose }) {
   );
 }
 
+function Vd2ErrorTray({ errors, activeErrorId, onPrevious, onNext, onCopy, onDismiss, onClear }) {
+  if (!errors.length) return null;
+  const activeIndex = Math.max(0, errors.findIndex((entry) => entry.id === activeErrorId));
+  const entry = errors[activeIndex];
+  return (
+    <section className="vd2-error-tray" role="alert" aria-live="assertive">
+      <div className="vd2-error-tray-meta">
+        <strong>{entry.source}</strong>
+        <span>{activeIndex + 1} / {errors.length}</span>
+        <time dateTime={new Date(entry.timestamp).toISOString()}>{new Date(entry.timestamp).toLocaleTimeString()}</time>
+      </div>
+      <pre>{entry.message}</pre>
+      <div className="vd2-error-tray-actions">
+        <button type="button" onClick={onPrevious} disabled={errors.length < 2} title="Previous error" aria-label="Previous error">&lt;</button>
+        <button type="button" onClick={onNext} disabled={errors.length < 2} title="Next error" aria-label="Next error">&gt;</button>
+        <button type="button" onClick={() => onCopy(entry.message)} title="Copy error" aria-label="Copy error">Copy</button>
+        <button type="button" onClick={() => onDismiss(entry.id)} title="Close this error" aria-label="Close this error">x</button>
+        <button type="button" onClick={onClear}>Clear all</button>
+      </div>
+    </section>
+  );
+}
+
 function Vd2HardwareModal({ open, power, tango, loading, error, onClose, onRefresh, onToggle, onAllPower, onServer }) {
   if (!open) return null;
   const outputFor = (channel) => power.outputs.find((output) => Number(output.id) === channel.outputId);
@@ -550,8 +573,8 @@ function Vd2HardwareModal({ open, power, tango, loading, error, onClose, onRefre
 function PumpProbeVD2() {
   const [state, setState] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [error, setError] = useState('');
-  const [pollError, setPollError] = useState('');
+  const [errors, setErrors] = useState([]);
+  const [activeErrorId, setActiveErrorId] = useState(null);
   const [previewError, setPreviewError] = useState('');
   const [previewEnabled, setPreviewEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -584,6 +607,38 @@ function PumpProbeVD2() {
   const previewOverlay = useRef(null);
   const nextRoiId = useRef(1);
   const phaseClickTimer = useRef(null);
+  const errorSequence = useRef(0);
+  const lastPollError = useRef({ state: '', protocol: '' });
+
+  const reportError = useCallback((message, source = 'Control') => {
+    const text = String(message || '').trim();
+    if (!text) return;
+    const id = `${Date.now()}-${++errorSequence.current}`;
+    setErrors((current) => [...current, {
+      id,
+      source,
+      message: text,
+      timestamp: Date.now(),
+    }].slice(-50));
+    setActiveErrorId(id);
+  }, []);
+
+  const reportPollError = useCallback((message, request) => {
+    const text = String(message || '').trim();
+    if (!text || lastPollError.current[request] === text) return;
+    lastPollError.current[request] = text;
+    reportError(text, 'Background check');
+  }, [reportError]);
+
+  useEffect(() => {
+    if (!errors.length) {
+      setActiveErrorId(null);
+      return;
+    }
+    if (!errors.some((entry) => entry.id === activeErrorId)) {
+      setActiveErrorId(errors[errors.length - 1].id);
+    }
+  }, [activeErrorId, errors]);
 
   const loadState = useCallback(async () => {
     if (requestActive.current) return;
@@ -593,13 +648,13 @@ function PumpProbeVD2() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read VD2 state');
       setState(payload);
-      setPollError('');
+      lastPollError.current.state = '';
     } catch (requestError) {
-      setPollError(requestError.message);
+      reportPollError(requestError.message, 'state');
     } finally {
       requestActive.current = false;
     }
-  }, []);
+  }, [reportPollError]);
 
   useEffect(() => {
     loadState();
@@ -613,11 +668,11 @@ function PumpProbeVD2() {
       const payload = await response.json();
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Unable to read VD2 protocol');
       setProtocol(payload);
-      setPollError('');
+      lastPollError.current.protocol = '';
     } catch (requestError) {
-      setPollError(requestError.message);
+      reportPollError(requestError.message, 'protocol');
     }
-  }, []);
+  }, [reportPollError]);
 
   useEffect(() => {
     loadProtocol();
@@ -698,13 +753,12 @@ function PumpProbeVD2() {
         setPreviewEnabled(false);
         setPreviewError('');
       }
-      setError('');
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [reportError]);
 
   const writeParameter = useCallback((name, value) => runRequest(`/parameter/${name}`, { value }), [runRequest]);
   const runCommand = useCallback((name) => runRequest(`/command/${name}`), [runRequest]);
@@ -726,9 +780,9 @@ function PumpProbeVD2() {
       setHardwarePower({ outputs: powerPayload.outputs || [] });
       setRuntime(runtimePayload);
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message, 'Startup check');
     }
-  }, []);
+  }, [reportError]);
 
   useEffect(() => {
     loadStartupReadiness();
@@ -750,13 +804,12 @@ function PumpProbeVD2() {
       if (!response.ok || !payload.success) throw new Error(payload.error || 'Experiment initialization failed');
       if (payload.device) setState(payload.device);
       await refreshAll();
-      setError('');
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message, 'Initialize experiment');
     } finally {
       setBusy(false);
     }
-  }, [refreshAll]);
+  }, [refreshAll, reportError]);
 
   const deinitializeExperiment = useCallback(async () => {
     setBusy(true);
@@ -770,13 +823,12 @@ function PumpProbeVD2() {
       setPreview(null);
       setPreviewEnabled(false);
       await refreshAll();
-      setError('');
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message, 'Deinitialize experiment');
     } finally {
       setBusy(false);
     }
-  }, [refreshAll]);
+  }, [refreshAll, reportError]);
 
   const controlRemoteEx = useCallback(async (action) => {
     setBusy(true);
@@ -790,13 +842,12 @@ function PumpProbeVD2() {
       setRuntime(payload);
       if (payload.device) setState(payload.device);
       await loadState();
-      setError('');
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message, 'RemoteEx');
     } finally {
       setBusy(false);
     }
-  }, [loadState]);
+  }, [loadState, reportError]);
 
   const updateProtocolSetting = useCallback((name, value) => {
     setProtocolSettings((current) => ({ ...current, [name]: value }));
@@ -822,13 +873,12 @@ function PumpProbeVD2() {
       setPreparedPhase(null);
       setPreviewEnabled(false);
       setPreviewError('');
-      setError('');
     } catch (requestError) {
-      setError(requestError.message);
+      reportError(requestError.message, `Start ${phase}`);
     } finally {
       setProtocolStarting(false);
     }
-  }, [protocolSettings]);
+  }, [protocolSettings, reportError]);
 
   const prepareProtocolPhase = useCallback((phase) => {
     window.clearTimeout(phaseClickTimer.current);
@@ -892,10 +942,11 @@ function PumpProbeVD2() {
       setHardwareTango(Object.fromEntries(entries));
     } catch (requestError) {
       setHardwareError(requestError.message);
+      reportError(requestError.message, 'Hardware');
     } finally {
       setHardwareLoading(false);
     }
-  }, []);
+  }, [reportError]);
 
   const toggleHardwarePower = useCallback(async (channel, enabled) => {
     const outputs = hardwarePower.outputs || [];
@@ -912,9 +963,10 @@ function PumpProbeVD2() {
       await loadHardware();
     } catch (requestError) {
       setHardwareError(requestError.message);
+      reportError(requestError.message, 'Hardware power');
       setHardwareLoading(false);
     }
-  }, [hardwarePower.outputs, loadHardware]);
+  }, [hardwarePower.outputs, loadHardware, reportError]);
 
   const setAllHardwarePower = useCallback(async (enabled) => {
     const outputs = hardwarePower.outputs || [];
@@ -932,9 +984,10 @@ function PumpProbeVD2() {
       await loadHardware();
     } catch (requestError) {
       setHardwareError(requestError.message);
+      reportError(requestError.message, 'Hardware power');
       setHardwareLoading(false);
     }
-  }, [hardwarePower.outputs, loadHardware]);
+  }, [hardwarePower.outputs, loadHardware, reportError]);
 
   const controlHardwareServer = useCallback(async (server, action) => {
     setHardwareLoading(true);
@@ -950,9 +1003,10 @@ function PumpProbeVD2() {
       await loadState();
     } catch (requestError) {
       setHardwareError(requestError.message);
+      reportError(requestError.message, 'Tango server');
       setHardwareLoading(false);
     }
-  }, [loadHardware, loadState]);
+  }, [loadHardware, loadState, reportError]);
 
   useEffect(() => {
     if (hardwareOpen) loadHardware();
@@ -1058,6 +1112,38 @@ function PumpProbeVD2() {
     }
     runCommand('StartApplication');
   };
+  const showPreviousError = () => {
+    if (errors.length < 2) return;
+    const activeIndex = Math.max(0, errors.findIndex((entry) => entry.id === activeErrorId));
+    setActiveErrorId(errors[(activeIndex - 1 + errors.length) % errors.length].id);
+  };
+  const showNextError = () => {
+    if (errors.length < 2) return;
+    const activeIndex = Math.max(0, errors.findIndex((entry) => entry.id === activeErrorId));
+    setActiveErrorId(errors[(activeIndex + 1) % errors.length].id);
+  };
+  const dismissError = (id) => setErrors((current) => current.filter((entry) => entry.id !== id));
+  const clearErrors = () => setErrors([]);
+  const copyError = async (message) => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(message);
+        return;
+      }
+      const textarea = document.createElement('textarea');
+      textarea.value = message;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.append(textarea);
+      textarea.select();
+      const copied = document.execCommand('copy');
+      textarea.remove();
+      if (!copied) throw new Error('Browser refused clipboard access');
+    } catch (clipboardError) {
+      reportError(`Could not copy error: ${clipboardError.message}`, 'Copy error');
+    }
+  };
 
   return (
     <main className="vd2-page">
@@ -1092,7 +1178,15 @@ function PumpProbeVD2() {
         </div>
       </header>
 
-      {(error || pollError) && <div className="vd2-error" role="alert">{error || pollError}</div>}
+      <Vd2ErrorTray
+        errors={errors}
+        activeErrorId={activeErrorId}
+        onPrevious={showPreviousError}
+        onNext={showNextError}
+        onCopy={copyError}
+        onDismiss={dismissError}
+        onClear={clearErrors}
+      />
 
       <div className="vd2-tabs" role="tablist" aria-label="VD2 control views">
         <button type="button" role="tab" aria-selected={activeTab === 'acquisition'} className={activeTab === 'acquisition' ? 'is-active' : ''} onClick={() => setActiveTab('acquisition')}>Acquisition</button>

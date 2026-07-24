@@ -75,6 +75,55 @@
 .vd2-header-actions .vd2-deinitialize { border-color: #a65757; color: #ffadad; }
 .vd2-error { margin-top: 10px; padding: 9px 12px; border: 1px solid #a06f28; background: #30240d; color: #ffd669; }
 
+.vd2-error-tray {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 14px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #aa7140;
+  background: #34210f;
+  color: #ffe0a0;
+  animation: vd2-error-arrive 150ms ease-out;
+}
+
+.vd2-error-tray-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.vd2-error-tray-meta strong { color: #ffd365; }
+.vd2-error-tray-meta span,
+.vd2-error-tray-meta time { color: #c9b792; }
+.vd2-error-tray pre {
+  grid-column: 1 / -1;
+  max-height: 148px;
+  margin: 0;
+  overflow: auto;
+  color: inherit;
+  font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.vd2-error-tray-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.vd2-error-tray-actions button { min-width: 32px; padding: 0 8px; }
+.vd2-error-tray-actions button:last-child { min-width: 74px; }
+
+@keyframes vd2-error-arrive {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .vd2-modal-backdrop {
   position: fixed;
   z-index: 40;
