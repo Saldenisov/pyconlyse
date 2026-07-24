@@ -49,6 +49,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
     remoteex_task_name = device_property(
         dtype=str, default_value="Pyconlyse-TaRemoteEx"
     )
+    remoteex_stop_task_name = device_property(
+        dtype=str, default_value="Pyconlyse-Stop-TaRemoteEx"
+    )
     remoteex_start_timeout_s = device_property(dtype=float, default_value=12.0)
     dg645_device = device_property(dtype=str, default_value="manip/sync/DG645")
     dg645_hpdta_recall_slot = device_property(dtype=int, default_value=9)
@@ -864,27 +867,42 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 shutdown_error = exc
 
         if self._windows_process_running("TaRemoteEx.exe"):
-            # AppEnd can make RemoteEx close its command socket before it sends
-            # the final reply. The local Tango server owns the process, so it
-            # can complete shutdown without relying on that broken socket. This
-            # also handles a Tango-server restart between AppEnd and shutdown.
+            # RemoteEx runs elevated through its interactive scheduled task.
+            # A non-elevated Tango device server cannot taskkill that process.
+            # The dedicated stop task runs taskkill in the same elevated
+            # interactive context as the RemoteEx launcher.
+            task_name = str(
+                self.remoteex_stop_task_name or "Pyconlyse-Stop-TaRemoteEx"
+            )
             completed = subprocess.run(
-                ["taskkill.exe", "/im", "TaRemoteEx.exe", "/f"],
+                ["schtasks.exe", "/run", "/tn", f"\\{task_name}"],
                 capture_output=True,
                 text=True,
                 timeout=10,
                 check=False,
             )
-            if completed.returncode != 0 and self._windows_process_running("TaRemoteEx.exe"):
+            deadline = time.monotonic() + 10.0
+            while (
+                self._windows_process_running("TaRemoteEx.exe")
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.25)
+            if self._windows_process_running("TaRemoteEx.exe"):
                 detail = (completed.stderr or completed.stdout or str(shutdown_error)).strip()
-                raise RuntimeError(f"Could not stop TaRemoteEx: {detail}") from shutdown_error
+                raise RuntimeError(
+                    f"Could not stop TaRemoteEx through elevated task {task_name}: {detail}"
+                ) from shutdown_error
         self.controller = None
         self.client = None
         self.connected_value = False
         self.application_running_value = False
         self.remoteex_status_value = "disconnected"
         self.busy_command_value = ""
-        self.last_command_value = controller.last_command if controller is not None else "taskkill TaRemoteEx.exe"
+        self.last_command_value = (
+            controller.last_command
+            if controller is not None
+            else "schtasks /run stop TaRemoteEx"
+        )
         self.last_response_value = controller.last_response_text if controller is not None else "TaRemoteEx stopped"
         self.set_state(DevState.OFF)
 

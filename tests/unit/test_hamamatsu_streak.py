@@ -2,6 +2,7 @@ import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -95,6 +96,45 @@ class TestHamamatsuStreakController(unittest.TestCase):
         self.assertFalse(device.application_running_value)
         self.assertEqual(device.remoteex_status_value, "idle")
         self.assertEqual(device.busy_command_value, "")
+
+    def test_stop_remoteex_uses_elevated_stop_task(self):
+        class StopDevice:
+            application_running_value = False
+            controller = None
+            remoteex_stop_task_name = "Pyconlyse-Stop-TaRemoteEx"
+            connected_value = True
+            remoteex_status_value = "idle"
+            busy_command_value = "Status()"
+            last_command_value = ""
+            last_response_value = ""
+
+            def __init__(self):
+                self._process_states = iter([True, False, False])
+
+            def _windows_process_running(self, _name):
+                return next(self._process_states)
+
+            def set_state(self, state):
+                self.state = state
+
+        device = StopDevice()
+        completed = SimpleNamespace(returncode=0, stdout="started", stderr="")
+
+        with patch(
+            "DeviceServers.cameras.hamamatsu_streak.DS_HAMAMATSU_STREAK.subprocess.run",
+            return_value=completed,
+        ) as run:
+            DS_HAMAMATSU_STREAK.StopRemoteEx(device)
+
+        run.assert_called_once_with(
+            ["schtasks.exe", "/run", "/tn", "\\Pyconlyse-Stop-TaRemoteEx"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        self.assertFalse(device.connected_value)
+        self.assertEqual(device.remoteex_status_value, "disconnected")
 
     def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
         fake = FakeRemoteExClient(
