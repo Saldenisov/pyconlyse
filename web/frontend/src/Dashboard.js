@@ -112,6 +112,8 @@ const Dashboard = () => {
   const [starters, setStarters] = useState([]);
   const [devices, setDevices] = useState([]);
   const [devicesLoading, setDevicesLoading] = useState(true);
+  const [deviceSnapshotAge, setDeviceSnapshotAge] = useState(null);
+  const [deviceSnapshotRefreshing, setDeviceSnapshotRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [serverActionInProgress, setServerActionInProgress] = useState('');
@@ -199,6 +201,12 @@ const Dashboard = () => {
             availableDevices,
           }));
           setDevices(sortDevicesByAvailability(deviceList));
+          setDeviceSnapshotAge(
+            Number.isFinite(Number(devicesData.snapshot_age_s))
+              ? Number(devicesData.snapshot_age_s)
+              : null
+          );
+          setDeviceSnapshotRefreshing(Boolean(devicesData.refreshing));
           setError('');
         }
       } catch (err) {
@@ -216,7 +224,7 @@ const Dashboard = () => {
     loadTangoStatus();
     loadDevices();
     const tangoIntervalId = setInterval(loadTangoStatus, 5000);
-    const devicesIntervalId = setInterval(loadDevices, 30000);
+    const devicesIntervalId = setInterval(loadDevices, 5000);
 
     return () => {
       disposed = true;
@@ -261,7 +269,7 @@ const Dashboard = () => {
 
       const [tangoResponse, devicesResponse] = await Promise.all([
         fetch('/api/tango_status'),
-        fetch('/api/devices?probe_state=1&include_dserver=1&include_admin=1'),
+        fetch('/api/devices?probe_state=1&include_dserver=1&include_admin=1&stale_ok=1'),
       ]);
       if (tangoResponse.ok && devicesResponse.ok) {
         const tangoData = await tangoResponse.json();
@@ -339,6 +347,12 @@ const Dashboard = () => {
               ? 'Checking devices...'
               : `${summary.availableDevices} / ${summary.deviceCount} reachable`}
           </p>
+          {deviceSnapshotAge !== null && (
+            <p style={{ margin: 0, color: '#667085', fontSize: '0.85rem' }}>
+              Snapshot: {deviceSnapshotAge.toFixed(0)} s ago
+              {deviceSnapshotRefreshing ? ', updating' : ''}
+            </p>
+          )}
         </div>
       </div>
 

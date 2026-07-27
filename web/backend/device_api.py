@@ -806,7 +806,7 @@ def _schedule_device_list_refresh(cache_key):
     return True
 
 
-def start_device_snapshot_monitor(interval_s=30.0):
+def start_device_snapshot_monitor(interval_s=10.0):
     """Keep the dashboard snapshot warm while the web backend is running."""
     global _device_snapshot_monitor_started
     with _device_snapshot_monitor_lock:
@@ -948,6 +948,9 @@ def control_server():
                     'Check the server console and hardware power.'
                 ),
             }), 503
+
+        # Preserve the last snapshot for clients, then refresh it in the background.
+        _schedule_device_list_refresh((True, True, True))
 
         return jsonify({
             'success': True,
