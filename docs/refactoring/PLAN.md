@@ -1,0 +1,99 @@
+# PyConlyse Refactoring Plan
+
+## Objective
+
+Reduce production monoliths in `DeviceServers`, `web/backend`, and `web/frontend` while preserving Tango names, commands, attributes, HTTP routes, JSON payloads, experiment safety, and current V0 work.
+
+This document is an execution plan, not permission to operate laboratory equipment.
+
+## Non-negotiable safety rules
+
+- Agents never power hardware.
+- Agents never move motors or translation stages.
+- Agents never open shutters or Faraday devices.
+- Agents never start HPD-TA, RemoteEx, cameras, generators, or other acquisition hardware.
+- Agents never deploy or restart Everest services autonomously.
+- Any hardware action, remote restart, or deployment requires an explicit manual gate from the user after tests and review pass.
+- Existing dirty V0 files remain protected: `web/frontend/src/PumpProbeV0.js`, `web/frontend/src/css/PumpProbeV0.css`, `web/frontend/src/pump-probe-v0/components.js`, and unrelated `tmp/` content.
+
+## Operating model
+
+`Sol` coordinates and reviews. `Terra` performs semantic refactoring and lifecycle work. `Luna` performs mechanical extraction only. `Sol` is read-only during review. Exactly one writing agent owns each file in each phase.
+
+Each phase must produce:
+
+1. Focused tests and static checks.
+2. A reviewable commit.
+3. A contract and rollback note.
+4. A manual approval request before any remote or hardware action.
+
+## Phases
+
+### Phase 0: Baseline and contracts
+
+- Inventory imports, duplicate legacy trees, generated files, wrappers, and configuration sources.
+- Record current Tango and HTTP contracts in `CONTRACTS.md`.
+- Add characterization tests without changing behavior.
+- Establish test commands and expected failures in `TEST_MATRIX.md`.
+- Freeze dirty V0 files from unrelated work.
+
+### Phase 1: DeviceServer stability foundation
+
+Owner: Terra.
+
+- Split shared lifecycle, state, configuration, error, archive, health, and retry concerns from `DeviceServers/base`.
+- Replace unsafe dynamic configuration evaluation with validated JSON/config loading.
+- Define independent server, transport, hardware, and operation states.
+- Standardize bounded timeouts, backoff, reconnect, cancellation, and structured errors.
+- Ensure polling cannot implicitly power equipment or start motion.
+
+### Phase 2: DeviceServer extraction
+
+One device family per commit, with Luna handling mechanical moves and Terra reviewing behavior:
+
+1. OWIS motion and aggregator.
+2. Hamamatsu RemoteEx transport and Tango adapter.
+3. Andor CCD/spectrograph.
+4. DG645 and DAQmx.
+5. Archive and remaining camera/power servers.
+
+Target structure per server:
+
+```text
+device_family/
+  config.py
+  driver.py
+  controller.py
+  tango_device.py
+  registration.py
+```
+
+### Phase 3: Backend boundaries
+
+- Split `device_api.py` into discovery/snapshots, Astor control, PDU, cameras, spectrographs, DAQmx, and generic device services.
+- Split treatment routes from file access, cache, conversion, OD calculation, selection, and export.
+- Split V0/VD2 acquisition orchestration from Flask route handlers.
+- Preserve route paths and payloads until an explicit versioned migration exists.
+
+### Phase 4: Frontend boundaries
+
+- Split `TabsControl.js` by equipment and treatment capability.
+- Split V0 and VD2 into API hooks, reducers/state machines, hardware controls, files, plots, selectors, and error presentation.
+- Split Plotly/heatmap/kinetics adapters from view components.
+- Keep current V0 dirty files excluded until their owner explicitly assigns them.
+
+### Phase 5: Cleanup and deployment readiness
+
+- Quarantine backups, generated registration scripts, vendor code, and duplicate legacy trees.
+- Remove compatibility shims only after import and runtime usage scans pass.
+- Build reproducible Windows wrappers and validate Astor metadata.
+- Run local tests and Everest software-only smoke tests.
+- Deploy or restart only after manual approval.
+
+## Completion criteria
+
+- No production file remains a monolith solely for historical reasons.
+- Public Tango and HTTP contracts are covered by tests.
+- Hardware I/O has explicit timeout, cancellation, readback, and error mapping.
+- No implicit power-up or motion occurs during polling or status refresh.
+- Every phase has a commit, test record, reviewer result, and rollback point.

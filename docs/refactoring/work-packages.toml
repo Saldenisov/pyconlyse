@@ -1,0 +1,103 @@
+version = 1
+
+# These paths are reserved for the active V0 work. No refactoring package may
+# modify them until an explicit package is created for that work.
+protected_paths = [
+  "web/frontend/src/PumpProbeV0.js",
+  "web/frontend/src/css/PumpProbeV0.css",
+  "web/frontend/src/pump-probe-v0/components.js",
+  "tmp/**",
+]
+
+[packages.T1]
+agent = "terra"
+description = "Shared Tango foundation"
+allowed_paths = [
+  "DeviceServers/base/general.py",
+  "DeviceServers/base/camera.py",
+  "DeviceServers/base/motor.py",
+]
+allowed_globs = ["tests/device_servers/base/**"]
+
+[packages.T2]
+agent = "terra"
+description = "OWIS motion safety"
+allowed_paths = ["DeviceServers/motion/owis/DS_OWIS_PS90.py"]
+allowed_globs = [
+  "tests/device_servers/motion/**",
+  "DeviceServers/motion/owis/*_adapter.py",
+]
+
+[packages.T3]
+agent = "terra"
+description = "Hamamatsu RemoteEx transport"
+allowed_paths = [
+  "DeviceServers/cameras/hamamatsu_streak/DS_HAMAMATSU_STREAK.py",
+  "DeviceServers/cameras/hamamatsu_streak/remoteex_client.py",
+  "DeviceServers/cameras/hamamatsu_streak/hamamatsu_streak_controller.py",
+]
+allowed_globs = [
+  "DeviceServers/cameras/hamamatsu_streak/*.py",
+  "tests/device_servers/cameras/hamamatsu_streak/**",
+]
+
+[packages.T4]
+agent = "terra"
+description = "Backend device API"
+allowed_paths = ["web/backend/device_api.py"]
+allowed_globs = ["tests/web/device_api/**", "tests/web/test_device_api*.py"]
+
+[packages.T5]
+agent = "terra"
+description = "Treatment backend domains"
+allowed_paths = [
+  "web/backend/treatment_api.py",
+  "web/backend/treatment_service.py",
+  "web/backend/pump_probe_vd2_api.py",
+]
+allowed_globs = [
+  "tests/web/treatment/**",
+  "tests/web/test_treatment*.py",
+  "tests/web/test_pump_probe_vd2*.py",
+]
+
+[packages.T6]
+agent = "terra"
+description = "Non-V0 frontend behavior"
+allowed_paths = ["web/frontend/src/TabsControl.js"]
+allowed_globs = [
+  "web/frontend/src/TopSection.js",
+  "web/frontend/src/components/**",
+  "web/frontend/src/tabs/**",
+  "web/frontend/src/utils/**",
+  "web/frontend/src/css/**",
+]
+
+[packages.L1]
+agent = "luna"
+description = "DG645 mechanical extraction"
+allowed_globs = ["DeviceServers/instruments/dg645/*.py"]
+
+[packages.L2]
+agent = "luna"
+description = "DAQmx client and UI extraction"
+allowed_globs = ["DeviceServers/control/daqmx/*.py"]
+
+[packages.L3]
+agent = "luna"
+description = "Treatment helper extraction"
+allowed_paths = [
+  "web/backend/treatment_network_path.py",
+  "web/backend/treatment_file_cache.py",
+  "web/backend/folder_api.py",
+]
+allowed_globs = ["tests/unit/test_treatment_*path.py", "tests/unit/test_treatment_file_cache.py"]
+
+[packages.L4]
+agent = "luna"
+description = "Existing non-V0 web component extraction"
+allowed_globs = [
+  "web/frontend/src/components/**",
+  "web/frontend/src/tabs/**",
+  "web/frontend/src/utils/**",
+]
