@@ -54,6 +54,8 @@ function PumpProbeV0() {
   const [dataParent, setDataParent] = useState('');
   const [dataEntries, setDataEntries] = useState([]);
   const [dataSelectedPath, setDataSelectedPath] = useState('');
+  const [dataTopPath, setDataTopPath] = useState('');
+  const [dataFolderName, setDataFolderName] = useState('');
   const [dataLoading, setDataLoading] = useState(false);
   const [dataError, setDataError] = useState('');
   const [loadedOdDataset, setLoadedOdDataset] = useState(null);
@@ -312,6 +314,9 @@ function PumpProbeV0() {
       setDataPath(payload.path || payload.root || '');
       setDataParent(payload.parent || payload.root || '');
       setDataEntries(payload.entries || []);
+      if (!dataTopPath && payload.root) {
+        setDataTopPath(payload.root);
+      }
       if (!dataSelectedPath && payload.path) {
         setDataSelectedPath(payload.path);
       }
@@ -320,7 +325,7 @@ function PumpProbeV0() {
     } finally {
       setDataLoading(false);
     }
-  }, [dataSelectedPath]);
+  }, [dataSelectedPath, dataTopPath]);
 
   const createSampleFolder = useCallback(async (name) => {
     const folderName = String(name || '').trim();
@@ -348,6 +353,29 @@ function PumpProbeV0() {
       setDataLoading(false);
     }
   }, [dataPath, dataRoot, loadDataPath]);
+
+  const createRunFolder = useCallback(async () => {
+    const folderName = dataFolderName.trim();
+    if (!folderName) {
+      throw new Error('Enter a Folder name before starting a run');
+    }
+    const parent = dataTopPath || dataPath || dataRoot;
+    if (!parent) {
+      throw new Error('Choose a Top folder in Files before starting a run');
+    }
+    const response = await fetch(`${API_BASE}/data/folder`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ parent, name: folderName }),
+    });
+    const payload = await response.json();
+    if (!response.ok || payload.success === false) {
+      throw new Error(payload.error || `Failed to create Folder (${response.status})`);
+    }
+    setDataSelectedPath(payload.path);
+    return payload.path;
+  }, [dataFolderName, dataPath, dataRoot, dataTopPath]);
 
   const loadDataFile = useCallback(async (filePath) => {
     if (!filePath) {
@@ -471,6 +499,8 @@ function PumpProbeV0() {
       if (parsed.data) {
         setSampleName(String(parsed.data.sampleName || ''));
         setDataSelectedPath(String(parsed.data.selectedPath || ''));
+        setDataTopPath(String(parsed.data.topPath || parsed.data.selectedPath || ''));
+        setDataFolderName(String(parsed.data.folderName || ''));
       }
       setBackendError('');
     } catch (error) {
@@ -495,6 +525,8 @@ function PumpProbeV0() {
         sampleName,
         root: dataRoot,
         selectedPath: dataSelectedPath,
+        topPath: dataTopPath,
+        folderName: dataFolderName,
       },
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
@@ -504,7 +536,7 @@ function PumpProbeV0() {
     anchor.download = 'pump-probe-v0-config.json';
     anchor.click();
     URL.revokeObjectURL(url);
-  }, [dataRoot, dataSelectedPath, deviceConfig, hardwareConfig, sampleName, samplePositionMm, samplePositionsMm, sampleTargetMm, settings]);
+  }, [dataFolderName, dataRoot, dataSelectedPath, dataTopPath, deviceConfig, hardwareConfig, sampleName, samplePositionMm, samplePositionsMm, sampleTargetMm, settings]);
 
   const moveSampleStage = useCallback((positionMmValue) => {
     const next = clamp(Number(positionMmValue) || 0, SAMPLE_STAGE_MIN_MM, SAMPLE_STAGE_MAX_MM);
@@ -591,6 +623,22 @@ function PumpProbeV0() {
   const currentIndex = backendState?.current_index ?? localIndex;
   const activeCurrentIndex = clamp(currentIndex, 0, Math.max(0, delays.length - 1));
   const running = backendState?.running ?? localRunning;
+  const handleRun = useCallback(async () => {
+    if (running) {
+      postAndRefresh('/run', { running: false });
+      return;
+    }
+    try {
+      const savePath = await createRunFolder();
+      await postAndRefresh('/run', {
+        running: true,
+        save_path: savePath,
+        sample_name: sampleName,
+      });
+    } catch (error) {
+      setBackendError(error.message);
+    }
+  }, [createRunFolder, postAndRefresh, running, sampleName]);
   const realTime = backendState?.real_time ?? false;
   const faradayClosed = backendState?.faraday_closed ?? localFaradayClosed;
   const electronState = backendState?.electron_state || localElectronState;
@@ -985,13 +1033,7 @@ function PumpProbeV0() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              postAndRefresh('/run', running ? { running: false } : {
-                running: true,
-                save_path: dataSelectedPath || dataPath || dataRoot,
-                sample_name: sampleName,
-              });
-            }}
+            onClick={handleRun}
           >
             {running ? 'Stop' : 'Start'}
           </button>
@@ -1030,12 +1072,22 @@ function PumpProbeV0() {
             Reset
           </button>
           <div className="pp-data-strip">
-            <input
-              type="text"
-              value={sampleName}
-              onChange={(event) => setSampleName(event.target.value)}
-              placeholder="sample name"
-            />
+            <div className="pp-data-fields">
+              <input
+                type="text"
+                value={sampleName}
+                onChange={(event) => setSampleName(event.target.value)}
+                placeholder="Sample name"
+                aria-label="Sample name"
+              />
+              <input
+                type="text"
+                value={dataFolderName}
+                onChange={(event) => setDataFolderName(event.target.value)}
+                placeholder="Folder"
+                aria-label="Folder"
+              />
+            </div>
             <button
               type="button"
               onClick={() => {
@@ -1045,8 +1097,8 @@ function PumpProbeV0() {
             >
               Files
             </button>
-            <span title={dataSelectedPath || 'No data folder selected'}>
-              {dataSelectedPath ? displayPathTail(dataSelectedPath) : 'no folder'}
+            <span title={dataTopPath || 'No top folder selected'}>
+              {dataTopPath ? displayPathTail(dataTopPath) : 'no top folder'}
             </span>
           </div>
         </div>
@@ -1342,10 +1394,12 @@ function PumpProbeV0() {
         loading={dataLoading}
         error={dataError}
         selectedPath={dataSelectedPath}
+        topPath={dataTopPath}
         onClose={() => setDataBrowserOpen(false)}
         onRefresh={() => loadDataPath(dataPath || dataRoot)}
         onOpenPath={(pathValue) => loadDataPath(pathValue || dataRoot)}
         onSelectPath={setDataSelectedPath}
+        onSetTopFolder={(pathValue) => setDataTopPath(pathValue || dataRoot)}
         onLoadFile={loadDataFile}
         onCreateFolder={createSampleFolder}
       />

@@ -40,12 +40,17 @@
 .pp-data-strip {
   flex: 1 0 100%;
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) 62px minmax(110px, 0.8fr);
+  grid-template-columns: minmax(160px, 1fr) 62px minmax(110px, 0.8fr);
   gap: 6px;
   align-items: center;
 }
 
-.pp-data-strip input {
+.pp-data-fields {
+  display: grid;
+  gap: 4px;
+}
+
+.pp-data-fields input {
   min-width: 0;
   height: 30px;
   border: 1px solid #59636d;

@@ -258,10 +258,12 @@ function DataBrowserWindow({
   loading,
   error,
   selectedPath,
+  topPath,
   onClose,
   onRefresh,
   onOpenPath,
   onSelectPath,
+  onSetTopFolder,
   onLoadFile,
   onCreateFolder,
 }) {
@@ -278,12 +280,20 @@ function DataBrowserWindow({
       <div className="pp-data-paths">
         <div><span>root</span>{root || 'DATA_VD'}</div>
         <div><span>current</span>{path || root || 'DATA_VD'}</div>
+        <div><span>top folder</span>{topPath || 'not selected'}</div>
         {selectedPath ? <div><span>selected</span>{selectedPath}</div> : null}
       </div>
       <div className="pp-data-actions">
         <button type="button" onClick={() => onOpenPath(root)} disabled={!root || loading}>Root</button>
         <button type="button" onClick={() => onOpenPath(parent)} disabled={!parent || loading}>Up</button>
         <button type="button" onClick={onRefresh} disabled={loading}>Refresh</button>
+        <button
+          type="button"
+          onClick={() => onSetTopFolder(path || root)}
+          disabled={!(path || root) || loading}
+        >
+          Set top folder
+        </button>
         <button
           type="button"
           onClick={() => onCreateFolder(sampleName)}
