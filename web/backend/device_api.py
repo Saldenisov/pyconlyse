@@ -682,9 +682,20 @@ def _get_starter_devices():
 
 def _get_starter_server_lists(starter_name):
     starter = tango.DeviceProxy(starter_name)
-    running = set(starter.command_inout('DevGetRunningServers', False))
-    stopped = set(starter.command_inout('DevGetStopServers', False))
+    # True includes every server managed by this Starter, not only controlled ones.
+    running = set(starter.command_inout('DevGetRunningServers', True))
+    stopped = set(starter.command_inout('DevGetStopServers', True))
     return starter, running, stopped
+
+
+def _wait_for_starter_server(starter_name, server_name, timeout_s=12.0):
+    """Wait until Starter reports a server as running after a control command."""
+    deadline = time.monotonic() + max(0.0, float(timeout_s))
+    while True:
+        _, running, stopped = _get_starter_server_lists(starter_name)
+        if server_name in running or time.monotonic() >= deadline:
+            return running, stopped
+        time.sleep(0.5)
 
 
 def _find_starter_for_server(server_name):
@@ -824,7 +835,6 @@ def control_server():
                 except Exception as exc:
                     if not _is_already_running_error(exc):
                         raise
-                time.sleep(2)
         elif action == 'hard_kill':
             starter.command_inout('HardKillServer', server_name)
             time.sleep(2)
@@ -846,17 +856,35 @@ def control_server():
             except Exception as exc:
                 if not _is_already_running_error(exc):
                     raise
-            time.sleep(2)
 
-        _, running_after, stopped_after = _get_starter_server_lists(starter_name)
+        if action in {'start', 'restart'}:
+            running_after, stopped_after = _wait_for_starter_server(starter_name, server_name)
+        else:
+            _, running_after, stopped_after = _get_starter_server_lists(starter_name)
+
+        running = server_name in running_after
+        stopped = server_name in stopped_after
+        if action in {'start', 'restart'} and not running:
+            return jsonify({
+                'success': False,
+                'action': action,
+                'server_name': server_name,
+                'starter': starter_name,
+                'running': False,
+                'stopped': stopped,
+                'error': (
+                    f'{server_name} did not register with {starter_name} within 12 seconds. '
+                    'Check the server console and hardware power.'
+                ),
+            }), 503
 
         return jsonify({
             'success': True,
             'action': action,
             'server_name': server_name,
             'starter': starter_name,
-            'running': server_name in running_after,
-            'stopped': server_name in stopped_after,
+            'running': running,
+            'stopped': stopped,
             'running_count': len(running_after),
             'stopped_count': len(stopped_after),
         })

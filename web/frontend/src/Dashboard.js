@@ -114,6 +114,7 @@ const Dashboard = () => {
   const [devicesLoading, setDevicesLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
+  const [serverActionInProgress, setServerActionInProgress] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
   const [serverFilter, setServerFilter] = useState('');
   const coverage = buildCoverage(devices);
@@ -233,6 +234,9 @@ const Dashboard = () => {
       return;
     }
 
+    const serverName = String(device.server);
+    setServerActionInProgress(serverName);
+
     try {
       const response = await fetch('/api/server/control', {
         method: 'POST',
@@ -281,6 +285,8 @@ const Dashboard = () => {
       }
     } catch (err) {
       setError(err.message);
+    } finally {
+      setServerActionInProgress('');
     }
   };
 
@@ -418,6 +424,28 @@ const Dashboard = () => {
                 </div>
                 <div style={{ marginTop: '6px', color: '#667085', fontSize: '0.85rem' }}>
                   Families: {server.families.join(', ')}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runServerAction({ name: server.name, server: server.name }, 'start')
+                    }
+                    disabled={serverActionInProgress === server.name}
+                    style={{ padding: '6px 10px', cursor: 'pointer' }}
+                  >
+                    {serverActionInProgress === server.name ? 'Working...' : 'Start'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runServerAction({ name: server.name, server: server.name }, 'restart')
+                    }
+                    disabled={serverActionInProgress === server.name}
+                    style={{ padding: '6px 10px', cursor: 'pointer' }}
+                  >
+                    Restart
+                  </button>
                 </div>
               </div>
             ))}
