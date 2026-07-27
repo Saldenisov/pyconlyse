@@ -92,6 +92,14 @@ const buildCoverage = (deviceList) => {
   return { familySummary, serverSummary };
 };
 
+const sortDevicesByAvailability = (deviceList) =>
+  [...deviceList].sort((a, b) => {
+    if (Boolean(a.available) !== Boolean(b.available)) {
+      return a.available ? 1 : -1;
+    }
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+
 const Dashboard = () => {
   const [summary, setSummary] = useState({
     tangoDbUp: null,
@@ -103,6 +111,7 @@ const Dashboard = () => {
   });
   const [starters, setStarters] = useState([]);
   const [devices, setDevices] = useState([]);
+  const [devicesLoading, setDevicesLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionMessage, setActionMessage] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
@@ -128,46 +137,29 @@ const Dashboard = () => {
 
   useEffect(() => {
     let disposed = false;
+    let devicesRequestInFlight = false;
 
-    const loadSummary = async () => {
+    const loadTangoStatus = async () => {
       try {
-        const [tangoResponse, devicesResponse] = await Promise.all([
-          fetch('/api/tango_status'),
-          fetch('/api/devices?probe_state=1&include_dserver=1&include_admin=1'),
-        ]);
+        const tangoResponse = await fetch('/api/tango_status');
 
         if (!tangoResponse.ok) {
           throw new Error(`Tango status failed (${tangoResponse.status})`);
         }
-        if (!devicesResponse.ok) {
-          throw new Error(`Device list failed (${devicesResponse.status})`);
-        }
 
         const tangoData = await tangoResponse.json();
-        const devicesData = await devicesResponse.json();
-
         const starterList = tangoData.starters || [];
-        const deviceList = devicesData.devices || [];
         const healthyStarters = starterList.filter((starter) => starter.healthy).length;
-        const availableDevices = deviceList.filter((device) => device.available).length;
-        const sortedDevices = [...deviceList].sort((a, b) => {
-          if (Boolean(a.available) !== Boolean(b.available)) {
-            return a.available ? 1 : -1;
-          }
-          return String(a.name || '').localeCompare(String(b.name || ''));
-        });
 
         if (!disposed) {
-          setSummary({
+          setSummary((currentSummary) => ({
+            ...currentSummary,
             tangoDbUp: Boolean(tangoData.mysql_status),
             tangoHost: String(tangoData.tango_host || ''),
             starterCount: starterList.length,
             healthyStarters,
-            deviceCount: deviceList.length,
-            availableDevices,
-          });
+          }));
           setStarters(starterList);
-          setDevices(sortedDevices);
           setError('');
         }
       } catch (err) {
@@ -177,12 +169,58 @@ const Dashboard = () => {
       }
     };
 
-    loadSummary();
-    const intervalId = setInterval(loadSummary, 5000);
+    const loadDevices = async () => {
+      if (devicesRequestInFlight) {
+        return;
+      }
+
+      devicesRequestInFlight = true;
+      if (!disposed) {
+        setDevicesLoading(true);
+      }
+
+      try {
+        const devicesResponse = await fetch(
+          '/api/devices?probe_state=1&include_dserver=1&include_admin=1'
+        );
+        if (!devicesResponse.ok) {
+          throw new Error(`Device list failed (${devicesResponse.status})`);
+        }
+
+        const devicesData = await devicesResponse.json();
+        const deviceList = devicesData.devices || [];
+        const availableDevices = deviceList.filter((device) => device.available).length;
+
+        if (!disposed) {
+          setSummary((currentSummary) => ({
+            ...currentSummary,
+            deviceCount: deviceList.length,
+            availableDevices,
+          }));
+          setDevices(sortDevicesByAvailability(deviceList));
+          setError('');
+        }
+      } catch (err) {
+        if (!disposed) {
+          setError(err.message);
+        }
+      } finally {
+        devicesRequestInFlight = false;
+        if (!disposed) {
+          setDevicesLoading(false);
+        }
+      }
+    };
+
+    loadTangoStatus();
+    loadDevices();
+    const tangoIntervalId = setInterval(loadTangoStatus, 5000);
+    const devicesIntervalId = setInterval(loadDevices, 30000);
 
     return () => {
       disposed = true;
-      clearInterval(intervalId);
+      clearInterval(tangoIntervalId);
+      clearInterval(devicesIntervalId);
     };
   }, []);
 
@@ -228,12 +266,7 @@ const Dashboard = () => {
         const deviceList = devicesData.devices || [];
         const healthyStarters = starterList.filter((starter) => starter.healthy).length;
         const availableDevices = deviceList.filter((entry) => entry.available).length;
-        const sortedDevices = [...deviceList].sort((a, b) => {
-          if (Boolean(a.available) !== Boolean(b.available)) {
-            return a.available ? 1 : -1;
-          }
-          return String(a.name || '').localeCompare(String(b.name || ''));
-        });
+        const sortedDevices = sortDevicesByAvailability(deviceList);
 
         setSummary({
           tangoDbUp: Boolean(tangoData.mysql_status),
@@ -295,7 +328,11 @@ const Dashboard = () => {
         </div>
         <div style={cardStyle}>
           <h3>Exported Devices</h3>
-          <p>{summary.availableDevices} / {summary.deviceCount} reachable</p>
+          <p>
+            {devicesLoading && summary.deviceCount === 0
+              ? 'Checking devices...'
+              : `${summary.availableDevices} / ${summary.deviceCount} reachable`}
+          </p>
         </div>
       </div>
 
