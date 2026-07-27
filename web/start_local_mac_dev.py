@@ -64,6 +64,7 @@ original_cwd = os.getcwd()
 try:
     os.chdir(backend_dir)
     from app import app, socketio
+    from device_api import start_device_snapshot_monitor
 finally:
     os.chdir(original_cwd)
 
@@ -84,6 +85,8 @@ if __name__ == "__main__":
     if not data_root.exists():
         print("Data Root:  not found yet; set PYCONLYSE_ALLOWED_ROOT if VD2 is elsewhere.")
     print("=" * 60)
+
+    start_device_snapshot_monitor()
 
     socketio.run(
         app,

@@ -53,6 +53,7 @@ original_cwd = os.getcwd()
 try:
     os.chdir(str(backend_dir))
     from app import socketio, app
+    from device_api import start_device_snapshot_monitor
 finally:
     os.chdir(original_cwd)
 
@@ -77,6 +78,7 @@ if __name__ == '__main__':
     print("=" * 60)
 
     _free_port(web_port)
+    start_device_snapshot_monitor()
 
     try:
         # Run the server in production mode

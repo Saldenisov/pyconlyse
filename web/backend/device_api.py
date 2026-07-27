@@ -572,6 +572,10 @@ device_operation_locks = {}
 monitoring_threads = {}
 monitoring_active = {}
 _device_list_cache = {}
+_device_list_cache_lock = threading.RLock()
+_device_list_refreshing = set()
+_device_snapshot_monitor_started = False
+_device_snapshot_monitor_lock = threading.Lock()
 
 
 def _device_proxy_target(device_name):
@@ -725,6 +729,105 @@ def _resolve_server_name(device_name):
             raise Exception(f"Could not resolve server for device {device_name}")
         return str(server_name)
 
+
+def _collect_device_list(probe_state, include_dserver, include_admin):
+    """Read one coherent device snapshot from Tango."""
+    db = tango.Database()
+    devices = db.get_device_exported("*")
+    device_list = []
+
+    for device_name in devices:
+        device_name = str(device_name)
+        lower_name = device_name.lower()
+        if not include_dserver and lower_name.startswith('dserver/'):
+            continue
+        if not include_admin and lower_name.startswith('tango/admin/'):
+            continue
+
+        server_name = None
+        dev_class = None
+        state = 'UNKNOWN'
+        available = True
+
+        try:
+            info = db.get_device_info(device_name)
+            server_name = getattr(info, 'ds_full_name', None) or getattr(info, 'server', None)
+            dev_class = getattr(info, 'class_name', None)
+        except Exception:
+            pass
+
+        if probe_state:
+            try:
+                device = tango.DeviceProxy(device_name)
+                state = str(device.state())
+                if not server_name or not dev_class:
+                    info = device.info()
+                    server_name = server_name or getattr(info, 'server_id', None)
+                    dev_class = dev_class or getattr(info, 'dev_class', None)
+            except Exception:
+                available = False
+
+        device_list.append({
+            'name': device_name,
+            'state': state,
+            'server': server_name,
+            'class': dev_class,
+            'available': available,
+        })
+
+    device_list.sort(key=lambda item: str(item.get('name', '')))
+    return device_list
+
+
+def _refresh_device_list_cache(cache_key):
+    probe_state, include_dserver, include_admin = cache_key
+    try:
+        devices = _collect_device_list(probe_state, include_dserver, include_admin)
+        with _device_list_cache_lock:
+            _device_list_cache[cache_key] = {'ts': time.time(), 'devices': devices}
+    finally:
+        with _device_list_cache_lock:
+            _device_list_refreshing.discard(cache_key)
+
+
+def _schedule_device_list_refresh(cache_key):
+    with _device_list_cache_lock:
+        if cache_key in _device_list_refreshing:
+            return False
+        _device_list_refreshing.add(cache_key)
+
+    thread = threading.Thread(
+        target=_refresh_device_list_cache,
+        args=(cache_key,),
+        name=f"tango-device-snapshot-{cache_key[0]}",
+        daemon=True,
+    )
+    thread.start()
+    return True
+
+
+def start_device_snapshot_monitor(interval_s=30.0):
+    """Keep the dashboard snapshot warm while the web backend is running."""
+    global _device_snapshot_monitor_started
+    with _device_snapshot_monitor_lock:
+        if _device_snapshot_monitor_started:
+            return False
+        _device_snapshot_monitor_started = True
+
+    cache_key = (True, True, True)
+
+    def monitor():
+        while True:
+            _schedule_device_list_refresh(cache_key)
+            time.sleep(max(5.0, float(interval_s)))
+
+    threading.Thread(
+        target=monitor,
+        name='tango-device-snapshot-monitor',
+        daemon=True,
+    ).start()
+    return True
+
 @device_api.route('/api/devices', methods=['GET'])
 def list_devices():
     """Get list of all available devices"""
@@ -733,68 +836,36 @@ def list_devices():
         include_dserver = _query_bool('include_dserver', True)
         include_admin = _query_bool('include_admin', False)
         refresh = _query_bool('refresh', False)
+        stale_ok = _query_bool('stale_ok', False)
         cache_ttl_s = float(os.environ.get('PYCONLYSE_DEVICE_LIST_CACHE_TTL', '4.0'))
         cache_key = (probe_state, include_dserver, include_admin)
 
         now = time.time()
-        cached_entry = _device_list_cache.get(cache_key)
+        with _device_list_cache_lock:
+            cached_entry = _device_list_cache.get(cache_key)
+            refreshing = cache_key in _device_list_refreshing
         if (
             not refresh
             and cached_entry
-            and (now - cached_entry.get('ts', 0)) <= max(cache_ttl_s, 0.0)
+            and (
+                stale_ok
+                or (now - cached_entry.get('ts', 0)) <= max(cache_ttl_s, 0.0)
+            )
         ):
+            if stale_ok and not refreshing:
+                _schedule_device_list_refresh(cache_key)
             return jsonify({
                 'devices': cached_entry.get('devices', []),
                 'success': True,
                 'cached': True,
                 'probe_state': probe_state,
+                'snapshot_age_s': round(now - cached_entry.get('ts', now), 3),
+                'refreshing': refreshing,
             })
 
-        db = tango.Database()
-        devices = db.get_device_exported("*")
-
-        device_list = []
-        for device_name in devices:
-            device_name = str(device_name)
-            lower_name = device_name.lower()
-            if not include_dserver and lower_name.startswith('dserver/'):
-                continue
-            if not include_admin and lower_name.startswith('tango/admin/'):
-                continue
-
-            server_name = None
-            dev_class = None
-            state = 'UNKNOWN'
-            available = True
-
-            try:
-                info = db.get_device_info(device_name)
-                server_name = getattr(info, 'ds_full_name', None) or getattr(info, 'server', None)
-                dev_class = getattr(info, 'class_name', None)
-            except Exception:
-                pass
-
-            if probe_state:
-                try:
-                    device = tango.DeviceProxy(device_name)
-                    state = str(device.state())
-                    if not server_name or not dev_class:
-                        info = device.info()
-                        server_name = server_name or getattr(info, 'server_id', None)
-                        dev_class = dev_class or getattr(info, 'dev_class', None)
-                except Exception:
-                    available = False
-
-            device_list.append({
-                'name': device_name,
-                'state': state,
-                'server': server_name,
-                'class': dev_class,
-                'available': available
-            })
-
-        device_list.sort(key=lambda item: str(item.get('name', '')))
-        _device_list_cache[cache_key] = {'ts': now, 'devices': device_list}
+        device_list = _collect_device_list(probe_state, include_dserver, include_admin)
+        with _device_list_cache_lock:
+            _device_list_cache[cache_key] = {'ts': now, 'devices': device_list}
 
         return jsonify({
             'devices': device_list,

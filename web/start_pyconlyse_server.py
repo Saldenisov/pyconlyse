@@ -26,6 +26,7 @@ original_cwd = os.getcwd()
 try:
     os.chdir(backend_dir)
     from app import socketio, app
+    from device_api import start_device_snapshot_monitor
 finally:
     os.chdir(original_cwd)
 
@@ -44,6 +45,8 @@ if __name__ == '__main__':
     print("WARNING: Running in DEVELOPMENT mode (debug=True)")
     print("For production, use: python start_production.py")
     print("=" * 60)
+
+    start_device_snapshot_monitor()
 
     try:
         # Run the server

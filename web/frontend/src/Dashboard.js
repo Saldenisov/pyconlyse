@@ -182,7 +182,7 @@ const Dashboard = () => {
 
       try {
         const devicesResponse = await fetch(
-          '/api/devices?probe_state=1&include_dserver=1&include_admin=1'
+          '/api/devices?probe_state=1&include_dserver=1&include_admin=1&stale_ok=1'
         );
         if (!devicesResponse.ok) {
           throw new Error(`Device list failed (${devicesResponse.status})`);
