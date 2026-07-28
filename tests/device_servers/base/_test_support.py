@@ -95,9 +95,11 @@ from DeviceServers.base import camera as camera_module
 from DeviceServers.base import general as general_module
 from DeviceServers.base import motor as motor_module
 from DeviceServers.base import pdu as pdu_module
+from DeviceServers.base.DS_Motor import DS_Motor
 
 __all__ = [
     "camera_module",
+    "DS_Motor",
     "general_module",
     "motor_module",
     "pdu_module",

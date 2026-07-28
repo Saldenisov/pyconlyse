@@ -377,6 +377,28 @@ def test_netio_command_returns_409_on_readback_mismatch(monkeypatch):
     assert cmd_payload["requested_states"] == [0, 0, 0, 0]
 
 
+def test_netio_output_fallback_does_not_hide_non_attribute_read_errors(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    netio = devices["pdu/netio/1"]
+    original_read = netio.read_attribute
+    reads = []
+
+    def fail_states_only(attr_name):
+        reads.append(attr_name)
+        if attr_name == "states":
+            raise RuntimeError("transport disconnected")
+        return original_read(attr_name)
+
+    netio.read_attribute = fail_states_only
+
+    response = client.get("/api/device/pdu/netio/1/pdu/outputs")
+    payload = response.get_json()
+
+    assert response.status_code == 500
+    assert payload["error"] == "transport disconnected"
+    assert "output_statuses" not in reads
+
+
 def test_standa_page_routes_smoke(monkeypatch):
     client, _devices = _make_client(monkeypatch)
 

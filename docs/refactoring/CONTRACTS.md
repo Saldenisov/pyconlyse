@@ -56,3 +56,17 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Deployment must stop if the remote worktree is dirty, the branch cannot be
   fast-forwarded to the exact commit, the affected server set is ambiguous,
   or hardware-safe restart approval is missing.
+
+## Software-only test gate
+
+- Default pytest collection contains automated software tests only.
+  `tests/manual`, `tests/integration`, `tests/legacy`, `tests/main_app`, and
+  `tests/utilities` are preserved but excluded from the default lane.
+- Tango and Taurus doubles are process-local to one collected test module or
+  one test. A test may not leave fake protocol modules in `sys.modules` for a
+  later file.
+- The full gate may import production code and use fakes, but may not create a
+  Tango server, contact a Tango database, connect to equipment, or issue
+  motion, shutter, power, PDU, or RemoteEx commands.
+- Coverage gates measure named refactored modules and enforce their committed
+  baselines. Whole-tree legacy coverage is informational only.

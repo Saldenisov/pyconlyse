@@ -3,11 +3,21 @@ from pathlib import Path
 
 from flask import Flask
 
+from tests._tango_stub import install_tango_stub
+
 
 ROOT = Path(__file__).resolve().parents[2]
 BACKEND = ROOT / "web" / "backend"
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
+
+
+class _CollectionMonkeyPatch:
+    def setitem(self, mapping, key, value):
+        mapping[key] = value
+
+
+install_tango_stub(_CollectionMonkeyPatch())
 
 import pump_probe_vd2_api as vd2_api_module
 from vd2_measurement_protocol import Vd2MeasurementProtocol

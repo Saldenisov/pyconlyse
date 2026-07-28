@@ -37,6 +37,21 @@ Each phase must produce:
 - Establish test commands and expected failures in `TEST_MATRIX.md`.
 - Freeze dirty V0 files from unrelated work.
 
+### Phase 0.5: Software-only test gate
+
+Owner: Terra, with Sol read-only review.
+
+- **T8a — test isolation:** restore `sys.modules` after every test-module
+  import; Tango/Taurus stubs are local to collection or one test only.
+- **T8b — collection hygiene:** default pytest collection contains only
+  automated software tests. Manual probes, legacy, integration, main-app, and
+  utilities remain preserved in explicit lanes.
+- **T8c — focused coverage:** measure only the refactored DeviceServer
+  lifecycle modules, enforce per-module floors, and do not use whole-tree
+  legacy coverage as a release metric.
+- **T8d — lifecycle contracts:** verify software-only init, polling, stop,
+  timeout, and readback behavior without Tango server control or hardware I/O.
+
 ### Phase 1: DeviceServer stability foundation
 
 Owner: Terra.
@@ -97,3 +112,5 @@ device_family/
 - Hardware I/O has explicit timeout, cancellation, readback, and error mapping.
 - No implicit power-up or motion occurs during polling or status refresh.
 - Every phase has a commit, test record, reviewer result, and rollback point.
+- `verify_refactor.py --apply --full` is a reproducible local software-only
+  gate: collection, focused coverage, static checks, and frontend checks.

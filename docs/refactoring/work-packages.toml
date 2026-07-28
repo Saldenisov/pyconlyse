@@ -88,6 +88,42 @@ allowed_globs = [
   "tests/device_servers/cameras/basler/**",
 ]
 
+[packages.T8]
+agent = "terra"
+description = "Software-only test, isolation, and coverage gate"
+allowed_paths = [
+  "pytest.ini",
+  ".coveragerc",
+  ".gitignore",
+  "tests/conftest.py",
+  "tests/_tango_stub.py",
+  "tests/README.md",
+  "scripts/refactor/verify_refactor.py",
+  "scripts/refactor/verify_coverage.py",
+  "scripts/refactor/pytest_module_isolation.py",
+  "web/backend/device_api.py",
+  "web/backend/treatment_service.py",
+  "web/frontend/package.json",
+  "web/frontend/package-lock.json",
+  "web/frontend/src/App.test.js",
+  "web/frontend/src/setupTests.js",
+]
+allowed_globs = [
+  "tests/integration/device_servers/**",
+  "tests/manual/**",
+  "tests/unit/test_hamamatsu_streak.py",
+  "tests/unit/test_treatment_service.py",
+  "tests/unit/test_refactor_coverage.py",
+  "tests/unit/test_pytest_module_isolation.py",
+  "tests/unit/test_refactor_tooling.py",
+  "tests/device_servers/base/_test_support.py",
+  "tests/device_servers/base/test_base_behaviors.py",
+  "tests/device_servers/motion/test_motion_recovery.py",
+  "tests/web/test_device_api*.py",
+  "tests/web/test_pump_probe_vd2_api.py",
+  "docs/refactoring/**",
+]
+
 [packages.L1]
 agent = "luna"
 description = "DG645 mechanical extraction"

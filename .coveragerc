@@ -1,0 +1,17 @@
+[run]
+relative_files = True
+include =
+    DeviceServers/base/camera.py
+    DeviceServers/base/general.py
+    DeviceServers/base/motor.py
+    DeviceServers/motion/owis/DS_OWIS_delay_line.py
+    DeviceServers/cameras/avantes/DS_AVANTES_CCD.py
+    DeviceServers/cameras/basler/DS_Basler_camera.py
+
+[report]
+precision = 1
+show_missing = True
+skip_empty = True
+
+[json]
+pretty_print = True

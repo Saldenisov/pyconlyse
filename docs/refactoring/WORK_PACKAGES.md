@@ -82,6 +82,20 @@ Scope only after explicit assignment:
 
 Current dirty V0 files are protected and must not be modified by an unrelated package.
 
+### T8: Software-only verification gate
+
+Scope:
+
+- `pytest.ini`, `.coveragerc`, `tests/conftest.py`, `tests/manual/**`
+- `scripts/refactor/verify_refactor.py`, `scripts/refactor/verify_coverage.py`
+- gate, coverage, and isolation regression tests
+- refactoring test documentation
+
+Deliver: order-independent Tango/Taurus test doubles; explicit automated,
+manual, integration, legacy, main-app, and utilities lanes; focused lifecycle
+coverage floors; and an executable local `--full` gate. This package does not
+operate Tango, hardware, PDU, motion, shutters, or deploy tooling.
+
 ## Luna mechanical packages
 
 ### L1: DG645 extraction

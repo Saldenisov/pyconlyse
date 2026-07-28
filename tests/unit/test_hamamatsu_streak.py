@@ -4,10 +4,20 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from tests._tango_stub import install_tango_stub
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+
+class _CollectionMonkeyPatch:
+    def setitem(self, mapping, key, value):
+        mapping[key] = value
+
+
+install_tango_stub(_CollectionMonkeyPatch())
 
 from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,

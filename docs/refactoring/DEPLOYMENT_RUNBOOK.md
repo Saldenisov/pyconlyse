@@ -53,6 +53,13 @@ Run the complete software-only pytest suite plus frontend tests/build:
 python scripts/refactor/verify_refactor.py --apply --full
 ```
 
+`--full` runs `npm ci --legacy-peer-deps` from the committed frontend lockfile,
+then the default automated pytest lane and focused DeviceServer lifecycle
+coverage with `.coveragerc` and
+`verify_coverage.py`. Manual probes, legacy, integration, main-app, and
+utilities suites remain opt-in and are not silently deleted or treated as
+software-only verification.
+
 The verification tool has no SSH, Tango, PDU, motion, shutter, or power code.
 
 ## Deploy Exact Commit

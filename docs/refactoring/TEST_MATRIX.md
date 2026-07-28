@@ -15,6 +15,7 @@ Frontend:
 
 ```bash
 cd web/frontend
+npm ci --legacy-peer-deps
 npm test -- --watchAll=false
 npm run build
 ```
@@ -72,6 +73,41 @@ npm run build
     connectivity, and a bounded stability observation.
 12. Elysium 2 deployment is blocked when its checkout is dirty, cannot
     fast-forward, or contains an unreviewed commit range.
+
+## Software-only collection and coverage
+
+Default collection is the automated lane. The following paths are preserved as
+explicit, opt-in lanes and are never selected by the full gate:
+
+| Lane | Invocation | Reason |
+|---|---|---|
+| Manual probes | `python tests/manual/<probe>.py` | Operator-approved hardware, GUI, or timing diagnostics |
+| Integration | `pytest -o addopts='' tests/integration` | Cross-component/runtime dependencies |
+| Legacy | `pytest -o addopts='' tests/legacy` | Historical compatibility characterization |
+| Main app / utilities | `pytest -o addopts='' tests/main_app tests/utilities` | GUI or standalone scripts |
+
+Focused coverage command, run from repository root:
+
+```bash
+conda run -n pyconlyse39 python -m coverage erase
+conda run -n pyconlyse39 python -m coverage run --rcfile=.coveragerc -m pytest --strict-config
+conda run -n pyconlyse39 python -m coverage report --rcfile=.coveragerc --fail-under=60
+conda run -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
+conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
+```
+
+Baseline floors use statement coverage and apply only to refactored lifecycle
+modules:
+
+| Module | Baseline floor |
+|---|---:|
+| `DeviceServers/base/camera.py` | 75% |
+| `DeviceServers/base/general.py` | 70% |
+| `DeviceServers/base/motor.py` | 70% |
+| `DeviceServers/motion/owis/DS_OWIS_delay_line.py` | 65% |
+| `DeviceServers/cameras/avantes/DS_AVANTES_CCD.py` | 40% |
+| `DeviceServers/cameras/basler/DS_Basler_camera.py` | 30% |
+| Combined focused modules | 60% |
 
 ## Failure policy
 

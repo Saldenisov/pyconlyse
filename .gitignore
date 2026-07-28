@@ -27,5 +27,6 @@
 .DS_Store
 
 /.coverage
+/.coverage-refactor.json
 /dset.h5
 /tmp/

@@ -137,6 +137,39 @@ def _read_pdu_states(device):
     return [1 if _as_int(raw_state, 0) else 0 for raw_state in states]
 
 
+def _is_missing_attribute_error(exc):
+    """Return whether a Tango read error means this compatibility attribute is absent."""
+    if isinstance(exc, KeyError):
+        return True
+    message = str(exc).lower()
+    return any(
+        marker in message
+        for marker in ("api_attrnotfound", "attribute not found", "unknown attribute")
+    )
+
+
+def _read_optional_attr_sequence_strict(device, attr_name):
+    """Read an optional compatibility attribute without hiding real read failures."""
+    try:
+        return _read_attr_sequence_strict(device, attr_name)
+    except Exception as exc:
+        if _is_missing_attribute_error(exc):
+            return []
+        raise
+
+
+def _read_pdu_states_strict(device):
+    """Read current PDU outputs, accepting the legacy ``output_statuses`` name.
+
+    Connection and other read failures remain visible to the retry/error path.
+    Only an absent ``states`` attribute activates the documented legacy fallback.
+    """
+    states = _read_optional_attr_sequence_strict(device, "states")
+    if not states:
+        states = _read_attr_sequence_strict(device, "output_statuses")
+    return states
+
+
 def _wait_for_pdu_states(device, expected_states, attempts=6, delay=0.25):
     """Poll PDU state and confirm that readback matches requested states."""
     expected = [1 if _as_int(value, 0) else 0 for value in expected_states]
@@ -1162,11 +1195,9 @@ def get_pdu_outputs(device_name):
     try:
         def read_outputs():
             device = DeviceManager.get_device(device_name)
-            ids = _read_attr_sequence_strict(device, 'ids')
-            names = _read_attr_sequence_strict(device, 'names')
-            states = _read_attr_sequence_strict(device, 'states')
-            if not states:
-                states = _read_attr_sequence_strict(device, 'output_statuses')
+            ids = _read_optional_attr_sequence_strict(device, 'ids')
+            names = _read_optional_attr_sequence_strict(device, 'names')
+            states = _read_pdu_states_strict(device)
             return device, ids, names, states
 
         device, ids, names, states = _with_device_retry(device_name, read_outputs)
