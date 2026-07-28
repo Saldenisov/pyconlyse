@@ -9,7 +9,7 @@ import numpy as np
 from tango import AttrWriteType, DevFloat, DevState, DispLevel
 from tango.server import attribute, command, device_property
 
-from DeviceServers.base.general import DS_General
+from DeviceServers.base.general import DS_General, operation_succeeded
 
 polling_infinite = 10000
 
@@ -495,23 +495,36 @@ class DS_CAMERA_CCD(DS_CAMERA):
         self.camera = None
         self.CG_position = {"X": 0, "Y": 0}
         super().init_device()
-        self.turn_on()
-        self.set_param_after_init()
+
+    @command
+    def turn_on(self):
+        """Apply CCD settings only after the operator explicitly powers it on."""
+        was_on = self.get_state() == DevState.ON
+        if was_on:
+            self.set_param_after_init()
+            return
+
+        super().turn_on()
+        if self.get_state() == DevState.ON:
+            self.set_param_after_init()
 
     def set_param_after_init(self):
-        state_ok = self.check_func_allowance(self.set_param_after_init)
-        if state_ok == 1:
-            self.info(f"Setting parameters for {self.device_name}.", True)
-            res = self.set_param_after_init_local()
-            if res != 0:
-                self.error(f"{res}")
+        with self._get_lifecycle_lock():
+            state_ok = self.check_func_allowance(self.set_param_after_init)
+            if state_ok == 1:
+                self.info(f"Setting parameters for {self.device_name}.", True)
+                res = self.set_param_after_init_local()
+                if not operation_succeeded(res):
+                    self.error(f"{res}")
+                else:
+                    self.info(
+                        f"Parameters for device {self.device_name} was set.", True
+                    )
             else:
-                self.info(f"Parameters for device {self.device_name} was set.", True)
-        else:
-            self.error(
-                f"Setting parameters for {self.device_name} did not work, "
-                f"check state of the device {self.get_state()}."
-            )
+                self.error(
+                    f"Setting parameters for {self.device_name} did not work, "
+                    f"check state of the device {self.get_state()}."
+                )
 
     @abstractmethod
     def set_param_after_init_local(self) -> Union[int, str]:
@@ -529,19 +542,22 @@ class DS_CAMERA_CCD(DS_CAMERA):
 
     @command
     def start_grabbing(self):
-        state_ok = self.check_func_allowance(self.start_grabbing)
-        if state_ok == 1:
-            self.info(f"Starting grabbing for {self.device_name}.", True)
-            res = self.start_grabbing_local()
-            if res != 0:
-                self.error(f"{res}")
+        with self._get_lifecycle_lock():
+            state_ok = self.check_func_allowance(self.start_grabbing)
+            if state_ok == 1:
+                self.info(f"Starting grabbing for {self.device_name}.", True)
+                res = self.start_grabbing_local()
+                if not operation_succeeded(res):
+                    self.error(f"{res}")
+                else:
+                    self.info(
+                        f"Grabbing is started for device {self.device_name}.", True
+                    )
             else:
-                self.info(f"Grabbing is started for device {self.device_name}.", True)
-        else:
-            self.error(
-                f"Starting grabbing for {self.device_name} did not work, "
-                f"check state of the device {self.get_state()}."
-            )
+                self.error(
+                    f"Starting grabbing for {self.device_name} did not work, "
+                    f"check state of the device {self.get_state()}."
+                )
 
     @abstractmethod
     def start_grabbing_local(self):
@@ -549,19 +565,22 @@ class DS_CAMERA_CCD(DS_CAMERA):
 
     @command
     def stop_grabbing(self):
-        state_ok = self.check_func_allowance(self.stop_grabbing)
-        if state_ok == 1:
-            self.info(f"Stopping grabbing for {self.device_name}.", True)
-            res = self.stop_grabbing_local()
-            if res != 0:
-                self.error(f"{res}")
+        with self._get_lifecycle_lock():
+            state_ok = self.check_func_allowance(self.stop_grabbing)
+            if state_ok == 1:
+                self.info(f"Stopping grabbing for {self.device_name}.", True)
+                res = self.stop_grabbing_local()
+                if not operation_succeeded(res):
+                    self.error(f"{res}")
+                else:
+                    self.info(
+                        f"Grabbing is stopped for device {self.device_name}.", True
+                    )
             else:
-                self.info(f"Grabbing is stopped for device {self.device_name}.", True)
-        else:
-            self.error(
-                f"Stopping grabbing for {self.device_name} did not work, "
-                f"check state of the device {self.get_state()}."
-            )
+                self.error(
+                    f"Stopping grabbing for {self.device_name} did not work, "
+                    f"check state of the device {self.get_state()}."
+                )
 
     @abstractmethod
     def stop_grabbing_local(self):

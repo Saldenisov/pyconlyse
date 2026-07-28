@@ -19,6 +19,7 @@ from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ENVIRONMENT = "pyconlyse39"
+LINT_ROOTS = ("DeviceServers", "web/backend", "scripts/refactor", "tests")
 
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -62,10 +63,60 @@ def validate_servers(servers: Iterable[str]) -> tuple[str, ...]:
     return normalized
 
 
+def changed_python_files(
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> tuple[str, ...]:
+    """Return changed Python files covered by the refactor verification gate."""
+    def eligible_paths(raw_paths: Iterable[str]) -> set[str]:
+        paths: set[str] = set()
+        for raw_path in raw_paths:
+            path = Path(raw_path.strip())
+            if (
+                path.suffix == ".py"
+                and not path.is_absolute()
+                and ".." not in path.parts
+                and any(
+                    path.as_posix() == root
+                    or path.as_posix().startswith(f"{root}/")
+                    for root in LINT_ROOTS
+                )
+            ):
+                paths.add(path.as_posix())
+        return paths
+
+    commands = (
+        ("git", "diff", "--name-only", "--diff-filter=ACMR"),
+        ("git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"),
+        ("git", "ls-files", "--others", "--exclude-standard"),
+    )
+    raw_paths: set[str] = set()
+    for argv in commands:
+        completed = runner(
+            argv,
+            cwd=PROJECT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        raw_paths.update(completed.stdout.splitlines())
+    paths = eligible_paths(raw_paths)
+    if not paths:
+        completed = runner(
+            ("git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"),
+            cwd=PROJECT_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        paths.update(eligible_paths(completed.stdout.splitlines()))
+    return tuple(sorted(paths))
+
+
 def build_verification_commands(
     environment: str = DEFAULT_ENVIRONMENT,
     include_frontend: bool = False,
     full: bool = False,
+    changed_files: Iterable[str] = (),
 ) -> tuple[Command, ...]:
     commands = [
         Command(("git", "diff", "--check")),
@@ -92,20 +143,6 @@ def build_verification_commands(
                 "run",
                 "-n",
                 environment,
-                "ruff",
-                "check",
-                "DeviceServers",
-                "web/backend",
-                "scripts/refactor",
-                "tests",
-            )
-        ),
-        Command(
-            (
-                "conda",
-                "run",
-                "-n",
-                environment,
                 "python",
                 "-m",
                 "pytest",
@@ -113,6 +150,24 @@ def build_verification_commands(
             )
         ),
     ]
+    lint_targets = tuple(changed_files)
+    if lint_targets:
+        commands.insert(
+            3,
+            Command(
+                (
+                    "conda",
+                    "run",
+                    "-n",
+                    environment,
+                    "ruff",
+                    "check",
+                    "--select",
+                    "F",
+                    *lint_targets,
+                )
+            ),
+        )
     if full:
         commands.append(
             Command(
@@ -167,6 +222,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.environment,
         include_frontend=args.frontend or args.full,
         full=args.full,
+        changed_files=changed_python_files(),
     )
     if not args.apply:
         print("Dry run. No commands executed. Re-run with --apply to verify locally.")

@@ -88,6 +88,7 @@ _install_tango_stub()
 
 from DeviceServers.base import general as general_module
 from DeviceServers.base import gpio as gpio_module
+from DeviceServers.base import motor as motor_module
 
 
 class DummyGeneral(general_module.DS_General):
@@ -221,6 +222,137 @@ def test_set_global_variable_can_disable_archive_immediately():
     assert result == "OK: DISABLE_ARCHIVE set to True"
     assert general_module.GLOBAL_SETTINGS["DISABLE_ARCHIVE"] is True
     assert device.archive.state == 0
+
+
+def test_parse_structured_config_supports_json_and_legacy_literals():
+    assert general_module.parse_structured_config('{"gain": 2}') == {"gain": 2}
+    assert general_module.parse_structured_config("{'gain': 2}") == {"gain": 2}
+
+
+@pytest.mark.parametrize("result", [0, 0.0])
+def test_operation_succeeded_accepts_only_explicit_numeric_zero(result):
+    assert general_module.operation_succeeded(result) is True
+
+
+@pytest.mark.parametrize(
+    "result", [None, "0", "backend failed", 1, -1, False, True]
+)
+def test_operation_succeeded_rejects_error_values(result):
+    assert general_module.operation_succeeded(result) is False
+
+
+def test_parse_structured_config_rejects_code_execution(monkeypatch):
+    called = []
+    monkeypatch.setattr(
+        general_module.os,
+        "system",
+        lambda value: called.append(value),
+    )
+
+    with pytest.raises(general_module.ConfigurationError, match="neither valid JSON"):
+        general_module.parse_structured_config("__import__('os').system('unsafe')")
+
+    assert called == []
+
+
+def test_invalid_device_parameters_leave_device_in_fault_with_diagnostic():
+    device = DummyGeneral()
+    device.parameters = "__import__('os').system('unsafe')"
+
+    device.init_device()
+
+    assert device.get_state() == general_module.DevState.FAULT
+    assert "Invalid parameters" in device.last_error()
+    device.delete_device()
+
+
+def test_multi_axis_config_accepts_json_and_legacy_literals():
+    raw = {
+        "1": {
+            "wait_time": 10,
+            "limit_min": -1.0,
+            "limit_max": 2.0,
+            "real_pos": 0.0,
+            "preset_positions": [0.0, 1.0],
+        }
+    }
+
+    json_config = motor_module.DS_MOTORIZED_MULTI_AXES._parse_delay_lines_parameters(
+        '{"1": {"wait_time": 10, "limit_min": -1.0, "limit_max": 2.0, '
+        '"real_pos": 0.0, "preset_positions": [0.0, 1.0]}}'
+    )
+    literal_config = motor_module.DS_MOTORIZED_MULTI_AXES._parse_delay_lines_parameters(
+        str({1: raw["1"]})
+    )
+
+    assert json_config[1]["position"] == 0.0
+    assert literal_config[1]["state"] == general_module.DevState.OFF
+
+
+def test_multi_axis_config_rejects_invalid_limits_and_code_execution():
+    invalid_limits = {
+        1: {
+            "wait_time": 10,
+            "limit_min": 2.0,
+            "limit_max": 1.0,
+            "real_pos": 1.0,
+            "preset_positions": [],
+        }
+    }
+
+    with pytest.raises(general_module.ConfigurationError, match="limit_min"):
+        motor_module.DS_MOTORIZED_MULTI_AXES._parse_delay_lines_parameters(
+            str(invalid_limits)
+        )
+    with pytest.raises(general_module.ConfigurationError):
+        motor_module.DS_MOTORIZED_MULTI_AXES._parse_delay_lines_parameters(
+            "__import__('os').system('unsafe')"
+        )
+
+
+def test_repeated_init_replaces_and_teardown_stops_error_timer():
+    device = DummyGeneral()
+
+    device.init_device()
+    first_stop_event = device._error_timer_stop
+    device.init_device()
+
+    assert first_stop_event.is_set()
+    assert device._error_timer_stop is not first_stop_event
+
+    active_stop_event = device._error_timer_stop
+    device.delete_device()
+    assert active_stop_event.is_set()
+
+
+def test_device_init_exception_does_not_leave_error_timer(monkeypatch):
+    device = DummyGeneral()
+
+    def raise_during_tango_init(_self):
+        raise RuntimeError("tango init failed")
+
+    monkeypatch.setattr(general_module.Device, "init_device", raise_during_tango_init)
+
+    with pytest.raises(RuntimeError, match="tango init failed"):
+        device.init_device()
+
+    assert device._error_timer_thread is None
+    assert device._error_timer_stop is None
+
+
+def test_later_init_exception_stops_error_timer(monkeypatch):
+    device = DummyGeneral()
+
+    def raise_during_discovery():
+        raise RuntimeError("discovery failed")
+
+    monkeypatch.setattr(device, "find_device", raise_during_discovery)
+
+    with pytest.raises(RuntimeError, match="discovery failed"):
+        device.init_device()
+
+    assert device._error_timer_thread is None
+    assert device._error_timer_stop is None
 
 
 def test_gpio_give_order_local_returns_minus_one_for_missing_order():

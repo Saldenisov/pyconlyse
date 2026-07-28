@@ -25,3 +25,7 @@
 /DeviceServers/OWIS/ps90_64.dll
 
 .DS_Store
+
+/.coverage
+/dset.h5
+/tmp/

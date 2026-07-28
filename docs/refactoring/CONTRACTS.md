@@ -44,3 +44,15 @@ Refactoring must preserve these contracts unless a separately approved migration
 - No dynamic code execution is allowed for configuration.
 - Windows `.exe`/wrapper entrypoints and Astor metadata are compatibility surfaces.
 - Deployment and service restart are manual-gated operations, never agent defaults.
+- Elysium 2 is the mandatory runtime target for device-server changes:
+  SSH alias `elysium2`, host `10.20.30.204`, repository
+  `C:\dev\pyconlyse`, environment `pyconlyse39`.
+- A device-server change is not complete after local source and unit checks.
+  The exact reviewed commit must be deployed to Elysium 2, followed by
+  sequential restart of only the affected server instances.
+- Elysium 2 validation must inspect restart logs, Tango state/status and
+  command/attribute access through the applicable API or GUI. Servers must
+  remain stable during a bounded post-restart observation period.
+- Deployment must stop if the remote worktree is dirty, the branch cannot be
+  fast-forwarded to the exact commit, the affected server set is ambiguous,
+  or hardware-safe restart approval is missing.

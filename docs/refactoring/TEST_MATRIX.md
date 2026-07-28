@@ -60,11 +60,18 @@ npm run build
 4. `git diff --check` passes.
 5. `git diff --cached --check` passes.
 6. Sol completes read-only contract, safety, and integration review.
-7. User explicitly approves any Everest deployment or restart.
+7. User explicitly approves any Everest or Elysium 2 deployment or restart.
 8. Everest runs the exact SHA in a detached temporary worktree with the same
    complete software-only pytest suite and frontend production build before
    its production checkout fast-forwards.
 9. Any Tango restart has a human-created, external, exact-SHA approval TOML.
+10. Device-server changes are deployed to Elysium 2 (`ssh elysium2`,
+    `C:\dev\pyconlyse`) at the exact reviewed SHA.
+11. Only affected Elysium 2 server instances restart, sequentially. For each
+    instance, capture pre/post Tango state, startup logs, API or GUI
+    connectivity, and a bounded stability observation.
+12. Elysium 2 deployment is blocked when its checkout is dirty, cannot
+    fast-forward, or contains an unreviewed commit range.
 
 ## Failure policy
 

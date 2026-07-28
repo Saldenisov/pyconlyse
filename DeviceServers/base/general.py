@@ -1,11 +1,12 @@
+import ast
 import json
 import os
 import time
 import zlib
 from abc import abstractmethod
+from dataclasses import dataclass
 from pathlib import Path
-from threading import RLock, Thread
-from time import sleep
+from threading import Event, RLock, Thread, current_thread
 from typing import Any, Dict, Union
 
 import msgpack
@@ -90,7 +91,76 @@ from utilities.datastructures.mes_independent.measurments_dataclass import (
 )
 
 standard_str_output = "str: 0 if success, else error."
-from dataclasses import dataclass
+
+
+class ConfigurationError(ValueError):
+    """Raised when a Tango property cannot be treated as inert data."""
+
+
+def operation_succeeded(result) -> bool:
+    """Return true only for explicit numeric-zero adapter results."""
+    return (
+        isinstance(result, (int, float))
+        and not isinstance(result, bool)
+        and result == 0
+    )
+
+
+def _validate_config_value(value, *, path="parameters"):
+    """Return only JSON-compatible values accepted by device configuration."""
+    if value is None or isinstance(value, (str, bool, int, float)):
+        return value
+    if isinstance(value, list):
+        return [
+            _validate_config_value(item, path=f"{path}[{index}]")
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, tuple):
+        return tuple(
+            _validate_config_value(item, path=f"{path}[{index}]")
+            for index, item in enumerate(value)
+        )
+    if isinstance(value, dict):
+        validated = {}
+        for key, item in value.items():
+            if not isinstance(key, (str, int, float, bool)):
+                raise ConfigurationError(
+                    f"{path} contains unsupported key type {type(key).__name__}"
+                )
+            validated[key] = _validate_config_value(item, path=f"{path}[{key!r}]")
+        return validated
+    raise ConfigurationError(
+        f"{path} contains unsupported value type {type(value).__name__}"
+    )
+
+
+def parse_structured_config(raw_value, *, name="parameters"):
+    """Parse JSON first, then legacy Python literals without executing code."""
+    if raw_value is None or isinstance(
+        raw_value, (dict, list, tuple, int, float, bool)
+    ):
+        return _validate_config_value(raw_value, path=name)
+    if not isinstance(raw_value, str):
+        raise ConfigurationError(
+            f"{name} must be JSON or a legacy Python literal, got "
+            f"{type(raw_value).__name__}"
+        )
+
+    source = raw_value.strip()
+    if not source:
+        raise ConfigurationError(f"{name} cannot be empty")
+
+    try:
+        parsed = json.loads(source)
+    except json.JSONDecodeError as json_error:
+        try:
+            parsed = ast.literal_eval(source)
+        except (SyntaxError, ValueError) as literal_error:
+            raise ConfigurationError(
+                f"{name} is neither valid JSON nor a supported legacy literal: "
+                f"{literal_error}"
+            ) from json_error
+    return _validate_config_value(parsed, path=name)
 
 
 @dataclass
@@ -249,6 +319,7 @@ class DS_General(Device):
 
     @abstractmethod
     def init_device(self):
+        self._stop_error_timer()
         self._lifecycle_lock = RLock()
         self._fault_recovery_attempts = 0
         self._next_fault_recovery_at = 0.0
@@ -261,37 +332,87 @@ class DS_General(Device):
         self._comment = "..."
         self._error = "..."
         self._n = 0
-        internal_time = Thread(target=self.int_time)
-        internal_time.daemon = True
-        internal_time.start()
         self._status_check_fault = 0
         self.prev_state = DevState.FAULT
-        Device.init_device(self)
-        if hasattr(self, "parameters"):
-            self.parameters = eval(str(self.parameters))
+        try:
+            Device.init_device(self)
+        except BaseException:
+            self._stop_error_timer()
+            raise
 
-        # Initialize archive connection with optional global disable flag
-        global_disable = bool(GLOBAL_SETTINGS.get("DISABLE_ARCHIVE", False))
-        if getattr(self, "archive_enabled", 1) == 0 or global_disable:
-            self.info(
-                "Archive disabled: Using mock archive (no connection attempt)", True
-            )
-            self._create_mock_archive()
-        else:
-            # Initialize archive connection with timeout handling
-            timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
-            self._init_archive_connection(timeout_seconds=timeout_val)
+        self._start_error_timer()
+        try:
+            configuration_valid = True
+            if hasattr(self, "parameters"):
+                try:
+                    self.parameters = parse_structured_config(self.parameters)
+                except ConfigurationError as error:
+                    self.error(f"Invalid parameters for {self.device_name}: {error}")
+                    self.set_state(DevState.FAULT)
+                    configuration_valid = False
 
-        self.set_state(DevState.OFF)
-        self._device_id_internal = -1
-        self._uri = b""
-        self.find_device()
+            if not configuration_valid:
+                self._create_mock_archive()
+                self._device_id_internal = -1
+                self._uri = b""
+                return
 
-        if self._device_id_internal != -1:
-            self.info(f"{self.device_name} was found.", True)
-        else:
-            self.info(f"{self.device_name} was NOT found.", True)
-            self.set_state(DevState.FAULT)
+            global_disable = bool(GLOBAL_SETTINGS.get("DISABLE_ARCHIVE", False))
+            if getattr(self, "archive_enabled", 1) == 0 or global_disable:
+                self.info(
+                    "Archive disabled: Using mock archive (no connection attempt)", True
+                )
+                self._create_mock_archive()
+            else:
+                timeout_val = int(GLOBAL_SETTINGS.get("ARCHIVE_TIMEOUT_SECONDS", 5))
+                self._init_archive_connection(timeout_seconds=timeout_val)
+
+            self.set_state(DevState.OFF)
+            self._device_id_internal = -1
+            self._uri = b""
+            self.find_device()
+
+            if self._device_id_internal != -1:
+                self.info(f"{self.device_name} was found.", True)
+            else:
+                self.info(f"{self.device_name} was NOT found.", True)
+                self.set_state(DevState.FAULT)
+        except BaseException:
+            self._stop_error_timer()
+            raise
+
+    def _start_error_timer(self):
+        """Start one bounded maintenance timer per device instance."""
+        self._stop_error_timer()
+        self._error_timer_stop = Event()
+        self._error_timer_thread = Thread(
+            target=self.int_time,
+            args=(self._error_timer_stop,),
+            name=f"{self.__class__.__name__}-error-timer",
+            daemon=True,
+        )
+        self._error_timer_thread.start()
+
+    def _stop_error_timer(self):
+        stop_event = getattr(self, "_error_timer_stop", None)
+        timer_thread = getattr(self, "_error_timer_thread", None)
+        if stop_event is not None:
+            stop_event.set()
+        if (
+            timer_thread is not None
+            and timer_thread.is_alive()
+            and timer_thread is not current_thread()
+        ):
+            timer_thread.join(timeout=1.0)
+        self._error_timer_stop = None
+        self._error_timer_thread = None
+
+    def delete_device(self):
+        """Release local maintenance resources when Tango removes this device."""
+        self._stop_error_timer()
+        parent_delete = getattr(super(), "delete_device", None)
+        if parent_delete is not None:
+            parent_delete()
 
     @abstractmethod
     def register_variables_for_archive(self):
@@ -352,7 +473,7 @@ class DS_General(Device):
         return True
 
     def _record_controller_status(self, result) -> None:
-        if result == 0:
+        if operation_succeeded(result):
             # Older adapters sometimes reported success but left their previous
             # FAULT untouched. A successful health check is authoritative.
             if self.get_state() == DevState.FAULT:
@@ -371,16 +492,14 @@ class DS_General(Device):
             f"last_error={getattr(self, '_last_fault_recovery_error', '')}"
         )
 
-    def int_time(self):
-        try:
-            while 1:
-                sleep(0.5)
-                self._n += 1
-                if self._n > 10:
-                    self._error = ""
-                    self._n = 0
-        except KeyboardInterrupt:
-            return
+    def int_time(self, stop_event=None):
+        """Clear transient errors until device teardown requests cancellation."""
+        stop_event = stop_event or Event()
+        while not stop_event.wait(0.5):
+            self._n += 1
+            if self._n > 10:
+                self._error = ""
+                self._n = 0
 
     def _init_archive_connection(self, timeout_seconds=5):
         """Initialize archive connection with timeout and graceful fallback"""
@@ -471,11 +590,6 @@ class DS_General(Device):
             result = self.get_controller_status_local()
             self._record_controller_status(result)
             self.send_state_archive()
-            if (
-                self.get_state() not in {DevState.ON, DevState.MOVING, DevState.RUNNING}
-                and self.always_on == 1
-            ):
-                self.turn_on()
 
     @abstractmethod
     def get_controller_status_local(self) -> Union[int, str]:
@@ -484,11 +598,14 @@ class DS_General(Device):
     @command
     def turn_on(self):
         with self._get_lifecycle_lock():
+            if self.get_state() == DevState.ON:
+                self.info(f"{self.device_name} is already ON.", True)
+                return
             state_ok = self.check_func_allowance(self.turn_on)
             if state_ok == 1:
                 self.info(f"Turning ON {self.device_name}.", True)
                 result = self.turn_on_local()
-                if result != 0:
+                if not operation_succeeded(result):
                     self._last_fault_recovery_error = str(result)
                     self.error(f"{result}")
                 else:
@@ -509,11 +626,14 @@ class DS_General(Device):
     @command
     def turn_off(self):
         with self._get_lifecycle_lock():
+            if self.get_state() == DevState.OFF:
+                self.info(f"{self.device_name} is already OFF.", True)
+                return
             state_ok = self.check_func_allowance(self.turn_off)
             if state_ok == 1:
                 self.info(f"Turning off device {self.device_name}.", True)
                 result = self.turn_off_local()
-                if result != 0:
+                if not operation_succeeded(result):
                     self.error(f"{result}")
                 else:
                     self.info(f"{self.device_name} is turned OFF.", True)
@@ -532,7 +652,7 @@ class DS_General(Device):
             result = self.get_controller_status_local()
             self._record_controller_status(result)
             self.send_state_archive()
-            if result == 0:
+            if operation_succeeded(result):
                 return "Recovered"
             return f"Recovery failed: {result}"
 
@@ -541,9 +661,10 @@ class DS_General(Device):
         pass
 
     def write_to_archive(self, data: ArchiveData):
-        if self.archive.state == 1:
+        archive = getattr(self, "archive", None)
+        if archive is not None and getattr(archive, "state", 0) == 1:
             data_c = self.compress_data(data)
-            self.archive.archive_it(data_c)
+            archive.archive_it(data_c)
 
     def compress_data(self, data):
         msg_b = msgpack.packb(str(data))

@@ -21,21 +21,8 @@ from msl.equipment.exceptions import AvantesError
 from tango import DevState
 from tango.server import AttrWriteType, attribute, device_property
 
-from DeviceServers.base.DS_Camera import DS_CAMERA_CCD
-
-# Import parallel measurement support
-# This module enables true simultaneous readout of multiple Avantes spectrometers
-try:
-    from DeviceServers.cameras.avantes.avantes_parallel import (
-        parallel_poll_and_get_data,
-        parallel_measure,
-        parallel_prepare_measure
-    )
-    PARALLEL_SUPPORT = True
-except ImportError:
-    PARALLEL_SUPPORT = False
-    print("Warning: avantes_parallel module not found. Falling back to sequential mode.")
-
+from DeviceServers.base.camera import DS_CAMERA_CCD
+from DeviceServers.base.general import parse_structured_config
 
 class DS_AVANTES_CCD(DS_CAMERA_CCD):
     RULES = {**DS_CAMERA_CCD.RULES}
@@ -53,11 +40,9 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
     def init_device(self):
         super().init_device()
         self.register_variables_for_archive()
-        if self.camera:
-            self.wavelengths = self.camera.get_lambda()
-            self.width = self.camera.get_num_pixels()
-        else:
-            self.wavelengths = eval(self.wavelengths)
+        self.wavelengths = parse_structured_config(
+            self.wavelengths, name="wavelengths"
+        )
 
     @attribute(label="number of kinetics", dtype=int, access=AttrWriteType.READ_WRITE)
     def number_kinetics(self):
@@ -71,6 +56,13 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
             self.camera = self.record.connect()
         except (Exception, AvantesError) as e:
             self.error(e)
+            self.camera = None
+            return str(e)
+        return 0
+
+    def _update_spectrum_metadata(self):
+        self.wavelengths = self.camera.get_lambda()
+        self.width = self.camera.get_num_pixels()
 
     def find_device(self) -> Tuple[int, str]:
         state_ok = self.check_func_allowance(self.find_device)
@@ -86,15 +78,9 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
                 ),
             )
 
-            self._connect()
-
-            if self.camera:
-                self.camera.use_high_res_adc(True)
-                self.set_state(DevState.ON)
-                argreturn = 1, str(self.serial_number_real).encode("utf-8")
-            else:
-                self.error("Could not initialize camera.")
+            argreturn = 1, str(self.device_id).encode("utf-8")
             self._device_id_internal, self._uri = argreturn
+        return argreturn
 
     def get_camera_friendly_name(self):
         return self.friendly_name
@@ -200,20 +186,33 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
         return "None"
 
     def turn_on_local(self) -> Union[int, str]:
-        if self.get_state != DevState.ON:
-            self._connect()
-            if self.camera:
-                self.info(f"{self.device_name} was Opened.", True)
-                self.set_state(DevState.ON)
-                return 0
-            self.info("Could not turn on camera, because it does not exist.", True)
-            return "Could not turn on camera, because it does not exist."
-        return "Could not turn on camera it is opened already."
+        if self.camera is None:
+            result = self._connect()
+            if result != 0:
+                return result
+
+        try:
+            self.camera.use_high_res_adc(True)
+            self._update_spectrum_metadata()
+        except (Exception, AvantesError) as error:
+            self.error(error)
+            return str(error)
+
+        self.info(f"{self.device_name} was Opened.", True)
+        self.set_state(DevState.ON)
+        return 0
 
     def turn_off_local(self) -> Union[int, str]:
+        if self.camera is None:
+            self.set_state(DevState.OFF)
+            return 0
         if self.grabbing:
             self.stop_grabbing_local()
-        self.camera.disconnect()
+        try:
+            self.camera.disconnect()
+        except (Exception, AvantesError) as error:
+            self.error(error)
+            return str(error)
         self.camera = None
         self.set_state(DevState.OFF)
         self.info(f"{self.device_name} was Closed.", True)
@@ -390,4 +389,3 @@ class DS_AVANTES_CCD(DS_CAMERA_CCD):
 
 if __name__ == "__main__":
     DS_AVANTES_CCD.run_server()
-

@@ -187,8 +187,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self._last_trigger_timeout_warning = 0.0
         super().init_device()
         self.register_variables_for_archive()
-        if hasattr(self, "camera") and self.camera and self.camera.IsOpen():
-            self.start_grabbing_local()
 
     def find_device(self):
         state_ok = self.check_func_allowance(self.find_device)
@@ -205,7 +203,6 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     self.camera = pylon.InstantCamera(
                         instance.CreateDevice(self.device)
                     )
-                    self.turn_on_local()
                     argreturn = (
                         1,
                         str(self.camera.GetDeviceInfo().GetSerialNumber()).encode(
@@ -222,34 +219,27 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     def turn_on_local(self) -> Union[int, str]:
         if pylon is None:
             return "Basler SDK unavailable: install pypylon on this host."
-        if self.camera and not self.camera.IsOpen():
+        if self.camera is None:
+            return "Could not turn on camera, because it does not exist."
+        if not self.camera.IsOpen():
             self.camera.Open()
+        if self.converter is None:
             self.converter = pylon.ImageFormatConverter()
-            self.set_state(DevState.ON)
-            self.get_camera_friendly_name()
-            self.info(f"{self.device_name} was Opened.", True)
-            return 0
-        return (
-            "Could not turn on camera it is opened already."
-            if self.camera
-            else "Could not turn on camera, "
-        )
+        self.set_state(DevState.ON)
+        self.get_camera_friendly_name()
+        self.info(f"{self.device_name} was Opened.", True)
+        return 0
 
     def turn_off_local(self) -> Union[int, str]:
         if self.camera and self.camera.IsOpen():
             if self.grabbing:
                 self.stop_grabbing()
             self.camera.Close()
-
-
             self.set_state(DevState.OFF)
             self.info(f"{self.device_name} was Closed.", True)
             return 0
-        return (
-            "Could not turn off camera it is closed already."
-            if not self.camera.IsOpen()
-            else "Could not turn on camera, because it does not exist."
-        )
+        self.set_state(DevState.OFF)
+        return 0
 
     def set_param_after_init_local(self) -> Union[int, str]:
         functions = [

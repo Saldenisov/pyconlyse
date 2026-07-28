@@ -1,6 +1,7 @@
 import sys
 from collections import deque
 from pathlib import Path
+from threading import Event, Thread
 from types import SimpleNamespace
 
 import numpy as np
@@ -156,6 +157,8 @@ class DummyMonoMotor(motor_module.DS_MOTORIZED_MONO_AXIS):
         self.last_moved_to = None
         self.read_position_calls = 0
         self.stop_calls = 0
+        self.stop_result = 0
+        self.move_result = 0
         self.controller_status_calls = 0
 
     @property
@@ -201,10 +204,44 @@ class DummyMonoMotor(motor_module.DS_MOTORIZED_MONO_AXIS):
     def move_axis_local(self, pos):
         self.last_moved_to = pos
         self._position = pos
+        return self.move_result
+
+    def stop_movement_local(self):
+        self.stop_calls += 1
+        return self.stop_result
+
+
+class BlockingDummyMonoMotor(DummyMonoMotor):
+    def __init__(self):
+        super().__init__()
+        self.move_entered = Event()
+        self.release_move = Event()
+        self.stop_entered = Event()
+        self.release_stop = Event()
+        self.block_stop = False
+        self.read_entered = Event()
+        self.release_read = Event()
+        self.block_read = False
+
+    def move_axis_local(self, pos):
+        self.last_moved_to = pos
+        self.move_entered.set()
+        assert self.release_move.wait(timeout=2.0)
+        self._position = pos
         return 0
 
     def stop_movement_local(self):
         self.stop_calls += 1
+        self.stop_entered.set()
+        if self.block_stop:
+            assert self.release_stop.wait(timeout=2.0)
+        return self.stop_result
+
+    def read_position_local(self):
+        self.read_position_calls += 1
+        self.read_entered.set()
+        if self.block_read:
+            assert self.release_read.wait(timeout=2.0)
         return 0
 
 
@@ -227,12 +264,16 @@ class DummyMultiMotor(motor_module.DS_MOTORIZED_MULTI_AXES):
                 "position": 1.5,
                 "device_name": "axis-1",
                 "friendly_name": "Axis 1",
+                "limit_min": -10.0,
+                "limit_max": 10.0,
             },
             2: {
                 "state": general_module.DevState.STANDBY,
                 "position": 3.0,
                 "device_name": "axis-2",
                 "friendly_name": "Axis 2",
+                "limit_min": -10.0,
+                "limit_max": 10.0,
             },
         }
         self.move_calls = []
@@ -296,6 +337,45 @@ class DummyMultiMotor(motor_module.DS_MOTORIZED_MULTI_AXES):
 
     def stop_axis_local(self, args):
         return 0
+
+
+class BlockingDummyMultiMotor(DummyMultiMotor):
+    def __init__(self):
+        super().__init__()
+        self.move_entered = Event()
+        self.release_move = Event()
+        self.stop_calls = 0
+        self.stop_result = 0
+        self.read_position_calls = []
+        self.stop_entered = Event()
+        self.release_stop = Event()
+        self.block_stop = False
+        self.read_entered = Event()
+        self.release_read = Event()
+        self.block_read = False
+
+    def move_axis_local(self, args):
+        axis, position = args
+        self.move_calls.append([axis, position])
+        if axis == 1:
+            self.move_entered.set()
+            assert self.release_move.wait(timeout=2.0)
+        self._delay_lines_parameters[axis]["position"] = position
+        return 0
+
+    def read_position_axis_local(self, axis):
+        self.read_position_calls.append(axis)
+        self.read_entered.set()
+        if self.block_read:
+            assert self.release_read.wait(timeout=2.0)
+        return 0
+
+    def stop_axis_local(self, axis):
+        self.stop_calls += 1
+        self.stop_entered.set()
+        if self.block_stop:
+            assert self.release_stop.wait(timeout=2.0)
+        return self.stop_result
 
 
 class DummyCamera(camera_module.DS_CAMERA):
@@ -370,6 +450,7 @@ class DummyCameraCCD(camera_module.DS_CAMERA_CCD):
         self.exposure_value = 0.1
         self.exposure_writes = []
         self.param_after_init_calls = 0
+        self.turn_on_calls = 0
         self.start_calls = 0
         self.stop_calls = 0
         self._grabbing = False
@@ -394,6 +475,7 @@ class DummyCameraCCD(camera_module.DS_CAMERA_CCD):
         return 0
 
     def turn_on_local(self):
+        self.turn_on_calls += 1
         self.set_state(general_module.DevState.ON)
         return 0
 
@@ -512,6 +594,29 @@ def test_always_on_does_not_reinitialize_running_device():
 
     assert device.controller_status_calls == 1
     assert device.turn_on_calls == 0
+
+
+def test_status_polling_never_powers_an_off_device_even_when_always_on():
+    device = DummyGeneral()
+    device.always_on = 1
+    device.set_state(general_module.DevState.OFF)
+
+    device.get_controller_status()
+
+    assert device.controller_status_calls == 0
+    assert device.turn_on_calls == 0
+
+
+def test_turn_on_and_off_are_idempotent_without_backend_calls():
+    device = DummyGeneral()
+    device.set_state(general_module.DevState.ON)
+
+    device.turn_on()
+    assert device.turn_on_calls == 0
+
+    device.set_state(general_module.DevState.OFF)
+    device.turn_off()
+    assert device.turn_off_calls == 0
 
 
 def test_recover_runs_immediate_health_check_from_fault():
@@ -681,6 +786,146 @@ def test_motor_stop_movement_runs_local_handler():
     assert device.controller_status_calls == 1
 
 
+def test_motor_stop_movement_records_backend_failure():
+    device = DummyMonoMotor()
+    device.stop_result = "backend stop failed"
+
+    device.stop_movement()
+
+    assert device.stop_calls == 1
+    assert device.controller_status_calls == 0
+    assert "backend stop failed" in device.last_error()
+
+
+def test_motor_explicit_zero_backend_result_refreshes_readback():
+    device = DummyMonoMotor()
+    device.move_result = 0
+    device.stop_result = 0
+
+    assert device.move_axis(7.5) == 0
+    device.stop_movement()
+
+    assert device.read_position_calls == 1
+    assert device.controller_status_calls == 1
+    assert device.last_error() == "..."
+
+
+def test_motor_move_returns_backend_and_validation_failures():
+    device = DummyMonoMotor()
+    device.move_result = "backend move failed"
+
+    assert device.move_axis(7.5) == "backend move failed"
+    assert "backend move failed" in device.last_error()
+
+    assert "position out of limit" in device.move_axis(11.0)
+
+
+def test_motor_stop_does_not_wait_for_blocking_move():
+    device = BlockingDummyMonoMotor()
+    move_thread = Thread(target=device.move_axis, args=(7.5,))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    device.stop_movement()
+
+    assert device.stop_calls == 1
+    assert device.controller_status_calls == 1
+    assert move_thread.is_alive()
+    assert device.read_position_calls == 0
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not move_thread.is_alive()
+    assert device.read_position_calls == 0
+
+
+def test_motor_rejects_concurrent_move_while_active_move_is_blocking():
+    device = BlockingDummyMonoMotor()
+    move_thread = Thread(target=device.move_axis, args=(7.5,))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    device.move_axis(6.0)
+
+    assert device.last_moved_to == 7.5
+    assert "another move is already in progress" in device.last_error()
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not move_thread.is_alive()
+
+
+def test_motor_rejects_new_move_while_stop_is_in_progress():
+    device = BlockingDummyMonoMotor()
+    device.block_stop = True
+    move_thread = Thread(target=device.move_axis, args=(7.5,))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    stop_thread = Thread(target=device.stop_movement)
+    stop_thread.start()
+    assert device.stop_entered.wait(timeout=1.0)
+
+    device.move_axis(6.0)
+    assert device.last_moved_to == 7.5
+    assert "stop is already in progress" in device.last_error()
+
+    device.release_stop.set()
+    stop_thread.join(timeout=1.0)
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not stop_thread.is_alive()
+    assert not move_thread.is_alive()
+
+
+def test_motor_failed_stop_does_not_suppress_blocking_move_readback():
+    device = BlockingDummyMonoMotor()
+    device.stop_result = "backend stop failed"
+    move_thread = Thread(target=device.move_axis, args=(7.5,))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    device.stop_movement()
+    assert device.stop_calls == 1
+    assert device.read_position_calls == 0
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+
+    assert not move_thread.is_alive()
+    assert device.read_position_calls == 1
+    assert "backend stop failed" in device.last_error()
+
+
+def test_motor_waits_for_stop_that_starts_during_post_move_readback():
+    device = BlockingDummyMonoMotor()
+    device.block_read = True
+    device.block_stop = True
+    device.release_move.set()
+    move_thread = Thread(target=device.move_axis, args=(7.5,))
+
+    move_thread.start()
+    assert device.read_entered.wait(timeout=1.0)
+
+    stop_thread = Thread(target=device.stop_movement)
+    stop_thread.start()
+    assert device.stop_entered.wait(timeout=1.0)
+
+    device.release_read.set()
+    assert move_thread.is_alive()
+
+    device.release_stop.set()
+    stop_thread.join(timeout=1.0)
+    move_thread.join(timeout=1.0)
+
+    assert not stop_thread.is_alive()
+    assert not move_thread.is_alive()
+
+
 def test_multi_motor_accessors_render_axis_snapshots():
     device = DummyMultiMotor()
 
@@ -708,6 +953,137 @@ def test_multi_motor_move_axis_returns_message_when_state_disallowed():
 
     assert "check_func_allowance" in result
     assert device.move_calls == []
+
+
+def test_multi_motor_move_axis_rejects_unknown_axis_and_out_of_range_position():
+    device = DummyMultiMotor()
+
+    unknown_result = device.move_axis([99, 1.0])
+    limit_result = device.move_axis([1, 11.0])
+
+    assert unknown_result == "unknown axis 99"
+    assert "outside axis 1 limits" in limit_result
+    assert device.move_calls == []
+
+
+def test_multi_motor_stop_does_not_wait_for_blocking_move():
+    device = BlockingDummyMultiMotor()
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    assert device.stop_axis(1) == "0"
+    assert device.stop_calls == 1
+    assert move_thread.is_alive()
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+
+    assert not move_thread.is_alive()
+    assert device.read_position_calls == []
+
+
+def test_multi_motor_rejects_same_axis_concurrent_move():
+    device = BlockingDummyMultiMotor()
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    result = device.move_axis([1, 5.0])
+
+    assert result == "Axis 1 move rejected: movement already in progress."
+    assert device.move_calls == [[1, 4.25]]
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not move_thread.is_alive()
+
+
+def test_multi_motor_allows_independent_move_on_different_axis():
+    device = BlockingDummyMultiMotor()
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    result = device.move_axis([2, 5.0])
+
+    assert result == "0"
+    assert device.move_calls == [[1, 4.25], [2, 5.0]]
+    assert device.read_position_calls == [2]
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not move_thread.is_alive()
+
+
+def test_multi_motor_rejects_new_move_while_axis_stop_is_in_progress():
+    device = BlockingDummyMultiMotor()
+    device.block_stop = True
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    stop_thread = Thread(target=device.stop_axis, args=(1,))
+    stop_thread.start()
+    assert device.stop_entered.wait(timeout=1.0)
+
+    result = device.move_axis([1, 5.0])
+    assert result == "Axis 1 move rejected: stop is already in progress."
+
+    device.release_stop.set()
+    stop_thread.join(timeout=1.0)
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+    assert not stop_thread.is_alive()
+    assert not move_thread.is_alive()
+
+
+def test_multi_motor_failed_stop_does_not_suppress_post_move_readback():
+    device = BlockingDummyMultiMotor()
+    device.stop_result = "backend stop failed"
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.move_entered.wait(timeout=1.0)
+
+    assert device.stop_axis(1) == "backend stop failed"
+    assert device.stop_calls == 1
+
+    device.release_move.set()
+    move_thread.join(timeout=1.0)
+
+    assert not move_thread.is_alive()
+    assert device.read_position_calls == [1]
+    assert "backend stop failed" in device.last_error()
+
+
+def test_multi_motor_waits_for_stop_that_starts_during_readback():
+    device = BlockingDummyMultiMotor()
+    device.block_read = True
+    device.block_stop = True
+    device.release_move.set()
+    move_thread = Thread(target=device.move_axis, args=([1, 4.25],))
+
+    move_thread.start()
+    assert device.read_entered.wait(timeout=1.0)
+
+    stop_thread = Thread(target=device.stop_axis, args=(1,))
+    stop_thread.start()
+    assert device.stop_entered.wait(timeout=1.0)
+
+    device.release_read.set()
+    assert move_thread.is_alive()
+
+    device.release_stop.set()
+    stop_thread.join(timeout=1.0)
+    move_thread.join(timeout=1.0)
+
+    assert not stop_thread.is_alive()
+    assert not move_thread.is_alive()
 
 
 def test_camera_register_order_and_give_order_use_uint16_arrays():
@@ -778,6 +1154,37 @@ def test_camera_ccd_set_param_after_init_calls_local_handler():
 
     device.set_param_after_init()
 
+    assert device.param_after_init_calls == 1
+
+
+def test_camera_ccd_init_does_not_power_or_configure_camera():
+    device = DummyCameraCCD()
+
+    device.init_device()
+
+    assert device.turn_on_calls == 0
+    assert device.param_after_init_calls == 0
+    assert device.get_state() == general_module.DevState.OFF
+    device.delete_device()
+
+
+def test_camera_ccd_explicit_turn_on_applies_initial_parameters_once():
+    device = DummyCameraCCD()
+    device.set_state(general_module.DevState.OFF)
+
+    device.turn_on()
+
+    assert device.turn_on_calls == 1
+    assert device.param_after_init_calls == 1
+
+
+def test_camera_ccd_turn_on_applies_settings_when_discovery_already_is_on():
+    device = DummyCameraCCD()
+    device.set_state(general_module.DevState.ON)
+
+    device.turn_on()
+
+    assert device.turn_on_calls == 0
     assert device.param_after_init_calls == 1
 
 

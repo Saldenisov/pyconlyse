@@ -17,18 +17,118 @@ class TestRefactorTooling(unittest.TestCase):
         self.assertIn(("git", "diff", "--cached", "--check"), argv)
         self.assertTrue(all(command.cwd == verify_refactor.PROJECT_ROOT for command in commands))
 
-    def test_verification_includes_tests_in_compileall_and_ruff(self):
-        commands = verify_refactor.build_verification_commands()
+    def test_quick_verification_lints_only_changed_python_files(self):
+        changed_files = (
+            "DeviceServers/base/general.py",
+            "tests/device_servers/base/test_base_behaviors.py",
+        )
+        commands = verify_refactor.build_verification_commands(changed_files=changed_files)
         argv = [command.argv for command in commands]
         compileall = next(command for command in argv if "compileall" in command)
         ruff = next(command for command in argv if "ruff" in command)
         self.assertIn("tests", compileall)
-        self.assertEqual(ruff[:8], ("conda", "run", "-n", "pyconlyse39", "ruff", "check", "DeviceServers", "web/backend"))
-        self.assertIn("tests", ruff)
+        self.assertEqual(
+            ruff,
+            (
+                "conda",
+                "run",
+                "-n",
+                "pyconlyse39",
+                "ruff",
+                "check",
+                "--select",
+                "F",
+                *changed_files,
+            ),
+        )
+
+    def test_quick_verification_omits_ruff_when_no_python_files_changed(self):
+        commands = verify_refactor.build_verification_commands()
+        self.assertFalse(any("ruff" in command.argv for command in commands))
+
+    def test_changed_python_files_combines_git_sources_and_filters_scope(self):
+        outputs = iter(
+            (
+                "DeviceServers/base/general.py\nREADME.md\n",
+                "tests/unit/test_refactor_tooling.py\n",
+                "web/frontend/src/App.js\nscripts/refactor/new_check.py\n",
+            )
+        )
+
+        def runner(argv, **kwargs):
+            self.assertEqual(kwargs["cwd"], verify_refactor.PROJECT_ROOT)
+            self.assertTrue(kwargs["check"])
+            self.assertTrue(kwargs["capture_output"])
+            self.assertTrue(kwargs["text"])
+            return subprocess.CompletedProcess(argv, 0, next(outputs), "")
+
+        self.assertEqual(
+            verify_refactor.changed_python_files(runner),
+            (
+                "DeviceServers/base/general.py",
+                "scripts/refactor/new_check.py",
+                "tests/unit/test_refactor_tooling.py",
+            ),
+        )
+
+    def test_changed_python_files_uses_head_parent_in_clean_checkout(self):
+        calls = []
+        outputs = iter(("", "", "", "DeviceServers/base/general.py\nREADME.md\n"))
+
+        def runner(argv, **_kwargs):
+            calls.append(tuple(argv))
+            return subprocess.CompletedProcess(argv, 0, next(outputs), "")
+
+        self.assertEqual(
+            verify_refactor.changed_python_files(runner),
+            ("DeviceServers/base/general.py",),
+        )
+        self.assertEqual(
+            calls[-1],
+            ("git", "diff", "--name-only", "--diff-filter=ACMR", "HEAD^", "HEAD"),
+        )
+
+    def test_non_python_dirty_files_do_not_disable_head_parent_fallback(self):
+        outputs = iter(
+            (
+                "",
+                "",
+                "tmp/pdfs/manual.pdf\nREADME.md\n",
+                "DeviceServers/base/general.py\n",
+            )
+        )
+
+        def runner(argv, **_kwargs):
+            return subprocess.CompletedProcess(argv, 0, next(outputs), "")
+
+        self.assertEqual(
+            verify_refactor.changed_python_files(runner),
+            ("DeviceServers/base/general.py",),
+        )
 
     def test_full_verification_is_software_only_and_includes_frontend(self):
-        commands = verify_refactor.build_verification_commands(full=True, include_frontend=True)
+        changed_files = ("DeviceServers/base/general.py",)
+        commands = verify_refactor.build_verification_commands(
+            full=True,
+            include_frontend=True,
+            changed_files=changed_files,
+        )
         argv = [command.argv for command in commands]
+        ruff = next(command for command in argv if "ruff" in command)
+        self.assertEqual(
+            ruff,
+            (
+                "conda",
+                "run",
+                "-n",
+                "pyconlyse39",
+                "ruff",
+                "check",
+                "--select",
+                "F",
+                *changed_files,
+            ),
+        )
         self.assertIn(
             (
                 "conda",

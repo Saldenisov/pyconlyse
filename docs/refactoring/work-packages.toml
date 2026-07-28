@@ -22,7 +22,10 @@ allowed_globs = ["tests/device_servers/base/**"]
 [packages.T2]
 agent = "terra"
 description = "OWIS motion safety"
-allowed_paths = ["DeviceServers/motion/owis/DS_OWIS_PS90.py"]
+allowed_paths = [
+  "DeviceServers/motion/owis/DS_OWIS_PS90.py",
+  "DeviceServers/motion/owis/DS_OWIS_delay_line.py",
+]
 allowed_globs = [
   "tests/device_servers/motion/**",
   "DeviceServers/motion/owis/*_adapter.py",
@@ -71,6 +74,18 @@ allowed_globs = [
   "web/frontend/src/tabs/**",
   "web/frontend/src/utils/**",
   "web/frontend/src/css/**",
+]
+
+[packages.T7]
+agent = "terra"
+description = "Concrete CCD startup lifecycle"
+allowed_paths = [
+  "DeviceServers/cameras/avantes/DS_AVANTES_CCD.py",
+  "DeviceServers/cameras/basler/DS_Basler_camera.py",
+]
+allowed_globs = [
+  "tests/device_servers/cameras/avantes/**",
+  "tests/device_servers/cameras/basler/**",
 ]
 
 [packages.L1]
