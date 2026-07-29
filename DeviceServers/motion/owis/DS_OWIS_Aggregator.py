@@ -236,6 +236,26 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                 f"{self.device_name}: backend '{backend_kind}' is down: {reason}"
             )
 
+    def _backend_connection_detail(self, proxy: DeviceProxy) -> str:
+        try:
+            return str(proxy.read_attribute("controller_connection_status").value)
+        except Exception:
+            return ""
+
+    def _unpowered_backend_reason(self) -> str:
+        for backend_kind, reason in self._backend_reason.items():
+            if "power is OFF" in reason:
+                return f"backend '{backend_kind}' is intentionally OFF: {reason}"
+        return ""
+
+    def _set_off_for_unpowered_backend(self, reason: str) -> str:
+        message = f"OWIS aggregator is OFF because {reason}"
+        self._device_id_internal, self._uri = -1, b""
+        self._next_recovery_attempt_ts = 0.0
+        self.set_state(DevState.OFF)
+        self.comment = message
+        return message
+
     @staticmethod
     def _backend_is_ready(state: DevState) -> bool:
         return state in (DevState.ON, DevState.STANDBY, DevState.MOVING, DevState.RUNNING)
@@ -257,10 +277,13 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                 proxy.command_inout("ensure_on")
                 state = proxy.state()
             if not self._backend_is_ready(state):
+                detail = self._backend_connection_detail(proxy)
+                if detail:
+                    detail = f"; {detail}"
                 return (
                     False,
                     f"{name} is {state}; controller may be unpowered or unreachable. "
-                    "No automatic recovery or axis initialisation was issued.",
+                    f"No automatic recovery or axis initialisation was issued{detail}",
                 )
             self._backend_proxies[backend_kind] = proxy
             self._backend_alive[backend_kind] = True
@@ -283,9 +306,12 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             proxy.ping()
             state = proxy.state()
             if not self._backend_is_ready(state):
+                detail = self._backend_connection_detail(proxy)
+                suffix = f"; {detail}" if detail else ""
                 self._mark_backend_down(
                     backend_kind,
-                    f"{self._backend_name(backend_kind)} is {state}; controller may be unpowered.",
+                    f"{self._backend_name(backend_kind)} is {state}; "
+                    f"controller may be unpowered{suffix}",
                 )
                 return False
             self._backend_alive[backend_kind] = True
@@ -363,8 +389,12 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             self._device_id_internal, self._uri = 1, b"OWIS Aggregator"
             self.set_state(DevState.STANDBY)
         else:
-            self._device_id_internal, self._uri = -1, b""
-            self.set_state(DevState.FAULT)
+            reason = self._unpowered_backend_reason()
+            if reason:
+                self._set_off_for_unpowered_backend(reason)
+            else:
+                self._device_id_internal, self._uri = -1, b""
+                self.set_state(DevState.FAULT)
 
     def turn_on_local(self) -> Union[int, str]:
         # Idempotent: if already ON just return success (LabVIEW calls turn_on before moves)
@@ -403,6 +433,9 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
     def get_controller_status_local(self) -> Union[int, str]:
         now = time.monotonic()
         if not self._refresh_backends(force=False):
+            reason = self._unpowered_backend_reason()
+            if reason:
+                return self._set_off_for_unpowered_backend(reason)
             self.set_state(DevState.FAULT)
             if now - self._last_recovery_wait_log_ts >= 1.0:
                 remain = max(0.0, self._next_recovery_attempt_ts - now)

@@ -298,6 +298,12 @@ def test_owis_aggregator_does_not_activate_faulted_backend_during_health_check(
         def command_inout(self, command):
             commands.append(command)
 
+        def read_attribute(self, name):
+            assert name == "controller_connection_status"
+            return types.SimpleNamespace(
+                value="OWIS controller power is OFF (power PDU manip/V0/PDU_VO output 2)"
+            )
+
     device = types.SimpleNamespace(
         backend_timeout_ms=3000,
         _backend_proxies={"three": None},
@@ -308,6 +314,9 @@ def test_owis_aggregator_does_not_activate_faulted_backend_during_health_check(
         info=lambda *_args, **_kwargs: None,
     )
     device._backend_is_ready = aggregator_module.DS_OWIS_Aggregator._backend_is_ready
+    device._backend_connection_detail = lambda proxy: (
+        aggregator_module.DS_OWIS_Aggregator._backend_connection_detail(device, proxy)
+    )
     monkeypatch.setattr(aggregator_module, "DeviceProxy", lambda _name: BackendProxy())
 
     ok, reason = aggregator_module.DS_OWIS_Aggregator._connect_backend(
@@ -316,6 +325,7 @@ def test_owis_aggregator_does_not_activate_faulted_backend_during_health_check(
 
     assert ok is False
     assert "may be unpowered" in reason
+    assert "power is OFF" in reason
     assert commands == []
 
 
