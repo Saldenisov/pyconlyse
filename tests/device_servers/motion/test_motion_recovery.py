@@ -68,6 +68,7 @@ def _install_tango_stub():
     tango.AttrWriteType = AttrWriteType
     tango.DevFloat = float
     tango.DevState = DevState
+    tango.DeviceProxy = object
     tango.DispLevel = DispLevel
     server.AttrWriteType = AttrWriteType
     server.attribute = _identity_decorator
@@ -87,6 +88,7 @@ if str(ROOT) not in sys.path:
 _install_tango_stub()
 
 from DeviceServers.motion.owis import DS_OWIS_PS90 as owis_module
+from DeviceServers.motion.owis import DS_OWIS_Aggregator as aggregator_module
 from DeviceServers.motion.standa import DS_Standa_Motor as standa_module
 
 
@@ -211,6 +213,109 @@ def test_owis_status_failure_triggers_recovery_after_threshold():
     assert result == 0
     assert calls == [True]
     assert device._status_check_fault == 0
+
+
+def test_owis_recovery_probes_transport_without_axis_initialisation():
+    device = _make_owis()
+    calls = []
+    device.recovery_connect_attempts = 1
+    device.recovery_attempt_delay_seconds = 0.1
+    device._disconnect_ps90 = lambda _control_unit: calls.append("disconnect") or (0, "")
+
+    def find_device():
+        calls.append("find")
+        device._device_id_internal = 2
+
+    device.find_device = find_device
+    device.turn_on_local = lambda: (_ for _ in ()).throw(AssertionError("must not initialise axes"))
+
+    assert device._attempt_recover_connection() is True
+    assert calls == ["disconnect", "find"]
+    assert device.get_state() == owis_module.DevState.STANDBY
+
+
+def test_owis_unpowered_controller_is_off_without_connection_or_recovery():
+    device = _make_owis()
+    device._read_power_dependency_state = lambda: (
+        False,
+        "power PDU manip/V0/PDU_VO output 2",
+    )
+    device.find_device = lambda: (_ for _ in ()).throw(AssertionError("must not connect"))
+    device._disconnect_ps90 = lambda *_args: (_ for _ in ()).throw(
+        AssertionError("must not recover")
+    )
+
+    result = device.turn_on_local()
+
+    assert "power is OFF" in result
+    assert device.get_state() == owis_module.DevState.OFF
+    assert device._attempt_recover_connection() is False
+
+
+def test_owis_reads_configured_netio_power_dependency(monkeypatch):
+    device = _make_owis()
+    device.power_dependency_device = "manip/V0/PDU_VO"
+    device.power_dependency_output_id = 2
+
+    class Attribute:
+        def __init__(self, value):
+            self.value = value
+
+    class PduProxy:
+        def set_timeout_millis(self, _timeout):
+            return None
+
+        def state(self):
+            return owis_module.DevState.ON
+
+        def read_attribute(self, name):
+            return Attribute({"ids": [1, 2, 3], "states": [1, 0, 1]}[name])
+
+    monkeypatch.setattr(owis_module, "DeviceProxy", lambda _name: PduProxy())
+
+    powered, detail = device._read_power_dependency_state()
+
+    assert powered is False
+    assert detail == "power PDU manip/V0/PDU_VO output 2"
+
+
+def test_owis_aggregator_does_not_activate_faulted_backend_during_health_check(
+    monkeypatch,
+):
+    commands = []
+
+    class BackendProxy:
+        def set_timeout_millis(self, _timeout):
+            return None
+
+        def ping(self):
+            return None
+
+        def state(self):
+            return aggregator_module.DevState.FAULT
+
+        def command_inout(self, command):
+            commands.append(command)
+
+    device = types.SimpleNamespace(
+        backend_timeout_ms=3000,
+        _backend_proxies={"three": None},
+        _backend_alive={"three": False},
+        _backend_reason={"three": ""},
+        device_name="OWIS Aggregator",
+        _backend_name=lambda _kind: "manip/general/DS_OWIS_PS90_IP",
+        info=lambda *_args, **_kwargs: None,
+    )
+    device._backend_is_ready = aggregator_module.DS_OWIS_Aggregator._backend_is_ready
+    monkeypatch.setattr(aggregator_module, "DeviceProxy", lambda _name: BackendProxy())
+
+    ok, reason = aggregator_module.DS_OWIS_Aggregator._connect_backend(
+        device, "three"
+    )
+
+    assert ok is False
+    assert "may be unpowered" in reason
+    assert commands == []
 
 
 def _make_owis_delay_line_stub(monkeypatch):
