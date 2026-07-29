@@ -156,20 +156,52 @@ def test_standa_status_success_resets_fault_counter(monkeypatch):
     assert device._power_status == device.POWER_STATES[3]
 
 
-def test_standa_status_failure_triggers_recovery_after_threshold():
+def test_standa_usb_loss_schedules_passive_recovery_after_threshold():
     device = _make_standa()
-    calls = []
+    device.usb_status_failure_threshold = 1
+    standa_module.lib = types.SimpleNamespace(get_status=lambda *_args, **_kwargs: -1)
 
-    monkeypatch_status = ctypes.c_int
-    standa_module.status_t = monkeypatch_status
+    result = device.get_controller_status_local()
+
+    assert "USB connection lost" in result
+    assert device.get_state() == standa_module.DevState.FAULT
+    assert device._device_id_internal == -1
+    assert device._standa_handle_open is False
+    assert device._next_fault_recovery_at > 0
+
+
+def test_standa_transient_usb_failure_does_not_fault_or_reconnect():
+    device = _make_standa()
+    device.usb_status_failure_threshold = 3
+    device._standa_handle_open = True
+    calls = []
     standa_module.lib = types.SimpleNamespace(get_status=lambda *_args, **_kwargs: -1)
     device._attempt_recover_connection = lambda: calls.append(True) or True
-    device._status_check_fault = device.recovery_fault_threshold
 
     result = device.get_controller_status_local()
 
     assert result == 0
-    assert calls == [True]
+    assert device.get_state() == standa_module.DevState.ON
+    assert device._status_check_fault == 1
+    assert calls == []
+
+
+def test_standa_busy_shared_transport_skips_status_sample():
+    device = _make_standa()
+    device._standa_handle_open = True
+
+    class BusyLock:
+        def __enter__(self):
+            raise standa_module.StandaTransportBusyError("held by another server")
+
+        def __exit__(self, *_args):
+            return False
+
+    device._transport_lock = lambda: BusyLock()
+
+    assert device.get_controller_status_local() == 0
+    assert device._status_check_fault == 0
+    assert device.get_state() == standa_module.DevState.ON
 
 
 def test_standa_recovery_discovers_transport_without_axis_initialisation():
@@ -190,6 +222,53 @@ def test_standa_recovery_discovers_transport_without_axis_initialisation():
     assert calls == ["find"]
     assert device.get_state() == standa_module.DevState.STANDBY
     assert device._status_check_fault == 0
+
+
+def test_standa_usb_loss_during_motion_blocks_automatic_recovery():
+    device = _make_standa()
+    device._standa_handle_open = True
+    device.usb_status_failure_threshold = 1
+    device.set_state(standa_module.DevState.MOVING)
+    calls = []
+    standa_module.lib = types.SimpleNamespace(get_status=lambda *_args, **_kwargs: -1)
+    device.find_device = lambda: calls.append("find")
+
+    result = device.get_controller_status_local()
+
+    assert "during motion" in result
+    assert device.get_state() == standa_module.DevState.FAULT
+    assert device._standa_auto_recovery_blocked is True
+    assert device._next_fault_recovery_at == float("inf")
+    assert device._attempt_recover_connection() is False
+    assert calls == []
+
+
+def test_standa_discovery_closes_probe_handle_without_turning_axis_off():
+    device = _make_standa()
+    device.set_state(standa_module.DevState.OFF)
+    device._standa_handle_open = False
+    closed = []
+
+    def get_serial(_handle, serial_ptr):
+        serial_ptr._obj.value = int(device.device_id)
+        return standa_module.Result.Ok
+
+    standa_module.lib = types.SimpleNamespace(
+        set_bindy_key=lambda _path: None,
+        enumerate_devices=lambda *_args: object(),
+        get_device_count=lambda _enum: 1,
+        get_device_name=lambda _enum, _index: b"xi-net://controller",
+        open_device=lambda _uri: 7,
+        get_serial_number=get_serial,
+        close_device=lambda _handle: closed.append(True) or 0,
+    )
+
+    device.find_device()
+
+    assert device._uri == b"xi-net://controller"
+    assert device._device_id_internal == 0
+    assert device._standa_handle_open is False
+    assert closed == [True]
 
 
 def _fill_standa_status(status_ptr):
