@@ -18,6 +18,9 @@ names = {
         "connect_data_port": 0,
         "start_application_on_turn_on": 0,
         "start_on_init": 0,
+        "power_dependency_device": "manip/SD2/PDU_SD2",
+        "power_dependency_output_id": 1,
+        "power_on_settle_seconds": 5.0,
     }
 }
 
@@ -46,6 +49,9 @@ def main():
                 "connect_data_port": config["connect_data_port"],
                 "start_application_on_turn_on": config["start_application_on_turn_on"],
                 "start_on_init": config["start_on_init"],
+                "power_dependency_device": config["power_dependency_device"],
+                "power_dependency_output_id": config["power_dependency_output_id"],
+                "power_on_settle_seconds": config["power_on_settle_seconds"],
             },
         )
 

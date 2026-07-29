@@ -170,6 +170,25 @@ def test_standa_status_failure_triggers_recovery_after_threshold():
 
     assert result == 0
     assert calls == [True]
+
+
+def test_standa_recovery_discovers_transport_without_axis_initialisation():
+    device = _make_standa()
+    calls = []
+
+    def discover():
+        calls.append("find")
+        device._device_id_internal = 7
+        device._uri = b"uri"
+
+    device.find_device = discover
+    device.turn_on_local = lambda: (_ for _ in ()).throw(
+        AssertionError("recovery must not initialise or stop an axis")
+    )
+
+    assert device._attempt_recover_connection() is True
+    assert calls == ["find"]
+    assert device.get_state() == standa_module.DevState.STANDBY
     assert device._status_check_fault == 0
 
 

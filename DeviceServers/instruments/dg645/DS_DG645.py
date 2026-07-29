@@ -141,7 +141,9 @@ class DS_DG645(DS_General):
                         raise RuntimeError("DG645 returned an empty *IDN? response")
                     self._idn_cache = idn
                     self._device_id_internal, self._uri = 1, uri
-                    self.set_state(DevState.ON)
+                    # Discovery verifies transport only.  The generator remains
+                    # in STANDBY until an explicit Tango turn_on command.
+                    self.set_state(DevState.STANDBY)
                     self.info(f"Found DG645 via {backend_name}: {idn}", True)
                     return
                 except Exception as exc:
@@ -181,6 +183,10 @@ class DS_DG645(DS_General):
         except Exception as exc:
             self.set_state(DevState.FAULT)
             return str(exc)
+
+    def release_power_dependency_local(self) -> None:
+        """Close the local TCP/driver session after an external PDU power loss."""
+        self._close_session()
 
     @attribute(label="IDN", dtype=str, access=AttrWriteType.READ)
     def idn(self) -> str:

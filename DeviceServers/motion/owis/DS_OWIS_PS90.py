@@ -693,30 +693,25 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         configured PDU dependency lets the server report OFF rather than
         treating that condition as a communication/recovery failure.
         """
-        device_name = str(getattr(self, "power_dependency_device", "")).strip()
-        output_id = int(getattr(self, "power_dependency_output_id", 0) or 0)
-        if not device_name or output_id <= 0:
-            return None, "controller power state is not configured"
+        return super()._read_power_dependency_state()
 
-        try:
-            proxy = DeviceProxy(device_name)
-            proxy.set_timeout_millis(3000)
-            if proxy.state() != DevState.ON:
-                return None, f"power PDU {device_name} is not ON"
-            output_ids = list(proxy.read_attribute("ids").value)
-            output_states = list(proxy.read_attribute("states").value)
-        except Exception as error:
-            return None, f"cannot read power PDU {device_name}: {error}"
+    @staticmethod
+    def _power_dependency_proxy(device_name: str):
+        return DeviceProxy(device_name)
 
-        try:
-            output_index = [int(value) for value in output_ids].index(output_id)
-            is_on = bool(int(output_states[output_index]))
-        except (IndexError, ValueError, TypeError) as error:
-            return (
-                None,
-                f"power output {output_id} is not available on {device_name}: {error}",
-            )
-        return is_on, f"power PDU {device_name} output {output_id}"
+    def _handle_power_dependency_off(self, detail: str) -> None:
+        self._set_off_for_unpowered_controller(detail)
+
+    def _handle_power_dependency_unavailable(self, detail: str) -> None:
+        self._controller_connection_status = f"Power dependency is unavailable: {detail}"
+        super()._handle_power_dependency_unavailable(detail)
+
+    def probe_powered_hardware(self) -> Union[int, str]:
+        """Restore PS90 transport only; never initialise axes from a PDU event."""
+        self.find_device()
+        if self._device_id_internal == -1:
+            return "OWIS controller did not respond after power was restored"
+        return 0
 
     def _set_off_for_unpowered_controller(self, detail: str) -> str:
         self._device_id_internal, self._uri = -1, b""

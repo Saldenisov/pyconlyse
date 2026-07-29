@@ -145,7 +145,14 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
         self.register_variables_for_archive()
-        self.turn_on()
+        # Device-server startup only discovers the controller.  It must not
+        # initialise axes, stop a motion, or energise a motor.
+        if self._device_id_internal != -1 and self.get_state() != DevState.FAULT:
+            self.set_state(DevState.STANDBY)
+            self.info(
+                f"{self.device_name} controller discovered; awaiting explicit turn_on.",
+                True,
+            )
 
 
     def register_variables_for_archive(self):
@@ -188,6 +195,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                         break
         self.info(f"Result: {argreturn}", True)
         self._device_id_internal, self._uri = argreturn
+        if self._device_id_internal != -1:
+            self.set_state(DevState.STANDBY)
 
     def read_position_local(self) -> Union[int, str]:
         pos = get_position_t()
@@ -250,19 +259,29 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         return f"Could NOT turn on {self.device_name}: {res}."
 
     def _attempt_recover_connection(self) -> bool:
-        self.info(f"Attempting STANDA recovery for {self.device_name}.", True)
+        self.info(
+            f"Attempting STANDA transport discovery for {self.device_name}; "
+            "no axis initialisation or movement will be issued.",
+            True,
+        )
         self.set_state(DevState.FAULT)
         self._device_id_internal = -1
         self._uri = ""
         try:
-            res = self.turn_on_local()
+            self.find_device()
+            res = 0 if self._device_id_internal != -1 else "controller unavailable"
         except Exception as e:
             self.error(f"Recovery attempt failed for {self.device_name}: {e}")
             return False
 
         if res == 0:
             self._status_check_fault = 0
-            self.info(f"STANDA recovery succeeded for {self.device_name}.", True)
+            self.set_state(DevState.STANDBY)
+            self.info(
+                f"STANDA transport discovery succeeded for {self.device_name}; "
+                "awaiting explicit turn_on.",
+                True,
+            )
             return True
 
         self.error(f"STANDA recovery failed for {self.device_name}: {res}")
@@ -279,6 +298,20 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             return 0
         self.set_state(DevState.FAULT)
         return self.error(f"Could not turn off device {self.device_name}: {result}.")
+
+    def release_power_dependency_local(self) -> None:
+        """Close a local controller handle after external PDU power loss."""
+        device_handle = getattr(self, "_device_id_internal", -1)
+        if device_handle in (-1, None):
+            return
+        try:
+            arg = ctypes.cast(device_handle, ctypes.POINTER(ctypes.c_int))
+            lib.close_device(ctypes.byref(arg))
+        except Exception:
+            pass
+        finally:
+            self._device_id_internal = -1
+            self._uri = ""
 
     def move_axis_local(self, pos) -> Union[int, str]:
         pos = pos * self.conversion

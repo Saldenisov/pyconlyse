@@ -40,6 +40,9 @@ def main():
             "driver_backend": "srsinst",
             "timeout_ms": 2000,
             "always_on": 1,
+            "power_dependency_device": "manip/SD2/PDU_SD2",
+            "power_dependency_output_id": 2,
+            "power_on_settle_seconds": 5.0,
         },
     )
     print(f"Registered device : {dev_info.name}")
