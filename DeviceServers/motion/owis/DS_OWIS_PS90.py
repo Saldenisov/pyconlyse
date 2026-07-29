@@ -680,6 +680,7 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         super().init_device()
         self._next_recovery_attempt_ts = 0.0
         self._last_recovery_wait_log_ts = 0.0
+        self._controller_connection_status = "initialising"
         self.follow = {}
         # A server start must never initialise axes or energise motors.  Probe
         # transport only; an explicit turn_on/ensure_on performs axis setup.
@@ -723,10 +724,23 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self._next_recovery_attempt_ts = 0.0
         self.set_state(DevState.OFF)
         message = f"OWIS controller power is OFF ({detail}); connection is intentionally skipped."
+        self._controller_connection_status = message
+        self.comment = message
         if getattr(self, "_last_power_off_message", "") != message:
             self.info(message, True)
             self._last_power_off_message = message
         return message
+
+    @attribute(
+        label="Controller connection status",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=DS_MOTORIZED_MULTI_AXES.polling,
+        doc="Power-aware OWIS connection diagnostic without initiating recovery.",
+    )
+    def controller_connection_status(self):
+        return getattr(self, "_controller_connection_status", "initialising")
 
     def register_variables_for_archive(self):
         from functools import partial
@@ -920,8 +934,13 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             if res:
                 self.set_state(DevState.STANDBY)
                 argreturn = self.control_unit_id, f"{self.serial_number}".encode()
+                self._controller_connection_status = "OWIS controller transport connected"
             else:
                 self.set_state(DevState.FAULT)
+                self._controller_connection_status = (
+                    f"OWIS controller connection failed ({comments}); {power_detail}"
+                )
+                self.comment = self._controller_connection_status
         self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
