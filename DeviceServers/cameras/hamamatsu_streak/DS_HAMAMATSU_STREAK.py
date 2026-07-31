@@ -156,11 +156,15 @@ class DS_HAMAMATSU_STREAK(DS_General):
         )
         # Keep Tango ON: it represents the controller process, while the
         # dependency attribute represents the separately switched hardware.
-        self.set_state(DevState.ON)
-        self.info(self._power_dependency_status, True)
+        self._mark_hardware_power_off(
+            self._power_dependency_status, tango_state=DevState.ON
+        )
 
     def _handle_power_dependency_unavailable(self, detail: str) -> None:
         self._power_dependency_status = f"Streak hardware power is unknown: {detail}"
+        self.set_hardware_lifecycle(
+            "POWER_STATUS_UNAVAILABLE", "UNKNOWN", self._power_dependency_status
+        )
         self.set_state(DevState.ON)
         self.warn(self._power_dependency_status, True)
 
@@ -188,7 +192,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
         treats every non-ON state as a failed power-up and reconnects RemoteEx,
         which interrupts the web control state while Live is active.
         """
-        self._observe_power_dependency()
+        power_state = self._observe_power_dependency()
+        if power_state.configured and power_state.powered is not True:
+            self.send_state_archive()
+            return 0
         result = self.get_controller_status_local()
         self.send_state_archive()
         if result != 0:

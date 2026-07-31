@@ -18,6 +18,12 @@ hardware transport did not connect. `CONNECTED` means a passive transport
 probe succeeded. `READY` means a device-specific operational initialisation
 succeeded.
 
+If a device has no configured PDU dependency, it must never claim `POWER_OFF`.
+It reports transport facts only. Power-managed adapters retry a passive probe
+after `power_dependency_reconnect_seconds` while supply remains on. The probe
+may open a transport and read identity, but must not switch a PDU, initialise
+an axis, move equipment, start acquisition, or open a shutter.
+
 ## Initialisation
 
 `NOT_REQUESTED` means transport is known but no active device setup was

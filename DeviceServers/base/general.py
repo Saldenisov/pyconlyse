@@ -192,6 +192,7 @@ class DS_General(Device):
     power_dependency_output_id = device_property(dtype=int, default_value=0)
     power_on_settle_seconds = device_property(dtype=float, default_value=5.0)
     power_dependency_poll_interval_s = device_property(dtype=float, default_value=1.0)
+    power_dependency_reconnect_seconds = device_property(dtype=float, default_value=5.0)
     power_dependency_auto_probe = device_property(dtype=int, default_value=1)
     power_dependency_auto_turn_on = device_property(dtype=int, default_value=0)
     archive = "manip/general/archive"
@@ -404,6 +405,7 @@ class DS_General(Device):
         )
         self._power_probe_pending = False
         self._power_probe_due_at = 0.0
+        self._last_power_probe_error = ""
         self._power_dependency_status = "power dependency is not configured"
         self.set_hardware_lifecycle(
             HardwareConnectionState.UNKNOWN,
@@ -498,6 +500,10 @@ class DS_General(Device):
                 )
                 self.info(f"{self.device_name} was NOT found.", True)
                 self.set_state(DevState.FAULT)
+                if power_state.configured and power_state.powered is True:
+                    self._schedule_power_probe(
+                        float(self.power_dependency_reconnect_seconds or 5.0)
+                    )
         except BaseException:
             self._stop_error_timer()
             self._stop_power_dependency_monitor()
@@ -593,8 +599,7 @@ class DS_General(Device):
 
         if previous is not None and previous.powered is not True:
             settle_seconds = max(0.0, float(self.power_on_settle_seconds or 0.0))
-            self._power_probe_due_at = time.monotonic() + settle_seconds
-            self._power_probe_pending = bool(int(self.power_dependency_auto_probe or 0))
+            self._schedule_power_probe(settle_seconds)
             self._power_dependency_status = (
                 f"{state.detail}; waiting {settle_seconds:.1f}s before safe probe"
             )
@@ -606,22 +611,39 @@ class DS_General(Device):
             self.set_state(DevState.INIT)
             self.info(self._power_dependency_status, True)
 
-    def _handle_power_dependency_off(self, detail: str) -> None:
-        self._release_power_dependency_transport()
+    def _schedule_power_probe(self, delay_seconds: float) -> None:
+        """Schedule a passive hardware probe; never issue a PDU command."""
+        self._power_probe_pending = bool(int(self.power_dependency_auto_probe or 0))
+        self._power_probe_due_at = time.monotonic() + max(0.0, float(delay_seconds))
+
+    def _mark_hardware_power_off(
+        self, message: str, *, tango_state=DevState.OFF
+    ) -> str:
+        """Record a confirmed external power loss without fault recovery."""
         self._device_id_internal, self._uri = -1, b""
         self._status_check_fault = 0
         self._fault_recovery_attempts = 0
         self._next_fault_recovery_at = 0.0
         self._last_fault_recovery_error = ""
-        message = f"Hardware power is OFF ({detail}); connection is intentionally skipped."
-        self._power_dependency_status = message
+        self._last_power_probe_error = ""
+        self._error = ""
         self.set_hardware_lifecycle(
             HardwareConnectionState.POWER_OFF,
             InitializationState.NOT_REQUESTED,
             message,
         )
-        self.set_state(DevState.OFF)
-        self.info(message, True)
+        self.set_state(tango_state)
+        self.comment = message
+        if getattr(self, "_last_power_off_message", "") != message:
+            self.info(message, True)
+            self._last_power_off_message = message
+        return message
+
+    def _handle_power_dependency_off(self, detail: str) -> None:
+        self._release_power_dependency_transport()
+        message = f"Hardware power is OFF ({detail}); connection is intentionally skipped."
+        self._power_dependency_status = message
+        self._mark_hardware_power_off(message)
 
     def _handle_power_dependency_unavailable(self, detail: str) -> None:
         self._release_power_dependency_transport()
@@ -680,6 +702,8 @@ class DS_General(Device):
             result = self.probe_powered_hardware()
             if operation_succeeded(result):
                 self.set_state(self.power_dependency_ready_state())
+                self._last_power_probe_error = ""
+                self._error = ""
                 self.set_hardware_lifecycle(
                     HardwareConnectionState.CONNECTED,
                     InitializationState.NOT_REQUESTED,
@@ -721,7 +745,12 @@ class DS_General(Device):
                 message,
             )
             self.set_state(DevState.FAULT)
-            self.error(message)
+            if message != getattr(self, "_last_power_probe_error", ""):
+                self.error(message)
+                self._last_power_probe_error = message
+            self._schedule_power_probe(
+                float(self.power_dependency_reconnect_seconds or 5.0)
+            )
 
     def _start_power_dependency_monitor(self) -> None:
         if not self._power_dependency_is_configured():

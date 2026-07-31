@@ -61,6 +61,10 @@ SPECTROGRAPH_DEVICES = [
             "pixel_width_um": 13.5,
             "linked_camera_ds": "manip/CR/ANDOR_CCD1",
             "start_on_init": 0,
+            # Shamrock is powered together with the UV-vis CCD stack.
+            "power_dependency_device": "manip/SD1/PDU_SD1",
+            "power_dependency_output_id": 1,
+            "power_on_settle_seconds": 5.0,
         },
     },
     {

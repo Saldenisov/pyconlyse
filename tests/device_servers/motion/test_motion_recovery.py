@@ -485,16 +485,9 @@ def test_owis_aggregator_treats_unpowered_backend_as_successful_status_poll():
 
 
 def test_owis_aggregator_clears_fault_diagnostics_for_expected_power_off():
-    states = []
+    events = []
     device = types.SimpleNamespace(
-        device_name="OWIS Aggregator",
-        _device_id_internal=1,
-        _uri=b"connected",
-        _next_recovery_attempt_ts=42.0,
-        _fault_recovery_attempts=3,
-        _last_fault_recovery_error="old transient error",
-        _error="old transient error",
-        set_state=lambda state: states.append(state),
+        _mark_hardware_power_off=lambda message: events.append(message) or message,
     )
 
     message = aggregator_module.DS_OWIS_Aggregator._set_off_for_unpowered_backend(
@@ -502,13 +495,7 @@ def test_owis_aggregator_clears_fault_diagnostics_for_expected_power_off():
     )
 
     assert message == "OWIS aggregator is OFF because backend 'three' is intentionally OFF"
-    assert device._device_id_internal == -1
-    assert device._uri == b""
-    assert device._next_recovery_attempt_ts == 0.0
-    assert device._fault_recovery_attempts == 0
-    assert device._last_fault_recovery_error == ""
-    assert device._error == ""
-    assert states == [aggregator_module.DevState.OFF]
+    assert events == [message]
 
 
 def test_owis_aggregator_logs_expected_power_off_as_information():

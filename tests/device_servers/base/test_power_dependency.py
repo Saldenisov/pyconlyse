@@ -24,8 +24,10 @@ class PowerDummy(general_module.DS_General):
         self.power_dependency_auto_turn_on = 0
         self.power_on_settle_seconds = 0.0
         self.power_dependency_poll_interval_s = 60.0
+        self.power_dependency_reconnect_seconds = 5.0
         self.find_calls = 0
         self.probe_calls = 0
+        self.probe_result = 0
         self.turn_on_calls = 0
         self.release_calls = 0
 
@@ -62,6 +64,10 @@ class PowerDummy(general_module.DS_General):
 
     def probe_powered_hardware(self):
         self.probe_calls += 1
+        if self.probe_result != 0:
+            self._device_id_internal = -1
+            self._uri = b""
+            return self.probe_result
         self._device_id_internal = 1
         self._uri = b"power://dummy"
         return 0
@@ -102,6 +108,8 @@ def test_unpowered_dependency_skips_discovery_and_active_turn_on(monkeypatch):
     assert "intentionally skipped" in device.power_dependency_status()
     assert device.hardware_connection_state() == "POWER_OFF"
     assert device.initialization_state() == "NOT_REQUESTED"
+    assert device.last_error() == ""
+    assert device.fault_recovery_status() == "attempts=0; last_error="
     device.delete_device()
 
 
@@ -154,6 +162,41 @@ def test_power_restore_runs_turn_on_only_when_explicitly_configured(monkeypatch)
     assert "turned ON automatically" in device.power_dependency_status()
     assert device.hardware_connection_state() == "READY"
     assert device.initialization_state() == "SUCCEEDED"
+
+
+def test_failed_safe_probe_retries_without_power_or_operational_commands(monkeypatch):
+    device = PowerDummy()
+    on = general_module.PowerDependencyState(True, True, "PDU output is ON")
+    monkeypatch.setattr(device, "_read_power_dependency_state", lambda: on)
+    device._power_dependency_observed = True
+    device._power_dependency_state = on
+    device._power_probe_pending = True
+    device._power_probe_due_at = 0.0
+    device._power_dependency_status = ""
+    device._last_power_probe_error = ""
+    device._error = ""
+    device._lifecycle_lock = __import__("threading").RLock()
+    device.probe_result = "USB device not ready"
+
+    device._run_power_dependency_probe_if_due()
+
+    assert device.probe_calls == 1
+    assert device.turn_on_calls == 0
+    assert device.get_state() == general_module.DevState.FAULT
+    assert device.hardware_connection_state() == "DISCONNECTED"
+    assert device._power_probe_pending is True
+    assert device._power_probe_due_at > 0.0
+    assert "safe probe failed" in device.power_dependency_status()
+
+    device.probe_result = 0
+    device._power_probe_due_at = 0.0
+    device._run_power_dependency_probe_if_due()
+
+    assert device.probe_calls == 2
+    assert device.turn_on_calls == 0
+    assert device.get_state() == general_module.DevState.STANDBY
+    assert device.hardware_connection_state() == "CONNECTED"
+    assert device.last_error() == ""
 
 
 def test_unavailable_pdu_faults_once_without_hardware_access(monkeypatch):

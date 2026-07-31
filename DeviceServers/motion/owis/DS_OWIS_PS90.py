@@ -719,22 +719,9 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         return 0
 
     def _set_off_for_unpowered_controller(self, detail: str) -> str:
-        self._device_id_internal, self._uri = -1, b""
-        self._status_check_fault = 0
-        self._next_recovery_attempt_ts = 0.0
-        self.set_state(DevState.OFF)
         message = f"OWIS controller power is OFF ({detail}); connection is intentionally skipped."
         self._controller_connection_status = message
-        self.set_hardware_lifecycle(
-            HardwareConnectionState.POWER_OFF,
-            InitializationState.NOT_REQUESTED,
-            message,
-        )
-        self.comment = message
-        if getattr(self, "_last_power_off_message", "") != message:
-            self.info(message, True)
-            self._last_power_off_message = message
-        return message
+        return self._mark_hardware_power_off(message)
 
     @attribute(
         label="Controller connection status",

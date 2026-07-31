@@ -263,16 +263,7 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
 
     def _set_off_for_unpowered_backend(self, reason: str) -> str:
         message = f"OWIS aggregator is OFF because {reason}"
-        self._device_id_internal, self._uri = -1, b""
-        self._next_recovery_attempt_ts = 0.0
-        # POWER_OFF is an expected physical condition, not a controller fault.
-        # Do not retain it in diagnostics as a fault-recovery failure.
-        self._fault_recovery_attempts = 0
-        self._last_fault_recovery_error = ""
-        self._error = ""
-        self.set_state(DevState.OFF)
-        self.comment = message
-        return message
+        return self._mark_hardware_power_off(message)
 
     @staticmethod
     def _backend_is_ready(state: DevState) -> bool:
