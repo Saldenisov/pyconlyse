@@ -45,6 +45,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             DevState.ON,
         ],
         "get_controller_status": [
+            # This is a virtual routing device. OFF can mean that a reachable
+            # backend controller had no PDU power, not that its Tango server
+            # disappeared. Keep read-only health polling alive to reconnect
+            # when that power returns; _refresh_backends never activates axes.
+            DevState.OFF,
             DevState.ON,
             DevState.MOVING,
             DevState.RUNNING,

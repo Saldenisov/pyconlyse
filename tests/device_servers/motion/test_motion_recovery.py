@@ -427,6 +427,13 @@ def test_owis_aggregator_does_not_activate_faulted_backend_during_health_check(
     assert commands == []
 
 
+def test_owis_aggregator_keeps_read_only_recovery_polling_when_off():
+    assert (
+        aggregator_module.DevState.OFF
+        in aggregator_module.DS_OWIS_Aggregator.RULES["get_controller_status"]
+    )
+
+
 def _make_owis_delay_line_stub(monkeypatch):
     monkeypatch.setattr(ctypes, "WinDLL", lambda _path: object(), raising=False)
     module_name = "DeviceServers.motion.owis.DS_OWIS_delay_line"
