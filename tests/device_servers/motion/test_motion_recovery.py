@@ -348,6 +348,8 @@ def test_owis_unpowered_controller_is_off_without_connection_or_recovery():
     assert "power is OFF" in result
     assert device.get_state() == owis_module.DevState.OFF
     assert "PDU_VO output 2" in device._controller_connection_status
+    assert device.hardware_connection_state() == "POWER_OFF"
+    assert device.initialization_state() == "NOT_REQUESTED"
     assert device._attempt_recover_connection() is False
 
 

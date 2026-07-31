@@ -809,6 +809,11 @@ def _read_device_diagnostics(device_name):
                 "error_message",
                 "fault_recovery_status",
                 "connection_status",
+                "controller_connection_status",
+                "power_dependency_status",
+                "hardware_connection_state",
+                "initialization_state",
+                "hardware_lifecycle_status",
             ):
                 attr_name = attr_names.get(candidate)
                 if not attr_name:

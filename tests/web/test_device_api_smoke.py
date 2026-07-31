@@ -378,7 +378,13 @@ def test_generic_device_lazy_endpoints_smoke(monkeypatch):
 def test_server_diagnostics_returns_state_error_details_and_logs(monkeypatch):
     client, devices = _make_client(monkeypatch)
     devices["manip/v0/dv04"].attributes.update(
-        {"last_error": "USB reconnect scheduled", "fault_recovery_status": "attempt=2"}
+        {
+            "last_error": "USB reconnect scheduled",
+            "fault_recovery_status": "attempt=2",
+            "hardware_connection_state": "POWER_OFF",
+            "initialization_state": "NOT_REQUESTED",
+            "hardware_lifecycle_status": "power PDU output 2 is OFF",
+        }
     )
     starter = FakeStarter()
     monkeypatch.setattr(
@@ -400,6 +406,8 @@ def test_server_diagnostics_returns_state_error_details_and_logs(monkeypatch):
         payload["device"]["error_attributes"]["last_error"]
         == "USB reconnect scheduled"
     )
+    assert payload["device"]["error_attributes"]["hardware_connection_state"] == "POWER_OFF"
+    assert payload["device"]["error_attributes"]["initialization_state"] == "NOT_REQUESTED"
     assert payload["server_log"]["available"] is True
     assert "simulated transport fault" in payload["server_log"]["text"]
 

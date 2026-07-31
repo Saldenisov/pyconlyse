@@ -100,6 +100,8 @@ def test_unpowered_dependency_skips_discovery_and_active_turn_on(monkeypatch):
     assert device.get_state() == general_module.DevState.OFF
     assert device.release_calls == 1
     assert "intentionally skipped" in device.power_dependency_status()
+    assert device.hardware_connection_state() == "POWER_OFF"
+    assert device.initialization_state() == "NOT_REQUESTED"
     device.delete_device()
 
 
@@ -124,6 +126,8 @@ def test_power_restore_waits_then_runs_safe_probe_without_turn_on(monkeypatch):
     assert device.turn_on_calls == 0
     assert device.get_state() == general_module.DevState.STANDBY
     assert "safe probe succeeded" in device.power_dependency_status()
+    assert device.hardware_connection_state() == "CONNECTED"
+    assert device.initialization_state() == "NOT_REQUESTED"
 
 
 def test_power_restore_runs_turn_on_only_when_explicitly_configured(monkeypatch):
@@ -148,6 +152,8 @@ def test_power_restore_runs_turn_on_only_when_explicitly_configured(monkeypatch)
     assert device.turn_on_calls == 1
     assert device.get_state() == general_module.DevState.ON
     assert "turned ON automatically" in device.power_dependency_status()
+    assert device.hardware_connection_state() == "READY"
+    assert device.initialization_state() == "SUCCEEDED"
 
 
 def test_unavailable_pdu_faults_once_without_hardware_access(monkeypatch):
@@ -163,4 +169,6 @@ def test_unavailable_pdu_faults_once_without_hardware_access(monkeypatch):
     assert device.turn_on_calls == 0
     assert device.get_state() == general_module.DevState.FAULT
     assert "Power dependency is unavailable" in device.power_dependency_status()
+    assert device.hardware_connection_state() == "POWER_STATUS_UNAVAILABLE"
+    assert device.initialization_state() == "UNKNOWN"
     device.delete_device()

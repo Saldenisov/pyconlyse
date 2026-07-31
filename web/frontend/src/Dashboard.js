@@ -586,7 +586,7 @@ const Dashboard = () => {
                 >
                   <strong style={{ wordBreak: 'break-word' }}>{device.name}</strong>
                   <span style={badgeStyle(Boolean(device.available))}>
-                    {device.available ? (device.state || 'AVAILABLE') : 'UNREACHABLE'}
+                    {device.available ? 'TANGO REACHABLE' : 'TANGO UNREACHABLE'}
                   </span>
                 </div>
                 <div style={{ marginTop: '6px', color: '#475467', fontSize: '0.9rem' }}>
@@ -602,8 +602,11 @@ const Dashboard = () => {
                 >
                   Server: {device.server || 'unknown'}
                 </div>
+                <div style={{ marginTop: '4px', color: '#667085', fontSize: '0.85rem' }}>
+                  Tango state: {device.available ? (device.state || 'UNKNOWN') : 'unavailable'}
+                </div>
                 <div style={{ marginTop: '6px', color: '#667085', fontSize: '0.8rem' }}>
-                  Right-click for server actions
+                  Right-click for hardware and server diagnostics
                 </div>
               </div>
             ))}

@@ -18,6 +18,11 @@ from DeviceServers.base.power_dependency import (
     PowerDependencyState,
     read_power_dependency_state,
 )
+from DeviceServers.base.hardware_lifecycle import (
+    HardwareConnectionState,
+    InitializationState,
+    lifecycle_value,
+)
 
 # Centralized global settings for all DeviceServers
 # These can be overridden via a single JSON config file, environment variables, or at runtime via commands
@@ -284,6 +289,63 @@ class DS_General(Device):
         return self._error
 
     @attribute(
+        label="Hardware connection",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Physical power and transport condition; independent from Tango reachability.",
+        polling_period=polling_main,
+    )
+    def hardware_connection_state(self):
+        return getattr(self, "_hardware_connection_state", HardwareConnectionState.UNKNOWN.value)
+
+    @attribute(
+        label="Initialisation",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Operational initialisation result; independent from power and transport.",
+        polling_period=polling_main,
+    )
+    def initialization_state(self):
+        return getattr(self, "_initialization_state", InitializationState.UNKNOWN.value)
+
+    @attribute(
+        label="Hardware lifecycle status",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Human-readable explanation for hardware connection and initialisation state.",
+        polling_period=polling_main,
+    )
+    def hardware_lifecycle_status(self):
+        return getattr(self, "_hardware_lifecycle_status", "not initialised")
+
+    def set_hardware_lifecycle(
+        self,
+        connection_state=HardwareConnectionState.UNKNOWN,
+        initialization_state=InitializationState.UNKNOWN,
+        detail="",
+    ):
+        """Record hardware facts without changing Tango ``DevState``.
+
+        A device server must not use these attributes to imply that the Tango
+        process itself is unavailable.  That is determined externally by a
+        DeviceProxy/Astor reachability check.
+        """
+        self._hardware_connection_state = lifecycle_value(
+            connection_state,
+            HardwareConnectionState,
+            HardwareConnectionState.UNKNOWN,
+        )
+        self._initialization_state = lifecycle_value(
+            initialization_state,
+            InitializationState,
+            InitializationState.UNKNOWN,
+        )
+        self._hardware_lifecycle_status = str(detail or "")
+
+    @attribute(
         label="URI",
         dtype=str,
         display_level=DispLevel.OPERATOR,
@@ -343,6 +405,11 @@ class DS_General(Device):
         self._power_probe_pending = False
         self._power_probe_due_at = 0.0
         self._power_dependency_status = "power dependency is not configured"
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.UNKNOWN,
+            InitializationState.UNKNOWN,
+            "device server started; hardware has not been probed",
+        )
         self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
@@ -371,6 +438,11 @@ class DS_General(Device):
                     configuration_valid = False
 
             if not configuration_valid:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.UNKNOWN,
+                    InitializationState.FAILED,
+                    "device configuration is invalid",
+                )
                 self._create_mock_archive()
                 self._device_id_internal = -1
                 self._uri = b""
@@ -396,6 +468,11 @@ class DS_General(Device):
             self.find_device()
 
             if self._device_id_internal != -1:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "hardware transport connected; operational initialisation has not been requested",
+                )
                 self.info(f"{self.device_name} was found.", True)
                 if power_state.configured:
                     self.set_state(self.power_dependency_ready_state())
@@ -414,6 +491,11 @@ class DS_General(Device):
                             True,
                         )
             else:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "hardware was not found during passive transport probe",
+                )
                 self.info(f"{self.device_name} was NOT found.", True)
                 self.set_state(DevState.FAULT)
         except BaseException:
@@ -516,6 +598,11 @@ class DS_General(Device):
             self._power_dependency_status = (
                 f"{state.detail}; waiting {settle_seconds:.1f}s before safe probe"
             )
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTING,
+                InitializationState.PENDING,
+                self._power_dependency_status,
+            )
             self.set_state(DevState.INIT)
             self.info(self._power_dependency_status, True)
 
@@ -528,6 +615,11 @@ class DS_General(Device):
         self._last_fault_recovery_error = ""
         message = f"Hardware power is OFF ({detail}); connection is intentionally skipped."
         self._power_dependency_status = message
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.POWER_OFF,
+            InitializationState.NOT_REQUESTED,
+            message,
+        )
         self.set_state(DevState.OFF)
         self.info(message, True)
 
@@ -536,6 +628,11 @@ class DS_General(Device):
         self._device_id_internal, self._uri = -1, b""
         message = f"Power dependency is unavailable: {detail}"
         self._power_dependency_status = message
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.POWER_STATUS_UNAVAILABLE,
+            InitializationState.UNKNOWN,
+            message,
+        )
         self.set_state(DevState.FAULT)
         self.error(message)
 
@@ -583,6 +680,11 @@ class DS_General(Device):
             result = self.probe_powered_hardware()
             if operation_succeeded(result):
                 self.set_state(self.power_dependency_ready_state())
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    f"{state.detail}; safe transport probe succeeded; operational initialisation has not been requested",
+                )
                 if self._power_dependency_auto_turn_on_enabled():
                     self._power_dependency_status = (
                         f"{state.detail}; safe probe succeeded; running automatic turn_on"
@@ -590,6 +692,11 @@ class DS_General(Device):
                     self.info(self._power_dependency_status, True)
                     self.turn_on()
                     if self.get_state() == DevState.ON:
+                        self.set_hardware_lifecycle(
+                            HardwareConnectionState.READY,
+                            InitializationState.SUCCEEDED,
+                            f"{state.detail}; safe probe and automatic operational initialisation succeeded",
+                        )
                         self._power_dependency_status = (
                             f"{state.detail}; safe probe succeeded; device was turned ON automatically"
                         )
@@ -608,6 +715,11 @@ class DS_General(Device):
                 return
             message = f"Hardware power is ON but safe probe failed: {result}"
             self._power_dependency_status = message
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                message,
+            )
             self.set_state(DevState.FAULT)
             self.error(message)
 

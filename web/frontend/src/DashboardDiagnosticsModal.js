@@ -31,6 +31,14 @@ const renderValue = (value) => {
   return JSON.stringify(value, null, 2);
 };
 
+const lifecycleAttributeNames = new Set([
+  'hardware_connection_state',
+  'initialization_state',
+  'hardware_lifecycle_status',
+  'power_dependency_status',
+  'controller_connection_status',
+]);
+
 const DashboardDiagnosticsModal = ({ diagnostics, loading, error, onClose }) => {
   const copyDiagnostics = async () => {
     if (!diagnostics || !navigator.clipboard) {
@@ -41,6 +49,12 @@ const DashboardDiagnosticsModal = ({ diagnostics, loading, error, onClose }) => 
 
   const device = diagnostics?.device;
   const errorAttributes = Object.entries(device?.error_attributes || {});
+  const lifecycleAttributes = errorAttributes.filter(([name]) => lifecycleAttributeNames.has(name));
+  const serverErrorAttributes = errorAttributes.filter(([name]) => !lifecycleAttributeNames.has(name));
+  const lifecycleValue = (name, fallback = 'NOT INSTRUMENTED') => {
+    const attribute = lifecycleAttributes.find(([attributeName]) => attributeName === name);
+    return attribute ? renderValue(attribute[1]) : fallback;
+  };
   const serverLog = diagnostics?.server_log;
   const starterLog = diagnostics?.starter_log;
 
@@ -88,18 +102,33 @@ const DashboardDiagnosticsModal = ({ diagnostics, loading, error, onClose }) => 
               }}
             >
               <div><strong>Starter</strong><br />{diagnostics.starter}</div>
-              <div><strong>Process</strong><br />{diagnostics.running ? 'RUNNING' : diagnostics.stopped ? 'STOPPED' : 'UNKNOWN'}</div>
-              <div><strong>Device state</strong><br />{device?.state || 'UNREACHABLE'}</div>
+              <div><strong>Server process</strong><br />{diagnostics.running ? 'RUNNING' : diagnostics.stopped ? 'STOPPED' : 'UNKNOWN'}</div>
+              <div><strong>Tango proxy</strong><br />{device?.available ? 'REACHABLE' : 'UNREACHABLE'}</div>
+              <div><strong>Tango state</strong><br />{device?.state || 'UNREACHABLE'}</div>
+              <div><strong>Hardware connection</strong><br />{lifecycleValue('hardware_connection_state')}</div>
+              <div><strong>Initialisation</strong><br />{lifecycleValue('initialization_state')}</div>
               <div><strong>Captured</strong><br />{diagnostics.timestamp || ''}</div>
             </div>
+
+            <h3>Hardware lifecycle</h3>
+            <pre style={preStyle}>{lifecycleValue('hardware_lifecycle_status', 'This device does not yet expose the shared lifecycle contract.')}</pre>
+
+            {lifecycleAttributes
+              .filter(([name]) => !['hardware_connection_state', 'initialization_state', 'hardware_lifecycle_status'].includes(name))
+              .map(([name, value]) => (
+                <div key={name} style={{ marginBottom: '10px' }}>
+                  <strong>{name}</strong>
+                  <pre style={preStyle}>{renderValue(value)}</pre>
+                </div>
+              ))}
 
             <h3>Device status</h3>
             <pre style={preStyle}>{device?.status || device?.error || 'No status returned.'}</pre>
 
-            {errorAttributes.length > 0 && (
+            {serverErrorAttributes.length > 0 && (
               <>
                 <h3>Server error details</h3>
-                {errorAttributes.map(([name, value]) => (
+                {serverErrorAttributes.map(([name, value]) => (
                   <div key={name} style={{ marginBottom: '10px' }}>
                     <strong>{name}</strong>
                     <pre style={preStyle}>{renderValue(value)}</pre>

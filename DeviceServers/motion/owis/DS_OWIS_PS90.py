@@ -29,8 +29,13 @@ time_ps_delay = 0.005
 
 try:
     from DeviceServers.base.motor import DS_MOTORIZED_MULTI_AXES
+    from DeviceServers.base.hardware_lifecycle import (
+        HardwareConnectionState,
+        InitializationState,
+    )
 except ModuleNotFoundError:
     from base.motor import DS_MOTORIZED_MULTI_AXES
+    from base.hardware_lifecycle import HardwareConnectionState, InitializationState
 
 
 class _PS90TcpAdapter:
@@ -720,6 +725,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         self.set_state(DevState.OFF)
         message = f"OWIS controller power is OFF ({detail}); connection is intentionally skipped."
         self._controller_connection_status = message
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.POWER_OFF,
+            InitializationState.NOT_REQUESTED,
+            message,
+        )
         self.comment = message
         if getattr(self, "_last_power_off_message", "") != message:
             self.info(message, True)
@@ -930,10 +940,20 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.set_state(DevState.STANDBY)
                 argreturn = self.control_unit_id, f"{self.serial_number}".encode()
                 self._controller_connection_status = "OWIS controller transport connected"
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "OWIS controller transport connected; axis initialisation has not been requested",
+                )
             else:
                 self.set_state(DevState.FAULT)
                 self._controller_connection_status = (
                     f"OWIS controller connection failed ({comments}); {power_detail}"
+                )
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    self._controller_connection_status,
                 )
                 self.comment = self._controller_connection_status
         self._device_id_internal, self._uri = argreturn
@@ -951,6 +971,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             return f"Could NOT turn on {self.device_name}: Device could not be found."
 
         self.set_state(DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.CONNECTED,
+            InitializationState.IN_PROGRESS,
+            "OWIS transport connected; axis initialisation is in progress",
+        )
         init_errors = []
         for axis in sorted(self._delay_lines_parameters.keys()):
             try:
@@ -963,10 +988,20 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.error(f"{self.device_name} {err}")
         if init_errors:
             self.set_state(DevState.FAULT)
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTED,
+                InitializationState.FAILED,
+                "; ".join(init_errors),
+            )
             return (
                 f"Could NOT turn on {self.device_name}: "
                 + "; ".join(init_errors)
             )
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS controller connected and configured axes are initialised",
+        )
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
@@ -1021,6 +1056,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self._next_recovery_attempt_ts = 0.0
                 self._last_recovery_wait_log_ts = 0.0
                 self.set_state(DevState.STANDBY)
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "OWIS transport recovery succeeded; axis initialisation has not been requested",
+                )
                 self.info(
                     f"OWIS transport recovery succeeded for {self.device_name}; "
                     "awaiting explicit turn_on for axis initialisation.",

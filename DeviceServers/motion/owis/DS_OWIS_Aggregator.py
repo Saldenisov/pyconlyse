@@ -15,8 +15,13 @@ sys.path.append(str(app_folder1))
 
 try:
     from DeviceServers.base.motor import DS_MOTORIZED_MULTI_AXES
+    from DeviceServers.base.hardware_lifecycle import (
+        HardwareConnectionState,
+        InitializationState,
+    )
 except ModuleNotFoundError:
     from base.motor import DS_MOTORIZED_MULTI_AXES
+    from base.hardware_lifecycle import HardwareConnectionState, InitializationState
 
 
 class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
@@ -393,6 +398,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
 
         if self._refresh_backends(force=True):
             self._device_id_internal, self._uri = 1, b"OWIS Aggregator"
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTED,
+                InitializationState.NOT_REQUESTED,
+                "OWIS backend transports are connected; aggregate axis initialisation has not been requested",
+            )
             self.set_state(DevState.STANDBY)
         else:
             reason = self._unpowered_backend_reason()
@@ -414,16 +424,31 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             )
 
         self._device_id_internal, self._uri = 1, b"OWIS Aggregator"
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.CONNECTED,
+            InitializationState.IN_PROGRESS,
+            "OWIS backend transports are connected; aggregate axis initialisation is in progress",
+        )
         for axis in sorted(self._delay_lines_parameters.keys()):
             self.get_status_axis_local(axis)
             self.read_position_axis_local(axis)
         self.set_state(DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS aggregate axes are initialised and ready",
+        )
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
         self._backend_proxies = {"three": None, "four": None}
         self._backend_alive = {"three": False, "four": False}
         self._device_id_internal, self._uri = -1, b""
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.DISCONNECTED,
+            InitializationState.NOT_REQUESTED,
+            "OWIS aggregate was turned off explicitly",
+        )
         self.set_state(DevState.OFF)
         return 0
 
@@ -441,7 +466,17 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
         if not self._refresh_backends(force=False):
             reason = self._unpowered_backend_reason()
             if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
                 return self._set_off_for_unpowered_backend(reason)
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                "one or more OWIS backend transports are unavailable",
+            )
             self.set_state(DevState.FAULT)
             if now - self._last_recovery_wait_log_ts >= 1.0:
                 remain = max(0.0, self._next_recovery_attempt_ts - now)
@@ -471,6 +506,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                 return pos_res
 
         self.set_state(DevState.MOVING if any_moving else DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS backends are connected and aggregate status is current",
+        )
         return 0
 
     def init_axis_local(self, axis: int) -> Union[int, str]:
