@@ -466,6 +466,77 @@ def test_owis_aggregator_marks_unpowered_backend_as_hardware_power_off():
     }
 
 
+def test_owis_aggregator_treats_unpowered_backend_as_successful_status_poll():
+    events = []
+    device = types.SimpleNamespace(
+        _refresh_backends=lambda **_kwargs: False,
+        _unpowered_backend_reason=lambda: "backend three power PDU output 2 is OFF",
+        set_hardware_lifecycle=lambda *args: events.append(("lifecycle", args)),
+        _set_off_for_unpowered_backend=lambda reason: events.append(("off", reason)),
+    )
+
+    result = aggregator_module.DS_OWIS_Aggregator.get_controller_status_local(device)
+
+    assert result == 0
+    assert events[0][0] == "lifecycle"
+    assert events[0][1][0].value == "POWER_OFF"
+    assert events[0][1][1].value == "NOT_REQUESTED"
+    assert events[1] == ("off", "backend three power PDU output 2 is OFF")
+
+
+def test_owis_aggregator_clears_fault_diagnostics_for_expected_power_off():
+    states = []
+    device = types.SimpleNamespace(
+        device_name="OWIS Aggregator",
+        _device_id_internal=1,
+        _uri=b"connected",
+        _next_recovery_attempt_ts=42.0,
+        _fault_recovery_attempts=3,
+        _last_fault_recovery_error="old transient error",
+        _error="old transient error",
+        set_state=lambda state: states.append(state),
+    )
+
+    message = aggregator_module.DS_OWIS_Aggregator._set_off_for_unpowered_backend(
+        device, "backend 'three' is intentionally OFF"
+    )
+
+    assert message == "OWIS aggregator is OFF because backend 'three' is intentionally OFF"
+    assert device._device_id_internal == -1
+    assert device._uri == b""
+    assert device._next_recovery_attempt_ts == 0.0
+    assert device._fault_recovery_attempts == 0
+    assert device._last_fault_recovery_error == ""
+    assert device._error == ""
+    assert states == [aggregator_module.DevState.OFF]
+
+
+def test_owis_aggregator_logs_expected_power_off_as_information():
+    logs = []
+    device = types.SimpleNamespace(
+        device_name="OWIS Aggregator",
+        _backend_alive={"three": True},
+        _backend_proxies={"three": object()},
+        _backend_reason={"three": ""},
+        info=lambda message, *_args: logs.append(("info", message)),
+        error=lambda message: logs.append(("error", message)),
+    )
+
+    aggregator_module.DS_OWIS_Aggregator._mark_backend_down(
+        device, "three", "OWIS controller power is OFF (PDU output 2)"
+    )
+
+    assert device._backend_alive["three"] is False
+    assert device._backend_proxies["three"] is None
+    assert logs == [
+        (
+            "info",
+            "OWIS Aggregator: backend 'three' is down: "
+            "OWIS controller power is OFF (PDU output 2)",
+        )
+    ]
+
+
 def _make_owis_delay_line_stub(monkeypatch):
     monkeypatch.setattr(ctypes, "WinDLL", lambda _path: object(), raising=False)
     module_name = "DeviceServers.motion.owis.DS_OWIS_delay_line"

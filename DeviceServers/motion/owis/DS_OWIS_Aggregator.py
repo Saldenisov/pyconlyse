@@ -243,9 +243,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
         previous_reason = self._backend_reason.get(backend_kind, "")
         self._backend_reason[backend_kind] = reason
         if reason and reason != previous_reason:
-            self.error(
-                f"{self.device_name}: backend '{backend_kind}' is down: {reason}"
-            )
+            message = f"{self.device_name}: backend '{backend_kind}' is down: {reason}"
+            if "power is OFF" in reason:
+                self.info(message, True)
+            else:
+                self.error(message)
 
     def _backend_connection_detail(self, proxy: DeviceProxy) -> str:
         try:
@@ -263,6 +265,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
         message = f"OWIS aggregator is OFF because {reason}"
         self._device_id_internal, self._uri = -1, b""
         self._next_recovery_attempt_ts = 0.0
+        # POWER_OFF is an expected physical condition, not a controller fault.
+        # Do not retain it in diagnostics as a fault-recovery failure.
+        self._fault_recovery_attempts = 0
+        self._last_fault_recovery_error = ""
+        self._error = ""
         self.set_state(DevState.OFF)
         self.comment = message
         return message
@@ -356,10 +363,14 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                     time.sleep(attempt_delay)
             if not ok and last_comment != self._backend_reason.get(backend_kind, ""):
                 self._backend_reason[backend_kind] = last_comment
-                self.error(
+                message = (
                     f"{self.device_name}: backend '{backend_kind}' connect failed: "
                     f"{last_comment}"
                 )
+                if "power is OFF" in last_comment:
+                    self.info(message, True)
+                else:
+                    self.error(message)
 
         all_ok = all(self._backend_alive.values())
         if all_ok:
@@ -494,7 +505,8 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                     InitializationState.NOT_REQUESTED,
                     reason,
                 )
-                return self._set_off_for_unpowered_backend(reason)
+                self._set_off_for_unpowered_backend(reason)
+                return 0
             self.set_hardware_lifecycle(
                 HardwareConnectionState.DISCONNECTED,
                 InitializationState.NOT_REQUESTED,
