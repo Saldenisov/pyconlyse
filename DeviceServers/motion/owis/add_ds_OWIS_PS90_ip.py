@@ -119,6 +119,9 @@ def main() -> None:
         "ovis_tcp_keep_motor_on": True,
         "power_dependency_device": args.power_pdu_device,
         "power_dependency_output_id": args.power_pdu_output_id,
+        # PDU_VO/out 2 powers the V0 OWIS delay-line controller. Once supply
+        # and transport are verified, axis initialisation must resume itself.
+        "power_dependency_auto_turn_on": 1,
         "delay_lines_parameters": str(_delay_lines()),
         "max_retries": 3,
         "retry_delay": 1.0,

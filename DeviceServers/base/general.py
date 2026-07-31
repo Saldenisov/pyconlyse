@@ -188,6 +188,7 @@ class DS_General(Device):
     power_on_settle_seconds = device_property(dtype=float, default_value=5.0)
     power_dependency_poll_interval_s = device_property(dtype=float, default_value=1.0)
     power_dependency_auto_probe = device_property(dtype=int, default_value=1)
+    power_dependency_auto_turn_on = device_property(dtype=int, default_value=0)
     archive = "manip/general/archive"
     # Health checks must not compete with commands that open, close, or
     # configure a transport. Acquisition loops use their own explicit rates.
@@ -398,10 +399,20 @@ class DS_General(Device):
                 self.info(f"{self.device_name} was found.", True)
                 if power_state.configured:
                     self.set_state(self.power_dependency_ready_state())
-                    self.info(
-                        f"{self.device_name} power is available; awaiting explicit turn_on.",
-                        True,
-                    )
+                    if self._power_dependency_auto_turn_on_enabled():
+                        settle_seconds = max(0.0, float(self.power_on_settle_seconds or 0.0))
+                        self._power_probe_due_at = time.monotonic() + settle_seconds
+                        self._power_probe_pending = True
+                        self._power_dependency_status = (
+                            f"{power_state.detail}; waiting {settle_seconds:.1f}s before "
+                            "safe probe and automatic turn_on"
+                        )
+                        self.info(self._power_dependency_status, True)
+                    else:
+                        self.info(
+                            f"{self.device_name} power is available; awaiting explicit turn_on.",
+                            True,
+                        )
             else:
                 self.info(f"{self.device_name} was NOT found.", True)
                 self.set_state(DevState.FAULT)
@@ -427,6 +438,13 @@ class DS_General(Device):
             return bool(str(self.power_dependency_device or "").strip()) and int(
                 self.power_dependency_output_id or 0
             ) > 0
+        except (TypeError, ValueError):
+            return False
+
+    def _power_dependency_auto_turn_on_enabled(self) -> bool:
+        """Return whether this explicitly opted-in device may re-enable itself."""
+        try:
+            return bool(int(self.power_dependency_auto_turn_on or 0))
         except (TypeError, ValueError):
             return False
 
@@ -565,6 +583,24 @@ class DS_General(Device):
             result = self.probe_powered_hardware()
             if operation_succeeded(result):
                 self.set_state(self.power_dependency_ready_state())
+                if self._power_dependency_auto_turn_on_enabled():
+                    self._power_dependency_status = (
+                        f"{state.detail}; safe probe succeeded; running automatic turn_on"
+                    )
+                    self.info(self._power_dependency_status, True)
+                    self.turn_on()
+                    if self.get_state() == DevState.ON:
+                        self._power_dependency_status = (
+                            f"{state.detail}; safe probe succeeded; device was turned ON automatically"
+                        )
+                        self.info(self._power_dependency_status, True)
+                    else:
+                        self._power_dependency_status = (
+                            f"{state.detail}; safe probe succeeded but automatic turn_on "
+                            f"did not reach ON (state={self.get_state()})"
+                        )
+                        self.error(self._power_dependency_status)
+                    return
                 self._power_dependency_status = (
                     f"{state.detail}; safe probe succeeded; awaiting explicit turn_on"
                 )

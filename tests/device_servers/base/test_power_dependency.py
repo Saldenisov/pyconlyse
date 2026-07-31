@@ -13,6 +13,7 @@ class PowerDummy(general_module.DS_General):
     def __init__(self):
         self._state = general_module.DevState.OFF
         self._name = "test/power-dummy"
+        self.archive_state = {}
         self.device_id = "power-dummy"
         self.friendly_name = "PowerDummy"
         self.always_on = 0
@@ -20,6 +21,7 @@ class PowerDummy(general_module.DS_General):
         self.power_dependency_device = "manip/test/PDU"
         self.power_dependency_output_id = 2
         self.power_dependency_auto_probe = 1
+        self.power_dependency_auto_turn_on = 0
         self.power_on_settle_seconds = 0.0
         self.power_dependency_poll_interval_s = 60.0
         self.find_calls = 0
@@ -122,6 +124,30 @@ def test_power_restore_waits_then_runs_safe_probe_without_turn_on(monkeypatch):
     assert device.turn_on_calls == 0
     assert device.get_state() == general_module.DevState.STANDBY
     assert "safe probe succeeded" in device.power_dependency_status()
+
+
+def test_power_restore_runs_turn_on_only_when_explicitly_configured(monkeypatch):
+    device = PowerDummy()
+    device.power_dependency_auto_turn_on = 1
+    off = general_module.PowerDependencyState(True, False, "PDU output is OFF")
+    on = general_module.PowerDependencyState(True, True, "PDU output is ON")
+    monkeypatch.setattr(device, "_read_power_dependency_state", lambda: on)
+
+    device._power_dependency_observed = False
+    device._power_dependency_state = off
+    device._power_probe_pending = False
+    device._power_probe_due_at = 0.0
+    device._power_dependency_status = ""
+    device._lifecycle_lock = __import__("threading").RLock()
+
+    device._apply_power_dependency_state(off)
+    device._apply_power_dependency_state(on)
+    device._run_power_dependency_probe_if_due()
+
+    assert device.probe_calls == 1
+    assert device.turn_on_calls == 1
+    assert device.get_state() == general_module.DevState.ON
+    assert "turned ON automatically" in device.power_dependency_status()
 
 
 def test_unavailable_pdu_faults_once_without_hardware_access(monkeypatch):

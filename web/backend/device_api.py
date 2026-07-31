@@ -702,7 +702,7 @@ def _wait_for_starter_server(starter_name, server_name, timeout_s=12.0):
         time.sleep(0.5)
 
 
-def _find_starter_for_server(server_name):
+def _find_starter_for_server(server_name, allow_db_host_fallback=False):
     for starter_name in _get_starter_devices():
         try:
             starter, running, stopped = _get_starter_server_lists(starter_name)
@@ -710,6 +710,27 @@ def _find_starter_for_server(server_name):
             continue
         if server_name in running or server_name in stopped:
             return starter_name, starter, running, stopped
+
+    if allow_db_host_fallback:
+        try:
+            server_info = tango.Database().get_server_info(server_name)
+            host = str(getattr(server_info, "host", "")).strip().lower()
+            if host:
+                short_host = host.split(".", 1)[0]
+                starter_name = next(
+                    (
+                        str(candidate)
+                        for candidate in _get_starter_devices()
+                        if str(candidate).rsplit("/", 1)[-1].lower()
+                        in {host, short_host}
+                    ),
+                    f"tango/admin/{short_host}",
+                )
+                starter, running, stopped = _get_starter_server_lists(starter_name)
+                return starter_name, starter, running, stopped
+        except Exception:
+            pass
+
     raise Exception(f"No Starter manages server {server_name}")
 
 
@@ -727,7 +748,141 @@ def _resolve_server_name(device_name):
         server_name = getattr(info, 'ds_full_name', None) or getattr(info, 'server', None)
         if not server_name:
             raise Exception(f"Could not resolve server for device {device_name}")
-        return str(server_name)
+    return str(server_name)
+
+
+def _tail_log_text(value, line_limit=240, char_limit=60000):
+    """Bound a Starter log response before returning it to a browser client."""
+    text = str(value or "").replace("\r\n", "\n")
+    truncated = len(text) > char_limit
+    if truncated:
+        text = text[-char_limit:]
+
+    lines = text.splitlines()
+    if len(lines) > line_limit:
+        truncated = True
+        lines = lines[-line_limit:]
+    return "\n".join(lines), truncated
+
+
+def _read_starter_log(starter, log_name):
+    """Read a log captured by Tango Starter without making any equipment call."""
+    try:
+        text, truncated = _tail_log_text(starter.command_inout("DevReadLog", log_name))
+        return {
+            "available": True,
+            "text": text,
+            "truncated": truncated,
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "available": False,
+            "text": "",
+            "truncated": False,
+            "error": str(exc),
+        }
+
+
+def _read_device_diagnostics(device_name):
+    """Return state, status, and common server-reported error attributes."""
+    result = {
+        "name": device_name,
+        "available": False,
+        "state": "UNREACHABLE",
+        "status": "",
+        "error_attributes": {},
+        "error": "",
+    }
+    try:
+        def read_diagnostics():
+            device = DeviceManager.get_device(device_name)
+            try:
+                attr_names = {str(name).lower(): str(name) for name in device.get_attribute_list()}
+            except Exception:
+                attr_names = {}
+
+            error_attributes = {}
+            for candidate in (
+                "last_error",
+                "error",
+                "error_message",
+                "fault_recovery_status",
+                "connection_status",
+            ):
+                attr_name = attr_names.get(candidate)
+                if not attr_name:
+                    continue
+                try:
+                    value = make_json_safe(device.read_attribute(attr_name).value)
+                except Exception as exc:
+                    value = {"error": str(exc)}
+                error_attributes[attr_name] = value
+            return str(device.state()), str(device.status()), error_attributes
+
+        state, status, error_attributes = _with_device_retry(device_name, read_diagnostics)
+        result.update({
+            "available": True,
+            "state": state,
+            "status": status,
+            "error_attributes": error_attributes,
+        })
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+@device_api.route('/api/server/<path:server_name>/diagnostics', methods=['GET'])
+def get_server_diagnostics(server_name):
+    """Read-only operational diagnostics for one Tango server and its device."""
+    try:
+        device_name = str(request.args.get("device_name", "")).strip()
+        if not device_name:
+            return jsonify({"success": False, "error": "device_name is required"}), 400
+
+        device = _read_device_diagnostics(device_name)
+        starter_name = ""
+        running = set()
+        stopped = set()
+        starter_error = ""
+        server_log = {"available": False, "text": "", "truncated": False, "error": ""}
+        starter_log = {"available": False, "text": "", "truncated": False, "error": ""}
+
+        try:
+            starter_name, starter, running, stopped = _find_starter_for_server(
+                server_name,
+                allow_db_host_fallback=True,
+            )
+            server_log = _read_starter_log(starter, server_name)
+            starter_log = _read_starter_log(starter, "Starter")
+        except Exception as exc:
+            starter_error = str(exc)
+            server_log["error"] = starter_error
+            starter_log["error"] = starter_error
+
+        capture_note = ""
+        if not server_log["available"]:
+            capture_note = "Tango Starter log is unavailable. "
+            if starter_error:
+                capture_note += "Starter could not be contacted."
+            else:
+                capture_note += "The server may be writing only to its terminal window."
+
+        return jsonify({
+            "success": True,
+            "server_name": server_name,
+            "starter": starter_name,
+            "running": server_name in running,
+            "stopped": server_name in stopped,
+            "starter_error": starter_error,
+            "device": device,
+            "server_log": server_log,
+            "starter_log": starter_log,
+            "capture_note": capture_note,
+            "timestamp": datetime.now().isoformat(),
+        })
+    except Exception as exc:
+        return jsonify({"success": False, "error": str(exc)}), 500
 
 
 def _collect_device_list(probe_state, include_dserver, include_admin):
@@ -758,12 +913,23 @@ def _collect_device_list(probe_state, include_dserver, include_admin):
 
         if probe_state:
             try:
-                device = tango.DeviceProxy(device_name)
-                state = str(device.state())
-                if not server_name or not dev_class:
-                    info = device.info()
-                    server_name = server_name or getattr(info, 'server_id', None)
-                    dev_class = dev_class or getattr(info, 'dev_class', None)
+                def read_state_and_info():
+                    device = DeviceManager.get_device(device_name)
+                    current_state = str(device.state())
+                    current_server = server_name
+                    current_class = dev_class
+                    if not current_server or not current_class:
+                        info = device.info()
+                        current_server = current_server or getattr(info, 'server_id', None)
+                        current_class = current_class or getattr(info, 'dev_class', None)
+                    return current_state, current_server, current_class
+
+                # Dashboard polling and an explicit diagnostics request can arrive
+                # together. Reuse the cached proxy and serialize all calls per device.
+                state, server_name, dev_class = _with_device_retry(
+                    device_name,
+                    read_state_and_info,
+                )
             except Exception:
                 available = False
 
@@ -1162,11 +1328,11 @@ def get_pdu_outputs(device_name):
     try:
         def read_outputs():
             device = DeviceManager.get_device(device_name)
-            ids = _read_attr_sequence_strict(device, 'ids')
-            names = _read_attr_sequence_strict(device, 'names')
-            states = _read_attr_sequence_strict(device, 'states')
+            ids = _read_attr_sequence(device, 'ids')
+            names = _read_attr_sequence(device, 'names')
+            states = _read_attr_sequence(device, 'states')
             if not states:
-                states = _read_attr_sequence_strict(device, 'output_statuses')
+                states = _read_attr_sequence(device, 'output_statuses')
             return device, ids, names, states
 
         device, ids, names, states = _with_device_retry(device_name, read_outputs)

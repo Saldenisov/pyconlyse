@@ -4,6 +4,7 @@ import {
   normalizeDeviceFamilyText,
   resolveDeviceFamily,
 } from './utils/deviceFamily';
+import DashboardDiagnosticsModal from './DashboardDiagnosticsModal';
 
 const cardStyle = {
   border: '1px solid #d8e0ea',
@@ -118,6 +119,9 @@ const Dashboard = () => {
   const [actionMessage, setActionMessage] = useState('');
   const [serverActionInProgress, setServerActionInProgress] = useState('');
   const [contextMenu, setContextMenu] = useState(null);
+  const [diagnostics, setDiagnostics] = useState(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [diagnosticsError, setDiagnosticsError] = useState('');
   const [serverFilter, setServerFilter] = useState('');
   const coverage = buildCoverage(devices);
   const normalizedServerFilter = normalizeDeviceFamilyText(serverFilter).trim();
@@ -295,6 +299,31 @@ const Dashboard = () => {
       setError(err.message);
     } finally {
       setServerActionInProgress('');
+    }
+  };
+
+  const openDiagnostics = async (device) => {
+    setContextMenu(null);
+    setDiagnostics(null);
+    setDiagnosticsError('');
+    setDiagnosticsLoading(true);
+
+    try {
+      if (!device.server) {
+        throw new Error(`No server name is available for ${device.name}`);
+      }
+      const response = await fetch(
+        `/api/server/${encodeURIComponent(device.server)}/diagnostics?device_name=${encodeURIComponent(device.name)}`
+      );
+      const payload = await response.json();
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || `Diagnostics failed (${response.status})`);
+      }
+      setDiagnostics(payload);
+    } catch (err) {
+      setDiagnosticsError(err.message);
+    } finally {
+      setDiagnosticsLoading(false);
     }
   };
 
@@ -612,6 +641,20 @@ const Dashboard = () => {
           </div>
           <button
             type="button"
+            onClick={() => openDiagnostics(contextMenu.device)}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '8px 10px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+            }}
+          >
+            View Status and Logs
+          </button>
+          <button
+            type="button"
             onClick={() => runServerAction(contextMenu.device, 'start')}
             style={{
               width: '100%',
@@ -654,6 +697,18 @@ const Dashboard = () => {
             Hard Kill Server
           </button>
         </div>
+      )}
+      {(diagnostics || diagnosticsLoading || diagnosticsError) && (
+        <DashboardDiagnosticsModal
+          diagnostics={diagnostics}
+          loading={diagnosticsLoading}
+          error={diagnosticsError}
+          onClose={() => {
+            setDiagnostics(null);
+            setDiagnosticsLoading(false);
+            setDiagnosticsError('');
+          }}
+        />
       )}
     </div>
   );
