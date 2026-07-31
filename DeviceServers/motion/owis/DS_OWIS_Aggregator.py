@@ -50,6 +50,7 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             # disappeared. Keep read-only health polling alive to reconnect
             # when that power returns; _refresh_backends never activates axes.
             DevState.OFF,
+            DevState.STANDBY,
             DevState.ON,
             DevState.MOVING,
             DevState.RUNNING,
