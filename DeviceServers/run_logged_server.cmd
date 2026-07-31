@@ -54,8 +54,9 @@ echo ==== %date% %time% starting %SERVER_NAME%/%INSTANCE_NAME% ==== >> "%PYCONLY
 echo Log file: %PYCONLYSE_DS_LOG_FILE%
 echo Starting %SERVER_NAME%/%INSTANCE_NAME%...
 
-REM Tee-Object preserves output in this terminal and writes the same stream to disk.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "& python $env:PYCONLYSE_DS_SCRIPT $env:PYCONLYSE_DS_INSTANCE 2^>^&1 | Tee-Object -FilePath $env:PYCONLYSE_DS_LOG_FILE -Append; exit $LASTEXITCODE"
+REM Older Windows PowerShell lacks Tee-Object -Encoding. Write UTF-8 explicitly
+REM while preserving the same output in this terminal.
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$utf8 = New-Object System.Text.UTF8Encoding($false); & python $env:PYCONLYSE_DS_SCRIPT $env:PYCONLYSE_DS_INSTANCE 2>&1 | ForEach-Object { $line = ($_ | Out-String); [Console]::Out.Write($line); [System.IO.File]::AppendAllText($env:PYCONLYSE_DS_LOG_FILE, $line, $utf8) }; exit $LASTEXITCODE"
 set "EXIT_CODE=%ERRORLEVEL%"
 echo ==== %date% %time% exited with %EXIT_CODE% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
 exit /b %EXIT_CODE%
