@@ -407,9 +407,19 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
         else:
             reason = self._unpowered_backend_reason()
             if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
                 self._set_off_for_unpowered_backend(reason)
             else:
                 self._device_id_internal, self._uri = -1, b""
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "one or more OWIS backend transports are unavailable",
+                )
                 self.set_state(DevState.FAULT)
 
     def turn_on_local(self) -> Union[int, str]:
@@ -418,6 +428,19 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             return 0
 
         if not self._refresh_backends(force=True, activate=True):
+            reason = self._unpowered_backend_reason()
+            if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
+            else:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "one or more OWIS backend transports are unavailable",
+                )
             self.set_state(DevState.FAULT)
             return (
                 f"Could NOT turn on {self.device_name}: at least one backend is down."

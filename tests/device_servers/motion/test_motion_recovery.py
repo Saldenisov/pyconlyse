@@ -437,6 +437,35 @@ def test_owis_aggregator_keeps_read_only_recovery_polling_when_off():
     assert aggregator_module.DevState.STANDBY in allowed_states
 
 
+def test_owis_aggregator_marks_unpowered_backend_as_hardware_power_off():
+    state = {"value": aggregator_module.DevState.INIT}
+    lifecycle = {}
+    device = types.SimpleNamespace(
+        _device_id_internal=-1,
+        _uri=b"",
+        _refresh_backends=lambda **_kwargs: False,
+        _unpowered_backend_reason=lambda: "backend three power PDU output 2 is OFF",
+        _set_off_for_unpowered_backend=lambda _reason: None,
+        set_state=lambda value: state.__setitem__("value", value),
+        set_hardware_lifecycle=lambda connection, initialization, detail: lifecycle.update(
+            connection=connection.value,
+            initialization=initialization.value,
+            detail=detail,
+        ),
+        check_func_allowance=lambda _func: 1,
+    )
+    device.find_device = lambda: None
+
+    aggregator_module.DS_OWIS_Aggregator.find_device(device)
+
+    assert state["value"] == aggregator_module.DevState.INIT
+    assert lifecycle == {
+        "connection": "POWER_OFF",
+        "initialization": "NOT_REQUESTED",
+        "detail": "backend three power PDU output 2 is OFF",
+    }
+
+
 def _make_owis_delay_line_stub(monkeypatch):
     monkeypatch.setattr(ctypes, "WinDLL", lambda _path: object(), raising=False)
     module_name = "DeviceServers.motion.owis.DS_OWIS_delay_line"
