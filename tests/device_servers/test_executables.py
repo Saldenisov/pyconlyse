@@ -42,6 +42,16 @@ class TestExecutableWrappers(unittest.TestCase):
         self.assertIn("run_logged_server.cmd", wrapper_text)
         self.assertIn('"DS_Netio_pdu"', wrapper_text)
 
+    def test_netio_executable_wrapper_uses_shared_logged_launcher(self):
+        device_servers_root = Path(__file__).parents[2] / "DeviceServers"
+        wrapper_text = (device_servers_root / "DS_Netio_pdu_wrapper.cs").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("run_logged_server.cmd", wrapper_text)
+        self.assertIn("DS_Netio_pdu", wrapper_text)
+        self.assertIn("DISABLE_ARCHIVE=1", wrapper_text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

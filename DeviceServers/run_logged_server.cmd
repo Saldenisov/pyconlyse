@@ -7,6 +7,7 @@ set "SERVER_NAME=%~1"
 set "INSTANCE_NAME=%~2"
 set "DEVICE_DIR=%~3"
 set "DEVICE_SCRIPT=%~4"
+set "SERVER_ENVIRONMENT=%~5"
 
 if "%SERVER_NAME%"=="" (
     echo ERROR: Server name is required.
@@ -27,6 +28,7 @@ if "%DEVICE_SCRIPT%"=="" (
 
 if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
 if not defined PYCONLYSE_LOG_DIR set "PYCONLYSE_LOG_DIR=C:\temp\ds.log"
+if not "%SERVER_ENVIRONMENT%"=="" set "%SERVER_ENVIRONMENT%"
 
 if not exist "%PYCONLYSE_LOG_DIR%" mkdir "%PYCONLYSE_LOG_DIR%"
 set "PYCONLYSE_DS_LOG_FILE=%PYCONLYSE_LOG_DIR%\%SERVER_NAME%_%INSTANCE_NAME%.log"
