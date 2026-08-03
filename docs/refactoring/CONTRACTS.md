@@ -68,5 +68,6 @@ Refactoring must preserve these contracts unless a separately approved migration
 - The full gate may import production code and use fakes, but may not create a
   Tango server, contact a Tango database, connect to equipment, or issue
   motion, shutter, power, PDU, or RemoteEx commands.
-- Coverage gates measure named refactored modules and enforce their committed
+- Coverage gates measure named refactored lifecycle/backend Python modules and
+  pure frontend request/classification modules, then enforce committed
   baselines. Whole-tree legacy coverage is informational only.

@@ -92,9 +92,10 @@ Scope:
 - refactoring test documentation
 
 Deliver: order-independent Tango/Taurus test doubles; explicit automated,
-manual, integration, legacy, main-app, and utilities lanes; focused lifecycle
-coverage floors; and an executable local `--full` gate. This package does not
-operate Tango, hardware, PDU, motion, shutters, or deploy tooling.
+manual, integration, legacy, main-app, and utilities lanes; focused lifecycle,
+backend, and pure frontend coverage floors; and an executable local `--full`
+gate. This package does not operate Tango, hardware, PDU, motion, shutters, or
+deploy tooling.
 
 ## Luna mechanical packages
 

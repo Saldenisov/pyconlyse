@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Enforce coverage floors for the refactored DeviceServer lifecycle modules."""
+"""Enforce coverage floors for critical refactored Python modules."""
 
 from __future__ import annotations
 
@@ -18,6 +18,14 @@ MINIMUM_MODULE_COVERAGE = {
     "DeviceServers/motion/owis/DS_OWIS_delay_line.py": 65.0,
     "DeviceServers/cameras/avantes/DS_AVANTES_CCD.py": 40.0,
     "DeviceServers/cameras/basler/DS_Basler_camera.py": 30.0,
+    "web/backend/device_api.py": 40.0,
+    "web/backend/folder_api.py": 75.0,
+    "web/backend/treatment_api.py": 65.0,
+    "web/backend/treatment_file_cache.py": 80.0,
+    "web/backend/treatment_network_path.py": 55.0,
+    "web/backend/treatment_service.py": 80.0,
+    "web/backend/vd2_measurement_protocol.py": 80.0,
+    "web/backend/websocket_handler.py": 45.0,
 }
 MINIMUM_TOTAL_COVERAGE = 60.0
 

@@ -96,8 +96,8 @@ conda run -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .covera
 conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
 ```
 
-Baseline floors use statement coverage and apply only to refactored lifecycle
-modules:
+Baseline floors use statement coverage and apply only to named refactored
+lifecycle and backend modules:
 
 | Module | Baseline floor |
 |---|---:|
@@ -107,7 +107,19 @@ modules:
 | `DeviceServers/motion/owis/DS_OWIS_delay_line.py` | 65% |
 | `DeviceServers/cameras/avantes/DS_AVANTES_CCD.py` | 40% |
 | `DeviceServers/cameras/basler/DS_Basler_camera.py` | 30% |
+| `web/backend/device_api.py` | 40% |
+| `web/backend/folder_api.py` | 75% |
+| `web/backend/treatment_api.py` | 65% |
+| `web/backend/treatment_file_cache.py` | 80% |
+| `web/backend/treatment_network_path.py` | 55% |
+| `web/backend/treatment_service.py` | 80% |
+| `web/backend/vd2_measurement_protocol.py` | 80% |
+| `web/backend/websocket_handler.py` | 45% |
 | Combined focused modules | 60% |
+
+Frontend Jest coverage is restricted to `src/api/treatmentClient.js` and
+`src/utils/deviceFamily.js`. The full gate requires 90% statements, 75%
+branches, 90% functions, and 90% lines across those named modules.
 
 ## Failure policy
 

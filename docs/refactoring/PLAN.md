@@ -46,9 +46,10 @@ Owner: Terra, with Sol read-only review.
 - **T8b — collection hygiene:** default pytest collection contains only
   automated software tests. Manual probes, legacy, integration, main-app, and
   utilities remain preserved in explicit lanes.
-- **T8c — focused coverage:** measure only the refactored DeviceServer
-  lifecycle modules, enforce per-module floors, and do not use whole-tree
-  legacy coverage as a release metric.
+- **T8c — focused coverage:** measure named refactored DeviceServer lifecycle
+  and backend modules plus pure frontend API/classification modules, enforce
+  explicit floors, and do not use whole-tree legacy coverage as a release
+  metric.
 - **T8d — lifecycle contracts:** verify software-only init, polling, stop,
   timeout, and readback behavior without Tango server control or hardware I/O.
 

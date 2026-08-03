@@ -106,7 +106,9 @@ allowed_paths = [
   "web/frontend/package.json",
   "web/frontend/package-lock.json",
   "web/frontend/src/App.test.js",
+  "web/frontend/src/api/treatmentClient.test.js",
   "web/frontend/src/setupTests.js",
+  "web/frontend/src/utils/deviceFamily.test.js",
 ]
 allowed_globs = [
   "tests/integration/device_servers/**",
@@ -118,9 +120,11 @@ allowed_globs = [
   "tests/unit/test_refactor_tooling.py",
   "tests/device_servers/base/_test_support.py",
   "tests/device_servers/base/test_base_behaviors.py",
+  "tests/device_servers/base/test_base_extended_contracts.py",
   "tests/device_servers/motion/test_motion_recovery.py",
   "tests/web/test_device_api*.py",
   "tests/web/test_pump_probe_vd2_api.py",
+  "tests/web/test_websocket_handler_contracts.py",
   "docs/refactoring/**",
 ]
 

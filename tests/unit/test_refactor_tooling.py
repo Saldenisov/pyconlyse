@@ -178,7 +178,16 @@ class TestRefactorTooling(unittest.TestCase):
             argv,
         )
         self.assertIn(("npm", "ci", "--legacy-peer-deps"), argv)
-        self.assertIn(("npm", "test", "--", "--watchAll=false"), argv)
+        self.assertIn(
+            (
+                "npm",
+                "test",
+                "--",
+                "--watchAll=false",
+                *verify_refactor.FRONTEND_COVERAGE_ARGS,
+            ),
+            argv,
+        )
         self.assertIn(("npm", "run", "build"), argv)
 
     def test_deploy_tests_exact_sha_in_detached_worktree_before_fast_forward(self):

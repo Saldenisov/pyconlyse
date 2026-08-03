@@ -7,6 +7,14 @@ include =
     DeviceServers/motion/owis/DS_OWIS_delay_line.py
     DeviceServers/cameras/avantes/DS_AVANTES_CCD.py
     DeviceServers/cameras/basler/DS_Basler_camera.py
+    web/backend/device_api.py
+    web/backend/folder_api.py
+    web/backend/treatment_api.py
+    web/backend/treatment_file_cache.py
+    web/backend/treatment_network_path.py
+    web/backend/treatment_service.py
+    web/backend/vd2_measurement_protocol.py
+    web/backend/websocket_handler.py
 
 [report]
 precision = 1

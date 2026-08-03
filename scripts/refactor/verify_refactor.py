@@ -35,6 +35,12 @@ SOFTWARE_TEST_COMMAND = (
 )
 COVERAGE_CONFIG = ".coveragerc"
 COVERAGE_JSON = ".coverage-refactor.json"
+FRONTEND_COVERAGE_ARGS = (
+    "--coverage",
+    "--collectCoverageFrom=src/api/treatmentClient.js",
+    "--collectCoverageFrom=src/utils/deviceFamily.js",
+    '--coverageThreshold={"global":{"branches":75,"functions":90,"lines":90,"statements":90}}',
+)
 
 _BRANCH_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 _COMMIT_PATTERN = re.compile(r"^[0-9a-f]{40}$")
@@ -273,7 +279,10 @@ def build_verification_commands(
         commands.extend(
             [
                 Command(("npm", "ci", "--legacy-peer-deps"), PROJECT_ROOT / "web/frontend"),
-                Command(("npm", "test", "--", "--watchAll=false"), PROJECT_ROOT / "web/frontend"),
+                Command(
+                    ("npm", "test", "--", "--watchAll=false", *FRONTEND_COVERAGE_ARGS),
+                    PROJECT_ROOT / "web/frontend",
+                ),
                 Command(("npm", "run", "build"), PROJECT_ROOT / "web/frontend"),
             ]
         )
