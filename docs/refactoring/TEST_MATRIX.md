@@ -42,6 +42,8 @@ npm run build
 | Pump-probe | Emulator acquisition, delay sequence, background/reference/signal grouping, persistence |
 | Concurrency | Duplicate polling prevention, cancellation, timeout, bounded worker count |
 | Paths | Local path, remote SMB path, missing folder, permission error |
+| Web security | Production env validation; Werkzeug scrypt/pbkdf2 user hashes; secure device/auth cookies; CSRF header/cookie pairing; same-origin CORS and explicit allowlist; explicit local-dev opt-outs |
+| WebSocket security | Access-cookie decode/authentication; command authorization; per-SID subscriptions; last-subscriber cleanup; lock/timeout behavior |
 
 ## Frontend checks
 
@@ -96,6 +98,16 @@ conda run -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .covera
 conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
 ```
 
+T9 software-only focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
+cd web/frontend && npm test -- --watchAll=false --runInBand
+cd ../..
+conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
+```
+
 Baseline floors use statement coverage and apply only to named refactored
 lifecycle and backend modules:
 
@@ -117,9 +129,10 @@ lifecycle and backend modules:
 | `web/backend/websocket_handler.py` | 45% |
 | Combined focused modules | 60% |
 
-Frontend Jest coverage is restricted to `src/api/treatmentClient.js` and
-`src/utils/deviceFamily.js`. The full gate requires 90% statements, 75%
-branches, 90% functions, and 90% lines across those named modules.
+Frontend Jest coverage is restricted to `src/api/csrfRequest.js`,
+`src/api/treatmentClient.js`, and `src/utils/deviceFamily.js`. The full gate
+requires 90% statements, 75% branches, 90% functions, and 90% lines across
+those named modules.
 
 ## Failure policy
 

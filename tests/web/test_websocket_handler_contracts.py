@@ -5,6 +5,7 @@ import json
 import math
 import sys
 import types
+from types import SimpleNamespace
 
 import pytest
 
@@ -74,9 +75,17 @@ class FakeThread:
         self.started = True
 
 
+class FailingThread(FakeThread):
+    def start(self):
+        raise RuntimeError("thread start failed")
+
+
 @pytest.fixture
 def handler(monkeypatch):
     """Import handler against test Tango stub without retaining global state."""
+    flask_module = types.ModuleType("flask")
+    flask_module.current_app = SimpleNamespace(config={})
+    flask_module.request = SimpleNamespace(sid=None, cookies={})
     socketio_module = types.ModuleType("flask_socketio")
     socketio_module.SocketIO = FakeSocketIO
     socketio_module.emit = lambda *_args, **_kwargs: None
@@ -84,12 +93,14 @@ def handler(monkeypatch):
     socketio_module.leave_room = lambda *_args, **_kwargs: None
     jwt_module = types.ModuleType("flask_jwt_extended")
     jwt_module.decode_token = lambda token: {"token": token}
+    monkeypatch.setitem(sys.modules, "flask", flask_module)
     monkeypatch.setitem(sys.modules, "flask_socketio", socketio_module)
     monkeypatch.setitem(sys.modules, "flask_jwt_extended", jwt_module)
     monkeypatch.delitem(sys.modules, "web.backend.websocket_handler", raising=False)
     module = importlib.import_module("web.backend.websocket_handler")
     module.monitoring_rooms.clear()
     module.device_subscriptions.clear()
+    module.client_subscriptions.clear()
     module.socketio = None
     return module
 
@@ -109,20 +120,64 @@ def test_json_and_environment_helpers_produce_json_safe_contracts(handler, monke
     assert handler._env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", default=True) is False
 
 
-def test_socket_auth_only_decodes_tokens_when_enforcement_is_enabled(handler, monkeypatch):
+def test_socket_auth_uses_configured_http_only_cookie_when_enforcement_is_enabled(handler, monkeypatch):
     calls = []
+    monkeypatch.delenv("PYCONLYSE_PRODUCTION", raising=False)
     monkeypatch.delenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", raising=False)
     monkeypatch.setattr(handler, "decode_token", lambda token: calls.append(token))
-    assert handler._socket_auth_allowed(None) is True
+    assert handler._socket_auth_allowed({"token": "ignored"}) is True
     assert calls == []
 
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
-    assert handler._socket_auth_allowed(None) is False
-    assert handler._socket_auth_allowed({"token": "valid-token"}) is True
-    assert calls == ["valid-token"]
+    monkeypatch.setattr(handler, "request", SimpleNamespace(cookies={}))
+    assert handler._socket_auth_allowed({"token": "ignored"}) is False
+    assert calls == []
 
-    monkeypatch.setattr(handler, "decode_token", lambda _token: (_ for _ in ()).throw(ValueError("bad token")))
-    assert handler._socket_auth_allowed({"token": "invalid-token"}) is False
+    monkeypatch.setattr(
+        handler,
+        "current_app",
+        SimpleNamespace(config={"JWT_ACCESS_COOKIE_NAME": "custom_access"}),
+    )
+    monkeypatch.setattr(
+        handler,
+        "request",
+        SimpleNamespace(cookies={"custom_access": "valid-cookie"}),
+    )
+    assert handler._socket_auth_allowed({"token": "ignored"}) is True
+    assert calls == ["valid-cookie"]
+
+    monkeypatch.setattr(
+        handler,
+        "decode_token",
+        lambda _token: (_ for _ in ()).throw(ValueError("bad cookie")),
+    )
+    assert handler._socket_auth_allowed(None) is False
+
+
+def test_socket_auth_defaults_to_required_in_production_despite_false_override(handler, monkeypatch):
+    calls = []
+    monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
+    monkeypatch.delenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", raising=False)
+    monkeypatch.setattr(handler, "request", SimpleNamespace(cookies={"access_token_cookie": "cookie"}))
+    monkeypatch.setattr(handler, "decode_token", lambda token: calls.append(token))
+
+    assert handler._socket_auth_allowed(None) is True
+    assert calls == ["cookie"]
+
+    monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "false")
+    assert handler._socket_auth_allowed(None) is True
+    assert calls == ["cookie", "cookie"]
+
+
+def test_connect_rejects_missing_cookie_before_registering_client(handler, monkeypatch):
+    socket_emits = []
+    socket = handler.init_socketio(object())
+    monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a", cookies={}))
+    monkeypatch.setattr(handler, "emit", lambda event, payload: socket_emits.append((event, payload)))
+
+    assert socket.handlers["connect"]() is False
+    assert socket_emits == []
 
 
 def test_get_device_caches_success_and_does_not_cache_connection_errors(handler, monkeypatch):
@@ -206,7 +261,7 @@ def test_monitoring_loop_exits_after_recoverable_error_without_background_thread
     assert calls == [("test/error", room_id)]
 
 
-def test_subscription_lifecycle_creates_and_stops_room_without_starting_real_thread(handler, monkeypatch):
+def test_subscription_lifecycle_tracks_each_client_and_stops_after_last_subscriber(handler, monkeypatch):
     FakeThread.created.clear()
     socket_emits = []
     joined = []
@@ -218,22 +273,159 @@ def test_subscription_lifecycle_creates_and_stops_room_without_starting_real_thr
     monkeypatch.setattr(handler, "emit", lambda event, payload: socket_emits.append((event, payload)))
 
     socket = handler.init_socketio(object())
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a"))
     socket.handlers["subscribe_device"]({"device": "camera/test"})
 
     room_id = "device_camera/test"
     assert joined == [room_id]
     assert handler.monitoring_rooms[room_id]["devices"] == {"camera/test"}
-    assert handler.device_subscriptions == {"camera/test": {room_id}}
+    assert handler.device_subscriptions == {"camera/test": {"client-a"}}
+    assert handler.client_subscriptions == {"client-a": {"camera/test"}}
     assert len(FakeThread.created) == 1
     assert FakeThread.created[0].started is True
     assert FakeThread.created[0].daemon is True
 
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-b"))
+    socket.handlers["subscribe_device"]({"device": "camera/test"})
+    assert joined == [room_id, room_id]
+    assert handler.device_subscriptions == {"camera/test": {"client-a", "client-b"}}
+    assert handler.client_subscriptions == {
+        "client-a": {"camera/test"},
+        "client-b": {"camera/test"},
+    }
+    assert len(FakeThread.created) == 1
+
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a"))
+    socket.handlers["subscribe_device"]({"device": "camera/test"})
+    assert joined == [room_id, room_id]
+    assert len(FakeThread.created) == 1
+
     socket.handlers["unsubscribe_device"]({"device": "camera/test"})
 
     assert left == [room_id]
+    assert room_id in handler.monitoring_rooms
+    assert handler.device_subscriptions == {"camera/test": {"client-b"}}
+    assert handler.client_subscriptions == {"client-b": {"camera/test"}}
+
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-b"))
+    socket.handlers["disconnect"]()
+
     assert room_id not in handler.monitoring_rooms
     assert handler.device_subscriptions == {}
+    assert handler.client_subscriptions == {}
     assert socket_emits == [
         ("subscribed", {"device": "camera/test", "room": room_id, "status": "Monitoring started"}),
+        ("subscribed", {"device": "camera/test", "room": room_id, "status": "Monitoring started"}),
+        ("subscribed", {"device": "camera/test", "room": room_id, "status": "Monitoring started"}),
         ("unsubscribed", {"device": "camera/test", "status": "Monitoring stopped"}),
+    ]
+
+
+def test_subscription_rolls_back_when_monitor_thread_cannot_start(handler, monkeypatch):
+    monkeypatch.setattr(handler.threading, "Thread", FailingThread)
+
+    with pytest.raises(RuntimeError, match="thread start failed"):
+        handler._add_subscription("client-a", "camera/test")
+
+    assert handler.monitoring_rooms == {}
+    assert handler.device_subscriptions == {}
+    assert handler.client_subscriptions == {}
+
+
+def test_stale_monitor_generation_exits_after_last_unsubscribe_and_resubscribe(handler, monkeypatch):
+    FakeThread.created.clear()
+    monkeypatch.setattr(handler.threading, "Thread", FakeThread)
+
+    room_id, added = handler._add_subscription("client-a", "camera/test")
+    assert added is True
+    old_generation = handler.monitoring_rooms[room_id]["generation"]
+
+    handler._remove_subscription("client-a", "camera/test")
+    _, added = handler._add_subscription("client-b", "camera/test")
+    new_generation = handler.monitoring_rooms[room_id]["generation"]
+    assert new_generation != old_generation
+
+    monitor = handler.DeviceMonitor()
+    monkeypatch.setattr(
+        monitor,
+        "monitor_device",
+        lambda *_args: pytest.fail("stale monitor must not read the recreated room"),
+    )
+    monkeypatch.setattr(
+        handler.time,
+        "sleep",
+        lambda _seconds: pytest.fail("stale monitor must exit before sleeping"),
+    )
+
+    monitor.monitoring_loop(room_id, old_generation)
+
+
+def test_socketio_uses_application_cors_configuration(handler, monkeypatch):
+    monkeypatch.setattr(handler, "SocketIO", FakeSocketIO)
+    app = SimpleNamespace(config={"PYCONLYSE_CORS_ORIGINS": ["https://ui.example.test"]})
+
+    socket = handler.init_socketio(app)
+
+    assert socket.options["cors_allowed_origins"] == ["https://ui.example.test"]
+
+
+def test_socketio_uses_same_origin_checks_without_configured_cors_origins(handler, monkeypatch):
+    monkeypatch.setattr(handler, "SocketIO", FakeSocketIO)
+
+    socket = handler.init_socketio(SimpleNamespace(config={"PYCONLYSE_CORS_ORIGINS": []}))
+
+    assert socket.options["cors_allowed_origins"] is None
+
+
+def test_device_alert_broadcasts_once_to_shared_device_room(handler, monkeypatch):
+    fake_socket = FakeSocket()
+    handler.socketio = fake_socket
+    handler.device_subscriptions["camera/test"] = {"client-a", "client-b"}
+    monkeypatch.setattr(handler, "datetime", SimpleNamespace(now=lambda: SimpleNamespace(isoformat=lambda: "now")))
+
+    handler.broadcast_device_alert("camera/test", "warning", "temperature high")
+
+    assert fake_socket.emitted == [
+        (
+            "device_alert",
+            {
+                "device": "camera/test",
+                "alert_type": "warning",
+                "message": "temperature high",
+                "timestamp": "now",
+            },
+            "device_camera/test",
+        )
+    ]
+
+
+def test_execute_command_rechecks_cookie_auth_before_accessing_device(handler, monkeypatch):
+    socket_emits = []
+    socket = handler.init_socketio(object())
+    monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a", cookies={"access_token_cookie": "expired"}))
+    monkeypatch.setattr(
+        handler,
+        "decode_token",
+        lambda _token: (_ for _ in ()).throw(ValueError("expired cookie")),
+    )
+    monkeypatch.setattr(
+        handler.monitor,
+        "get_device",
+        lambda _device: pytest.fail("device access must require cookie auth"),
+    )
+    monkeypatch.setattr(handler, "emit", lambda event, payload: socket_emits.append((event, payload)))
+
+    socket.handlers["execute_command"]({"device": "camera/test", "command": "State"})
+
+    assert socket_emits == [
+        (
+            "command_error",
+            {
+                "device": "camera/test",
+                "command": "State",
+                "error": "Authentication required",
+                "success": False,
+            },
+        )
     ]

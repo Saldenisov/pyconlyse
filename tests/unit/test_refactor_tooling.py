@@ -179,6 +179,10 @@ class TestRefactorTooling(unittest.TestCase):
         )
         self.assertIn(("npm", "ci", "--legacy-peer-deps"), argv)
         self.assertIn(
+            "--collectCoverageFrom=src/api/csrfRequest.js",
+            verify_refactor.FRONTEND_COVERAGE_ARGS,
+        )
+        self.assertIn(
             (
                 "npm",
                 "test",

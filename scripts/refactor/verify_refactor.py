@@ -38,6 +38,7 @@ COVERAGE_JSON = ".coverage-refactor.json"
 FRONTEND_COVERAGE_ARGS = (
     "--coverage",
     "--collectCoverageFrom=src/api/treatmentClient.js",
+    "--collectCoverageFrom=src/api/csrfRequest.js",
     "--collectCoverageFrom=src/utils/deviceFamily.js",
     '--coverageThreshold={"global":{"branches":75,"functions":90,"lines":90,"statements":90}}',
 )

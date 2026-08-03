@@ -27,6 +27,34 @@ or laboratory hardware. It never uses `git reset --hard`, `taskkill`, or
    closed, and an operator has created a time-limited approval TOML outside
    the repository.
 
+## Web security provisioning
+
+Production must set `PYCONLYSE_PRODUCTION=true`,
+`PYCONLYSE_ENFORCE_DEVICE_AUTH=true`, `PYCONLYSE_JWT_COOKIE_SECURE=true`,
+and `PYCONLYSE_JWT_COOKIE_CSRF_PROTECT=true`, plus non-empty `JWT_SECRET_KEY`
+and `PYCONLYSE_AUTH_USERS`. The users value is a JSON object whose values are
+Werkzeug password hashes (`scrypt` or `pbkdf2`, never plaintext). Generate a
+hash without contacting equipment:
+
+```bash
+conda run -n pyconlyse39 python -c \
+  "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass('Password: '), method='scrypt'))"
+```
+
+Set the resulting JSON, for example:
+
+```powershell
+$env:PYCONLYSE_AUTH_USERS = '{"operator":"<paste-generated-scrypt-or-pbkdf2-hash>"}'
+$env:JWT_SECRET_KEY = '<long-random-production-secret>'
+```
+
+Production also keeps device authentication, secure cookies, and CSRF enabled.
+CORS remains same-origin unless an explicit allowlist is configured. For local
+development only, the local launcher may explicitly set the applicable
+enforcement variables to `false`; never copy those opt-outs into production.
+An optional CORS allowlist does not make cookie-plus-CSRF authentication valid
+cross-origin; the authenticated production UI remains same-origin.
+
 ## Local Verification
 
 Dry run prints commands only:
@@ -56,9 +84,21 @@ python scripts/refactor/verify_refactor.py --apply --full
 `--full` runs `npm ci --legacy-peer-deps` from the committed frontend lockfile,
 then the default automated pytest lane, named DeviceServer/backend coverage
 with `.coveragerc` and `verify_coverage.py`, and focused frontend Jest coverage
-for request/classification contracts. Manual probes, legacy, integration,
+for `src/api/csrfRequest.js`, `src/api/treatmentClient.js`, and
+`src/utils/deviceFamily.js`. Manual probes, legacy, integration,
 main-app, and utilities suites remain opt-in and are not silently deleted or
 treated as software-only verification.
+
+Exact T9 software-only gate:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
+conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
+```
+
+These commands must not start Tango, connect to devices, issue WebSocket
+hardware commands, or deploy/restart services.
 
 The verification tool has no SSH, Tango, PDU, motion, shutter, or power code.
 

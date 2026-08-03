@@ -14,8 +14,29 @@ Usage:
 
 import os
 import sys
-import signal
 from pathlib import Path
+
+
+def configure_production_environment(environ=None):
+    """Apply production-safe defaults before importing the Flask application."""
+    environ = os.environ if environ is None else environ
+    environ["PYCONLYSE_PRODUCTION"] = "true"
+    for name in ("JWT_SECRET_KEY", "PYCONLYSE_AUTH_USERS"):
+        if not environ.get(name, "").strip():
+            raise RuntimeError(f"{name} must be set before starting production")
+    environ.setdefault("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    if str(environ["PYCONLYSE_ENFORCE_DEVICE_AUTH"]).strip().lower() not in (
+        "1", "true", "yes", "y", "on"
+    ):
+        raise RuntimeError("PYCONLYSE_ENFORCE_DEVICE_AUTH must be true in production")
+    environ.setdefault("PYCONLYSE_JWT_COOKIE_SECURE", "true")
+    environ.setdefault("PYCONLYSE_JWT_COOKIE_CSRF_PROTECT", "true")
+    if str(environ["PYCONLYSE_JWT_COOKIE_CSRF_PROTECT"]).strip().lower() not in (
+        "1", "true", "yes", "y", "on"
+    ):
+        raise RuntimeError(
+            "PYCONLYSE_JWT_COOKIE_CSRF_PROTECT must be true in production"
+        )
 
 
 def _free_port(port):
@@ -40,25 +61,23 @@ def _free_port(port):
                 print(f"WARNING: port {port} is already in use and psutil is not installed.")
                 print("Install psutil to enable auto-kill: pip install psutil")
 
-# Add the project root to Python path
-project_root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(project_root))
+def main():
+    configure_production_environment()
+    project_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(project_root))
+    backend_dir = Path(__file__).parent / 'backend'
+    sys.path.insert(0, str(backend_dir))
 
-# Add backend directory to Python path
-backend_dir = Path(__file__).parent / 'backend'
-sys.path.insert(0, str(backend_dir))
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(str(backend_dir))
+        from auth import configured_users
+        configured_users(required=True)
+        from app import app, socketio
+        from device_api import start_device_snapshot_monitor
+    finally:
+        os.chdir(original_cwd)
 
-# Import and run the Flask application from backend directory
-original_cwd = os.getcwd()
-try:
-    os.chdir(str(backend_dir))
-    from app import socketio, app
-    from device_api import start_device_snapshot_monitor
-finally:
-    os.chdir(original_cwd)
-
-if __name__ == '__main__':
-    os.environ.setdefault('PYCONLYSE_ENFORCE_DEVICE_AUTH', 'false')
     web_host = os.environ.get('PYCONLYSE_WEB_HOST', '0.0.0.0')
     web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
     print("=" * 60)
@@ -107,3 +126,7 @@ if __name__ == '__main__':
         print("3. Ensure Tango database is accessible")
         print("4. Check devices are registered and running")
         print("5. Ensure eventlet is installed: pip install eventlet")
+
+
+if __name__ == '__main__':
+    main()

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { withCsrfToken } from './api/csrfRequest';
 import './css/PumpProbeVD2.css';
 
 const API_BASE = '/api/pump-probe-vd2';
@@ -955,9 +956,10 @@ function PumpProbeVD2() {
     setHardwareError('');
     try {
       const nextStates = outputs.map((output) => Number(output.id) === channel.outputId ? (enabled ? 1 : 0) : Number(output.state));
-      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+      const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not switch ${channel.label}`);
       await loadHardware();
@@ -976,9 +978,10 @@ function PumpProbeVD2() {
     try {
       const outputIds = new Set(VD2_POWER_CHANNELS.map((channel) => channel.outputId));
       const nextStates = outputs.map((output) => outputIds.has(Number(output.id)) ? (enabled ? 1 : 0) : Number(output.state));
-      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+      const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || 'Could not switch VD2 power');
       await loadHardware();
@@ -993,10 +996,11 @@ function PumpProbeVD2() {
     setHardwareLoading(true);
     setHardwareError('');
     try {
-      const response = await fetch('/api/server/control', {
+      const url = '/api/server/control';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ action, device_name: server.device }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not ${action} ${server.label}`);
       await loadHardware();

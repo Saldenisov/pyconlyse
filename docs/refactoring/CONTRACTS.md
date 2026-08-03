@@ -31,6 +31,32 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Snapshot/cache behavior must remain observable and bounded by a documented TTL.
 - Server-control actions require explicit user invocation and must return operation status.
 
+### Web security and WebSocket
+
+- Production startup requires non-empty `JWT_SECRET_KEY` and
+  `PYCONLYSE_AUTH_USERS`; the latter is JSON mapping usernames to Werkzeug
+  `scrypt` or `pbkdf2` password hashes. Plaintext passwords are invalid.
+- Production startup sets `PYCONLYSE_PRODUCTION=true` and mandates
+  `PYCONLYSE_ENFORCE_DEVICE_AUTH=true`, `PYCONLYSE_JWT_COOKIE_SECURE=true`,
+  and `PYCONLYSE_JWT_COOKIE_CSRF_PROTECT=true`.
+- Device authentication, secure cookies, and CSRF protection are mandatory in
+  production. Same-origin CORS is the default; cross-origin access requires an
+  explicit configured allowlist.
+- The authenticated production browser UI is same-origin. An explicit CORS
+  allowlist alone does not make cookie-plus-CSRF authentication valid
+  cross-origin; any cross-origin deployment requires a separately reviewed
+  authentication design.
+- Local development may disable authentication, secure-cookie, and CSRF checks
+  only when the local launcher explicitly sets the applicable enforcement
+  variables to `false`; those settings are not production defaults.
+- Browser requests send `X-CSRF-TOKEN` from the separate, non-HttpOnly
+  `csrf_access_token` cookie. Browser code never reads the HttpOnly access-token
+  cookie.
+- WebSocket connections authenticate by decoding the access-token cookie before
+  accepting commands. Commands are authorized per authenticated client.
+  Subscriptions are tracked per Socket.IO SID, including last-subscriber
+  cleanup, with locking around shared subscription/device state.
+
 ## Frontend
 
 - Existing user workflows remain available: refresh, connect/disconnect, start/stop, hardware refresh, files, selectors, live data, and error copying.

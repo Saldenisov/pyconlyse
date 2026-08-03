@@ -1,6 +1,7 @@
 // DSStandaMotorsClient.js - Multi-motor Standa web client with config selection
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { withCsrfToken } from '../api/csrfRequest';
 import './DSStandaMotorsClient.css';
 
 // Layout configurations from DS_STANDA_client.py
@@ -75,15 +76,6 @@ const MOTOR_CONFIGS = {
     ],
     "width": 4,
   },
-};
-
-const getCookie = (name) => {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop().split(';').shift();
-  }
-  return null;
 };
 
 async function fetchMotorDetails(motorNames) {
@@ -229,10 +221,8 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
     }
 
     if (motorNames.length > 0) {
-      const token = getCookie('access_token_cookie');
       const socket = io('/', {
         withCredentials: true,
-        auth: { token }
       });
       socketRef.current = socket;
 
@@ -315,12 +305,13 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
 
   const moveMotorAbsolute = async (motorName, targetPosition) => {
     try {
-      const response = await fetch(`/api/device/${motorName}/command/move_axis_abs`, {
+      const url = `/api/device/${motorName}/command/move_axis_abs`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [targetPosition] })
-      });
+      }));
       
       if (response.ok) {
         // Update local state optimistically
@@ -355,12 +346,13 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
 
   const turnMotorOn = async (motorName) => {
     try {
-      const response = await fetch(`/api/device/${motorName}/command/turn_on`, {
+      const url = `/api/device/${motorName}/command/turn_on`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [] })
-      });
+      }));
       
       if (response.ok) {
         setError(null);
@@ -374,12 +366,13 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
 
   const stopMotor = async (motorName) => {
     try {
-      const response = await fetch(`/api/device/${motorName}/command/stop_movement`, {
+      const url = `/api/device/${motorName}/command/stop_movement`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [] })
-      });
+      }));
       
       if (response.ok) {
         setError(null);

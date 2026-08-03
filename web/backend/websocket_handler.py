@@ -1,15 +1,16 @@
 # websocket_handler.py - WebSocket support for real-time device monitoring
-from flask_socketio import SocketIO, emit, join_room, leave_room
 import ast
+import logging
+import math
 import os
 import threading
 import time
-import tango
 from datetime import datetime
-import json
-import logging
-import math
+
+import tango
+from flask import current_app, request
 from flask_jwt_extended import decode_token
+from flask_socketio import SocketIO, emit, join_room, leave_room
 
 # Configure logging - reduced verbosity
 logging.basicConfig(level=logging.WARNING)
@@ -33,16 +34,28 @@ def _env_bool(name, default=False):
     return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-def _socket_auth_allowed(auth_payload):
-    if not _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", False):
+def _device_auth_required():
+    """Require cookie authentication by default in production."""
+    if _env_bool("PYCONLYSE_PRODUCTION", False):
         return True
+    return _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", False)
 
-    token = None
-    if isinstance(auth_payload, dict):
-        token = auth_payload.get("token")
-    if not token:
-        return False
+
+def _jwt_access_cookie_name():
     try:
+        return current_app.config.get("JWT_ACCESS_COOKIE_NAME", "access_token_cookie")
+    except RuntimeError:
+        return "access_token_cookie"
+
+
+def _socket_auth_allowed(_auth_payload=None):
+    """Validate the JWT supplied by the Socket.IO request cookie."""
+    if not _device_auth_required():
+        return True
+    try:
+        token = request.cookies.get(_jwt_access_cookie_name())
+        if not token:
+            return False
         decode_token(str(token))
         return True
     except Exception:
@@ -52,8 +65,96 @@ def _socket_auth_allowed(auth_payload):
 socketio = None
 
 # Global monitoring state
-monitoring_rooms = {}  # room_id -> {'devices': set(), 'thread': thread_obj, 'active': bool}
-device_subscriptions = {}  # device_name -> set of room_ids
+monitoring_rooms = {}  # room_id -> {'devices': set(), 'thread': thread_obj, 'active': bool, 'generation': int}
+device_subscriptions = {}  # device_name -> set of Socket.IO session IDs
+client_subscriptions = {}  # Socket.IO session ID -> set of device names
+subscription_lock = threading.RLock()
+_monitoring_room_generation = 0
+
+
+def _room_id(device_name):
+    return f"device_{device_name}"
+
+
+def _add_subscription(sid, device_name):
+    """Record one client's device subscription and start its monitor once."""
+    global _monitoring_room_generation
+    room_id = _room_id(device_name)
+    with subscription_lock:
+        client_devices = client_subscriptions.setdefault(sid, set())
+        if device_name in client_devices:
+            return room_id, False
+
+        client_devices.add(device_name)
+        subscribers = device_subscriptions.setdefault(device_name, set())
+        subscribers.add(sid)
+
+        if room_id not in monitoring_rooms:
+            _monitoring_room_generation += 1
+            generation = _monitoring_room_generation
+            monitoring_rooms[room_id] = {
+                'devices': {device_name},
+                'active': True,
+                'thread': None,
+                'generation': generation,
+            }
+            thread = threading.Thread(
+                target=monitor.monitoring_loop,
+                args=(room_id, generation),
+                daemon=True
+            )
+            monitoring_rooms[room_id]['thread'] = thread
+            try:
+                thread.start()
+            except Exception:
+                del monitoring_rooms[room_id]
+                subscribers.remove(sid)
+                if not subscribers:
+                    del device_subscriptions[device_name]
+                client_devices.remove(device_name)
+                if not client_devices:
+                    del client_subscriptions[sid]
+                raise
+
+    return room_id, True
+
+
+def _remove_subscription(sid, device_name):
+    """Remove one client subscription and stop its monitor after the last client."""
+    room_id = _room_id(device_name)
+    with subscription_lock:
+        client_devices = client_subscriptions.get(sid)
+        if not client_devices or device_name not in client_devices:
+            return room_id, False
+
+        client_devices.remove(device_name)
+        if not client_devices:
+            del client_subscriptions[sid]
+
+        subscribers = device_subscriptions.get(device_name)
+        if subscribers is not None:
+            subscribers.discard(sid)
+            if not subscribers:
+                del device_subscriptions[device_name]
+                room = monitoring_rooms.get(room_id)
+                if room is not None:
+                    room['active'] = False
+                    del monitoring_rooms[room_id]
+
+    return room_id, True
+
+
+def _remove_client_subscriptions(sid):
+    """Disconnect cleanup for every device owned by one Socket.IO session."""
+    with subscription_lock:
+        devices = tuple(client_subscriptions.get(sid, ()))
+    for device_name in devices:
+        _remove_subscription(sid, device_name)
+
+
+def _socket_cors_origins(app):
+    """Use same-origin Socket.IO checks when no explicit origin is configured."""
+    return getattr(app, 'config', {}).get('PYCONLYSE_CORS_ORIGINS') or None
 
 class DeviceMonitor:
     """Real-time device monitoring with WebSocket support"""
@@ -234,17 +335,30 @@ class DeviceMonitor:
             }
             socketio.emit('device_error', error_data, room=room_id)
     
-    def monitoring_loop(self, room_id):
+    def monitoring_loop(self, room_id, generation=None):
         """Main monitoring loop for a room"""
         logger.info(f"Starting monitoring loop for room {room_id}")
         
-        while room_id in monitoring_rooms and monitoring_rooms[room_id]['active']:
+        while True:
+            with subscription_lock:
+                room = monitoring_rooms.get(room_id)
+                if room is None or not room['active']:
+                    break
+                if generation is None:
+                    generation = room.get('generation')
+                elif room.get('generation') != generation:
+                    break
+                devices = room['devices'].copy()
             try:
-                devices = monitoring_rooms[room_id]['devices'].copy()
-                
                 for device_name in devices:
-                    if not monitoring_rooms[room_id]['active']:
-                        break
+                    with subscription_lock:
+                        room = monitoring_rooms.get(room_id)
+                        if (
+                            room is None
+                            or not room['active']
+                            or room.get('generation') != generation
+                        ):
+                            break
                     self.monitor_device(device_name, room_id)
                 
                 time.sleep(1)  # Update every second
@@ -263,7 +377,7 @@ def init_socketio(app):
     global socketio
     socketio = SocketIO(
         app, 
-        cors_allowed_origins="*", 
+        cors_allowed_origins=_socket_cors_origins(app),
         logger=False, 
         engineio_logger=False,
         async_mode='threading',  # Use threading mode explicitly
@@ -282,6 +396,7 @@ def init_socketio(app):
     @socketio.on('disconnect')
     def handle_disconnect():
         """Handle client disconnection"""
+        _remove_client_subscriptions(request.sid)
         logger.info("Client disconnected from WebSocket")
     
     @socketio.on('subscribe_device')
@@ -289,39 +404,14 @@ def init_socketio(app):
         """Subscribe to device monitoring"""
         try:
             device_name = data.get('device')
-            room_id = f"device_{device_name}"
             
             if not device_name:
                 emit('error', {'message': 'Device name required'})
                 return
             
-            # Join room for this device
-            join_room(room_id)
-            
-            # Initialize monitoring room if needed
-            if room_id not in monitoring_rooms:
-                monitoring_rooms[room_id] = {
-                    'devices': {device_name},
-                    'active': True,
-                    'thread': None
-                }
-                
-                # Start monitoring thread
-                thread = threading.Thread(
-                    target=monitor.monitoring_loop, 
-                    args=(room_id,),
-                    daemon=True
-                )
-                thread.start()
-                monitoring_rooms[room_id]['thread'] = thread
-                
-            else:
-                monitoring_rooms[room_id]['devices'].add(device_name)
-            
-            # Track device subscriptions
-            if device_name not in device_subscriptions:
-                device_subscriptions[device_name] = set()
-            device_subscriptions[device_name].add(room_id)
+            room_id, added = _add_subscription(request.sid, device_name)
+            if added:
+                join_room(room_id)
             
             emit('subscribed', {
                 'device': device_name,
@@ -340,29 +430,14 @@ def init_socketio(app):
         """Unsubscribe from device monitoring"""
         try:
             device_name = data.get('device')
-            room_id = f"device_{device_name}"
             
             if not device_name:
                 emit('error', {'message': 'Device name required'})
                 return
             
-            # Leave room
-            leave_room(room_id)
-            
-            # Remove from monitoring
-            if room_id in monitoring_rooms:
-                monitoring_rooms[room_id]['devices'].discard(device_name)
-                
-                # If no devices left in room, stop monitoring
-                if not monitoring_rooms[room_id]['devices']:
-                    monitoring_rooms[room_id]['active'] = False
-                    del monitoring_rooms[room_id]
-            
-            # Update device subscriptions
-            if device_name in device_subscriptions:
-                device_subscriptions[device_name].discard(room_id)
-                if not device_subscriptions[device_name]:
-                    del device_subscriptions[device_name]
+            room_id, removed = _remove_subscription(request.sid, device_name)
+            if removed:
+                leave_room(room_id)
             
             emit('unsubscribed', {
                 'device': device_name,
@@ -402,6 +477,9 @@ def init_socketio(app):
             if not device_name or not command_name:
                 emit('error', {'message': 'Device name and command required'})
                 return
+
+            if not _socket_auth_allowed():
+                raise PermissionError("Authentication required")
             
             device = monitor.get_device(device_name)
             
@@ -433,7 +511,11 @@ def init_socketio(app):
 
 def broadcast_device_alert(device_name, alert_type, message):
     """Broadcast device alert to all subscribers"""
-    if socketio and device_name in device_subscriptions:
+    with subscription_lock:
+        subscriber_count = len(device_subscriptions.get(device_name, ()))
+        room_id = _room_id(device_name)
+
+    if socketio and subscriber_count:
         alert_data = {
             'device': device_name,
             'alert_type': alert_type,
@@ -441,5 +523,4 @@ def broadcast_device_alert(device_name, alert_type, message):
             'timestamp': datetime.now().isoformat()
         }
         
-        for room_id in device_subscriptions[device_name]:
-            socketio.emit('device_alert', alert_data, room=room_id)
+        socketio.emit('device_alert', alert_data, room=room_id)

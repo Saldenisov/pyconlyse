@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { withCsrfToken } from '../api/csrfRequest';
 
 const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
 
@@ -86,12 +87,13 @@ const AndorNewtonClient = ({ cameraName, panelTitle = 'Andor Newton CCD' }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(cameraName)}/grabbing`, {
+      const url = `${API_BASE}/camera/${encodeURIComponent(cameraName)}/grabbing`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `HTTP ${response.status}`);
@@ -110,12 +112,13 @@ const AndorNewtonClient = ({ cameraName, panelTitle = 'Andor Newton CCD' }) => {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(cameraName)}/parameters`, {
+      const url = `${API_BASE}/camera/${encodeURIComponent(cameraName)}/parameters`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `HTTP ${response.status}`);

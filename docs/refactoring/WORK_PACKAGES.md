@@ -97,6 +97,38 @@ backend, and pure frontend coverage floors; and an executable local `--full`
 gate. This package does not operate Tango, hardware, PDU, motion, shutters, or
 deploy tooling.
 
+### T9: Conservative web security and WebSocket contracts
+
+Scope:
+
+- `web/backend/app.py`
+- `web/backend/auth.py`
+- `web/backend/websocket_handler.py`
+- `web/backend/device_api.py`
+- `web/start_production.py`
+- `tests/web/test_auth_security.py`
+- `tests/web/test_websocket_handler_contracts.py`
+- `web/frontend/src/api/csrfRequest.js`
+- `web/frontend/src/api/csrfRequest.test.js`
+- `web/frontend/src/CamerasClients.js`
+- `web/frontend/src/DAQmxClients.js`
+- `web/frontend/src/Dashboard.js`
+- `web/frontend/src/PumpProbeVD2.js`
+- `scripts/refactor/verify_refactor.py`
+- `tests/unit/test_refactor_tooling.py`
+- non-protected frontend callers changed by the frontend owner and required to
+  attach CSRF headers or establish authenticated WebSocket sessions
+- this refactoring documentation and manifest entries
+
+Deliver: production JWT and password-hash requirements; secure device auth,
+cookies, and CSRF; same-origin CORS by default with an explicit allowlist;
+explicit local-development auth/secure-cookie/CSRF opt-outs; browser CSRF
+helper that reads only the non-HttpOnly `csrf_access_token` cookie and never
+reads the HttpOnly access cookie; and authenticated WebSocket command,
+subscription, per-SID last-subscriber, and locking contracts. Provisioning,
+tests, and gate commands remain software-only; no hardware or deployment
+actions are included.
+
 ## Luna mechanical packages
 
 ### L1: DG645 extraction

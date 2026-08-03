@@ -128,6 +128,34 @@ allowed_globs = [
   "docs/refactoring/**",
 ]
 
+[packages.T9]
+agent = "terra"
+description = "Conservative web security and WebSocket contracts"
+allowed_paths = [
+  "web/backend/app.py",
+  "web/backend/auth.py",
+  "web/backend/websocket_handler.py",
+  "web/backend/device_api.py",
+  "web/start_production.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "web/frontend/src/api/csrfRequest.js",
+  "web/frontend/src/api/csrfRequest.test.js",
+  "web/frontend/src/CamerasClients.js",
+  "web/frontend/src/DAQmxClients.js",
+  "web/frontend/src/Dashboard.js",
+  "web/frontend/src/PumpProbeVD2.js",
+  "scripts/refactor/verify_refactor.py",
+  "tests/unit/test_refactor_tooling.py",
+]
+allowed_globs = [
+  "web/frontend/src/components/**",
+  "web/frontend/src/tabs/**",
+  "web/frontend/src/utils/**",
+  "tests/web/test_auth_security*.py",
+  "docs/refactoring/**",
+]
+
 [packages.L1]
 agent = "luna"
 description = "DG645 mechanical extraction"

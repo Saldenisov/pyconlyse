@@ -1,16 +1,8 @@
 // ITestPSUClient.js - Specialized client for iTest PSU devices
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { withCsrfToken } from '../api/csrfRequest';
 import './ITestPSUClient.css';
-
-const getCookie = (name) => {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  if (parts.length === 2) {
-    return parts.pop().split(';').shift();
-  }
-  return null;
-};
 
 async function fetchItestTabConfig(deviceName) {
   const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
@@ -171,10 +163,8 @@ const ITestPSUClient = ({ deviceName }) => {
     }
 
     if (deviceName) {
-      const token = getCookie('access_token_cookie');
       const socket = io('/', {
         withCredentials: true,
-        auth: { token }
       });
       socketRef.current = socket;
 
@@ -279,12 +269,13 @@ const ITestPSUClient = ({ deviceName }) => {
 
   const setSlotOutputState = async (slotId, state) => {
     try {
-      const response = await fetch(`/api/device/itest/${deviceName}/slot/${slotId}/output`, {
+      const url = `/api/device/itest/${deviceName}/slot/${slotId}/output`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ state })
-      });
+      }));
       
       if (response.ok) {
         await fetchSlotData();
@@ -303,12 +294,13 @@ const ITestPSUClient = ({ deviceName }) => {
         throw new Error(`Current ${value}A outside limits [${limits.min}, ${limits.max}]A`);
       }
       
-      const response = await fetch(`/api/device/itest/${deviceName}/slot/${slotId}/current`, {
+      const url = `/api/device/itest/${deviceName}/slot/${slotId}/current`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ value })
-      });
+      }));
       
       if (response.ok) {
         await fetchSlotData();

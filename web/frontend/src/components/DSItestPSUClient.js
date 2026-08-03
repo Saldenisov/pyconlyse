@@ -1,6 +1,7 @@
 // DSItestPSUClient.js - Multi-slot DS iTest PSU web client
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { withCsrfToken } from '../api/csrfRequest';
 import './DSItestPSUClient.css';
 
 const formatCurrent = (value, digits = 3) => {
@@ -45,11 +46,8 @@ const DSItestPSUClient = ({ deviceName }) => {
   }, [deviceName]);
 
   const initializeWebSocket = () => {
-    const token = getCookie('access_token_cookie');
-    
     socketRef.current = io('/', {
       withCredentials: true,
-      auth: { token: token }
     });
 
     socketRef.current.on('connect', () => {
@@ -72,13 +70,6 @@ const DSItestPSUClient = ({ deviceName }) => {
         setError(data.error);
       }
     });
-  };
-
-  const getCookie = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
   };
 
   const fetchSlotData = async () => {
@@ -117,12 +108,13 @@ const DSItestPSUClient = ({ deviceName }) => {
 
   const setSlotCurrent = async (slotId, currentValue) => {
     try {
-      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/current`, {
+      const url = `/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/current`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ current: currentValue })
-      });
+      }));
       
       if (response.ok) {
         const data = await response.json();
@@ -145,12 +137,13 @@ const DSItestPSUClient = ({ deviceName }) => {
 
   const setSlotState = async (slotId, enabled) => {
     try {
-      const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/state`, {
+      const url = `/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/state`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ enabled })
-      });
+      }));
       
       if (response.ok) {
         const data = await response.json();

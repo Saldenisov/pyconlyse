@@ -52,6 +52,11 @@ Owner: Terra, with Sol read-only review.
   metric.
 - **T8d — lifecycle contracts:** verify software-only init, polling, stop,
   timeout, and readback behavior without Tango server control or hardware I/O.
+- **T9 — conservative web security/WebSocket contracts:** require production
+  JWT and Werkzeug scrypt/pbkdf2-hashed users; enforce secure device auth,
+  cookies, CSRF, same-origin CORS (or explicit allowlist), and authenticated
+  WebSocket commands/subscriptions with per-SID locking. Local development may
+  opt out only explicitly. Browser code never reads the HttpOnly access cookie.
 
 ### Phase 1: DeviceServer stability foundation
 

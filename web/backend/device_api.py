@@ -1,14 +1,15 @@
 # device_api.py - Enhanced Tango Device API for Browser Clients
-from flask import Blueprint, jsonify, request
-import os
-import tango
 import json
-import traceback
-from datetime import datetime
+import math
+import os
 import threading
 import time
-import math
+import traceback
+from datetime import datetime
+
 import numpy as np
+import tango
+from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
 
 device_api = Blueprint("device_api", __name__)
@@ -578,7 +579,9 @@ def _query_bool(name, default=False):
 
 
 def _maybe_require_auth():
-    if _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", False):
+    if _env_bool("PYCONLYSE_PRODUCTION", False) or _env_bool(
+        "PYCONLYSE_ENFORCE_DEVICE_AUTH", False
+    ):
         verify_jwt_in_request()
 
 # Debug endpoint to test WebSocket monitoring

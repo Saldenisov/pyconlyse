@@ -1,6 +1,7 @@
 // DeviceControl.js - Generic device control component
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { withCsrfToken } from '../api/csrfRequest';
 import './DeviceControl.css';
 
 const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
@@ -55,13 +56,8 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
   }, [deviceName]);
 
   const initializeWebSocket = () => {
-    const token = getCookie('access_token_cookie');
-    
     socketRef.current = io('/', {
       withCredentials: true,
-      auth: {
-        token: token
-      }
     });
 
     socketRef.current.on('connect', () => {
@@ -102,13 +98,6 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
       console.error('WebSocket error:', data.message);
       setError(data.message);
     });
-  };
-
-  const getCookie = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
   };
 
   const fetchDeviceSummary = async () => {
@@ -223,14 +212,15 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
       if (!attributesLoaded) {
         await fetchAttributes();
       }
-      const response = await fetch(`/api/device/${deviceName}/attribute/${attributeName}`, {
+      const url = `/api/device/${deviceName}/attribute/${attributeName}`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({ value })
-      });
+      }));
       
       if (response.ok) {
         const data = await response.json();
@@ -257,14 +247,15 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
       if (!commandsLoaded) {
         await fetchCommands();
       }
-      const response = await fetch(`/api/device/${deviceName}/command/${commandName}`, {
+      const url = `/api/device/${deviceName}/command/${commandName}`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({ args })
-      });
+      }));
       
       if (response.ok) {
         const data = await response.json();
