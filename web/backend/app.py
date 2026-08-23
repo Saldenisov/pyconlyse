@@ -3,6 +3,9 @@ import secrets
 from pathlib import Path
 
 
+MINIMUM_JWT_SECRET_BYTES = 32
+
+
 def _load_project_env(path: str) -> None:
     if not path or not os.path.exists(path):
         return
@@ -43,6 +46,14 @@ def _env_origins(name, default):
     return origins
 
 
+def _validate_production_jwt_secret(jwt_secret):
+    """Reject short JWT signing secrets in production only."""
+    if len(jwt_secret.encode("utf-8")) < MINIMUM_JWT_SECRET_BYTES:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be at least 32 bytes in production"
+        )
+
+
 def configure_security(flask_app):
     """Configure security-sensitive web settings from the environment."""
     production = _env_bool("PYCONLYSE_PRODUCTION", False)
@@ -53,6 +64,8 @@ def configure_security(flask_app):
         if production:
             raise RuntimeError("JWT_SECRET_KEY must be set in production")
         jwt_secret = secrets.token_urlsafe(48)
+    elif production:
+        _validate_production_jwt_secret(jwt_secret)
 
     cookie_secure = _env_bool("PYCONLYSE_JWT_COOKIE_SECURE", production)
     if production and not cookie_secure:

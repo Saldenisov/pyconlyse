@@ -24,6 +24,25 @@ def _payload(percentages):
 
 
 class TestCoverageGate(unittest.TestCase):
+    def test_t10_security_modules_have_explicit_floors(self):
+        self.assertEqual(
+            {
+                "web/backend/app.py": 50.0,
+                "web/backend/auth.py": 80.0,
+                "web/backend/mutation_auth.py": 90.0,
+                "web/start_production.py": 50.0,
+            },
+            {
+                path: verify_coverage.MINIMUM_MODULE_COVERAGE.get(path)
+                for path in (
+                    "web/backend/app.py",
+                    "web/backend/auth.py",
+                    "web/backend/mutation_auth.py",
+                    "web/start_production.py",
+                )
+            },
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {

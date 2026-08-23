@@ -5,16 +5,18 @@ from __future__ import annotations
 import base64
 import json
 import time
-from typing import Any, Callable, Dict
+from typing import Any, Dict
 
 from flask import Blueprint, jsonify, request
 from tango import DeviceProxy
 
+from mutation_auth import install_mutation_auth
 from vd2_measurement_protocol import Vd2MeasurementProtocol, Vd2ProtocolError
 
 pump_probe_vd2_api = Blueprint(
     "pump_probe_vd2_api", __name__, url_prefix="/api/pump-probe-vd2"
 )
+install_mutation_auth(pump_probe_vd2_api)
 
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"

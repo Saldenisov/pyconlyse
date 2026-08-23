@@ -153,7 +153,7 @@ def test_production_cookie_auth_requires_csrf_for_device_mutations(monkeypatch):
     device_module = importlib.import_module("device_api")
     app = Flask(__name__)
     app.config.update(
-        JWT_SECRET_KEY="test-production-secret",
+        JWT_SECRET_KEY="0123456789abcdef0123456789abcdef",
         JWT_TOKEN_LOCATION=["cookies"],
         JWT_COOKIE_SECURE=True,
         JWT_COOKIE_HTTPONLY=True,
@@ -216,7 +216,7 @@ def test_production_security_configuration_uses_secure_cookie_csrf_and_cors(
     monkeypatch.delenv("PYCONLYSE_PRODUCTION", raising=False)
     app_module = importlib.import_module("app")
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-production-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "0123456789abcdef0123456789abcdef")
     monkeypatch.setenv(
         "PYCONLYSE_AUTH_USERS",
         f'{{"test-user": "{generate_password_hash("test-password")}"}}',
@@ -251,7 +251,7 @@ def test_production_security_configuration_rejects_disabled_csrf(monkeypatch):
     app_module = importlib.import_module("app")
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-production-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "0123456789abcdef0123456789abcdef")
     monkeypatch.setenv("PYCONLYSE_JWT_COOKIE_CSRF_PROTECT", "false")
 
     with pytest.raises(RuntimeError, match="PYCONLYSE_JWT_COOKIE_CSRF_PROTECT"):
@@ -263,7 +263,7 @@ def test_production_security_configuration_rejects_wildcard_cors(monkeypatch):
     app_module = importlib.import_module("app")
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-production-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "0123456789abcdef0123456789abcdef")
     monkeypatch.setenv("PYCONLYSE_CORS_ORIGINS", "*")
 
     with pytest.raises(RuntimeError, match="PYCONLYSE_CORS_ORIGINS"):
@@ -273,7 +273,7 @@ def test_production_security_configuration_rejects_wildcard_cors(monkeypatch):
 def test_production_startup_rejects_disabled_device_authentication():
     production_module = importlib.import_module("start_production")
     environment = {
-        "JWT_SECRET_KEY": "test-production-secret",
+        "JWT_SECRET_KEY": "0123456789abcdef0123456789abcdef",
         "PYCONLYSE_AUTH_USERS": (
             f'{{"test-user": "{generate_password_hash("test-password")}"}}'
         ),
@@ -287,7 +287,7 @@ def test_production_startup_rejects_disabled_device_authentication():
 def test_production_startup_rejects_disabled_csrf():
     production_module = importlib.import_module("start_production")
     environment = {
-        "JWT_SECRET_KEY": "test-production-secret",
+        "JWT_SECRET_KEY": "0123456789abcdef0123456789abcdef",
         "PYCONLYSE_AUTH_USERS": (
             f'{{"test-user": "{generate_password_hash("test-password")}"}}'
         ),
@@ -304,7 +304,7 @@ def test_production_security_configuration_rejects_plaintext_passwords(monkeypat
     app_module = importlib.import_module("app")
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
     monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
-    monkeypatch.setenv("JWT_SECRET_KEY", "test-production-secret")
+    monkeypatch.setenv("JWT_SECRET_KEY", "0123456789abcdef0123456789abcdef")
     monkeypatch.setenv("PYCONLYSE_AUTH_USERS", '{"test-user": "test-password"}')
 
     with pytest.raises(RuntimeError, match="password hashes"):

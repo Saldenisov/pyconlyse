@@ -4,6 +4,10 @@ import './css/PumpProbeVD2.css';
 
 const API_BASE = '/api/pump-probe-vd2';
 
+export function fetchVd2(url, options = {}) {
+  return fetch(url, withCsrfToken(url, options));
+}
+
 const TIME_RANGES = [
   '0.5 ns', '1 ns', '2 ns', '5 ns', '10 ns', '20 ns', '50 ns', '100 ns',
   '200 ns', '500 ns', '1 us', '2 us', '5 us', '10 us', '20 us', '50 us',
@@ -729,7 +733,8 @@ function PumpProbeVD2() {
   const runRequest = useCallback(async (path, body) => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}${path}`, {
+      const url = `${API_BASE}${path}`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -797,7 +802,8 @@ function PumpProbeVD2() {
   const initializeExperiment = useCallback(async () => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/initialize`, {
+      const url = `${API_BASE}/initialize`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -815,7 +821,8 @@ function PumpProbeVD2() {
   const deinitializeExperiment = useCallback(async () => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/deinitialize`, {
+      const url = `${API_BASE}/deinitialize`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -834,7 +841,8 @@ function PumpProbeVD2() {
   const controlRemoteEx = useCallback(async (action) => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/runtime/remoteex/${action}`, {
+      const url = `${API_BASE}/runtime/remoteex/${action}`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -857,7 +865,8 @@ function PumpProbeVD2() {
   const startProtocolPhase = useCallback(async (phase) => {
     setProtocolStarting(true);
     try {
-      const response = await fetch(`${API_BASE}/protocol/start`, {
+      const url = `${API_BASE}/protocol/start`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

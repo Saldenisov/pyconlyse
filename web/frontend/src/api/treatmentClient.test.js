@@ -18,6 +18,7 @@ const originalFetch = global.fetch;
 describe('treatmentClient request contracts', () => {
   beforeEach(() => {
     global.fetch = jest.fn();
+    document.cookie = 'csrf_access_token=; Max-Age=0; path=/';
   });
 
   afterEach(() => {
@@ -72,6 +73,30 @@ describe('treatmentClient request contracts', () => {
       })
     );
     expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('adds the current CSRF token to mutation requests without changing payload or headers', async () => {
+    document.cookie = 'csrf_access_token=current%20token; path=/';
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ success: true }),
+    });
+
+    await postTreatment('s1', '/api/treatment/save', { file_path: '/tmp/input.dat' });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/treatment/save',
+      expect.objectContaining({
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Treatment-Session-Id': 's1',
+          'X-CSRF-TOKEN': 'current token',
+        },
+        body: JSON.stringify({ file_path: '/tmp/input.dat' }),
+      })
+    );
   });
 
   test('converts failed responses and network failures to stable errors', async () => {
@@ -155,6 +180,7 @@ describe('treatmentClient request contracts', () => {
   });
 
   test('updateSelectionConfig posts payload and parses non-JSON responses', async () => {
+    document.cookie = 'csrf_access_token=selection-token; path=/';
     global.fetch.mockResolvedValueOnce({
       ok: true,
       status: 204,
@@ -165,6 +191,11 @@ describe('treatmentClient request contracts', () => {
       '/api/treatment/session/selection',
       expect.objectContaining({
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Treatment-Session-Id': 'sid',
+          'X-CSRF-TOKEN': 'selection-token',
+        },
         body: JSON.stringify({ mode: 'auto' }),
       })
     );

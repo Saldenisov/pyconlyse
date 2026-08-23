@@ -14,6 +14,7 @@ import numpy as np
 
 from flask import Blueprint, jsonify, request
 
+from mutation_auth import install_mutation_auth
 from pump_probe_v0_config import (
     ACCELERATOR_HZ,
     BACKGROUND_RANDOM_COUNTS,
@@ -52,6 +53,7 @@ from treatment_network_path import (
 
 
 pump_probe_v0_api = Blueprint("pump_probe_v0_api", __name__, url_prefix="/api/pump-probe-v0")
+install_mutation_auth(pump_probe_v0_api)
 
 
 def _clamp(value, low, high):

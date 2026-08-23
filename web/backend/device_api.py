@@ -11,8 +11,10 @@ import numpy as np
 import tango
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
+from mutation_auth import install_mutation_auth
 
 device_api = Blueprint("device_api", __name__)
+install_mutation_auth(device_api, protected_get_endpoints=("debug_monitor_device",))
 
 # Helper function to convert numpy arrays to lists for JSON serialization
 def make_json_safe(value):

@@ -44,6 +44,16 @@ npm run build
 | Paths | Local path, remote SMB path, missing folder, permission error |
 | Web security | Production env validation; Werkzeug scrypt/pbkdf2 user hashes; secure device/auth cookies; CSRF header/cookie pairing; same-origin CORS and explicit allowlist; explicit local-dev opt-outs |
 | WebSocket security | Access-cookie decode/authentication; command authorization; per-SID subscriptions; last-subscriber cleanup; lock/timeout behavior |
+| T10 startup/auth | 32-byte UTF-8 JWT secret; bind preflight before snapshot monitor; no process termination; bounded login rate limits; 429/`Retry-After`; mutation auth for device/treatment/VD2/V0 and debug-monitor GET |
+
+T10 backend coverage measurements and floors:
+
+| Module | Measured | Floor |
+|---|---:|---:|
+| `web/backend/app.py` | 55.0% | 50.0% |
+| `web/backend/auth.py` | 87.0% | 80.0% |
+| `web/backend/mutation_auth.py` | 100.0% | 90.0% |
+| `web/start_production.py` | 58.7% | 50.0% |
 
 ## Frontend checks
 
@@ -108,6 +118,41 @@ cd ../..
 conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
 ```
 
+T10 software-only focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py \
+  tests/web/test_login_rate_limit.py \
+  tests/web/test_production_startup_security.py \
+  tests/web/test_production_mutation_auth.py
+```
+
+T10 does not modify protected V0 frontend files. CSRF coverage for
+treatmentClient, VD2, and shared V0 helpers is provided by the focused frontend
+suites below.
+WebSocket command allowlists and CI/dependency reproducibility remain deferred.
+
+T10 focused frontend checks:
+
+```bash
+cd web/frontend
+npm test -- --watchAll=false --runInBand \
+  src/api/treatmentClient.test.js \
+  src/PumpProbeVD2.test.js \
+  src/pump-probe-v0/shared.test.js
+cd ../..
+```
+
+Protected `PumpProbeV0.js` direct unsafe POSTs remain outside T10; production
+workflows stay blocked until explicit V0-owner migration. T11 additionally
+requires roles, strict device/command/args allowlists, and one-shot approval
+bound to user/action/device/args/expiry; JWT alone is insufficient.
+
+Production blocker: `websocket_handler.py` forces threading while the launcher
+claims eventlet, and eventlet is not a direct dependency. Do not deploy until
+one server mode is selected, pinned, and tested.
+
 Baseline floors use statement coverage and apply only to named refactored
 lifecycle and backend modules:
 
@@ -127,6 +172,10 @@ lifecycle and backend modules:
 | `web/backend/treatment_service.py` | 80% |
 | `web/backend/vd2_measurement_protocol.py` | 80% |
 | `web/backend/websocket_handler.py` | 45% |
+| `web/backend/app.py` | 50.0% |
+| `web/backend/auth.py` | 80.0% |
+| `web/backend/mutation_auth.py` | 90.0% |
+| `web/start_production.py` | 50.0% |
 | Combined focused modules | 60% |
 
 Frontend Jest coverage is restricted to `src/api/csrfRequest.js`,

@@ -48,12 +48,55 @@ $env:PYCONLYSE_AUTH_USERS = '{"operator":"<paste-generated-scrypt-or-pbkdf2-hash
 $env:JWT_SECRET_KEY = '<long-random-production-secret>'
 ```
 
+Generate `JWT_SECRET_KEY` offline; do not handcraft, reuse, or leave a default
+secret:
+
+```bash
+conda run -n pyconlyse39 python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Validator currently checks minimum UTF-8 length only; it does not prove secret
+entropy.
+
 Production also keeps device authentication, secure cookies, and CSRF enabled.
 CORS remains same-origin unless an explicit allowlist is configured. For local
 development only, the local launcher may explicitly set the applicable
 enforcement variables to `false`; never copy those opt-outs into production.
 An optional CORS allowlist does not make cookie-plus-CSRF authentication valid
 cross-origin; the authenticated production UI remains same-origin.
+
+`JWT_SECRET_KEY` must contain at least 32 UTF-8 bytes. Startup validates the
+configured TCP bind before starting the device snapshot monitor. An occupied,
+invalid, unresolved, or otherwise unbindable `PYCONLYSE_WEB_HOST` /
+`PYCONLYSE_WEB_PORT` stops startup and never kills or terminates an existing
+process.
+
+Login throttling defaults to 5 failed attempts per IP in 900 seconds, with a
+maximum of 10,000 process-local IP keys. Exhausted limits return HTTP 429 and a
+`Retry-After` header. Override only with bounded values:
+
+- `PYCONLYSE_LOGIN_RATE_LIMIT_ATTEMPTS`: 1–1000.
+- `PYCONLYSE_LOGIN_RATE_LIMIT_WINDOW_SECONDS`: 1–86400.
+- `PYCONLYSE_LOGIN_RATE_LIMIT_MAX_KEYS`: 1–100000.
+
+Limiter state is single-process: restart clears it, multiple workers do not
+share it, NAT may combine users under one address, and `request.remote_addr`
+must only be trusted behind a separately reviewed proxy configuration.
+
+Production and explicit local auth enforcement cover all non-safe methods in
+device, treatment, VD2, and V0 APIs, including device debug-monitor GET because
+it starts monitoring work. `treatmentClient`, VD2 callers, and shared V0
+helpers attach CSRF headers.
+
+Protected `PumpProbeV0.js` direct unsafe POSTs remain outside T10 and currently
+include `/api/server/control` (line 283), `/api/pump-probe-v0/data/folder`
+(lines 338 and 366), and `/api/pump-probe-v0/data/load` (line 387). Production
+workflows remain deploy-blocked until an explicit V0 owner migrates them.
+
+T11 deployment blocker: hardware mutations require roles, strict device,
+command, and argument allowlists, plus one-shot human approval bound to user,
+action, device, arguments, and expiry. JWT authentication alone is
+insufficient. Eventlet/threading mode selection remains a separate blocker.
 
 ## Local Verification
 
@@ -101,6 +144,30 @@ These commands must not start Tango, connect to devices, issue WebSocket
 hardware commands, or deploy/restart services.
 
 The verification tool has no SSH, Tango, PDU, motion, shutter, or power code.
+
+T10 focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py \
+  tests/web/test_login_rate_limit.py \
+  tests/web/test_production_startup_security.py \
+  tests/web/test_production_mutation_auth.py
+```
+
+Coverage gate also requires `.coveragerc`, `scripts/refactor/verify_coverage.py`,
+and `tests/unit/test_refactor_coverage.py`; current T10 measurements/floors
+are app 55.0/50.0%, auth 87.0/80.0%, mutation_auth 100.0/90.0%, and
+start_production 58.7/50.0%.
+
+WebSocket command allowlists and CI dependency changes are deferred; these
+checks do not validate either item. The remaining protected V0 direct POSTs
+also remain outside this focused command.
+
+Current production blocker: `web/backend/websocket_handler.py` forces
+`async_mode='threading'`, while `start_production.py` claims eventlet mode;
+`eventlet` is not a direct project dependency. Do not deploy T10 until one
+server mode is selected, pinned, and covered by software-only tests.
 
 ## Deploy Exact Commit
 

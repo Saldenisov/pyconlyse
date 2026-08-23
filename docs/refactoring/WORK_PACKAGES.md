@@ -129,6 +129,78 @@ subscription, per-SID last-subscriber, and locking contracts. Provisioning,
 tests, and gate commands remain software-only; no hardware or deployment
 actions are included.
 
+### T10: Production startup and mutation authentication
+
+Scope:
+
+- `web/backend/app.py`
+- `web/backend/auth.py`
+- `web/backend/device_api.py`
+- `web/backend/treatment_api.py`
+- `web/backend/pump_probe_vd2_api.py`
+- `web/backend/pump_probe_v0_api.py`
+- `web/backend/mutation_auth.py`
+- `web/start_production.py`
+- `tests/web/test_auth_security.py`
+- `tests/web/test_login_rate_limit.py`
+- `tests/web/test_production_startup_security.py`
+- `tests/web/test_production_mutation_auth.py`
+- `web/frontend/src/api/treatmentClient.js`
+- `web/frontend/src/api/treatmentClient.test.js`
+- `web/frontend/src/PumpProbeVD2.js`
+- `web/frontend/src/PumpProbeVD2.test.js`
+- `web/frontend/src/pump-probe-v0/shared.js`
+- `web/frontend/src/pump-probe-v0/shared.test.js`
+- this refactoring documentation and manifest entries
+
+Deliver:
+
+- Production JWT secret validation: at least 32 UTF-8 bytes.
+- Startup bind/port preflight before snapshot-monitor startup; occupied or
+  invalid bind fails closed and never terminates unrelated processes.
+- Login throttling defaults to 5 failures per 900 seconds, 10,000 process-local
+  IP keys, HTTP 429, and `Retry-After`.
+- Validate `PYCONLYSE_LOGIN_RATE_LIMIT_ATTEMPTS` (1–1000),
+  `PYCONLYSE_LOGIN_RATE_LIMIT_WINDOW_SECONDS` (1–86400), and
+  `PYCONLYSE_LOGIN_RATE_LIMIT_MAX_KEYS` (1–100000).
+- Require authentication for every non-safe method in device, treatment, VD2,
+  and V0 APIs, plus device debug-monitor GET, in production and when local
+  enforcement is explicitly enabled.
+- Preserve local-development auth opt-out when enforcement is explicitly
+  disabled; production remains fail-closed.
+- Ensure `treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF
+  headers. Protected V0 frontend files remain outside this package.
+- Coverage measurement from 356 passed, 8 skipped software-only tests:
+
+  | Module | Measured | Floor | Headroom |
+  |---|---:|---:|---:|
+  | `web/backend/app.py` | 55.0% | 50.0% | 5.0 pp |
+  | `web/backend/auth.py` | 87.0% | 80.0% | 7.0 pp |
+  | `web/backend/mutation_auth.py` | 100.0% | 90.0% | 10.0 pp |
+  | `web/start_production.py` | 58.7% | 50.0% | 8.7 pp |
+
+  T10 full gate/lane uses `.coveragerc`, `verify_coverage.py`, and the full
+  software-only pytest lane; no hardware or deployment actions.
+
+Deferred:
+
+- WebSocket command allowlist and role/RBAC policy.
+- CI workflow and adding pytest/coverage/eventlet to locked project dependencies.
+- Production server mode remains blocked: `websocket_handler.py` forces
+  `async_mode='threading'`, `start_production.py` claims eventlet, and eventlet
+  is not a direct dependency. Select, pin, and test one mode before deployment.
+- Cross-process login throttling, restart persistence, NAT aggregation policy,
+  and trusted-proxy client-IP handling. Current limiter is single-process and
+  uses `request.remote_addr`; multiple workers/restarts reset state and NAT can
+  aggregate clients.
+
+### T11: First-tomorrow hardware mutation gate
+
+Before deployment, add roles plus strict device, command, and argument
+allowlists, and require one-shot human approval bound to user, action, device,
+arguments, and expiry. JWT authentication alone is insufficient for hardware
+mutations. Eventlet/threading mode mismatch remains a separate blocker.
+
 ## Luna mechanical packages
 
 ### L1: DG645 extraction

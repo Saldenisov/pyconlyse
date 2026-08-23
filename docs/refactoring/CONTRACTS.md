@@ -49,6 +49,24 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Local development may disable authentication, secure-cookie, and CSRF checks
   only when the local launcher explicitly sets the applicable enforcement
   variables to `false`; those settings are not production defaults.
+- Production `JWT_SECRET_KEY` must contain at least 32 UTF-8 bytes. Startup must
+  reject an occupied, invalid, or unbindable `PYCONLYSE_WEB_HOST` /
+  `PYCONLYSE_WEB_PORT` before starting the device snapshot monitor; it must not
+  terminate an existing process to claim the port.
+- Login throttling defaults to 5 failures per 900 seconds and 10,000
+  process-local IP keys. Limits are configured by
+  `PYCONLYSE_LOGIN_RATE_LIMIT_ATTEMPTS`,
+  `PYCONLYSE_LOGIN_RATE_LIMIT_WINDOW_SECONDS`, and
+  `PYCONLYSE_LOGIN_RATE_LIMIT_MAX_KEYS`; exhausted limits return HTTP 429 and
+  `Retry-After`. State is single-process, resets on restart, may aggregate
+  clients behind NAT, and trusts `request.remote_addr` unless a reviewed proxy
+  policy is added.
+- In production, and with explicit local opt-in, every non-safe method in the
+  device, treatment, VD2, and V0 APIs requires JWT authentication. The device
+  debug-monitor GET is also protected because it starts monitoring work.
+- `treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers to
+  mutation requests. Protected V0 frontend files are not modified by this
+  package.
 - Browser requests send `X-CSRF-TOKEN` from the separate, non-HttpOnly
   `csrf_access_token` cookie. Browser code never reads the HttpOnly access-token
   cookie.
@@ -97,3 +115,12 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Coverage gates measure named refactored lifecycle/backend Python modules and
   pure frontend request/classification modules, then enforce committed
   baselines. Whole-tree legacy coverage is informational only.
+- WebSocket command allowlists and CI/dependency reproducibility are deferred
+  contracts; they require separate approved packages.
+- Production server mode is unresolved: `websocket_handler.py` forces
+  `async_mode='threading'`, while the launcher claims eventlet and eventlet is
+  not a direct dependency. Deployment is blocked until one mode is selected,
+  pinned, and covered by software-only tests.
+- Hardware mutations require roles, strict device/command/argument allowlists,
+  and one-shot human approval bound to user, action, device, arguments, and
+  expiry. JWT authentication alone is insufficient.

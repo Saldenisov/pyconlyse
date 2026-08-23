@@ -1,3 +1,5 @@
+import { withCsrfToken } from './csrfRequest';
+
 const DEFAULT_TIMEOUT_MS = 30000;
 const LONG_TREATMENT_TIMEOUT_MS = 120000;
 
@@ -30,7 +32,10 @@ async function requestTreatment(url, options = {}, timeoutMs = DEFAULT_TIMEOUT_M
   const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { ...options, signal: controller.signal });
+    const response = await fetch(url, withCsrfToken(url, {
+      ...options,
+      signal: controller.signal,
+    }));
     return parseResponse(response);
   } catch (error) {
     if (error.name === 'AbortError') {

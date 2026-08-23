@@ -15,6 +15,10 @@ include =
     web/backend/treatment_service.py
     web/backend/vd2_measurement_protocol.py
     web/backend/websocket_handler.py
+    web/backend/app.py
+    web/backend/auth.py
+    web/backend/mutation_auth.py
+    web/start_production.py
 
 [report]
 precision = 1

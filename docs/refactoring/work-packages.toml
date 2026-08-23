@@ -156,6 +156,34 @@ allowed_globs = [
   "docs/refactoring/**",
 ]
 
+[packages.T10]
+agent = "terra"
+description = "Production startup, mutation authentication, and login throttling"
+allowed_paths = [
+  "web/backend/app.py",
+  "web/backend/auth.py",
+  "web/backend/device_api.py",
+  "web/backend/treatment_api.py",
+  "web/backend/pump_probe_vd2_api.py",
+  "web/backend/pump_probe_v0_api.py",
+  "web/backend/mutation_auth.py",
+  "web/start_production.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_login_rate_limit.py",
+  "tests/web/test_production_startup_security.py",
+  "tests/web/test_production_mutation_auth.py",
+  ".coveragerc",
+  "scripts/refactor/verify_coverage.py",
+  "tests/unit/test_refactor_coverage.py",
+  "web/frontend/src/api/treatmentClient.js",
+  "web/frontend/src/api/treatmentClient.test.js",
+  "web/frontend/src/PumpProbeVD2.js",
+  "web/frontend/src/PumpProbeVD2.test.js",
+  "web/frontend/src/pump-probe-v0/shared.js",
+  "web/frontend/src/pump-probe-v0/shared.test.js",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.L1]
 agent = "luna"
 description = "DG645 mechanical extraction"
