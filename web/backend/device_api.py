@@ -9,6 +9,7 @@ from datetime import datetime
 
 import numpy as np
 import tango
+import tango_gateway
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
 from hardware_authorization import (
@@ -756,7 +757,9 @@ class DeviceManager:
         with device_cache_lock:
             if device_name not in device_cache:
                 try:
-                    device_cache[device_name] = tango.DeviceProxy(_device_proxy_target(device_name))
+                    device_cache[device_name] = tango_gateway.create_device_proxy(
+                        _device_proxy_target(device_name)
+                    )
                 except Exception as e:
                     raise Exception(f"Could not connect to device {device_name}: {str(e)}")
             return device_cache[device_name]
@@ -790,7 +793,7 @@ class DeviceManager:
     @staticmethod
     def get_device_properties(device_name):
         properties = {}
-        db = tango.Database()
+        db = tango_gateway.create_database()
         prop_list = db.get_device_property_list(device_name, '*')
         for prop_name in prop_list:
             try:
@@ -841,13 +844,13 @@ class DeviceManager:
 
 
 def _get_starter_devices():
-    db = tango.Database()
+    db = tango_gateway.create_database()
     devices = list(db.get_device_exported("*"))
     return [device_name for device_name in devices if str(device_name).startswith("tango/admin/")]
 
 
 def _get_starter_server_lists(starter_name):
-    starter = tango.DeviceProxy(starter_name)
+    starter = tango_gateway.create_device_proxy(starter_name)
     # True includes every server managed by this Starter, not only controlled ones.
     running = set(starter.command_inout('DevGetRunningServers', True))
     stopped = set(starter.command_inout('DevGetStopServers', True))
@@ -875,7 +878,7 @@ def _find_starter_for_server(server_name, allow_db_host_fallback=False):
 
     if allow_db_host_fallback:
         try:
-            server_info = tango.Database().get_server_info(server_name)
+            server_info = tango_gateway.create_database().get_server_info(server_name)
             host = str(getattr(server_info, "host", "")).strip().lower()
             if host:
                 short_host = host.split(".", 1)[0]
@@ -902,7 +905,7 @@ def _is_already_running_error(exc):
 
 
 def _resolve_server_name(device_name):
-    db = tango.Database()
+    db = tango_gateway.create_database()
     try:
         return DeviceManager.get_device(device_name).info().server_id
     except Exception:
@@ -1054,7 +1057,7 @@ def get_server_diagnostics(server_name):
 
 def _collect_device_list(probe_state, include_dserver, include_admin):
     """Read one coherent device snapshot from Tango."""
-    db = tango.Database()
+    db = tango_gateway.create_database()
     devices = db.get_device_exported("*")
     device_list = []
 
@@ -1626,7 +1629,7 @@ def get_ds_itest_psu_slots(device_name):
 def get_ds_itest_psu_tab_config(device_name):
     """Get tab configuration from Tango DB property 'tab_config'"""
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         
         # Default configuration
         default_config = {
@@ -2196,7 +2199,7 @@ def camera_capture(device_name):
 def list_daqmx_devices():
     """List DAQmx-related Tango devices (ZMQ reader and PSP supervision readers)."""
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         seen = set()
         devices = []
         probe_state = _query_bool('probe_state', True)
@@ -2238,7 +2241,7 @@ def list_daqmx_devices():
 def list_psp_devices():
     """List DS_PSP devices available in Tango DB."""
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         probe_state = _query_bool('probe_state', True)
         names = []
         try:
@@ -2488,7 +2491,7 @@ def write_daqmx_channel(device_name):
 def list_cameras():
     """Get list of all available camera devices - fast query from Tango DB"""
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         
         # Query Tango DB for camera device classes directly (much faster!)
         camera_classes = ['DS_Basler_camera', 'DS_ANDOR_CCD', 'DS_AVANTES_CCD']
@@ -2501,7 +2504,7 @@ def list_cameras():
                 
                 for device_name in device_list:
                     try:
-                        device = tango.DeviceProxy(device_name)
+                        device = tango_gateway.create_device_proxy(device_name)
                         state = str(device.state())
                         
                         camera_info = {
@@ -2743,7 +2746,7 @@ def get_camera_image(device_name):
 def list_spectrographs():
     """Get list of Andor spectrograph devices directly from Tango DB."""
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         spectro_classes = ['DS_ANDOR_SPECTROGRAPH']
         spectrograph_list = []
 
@@ -2752,7 +2755,7 @@ def list_spectrographs():
                 device_list = db.get_device_name('*', dev_class)
                 for device_name in device_list:
                     try:
-                        device = tango.DeviceProxy(device_name)
+                        device = tango_gateway.create_device_proxy(device_name)
                         info = {
                             'name': device_name,
                             'state': str(device.state()),

@@ -157,6 +157,22 @@ Deliver:
   frontend files in this package. No Tango request or hardware action occurs in
   verification.
 
+### T14: Device API Tango construction boundary
+
+Scope is limited to `[packages.T14]` in `work-packages.toml`.
+
+Deliver:
+
+- Keep public endpoints and `DeviceManager` cache/retry behavior unchanged,
+  while moving every `Database()` and `DeviceProxy()` construction in
+  `device_api.py` behind `tango_gateway`.
+- Keep Tango value types such as `AttrWriteType` in the API module where they
+  are part of response interpretation; this package moves construction only.
+- Characterize source-level construction ownership and reuse the existing
+  device API smoke/PSP contracts under network denial.
+- Do not split routes, change device commands, call Tango, or alter
+  DeviceServer/frontend/deployment code.
+
 ### T9: Conservative web security and WebSocket contracts
 
 Scope:
@@ -336,7 +352,7 @@ occurs after an explicit runtime check. An explicitly supplied
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
 one warning. Current full Python deny-network gate passed tooling 39; Python
-586 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
+587 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

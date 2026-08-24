@@ -1,5 +1,6 @@
 """Software-only contracts for the lazy Tango construction gateway."""
 
+import ast
 import importlib
 import sys
 import types
@@ -71,3 +72,24 @@ def test_gateway_preserves_starter_healthy_state_semantics(monkeypatch):
     assert gateway.is_healthy_state(FakeTango.DevState.MOVING) is True
     assert gateway.is_healthy_state(FakeTango.DevState.STANDBY) is True
     assert gateway.is_healthy_state(FakeTango.DevState.FAULT) is False
+
+
+def test_device_api_delegates_every_tango_constructor_to_gateway():
+    source_path = BACKEND / "device_api.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    constructor_calls = []
+    gateway_calls = set()
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+            continue
+        value = node.func.value
+        if isinstance(value, ast.Name) and value.id == "tango":
+            if node.func.attr in {"Database", "DeviceProxy"}:
+                constructor_calls.append(node.func.attr)
+        if isinstance(value, ast.Name) and value.id == "tango_gateway":
+            gateway_calls.add(node.func.attr)
+
+    assert constructor_calls == []
+    assert {"create_database", "create_device_proxy"} <= gateway_calls

@@ -123,7 +123,7 @@ def _make_client(monkeypatch):
     fake_device = FakePSPDevice()
     fake_db = FakeDatabase()
 
-    monkeypatch.setattr(device_api_module.tango, "Database", lambda: fake_db)
+    monkeypatch.setattr(device_api_module.tango_gateway, "create_database", lambda: fake_db)
     monkeypatch.setattr(device_api_module.DeviceManager, "get_device", lambda _name: fake_device)
 
     app = Flask(__name__)

@@ -53,6 +53,9 @@ Refactoring must preserve these contracts unless a separately approved migration
   database/proxy construction. Importing either boundary must not construct a
   database or proxy; live operations remain request-driven and retain their
   existing cache and error semantics.
+- `web/backend/device_api.py` uses the same gateway for all database/proxy
+  construction. Its current cache, retry, payload, command, and Tango value
+  type semantics are unchanged by that mechanical boundary step.
 
 ### Web security and WebSocket
 

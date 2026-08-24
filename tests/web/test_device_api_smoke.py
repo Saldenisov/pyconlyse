@@ -286,14 +286,14 @@ def _make_client(monkeypatch):
         return devices[name]
 
     monkeypatch.setattr(
-        device_api_module.tango,
-        "DeviceProxy",
+        device_api_module.tango_gateway,
+        "create_device_proxy",
         fake_proxy,
         raising=False,
     )
     monkeypatch.setattr(
-        device_api_module.tango,
-        "Database",
+        device_api_module.tango_gateway,
+        "create_database",
         lambda: fake_db,
         raising=False,
     )

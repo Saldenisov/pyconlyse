@@ -222,6 +222,17 @@ allowed_paths = [
 ]
 allowed_globs = ["docs/refactoring/**"]
 
+[packages.T14]
+agent = "terra"
+description = "Device API Tango construction boundary"
+allowed_paths = [
+  "web/backend/device_api.py",
+  "tests/web/test_device_api_smoke.py",
+  "tests/web/test_device_api_psp.py",
+  "tests/web/test_tango_gateway.py",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.T10]
 agent = "terra"
 description = "Production startup, mutation authentication, and login throttling"
