@@ -281,3 +281,16 @@ allowed_paths = [
   "web/test_standa_motors.html",
 ]
 allowed_globs = ["docs/refactoring/**"]
+
+[packages.B]
+agent = "terra"
+description = "Runtime and dependency reproducibility"
+allowed_paths = [
+  "pyproject.toml",
+  "poetry.lock",
+  "web/start_production.py",
+  "web/backend/websocket_handler.py",
+  "tests/web/test_production_startup_security.py",
+  "web/PRODUCTION_DEPLOYMENT.md",
+]
+allowed_globs = ["docs/refactoring/**"]

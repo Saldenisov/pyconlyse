@@ -185,10 +185,9 @@ Deliver:
 
 Deferred:
 
-- CI workflow and adding pytest/coverage/eventlet to locked project dependencies.
-- Production server mode remains blocked: `websocket_handler.py` forces
-  `async_mode='threading'`, `start_production.py` claims eventlet, and eventlet
-  is not a direct dependency. Select, pin, and test one mode before deployment.
+- CI workflow remains deferred pending reproducible native-dependency bootstrap
+  and equivalent OS-level network denial. Socket.IO threading mode is selected
+  and pinned; select and load-validate a supported server/runtime for Windows.
 - Cross-process login throttling, restart persistence, NAT aggregation policy,
   and trusted-proxy client-IP handling. Current limiter is single-process and
   uses `request.remote_addr`; multiple workers/restarts reset state and NAT can
@@ -199,7 +198,8 @@ Deferred:
 Before deployment, add roles plus strict device, command, and argument
 allowlists, and require one-shot human approval bound to user, action, device,
 arguments, and expiry. JWT authentication alone is insufficient for hardware
-mutations. Eventlet/threading mode mismatch remains a separate blocker.
+mutations. Supported-server selection and Windows load validation remain
+separate deployment blockers.
 
 ## Luna mechanical packages
 
@@ -264,8 +264,8 @@ opt-outs remain available only when explicitly configured. Return semantics are
 401 unauthenticated, 403 policy denial, 428 missing approval, and 409 invalid
 or replayed approval. Approval and policy directories must be outside the
 repository with restrictive ACLs. V0 safe-read behavior remains covered; the
-protected V0 UI remains deploy-blocked. Eventlet/threading selection is a
-separate deployment blocker.
+protected V0 UI remains deploy-blocked. Supported-server selection and Windows
+load validation remain separate deployment blockers.
 
 T11 also owns the `routes.py` import-safety regression. Importing web routes
 must not construct a Tango `Database`, create a `DeviceProxy`, set a remote
@@ -308,6 +308,17 @@ gate; it must never restore JWT-only mutation access. This package prescribes
 no equipment, Tango, PDU, motion, shutter, power, deploy, or restart commands.
 
 ## Sol review packages
+
+### Package B: Runtime and dependency reproducibility
+
+Scope is limited to exact paths listed under `[packages.B]` in
+`work-packages.toml`. It selects constant Socket.IO threading mode, pins
+simple-websocket and direct development test/coverage dependencies, and
+documents the controlled single-process Werkzeug launcher limitation. Official
+threaded production guidance, Unix-only Gunicorn constraints, Windows server
+selection, and load-validation blockers remain explicit. CI is deferred until
+native/proprietary dependencies, conda assumptions, and equivalent OS network
+denial are reproducibly bootstrapped.
 
 ### Package A: Universal frontend approval transport
 

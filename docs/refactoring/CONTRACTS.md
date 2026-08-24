@@ -153,10 +153,26 @@ Refactoring must preserve these contracts unless a separately approved migration
 - WebSocket commands use exact device/command/argument allowlists and
   authenticated per-client authorization. CI/dependency reproducibility
   remains deferred and requires a separate approved package.
-- Production server mode is unresolved: `websocket_handler.py` forces
-  `async_mode='threading'`, while the launcher claims eventlet and eventlet is
-  not a direct dependency. Deployment is blocked until one mode is selected,
-  pinned, and covered by software-only tests.
+- Production Socket.IO mode is selected and pinned as constant
+  `async_mode='threading'`; deployment remains blocked pending selection and
+  load validation of a supported server/runtime for the Windows target.
+- Package B selects Socket.IO `async_mode='threading'` as a constant and pins
+  direct `simple-websocket==1.1.0`; direct development dependencies pin
+  `pytest==8.4.2` and `coverage==7.10.7`. The lock already contained
+  `simple-websocket`; the update adds direct pins, their transitive packages,
+  coverage, pytest, `iniconfig`, and resolver metadata, with no existing
+  package-version upgrades.
+- The launcher applies production security but uses a controlled single-process
+  Werkzeug runner and is not supported as production deployment. Official
+  Flask-SocketIO guidance treats Werkzeug as development-only; its supported
+  threaded example uses Gunicorn with one worker, threads, and
+  simple-websocket. Gunicorn is Unix-only, so Windows requires a supported
+  server selection and load validation. Configuration mismatch is resolved, but
+  deployment remains blocked pending runtime validation.
+- CI workflow remains deferred: proprietary/native PyTango, PyQt, pypylon, and
+  Windows dependencies, named conda-environment assumptions, and Mac-only
+  `sandbox-exec` network denial require a reproducible hosted bootstrap and
+  equivalent OS-level network isolation first.
 - Hardware mutations require roles, strict device/command/argument allowlists,
   and one-shot human approval bound to user, action, device, arguments, and
   expiry. JWT authentication alone is insufficient.

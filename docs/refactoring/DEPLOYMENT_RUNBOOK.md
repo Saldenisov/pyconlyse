@@ -119,7 +119,26 @@ Shared V0 nonhardware POSTs (`/config`, `/hardware-config`,
 T11 deployment blocker: hardware mutations require roles, strict device,
 command, and argument allowlists, plus one-shot human approval bound to user,
 action, device, arguments, and expiry. JWT authentication alone is
-insufficient. Eventlet/threading mode selection remains a separate blocker.
+insufficient. Supported-server selection and Windows-target load validation
+remain deployment blockers.
+
+Package B selects constant
+`async_mode='threading'` and adds direct `simple-websocket==1.1.0`; direct
+development pins are `pytest==8.4.2` and `coverage==7.10.7`. The lock already
+contained simple-websocket; the update adds direct pins, their transitive
+packages, coverage, pytest, `iniconfig`, and resolver metadata without
+upgrading existing package versions.
+The launcher still uses a controlled single-process Werkzeug runner: it applies
+production security but is not a supported production deployment. Flask-SocketIO
+guidance treats Werkzeug as development-only; the supported threaded example
+uses Gunicorn one worker plus threads and simple-websocket. Gunicorn is
+Unix-only, so Windows needs supported-server selection and load validation.
+Deployment remains blocked pending that validation.
+
+No CI workflow is added yet. Native/proprietary PyTango, PyQt, pypylon, and
+Windows dependencies, named conda assumptions, and Mac-only `sandbox-exec`
+network denial require a reproducible hosted bootstrap and equivalent OS-level
+network isolation before CI can be trusted.
 
 T11 authorization provisioning is software-only and fail-closed. Policy JSON,
 approval JSON, and consumed-marker directories must be outside the repository
@@ -232,8 +251,8 @@ T11 covers HTTP, WebSocket, device, VD2, and backend V0 mutation gates. The
 protected V0 UI files remain unchanged and cannot yet attach approval nonces;
 production V0 UI workflows therefore remain deploy-blocked. Background
 monitoring and VD2 preview are read-only polling paths; V0 active polling is
-available only for an already-authorized run/realtime sequence. Eventlet versus
-threading remains a separate deployment blocker.
+available only for an already-authorized run/realtime sequence. Supported
+server selection and Windows load validation remain deployment blockers.
 
 Fail-closed workflow blockers: enforced iTest increment/decrement derived-value
 actions return 403 until exact ordered plans are represented; iTest set remains
@@ -250,10 +269,9 @@ write plan. Restart approval never authorizes an implicit `HardKillServer`;
 server action and trusted Starter target must match explicitly. VD2 preview is
 a passive read-frame operation.
 
-Current production blocker: `web/backend/websocket_handler.py` forces
-`async_mode='threading'`, while `start_production.py` claims eventlet mode;
-`eventlet` is not a direct project dependency. Do not deploy T10 until one
-server mode is selected, pinned, and covered by software-only tests.
+Current production blocker: Socket.IO threading mode is selected and pinned,
+but the controlled Werkzeug runner is not supported production deployment.
+Select and load-validate a supported server/runtime for the Windows target.
 
 ## Deploy Exact Commit
 

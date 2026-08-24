@@ -171,9 +171,8 @@ one-shot approval bound to user/action/device/args/expiry; JWT alone is
 insufficient. Protected `PumpProbeV0.js` remains untouched and cannot attach
 approval nonces, so its production UI workflows stay blocked.
 
-Production blocker: `websocket_handler.py` forces threading while the launcher
-claims eventlet, and eventlet is not a direct dependency. Do not deploy until
-one server mode is selected, pinned, and tested.
+Production blocker: Socket.IO threading mode is selected and pinned, but a
+supported server/runtime must still be selected and load-validated for Windows.
 
 ## T11 hardware authorization
 
@@ -285,6 +284,20 @@ Frontend Jest coverage is restricted to `src/api/csrfRequest.js`,
 `src/api/treatmentClient.js`, and `src/utils/deviceFamily.js`. The full gate
 requires 90% statements, 75% branches, 90% functions, and 90% lines across
 those named modules.
+
+## Package B runtime and reproducibility
+
+Focused evidence: 31 tests passed; `poetry check --lock`, dependency compile,
+Ruff, and diff checks passed. Socket.IO threading mode is constant and uses
+direct `simple-websocket==1.1.0`; direct development pins are `pytest==8.4.2`
+and `coverage==7.10.7`. The lock already contained simple-websocket; the
+update adds direct pins, their transitive packages, coverage, pytest,
+`iniconfig`, and resolver metadata without existing package-version upgrades.
+Production deployment remains
+blocked until a supported server/runtime is selected and load-validated for
+the Windows target; the secured single-process Werkzeug launcher is not that
+deployment. CI remains deferred pending reproducible native-dependency
+bootstrap and OS-equivalent network denial.
 
 ## Failure policy
 

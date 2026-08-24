@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
 """
-PYCONLYSE Web Server - Production Startup Script
+PYCONLYSE Web Server - Controlled Startup Script
 
-This script starts the PYCONLYSE web server in production mode.
-It uses eventlet for proper Socket.IO WebSocket support.
-
-Requirements:
-    pip install eventlet
+This script starts the web server with production security configuration.
+It uses Flask-SocketIO's threading mode with simple-websocket support, backed
+by Werkzeug as a controlled single-process runner. It is not a supported
+production deployment server.
 
 Usage:
     python start_production.py
@@ -18,8 +17,10 @@ import socket
 import sys
 from pathlib import Path
 
-
 MINIMUM_JWT_SECRET_BYTES = 32
+SOCKETIO_ASYNC_MODE = "threading"
+SOCKETIO_WEBSOCKET_DEPENDENCY = "simple-websocket"
+SERVER_RUNTIME_CLASS = "controlled single-process Werkzeug runner"
 
 
 def _validate_production_jwt_secret(jwt_secret):
@@ -102,12 +103,6 @@ def run_production_server(socketio, app, web_host, web_port):
     except KeyboardInterrupt:
         print("\n\nServer stopped by user.")
         raise
-    except ImportError as exc:
-        if "eventlet" in str(exc):
-            print("\n\nERROR: eventlet is not installed!")
-            print("Please install it with: pip install eventlet")
-            print("\neventlet is required for Socket.IO WebSocket support in production.")
-        raise
     except Exception as exc:
         print(f"\nError starting server: {exc}")
         print("\nTroubleshooting:")
@@ -115,7 +110,7 @@ def run_production_server(socketio, app, web_host, web_port):
         print("2. Verify IP address 10.20.30.202 is correct")
         print("3. Ensure Tango database is accessible")
         print("4. Check devices are registered and running")
-        print("5. Ensure eventlet is installed: pip install eventlet")
+        print("5. Verify Flask-SocketIO and simple-websocket are installed")
         raise
 
 
@@ -140,20 +135,25 @@ def main():
     if not web_host:
         raise RuntimeError("PYCONLYSE_WEB_HOST must be non-empty")
     web_port = parse_web_port(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
+    tango_host = os.environ.get(
+        'TANGO_HOST', os.environ.get('PYCONLYSE_TANGO_HOST', '10.20.30.202:10000')
+    )
+    device_auth_enforced = os.environ.get('PYCONLYSE_ENFORCE_DEVICE_AUTH')
     print("=" * 60)
-    print("PYCONLYSE Web Server - PRODUCTION MODE")
+    print("PYCONLYSE Web Server - CONTROLLED SINGLE-PROCESS MODE")
     print("=" * 60)
     print(f"Server starting on: http://{web_host}:{web_port}")
     print(f"Main page:        http://{web_host}:{web_port}/")
     print(f"iTest PSU page:   http://{web_host}:{web_port}/test_ds_itest_psu.html")
     print(f"API devices:      http://{web_host}:{web_port}/api/devices")
-    print(f"TANGO_HOST:       {os.environ.get('TANGO_HOST', os.environ.get('PYCONLYSE_TANGO_HOST', '10.20.30.202:10000'))}")
+    print(f"TANGO_HOST:       {tango_host}")
     print("=" * 60)
-    print("Production settings:")
+    print("Production security settings:")
     print("  - Debug mode: OFF")
-    print("  - WebSocket: eventlet")
+    print(f"  - WebSocket: {SOCKETIO_ASYNC_MODE} ({SOCKETIO_WEBSOCKET_DEPENDENCY})")
+    print(f"  - Server runtime: {SERVER_RUNTIME_CLASS}")
     print("  - Auto-reload: OFF")
-    print(f"  - Device auth enforced: {os.environ.get('PYCONLYSE_ENFORCE_DEVICE_AUTH')}")
+    print(f"  - Device auth enforced: {device_auth_enforced}")
     print("=" * 60)
 
     preflight_web_port(web_host, web_port)

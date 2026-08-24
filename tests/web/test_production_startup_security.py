@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 from flask import Flask
 
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
+
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 BACKEND_DIR = WEB_DIR / "backend"
 VALID_SECRET = "0123456789abcdef0123456789abcdef"
@@ -195,19 +200,66 @@ def test_preflight_fails_closed_when_configured_port_is_occupied(
     ("failure", "diagnostic"),
     (
         (RuntimeError("bind failed"), "Error starting server: bind failed"),
-        (ImportError("No module named 'eventlet'"), "eventlet is not installed!"),
+        (ImportError("No module named 'simple_websocket'"), "Error starting server:"),
     ),
 )
 def test_production_server_failure_is_reported_and_propagated(
     capsys, production_module, failure, diagnostic
 ):
     class FailingSocketIO:
+        def __init__(self):
+            self.run_kwargs = None
+
         def run(self, *_args, **_kwargs):
+            self.run_kwargs = _kwargs
             raise failure
 
+    socketio = FailingSocketIO()
     with pytest.raises(type(failure), match=f"^{failure}$"):
         production_module.run_production_server(
-            FailingSocketIO(), object(), "127.0.0.1", 5000
+            socketio, object(), "127.0.0.1", 5000
         )
 
     assert diagnostic in capsys.readouterr().out
+    assert socketio.run_kwargs == {
+        "debug": False,
+        "port": 5000,
+        "host": "127.0.0.1",
+        "use_reloader": False,
+    }
+
+
+def test_production_socketio_runtime_and_dependencies_are_explicitly_threading_based(
+    production_module, app_module
+):
+    """Keep launcher, Socket.IO runtime, and direct dependencies aligned."""
+    with (WEB_DIR.parent / "pyproject.toml").open("rb") as handle:
+        pyproject = tomllib.load(handle)
+    with (WEB_DIR.parent / "poetry.lock").open("rb") as handle:
+        poetry_lock = tomllib.load(handle)
+
+    assert production_module.SOCKETIO_ASYNC_MODE == "threading"
+    assert production_module.SOCKETIO_WEBSOCKET_DEPENDENCY == "simple-websocket"
+    assert production_module.SERVER_RUNTIME_CLASS == (
+        "controlled single-process Werkzeug runner"
+    )
+    assert app_module.socketio.async_mode == production_module.SOCKETIO_ASYNC_MODE
+    assert pyproject["tool"]["poetry"]["dependencies"]["simple-websocket"] == "==1.1.0"
+    dev_dependencies = pyproject["tool"]["poetry"]["group"]["dev"]["dependencies"]
+    assert dev_dependencies["pytest"] == "==8.4.2"
+    assert dev_dependencies["coverage"] == "==7.10.7"
+
+    locked_packages = {package["name"]: package for package in poetry_lock["package"]}
+    package_contracts = {
+        "simple-websocket": (
+            pyproject["tool"]["poetry"]["dependencies"]["simple-websocket"],
+            ["main"],
+        ),
+        "pytest": (dev_dependencies["pytest"], ["dev"]),
+        "coverage": (dev_dependencies["coverage"], ["dev"]),
+    }
+    for package_name, (declared_version, groups) in package_contracts.items():
+        package = locked_packages[package_name]
+        assert package["version"] == declared_version.removeprefix("==")
+        assert package["groups"] == groups
+    assert "eventlet" not in locked_packages

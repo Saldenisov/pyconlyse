@@ -24,6 +24,9 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 
+SOCKETIO_ASYNC_MODE = "threading"
+
+
 def _json_safe_number(value, default=0.0):
     try:
         numeric = float(value)
@@ -428,7 +431,7 @@ def init_socketio(app):
         cors_allowed_origins=_socket_cors_origins(app),
         logger=False, 
         engineio_logger=False,
-        async_mode='threading',  # Use threading mode explicitly
+        async_mode=SOCKETIO_ASYNC_MODE,
         ping_timeout=60,  # Increase ping timeout
         ping_interval=25  # Increase ping interval
     )
