@@ -1,6 +1,8 @@
-from tango import Database, DbDevInfo
+"""Register the test device in the Tango database.
 
-db = Database()
+This is an operator-only probe.  Running it mutates the configured Tango
+database.
+"""
 
 names = {
     "test_device_id": [
@@ -14,6 +16,9 @@ names = {
 
 
 def main():
+    from tango import Database, DbDevInfo
+
+    db = Database()
     i = 1
     for uri, val in names.items():
         dev_info = DbDevInfo()

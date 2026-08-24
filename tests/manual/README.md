@@ -11,6 +11,14 @@ gate; never run this directory through pytest:
 conda run -n pyconlyse39 python tests/manual/netio/netio_state_probe.py <device-name>
 ```
 
+The Tango test-device registration probe is operator-only and mutates the
+configured Tango database.  Run it exactly as follows, after confirming the
+target `TANGO_HOST` and obtaining approval:
+
+```bash
+conda run -n pyconlyse39 python tests/manual/device_servers/testing/add_ds_test_probe.py
+```
+
 The `legacy`, `integration`, `main_app`, and `utilities` lanes are also
 excluded from default collection. To diagnose one of them intentionally,
 clear default pytest options explicitly, for example:
