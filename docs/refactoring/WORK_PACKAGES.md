@@ -173,6 +173,24 @@ Deliver:
 - Do not split routes, change device commands, call Tango, or alter
   DeviceServer/frontend/deployment code.
 
+### T15: Read-only device snapshot boundary
+
+Scope is limited to `[packages.T15]` in `work-packages.toml`.
+
+Deliver:
+
+- Extract device-list filtering, state snapshot collection, bounded cache,
+  stale one-flight refresh, and one-shot monitor scheduling into an
+  import-inert service with injected database and per-device read callbacks.
+- Keep `/api/devices`, `start_device_snapshot_monitor()`, `DeviceManager`,
+  proxy cache/retry semantics, authorization, and every command route in
+  `device_api.py`.
+- Characterize cache keys, TTL, stale response metadata, error shapes,
+  filtering/sorting, and monitor minimum interval under software-only tests.
+- Include the service in named-module coverage with a 90% statement floor.
+- Do not call Tango, start a monitor on import, alter DeviceServer/frontend/
+  deployment code, or move mutating paths.
+
 ### T9: Conservative web security and WebSocket contracts
 
 Scope:
@@ -351,8 +369,8 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Current full Python deny-network gate passed tooling 39; Python
-587 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
+one warning. Current full Python deny-network gate passed tooling 40; Python
+594 passed, 1 skipped; named-module coverage was 68.7%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

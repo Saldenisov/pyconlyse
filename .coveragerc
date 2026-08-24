@@ -13,6 +13,7 @@ include =
     utilities/dataio/hamamatsu_file_opener.py
     utilities/dataio/opener.py
     web/backend/device_api.py
+    web/backend/device_snapshot_service.py
     web/backend/folder_api.py
     web/backend/treatment_api.py
     web/backend/treatment_file_cache.py

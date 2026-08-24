@@ -174,6 +174,21 @@ Required cases: every database/proxy construction in `device_api.py` delegates
 to the shared gateway; existing cache, delayed-retry, PSP, and route payload
 contracts remain unchanged.
 
+T15 read-only device snapshot focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+  tests/web/test_device_snapshot_service.py \
+  tests/web/test_device_api_smoke.py
+```
+
+Required cases: the extracted service imports only stdlib and performs no work
+at import; database/proxy dependencies are injected; `/api/devices` keeps its
+existing query and payload contract; cache keys, fresh/forced/stale behavior,
+one-flight refresh, filter/sort/error semantics, and monitor one-shot/minimum
+interval remain deterministic. Named-module coverage requires 90% statements
+for `web/backend/device_snapshot_service.py`.
+
 T10 software-only focused checks:
 
 ```bash
@@ -202,8 +217,8 @@ cd ../..
 
 Focused Jest command covering hardwareApprovalRequest, treatmentClient, shared
 V0, PumpProbeVD2, HardwareApprovalControl, and standalone transport: 6
-suites/70 tests passed. Current full Python deny-network gate: tooling 39
-passed; Python 587 passed, 1 skipped; frontend 10 suites/83 tests; frontend
+suites/70 tests passed. Current full Python deny-network gate: tooling 40
+passed; Python 594 passed, 1 skipped; frontend 10 suites/83 tests; frontend
 coverage 96.66% statements, 90.08% branches, 97.87% functions, and 96.61%
 lines. Production build passed with existing hook/bundle warnings. Coverage
 verifies exact lowercase 64-hex input,
@@ -276,8 +291,8 @@ above its committed 60.0% floor. Dedicated focused branch coverage measured
 `web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Current full Python deny-network evidence: tooling 39 passed; Python 587
-passed, 1 skipped, 18 warnings; named-module coverage 68.4%; frontend 10
+Current full Python deny-network evidence: tooling 40 passed; Python 594
+passed, 1 skipped, 18 warnings; named-module coverage 68.7%; frontend 10
 suites/83 tests with 96.66% statements, 90.08% branches,
 97.87% functions, and 96.61% lines; production build passed with existing
 hook/bundle warnings.

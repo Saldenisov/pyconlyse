@@ -73,6 +73,14 @@ class TestCoverageGate(unittest.TestCase):
             100.0,
         )
 
+    def test_t15_device_snapshot_service_has_an_explicit_statement_floor(self):
+        self.assertEqual(
+            verify_coverage.MINIMUM_MODULE_COVERAGE[
+                "web/backend/device_snapshot_service.py"
+            ],
+            90.0,
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {

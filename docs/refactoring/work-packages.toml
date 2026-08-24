@@ -233,6 +233,20 @@ allowed_paths = [
 ]
 allowed_globs = ["docs/refactoring/**"]
 
+[packages.T15]
+agent = "terra"
+description = "Read-only device snapshot boundary"
+allowed_paths = [
+  ".coveragerc",
+  "scripts/refactor/verify_coverage.py",
+  "web/backend/device_api.py",
+  "web/backend/device_snapshot_service.py",
+  "tests/web/test_device_api_smoke.py",
+  "tests/web/test_device_snapshot_service.py",
+  "tests/unit/test_refactor_coverage.py",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.T10]
 agent = "terra"
 description = "Production startup, mutation authentication, and login throttling"

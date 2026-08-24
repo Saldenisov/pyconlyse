@@ -322,6 +322,20 @@ def test_device_listing_and_standa_properties_smoke(monkeypatch):
     assert props_payload["limit_min"] == ["-10"]
 
 
+def test_snapshot_monitor_public_facade_delegates_without_starting_on_import(monkeypatch):
+    _client, _devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
+    calls = []
+    monkeypatch.setattr(
+        device_api_module._device_snapshot_service,
+        "start_monitor",
+        lambda interval: calls.append(interval) or True,
+    )
+
+    assert device_api_module.start_device_snapshot_monitor(7.5) is True
+    assert calls == [7.5]
+
+
 def test_dashboard_state_probe_retries_delayed_tango_connection(monkeypatch):
     client, devices = _make_client(monkeypatch)
     device_api_module = importlib.import_module("device_api")

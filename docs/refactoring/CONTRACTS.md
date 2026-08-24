@@ -56,6 +56,10 @@ Refactoring must preserve these contracts unless a separately approved migration
 - `web/backend/device_api.py` uses the same gateway for all database/proxy
   construction. Its current cache, retry, payload, command, and Tango value
   type semantics are unchanged by that mechanical boundary step.
+- Read-only device-list snapshots live in an import-inert service with injected
+  database and per-device read callbacks. `/api/devices` retains its query,
+  payload, cache-key, TTL, stale-refresh, sorting, and failure semantics;
+  `DeviceManager` remains the owner of proxy identity and retry behavior.
 
 ### Web security and WebSocket
 
