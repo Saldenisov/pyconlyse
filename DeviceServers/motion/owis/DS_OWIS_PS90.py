@@ -18,7 +18,7 @@ from threading import Thread
 from time import sleep
 from typing import Optional, Tuple, Union
 
-from tango import AttrWriteType, DevState, DispLevel
+from tango import AttrWriteType, DevState, DeviceProxy, DispLevel
 from tango.server import attribute, device_property, command
 
 from utilities.tools.decorators import development_mode
@@ -29,8 +29,13 @@ time_ps_delay = 0.005
 
 try:
     from DeviceServers.base.motor import DS_MOTORIZED_MULTI_AXES
+    from DeviceServers.base.hardware_lifecycle import (
+        HardwareConnectionState,
+        InitializationState,
+    )
 except ModuleNotFoundError:
     from base.motor import DS_MOTORIZED_MULTI_AXES
+    from base.hardware_lifecycle import HardwareConnectionState, InitializationState
 
 
 class _PS90TcpAdapter:
@@ -590,6 +595,8 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
     ovis_tcp_init_ready_timeout = device_property(dtype=float, default_value=6.0)
     ovis_tcp_init_poll_interval = device_property(dtype=float, default_value=0.05)
     ovis_tcp_keep_motor_on = device_property(dtype=bool, default_value=True)
+    power_dependency_device = device_property(dtype=str, default_value="")
+    power_dependency_output_id = device_property(dtype=int, default_value=0)
     recovery_connect_attempts = device_property(dtype=int, default_value=3)
     recovery_attempt_delay_seconds = device_property(dtype=float, default_value=1.0)
     recovery_pause_seconds = device_property(dtype=float, default_value=8.0)
@@ -678,8 +685,54 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         super().init_device()
         self._next_recovery_attempt_ts = 0.0
         self._last_recovery_wait_log_ts = 0.0
+        self._controller_connection_status = "initialising"
         self.follow = {}
-        self.turn_on()
+        # A server start must never initialise axes or energise motors.  Probe
+        # transport only; an explicit turn_on/ensure_on performs axis setup.
+        self.find_device()
+
+    def _read_power_dependency_state(self) -> tuple[Union[bool, None], str]:
+        """Read configured Netio output without changing it.
+
+        A controller without supply voltage is expected to be unavailable.  A
+        configured PDU dependency lets the server report OFF rather than
+        treating that condition as a communication/recovery failure.
+        """
+        return super()._read_power_dependency_state()
+
+    @staticmethod
+    def _power_dependency_proxy(device_name: str):
+        return DeviceProxy(device_name)
+
+    def _handle_power_dependency_off(self, detail: str) -> None:
+        self._set_off_for_unpowered_controller(detail)
+
+    def _handle_power_dependency_unavailable(self, detail: str) -> None:
+        self._controller_connection_status = f"Power dependency is unavailable: {detail}"
+        super()._handle_power_dependency_unavailable(detail)
+
+    def probe_powered_hardware(self) -> Union[int, str]:
+        """Restore PS90 transport only; never initialise axes from a PDU event."""
+        self.find_device()
+        if self._device_id_internal == -1:
+            return "OWIS controller did not respond after power was restored"
+        return 0
+
+    def _set_off_for_unpowered_controller(self, detail: str) -> str:
+        message = f"OWIS controller power is OFF ({detail}); connection is intentionally skipped."
+        self._controller_connection_status = message
+        return self._mark_hardware_power_off(message)
+
+    @attribute(
+        label="Controller connection status",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        polling_period=DS_MOTORIZED_MULTI_AXES.polling,
+        doc="Power-aware OWIS connection diagnostic without initiating recovery.",
+    )
+    def controller_connection_status(self):
+        return getattr(self, "_controller_connection_status", "initialising")
 
     def register_variables_for_archive(self):
         from functools import partial
@@ -694,6 +747,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         state_ok = self.check_func_allowance(self.find_device)
         argreturn = -1, b""
         if state_ok:
+            power_is_on, power_detail = self._read_power_dependency_state()
+            if power_is_on is False:
+                self._set_off_for_unpowered_controller(power_detail)
+                return
             transport = str(getattr(self, "transport", "tcp")).strip().lower()
             ip = str(getattr(self, "controller_ip", "")).strip()
             port = int(getattr(self, "controller_port", 8777))
@@ -869,11 +926,29 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             if res:
                 self.set_state(DevState.STANDBY)
                 argreturn = self.control_unit_id, f"{self.serial_number}".encode()
+                self._controller_connection_status = "OWIS controller transport connected"
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "OWIS controller transport connected; axis initialisation has not been requested",
+                )
             else:
                 self.set_state(DevState.FAULT)
+                self._controller_connection_status = (
+                    f"OWIS controller connection failed ({comments}); {power_detail}"
+                )
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    self._controller_connection_status,
+                )
+                self.comment = self._controller_connection_status
         self._device_id_internal, self._uri = argreturn
 
     def turn_on_local(self) -> Union[int, str]:
+        power_is_on, power_detail = self._read_power_dependency_state()
+        if power_is_on is False:
+            return self._set_off_for_unpowered_controller(power_detail)
         if self._device_id_internal == -1:
             self.info(f"Searching for device: {self.device_id}", True)
             self.find_device()
@@ -883,6 +958,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
             return f"Could NOT turn on {self.device_name}: Device could not be found."
 
         self.set_state(DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.CONNECTED,
+            InitializationState.IN_PROGRESS,
+            "OWIS transport connected; axis initialisation is in progress",
+        )
         init_errors = []
         for axis in sorted(self._delay_lines_parameters.keys()):
             try:
@@ -895,10 +975,20 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.error(f"{self.device_name} {err}")
         if init_errors:
             self.set_state(DevState.FAULT)
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTED,
+                InitializationState.FAILED,
+                "; ".join(init_errors),
+            )
             return (
                 f"Could NOT turn on {self.device_name}: "
                 + "; ".join(init_errors)
             )
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS controller connected and configured axes are initialised",
+        )
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
@@ -911,13 +1001,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
         return comments
 
     def _attempt_recover_connection(self) -> bool:
+        power_is_on, power_detail = self._read_power_dependency_state()
+        if power_is_on is False:
+            self._set_off_for_unpowered_controller(power_detail)
+            return False
         attempts = max(1, int(getattr(self, "recovery_connect_attempts", 3)))
         retry_delay = max(
             0.1, float(getattr(self, "recovery_attempt_delay_seconds", 1.0))
         )
         self.info(
-            f"Attempting OWIS recovery for {self.device_name} "
-            f"(attempts={attempts}, delay={retry_delay}s).",
+            f"Attempting OWIS transport recovery for {self.device_name} "
+            f"(attempts={attempts}, delay={retry_delay}s; no axis initialisation).",
             True,
         )
         self.set_state(DevState.FAULT)
@@ -932,7 +1026,11 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 pass
 
             try:
-                res = self.turn_on_local()
+                # find_device performs only the controller connection probe.
+                # Calling turn_on_local here would initialise axes and can
+                # alter motor state merely because a status poll failed.
+                self.find_device()
+                res = 0 if self._device_id_internal != -1 else "controller unavailable"
             except Exception as e:
                 self.error(
                     f"Recovery attempt {attempt}/{attempts} failed for "
@@ -944,7 +1042,17 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self._status_check_fault = 0
                 self._next_recovery_attempt_ts = 0.0
                 self._last_recovery_wait_log_ts = 0.0
-                self.info(f"OWIS recovery succeeded for {self.device_name}.", True)
+                self.set_state(DevState.STANDBY)
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "OWIS transport recovery succeeded; axis initialisation has not been requested",
+                )
+                self.info(
+                    f"OWIS transport recovery succeeded for {self.device_name}; "
+                    "awaiting explicit turn_on for axis initialisation.",
+                    True,
+                )
                 return True
 
             self.error(
@@ -973,6 +1081,10 @@ class DS_OWIS_PS90(DS_MOTORIZED_MULTI_AXES):
                 self.info(f"{self.device_name} already ON; ensure_on is a no-op.", True)
 
     def get_controller_status_local(self) -> Union[int, str]:
+        power_is_on, power_detail = self._read_power_dependency_state()
+        if power_is_on is False:
+            return self._set_off_for_unpowered_controller(power_detail)
+
         now = time.monotonic()
         next_recovery_attempt_ts = float(
             getattr(self, "_next_recovery_attempt_ts", 0.0)

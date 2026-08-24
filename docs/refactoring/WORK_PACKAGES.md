@@ -274,9 +274,9 @@ occurs after an explicit runtime check. An explicitly supplied
 `PYCONLYSE_TANGO_HOST` remains mapped to `TANGO_HOST`.
 
 T11 collection evidence: under OS-level network denial, the focused listed
-suite collected and passed 151 tests in both forward and reverse order, with
-one warning. The default/full lane collected 517 items with one collection
-skip and ran 510 passed, 8 skipped, and 18 warnings. Manual probes, legacy, integration, main-app, and utilities stay
+suite collected and passed 159 tests in both forward and reverse order, with
+one warning. The default/full lane collected 557 items with one collection
+skip and ran 550 passed, 8 skipped, and 18 warnings. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import
 safety, and module-isolation regressions. V0 initialization is rejected with
 403 when enforcement is enabled unless an exact approval is supplied; the

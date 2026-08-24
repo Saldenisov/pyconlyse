@@ -181,23 +181,25 @@ conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .cove
 
 Required cases: server-derived subject/role; external policy and approval
 directories; canonical args; strict unknown/duplicate/missing/non-finite and
-wildcard rejection; UTC expiry; lowercase 256-bit nonce; atomic one-shot
-consumption before proxy access; 401/403/428/409 semantics; route and ordered
+wildcard rejection; exact-UTC timestamps and expiry; lowercase 256-bit nonce;
+atomic one-shot consumption before proxy access; POSIX marker/directory fsync
+and mocked Windows `CREATE_NEW`/write-through/flush failure paths;
+401/403/428/409 semantics; route and ordered
 target binding; WebSocket command authorization; V0 safe-read regression; and
 production fail-closed configuration. No test may contact Tango or equipment.
 
-T11 focused measurement: the listed suite collected and passed 151 tests in
+T11 focused measurement: the listed suite collected and passed 159 tests in
 both forward and reverse order, with one warning, under OS-level network
-denial. Full named-module statement coverage was 67.3%;
-`web/backend/hardware_authorization.py` measured 70.9% statements (339/478),
+denial. Full named-module statement coverage was 68.0%;
+`web/backend/hardware_authorization.py` measured 71.2% statements (380/534),
 above its committed 60.0% floor. Dedicated focused branch coverage measured
-64.4% for that module (338/478 covered lines; 132/252 branches). Full
-`web/backend/device_api.py` statement coverage was 52.4%. The 49.3% total for
+65.4% for that module (379/534 covered lines; 143/264 branches). Full
+`web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Full software-only evidence: 517 items collected with one collection skip;
-510 passed, 8 skipped, and 18 warnings. Frontend verification passed 6
-suites/31 tests with 96.11% statements and 89.87% branches; production build
+Full software-only evidence: 557 items collected with one collection skip;
+550 passed, 8 skipped, and 18 warnings. Frontend verification passed 7
+suites/32 tests with 96.11% statements and 89.87% branches; production build
 passed with existing hook and bundle-size warnings.
 
 Fail-closed contract cases: enforced iTest increment/decrement derived-value

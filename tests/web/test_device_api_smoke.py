@@ -188,11 +188,33 @@ class FakeDatabase:
         )
 
 
+class FakeStarter(FakeDevice):
+    def __init__(self):
+        super().__init__("tango/admin/fake")
+
+    def command_inout(self, command_name, args=None):
+        if command_name == "DevGetRunningServers":
+            return ["fake/server"]
+        if command_name == "DevGetStopServers":
+            return []
+        if command_name == "DevReadLog":
+            if args == "fake/server":
+                return "INFO server started\nERROR simulated transport fault"
+            if args == "Starter":
+                return "fake/server started"
+        return super().command_inout(command_name, args)
+
+
 def _build_fake_backend():
     devices = {
         "pdu/netio/1": FakeDevice(
             "pdu/netio/1",
-            attributes={"output_statuses": [1, 0, 1, 0], "name": "NETIO PDU"},
+            attributes={
+                "ids": [1, 2, 3, 4],
+                "names": ["Output 1", "Output 2", "Output 3", "Output 4"],
+                "output_statuses": [1, 0, 1, 0],
+                "name": "NETIO PDU",
+            },
         ),
         "manip/v0/dv04": FakeDevice(
             "manip/v0/dv04",
@@ -300,6 +322,34 @@ def test_device_listing_and_standa_properties_smoke(monkeypatch):
     assert props_payload["limit_min"] == ["-10"]
 
 
+def test_dashboard_state_probe_retries_delayed_tango_connection(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
+    device = devices["manip/v0/dv04"]
+    original_state = device.state
+    attempts = {"count": 0}
+
+    def delayed_once():
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("The connection request was delayed")
+        return original_state()
+
+    device.state = delayed_once
+    monkeypatch.setattr(device_api_module.time, "sleep", lambda _seconds: None)
+
+    response = client.get(
+        "/api/devices?probe_state=1&include_dserver=1&include_admin=1&refresh=1"
+    )
+    payload = response.get_json()
+    selected = next(item for item in payload["devices"] if item["name"] == "manip/v0/dv04")
+
+    assert response.status_code == 200
+    assert selected["available"] is True
+    assert selected["state"] == "ON"
+    assert attempts["count"] == 2
+
+
 def test_generic_device_lazy_endpoints_smoke(monkeypatch):
     client, _devices = _make_client(monkeypatch)
 
@@ -332,6 +382,92 @@ def test_generic_device_lazy_endpoints_smoke(monkeypatch):
     assert commands_response.status_code == 200
     assert commands_payload["success"] is True
     assert "move_axis_abs" in commands_payload["commands"]
+
+
+def test_server_diagnostics_returns_state_error_details_and_logs(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
+    devices["manip/v0/dv04"].attributes.update(
+        {
+            "last_error": "USB reconnect scheduled",
+            "fault_recovery_status": "attempt=2",
+            "hardware_connection_state": "POWER_OFF",
+            "initialization_state": "NOT_REQUESTED",
+            "hardware_lifecycle_status": "power PDU output 2 is OFF",
+        }
+    )
+    starter = FakeStarter()
+    monkeypatch.setattr(
+        device_api_module,
+        "_find_starter_for_server",
+        lambda _server, **_kwargs: ("tango/admin/fake", starter, {"fake/server"}, set()),
+    )
+
+    response = client.get(
+        "/api/server/fake/server/diagnostics?device_name=manip/v0/dv04"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["running"] is True
+    assert payload["device"]["state"] == "ON"
+    assert (
+        payload["device"]["error_attributes"]["last_error"]
+        == "USB reconnect scheduled"
+    )
+    assert payload["device"]["error_attributes"]["hardware_connection_state"] == "POWER_OFF"
+    assert payload["device"]["error_attributes"]["initialization_state"] == "NOT_REQUESTED"
+    assert payload["server_log"]["available"] is True
+    assert "simulated transport fault" in payload["server_log"]["text"]
+
+
+def test_server_diagnostics_keeps_device_status_when_starter_is_unreachable(monkeypatch):
+    client, _devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
+    monkeypatch.setattr(
+        device_api_module,
+        "_find_starter_for_server",
+        lambda _server, **_kwargs: (_ for _ in ()).throw(RuntimeError("Starter offline")),
+    )
+
+    response = client.get(
+        "/api/server/fake/server/diagnostics?device_name=manip/v0/dv04"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["starter_error"] == "Starter offline"
+    assert payload["device"]["state"] == "ON"
+    assert payload["server_log"]["available"] is False
+
+
+def test_server_diagnostics_retries_delayed_device_connection(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
+    device = devices["manip/v0/dv04"]
+    original_state = device.state
+    attempts = {"count": 0}
+
+    def delayed_once():
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise RuntimeError("The connection request was delayed")
+        return original_state()
+
+    device.state = delayed_once
+    monkeypatch.setattr(device_api_module.time, "sleep", lambda _seconds: None)
+
+    response = client.get(
+        "/api/server/fake/server/diagnostics?device_name=manip/v0/dv04"
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["device"]["available"] is True
+    assert payload["device"]["state"] == "ON"
+    assert attempts["count"] == 2
 
 
 def test_netio_page_routes_smoke(monkeypatch):

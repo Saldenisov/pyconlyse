@@ -139,13 +139,18 @@ Refactoring must preserve these contracts unless a separately approved migration
 - JWT subject and role are server-derived. Authorization identifies explicit
   `route_id`, action, ordered targets, device, command, and canonicalized args.
 - Canonical args reject unknown, duplicate, missing, wildcard, and non-finite
-  values and are bounded by closed policy schemas. Approval expiry is UTC and
+  values and are bounded by closed policy schemas. Approval timestamps use an
+  exact UTC offset (`+00:00`/`Z`), expiry is UTC and
   may not exceed 300 seconds; nonce is exactly 256-bit lowercase hex.
 - Policy and approval inputs are external read-only files. Service startup
   rejects repository-local paths, symlinks, and unsafe permissions; consumed
-  markers use a separate service-writable directory and atomic `O_EXCL`
-  creation, followed by file and parent-directory fsync; policy/approval reads
-  reject symlinks with `O_NOFOLLOW`.
+  markers use a separate service-writable directory. POSIX uses atomic `O_EXCL`
+  creation followed by marker and parent-directory `fsync`. Windows uses atomic
+  `CreateFileW(CREATE_NEW)` with write-through, `WriteFile`, and
+  `FlushFileBuffers`; Windows has no portable parent-directory `fsync`
+  equivalent. Both create the marker before any side effect and fail closed on
+  every marker I/O error; policy/approval reads reject symlinks with
+  `O_NOFOLLOW` where available.
 - Starter control uses a trusted policy `starter_servers` mapping. The service
   never discovers or substitutes a Tango Starter target before approval.
 - Approval is one-shot and consumed with an atomic `O_EXCL` marker before any

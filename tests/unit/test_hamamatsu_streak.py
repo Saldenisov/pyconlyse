@@ -19,6 +19,8 @@ class _CollectionMonkeyPatch:
 
 install_tango_stub(_CollectionMonkeyPatch())
 
+from tango import DevState
+
 from DeviceServers.cameras.hamamatsu_streak.hamamatsu_streak_controller import (
     HamamatsuStreakController,
 )
@@ -82,6 +84,48 @@ class TestRemoteExProtocol(unittest.TestCase):
 
 
 class TestHamamatsuStreakController(unittest.TestCase):
+    def test_power_off_keeps_tango_launcher_on_but_reports_hardware_off(self):
+        calls = []
+        device = SimpleNamespace(
+            _power_probe_pending=True,
+            _power_probe_due_at=10.0,
+            _mark_hardware_power_off=lambda message, **kwargs: calls.append(
+                (message, kwargs)
+            ),
+        )
+
+        DS_HAMAMATSU_STREAK._handle_power_dependency_off(device, "PDU output 1")
+
+        self.assertFalse(device._power_probe_pending)
+        self.assertEqual(device._power_probe_due_at, 0.0)
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "Streak hardware power is OFF (PDU output 1); "
+                    "RemoteEx service remains available.",
+                    {"tango_state": DevState.ON},
+                )
+            ],
+        )
+
+    def test_status_skips_remoteex_when_streak_power_is_confirmed_off(self):
+        calls = []
+        device = SimpleNamespace(
+            _observe_power_dependency=lambda: SimpleNamespace(
+                configured=True, powered=False
+            ),
+            send_state_archive=lambda: calls.append("archive"),
+            get_controller_status_local=lambda: (_ for _ in ()).throw(
+                AssertionError("must not query RemoteEx while hardware is unpowered")
+            ),
+        )
+
+        result = DS_HAMAMATSU_STREAK.get_controller_status(device)
+
+        self.assertEqual(result, 0)
+        self.assertEqual(calls, ["archive"])
+
     def test_start_remoteex_attaches_before_starting_scheduled_task(self):
         class AttachOnlyDevice:
             controller = None
@@ -145,7 +189,7 @@ class TestHamamatsuStreakController(unittest.TestCase):
         )
         self.assertFalse(device.connected_value)
         self.assertEqual(device.remoteex_status_value, "disconnected")
-        self.assertEqual(str(device.state).split(".")[-1], "ON")
+        self.assertEqual(device.state, DevState.ON)
 
     def test_refresh_cached_state_does_not_poll_controls_while_live_is_busy(self):
         fake = FakeRemoteExClient(

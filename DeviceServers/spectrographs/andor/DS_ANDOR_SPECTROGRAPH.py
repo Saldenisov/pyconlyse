@@ -26,7 +26,9 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
     pixel_number = device_property(dtype=int, default_value=1064)
     pixel_width_um = device_property(dtype=float, default_value=13.5)
     linked_camera_ds = device_property(dtype=str, default_value="")
-    start_on_init = device_property(dtype=int, default_value=1)
+    # Discovery is passive. Opening/configuring the spectrograph requires an
+    # explicit turn_on after its externally switched supply is confirmed.
+    start_on_init = device_property(dtype=int, default_value=0)
 
     @staticmethod
     def _coerce_int(value, default: int) -> int:
@@ -321,6 +323,16 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
                 self.spectrograph = None
         self.set_state(DevState.OFF)
         return 0
+
+    def release_power_dependency_local(self) -> None:
+        """Release the local SDK handle after external supply loss."""
+        spectrograph = self.spectrograph
+        self.spectrograph = None
+        if spectrograph is not None:
+            try:
+                spectrograph.close()
+            except Exception:
+                pass
 
     def refresh_calibration_axis(self):
         if self.spectrograph is None:

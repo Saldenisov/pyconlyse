@@ -21,6 +21,9 @@ CCD_DEVICE = {
         "default_temperature": -50,
         "linked_spectrograph_ds": "",
         "start_grabbing_on_init": 0,
+        "power_dependency_device": "manip/SD1/PDU_SD1",
+        "power_dependency_output_id": 1,
+        "power_on_settle_seconds": 5.0,
         "parameters": str(
             {
                 "Acquisition_Controls": {
@@ -57,7 +60,11 @@ SPECTROGRAPH_DEVICES = [
             "pixel_number": 1064,
             "pixel_width_um": 13.5,
             "linked_camera_ds": "manip/CR/ANDOR_CCD1",
-            "start_on_init": 1,
+            "start_on_init": 0,
+            # Shamrock is powered together with the UV-vis CCD stack.
+            "power_dependency_device": "manip/SD1/PDU_SD1",
+            "power_dependency_output_id": 1,
+            "power_on_settle_seconds": 5.0,
         },
     },
     {
@@ -74,7 +81,10 @@ SPECTROGRAPH_DEVICES = [
             "pixel_number": 1064,
             "pixel_width_um": 13.5,
             "linked_camera_ds": "manip/CR/ANDOR_CCD1",
-            "start_on_init": 1,
+            "start_on_init": 0,
+            "power_dependency_device": "manip/SD2/PDU_SD2",
+            "power_dependency_output_id": 1,
+            "power_on_settle_seconds": 5.0,
         },
     },
 ]

@@ -242,24 +242,30 @@ def main():
         dev_info.server = f"DS_Standa_Motor/{i}_{val[2]}"
         a.append(f"{i}_{val[2]}")
         db.add_device(dev_info)
-        db.put_device_property(
-            dev_name,
-            {
-                "ip_address": "10.20.30.204",
-                "uri": uri,
-                "friendly_name": val[1],
-                "wait_time": 5,
-                "server_id": i,
-                "preset_pos": val[3],
-                "limit_min": val[4][0],
-                "limit_max": val[4][1],
-                "real_pos": 0.0,
-                "device_id": val[5],
-                "unit": val[6][0],
-                "conversion": val[6][1],
-                "always_on": 1,
-            },
-        )
+        properties = {
+            "ip_address": "10.20.30.204",
+            "uri": uri,
+            "friendly_name": val[1],
+            "wait_time": 5,
+            "server_id": i,
+            "preset_pos": val[3],
+            "limit_min": val[4][0],
+            "limit_max": val[4][1],
+            "real_pos": 0.0,
+            "device_id": val[5],
+            "unit": val[6][0],
+            "conversion": val[6][1],
+            "always_on": 1,
+        }
+        if dev_name.lower().startswith("manip/v0/"):
+            properties.update(
+                {
+                    "power_dependency_device": "manip/V0/PDU_VO",
+                    "power_dependency_output_id": 3,
+                    "power_on_settle_seconds": 5.0,
+                }
+            )
+        db.put_device_property(dev_name, properties)
 
         i += 1
     # print(a)

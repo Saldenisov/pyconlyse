@@ -13,7 +13,7 @@ import os
 import re
 import stat
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
@@ -436,7 +436,7 @@ def _approval_time(value: Any) -> datetime:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError as exc:
         raise AuthorizationError(409, "hardware_approval_invalid", "Hardware approval time is invalid") from exc
-    if parsed.tzinfo is None or parsed.utcoffset() is None:
+    if parsed.tzinfo is None or parsed.utcoffset() != timedelta(0):
         raise AuthorizationError(409, "hardware_approval_invalid", "Hardware approval time is invalid")
     return parsed
 
@@ -455,6 +455,13 @@ def consume_approval(config: AuthorizationConfig, nonce: str) -> bool:
 
 def _write_and_sync_consumption_marker(marker: Path, consumed_dir: Path, nonce: str) -> None:
     """Durably publish a consumed marker before a hardware side effect."""
+    if _is_windows():
+        _write_and_sync_windows_consumption_marker(marker, nonce)
+        return
+    _write_and_sync_posix_consumption_marker(marker, consumed_dir, nonce)
+
+
+def _write_and_sync_posix_consumption_marker(marker: Path, consumed_dir: Path, nonce: str) -> None:
     marker_descriptor = os.open(
         str(marker), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
     )
@@ -476,6 +483,92 @@ def _write_and_sync_consumption_marker(marker: Path, consumed_dir: Path, nonce: 
         os.fsync(directory_descriptor)
     finally:
         os.close(directory_descriptor)
+
+
+def _windows_kernel32():
+    """Load kernel32 lazily so non-Windows imports have no WinAPI dependency."""
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateFileW.argtypes = (
+        wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, wintypes.LPVOID,
+        wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE,
+    )
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.WriteFile.argtypes = (
+        wintypes.HANDLE, wintypes.LPCVOID, wintypes.DWORD,
+        ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID,
+    )
+    kernel32.WriteFile.restype = wintypes.BOOL
+    kernel32.FlushFileBuffers.argtypes = (wintypes.HANDLE,)
+    kernel32.FlushFileBuffers.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    return kernel32
+
+
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+def _native_windows() -> bool:
+    return os.name == "nt"
+
+
+def _ctypes_last_error() -> int:
+    import ctypes
+
+    return int(ctypes.get_last_error())
+
+
+def _windows_error(kernel32, message: str) -> OSError:
+    # WinDLL(use_last_error=True) stores the call result in ctypes state. A
+    # separate GetLastError call can overwrite or observe the wrong value.
+    error_code = _ctypes_last_error() if _native_windows() else int(kernel32.GetLastError())
+    return OSError(error_code, message)
+
+
+def _write_and_sync_windows_consumption_marker(marker: Path, nonce: str) -> None:
+    """Create and flush a CREATE_NEW marker before any hardware side effect.
+
+    Windows has no portable parent-directory fsync equivalent. CREATE_NEW
+    establishes the one-shot marker, and write-through plus FlushFileBuffers
+    provides the durability primitive exposed by the Windows file API.
+    """
+    import ctypes
+    from ctypes import wintypes
+
+    kernel32 = _windows_kernel32()
+    generic_write = 0x40000000
+    create_new = 1
+    file_attribute_normal = 0x00000080
+    file_flag_write_through = 0x80000000
+    invalid_handle_value = ctypes.c_void_p(-1).value
+    handle = kernel32.CreateFileW(
+        str(marker), generic_write, 0, None, create_new,
+        file_attribute_normal | file_flag_write_through, None,
+    )
+    if handle in (None, -1, invalid_handle_value):
+        raise _windows_error(kernel32, "Unable to create hardware approval marker")
+
+    pending_error = None
+    try:
+        payload = (nonce + "\n").encode("utf-8")
+        buffer = ctypes.create_string_buffer(payload)
+        written = wintypes.DWORD()
+        if not kernel32.WriteFile(handle, buffer, len(payload), ctypes.byref(written), None):
+            raise _windows_error(kernel32, "Unable to write hardware approval marker")
+        if written.value != len(payload):
+            raise OSError("Unable to write complete hardware approval marker")
+        if not kernel32.FlushFileBuffers(handle):
+            raise _windows_error(kernel32, "Unable to flush hardware approval marker")
+    except BaseException as exc:
+        pending_error = exc
+        raise
+    finally:
+        if not kernel32.CloseHandle(handle) and pending_error is None:
+            raise _windows_error(kernel32, "Unable to close hardware approval marker")
 
 
 def authorize_operation(config: AuthorizationConfig, *, subject: str, role: str, operation: Operation, nonce: str | None, before_side_effect: Callable[[], Any] | None = None, policy: Mapping[str, Any] | None = None, approval: Mapping[str, Any] | None = None) -> bool:

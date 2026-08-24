@@ -570,6 +570,41 @@ class DS_ANDOR_CCD(DS_CAMERA_CCD):
         self.set_state(DevState.OFF)
         return 0
 
+    def release_power_dependency_local(self) -> None:
+        """Release a stale SDK handle without issuing camera configuration commands."""
+        if self.grabbing:
+            self.abort = True
+        camera = self.camera
+        self.camera = None
+        if camera is not None:
+            try:
+                camera.close()
+            except Exception:
+                pass
+
+    def probe_powered_hardware(self) -> Union[int, str]:
+        """Verify an externally powered camera without opening its shutter or grabbing."""
+        if self.camera is not None:
+            return 0
+        camera = None
+        try:
+            camera = self._create_camera()
+            camera.get_device_info()
+            camera_index = self._coerce_int(self.camera_index, 0)
+            self._device_id_internal = camera_index
+            self._uri = f"andor-sdk2://index/{camera_index}".encode("utf-8")
+            return 0
+        except Exception as exc:
+            self._device_id_internal = -1
+            self._uri = b""
+            return f"Andor camera probe failed: {exc}"
+        finally:
+            if camera is not None:
+                try:
+                    camera.close()
+                except Exception:
+                    pass
+
     def set_param_after_init_local(self) -> Union[int, str]:
         if not self.camera:
             return "Camera is not opened"

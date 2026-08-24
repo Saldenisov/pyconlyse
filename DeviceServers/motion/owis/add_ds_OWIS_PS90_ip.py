@@ -76,6 +76,17 @@ def main() -> None:
     parser.add_argument("--controller-ip", default="10.20.30.134")
     parser.add_argument("--controller-port", type=int, default=8777)
     parser.add_argument("--serial-number", type=int, default=25010013)
+    parser.add_argument(
+        "--power-pdu-device",
+        default="manip/V0/PDU_VO",
+        help="Read-only Tango PDU dependency for the controller supply.",
+    )
+    parser.add_argument(
+        "--power-pdu-output-id",
+        type=int,
+        default=2,
+        help="PDU output ID which supplies the OWIS delay-line controller.",
+    )
     args = parser.parse_args()
 
     db = Database()
@@ -106,6 +117,11 @@ def main() -> None:
         "ovis_tcp_init_ready_timeout": 6.0,
         "ovis_tcp_init_poll_interval": 0.05,
         "ovis_tcp_keep_motor_on": True,
+        "power_dependency_device": args.power_pdu_device,
+        "power_dependency_output_id": args.power_pdu_output_id,
+        # PDU_VO/out 2 powers the V0 OWIS delay-line controller. Once supply
+        # and transport are verified, axis initialisation must resume itself.
+        "power_dependency_auto_turn_on": 1,
         "delay_lines_parameters": str(_delay_lines()),
         "max_retries": 3,
         "retry_delay": 1.0,

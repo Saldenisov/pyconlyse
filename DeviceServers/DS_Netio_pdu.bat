@@ -50,12 +50,13 @@ echo Attempting to open in Windows Terminal tab (if available)...
 echo.
 REM Start the device server in a Windows Terminal tab if possible; otherwise fallback to a new window
 set "DS_TITLE=DS_Netio_pdu [%INSTANCE_NAME%]"
+set "LOGGED_LAUNCHER=%PYCONLYSE%\DeviceServers\run_logged_server.cmd"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\netio" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_Netio_pdu device server... && python DS_Netio_pdu.py %INSTANCE_NAME%"
+    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\netio" cmd /k call "%LOGGED_LAUNCHER%" "DS_Netio_pdu" "%INSTANCE_NAME%" "%PYCONLYSE%\DeviceServers\power\netio" "DS_Netio_pdu.py" "DISABLE_ARCHIVE=1"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\power\netio" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_Netio_pdu device server... && python DS_Netio_pdu.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k call "%LOGGED_LAUNCHER%" "DS_Netio_pdu" "%INSTANCE_NAME%" "%PYCONLYSE%\DeviceServers\power\netio" "DS_Netio_pdu.py" "DISABLE_ARCHIVE=1"
 )
 
 echo Device server started in terminal tab/window!

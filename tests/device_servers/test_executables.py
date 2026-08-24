@@ -27,6 +27,31 @@ class TestExecutableWrappers(unittest.TestCase):
                 # If present, ensure it's non-empty
                 self.assertGreater(path.stat().st_size, 0, f"{name} is empty")
 
+    def test_netio_wrapper_mirrors_terminal_output_to_starter_log(self):
+        device_servers_root = Path(__file__).parents[2] / "DeviceServers"
+        helper = device_servers_root / "run_logged_server.cmd"
+        wrapper = device_servers_root / "DS_Netio_pdu.bat"
+
+        self.assertTrue(helper.exists())
+        helper_text = helper.read_text(encoding="utf-8")
+        wrapper_text = wrapper.read_text(encoding="utf-8")
+
+        self.assertIn(r"C:\temp\ds.log", helper_text)
+        self.assertIn("Tee-Object", helper_text)
+        self.assertIn("%SERVER_NAME%_%INSTANCE_NAME%.log", helper_text)
+        self.assertIn("run_logged_server.cmd", wrapper_text)
+        self.assertIn('"DS_Netio_pdu"', wrapper_text)
+
+    def test_netio_executable_wrapper_uses_shared_logged_launcher(self):
+        device_servers_root = Path(__file__).parents[2] / "DeviceServers"
+        wrapper_text = (device_servers_root / "DS_Netio_pdu_wrapper.cs").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("run_logged_server.cmd", wrapper_text)
+        self.assertIn("DS_Netio_pdu", wrapper_text)
+        self.assertIn("DISABLE_ARCHIVE=1", wrapper_text)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

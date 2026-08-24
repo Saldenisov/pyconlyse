@@ -14,6 +14,16 @@ import numpy as np
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import Device, attribute, command, device_property, pipe
 
+from DeviceServers.base.power_dependency import (
+    PowerDependencyState,
+    read_power_dependency_state,
+)
+from DeviceServers.base.hardware_lifecycle import (
+    HardwareConnectionState,
+    InitializationState,
+    lifecycle_value,
+)
+
 # Centralized global settings for all DeviceServers
 # These can be overridden via a single JSON config file, environment variables, or at runtime via commands
 
@@ -178,6 +188,13 @@ class DS_General(Device):
     archive_enabled = device_property(dtype=int, default_value=0)
     fault_recovery_enabled = device_property(dtype=int, default_value=1)
     fault_recovery_cooldown_s = device_property(dtype=float, default_value=3.0)
+    power_dependency_device = device_property(dtype=str, default_value="")
+    power_dependency_output_id = device_property(dtype=int, default_value=0)
+    power_on_settle_seconds = device_property(dtype=float, default_value=5.0)
+    power_dependency_poll_interval_s = device_property(dtype=float, default_value=1.0)
+    power_dependency_reconnect_seconds = device_property(dtype=float, default_value=5.0)
+    power_dependency_auto_probe = device_property(dtype=int, default_value=1)
+    power_dependency_auto_turn_on = device_property(dtype=int, default_value=0)
     archive = "manip/general/archive"
     # Health checks must not compete with commands that open, close, or
     # configure a transport. Acquisition loops use their own explicit rates.
@@ -273,6 +290,63 @@ class DS_General(Device):
         return self._error
 
     @attribute(
+        label="Hardware connection",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Physical power and transport condition; independent from Tango reachability.",
+        polling_period=polling_main,
+    )
+    def hardware_connection_state(self):
+        return getattr(self, "_hardware_connection_state", HardwareConnectionState.UNKNOWN.value)
+
+    @attribute(
+        label="Initialisation",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Operational initialisation result; independent from power and transport.",
+        polling_period=polling_main,
+    )
+    def initialization_state(self):
+        return getattr(self, "_initialization_state", InitializationState.UNKNOWN.value)
+
+    @attribute(
+        label="Hardware lifecycle status",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+        doc="Human-readable explanation for hardware connection and initialisation state.",
+        polling_period=polling_main,
+    )
+    def hardware_lifecycle_status(self):
+        return getattr(self, "_hardware_lifecycle_status", "not initialised")
+
+    def set_hardware_lifecycle(
+        self,
+        connection_state=HardwareConnectionState.UNKNOWN,
+        initialization_state=InitializationState.UNKNOWN,
+        detail="",
+    ):
+        """Record hardware facts without changing Tango ``DevState``.
+
+        A device server must not use these attributes to imply that the Tango
+        process itself is unavailable.  That is determined externally by a
+        DeviceProxy/Astor reachability check.
+        """
+        self._hardware_connection_state = lifecycle_value(
+            connection_state,
+            HardwareConnectionState,
+            HardwareConnectionState.UNKNOWN,
+        )
+        self._initialization_state = lifecycle_value(
+            initialization_state,
+            InitializationState,
+            InitializationState.UNKNOWN,
+        )
+        self._hardware_lifecycle_status = str(detail or "")
+
+    @attribute(
         label="URI",
         dtype=str,
         display_level=DispLevel.OPERATOR,
@@ -320,10 +394,24 @@ class DS_General(Device):
     @abstractmethod
     def init_device(self):
         self._stop_error_timer()
+        self._stop_power_dependency_monitor()
         self._lifecycle_lock = RLock()
         self._fault_recovery_attempts = 0
         self._next_fault_recovery_at = 0.0
         self._last_fault_recovery_error = ""
+        self._power_dependency_observed = False
+        self._power_dependency_state = PowerDependencyState(
+            False, None, "power dependency is not configured"
+        )
+        self._power_probe_pending = False
+        self._power_probe_due_at = 0.0
+        self._last_power_probe_error = ""
+        self._power_dependency_status = "power dependency is not configured"
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.UNKNOWN,
+            InitializationState.UNKNOWN,
+            "device server started; hardware has not been probed",
+        )
         self.orders: Dict[str, GeneralOrderInfo] = {}
         self.previous_archive_state: Dict[str, Any] = {}
         self.archive_state: Dict[str, Any] = {}
@@ -352,6 +440,11 @@ class DS_General(Device):
                     configuration_valid = False
 
             if not configuration_valid:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.UNKNOWN,
+                    InitializationState.FAILED,
+                    "device configuration is invalid",
+                )
                 self._create_mock_archive()
                 self._device_id_internal = -1
                 self._uri = b""
@@ -370,15 +463,50 @@ class DS_General(Device):
             self.set_state(DevState.OFF)
             self._device_id_internal = -1
             self._uri = b""
+            power_state = self._observe_power_dependency(force=True, initial=True)
+            self._start_power_dependency_monitor()
+            if power_state.configured and power_state.powered is not True:
+                return
             self.find_device()
 
             if self._device_id_internal != -1:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "hardware transport connected; operational initialisation has not been requested",
+                )
                 self.info(f"{self.device_name} was found.", True)
+                if power_state.configured:
+                    self.set_state(self.power_dependency_ready_state())
+                    if self._power_dependency_auto_turn_on_enabled():
+                        settle_seconds = max(0.0, float(self.power_on_settle_seconds or 0.0))
+                        self._power_probe_due_at = time.monotonic() + settle_seconds
+                        self._power_probe_pending = True
+                        self._power_dependency_status = (
+                            f"{power_state.detail}; waiting {settle_seconds:.1f}s before "
+                            "safe probe and automatic turn_on"
+                        )
+                        self.info(self._power_dependency_status, True)
+                    else:
+                        self.info(
+                            f"{self.device_name} power is available; awaiting explicit turn_on.",
+                            True,
+                        )
             else:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "hardware was not found during passive transport probe",
+                )
                 self.info(f"{self.device_name} was NOT found.", True)
                 self.set_state(DevState.FAULT)
+                if power_state.configured and power_state.powered is True:
+                    self._schedule_power_probe(
+                        float(self.power_dependency_reconnect_seconds or 5.0)
+                    )
         except BaseException:
             self._stop_error_timer()
+            self._stop_power_dependency_monitor()
             raise
 
     def _start_error_timer(self):
@@ -392,6 +520,264 @@ class DS_General(Device):
             daemon=True,
         )
         self._error_timer_thread.start()
+
+    def _power_dependency_is_configured(self) -> bool:
+        try:
+            return bool(str(self.power_dependency_device or "").strip()) and int(
+                self.power_dependency_output_id or 0
+            ) > 0
+        except (TypeError, ValueError):
+            return False
+
+    def _power_dependency_auto_turn_on_enabled(self) -> bool:
+        """Return whether this explicitly opted-in device may re-enable itself."""
+        try:
+            return bool(int(self.power_dependency_auto_turn_on or 0))
+        except (TypeError, ValueError):
+            return False
+
+    def _read_power_dependency_state(self) -> PowerDependencyState:
+        return read_power_dependency_state(
+            self.power_dependency_device,
+            self.power_dependency_output_id,
+            self._power_dependency_proxy,
+        )
+
+    @staticmethod
+    def _power_dependency_proxy(device_name: str):
+        from tango import DeviceProxy
+
+        return DeviceProxy(device_name)
+
+    def _observe_power_dependency(
+        self, *, force: bool = False, initial: bool = False
+    ) -> PowerDependencyState:
+        if not self._power_dependency_is_configured():
+            state = PowerDependencyState(
+                False, None, "power dependency is not configured"
+            )
+            self._power_dependency_state = state
+            self._power_dependency_status = state.detail
+            return state
+
+        state = self._read_power_dependency_state()
+        self._apply_power_dependency_state(state, initial=initial)
+        return state
+
+    def _apply_power_dependency_state(
+        self, state: PowerDependencyState, *, initial: bool = False
+    ) -> None:
+        previous = getattr(self, "_power_dependency_state", None)
+        observed = bool(getattr(self, "_power_dependency_observed", False))
+        changed = (
+            not observed
+            or previous is None
+            or previous.powered != state.powered
+            or previous.detail != state.detail
+        )
+        self._power_dependency_observed = True
+        self._power_dependency_state = state
+        if changed:
+            self._power_dependency_status = state.detail
+
+        if state.powered is False:
+            self._power_probe_pending = False
+            self._power_probe_due_at = 0.0
+            if changed:
+                self._handle_power_dependency_off(state.detail)
+            return
+
+        if state.powered is None:
+            self._power_probe_pending = False
+            self._power_probe_due_at = 0.0
+            if changed:
+                self._handle_power_dependency_unavailable(state.detail)
+            return
+
+        if initial:
+            return
+
+        if previous is not None and previous.powered is not True:
+            settle_seconds = max(0.0, float(self.power_on_settle_seconds or 0.0))
+            self._schedule_power_probe(settle_seconds)
+            self._power_dependency_status = (
+                f"{state.detail}; waiting {settle_seconds:.1f}s before safe probe"
+            )
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTING,
+                InitializationState.PENDING,
+                self._power_dependency_status,
+            )
+            self.set_state(DevState.INIT)
+            self.info(self._power_dependency_status, True)
+
+    def _schedule_power_probe(self, delay_seconds: float) -> None:
+        """Schedule a passive hardware probe; never issue a PDU command."""
+        self._power_probe_pending = bool(int(self.power_dependency_auto_probe or 0))
+        self._power_probe_due_at = time.monotonic() + max(0.0, float(delay_seconds))
+
+    def _mark_hardware_power_off(
+        self, message: str, *, tango_state=DevState.OFF
+    ) -> str:
+        """Record a confirmed external power loss without fault recovery."""
+        self._device_id_internal, self._uri = -1, b""
+        self._status_check_fault = 0
+        self._fault_recovery_attempts = 0
+        self._next_fault_recovery_at = 0.0
+        self._last_fault_recovery_error = ""
+        self._last_power_probe_error = ""
+        self._error = ""
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.POWER_OFF,
+            InitializationState.NOT_REQUESTED,
+            message,
+        )
+        self.set_state(tango_state)
+        self.comment = message
+        if getattr(self, "_last_power_off_message", "") != message:
+            self.info(message, True)
+            self._last_power_off_message = message
+        return message
+
+    def _handle_power_dependency_off(self, detail: str) -> None:
+        self._release_power_dependency_transport()
+        message = f"Hardware power is OFF ({detail}); connection is intentionally skipped."
+        self._power_dependency_status = message
+        self._mark_hardware_power_off(message)
+
+    def _handle_power_dependency_unavailable(self, detail: str) -> None:
+        self._release_power_dependency_transport()
+        self._device_id_internal, self._uri = -1, b""
+        message = f"Power dependency is unavailable: {detail}"
+        self._power_dependency_status = message
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.POWER_STATUS_UNAVAILABLE,
+            InitializationState.UNKNOWN,
+            message,
+        )
+        self.set_state(DevState.FAULT)
+        self.error(message)
+
+    def release_power_dependency_local(self) -> None:
+        """Release local transport resources after external power loss only."""
+
+    def power_dependency_ready_state(self):
+        """State after a passive post-power probe; hardware defaults to STANDBY."""
+        return DevState.STANDBY
+
+    def _release_power_dependency_transport(self) -> None:
+        try:
+            self.release_power_dependency_local()
+        except Exception as error:
+            self.warn(f"Power-loss transport cleanup failed: {error}", True)
+
+    def probe_powered_hardware(self) -> Union[int, str]:
+        """Probe a restored supply without calling turn_on or moving hardware."""
+        self._device_id_internal, self._uri = -1, b""
+        self.find_device()
+        if self._device_id_internal == -1:
+            return "hardware did not respond after power was restored"
+        return 0
+
+    def _power_dependency_monitor_loop(self, stop_event: Event) -> None:
+        while not stop_event.wait(
+            max(0.2, float(self.power_dependency_poll_interval_s or 1.0))
+        ):
+            try:
+                self._observe_power_dependency()
+                self._run_power_dependency_probe_if_due()
+            except Exception as error:
+                self.warn(f"Power dependency monitor failed: {error}", True)
+
+    def _run_power_dependency_probe_if_due(self) -> None:
+        if not bool(getattr(self, "_power_probe_pending", False)):
+            return
+        if time.monotonic() < float(getattr(self, "_power_probe_due_at", 0.0)):
+            return
+        self._power_probe_pending = False
+        with self._get_lifecycle_lock():
+            state = self._observe_power_dependency(force=True)
+            if state.powered is not True:
+                return
+            result = self.probe_powered_hardware()
+            if operation_succeeded(result):
+                self.set_state(self.power_dependency_ready_state())
+                self._last_power_probe_error = ""
+                self._error = ""
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.CONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    f"{state.detail}; safe transport probe succeeded; operational initialisation has not been requested",
+                )
+                if self._power_dependency_auto_turn_on_enabled():
+                    self._power_dependency_status = (
+                        f"{state.detail}; safe probe succeeded; running automatic turn_on"
+                    )
+                    self.info(self._power_dependency_status, True)
+                    self.turn_on()
+                    if self.get_state() == DevState.ON:
+                        self.set_hardware_lifecycle(
+                            HardwareConnectionState.READY,
+                            InitializationState.SUCCEEDED,
+                            f"{state.detail}; safe probe and automatic operational initialisation succeeded",
+                        )
+                        self._power_dependency_status = (
+                            f"{state.detail}; safe probe succeeded; device was turned ON automatically"
+                        )
+                        self.info(self._power_dependency_status, True)
+                    else:
+                        self._power_dependency_status = (
+                            f"{state.detail}; safe probe succeeded but automatic turn_on "
+                            f"did not reach ON (state={self.get_state()})"
+                        )
+                        self.error(self._power_dependency_status)
+                    return
+                self._power_dependency_status = (
+                    f"{state.detail}; safe probe succeeded; awaiting explicit turn_on"
+                )
+                self.info(self._power_dependency_status, True)
+                return
+            message = f"Hardware power is ON but safe probe failed: {result}"
+            self._power_dependency_status = message
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                message,
+            )
+            self.set_state(DevState.FAULT)
+            if message != getattr(self, "_last_power_probe_error", ""):
+                self.error(message)
+                self._last_power_probe_error = message
+            self._schedule_power_probe(
+                float(self.power_dependency_reconnect_seconds or 5.0)
+            )
+
+    def _start_power_dependency_monitor(self) -> None:
+        if not self._power_dependency_is_configured():
+            return
+        self._stop_power_dependency_monitor()
+        self._power_dependency_monitor_stop = Event()
+        self._power_dependency_monitor_thread = Thread(
+            target=self._power_dependency_monitor_loop,
+            args=(self._power_dependency_monitor_stop,),
+            name=f"{self.__class__.__name__}-power-monitor",
+            daemon=True,
+        )
+        self._power_dependency_monitor_thread.start()
+
+    def _stop_power_dependency_monitor(self) -> None:
+        stop_event = getattr(self, "_power_dependency_monitor_stop", None)
+        monitor_thread = getattr(self, "_power_dependency_monitor_thread", None)
+        if stop_event is not None:
+            stop_event.set()
+        if (
+            monitor_thread is not None
+            and monitor_thread.is_alive()
+            and monitor_thread is not current_thread()
+        ):
+            monitor_thread.join(timeout=1.0)
+        self._power_dependency_monitor_stop = None
+        self._power_dependency_monitor_thread = None
 
     def _stop_error_timer(self):
         stop_event = getattr(self, "_error_timer_stop", None)
@@ -410,6 +796,7 @@ class DS_General(Device):
     def delete_device(self):
         """Release local maintenance resources when Tango removes this device."""
         self._stop_error_timer()
+        self._stop_power_dependency_monitor()
         parent_delete = getattr(super(), "delete_device", None)
         if parent_delete is not None:
             parent_delete()
@@ -491,6 +878,28 @@ class DS_General(Device):
             f"attempts={getattr(self, '_fault_recovery_attempts', 0)}; "
             f"last_error={getattr(self, '_last_fault_recovery_error', '')}"
         )
+
+    @attribute(
+        label="Power dependency status",
+        dtype=str,
+        access=AttrWriteType.READ,
+        doc="Read-only Netio dependency state; no PDU output is controlled.",
+    )
+    def power_dependency_status(self) -> str:
+        return str(getattr(self, "_power_dependency_status", "not initialised"))
+
+    def _power_dependency_allows_hardware_operation(self, *, force: bool = False) -> bool:
+        if not self._power_dependency_is_configured():
+            return True
+        state = self._observe_power_dependency(force=force)
+        if state.powered is True and not bool(
+            getattr(self, "_power_probe_pending", False)
+        ):
+            return True
+        if state.powered is True:
+            self.info(self._power_dependency_status, True)
+            return False
+        return False
 
     def int_time(self, stop_event=None):
         """Clear transient errors until device teardown requests cancellation."""
@@ -582,6 +991,8 @@ class DS_General(Device):
     @command(polling_period=polling_main)
     def get_controller_status(self):
         with self._get_lifecycle_lock():
+            if not self._power_dependency_allows_hardware_operation():
+                return
             state = self.get_state()
             state_ok = self.check_func_allowance(self.get_controller_status)
             if state_ok != 1 or not self._fault_recovery_due(state):
@@ -598,6 +1009,8 @@ class DS_General(Device):
     @command
     def turn_on(self):
         with self._get_lifecycle_lock():
+            if not self._power_dependency_allows_hardware_operation(force=True):
+                return
             if self.get_state() == DevState.ON:
                 self.info(f"{self.device_name} is already ON.", True)
                 return
@@ -648,6 +1061,8 @@ class DS_General(Device):
     def recover(self):
         """Run one immediate non-power-cycling health recovery attempt."""
         with self._get_lifecycle_lock():
+            if not self._power_dependency_allows_hardware_operation(force=True):
+                return "Recovery skipped: hardware power is not available"
             self._next_fault_recovery_at = 0.0
             result = self.get_controller_status_local()
             self._record_controller_status(result)

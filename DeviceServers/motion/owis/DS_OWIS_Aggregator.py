@@ -15,8 +15,13 @@ sys.path.append(str(app_folder1))
 
 try:
     from DeviceServers.base.motor import DS_MOTORIZED_MULTI_AXES
+    from DeviceServers.base.hardware_lifecycle import (
+        HardwareConnectionState,
+        InitializationState,
+    )
 except ModuleNotFoundError:
     from base.motor import DS_MOTORIZED_MULTI_AXES
+    from base.hardware_lifecycle import HardwareConnectionState, InitializationState
 
 
 class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
@@ -45,6 +50,12 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             DevState.ON,
         ],
         "get_controller_status": [
+            # This is a virtual routing device. OFF can mean that a reachable
+            # backend controller had no PDU power, not that its Tango server
+            # disappeared. Keep read-only health polling alive to reconnect
+            # when that power returns; _refresh_backends never activates axes.
+            DevState.OFF,
+            DevState.STANDBY,
             DevState.ON,
             DevState.MOVING,
             DevState.RUNNING,
@@ -142,10 +153,13 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
     def init_device(self):
         self._backend_proxies = {"three": None, "four": None}
         self._backend_alive = {"three": False, "four": False}
+        self._backend_reason = {"three": "", "four": ""}
         self._next_recovery_attempt_ts = 0.0
         self._last_recovery_wait_log_ts = 0.0
         super().init_device()
-        self.turn_on()
+        # Startup validates dependencies only.  It must not call ensure_on on
+        # a backend whose physical controller may be intentionally unpowered.
+        self.find_device()
 
     def register_variables_for_archive(self):
         from functools import partial
@@ -226,12 +240,38 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
     def _mark_backend_down(self, backend_kind: str, reason: str = ""):
         self._backend_alive[backend_kind] = False
         self._backend_proxies[backend_kind] = None
-        if reason:
-            self.error(
-                f"{self.device_name}: backend '{backend_kind}' is down: {reason}"
-            )
+        previous_reason = self._backend_reason.get(backend_kind, "")
+        self._backend_reason[backend_kind] = reason
+        if reason and reason != previous_reason:
+            message = f"{self.device_name}: backend '{backend_kind}' is down: {reason}"
+            if "power is OFF" in reason:
+                self.info(message, True)
+            else:
+                self.error(message)
 
-    def _connect_backend(self, backend_kind: str) -> Tuple[bool, str]:
+    def _backend_connection_detail(self, proxy: DeviceProxy) -> str:
+        try:
+            return str(proxy.read_attribute("controller_connection_status").value)
+        except Exception:
+            return ""
+
+    def _unpowered_backend_reason(self) -> str:
+        for backend_kind, reason in self._backend_reason.items():
+            if "power is OFF" in reason:
+                return f"backend '{backend_kind}' is intentionally OFF: {reason}"
+        return ""
+
+    def _set_off_for_unpowered_backend(self, reason: str) -> str:
+        message = f"OWIS aggregator is OFF because {reason}"
+        return self._mark_hardware_power_off(message)
+
+    @staticmethod
+    def _backend_is_ready(state: DevState) -> bool:
+        return state in (DevState.ON, DevState.STANDBY, DevState.MOVING, DevState.RUNNING)
+
+    def _connect_backend(
+        self, backend_kind: str, *, activate: bool = False
+    ) -> Tuple[bool, str]:
         name = self._backend_name(backend_kind)
         if not name:
             return False, f"empty device property for backend '{backend_kind}'"
@@ -239,12 +279,24 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             proxy = DeviceProxy(name)
             proxy.set_timeout_millis(int(self.backend_timeout_ms))
             proxy.ping()
-            try:
+            state = proxy.state()
+            if activate and state != DevState.ON:
+                # Activation is permitted only by an explicit aggregator
+                # turn_on/ensure_on command, never by polling or startup.
                 proxy.command_inout("ensure_on")
-            except Exception:
-                pass
+                state = proxy.state()
+            if not self._backend_is_ready(state):
+                detail = self._backend_connection_detail(proxy)
+                if detail:
+                    detail = f"; {detail}"
+                return (
+                    False,
+                    f"{name} is {state}; controller may be unpowered or unreachable. "
+                    f"No automatic recovery or axis initialisation was issued{detail}",
+                )
             self._backend_proxies[backend_kind] = proxy
             self._backend_alive[backend_kind] = True
+            self._backend_reason[backend_kind] = ""
             self.info(
                 f"{self.device_name}: connected backend '{backend_kind}' -> {name}",
                 True,
@@ -261,13 +313,24 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             return False
         try:
             proxy.ping()
+            state = proxy.state()
+            if not self._backend_is_ready(state):
+                detail = self._backend_connection_detail(proxy)
+                suffix = f"; {detail}" if detail else ""
+                self._mark_backend_down(
+                    backend_kind,
+                    f"{self._backend_name(backend_kind)} is {state}; "
+                    f"controller may be unpowered{suffix}",
+                )
+                return False
             self._backend_alive[backend_kind] = True
+            self._backend_reason[backend_kind] = ""
             return True
         except Exception as e:
             self._mark_backend_down(backend_kind, str(e))
             return False
 
-    def _refresh_backends(self, force: bool = False) -> bool:
+    def _refresh_backends(self, force: bool = False, *, activate: bool = False) -> bool:
         now = time.monotonic()
         if (not force) and now < self._next_recovery_attempt_ts:
             return all(self._backend_alive.values())
@@ -284,16 +347,21 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
             ok = False
             last_comment = ""
             for attempt in range(1, attempts + 1):
-                ok, last_comment = self._connect_backend(backend_kind)
+                ok, last_comment = self._connect_backend(backend_kind, activate=activate)
                 if ok:
                     break
                 if attempt < attempts:
                     time.sleep(attempt_delay)
-            if not ok:
-                self.error(
+            if not ok and last_comment != self._backend_reason.get(backend_kind, ""):
+                self._backend_reason[backend_kind] = last_comment
+                message = (
                     f"{self.device_name}: backend '{backend_kind}' connect failed: "
                     f"{last_comment}"
                 )
+                if "power is OFF" in last_comment:
+                    self.info(message, True)
+                else:
+                    self.error(message)
 
         all_ok = all(self._backend_alive.values())
         if all_ok:
@@ -332,37 +400,80 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
 
         if self._refresh_backends(force=True):
             self._device_id_internal, self._uri = 1, b"OWIS Aggregator"
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.CONNECTED,
+                InitializationState.NOT_REQUESTED,
+                "OWIS backend transports are connected; aggregate axis initialisation has not been requested",
+            )
             self.set_state(DevState.STANDBY)
         else:
-            self._device_id_internal, self._uri = -1, b""
-            self.set_state(DevState.FAULT)
+            reason = self._unpowered_backend_reason()
+            if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
+                self._set_off_for_unpowered_backend(reason)
+            else:
+                self._device_id_internal, self._uri = -1, b""
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "one or more OWIS backend transports are unavailable",
+                )
+                self.set_state(DevState.FAULT)
 
     def turn_on_local(self) -> Union[int, str]:
         # Idempotent: if already ON just return success (LabVIEW calls turn_on before moves)
         if self.get_state() == DevState.ON:
             return 0
 
-        if self._device_id_internal == -1:
-            self.find_device()
-        if self._device_id_internal == -1:
-            return f"Could NOT turn on {self.device_name}: backends are unavailable."
-
-        if not self._refresh_backends(force=True):
+        if not self._refresh_backends(force=True, activate=True):
+            reason = self._unpowered_backend_reason()
+            if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
+            else:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.DISCONNECTED,
+                    InitializationState.NOT_REQUESTED,
+                    "one or more OWIS backend transports are unavailable",
+                )
             self.set_state(DevState.FAULT)
             return (
                 f"Could NOT turn on {self.device_name}: at least one backend is down."
             )
 
+        self._device_id_internal, self._uri = 1, b"OWIS Aggregator"
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.CONNECTED,
+            InitializationState.IN_PROGRESS,
+            "OWIS backend transports are connected; aggregate axis initialisation is in progress",
+        )
         for axis in sorted(self._delay_lines_parameters.keys()):
             self.get_status_axis_local(axis)
             self.read_position_axis_local(axis)
         self.set_state(DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS aggregate axes are initialised and ready",
+        )
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
         self._backend_proxies = {"three": None, "four": None}
         self._backend_alive = {"three": False, "four": False}
         self._device_id_internal, self._uri = -1, b""
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.DISCONNECTED,
+            InitializationState.NOT_REQUESTED,
+            "OWIS aggregate was turned off explicitly",
+        )
         self.set_state(DevState.OFF)
         return 0
 
@@ -378,6 +489,20 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
     def get_controller_status_local(self) -> Union[int, str]:
         now = time.monotonic()
         if not self._refresh_backends(force=False):
+            reason = self._unpowered_backend_reason()
+            if reason:
+                self.set_hardware_lifecycle(
+                    HardwareConnectionState.POWER_OFF,
+                    InitializationState.NOT_REQUESTED,
+                    reason,
+                )
+                self._set_off_for_unpowered_backend(reason)
+                return 0
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.NOT_REQUESTED,
+                "one or more OWIS backend transports are unavailable",
+            )
             self.set_state(DevState.FAULT)
             if now - self._last_recovery_wait_log_ts >= 1.0:
                 remain = max(0.0, self._next_recovery_attempt_ts - now)
@@ -407,6 +532,11 @@ class DS_OWIS_Aggregator(DS_MOTORIZED_MULTI_AXES):
                 return pos_res
 
         self.set_state(DevState.MOVING if any_moving else DevState.ON)
+        self.set_hardware_lifecycle(
+            HardwareConnectionState.READY,
+            InitializationState.SUCCEEDED,
+            "OWIS backends are connected and aggregate status is current",
+        )
         return 0
 
     def init_axis_local(self, axis: int) -> Union[int, str]:

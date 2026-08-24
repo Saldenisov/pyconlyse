@@ -144,6 +144,34 @@ class DS_HAMAMATSU_STREAK(DS_General):
             "float32",
         )
 
+    def power_dependency_ready_state(self):
+        """RemoteEx is a Tango companion service, not the camera power state."""
+        return DevState.ON
+
+    def _handle_power_dependency_off(self, detail: str) -> None:
+        self._power_probe_pending = False
+        self._power_probe_due_at = 0.0
+        self._power_dependency_status = (
+            f"Streak hardware power is OFF ({detail}); RemoteEx service remains available."
+        )
+        # Keep Tango ON: it represents the controller process, while the
+        # dependency attribute represents the separately switched hardware.
+        self._mark_hardware_power_off(
+            self._power_dependency_status, tango_state=DevState.ON
+        )
+
+    def _handle_power_dependency_unavailable(self, detail: str) -> None:
+        self._power_dependency_status = f"Streak hardware power is unknown: {detail}"
+        self.set_hardware_lifecycle(
+            "POWER_STATUS_UNAVAILABLE", "UNKNOWN", self._power_dependency_status
+        )
+        self.set_state(DevState.ON)
+        self.warn(self._power_dependency_status, True)
+
+    def probe_powered_hardware(self) -> Union[int, str]:
+        """A PDU transition must not launch HPD-TA or issue camera commands."""
+        return 0
+
     def find_device(self):
         arg_return = -1, b""
         try:
@@ -164,6 +192,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
         treats every non-ON state as a failed power-up and reconnects RemoteEx,
         which interrupts the web control state while Live is active.
         """
+        power_state = self._observe_power_dependency()
+        if power_state.configured and power_state.powered is not True:
+            self.send_state_archive()
+            return 0
         result = self.get_controller_status_local()
         self.send_state_archive()
         if result != 0:
@@ -946,6 +978,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def StartApplication(self):
+        if not self._power_dependency_allows_hardware_operation(force=True):
+            raise RuntimeError(self._power_dependency_status)
+
         if (
             self._application_start_thread is not None
             and self._application_start_thread.is_alive()

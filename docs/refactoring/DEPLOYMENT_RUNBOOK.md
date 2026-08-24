@@ -100,8 +100,12 @@ with restrictive ACLs. The server derives JWT subject and role; callers cannot
 select either. Each approval binds explicit route ID, action, ordered targets,
 device, command, canonical args, UTC expiry, and a lowercase 256-bit hex nonce.
 Unknown, duplicate, missing, wildcard, or non-finite fields are rejected.
-Approval consumption uses an atomic `O_EXCL` marker before any proxy/Tango
-operation. There is no approval-generation API or tool. Expected HTTP errors
+Approval consumption creates a marker before any proxy/Tango operation. POSIX
+uses atomic `O_EXCL` plus marker and parent-directory `fsync`; Windows uses
+atomic `CreateFileW(CREATE_NEW)` with write-through, `WriteFile`, and
+`FlushFileBuffers` (no portable Windows directory-`fsync` equivalent). Any
+marker I/O error fails closed. There is no approval-generation API or tool.
+Expected HTTP errors
 are 401 (authentication), 403 (policy), 428 (missing approval), and 409
 (invalid/replayed approval). Existing explicit local opt-outs do not weaken
 production fail-closed validation. Protected V0 UI mutations remain
@@ -190,12 +194,12 @@ T11 focused checks (software-only):
   tests/unit/test_pytest_module_isolation.py
 ```
 
-The focused T11 suite collected and passed 151 tests in both forward and
+The focused T11 suite collected and passed 159 tests in both forward and
 reverse order, with one warning, under OS-level network denial. The default
-software-only lane collected 517 items with one collection skip and ran 510
+software-only lane collected 557 items with one collection skip and ran 550
 passed, 8 skipped, and 18 warnings. Full named-module statement coverage was
-67.3%; `hardware_authorization.py` was 70.9% (339/478), above its 60.0% floor;
-`device_api.py` was 52.4%. Frontend verification passed 6 suites/31 tests with
+68.0%; `hardware_authorization.py` was 71.2% (380/534), above its 60.0% floor;
+`device_api.py` was 54.3%. Frontend verification passed 7 suites/32 tests with
 96.11% statements and 89.87% branches; production build passed with existing
 hook and bundle-size warnings.
 

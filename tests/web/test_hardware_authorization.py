@@ -307,6 +307,148 @@ def test_invalid_utc_offset_is_409(tmp_path):
     assert exc.value.status_code == 409
 
 
+@pytest.mark.parametrize("field", ["issued_at", "expires_at"])
+def test_nonzero_utc_offset_is_409(tmp_path, field):
+    issued_at = datetime.now(timezone.utc)
+    expires_at = issued_at + timedelta(seconds=60)
+    data = approval(expires_at=expires_at.isoformat())
+    data["issued_at"] = issued_at.isoformat()
+    offset = timezone(timedelta(hours=1))
+    data[field] = (issued_at if field == "issued_at" else expires_at).astimezone(offset).isoformat()
+    config = write_contract(tmp_path, approval=data)
+    with pytest.raises(AuthorizationError) as exc:
+        authorize_operation(config, subject="alice", role="operator", operation=operation(), nonce=NONCE)
+    assert exc.value.status_code == 409
+
+
+class _FakeWindowsKernel32:
+    def __init__(self, *, write_ok=True, flush_ok=True, close_ok=True):
+        self.write_ok = write_ok
+        self.flush_ok = flush_ok
+        self.close_ok = close_ok
+        self.last_error = 5
+        self.created = set()
+        self.calls = []
+
+    def CreateFileW(self, path, desired_access, share_mode, security, creation, flags, template):
+        self.calls.append(("create", path, desired_access, share_mode, creation, flags))
+        if path in self.created:
+            self.last_error = 80
+            return -1
+        Path(path).touch(exist_ok=False)
+        self.created.add(path)
+        return 101
+
+    def WriteFile(self, handle, buffer, length, written, overlapped):
+        self.calls.append(("write", handle, length))
+        if not self.write_ok:
+            self.last_error = 1117
+            return False
+        written._obj.value = length
+        return True
+
+    def FlushFileBuffers(self, handle):
+        self.calls.append(("flush", handle))
+        if not self.flush_ok:
+            self.last_error = 112
+        return self.flush_ok
+
+    def CloseHandle(self, handle):
+        self.calls.append(("close", handle))
+        if not self.close_ok:
+            self.last_error = 6
+        return self.close_ok
+
+    def GetLastError(self):
+        return self.last_error
+
+
+def _use_mocked_windows_consumption(monkeypatch, kernel32):
+    monkeypatch.setattr(hardware_authorization, "_is_windows", lambda: True)
+    monkeypatch.setattr(hardware_authorization, "_native_windows", lambda: False)
+    monkeypatch.setattr(hardware_authorization, "_windows_kernel32", lambda: kernel32)
+
+
+def test_windows_error_uses_ctypes_saved_error_on_native_windows(monkeypatch):
+    kernel32 = _FakeWindowsKernel32()
+    monkeypatch.setattr(hardware_authorization, "_native_windows", lambda: True)
+    monkeypatch.setattr(hardware_authorization, "_ctypes_last_error", lambda: 1234)
+    kernel32.GetLastError = lambda: pytest.fail("native path must not call GetLastError")
+
+    assert hardware_authorization._windows_error(kernel32, "marker failure").errno == 1234
+
+
+def test_windows_consumption_is_create_new_write_through_and_precedes_side_effect(monkeypatch, tmp_path):
+    config = write_contract(tmp_path, approval=approval())
+    kernel32 = _FakeWindowsKernel32()
+    _use_mocked_windows_consumption(monkeypatch, kernel32)
+    effects = []
+
+    authorize_operation(
+        config,
+        subject="alice",
+        role="operator",
+        operation=operation(),
+        nonce=NONCE,
+        before_side_effect=lambda: effects.append(
+            (config.consumed_dir / f"{NONCE}.used").exists()
+        ),
+    )
+
+    assert [call[0] for call in kernel32.calls] == ["create", "write", "flush", "close"]
+    create = kernel32.calls[0]
+    assert create[3] == 0 and create[4] == 1
+    assert create[5] & 0x80000000
+    assert effects == [True]
+
+
+def test_windows_consumption_replay_fails_closed(monkeypatch, tmp_path):
+    config = write_contract(tmp_path, approval=approval())
+    kernel32 = _FakeWindowsKernel32()
+    _use_mocked_windows_consumption(monkeypatch, kernel32)
+    assert consume_approval(config, NONCE) is True
+    with pytest.raises(AuthorizationError) as exc:
+        consume_approval(config, NONCE)
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.parametrize(
+    ("failure", "error_code"),
+    [("write_ok", 1117), ("flush_ok", 112)],
+)
+def test_windows_marker_write_or_flush_failure_fails_closed(
+    monkeypatch, tmp_path, failure, error_code
+):
+    config = write_contract(tmp_path, approval=approval())
+    kernel32 = _FakeWindowsKernel32(**{failure: False})
+    _use_mocked_windows_consumption(monkeypatch, kernel32)
+    effects = []
+    with pytest.raises(AuthorizationError) as exc:
+        authorize_operation(
+            config,
+            subject="alice",
+            role="operator",
+            operation=operation(),
+            nonce=NONCE,
+            before_side_effect=lambda: effects.append(True),
+        )
+    assert exc.value.status_code == 409
+    assert exc.value.__cause__.errno == error_code
+    assert [call[0] for call in kernel32.calls][-1] == "close"
+    assert (config.consumed_dir / f"{NONCE}.used").exists()
+    assert effects == []
+
+
+def test_windows_close_failure_fails_closed_after_marker_creation(monkeypatch, tmp_path):
+    config = write_contract(tmp_path, approval=approval())
+    kernel32 = _FakeWindowsKernel32(close_ok=False)
+    _use_mocked_windows_consumption(monkeypatch, kernel32)
+    with pytest.raises(AuthorizationError) as exc:
+        consume_approval(config, NONCE)
+    assert exc.value.status_code == 409
+    assert [call[0] for call in kernel32.calls] == ["create", "write", "flush", "close"]
+
+
 def test_environment_config_requires_absolute_external_directories(monkeypatch, tmp_path):
     config_root = tmp_path / "external"
     config = write_contract(config_root, approval=None)

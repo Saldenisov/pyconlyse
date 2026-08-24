@@ -52,13 +52,14 @@ namespace DS_Netio_pdu_Wrapper
                 Console.WriteLine("PYCONLYSE: " + pyconlyse);
                 Console.WriteLine("=====================================================");
 
-// Prepare launch parameters
+// The executable is the Astor entry point. Delegate to the shared launcher so
+// that console output is mirrored to the convention used by Starter.DevReadLog.
 string deviceDir = Path.Combine(pyconlyse, @"DeviceServers\power\netio");
 string title = "DS_Netio_pdu [" + instanceName + "]";
-string activatePath = Path.Combine(anaconda, @"Scripts\activate.bat");
-string innerCmd = "cmd /k \"call \"" + activatePath + "\" " + pyconlyseEnv +
-                  " && set DISABLE_ARCHIVE=1" +
-                  " && echo Starting DS_Netio_pdu device server... && python DS_Netio_pdu.py " + instanceName + "\"";
+string launcherPath = Path.Combine(pyconlyse, @"DeviceServers\run_logged_server.cmd");
+string runnerArgs = "call \"" + launcherPath + "\" \"DS_Netio_pdu\" \"" +
+                    instanceName + "\" \"" + deviceDir + "\" \"DS_Netio_pdu.py\" " +
+                    "\"DISABLE_ARCHIVE=1\"";
 
 // Try Windows Terminal tab first
 bool launched = false;
@@ -66,7 +67,7 @@ try
 {
     ProcessStartInfo psiWT = new ProcessStartInfo();
     psiWT.FileName = "wt.exe";
-    psiWT.Arguments = "-w 0 nt --title \"" + title + "\" -d \"" + deviceDir + "\" " + innerCmd;
+    psiWT.Arguments = "-w 0 nt --title \"" + title + "\" -d \"" + deviceDir + "\" cmd /k " + runnerArgs;
     psiWT.UseShellExecute = true;
     psiWT.CreateNoWindow = false;
     psiWT.WindowStyle = ProcessWindowStyle.Normal;
@@ -89,9 +90,7 @@ if (!launched)
     // Fallback to separate Command Prompt window
     ProcessStartInfo psiCmd = new ProcessStartInfo();
     psiCmd.FileName = "cmd.exe";
-    psiCmd.Arguments = "/k \"title " + title + " && cd /d \"" + deviceDir + "\" && \"" + activatePath + "\" " + pyconlyseEnv +
-                       " && set DISABLE_ARCHIVE=1" +
-                       " && echo Starting DS_Netio_pdu device server... && python DS_Netio_pdu.py " + instanceName + "\"";
+    psiCmd.Arguments = "/k " + runnerArgs;
     psiCmd.UseShellExecute = true;
     psiCmd.CreateNoWindow = false;
     psiCmd.WindowStyle = ProcessWindowStyle.Normal;
