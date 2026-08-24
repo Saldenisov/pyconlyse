@@ -168,7 +168,7 @@
 
         async function listCameras() {
             try {
-                const response = await fetch(`${API_BASE}/cameras`);
+                const response = await hardwareApprovalFetch(`${API_BASE}/cameras`);
                 const data = await response.json();
                 log(JSON.stringify(data, null, 2));
                 
@@ -199,7 +199,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/info`);
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/info`);
                 const data = await response.json();
                 log(JSON.stringify(data, null, 2));
             } catch (err) {
@@ -214,7 +214,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`);
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`);
                 const data = await response.json();
                 log(JSON.stringify(data, null, 2));
             } catch (err) {
@@ -236,7 +236,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`, {
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ [paramName]: value })
@@ -255,7 +255,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'start' })
@@ -274,7 +274,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ action: 'stop' })
@@ -293,7 +293,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`);
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`);
                 const data = await response.json();
                 log(JSON.stringify(data, null, 2));
             } catch (err) {
@@ -308,7 +308,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/trigger`, {
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/trigger`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' }
                 });
@@ -326,7 +326,7 @@
             }
             
             try {
-                const response = await fetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
+                const response = await hardwareApprovalFetch(`${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/image`);
                 const data = await response.json();
                 
                 if (data.success && data.image) {
@@ -411,5 +411,6 @@
             listCameras();
         });
     </script>
+    <script src="/hardwareApprovalTransport.js"></script>
 </body>
 </html>

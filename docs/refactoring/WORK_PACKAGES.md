@@ -275,8 +275,9 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. The default/full lane collected 557 items with one collection
-skip and ran 550 passed, 8 skipped, and 18 warnings. Manual probes, legacy, integration, main-app, and utilities stay
+one warning. Final full offline deny-network gate passed tooling 26; Python
+551 passed, 8 skipped; frontend 10 suites/83 tests with 96.66% statements,
+90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import
 safety, and module-isolation regressions. V0 initialization is rejected with
 403 when enforcement is enabled unless an exact approval is supplied; the
@@ -307,6 +308,33 @@ gate; it must never restore JWT-only mutation access. This package prescribes
 no equipment, Tango, PDU, motion, shutter, power, deploy, or restart commands.
 
 ## Sol review packages
+
+### Package A: Universal frontend approval transport
+
+Scope is limited to exact paths listed under `[packages.A]` in
+`work-packages.toml`. It adds operator paste/arm UI and one-shot
+`X-PYCONLYSE-HARDWARE-APPROVAL` transport composed with CSRF for same-origin
+unsafe mutations. Input is exact lowercase 64-hex; approval is consumed before
+the single fetch attempt, including reject/throw, and is never generated.
+Safe/cross-origin requests do not consume it; caller headers are stripped and
+status is visible. Login POST is excluded. Shared V0 helper flows are covered.
+Treatment mutations use CSRF-only transport and preserve armed approval.
+Hardware fan-out fails closed before fetch, consumes stale approval, and never
+retries after dispatch ambiguity/failure; cameras bulk maps and protected V0
+Promise.all therefore require one nonce per mutation or an exact-plan backend
+batch. Shared V0 nonhardware POSTs are CSRF-only for `/config`,
+`/hardware-config`, `/hardware/preflight`, `/faraday`, `/crystal/move`, `/reset`,
+`/run=false`, and `/realtime=false`; approval covers initialize, true run/
+realtime, and stage/sample move/stop.
+Protected `PumpProbeV0.js` direct server/data mutation fetches remain outside
+scope and block deployment.
+
+Package A also covers public transport used by Flask-served pages and
+standalone tests. VD2 automatic/button/post-action refresh is passive GET;
+explicit Read hardware is the only Refresh Status POST. Same-turn bulk camera
+maps reject before any fetch. Protected V0 raw direct fetches cannot attach an
+approval header and rely on backend fail-closed rejection. Future
+WebSocket `execute_command` needs separate `approval_nonce` transport.
 
 ### R1: Contract review
 

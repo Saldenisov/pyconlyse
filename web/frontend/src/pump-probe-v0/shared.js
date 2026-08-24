@@ -1,5 +1,9 @@
 
-import { withCsrfToken } from '../api/csrfRequest';
+import {
+  fetchWithCsrfToken,
+  fetchWithHardwareApproval,
+  isHardwareApprovalConcurrencyError,
+} from '../api/csrfRequest';
 
 // Shared V0 domain constants, API helpers, and selection math.
 const PIXELS = 512;
@@ -12,13 +16,72 @@ const DEFAULT_SAMPLE_POSITIONS_MM = Array.from({ length: 7 }, (_value, index) =>
 const MM_PER_PS = 0.0749481145;
 const API_BASE = '/api/pump-probe-v0';
 
+function isUnsafeRequest(options) {
+  return !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(String(options.method || 'GET').toUpperCase());
+}
+
+function hasExplicitlyDisabledJsonAction(options, field) {
+  if (typeof options.body !== 'string') {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(options.body);
+    return payload !== null
+      && typeof payload === 'object'
+      && !Array.isArray(payload)
+      && payload[field] === false;
+  } catch (_error) {
+    return false;
+  }
+}
+
+function requiresPumpProbeHardwareApproval(path, options) {
+  if (!isUnsafeRequest(options)) {
+    return false;
+  }
+
+  if (path === '/hardware/initialize'
+    || path === '/stage/move'
+    || path === '/stage/stop'
+    || path === '/sample-stage/move'
+    || path === '/sample-stage/stop') {
+    return true;
+  }
+
+  if (path === '/run') {
+    return !hasExplicitlyDisabledJsonAction(options, 'running');
+  }
+  if (path === '/realtime') {
+    return !hasExplicitlyDisabledJsonAction(options, 'enabled');
+  }
+  return false;
+}
+
+function requiresDeviceHardwareApproval(url, options) {
+  return isUnsafeRequest(options)
+    && typeof url === 'string'
+    && (url === '/api/device' || url.startsWith('/api/device/'));
+}
+
+function fetchV0Request(url, options, requiresHardwareApproval) {
+  return requiresHardwareApproval
+    ? fetchWithHardwareApproval(url, options)
+    : fetchWithCsrfToken(url, options);
+}
+
 async function pumpProbeRequest(path, options = {}) {
   const url = `${API_BASE}${path}`;
-  const response = await fetch(url, withCsrfToken(url, {
+  const requestOptions = {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     credentials: 'include',
     ...options,
-  }));
+  };
+  const response = await fetchV0Request(
+    url,
+    requestOptions,
+    requiresPumpProbeHardwareApproval(path, requestOptions)
+  );
   if (!response.ok) {
     let message = `Pump-probe V0 API failed: ${response.status}`;
     try {
@@ -53,10 +116,11 @@ function compactHardwareError(errors) {
 }
 
 async function fetchJsonWithRetry(url, options = {}, attempts = 3) {
+  const requiresHardwareApproval = requiresDeviceHardwareApproval(url, options);
   let lastError = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const response = await fetch(url, withCsrfToken(url, options));
+      const response = await fetchV0Request(url, options, requiresHardwareApproval);
       const payload = await response.json();
       if (!response.ok || payload.success === false) {
         throw new Error(payload.error || `Request failed: ${response.status}`);
@@ -64,7 +128,10 @@ async function fetchJsonWithRetry(url, options = {}, attempts = 3) {
       return payload;
     } catch (error) {
       lastError = error;
-      if (!isTransientTangoError(error.message) || attempt + 1 >= attempts) {
+      if (requiresHardwareApproval
+        || isHardwareApprovalConcurrencyError(error)
+        || !isTransientTangoError(error.message)
+        || attempt + 1 >= attempts) {
         throw error;
       }
       await new Promise((resolve) => { window.setTimeout(resolve, 1100); });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './CameraClient.css';
 
 const CameraClient = ({
@@ -212,11 +212,11 @@ const CameraClient = ({
     setLoading(true);
     try {
       const url = `${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'start' })
-      }));
+      });
       const data = await response.json();
       if (data.success) {
         const confirmedState = await pollGrabbingState(true);
@@ -241,11 +241,11 @@ const CameraClient = ({
     setLoading(true);
     try {
       const url = `${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/grabbing`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'stop' })
-      }));
+      });
       const data = await response.json();
       if (data.success) {
         const confirmedState = await pollGrabbingState(false);
@@ -276,11 +276,11 @@ const CameraClient = ({
     setLoading(true);
     try {
       const url = `${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/parameters`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [paramName]: parseFloat(value) })
-      }));
+      });
       const data = await response.json();
       if (data.success) {
         setParameters(prev => ({ ...prev, [paramName]: value }));
@@ -298,10 +298,10 @@ const CameraClient = ({
     setLoading(true);
     try {
       const url = `${API_BASE}/camera/${encodeURIComponent(selectedCamera)}/trigger`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
-      }));
+      });
       const data = await response.json();
       if (!data.success) {
         setError(data.error);

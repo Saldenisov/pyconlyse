@@ -170,7 +170,7 @@
                 statusDiv.innerHTML = '<div class="status">🔄 Connecting to device...</div>';
                 
                 // Test device connection
-                const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/slots`, {
+                const response = await hardwareApprovalFetch(`/api/device/ds_itest_psu/${deviceName}/slots`, {
                     credentials: 'include'
                 });
                 
@@ -306,7 +306,7 @@
         
         async function loadTabConfig(deviceName) {
             try {
-                const response = await fetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
+                const response = await hardwareApprovalFetch(`/api/device/ds_itest_psu/${deviceName}/tab_config`, {
                     credentials: 'include'
                 });
                 if (response.ok) {
@@ -504,7 +504,7 @@
                     return; // recent WS update, skip poll
                 }
                 try {
-                    const resp = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slots`);
+                    const resp = await hardwareApprovalFetch(`/api/device/ds_itest_psu/${currentDeviceName}/slots`);
                     if (resp.ok) {
                         const json = await resp.json();
                         if (json && json.slots) {
@@ -571,7 +571,7 @@
         
         async function setSlotCurrent(slotId, value) {
             try {
-                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/current`, {
+                const response = await hardwareApprovalFetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/current`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -590,7 +590,7 @@
         
         async function toggleSlot(slotId, enabled) {
             try {
-                const response = await fetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/state`, {
+                const response = await hardwareApprovalFetch(`/api/device/ds_itest_psu/${currentDeviceName}/slot/${slotId}/state`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -628,5 +628,6 @@
             }
         }
     </script>
+    <script src="/hardwareApprovalTransport.js"></script>
 </body>
 </html>

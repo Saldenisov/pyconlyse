@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import CameraClient from './components/CameraClient';
-import { withCsrfToken } from './api/csrfRequest';
+import { fetchWithHardwareApproval } from './api/csrfRequest';
 import './css/DeviceClients.css';
 import './css/CamerasClients.css';
 
@@ -154,12 +154,12 @@ const CamerasClients = () => {
       loadedCameraNames.map(async (cameraName) => {
         try {
           const url = `${API_BASE}/camera/${encodeURIComponent(cameraName)}/grabbing`;
-          const response = await fetch(url, withCsrfToken(url, {
+          const response = await fetchWithHardwareApproval(url, {
             method: 'POST',
             credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action }),
-          }));
+          });
           const payload = await response.json();
           if (!response.ok || !payload.success) {
             throw new Error(payload.error || `HTTP ${response.status}`);

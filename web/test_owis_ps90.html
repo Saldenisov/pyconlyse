@@ -561,8 +561,8 @@
         async function loadControllerModel(target) {
             const { deviceName, role, axes } = target;
             const [attrResponse, infoResponse] = await Promise.all([
-                fetch(`/api/device/${deviceName}/attributes`, { credentials: 'include' }),
-                fetch(`/api/device/${deviceName}/info`, { credentials: 'include' })
+                hardwareApprovalFetch(`/api/device/${deviceName}/attributes`, { credentials: 'include' }),
+                hardwareApprovalFetch(`/api/device/${deviceName}/info`, { credentials: 'include' })
             ]);
 
             if (!attrResponse.ok) {
@@ -759,7 +759,7 @@
         }
 
         async function runAxisCommand(axis, commandName, args) {
-            const response = await fetch(`/api/device/${axis.deviceName}/command/${commandName}`, {
+            const response = await hardwareApprovalFetch(`/api/device/${axis.deviceName}/command/${commandName}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'include',
@@ -1023,5 +1023,6 @@
             onProfileChange();
         });
     </script>
+    <script src="/hardwareApprovalTransport.js"></script>
 </body>
 </html>

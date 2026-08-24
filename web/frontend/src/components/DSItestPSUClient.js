@@ -1,7 +1,7 @@
 // DSItestPSUClient.js - Multi-slot DS iTest PSU web client
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DSItestPSUClient.css';
 
 const formatCurrent = (value, digits = 3) => {
@@ -109,12 +109,12 @@ const DSItestPSUClient = ({ deviceName }) => {
   const setSlotCurrent = async (slotId, currentValue) => {
     try {
       const url = `/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/current`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ current: currentValue })
-      }));
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -138,12 +138,12 @@ const DSItestPSUClient = ({ deviceName }) => {
   const setSlotState = async (slotId, enabled) => {
     try {
       const url = `/api/device/ds_itest_psu/${deviceName}/slot/${slotId}/state`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ enabled })
-      }));
+      });
       
       if (response.ok) {
         const data = await response.json();

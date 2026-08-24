@@ -142,6 +142,30 @@ npm test -- --watchAll=false --runInBand \
 cd ../..
 ```
 
+## Package A frontend approval transport
+
+Focused Jest command covering hardwareApprovalRequest, treatmentClient, shared
+V0, PumpProbeVD2, HardwareApprovalControl, and standalone transport: 6
+suites/70 tests passed. Final full offline deny-network gate: tooling 26
+passed; Python 551 passed, 8 skipped; frontend 10 suites/83 tests; frontend
+coverage 96.66% statements, 90.08% branches, 97.87% functions, and 96.61%
+lines. Production build passed with existing hook/bundle warnings. Coverage
+verifies exact lowercase 64-hex input,
+CSRF-plus-approval composition, caller-header stripping, one-shot consumption
+before successful, rejected, or thrown same-origin unsafe fetch attempts,
+non-consumption for safe/cross-origin requests, no nonce generation, and
+visible consumed status. Login POST is intentionally excluded. Shared V0
+helper flows are covered; direct server/data mutations in protected
+`web/frontend/src/PumpProbeV0.js` remain a blocker.
+
+Executed test scope includes the public transport, standalone tests, Flask-served
+camera/PSU/PDU/OWIS pages, and VD2 tests. It checks passive VD2 refresh loaders
+versus explicit Refresh Status POST, same-turn bulk-map rejection before any fetch,
+protected V0 Promise.all/direct fetch limitations, and separate future
+WebSocket `approval_nonce` transport. Measured frontend collect coverage remains
+restricted to `src/api/csrfRequest.js`, `src/api/treatmentClient.js`, and
+`src/utils/deviceFamily.js`.
+
 T11 additionally requires roles, strict device/command/args allowlists, and
 one-shot approval bound to user/action/device/args/expiry; JWT alone is
 insufficient. Protected `PumpProbeV0.js` remains untouched and cannot attach
@@ -197,10 +221,10 @@ above its committed 60.0% floor. Dedicated focused branch coverage measured
 `web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Full software-only evidence: 557 items collected with one collection skip;
-550 passed, 8 skipped, and 18 warnings. Frontend verification passed 7
-suites/32 tests with 96.11% statements and 89.87% branches; production build
-passed with existing hook and bundle-size warnings.
+Final full offline deny-network evidence: tooling 26 passed; Python 551 passed,
+8 skipped; frontend 10 suites/83 tests with 96.66% statements, 90.08% branches,
+97.87% functions, and 96.61% lines; production build passed with existing
+hook/bundle warnings.
 
 Fail-closed contract cases: enforced iTest increment/decrement derived-value
 actions must return 403 without an exact ordered plan; iTest set remains

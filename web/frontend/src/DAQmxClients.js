@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { withCsrfToken } from './api/csrfRequest';
+import { fetchWithHardwareApproval } from './api/csrfRequest';
 import './css/DeviceClients.css';
 import './css/DAQmxClients.css';
 
@@ -126,12 +126,12 @@ const DAQmxClients = () => {
     setWriteResult('');
     try {
       const url = `/api/daqmx/device/${encodeURIComponent(loadedDeviceName)}/write`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ channel, value }),
-      }));
+      });
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `DAQmx write failed (${response.status})`);

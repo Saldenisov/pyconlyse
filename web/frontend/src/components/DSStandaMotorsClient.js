@@ -1,7 +1,7 @@
 // DSStandaMotorsClient.js - Multi-motor Standa web client with config selection
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DSStandaMotorsClient.css';
 
 // Layout configurations from DS_STANDA_client.py
@@ -306,12 +306,12 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
   const moveMotorAbsolute = async (motorName, targetPosition) => {
     try {
       const url = `/api/device/${motorName}/command/move_axis_abs`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [targetPosition] })
-      }));
+      });
       
       if (response.ok) {
         // Update local state optimistically
@@ -347,12 +347,12 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
   const turnMotorOn = async (motorName) => {
     try {
       const url = `/api/device/${motorName}/command/turn_on`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [] })
-      }));
+      });
       
       if (response.ok) {
         setError(null);
@@ -367,12 +367,12 @@ const DSStandaMotorsClient = ({ defaultConfig = "V0_short", motorOverride = null
   const stopMotor = async (motorName) => {
     try {
       const url = `/api/device/${motorName}/command/stop_movement`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: [] })
-      }));
+      });
       
       if (response.ok) {
         setError(null);

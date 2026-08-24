@@ -1,4 +1,4 @@
-import { fetchVd2 } from './PumpProbeVD2';
+import { fetchVd2, refreshVd2Passive } from './PumpProbeVD2';
 
 const originalFetch = global.fetch;
 
@@ -45,5 +45,15 @@ describe('fetchVd2', () => {
     fetchVd2('/api/pump-probe-vd2/state', options);
 
     expect(global.fetch).toHaveBeenCalledWith('/api/pump-probe-vd2/state', options);
+  });
+
+  test('uses only passive state and readiness loaders for automatic refresh', async () => {
+    const loadState = jest.fn().mockResolvedValue();
+    const loadStartupReadiness = jest.fn().mockResolvedValue();
+
+    await refreshVd2Passive(loadState, loadStartupReadiness);
+
+    expect(loadState).toHaveBeenCalledTimes(1);
+    expect(loadStartupReadiness).toHaveBeenCalledTimes(1);
   });
 });

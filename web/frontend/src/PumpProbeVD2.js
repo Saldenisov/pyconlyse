@@ -1,11 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { withCsrfToken } from './api/csrfRequest';
+import { fetchWithHardwareApproval } from './api/csrfRequest';
 import './css/PumpProbeVD2.css';
 
 const API_BASE = '/api/pump-probe-vd2';
 
 export function fetchVd2(url, options = {}) {
-  return fetch(url, withCsrfToken(url, options));
+  return fetchWithHardwareApproval(url, options);
+}
+
+export async function refreshVd2Passive(loadState, loadStartupReadiness) {
+  await loadState();
+  await loadStartupReadiness();
 }
 
 const TIME_RANGES = [
@@ -768,11 +773,6 @@ function PumpProbeVD2() {
 
   const writeParameter = useCallback((name, value) => runRequest(`/parameter/${name}`, { value }), [runRequest]);
   const runCommand = useCallback((name) => runRequest(`/command/${name}`), [runRequest]);
-  const refreshStatus = useCallback(() => {
-    if (state?.connected) return runCommand('RefreshStatus');
-    return loadState();
-  }, [loadState, runCommand, state?.connected]);
-
   const loadStartupReadiness = useCallback(async () => {
     try {
       const [powerResponse, runtimeResponse] = await Promise.all([
@@ -795,9 +795,8 @@ function PumpProbeVD2() {
   }, [loadStartupReadiness]);
 
   const refreshAll = useCallback(async () => {
-    await refreshStatus();
-    await loadStartupReadiness();
-  }, [loadStartupReadiness, refreshStatus]);
+    await refreshVd2Passive(loadState, loadStartupReadiness);
+  }, [loadStartupReadiness, loadState]);
 
   const initializeExperiment = useCallback(async () => {
     setBusy(true);
@@ -966,9 +965,9 @@ function PumpProbeVD2() {
     try {
       const nextStates = outputs.map((output) => Number(output.id) === channel.outputId ? (enabled ? 1 : 0) : Number(output.state));
       const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      }));
+      });
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not switch ${channel.label}`);
       await loadHardware();
@@ -988,9 +987,9 @@ function PumpProbeVD2() {
       const outputIds = new Set(VD2_POWER_CHANNELS.map((channel) => channel.outputId));
       const nextStates = outputs.map((output) => outputIds.has(Number(output.id)) ? (enabled ? 1 : 0) : Number(output.state));
       const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      }));
+      });
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || 'Could not switch VD2 power');
       await loadHardware();
@@ -1006,10 +1005,10 @@ function PumpProbeVD2() {
     setHardwareError('');
     try {
       const url = '/api/server/control';
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ action, device_name: server.device }),
-      }));
+      });
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not ${action} ${server.label}`);
       await loadHardware();
@@ -1027,9 +1026,9 @@ function PumpProbeVD2() {
 
   useEffect(() => {
     if (activeTab === 'hardware' && state?.connected && state?.application_running) {
-      runCommand('RefreshStatus');
+      refreshAll();
     }
-  }, [activeTab, runCommand, state?.application_running, state?.connected]);
+  }, [activeTab, refreshAll, state?.application_running, state?.connected]);
   const updateLutRange = useCallback((bound, value) => {
     setLutRange((previous) => {
       if (bound === 'minimum') {

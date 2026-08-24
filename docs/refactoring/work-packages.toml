@@ -244,3 +244,40 @@ allowed_paths = [
   "tests/_tango_stub.py",
 ]
 allowed_globs = ["docs/refactoring/**"]
+
+[packages.A]
+agent = "terra"
+description = "Universal frontend hardware-approval transport"
+allowed_paths = [
+  "web/frontend/src/App.js",
+  "web/frontend/src/CamerasClients.js",
+  "web/frontend/src/DAQmxClients.js",
+  "web/frontend/src/Dashboard.js",
+  "web/frontend/src/PumpProbeVD2.js",
+  "web/frontend/src/PumpProbeVD2.test.js",
+  "web/frontend/src/api/standaloneHardwareApprovalTransport.test.js",
+  "web/frontend/src/api/csrfRequest.js",
+  "web/frontend/src/api/hardwareApprovalRequest.test.js",
+  "web/frontend/src/api/treatmentClient.js",
+  "web/frontend/src/api/treatmentClient.test.js",
+  "web/frontend/src/pump-probe-v0/shared.test.js",
+  "web/frontend/src/components/AndorNewtonClient.js",
+  "web/frontend/src/components/AndorSpectrographClient.js",
+  "web/frontend/src/components/CameraClient.js",
+  "web/frontend/src/components/DSItestPSUClient.js",
+  "web/frontend/src/components/DSNetioPDUClient.js",
+  "web/frontend/src/components/DSStandaMotorsClient.js",
+  "web/frontend/src/components/DeviceControl.js",
+  "web/frontend/src/components/HardwareApprovalControl.js",
+  "web/frontend/src/components/HardwareApprovalControl.test.js",
+  "web/frontend/src/components/ITestPSUClient.js",
+  "web/frontend/src/pump-probe-v0/shared.js",
+  "web/frontend/public/hardwareApprovalTransport.js",
+  "web/basler_camera.html",
+  "web/test_camera_api.html",
+  "web/test_ds_itest_psu.html",
+  "web/test_netio_pdu.html",
+  "web/test_owis_ps90.html",
+  "web/test_standa_motors.html",
+]
+allowed_globs = ["docs/refactoring/**"]

@@ -88,6 +88,33 @@ Production and explicit local auth enforcement cover all non-safe methods in
 device, treatment, VD2, and V0 APIs. Device debug-monitor GET is passive; the
 explicit monitor-start POST is authenticated and mutation-protected.
 `treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers.
+Treatment mutations use CSRF-only transport and preserve an armed hardware
+nonce.
+
+Frontend hardware approval is operator-pasted lowercase 64-hex input.
+`fetchWithHardwareApproval` composes CSRF and
+`X-PYCONLYSE-HARDWARE-APPROVAL`, strips caller-supplied approval headers, and
+consumes the nonce before one same-origin unsafe fetch attempt, including
+rejected or synchronously thrown attempts. Safe/cross-origin requests do not
+consume it; the browser never generates one. UI status is visible. Login POST
+intentionally excludes this header. Protected `PumpProbeV0.js` direct
+server/data mutation fetches remain a deployment blocker.
+
+VD2 automatic, button, and post-action refreshes are passive GET loaders; only
+explicit Read hardware invokes Refresh Status POST. Same-turn bulk maps fail
+closed before any fetch when fan-out would reuse one nonce; stale approval is
+consumed, fresh approval works later, and requests do not retry after dispatch
+ambiguity/failure. Shared-helper Promise.all fan-out is covered by this
+zero-fetch rejection. Protected `PumpProbeV0.js` raw direct mutations reach the
+backend without an approval header and rely on backend fail-closed rejection;
+they remain deploy-blocked. Future WebSocket
+`execute_command` needs separate `approval_nonce` transport because HTTP
+approval headers do not cross WebSocket messages.
+
+Shared V0 nonhardware POSTs (`/config`, `/hardware-config`,
+`/hardware/preflight`, `/faraday`, `/crystal/move`, `/reset`, `/run=false`, and
+`/realtime=false`) are CSRF-only. Approval paths are `/hardware/initialize`, `/run=true`,
+`/realtime=true`, and stage/sample move/stop.
 
 T11 deployment blocker: hardware mutations require roles, strict device,
 command, and argument allowlists, plus one-shot human approval bound to user,
@@ -195,13 +222,11 @@ T11 focused checks (software-only):
 ```
 
 The focused T11 suite collected and passed 159 tests in both forward and
-reverse order, with one warning, under OS-level network denial. The default
-software-only lane collected 557 items with one collection skip and ran 550
-passed, 8 skipped, and 18 warnings. Full named-module statement coverage was
-68.0%; `hardware_authorization.py` was 71.2% (380/534), above its 60.0% floor;
-`device_api.py` was 54.3%. Frontend verification passed 7 suites/32 tests with
-96.11% statements and 89.87% branches; production build passed with existing
-hook and bundle-size warnings.
+reverse order, with one warning, under OS-level network denial. Final full
+offline deny-network gate passed tooling 26; Python 551 passed, 8 skipped;
+frontend 10 suites/83 tests with 96.66% statements, 90.08% branches, 97.87%
+functions, and 96.61% lines; production build passed with existing hook/bundle
+warnings. Existing named-module coverage remains recorded below.
 
 T11 covers HTTP, WebSocket, device, VD2, and backend V0 mutation gates. The
 protected V0 UI files remain unchanged and cannot yet attach approval nonces;

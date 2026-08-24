@@ -1,7 +1,7 @@
 // ITestPSUClient.js - Specialized client for iTest PSU devices
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './ITestPSUClient.css';
 
 async function fetchItestTabConfig(deviceName) {
@@ -270,12 +270,12 @@ const ITestPSUClient = ({ deviceName }) => {
   const setSlotOutputState = async (slotId, state) => {
     try {
       const url = `/api/device/itest/${deviceName}/slot/${slotId}/output`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ state })
-      }));
+      });
       
       if (response.ok) {
         await fetchSlotData();
@@ -295,12 +295,12 @@ const ITestPSUClient = ({ deviceName }) => {
       }
       
       const url = `/api/device/itest/${deviceName}/slot/${slotId}/current`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ value })
-      }));
+      });
       
       if (response.ok) {
         await fetchSlotData();

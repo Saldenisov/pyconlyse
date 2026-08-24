@@ -1,7 +1,7 @@
 // DeviceControl.js - Generic device control component
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DeviceControl.css';
 
 const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
@@ -213,14 +213,14 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
         await fetchAttributes();
       }
       const url = `/api/device/${deviceName}/attribute/${attributeName}`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({ value })
-      }));
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -248,14 +248,14 @@ const DeviceControl = ({ deviceName, deviceType = 'generic' }) => {
         await fetchCommands();
       }
       const url = `/api/device/${deviceName}/command/${commandName}`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         credentials: 'include',
         body: JSON.stringify({ args })
-      }));
+      });
       
       if (response.ok) {
         const data = await response.json();

@@ -507,7 +507,7 @@
 
         async function fetchAvailableDevices() {
             try {
-                const response = await fetch('/api/devices?server=*Standa*');
+                const response = await hardwareApprovalFetch('/api/devices?server=*Standa*');
                 if (!response.ok) {
                     throw new Error('Failed to fetch devices');
                 }
@@ -586,13 +586,13 @@
 
         async function fetchMotorData(motorName) {
             try {
-                const posResponse = await fetch(`/api/device/${motorName}/attribute/position`);
+                const posResponse = await hardwareApprovalFetch(`/api/device/${motorName}/attribute/position`);
                 const position = posResponse.ok ? (await posResponse.json()).value : 0;
                 
-                const stateResponse = await fetch(`/api/device/${motorName}/state`);
+                const stateResponse = await hardwareApprovalFetch(`/api/device/${motorName}/state`);
                 const state = stateResponse.ok ? (await stateResponse.json()).state : 'UNKNOWN';
                 
-                const propsResponse = await fetch(`/api/device/${motorName}/properties`);
+                const propsResponse = await hardwareApprovalFetch(`/api/device/${motorName}/properties`);
                 const props = propsResponse.ok ? await propsResponse.json() : {};
                 
                 motors[motorName] = {
@@ -683,7 +683,7 @@
 
         async function moveAbsolute(motorName, position) {
             try {
-                const response = await fetch(`/api/device/${motorName}/command/move_axis_abs`, {
+                const response = await hardwareApprovalFetch(`/api/device/${motorName}/command/move_axis_abs`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ args: [parseFloat(position)] })
@@ -706,7 +706,7 @@
 
         async function turnOn(motorName) {
             try {
-                await fetch(`/api/device/${motorName}/command/turn_on`, {
+                await hardwareApprovalFetch(`/api/device/${motorName}/command/turn_on`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ args: [] })
@@ -718,7 +718,7 @@
 
         async function stopMotor(motorName) {
             try {
-                await fetch(`/api/device/${motorName}/command/stop_movement`, {
+                await hardwareApprovalFetch(`/api/device/${motorName}/command/stop_movement`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ args: [] })
@@ -748,5 +748,6 @@
             loadConfiguration();
         };
     </script>
+    <script src="/hardwareApprovalTransport.js"></script>
 </body>
 </html>

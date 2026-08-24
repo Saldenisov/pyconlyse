@@ -1,7 +1,7 @@
 // DSNetioPDUClient.js - Multi-device NETIO PDU web client
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
-import { withCsrfToken } from '../api/csrfRequest';
+import { fetchWithHardwareApproval } from '../api/csrfRequest';
 import './DSNetioPDUClient.css';
 
 const DSNetioPDUClient = ({ deviceNames = [] }) => {
@@ -187,12 +187,12 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
       );
       
       const url = `/api/device/${devicePath(deviceName)}/command/set_channels_states`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
-      }));
+      });
 
       await parseJsonOrThrow(response, `Failed to set output ${outputId} for ${deviceName}`);
 
@@ -232,12 +232,12 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
       const states = device.outputs.map(() => state ? 1 : 0);
       
       const url = `/api/device/${devicePath(deviceName)}/command/set_channels_states`;
-      const response = await fetch(url, withCsrfToken(url, {
+      const response = await fetchWithHardwareApproval(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
-      }));
+      });
 
       await parseJsonOrThrow(response, `Failed to set all outputs for ${deviceName}`);
 

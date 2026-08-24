@@ -392,7 +392,7 @@
             
             for (const deviceName of deviceNames) {
                 try {
-                    const response = await fetch(`/api/device/${deviceName}/attributes`, {
+                    const response = await hardwareApprovalFetch(`/api/device/${deviceName}/attributes`, {
                         credentials: 'include'
                     });
                     
@@ -521,7 +521,7 @@
             );
             
             try {
-                const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+                const response = await hardwareApprovalFetch(`/api/device/${deviceName}/command/set_channels_states`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -549,7 +549,7 @@
             const states = device.outputs.map(() => stateValue);
             
             try {
-                const response = await fetch(`/api/device/${deviceName}/command/set_channels_states`, {
+                const response = await hardwareApprovalFetch(`/api/device/${deviceName}/command/set_channels_states`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
@@ -625,5 +625,6 @@
             });
         }
     </script>
+    <script src="/hardwareApprovalTransport.js"></script>
 </body>
 </html>

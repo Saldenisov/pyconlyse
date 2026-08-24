@@ -73,6 +73,35 @@ Refactoring must preserve these contracts unless a separately approved migration
 - `treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers to
   mutation requests. Protected V0 frontend files are not modified by this
   package.
+- Treatment mutations intentionally use CSRF-only transport and preserve any
+  armed hardware nonce for the next eligible mutation.
+- Universal frontend hardware approval is operator-driven: only an exact
+  lowercase 64-hex nonce may be armed. Transport composes `X-CSRF-TOKEN` with
+  `X-PYCONLYSE-HARDWARE-APPROVAL`, strips caller-supplied approval headers, and
+  consumes the nonce before one same-origin unsafe fetch attempt, including
+  rejected or synchronously thrown attempts. Safe/cross-origin requests do
+  not attach or consume it. The browser never generates a nonce; armed,
+  consumed, cleared, and invalid status is visible. Login POST intentionally
+  excludes hardware approval.
+- Wrapped clients cover cameras, DAQmx, dashboard, VD2, shared V0
+  helpers, generic device control, iTest/DS iTest PSU, Netio PDU, Standa
+  motors, Andor Newton, Andor spectrograph, and camera controls. Direct
+  server/data mutation fetches in protected `web/frontend/src/PumpProbeV0.js`
+  remain a deployment blocker.
+- VD2 automatic, Refresh-button, and post-action refreshes use passive GET
+  loaders; only explicit Read hardware uses Refresh Status POST.
+  `CamerasClients` and shared-helper Promise.all fan-out fail closed before any
+  fetch when a same-turn operation would reuse one nonce; stale approval is
+  consumed, fresh approval works later, and requests never retry after dispatch
+  ambiguity/failure. Protected `PumpProbeV0.js` raw direct mutations reach the
+  backend without an approval header and rely on backend fail-closed rejection;
+  they remain deploy-blocked.
+  Future WebSocket `execute_command` requires a
+  separate `approval_nonce` transport; the HTTP header does not apply.
+- Shared V0 nonhardware POSTs to `/config`, `/hardware-config`,
+  `/hardware/preflight`, `/faraday`, `/crystal/move`, `/reset`, `/run=false`,
+  and `/realtime=false` are CSRF-only. Approval paths are `/hardware/initialize`,
+  `/run=true`, `/realtime=true`, and stage/sample move/stop.
 - Browser requests send `X-CSRF-TOKEN` from the separate, non-HttpOnly
   `csrf_access_token` cookie. Browser code never reads the HttpOnly access-token
   cookie.
