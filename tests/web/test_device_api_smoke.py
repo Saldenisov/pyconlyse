@@ -31,8 +31,6 @@ if str(BACKEND) not in sys.path:
 
 _install_tango_stub()
 
-device_api_module = importlib.import_module("device_api")
-
 
 class FakeAttribute:
     def __init__(self, value):
@@ -271,16 +269,26 @@ def _build_fake_backend():
 
 
 def _make_client(monkeypatch):
-    importlib.reload(device_api_module)
+    monkeypatch.setenv("TANGO_HOST", "stub.invalid:1")
+    monkeypatch.setenv("PYCONLYSE_TANGO_HOST", "stub.invalid:1")
+    sys.modules.pop("device_api", None)
+    device_api_module = importlib.import_module("device_api")
     device_api_module.device_cache.clear()
 
     devices, properties = _build_fake_backend()
     fake_db = FakeDatabase(devices, properties)
 
+    def fake_proxy(device_name):
+        name = str(device_name)
+        prefix = "tango://stub.invalid:1/"
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+        return devices[name]
+
     monkeypatch.setattr(
         device_api_module.tango,
         "DeviceProxy",
-        lambda device_name: devices[device_name],
+        fake_proxy,
         raising=False,
     )
     monkeypatch.setattr(
@@ -316,6 +324,7 @@ def test_device_listing_and_standa_properties_smoke(monkeypatch):
 
 def test_dashboard_state_probe_retries_delayed_tango_connection(monkeypatch):
     client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
     device = devices["manip/v0/dv04"]
     original_state = device.state
     attempts = {"count": 0}
@@ -377,6 +386,7 @@ def test_generic_device_lazy_endpoints_smoke(monkeypatch):
 
 def test_server_diagnostics_returns_state_error_details_and_logs(monkeypatch):
     client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
     devices["manip/v0/dv04"].attributes.update(
         {
             "last_error": "USB reconnect scheduled",
@@ -414,6 +424,7 @@ def test_server_diagnostics_returns_state_error_details_and_logs(monkeypatch):
 
 def test_server_diagnostics_keeps_device_status_when_starter_is_unreachable(monkeypatch):
     client, _devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
     monkeypatch.setattr(
         device_api_module,
         "_find_starter_for_server",
@@ -434,6 +445,7 @@ def test_server_diagnostics_keeps_device_status_when_starter_is_unreachable(monk
 
 def test_server_diagnostics_retries_delayed_device_connection(monkeypatch):
     client, devices = _make_client(monkeypatch)
+    device_api_module = importlib.import_module("device_api")
     device = devices["manip/v0/dv04"]
     original_state = device.state
     attempts = {"count": 0}
@@ -507,6 +519,28 @@ def test_netio_command_returns_409_on_readback_mismatch(monkeypatch):
     assert cmd_payload["success"] is False
     assert "readback states" in cmd_payload["error"]
     assert cmd_payload["requested_states"] == [0, 0, 0, 0]
+
+
+def test_netio_output_fallback_does_not_hide_non_attribute_read_errors(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    netio = devices["pdu/netio/1"]
+    original_read = netio.read_attribute
+    reads = []
+
+    def fail_states_only(attr_name):
+        reads.append(attr_name)
+        if attr_name == "states":
+            raise RuntimeError("transport disconnected")
+        return original_read(attr_name)
+
+    netio.read_attribute = fail_states_only
+
+    response = client.get("/api/device/pdu/netio/1/pdu/outputs")
+    payload = response.get_json()
+
+    assert response.status_code == 500
+    assert payload["error"] == "transport disconnected"
+    assert "output_statuses" not in reads
 
 
 def test_standa_page_routes_smoke(monkeypatch):

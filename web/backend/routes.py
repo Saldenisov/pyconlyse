@@ -1,4 +1,4 @@
-from flask import Blueprint, jsonify, send_from_directory, current_app, g
+from flask import Blueprint, jsonify, g
 try:
     import sqlite3
 except Exception:  # pragma: no cover - fallback for broken stdlib sqlite bindings
@@ -6,24 +6,19 @@ except Exception:  # pragma: no cover - fallback for broken stdlib sqlite bindin
         import pysqlite3 as sqlite3
     except Exception:
         sqlite3 = None
-import socket
 import tango
 import os
 from datetime import datetime
 
-# Respect the caller's TANGO_HOST if already set. Otherwise, fall back to the
-# same lab default used by the local Mac dev launcher.
-os.environ.setdefault(
-    "TANGO_HOST",
-    os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),
-)
+# Never select a remote Tango database during import.  An explicitly supplied
+# PyConlyse host remains a compatibility input for a later, explicit request.
+if "TANGO_HOST" not in os.environ:
+    configured_tango_host = os.environ.get("PYCONLYSE_TANGO_HOST", "")
+    if configured_tango_host.strip():
+        os.environ["TANGO_HOST"] = configured_tango_host
 
-# Try to initialize the global Tango Database connection
-try:
-    db = tango.Database()
-except Exception as e:
-    print("Could not initialize Tango Database:", e)
-    db = None
+# Tango connection construction is request-driven through check_tango_database.
+db = None
 
 # Create the Blueprint
 routes = Blueprint("routes", __name__)
@@ -85,6 +80,19 @@ def check_tango_database():
         if downtime['tango_db']['downtime_start'] is None:
             downtime['tango_db']['downtime_start'] = now
         return False
+
+
+def get_tango_database():
+    """Return the cached Tango database, creating it only for a request."""
+    global db
+    if db is not None:
+        return db
+    try:
+        db = tango.Database()
+        print("Initialized Tango Database connection.")
+    except Exception as exc:
+        print("Could not initialize Tango Database:", exc)
+    return db
 
 def check_tango_device(address):
     """Check the state of a Tango device and return its state as a string."""
@@ -187,13 +195,13 @@ def tango_status():
 @routes.route('/api/jive/classes')
 def jive_classes():
     """Get list of device classes from Tango database"""
-    global db
-    if db is None:
+    database = get_tango_database()
+    if database is None:
         return jsonify({'error': 'Tango Database not available'}), 503
     
     try:
         # Get all device classes
-        class_list = db.get_class_list('*')
+        class_list = database.get_class_list('*')
         classes = []
         for i in range(0, len(class_list), 2):
             server_name = class_list[i]
@@ -210,18 +218,18 @@ def jive_classes():
 @routes.route('/api/jive/servers')
 def jive_servers():
     """Get list of device servers from Tango database"""
-    global db
-    if db is None:
+    database = get_tango_database()
+    if database is None:
         return jsonify({'error': 'Tango Database not available'}), 503
     
     try:
         # Get all server instances
-        server_list = db.get_server_list('*')
+        server_list = database.get_server_list('*')
         servers = []
         for server in server_list:
             try:
                 # Get devices for this server
-                devices = db.get_device_class_list(server)
+                devices = database.get_device_class_list(server)
                 server_devices = []
                 for i in range(0, len(devices), 2):
                     device_name = devices[i]
@@ -248,18 +256,18 @@ def jive_servers():
 @routes.route('/api/jive/devices')
 def jive_devices():
     """Get list of all devices from Tango database"""
-    global db
-    if db is None:
+    database = get_tango_database()
+    if database is None:
         return jsonify({'error': 'Tango Database not available'}), 503
     
     try:
         # Get all exported devices
-        device_list = db.get_device_exported('*')
+        device_list = database.get_device_exported('*')
         devices = []
         for device_name in device_list:
             try:
                 # Get device info
-                info = db.get_device_info(device_name)
+                info = database.get_device_info(device_name)
                 devices.append({
                     'name': device_name,
                     'class': info.class_name,
@@ -282,20 +290,20 @@ def jive_devices():
 @routes.route('/api/jive/device/<path:device_name>')
 def jive_device_details(device_name):
     """Get detailed information about a specific device"""
-    global db
-    if db is None:
+    database = get_tango_database()
+    if database is None:
         return jsonify({'error': 'Tango Database not available'}), 503
     
     try:
         # Get device info
-        info = db.get_device_info(device_name)
+        info = database.get_device_info(device_name)
         
         # Get device properties
         properties = {}
         try:
-            prop_list = db.get_device_property_list(device_name, '*')
+            prop_list = database.get_device_property_list(device_name, '*')
             for prop_name in prop_list:
-                prop_value = db.get_device_property(device_name, prop_name)
+                prop_value = database.get_device_property(device_name, prop_name)
                 if prop_name in prop_value:
                     properties[prop_name] = prop_value[prop_name]
         except Exception as e:

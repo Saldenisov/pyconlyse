@@ -12,55 +12,134 @@ Usage:
     python start_production.py
 """
 
+import errno
 import os
+import socket
 import sys
-import signal
 from pathlib import Path
 
 
-def _free_port(port):
-    """Kill any process currently listening on the given port."""
+MINIMUM_JWT_SECRET_BYTES = 32
+
+
+def _validate_production_jwt_secret(jwt_secret):
+    """Reject short signing secrets before production startup imports the app."""
+    if len(jwt_secret.encode("utf-8")) < MINIMUM_JWT_SECRET_BYTES:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be at least 32 bytes in production"
+        )
+
+
+def configure_production_environment(environ=None):
+    """Apply production-safe defaults before importing the Flask application."""
+    environ = os.environ if environ is None else environ
+    environ["PYCONLYSE_PRODUCTION"] = "true"
+    for name in ("JWT_SECRET_KEY", "PYCONLYSE_AUTH_USERS"):
+        if not environ.get(name, "").strip():
+            raise RuntimeError(f"{name} must be set before starting production")
+    _validate_production_jwt_secret(environ["JWT_SECRET_KEY"].strip())
+    environ.setdefault("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    if str(environ["PYCONLYSE_ENFORCE_DEVICE_AUTH"]).strip().lower() not in (
+        "1", "true", "yes", "y", "on"
+    ):
+        raise RuntimeError("PYCONLYSE_ENFORCE_DEVICE_AUTH must be true in production")
+    environ.setdefault("PYCONLYSE_JWT_COOKIE_SECURE", "true")
+    environ.setdefault("PYCONLYSE_JWT_COOKIE_CSRF_PROTECT", "true")
+    if str(environ["PYCONLYSE_JWT_COOKIE_CSRF_PROTECT"]).strip().lower() not in (
+        "1", "true", "yes", "y", "on"
+    ):
+        raise RuntimeError(
+            "PYCONLYSE_JWT_COOKIE_CSRF_PROTECT must be true in production"
+        )
+
+
+def parse_web_port(value):
+    """Return a valid TCP port from an environment value."""
+    text = str(value).strip()
+    if not text or not text.isascii() or not text.isdecimal():
+        raise RuntimeError("PYCONLYSE_WEB_PORT must be an integer from 1 to 65535")
+    port = int(text)
+    if not 1 <= port <= 65535:
+        raise RuntimeError("PYCONLYSE_WEB_PORT must be an integer from 1 to 65535")
+    return port
+
+
+def preflight_web_port(host, port):
+    """Verify that the configured local TCP bind address is currently available."""
     try:
-        import psutil
-        for conn in psutil.net_connections(kind='tcp'):
-            if conn.laddr.port == port and conn.pid:
-                try:
-                    proc = psutil.Process(conn.pid)
-                    print(f"Stopping existing server (PID {conn.pid}) on port {port}...")
-                    proc.terminate()
-                    proc.wait(timeout=5)
-                    print(f"Process {conn.pid} stopped.")
-                except Exception as e:
-                    print(f"Warning: could not stop PID {conn.pid}: {e}")
-    except ImportError:
-        # psutil not available — fall back to socket-based detection only
-        import socket
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(('127.0.0.1', port)) == 0:
-                print(f"WARNING: port {port} is already in use and psutil is not installed.")
-                print("Install psutil to enable auto-kill: pip install psutil")
+        addresses = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except socket.gaierror as exc:
+        raise RuntimeError(
+            f"PYCONLYSE_WEB_HOST {host!r} cannot be resolved for local binding"
+        ) from exc
 
-# Add the project root to Python path
-project_root = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(project_root))
+    for family, socktype, protocol, _, address in addresses:
+        probe = socket.socket(family, socktype, protocol)
+        try:
+            probe.bind(address)
+        except OSError as exc:
+            if exc.errno == errno.EADDRINUSE:
+                raise RuntimeError(
+                    f"PYCONLYSE_WEB_PORT {port} is already in use for host {host!r}"
+                ) from exc
+            raise RuntimeError(
+                f"PYCONLYSE_WEB_PORT {port} cannot be bound on host {host!r}: {exc}"
+            ) from exc
+        finally:
+            probe.close()
 
-# Add backend directory to Python path
-backend_dir = Path(__file__).parent / 'backend'
-sys.path.insert(0, str(backend_dir))
 
-# Import and run the Flask application from backend directory
-original_cwd = os.getcwd()
-try:
-    os.chdir(str(backend_dir))
-    from app import socketio, app
-    from device_api import start_device_snapshot_monitor
-finally:
-    os.chdir(original_cwd)
+def run_production_server(socketio, app, web_host, web_port):
+    """Run Socket.IO and propagate any startup failure to the caller."""
+    try:
+        socketio.run(
+            app,
+            debug=False,
+            port=web_port,
+            host=web_host,
+            use_reloader=False,
+        )
+    except KeyboardInterrupt:
+        print("\n\nServer stopped by user.")
+        raise
+    except ImportError as exc:
+        if "eventlet" in str(exc):
+            print("\n\nERROR: eventlet is not installed!")
+            print("Please install it with: pip install eventlet")
+            print("\neventlet is required for Socket.IO WebSocket support in production.")
+        raise
+    except Exception as exc:
+        print(f"\nError starting server: {exc}")
+        print("\nTroubleshooting:")
+        print("1. Check if port 5000 is available")
+        print("2. Verify IP address 10.20.30.202 is correct")
+        print("3. Ensure Tango database is accessible")
+        print("4. Check devices are registered and running")
+        print("5. Ensure eventlet is installed: pip install eventlet")
+        raise
 
-if __name__ == '__main__':
-    os.environ.setdefault('PYCONLYSE_ENFORCE_DEVICE_AUTH', 'false')
-    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '0.0.0.0')
-    web_port = int(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
+
+def main():
+    configure_production_environment()
+    project_root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(project_root))
+    backend_dir = Path(__file__).parent / 'backend'
+    sys.path.insert(0, str(backend_dir))
+
+    original_cwd = os.getcwd()
+    try:
+        os.chdir(str(backend_dir))
+        from auth import configured_users
+        configured_users(required=True)
+        from app import app, socketio
+        from device_api import start_device_snapshot_monitor
+    finally:
+        os.chdir(original_cwd)
+
+    web_host = os.environ.get('PYCONLYSE_WEB_HOST', '0.0.0.0').strip()
+    if not web_host:
+        raise RuntimeError("PYCONLYSE_WEB_HOST must be non-empty")
+    web_port = parse_web_port(os.environ.get('PYCONLYSE_WEB_PORT', '5000'))
     print("=" * 60)
     print("PYCONLYSE Web Server - PRODUCTION MODE")
     print("=" * 60)
@@ -77,33 +156,10 @@ if __name__ == '__main__':
     print(f"  - Device auth enforced: {os.environ.get('PYCONLYSE_ENFORCE_DEVICE_AUTH')}")
     print("=" * 60)
 
-    _free_port(web_port)
+    preflight_web_port(web_host, web_port)
     start_device_snapshot_monitor()
+    run_production_server(socketio, app, web_host, web_port)
 
-    try:
-        # Run the server in production mode
-        # eventlet is required for proper Socket.IO WebSocket support
-        socketio.run(
-            app,
-            debug=False,          # PRODUCTION: Debug mode OFF
-            port=web_port,
-            host=web_host,
-            use_reloader=False    # PRODUCTION: No auto-reload
-        )
-    except KeyboardInterrupt:
-        print("\n\nServer stopped by user.")
-    except ImportError as e:
-        if 'eventlet' in str(e):
-            print("\n\nERROR: eventlet is not installed!")
-            print("Please install it with: pip install eventlet")
-            print("\neventlet is required for Socket.IO WebSocket support in production.")
-        else:
-            raise
-    except Exception as e:
-        print(f"\nError starting server: {e}")
-        print("\nTroubleshooting:")
-        print("1. Check if port 5000 is available")
-        print("2. Verify IP address 10.20.30.202 is correct")
-        print("3. Ensure Tango database is accessible")
-        print("4. Check devices are registered and running")
-        print("5. Ensure eventlet is installed: pip install eventlet")
+
+if __name__ == '__main__':
+    main()

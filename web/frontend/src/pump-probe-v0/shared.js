@@ -1,4 +1,6 @@
 
+import { withCsrfToken } from '../api/csrfRequest';
+
 // Shared V0 domain constants, API helpers, and selection math.
 const PIXELS = 512;
 const STAGE_MIN_MM = -900;
@@ -11,11 +13,12 @@ const MM_PER_PS = 0.0749481145;
 const API_BASE = '/api/pump-probe-v0';
 
 async function pumpProbeRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const url = `${API_BASE}${path}`;
+  const response = await fetch(url, withCsrfToken(url, {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
     credentials: 'include',
     ...options,
-  });
+  }));
   if (!response.ok) {
     let message = `Pump-probe V0 API failed: ${response.status}`;
     try {
@@ -53,7 +56,7 @@ async function fetchJsonWithRetry(url, options = {}, attempts = 3) {
   let lastError = null;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const response = await fetch(url, options);
+      const response = await fetch(url, withCsrfToken(url, options));
       const payload = await response.json();
       if (!response.ok || payload.success === false) {
         throw new Error(payload.error || `Request failed: ${response.status}`);

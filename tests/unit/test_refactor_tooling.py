@@ -106,6 +106,23 @@ class TestRefactorTooling(unittest.TestCase):
             ("DeviceServers/base/general.py",),
         )
 
+    def test_changed_python_files_excludes_non_software_test_lanes(self):
+        outputs = iter(
+            (
+                "tests/manual/netio/netio_state_probe.py\n",
+                "tests/integration/test_main_app_integration.py\n",
+                "tests/legacy/test_simple.py\ntests/unit/test_refactor_tooling.py\n",
+            )
+        )
+
+        def runner(argv, **_kwargs):
+            return subprocess.CompletedProcess(argv, 0, next(outputs), "")
+
+        self.assertEqual(
+            verify_refactor.changed_python_files(runner),
+            ("tests/unit/test_refactor_tooling.py",),
+        )
+
     def test_full_verification_is_software_only_and_includes_frontend(self):
         changed_files = ("DeviceServers/base/general.py",)
         commands = verify_refactor.build_verification_commands(
@@ -137,13 +154,44 @@ class TestRefactorTooling(unittest.TestCase):
                 "pyconlyse39",
                 "python",
                 "-m",
-                "pytest",
+                "coverage",
+                "run",
+                "--rcfile",
+                ".coveragerc",
                 "-m",
-                "not slow and not integration and not netio",
+                "pytest",
+                "--strict-config",
             ),
             argv,
         )
-        self.assertIn(("npm", "test", "--", "--watchAll=false"), argv)
+        self.assertIn(
+            (
+                "conda",
+                "run",
+                "-n",
+                "pyconlyse39",
+                "python",
+                "scripts/refactor/verify_coverage.py",
+                "--json",
+                ".coverage-refactor.json",
+            ),
+            argv,
+        )
+        self.assertIn(("npm", "ci", "--legacy-peer-deps"), argv)
+        self.assertIn(
+            "--collectCoverageFrom=src/api/csrfRequest.js",
+            verify_refactor.FRONTEND_COVERAGE_ARGS,
+        )
+        self.assertIn(
+            (
+                "npm",
+                "test",
+                "--",
+                "--watchAll=false",
+                *verify_refactor.FRONTEND_COVERAGE_ARGS,
+            ),
+            argv,
+        )
         self.assertIn(("npm", "run", "build"), argv)
 
     def test_deploy_tests_exact_sha_in_detached_worktree_before_fast_forward(self):

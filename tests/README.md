@@ -89,7 +89,7 @@ pytest
 
 # Run specific test directories
 pytest tests/unit/
-pytest tests/integration/
+pytest -o addopts='' tests/integration/
 pytest tests/device_servers/
 
 # Run with specific markers
@@ -98,7 +98,7 @@ pytest -m integration
 pytest -m device_server
 
 # Run specific test files
-pytest tests/unit/netio/test_netio_state.py
+python tests/manual/netio/netio_state_probe.py <device-name>
 ```
 
 ### Using unittest directly

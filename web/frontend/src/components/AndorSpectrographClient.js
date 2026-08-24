@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { withCsrfToken } from '../api/csrfRequest';
 
 const API_BASE = (process.env.REACT_APP_API_BASE || '/api').replace(/\/$/, '');
 
@@ -58,12 +59,13 @@ const AndorSpectrographClient = ({ deviceName }) => {
 
   const writeParameters = async (updates) => {
     try {
-      const response = await fetch(`${API_BASE}/spectrograph/${encodeURIComponent(deviceName)}/parameters`, {
+      const url = `${API_BASE}/spectrograph/${encodeURIComponent(deviceName)}/parameters`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `HTTP ${response.status}`);
@@ -76,12 +78,13 @@ const AndorSpectrographClient = ({ deviceName }) => {
 
   const runCommand = async (commandName) => {
     try {
-      const response = await fetch(`${API_BASE}/device/${encodeURIComponent(deviceName)}/command/${commandName}`, {
+      const url = `${API_BASE}/device/${encodeURIComponent(deviceName)}/command/${commandName}`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || !payload.success) {
         throw new Error(payload.error || `HTTP ${response.status}`);

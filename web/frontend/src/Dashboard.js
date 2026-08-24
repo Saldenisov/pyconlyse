@@ -4,6 +4,7 @@ import {
   normalizeDeviceFamilyText,
   resolveDeviceFamily,
 } from './utils/deviceFamily';
+import { withCsrfToken } from './api/csrfRequest';
 import DashboardDiagnosticsModal from './DashboardDiagnosticsModal';
 
 const cardStyle = {
@@ -250,17 +251,17 @@ const Dashboard = () => {
     setServerActionInProgress(serverName);
 
     try {
-      const response = await fetch('/api/server/control', {
+      const url = '/api/server/control';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           action,
-          server_name: device.server,
-          device_name: device.name,
+          server_name: serverName,
         }),
-      });
+      }));
 
       const payload = await response.json();
       if (!response.ok || !payload.success) {

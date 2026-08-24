@@ -5,16 +5,19 @@ from __future__ import annotations
 import base64
 import json
 import time
-from typing import Any, Callable, Dict
+from typing import Any, Dict, Mapping
 
 from flask import Blueprint, jsonify, request
 from tango import DeviceProxy
 
-from vd2_measurement_protocol import Vd2MeasurementProtocol, Vd2ProtocolError
+from hardware_authorization import authorization_required, require_http_hardware
+from mutation_auth import install_mutation_auth
+from vd2_measurement_protocol import PhaseRequest, Vd2MeasurementProtocol, Vd2ProtocolError
 
 pump_probe_vd2_api = Blueprint(
     "pump_probe_vd2_api", __name__, url_prefix="/api/pump-probe-vd2"
 )
+install_mutation_auth(pump_probe_vd2_api)
 
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"
@@ -141,6 +144,184 @@ def _proxy() -> DeviceProxy:
 
 
 _measurement_protocol = Vd2MeasurementProtocol(_proxy)
+
+
+def _target(device: str, command: str) -> dict[str, str]:
+    """Return one exact Tango command/attribute target for authorization."""
+    return {"device": device, "command": command}
+
+
+def _server_recovery_targets(device: str) -> list[dict[str, str]]:
+    """Potential recovery calls in the order used by ``_ensure_server``."""
+    return [
+        _target(device, "recover"),
+        _target(ASTOR_DEVICE, "DevStop"),
+        _target(ASTOR_DEVICE, "DevStart"),
+        # A stale Astor running flag takes one explicit second stop/start.
+        _target(ASTOR_DEVICE, "DevStop"),
+        _target(ASTOR_DEVICE, "DevStart"),
+    ]
+
+
+def _server_arguments() -> dict[str, str]:
+    return {
+        VD2_PDU_DEVICE: VD2_SERVERS[VD2_PDU_DEVICE],
+        DG645_DEVICE: VD2_SERVERS[DG645_DEVICE],
+        STREAK_DEVICE: VD2_SERVERS[STREAK_DEVICE],
+    }
+
+
+def _recovery_plan(*devices: str) -> list[dict[str, Any]]:
+    """Bind every possible Astor server argument to its ordered recovery plan."""
+    return [
+        {
+            "device": device,
+            "server": VD2_SERVERS[device],
+            "commands": ["recover", "DevStop", "DevStart", "DevStop", "DevStart"],
+        }
+        for device in devices
+    ]
+
+
+def _approval_or_response(
+    action: str,
+    targets: list[dict[str, str]],
+    args: Any,
+    route_id: str,
+    wrapper_fields: set[str],
+):
+    """Fail before a Tango proxy, worker, or other hardware side effect exists."""
+    return require_http_hardware(
+        action=action,
+        targets=targets,
+        args=args,
+        route_id=route_id,
+        wrapper_fields=wrapper_fields,
+    )
+
+
+def _reject_duplicate_json_keys(pairs):
+    payload = {}
+    for key, value in pairs:
+        if key in payload:
+            raise ValueError("duplicate JSON key")
+        payload[key] = value
+    return payload
+
+
+def _reject_nonfinite_json(value):
+    raise ValueError(f"non-finite JSON value: {value}")
+
+
+def _invalid_hardware_request():
+    return jsonify(
+        {
+            "success": False,
+            "error": "Hardware request is invalid",
+            "code": "hardware_approval_invalid",
+        }
+    ), 409
+
+
+def _exact_plan_required():
+    """Fail closed when a conditional workflow cannot bind exact side effects."""
+    return jsonify(
+        {
+            "success": False,
+            "error": "This workflow requires an exact precomputed hardware plan",
+            "code": "hardware_not_authorized",
+        }
+    ), 403
+
+
+def _mutation_payload(wrapper_fields: set[str]):
+    """Read a mutation envelope before it can reach a proxy or authorization.
+
+    Enforcement uses a duplicate- and non-finite-safe parser.  Local opt-out
+    keeps Flask's permissive JSON decoding for existing development clients.
+    """
+    raw = request.get_data(cache=True, as_text=True)
+    if authorization_required():
+        try:
+            payload = {} if not raw.strip() else json.loads(
+                raw,
+                object_pairs_hook=_reject_duplicate_json_keys,
+                parse_constant=_reject_nonfinite_json,
+            )
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None, _invalid_hardware_request()
+        if not isinstance(payload, Mapping) or set(payload) != wrapper_fields:
+            return None, _invalid_hardware_request()
+        return dict(payload), None
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        payload = {}
+    if not isinstance(payload, Mapping):
+        return None, _invalid_hardware_request()
+    return dict(payload), None
+
+
+def _initialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
+    targets = _server_recovery_targets(VD2_PDU_DEVICE)
+    targets.append(_target(VD2_PDU_DEVICE, "set_channels_states"))
+    targets.extend(_server_recovery_targets(DG645_DEVICE))
+    targets.extend(_server_recovery_targets(STREAK_DEVICE))
+    targets.extend(
+        [
+            _target(STREAK_DEVICE, "PrepareDG645ForHPDTA"),
+            _target(STREAK_DEVICE, "StartRemoteEx"),
+            _target(STREAK_DEVICE, "StartApplication"),
+        ]
+    )
+    return targets, {
+        "servers": _server_arguments(),
+        "recovery_plan": _recovery_plan(VD2_PDU_DEVICE, DG645_DEVICE, STREAK_DEVICE),
+        "pdu_output_states": [
+            {"output_id": output_id, "state": 1}
+            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+        ],
+    }
+
+
+def _deinitialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
+    targets = [
+        _target(STREAK_DEVICE, "StopAcquisition"),
+        _target(STREAK_DEVICE, "write_attribute:streak_shutter"),
+        _target(STREAK_DEVICE, "write_attribute:spectrograph_shutter"),
+        _target(STREAK_DEVICE, "StopApplication"),
+        _target(STREAK_DEVICE, "StopRemoteEx"),
+    ]
+    targets.extend(_server_recovery_targets(VD2_PDU_DEVICE))
+    targets.append(_target(VD2_PDU_DEVICE, "set_channels_states"))
+    return targets, {
+        "servers": _server_arguments(),
+        "recovery_plan": _recovery_plan(VD2_PDU_DEVICE),
+        "pdu_output_states": [
+            {"output_id": output_id, "state": 0}
+            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+        ],
+        "shutters": {
+            "streak_shutter": "Closed",
+            "spectrograph_shutter": "Closed",
+        },
+    }
+
+
+def _protocol_authorization(request_data: PhaseRequest) -> tuple[list[dict[str, str]], dict[str, Any]]:
+    return [
+        _target(STREAK_DEVICE, "write_attribute:sequence_loops"),
+        _target(STREAK_DEVICE, "StartSequence"),
+        _target(STREAK_DEVICE, "WaitForIdle"),
+        _target(STREAK_DEVICE, "SaveCurrentSequence"),
+    ], {
+        "phase": request_data.phase,
+        "frames_per_his": request_data.frames_per_his,
+        "output_root": request_data.output_root,
+        "run_name": request_data.run_name,
+        "his_path": request_data.his_path,
+        "sequence_loops": str(request_data.frames_per_his),
+    }
 
 
 def _value(proxy: DeviceProxy, attribute: str) -> Any:
@@ -496,13 +677,33 @@ def protocol_state():
 
 @pump_probe_vd2_api.route("/protocol/start", methods=["POST"])
 def protocol_start():
-    payload = request.get_json(silent=True) or {}
+    payload, rejected = _mutation_payload(
+        {"phase", "frames_per_his", "output_root", "run_name"}
+    )
+    if rejected is not None:
+        return rejected
     try:
+        request_data = _measurement_protocol._build_request(
+            payload.get("phase"),
+            payload.get("frames_per_his"),
+            payload.get("output_root"),
+            payload.get("run_name"),
+        )
+        targets, args = _protocol_authorization(request_data)
+        blocked = _approval_or_response(
+            "start",
+            targets,
+            args,
+            "vd2.protocol.start",
+            {"phase", "frames_per_his", "output_root", "run_name"},
+        )
+        if blocked is not None:
+            return blocked
         state = _measurement_protocol.start(
-            phase=payload.get("phase"),
-            frames_per_his=payload.get("frames_per_his"),
-            output_root=payload.get("output_root"),
-            run_name=payload.get("run_name"),
+            phase=request_data.phase,
+            frames_per_his=request_data.frames_per_his,
+            output_root=request_data.output_root,
+            run_name=request_data.run_name,
         )
         return jsonify({"success": True, **state})
     except Vd2ProtocolError as exc:
@@ -527,6 +728,21 @@ def runtime_state():
 
 @pump_probe_vd2_api.route("/initialize", methods=["POST"])
 def initialize_experiment():
+    _, rejected = _mutation_payload(set())
+    if rejected is not None:
+        return rejected
+    if authorization_required():
+        return _exact_plan_required()
+    targets, args = _initialize_authorization()
+    blocked = _approval_or_response(
+        "initialize",
+        targets,
+        args,
+        "vd2.initialize",
+        set(),
+    )
+    if blocked is not None:
+        return blocked
     try:
         result = _initialize_experiment()
         return jsonify({"success": True, **result})
@@ -536,6 +752,21 @@ def initialize_experiment():
 
 @pump_probe_vd2_api.route("/deinitialize", methods=["POST"])
 def deinitialize_experiment():
+    _, rejected = _mutation_payload(set())
+    if rejected is not None:
+        return rejected
+    if authorization_required():
+        return _exact_plan_required()
+    targets, args = _deinitialize_authorization()
+    blocked = _approval_or_response(
+        "deinitialize",
+        targets,
+        args,
+        "vd2.deinitialize",
+        set(),
+    )
+    if blocked is not None:
+        return blocked
     try:
         result = _deinitialize_experiment()
         return jsonify({"success": True, **result})
@@ -545,6 +776,21 @@ def deinitialize_experiment():
 
 @pump_probe_vd2_api.route("/runtime/remoteex/<action>", methods=["POST"])
 def remoteex_runtime(action: str):
+    if action not in {"start", "stop"}:
+        return jsonify({"success": False, "error": f"Unsupported RemoteEx action: {action}"}), 404
+    _, rejected = _mutation_payload(set())
+    if rejected is not None:
+        return rejected
+    command_name = "StartRemoteEx" if action == "start" else "StopRemoteEx"
+    blocked = _approval_or_response(
+        f"remoteex.{action}",
+        [_target(STREAK_DEVICE, command_name)],
+        {"action": action},
+        "vd2.remoteex",
+        set(),
+    )
+    if blocked is not None:
+        return blocked
     try:
         proxy = _proxy()
         if action == "start":
@@ -568,7 +814,6 @@ def remoteex_runtime(action: str):
                     "device": _snapshot(proxy),
                 }
             )
-        return jsonify({"success": False, "error": f"Unsupported RemoteEx action: {action}"}), 404
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503
 
@@ -579,13 +824,28 @@ def write_parameter(name: str):
     if spec is None:
         return jsonify({"success": False, "error": f"Unsupported parameter: {name}"}), 404
 
-    payload = request.get_json(silent=True) or {}
+    payload, rejected = _mutation_payload({"value"})
+    if rejected is not None:
+        return rejected
     if "value" not in payload:
         return jsonify({"success": False, "error": "Missing value"}), 400
 
     try:
-        proxy = _proxy()
         value = spec["coerce"](payload["value"])
+        if "attribute" in spec:
+            target_name = f"write_attribute:{spec['attribute']}"
+        else:
+            target_name = spec["command"]
+        blocked = _approval_or_response(
+            f"parameter.{name}.write",
+            [_target(STREAK_DEVICE, target_name)],
+            {"name": name, "value": value},
+            "vd2.parameter",
+            {"value"},
+        )
+        if blocked is not None:
+            return blocked
+        proxy = _proxy()
         if "attribute" in spec:
             proxy.write_attribute(spec["attribute"], value)
         else:
@@ -601,6 +861,20 @@ def write_parameter(name: str):
 def command(name: str):
     if name not in ALLOWED_COMMANDS:
         return jsonify({"success": False, "error": f"Unsupported command: {name}"}), 404
+
+    _, rejected = _mutation_payload(set())
+    if rejected is not None:
+        return rejected
+
+    blocked = _approval_or_response(
+        f"command.{name}.execute",
+        [_target(STREAK_DEVICE, name)],
+        {"name": name},
+        "vd2.command",
+        set(),
+    )
+    if blocked is not None:
+        return blocked
 
     try:
         proxy = _proxy()

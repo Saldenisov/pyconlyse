@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { withCsrfToken } from './api/csrfRequest';
 import './css/PumpProbeVD2.css';
 
 const API_BASE = '/api/pump-probe-vd2';
+
+export function fetchVd2(url, options = {}) {
+  return fetch(url, withCsrfToken(url, options));
+}
 
 const TIME_RANGES = [
   '0.5 ns', '1 ns', '2 ns', '5 ns', '10 ns', '20 ns', '50 ns', '100 ns',
@@ -728,7 +733,8 @@ function PumpProbeVD2() {
   const runRequest = useCallback(async (path, body) => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}${path}`, {
+      const url = `${API_BASE}${path}`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -796,7 +802,8 @@ function PumpProbeVD2() {
   const initializeExperiment = useCallback(async () => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/initialize`, {
+      const url = `${API_BASE}/initialize`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -814,7 +821,8 @@ function PumpProbeVD2() {
   const deinitializeExperiment = useCallback(async () => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/deinitialize`, {
+      const url = `${API_BASE}/deinitialize`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -833,7 +841,8 @@ function PumpProbeVD2() {
   const controlRemoteEx = useCallback(async (action) => {
     setBusy(true);
     try {
-      const response = await fetch(`${API_BASE}/runtime/remoteex/${action}`, {
+      const url = `${API_BASE}/runtime/remoteex/${action}`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         credentials: 'include',
       });
@@ -856,7 +865,8 @@ function PumpProbeVD2() {
   const startProtocolPhase = useCallback(async (phase) => {
     setProtocolStarting(true);
     try {
-      const response = await fetch(`${API_BASE}/protocol/start`, {
+      const url = `${API_BASE}/protocol/start`;
+      const response = await fetchVd2(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -955,9 +965,10 @@ function PumpProbeVD2() {
     setHardwareError('');
     try {
       const nextStates = outputs.map((output) => Number(output.id) === channel.outputId ? (enabled ? 1 : 0) : Number(output.state));
-      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+      const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not switch ${channel.label}`);
       await loadHardware();
@@ -976,9 +987,10 @@ function PumpProbeVD2() {
     try {
       const outputIds = new Set(VD2_POWER_CHANNELS.map((channel) => channel.outputId));
       const nextStates = outputs.map((output) => outputIds.has(Number(output.id)) ? (enabled ? 1 : 0) : Number(output.state));
-      const response = await fetch('/api/device/manip/SD2/PDU_SD2/command/set_channels_states', {
+      const url = '/api/device/manip/SD2/PDU_SD2/command/set_channels_states';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ args: nextStates }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || 'Could not switch VD2 power');
       await loadHardware();
@@ -993,10 +1005,11 @@ function PumpProbeVD2() {
     setHardwareLoading(true);
     setHardwareError('');
     try {
-      const response = await fetch('/api/server/control', {
+      const url = '/api/server/control';
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
         body: JSON.stringify({ action, device_name: server.device }),
-      });
+      }));
       const payload = await response.json();
       if (!response.ok || payload.success === false) throw new Error(payload.error || `Could not ${action} ${server.label}`);
       await loadHardware();

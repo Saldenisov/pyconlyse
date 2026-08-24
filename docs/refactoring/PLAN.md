@@ -37,6 +37,27 @@ Each phase must produce:
 - Establish test commands and expected failures in `TEST_MATRIX.md`.
 - Freeze dirty V0 files from unrelated work.
 
+### Phase 0.5: Software-only test gate
+
+Owner: Terra, with Sol read-only review.
+
+- **T8a — test isolation:** restore `sys.modules` after every test-module
+  import; Tango/Taurus stubs are local to collection or one test only.
+- **T8b — collection hygiene:** default pytest collection contains only
+  automated software tests. Manual probes, legacy, integration, main-app, and
+  utilities remain preserved in explicit lanes.
+- **T8c — focused coverage:** measure named refactored DeviceServer lifecycle
+  and backend modules plus pure frontend API/classification modules, enforce
+  explicit floors, and do not use whole-tree legacy coverage as a release
+  metric.
+- **T8d — lifecycle contracts:** verify software-only init, polling, stop,
+  timeout, and readback behavior without Tango server control or hardware I/O.
+- **T9 — conservative web security/WebSocket contracts:** require production
+  JWT and Werkzeug scrypt/pbkdf2-hashed users; enforce secure device auth,
+  cookies, CSRF, same-origin CORS (or explicit allowlist), and authenticated
+  WebSocket commands/subscriptions with per-SID locking. Local development may
+  opt out only explicitly. Browser code never reads the HttpOnly access cookie.
+
 ### Phase 1: DeviceServer stability foundation
 
 Owner: Terra.
@@ -90,6 +111,27 @@ device_family/
 - Run local tests and Everest software-only smoke tests.
 - Deploy or restart only after manual approval.
 
+### Phase 5.5: T11 hardware mutation gate
+
+- Add role-based, fail-closed authorization for every hardware mutation route
+  and WebSocket command.
+- Bind one-shot external approvals to server-derived user/role, route/action,
+  ordered targets, device/command, canonical args, UTC expiry, and a unique
+  lowercase 256-bit nonce.
+- Consume approvals atomically before any proxy/Tango side effect. Keep policy,
+  approvals, consumed markers, and ACLs outside the repository.
+- Preserve explicit local auth opt-outs only; no approval-generation endpoint.
+- Keep V0 safe reads covered and protected V0 UI mutations deploy-blocked.
+- Treat eventlet/threading mismatch as an independent deployment blocker.
+- Keep policy/approval JSON schemas closed and bounded; reject unknown,
+  duplicate, wildcard, non-finite, and over-sized values. Policy and approval
+  files are read-only service inputs; consumed markers are writable only by the
+  service account; policy/approval reads reject symlinks with `O_NOFOLLOW`,
+  while consumed markers use atomic `O_EXCL` plus file and parent-directory
+  fsync.
+- Verify collection under a network-denied sandbox and restore Tango/Taurus
+  modules and environment between test modules.
+
 ## Completion criteria
 
 - No production file remains a monolith solely for historical reasons.
@@ -97,3 +139,5 @@ device_family/
 - Hardware I/O has explicit timeout, cancellation, readback, and error mapping.
 - No implicit power-up or motion occurs during polling or status refresh.
 - Every phase has a commit, test record, reviewer result, and rollback point.
+- `verify_refactor.py --apply --full` is a reproducible local software-only
+  gate: collection, focused coverage, static checks, and frontend checks.

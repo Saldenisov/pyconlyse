@@ -25,7 +25,98 @@ or laboratory hardware. It never uses `git reset --hard`, `taskkill`, or
 6. `pyconlyse39` exists on Everest.
 7. Before any Tango restart: experiment stopped, stages stationary, shutters
    closed, and an operator has created a time-limited approval TOML outside
-   the repository.
+   the repository. This restart approval is separate from T11 web mutation
+   approvals, which are external JSON files.
+
+## Web security provisioning
+
+Production must set `PYCONLYSE_PRODUCTION=true`,
+`PYCONLYSE_ENFORCE_DEVICE_AUTH=true`, `PYCONLYSE_JWT_COOKIE_SECURE=true`,
+and `PYCONLYSE_JWT_COOKIE_CSRF_PROTECT=true`, plus non-empty `JWT_SECRET_KEY`
+and `PYCONLYSE_AUTH_USERS`. The users value is a JSON object whose values are
+Werkzeug password hashes (`scrypt` or `pbkdf2`, never plaintext). Generate a
+hash without contacting equipment:
+
+```bash
+conda run -n pyconlyse39 python -c \
+  "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass('Password: '), method='scrypt'))"
+```
+
+Set the resulting JSON, for example:
+
+```powershell
+$env:PYCONLYSE_AUTH_USERS = '{"operator":"<paste-generated-scrypt-or-pbkdf2-hash>"}'
+$env:JWT_SECRET_KEY = '<long-random-production-secret>'
+```
+
+Generate `JWT_SECRET_KEY` offline; do not handcraft, reuse, or leave a default
+secret:
+
+```bash
+conda run -n pyconlyse39 python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+Validator currently checks minimum UTF-8 length only; it does not prove secret
+entropy.
+
+Production also keeps device authentication, secure cookies, and CSRF enabled.
+CORS remains same-origin unless an explicit allowlist is configured. For local
+development only, the local launcher may explicitly set the applicable
+enforcement variables to `false`; never copy those opt-outs into production.
+An optional CORS allowlist does not make cookie-plus-CSRF authentication valid
+cross-origin; the authenticated production UI remains same-origin.
+
+`JWT_SECRET_KEY` must contain at least 32 UTF-8 bytes. Startup validates the
+configured TCP bind before starting the device snapshot monitor. An occupied,
+invalid, unresolved, or otherwise unbindable `PYCONLYSE_WEB_HOST` /
+`PYCONLYSE_WEB_PORT` stops startup and never kills or terminates an existing
+process.
+
+Login throttling defaults to 5 failed attempts per IP in 900 seconds, with a
+maximum of 10,000 process-local IP keys. Exhausted limits return HTTP 429 and a
+`Retry-After` header. Override only with bounded values:
+
+- `PYCONLYSE_LOGIN_RATE_LIMIT_ATTEMPTS`: 1–1000.
+- `PYCONLYSE_LOGIN_RATE_LIMIT_WINDOW_SECONDS`: 1–86400.
+- `PYCONLYSE_LOGIN_RATE_LIMIT_MAX_KEYS`: 1–100000.
+
+Limiter state is single-process: restart clears it, multiple workers do not
+share it, NAT may combine users under one address, and `request.remote_addr`
+must only be trusted behind a separately reviewed proxy configuration.
+
+Production and explicit local auth enforcement cover all non-safe methods in
+device, treatment, VD2, and V0 APIs. Device debug-monitor GET is passive; the
+explicit monitor-start POST is authenticated and mutation-protected.
+`treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers.
+
+T11 deployment blocker: hardware mutations require roles, strict device,
+command, and argument allowlists, plus one-shot human approval bound to user,
+action, device, arguments, and expiry. JWT authentication alone is
+insufficient. Eventlet/threading mode selection remains a separate blocker.
+
+T11 authorization provisioning is software-only and fail-closed. Policy JSON,
+approval JSON, and consumed-marker directories must be outside the repository
+with restrictive ACLs. The server derives JWT subject and role; callers cannot
+select either. Each approval binds explicit route ID, action, ordered targets,
+device, command, canonical args, UTC expiry, and a lowercase 256-bit hex nonce.
+Unknown, duplicate, missing, wildcard, or non-finite fields are rejected.
+Approval consumption creates a marker before any proxy/Tango operation. POSIX
+uses atomic `O_EXCL` plus marker and parent-directory `fsync`; Windows uses
+atomic `CreateFileW(CREATE_NEW)` with write-through, `WriteFile`, and
+`FlushFileBuffers` (no portable Windows directory-`fsync` equivalent). Any
+marker I/O error fails closed. There is no approval-generation API or tool.
+Expected HTTP errors
+are 401 (authentication), 403 (policy), 428 (missing approval), and 409
+(invalid/replayed approval). Existing explicit local opt-outs do not weaken
+production fail-closed validation. Protected V0 UI mutations remain
+deploy-blocked.
+
+Import-safety incident (fixed in T11): an earlier check showed that
+`web/backend/routes.py` could construct a Tango database at import time after
+applying a remote default host. The route now performs lazy lookup only; it
+does not set a remote default or construct Tango objects during import.
+Explicit `PYCONLYSE_TANGO_HOST` mapping to `TANGO_HOST` remains compatible.
+The regression test and network-denied collection audit are mandatory.
 
 ## Local Verification
 
@@ -53,7 +144,91 @@ Run the complete software-only pytest suite plus frontend tests/build:
 python scripts/refactor/verify_refactor.py --apply --full
 ```
 
+`--full` runs `npm ci --legacy-peer-deps` from the committed frontend lockfile,
+then the default automated pytest lane, named DeviceServer/backend coverage
+with `.coveragerc` and `verify_coverage.py`, and focused frontend Jest coverage
+for `src/api/csrfRequest.js`, `src/api/treatmentClient.js`, and
+`src/utils/deviceFamily.js`. Manual probes, legacy, integration,
+main-app, and utilities suites remain opt-in and are not silently deleted or
+treated as software-only verification.
+
+Exact T9 software-only gate:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
+conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
+```
+
+These commands must not start Tango, connect to devices, issue WebSocket
+hardware commands, or deploy/restart services.
+
 The verification tool has no SSH, Tango, PDU, motion, shutter, or power code.
+
+T10 focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_auth_security.py \
+  tests/web/test_login_rate_limit.py \
+  tests/web/test_production_startup_security.py \
+  tests/web/test_production_mutation_auth.py
+```
+
+Coverage gate also requires `.coveragerc`, `scripts/refactor/verify_coverage.py`,
+and `tests/unit/test_refactor_coverage.py`; current T10 measurements/floors
+are app 55.0/50.0%, auth 87.0/80.0%, mutation_auth 100.0/90.0%, and
+start_production 58.7/50.0%.
+
+T11 focused checks (software-only):
+
+```bash
+/usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
+  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_hardware_authorization.py \
+  tests/web/test_hardware_authorization_routes.py \
+  tests/web/test_hardware_authorization_websocket.py \
+  tests/web/test_hardware_authorization_device_mutations.py \
+  tests/web/test_hardware_authorization_vd2.py \
+  tests/web/test_routes_import_safety.py \
+  tests/unit/test_pytest_module_isolation.py
+```
+
+The focused T11 suite collected and passed 159 tests in both forward and
+reverse order, with one warning, under OS-level network denial. The default
+software-only lane collected 557 items with one collection skip and ran 550
+passed, 8 skipped, and 18 warnings. Full named-module statement coverage was
+68.0%; `hardware_authorization.py` was 71.2% (380/534), above its 60.0% floor;
+`device_api.py` was 54.3%. Frontend verification passed 7 suites/32 tests with
+96.11% statements and 89.87% branches; production build passed with existing
+hook and bundle-size warnings.
+
+T11 covers HTTP, WebSocket, device, VD2, and backend V0 mutation gates. The
+protected V0 UI files remain unchanged and cannot yet attach approval nonces;
+production V0 UI workflows therefore remain deploy-blocked. Background
+monitoring and VD2 preview are read-only polling paths; V0 active polling is
+available only for an already-authorized run/realtime sequence. Eventlet versus
+threading remains a separate deployment blocker.
+
+Fail-closed workflow blockers: enforced iTest increment/decrement derived-value
+actions return 403 until exact ordered plans are represented; iTest set remains
+behind its existing gate. Enforced VD2 initialize/deinitialize return 403
+because conditional recovery/PDU plans are not exact. Enforced V0 Tango
+run/realtime start returns 403 because repeated cycles and complete argument
+plans are not fully bound. Local opt-out preserves legacy behavior. Do not
+treat these high-level workflows as authorized until UI and policy migrations
+are reviewed and deployed.
+
+Enforced fallback routes require policy migration when their exact
+`command_variant` changes. Parameter-batch approvals bind the full ordered
+write plan. Restart approval never authorizes an implicit `HardKillServer`;
+server action and trusted Starter target must match explicitly. VD2 preview is
+a passive read-frame operation.
+
+Current production blocker: `web/backend/websocket_handler.py` forces
+`async_mode='threading'`, while `start_production.py` claims eventlet mode;
+`eventlet` is not a direct project dependency. Do not deploy T10 until one
+server mode is selected, pinned, and covered by software-only tests.
 
 ## Deploy Exact Commit
 
@@ -139,16 +314,16 @@ prohibited.
 
 1. Stop at the failed step and preserve terminal output.
 2. Do not use `git reset --hard`, `taskkill`, or `HardKillServer`.
-3. Create a revert commit on Mac:
-
-   ```bash
-   git revert <bad-commit>
-   git push origin develop
-   ```
-
-4. Deploy the revert through `deploy_everest.py`.
-5. Restart only affected servers through `restart_tango_servers.py`, with a
-   new human-created approval TOML.
+3. Disable hardware mutation access first, or isolate the web service, without
+   issuing equipment commands. Preserve authorization policy, approval, and
+   consumed-marker evidence for review.
+4. Through the operator-approved safety process, confirm that the service is
+   not issuing hardware mutations and that the laboratory state is safe. This
+   runbook prescribes no Tango, PDU, motion, shutter, power, deploy, or restart
+   commands.
+5. Only after steps 1–4, deploy a previously secure release or replacement
+   authorization gate through the separately approved deployment procedure.
+   A T11 revert must never restore JWT-only hardware mutation access.
 
 ## Required Manual Gate
 

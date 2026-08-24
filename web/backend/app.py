@@ -1,5 +1,9 @@
 import os
+import secrets
 from pathlib import Path
+
+
+MINIMUM_JWT_SECRET_BYTES = 32
 
 
 def _load_project_env(path: str) -> None:
@@ -32,16 +36,90 @@ def _env_bool(name, default=False):
     return str(value).strip().lower() in ("1", "true", "yes", "y", "on")
 
 
-# Default to the lab Tango DB, but never overwrite an explicit shell setting.
-_load_project_env(str(Path(__file__).resolve().parents[1] / ".env"))
-os.environ.setdefault(
-    "TANGO_HOST",
-    os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),
-)
+def _env_origins(name, default):
+    value = os.environ.get(name)
+    if value is None:
+        return list(default)
+    origins = [origin.strip() for origin in value.split(",") if origin.strip()]
+    if "*" in origins:
+        raise RuntimeError(f"{name} must not contain '*'")
+    return origins
 
-from flask import Flask, jsonify, send_from_directory
+
+def _validate_production_jwt_secret(jwt_secret):
+    """Reject short JWT signing secrets in production only."""
+    if len(jwt_secret.encode("utf-8")) < MINIMUM_JWT_SECRET_BYTES:
+        raise RuntimeError(
+            "JWT_SECRET_KEY must be at least 32 bytes in production"
+        )
+
+
+def configure_security(flask_app):
+    """Configure security-sensitive web settings from the environment."""
+    production = _env_bool("PYCONLYSE_PRODUCTION", False)
+    if production and not _env_bool("PYCONLYSE_ENFORCE_DEVICE_AUTH", True):
+        raise RuntimeError("PYCONLYSE_ENFORCE_DEVICE_AUTH must be true in production")
+    jwt_secret = os.environ.get("JWT_SECRET_KEY", "").strip()
+    if not jwt_secret:
+        if production:
+            raise RuntimeError("JWT_SECRET_KEY must be set in production")
+        jwt_secret = secrets.token_urlsafe(48)
+    elif production:
+        _validate_production_jwt_secret(jwt_secret)
+
+    cookie_secure = _env_bool("PYCONLYSE_JWT_COOKIE_SECURE", production)
+    if production and not cookie_secure:
+        raise RuntimeError("PYCONLYSE_JWT_COOKIE_SECURE must be true in production")
+    csrf_protect = _env_bool("PYCONLYSE_JWT_COOKIE_CSRF_PROTECT", production)
+    if production and not csrf_protect:
+        raise RuntimeError(
+            "PYCONLYSE_JWT_COOKIE_CSRF_PROTECT must be true in production"
+        )
+
+    same_site = os.environ.get("PYCONLYSE_JWT_COOKIE_SAMESITE", "Lax").strip().lower()
+    same_site_values = {"lax": "Lax", "strict": "Strict", "none": "None"}
+    if same_site not in same_site_values:
+        raise RuntimeError("PYCONLYSE_JWT_COOKIE_SAMESITE must be Lax, Strict, or None")
+    if same_site == "none" and not cookie_secure:
+        raise RuntimeError("PYCONLYSE_JWT_COOKIE_SAMESITE=None requires secure cookies")
+
+    origins = _env_origins(
+        "PYCONLYSE_CORS_ORIGINS",
+        () if production else ("http://localhost:3000", "http://127.0.0.1:3000"),
+    )
+    flask_app.config.update(
+        JWT_SECRET_KEY=jwt_secret,
+        JWT_TOKEN_LOCATION=["cookies"],
+        JWT_COOKIE_SECURE=cookie_secure,
+        JWT_COOKIE_HTTPONLY=True,
+        JWT_COOKIE_SAMESITE=same_site_values[same_site],
+        JWT_COOKIE_CSRF_PROTECT=csrf_protect,
+        PYCONLYSE_CORS_ORIGINS=origins,
+    )
+    CORS(
+        flask_app,
+        resources={r"/api/*": {"origins": origins}},
+        supports_credentials=True,
+    )
+    # Hardware authorization shares the existing production/local-auth gate.
+    # Validation completes before blueprints register routes.
+    if authorization_required():
+        try:
+            authorization_config_from_environment()
+        except AuthorizationError as exc:
+            raise RuntimeError(f"Hardware authorization configuration is invalid: {exc.message}") from exc
+
+
+_load_project_env(str(Path(__file__).resolve().parents[1] / ".env"))
+
+from flask import Flask, jsonify, send_from_directory  # noqa: I001
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from hardware_authorization import (
+    AuthorizationError,
+    authorization_config_from_environment,
+    authorization_required,
+)
 
 from routes import routes        # Your additional API endpoints
 from folder_api import folder_api  # Folder-related endpoints
@@ -49,18 +127,13 @@ from device_api import device_api  # Device control API endpoints
 from treatment_api import treatment_api  # Treatment workflow API
 from pump_probe_v0_api import pump_probe_v0_api  # Pump-probe V0 emulator API
 from pump_probe_vd2_api import pump_probe_vd2_api  # VD2 streak-camera control API
-from auth import auth            # Authentication endpoints
+from auth import auth, configured_users  # Authentication endpoints
 from websocket_handler import init_socketio  # WebSocket support
 
 app = Flask(__name__, static_folder='../frontend/build', static_url_path='')
-CORS(app)
-
-# JWT Configuration
-# PRODUCTION: Consider using environment variable for secret key
-app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'Elys3!icp2025')
-app.config['JWT_TOKEN_LOCATION'] = ['cookies']
-app.config['JWT_COOKIE_SECURE'] = _env_bool('PYCONLYSE_JWT_COOKIE_SECURE', False)
-app.config['JWT_COOKIE_CSRF_PROTECT'] = False  # PRODUCTION: Consider enabling CSRF protection
+configure_security(app)
+if _env_bool("PYCONLYSE_PRODUCTION", False):
+    configured_users(required=True)
 jwt = JWTManager(app)
 
 # Register blueprints

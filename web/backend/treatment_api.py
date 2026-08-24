@@ -18,6 +18,7 @@ from folder_api import (
     get_treatment_root_bases,
     set_allowed_root,
 )
+from mutation_auth import install_mutation_auth
 from treatment_file_cache import (
     cache_file,
     cache_external_file,
@@ -45,6 +46,7 @@ from treatment_network_path import (
 from treatment_service import TreatmentDataService, h5py
 
 treatment_api = Blueprint("treatment_api", __name__, url_prefix="/api/treatment")
+install_mutation_auth(treatment_api)
 
 EXP_TYPES = ["HIS", "HIS+NOISE", "ABS+BASE+NOISE"]
 DATA_TYPES = [

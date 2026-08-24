@@ -12,6 +12,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from _test_support import (
+    DS_Motor,
     camera_module,
     general_module,
     motor_module,
@@ -712,8 +713,6 @@ def test_write_to_archive_only_emits_when_archive_is_enabled():
 
 
 def test_ds_motor_wrapper_exports_mono_axis_alias():
-    from DeviceServers.base.DS_Motor import DS_Motor
-
     assert DS_Motor is motor_module.DS_MOTORIZED_MONO_AXIS
 
 

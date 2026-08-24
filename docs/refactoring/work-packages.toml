@@ -88,6 +88,102 @@ allowed_globs = [
   "tests/device_servers/cameras/basler/**",
 ]
 
+[packages.T8]
+agent = "terra"
+description = "Software-only test, isolation, and coverage gate"
+allowed_paths = [
+  "pytest.ini",
+  ".coveragerc",
+  ".gitignore",
+  "tests/conftest.py",
+  "tests/_tango_stub.py",
+  "tests/README.md",
+  "scripts/refactor/verify_refactor.py",
+  "scripts/refactor/verify_coverage.py",
+  "scripts/refactor/pytest_module_isolation.py",
+  "web/backend/device_api.py",
+  "web/backend/treatment_service.py",
+  "web/frontend/package.json",
+  "web/frontend/package-lock.json",
+  "web/frontend/src/App.test.js",
+  "web/frontend/src/api/treatmentClient.test.js",
+  "web/frontend/src/setupTests.js",
+  "web/frontend/src/utils/deviceFamily.test.js",
+]
+allowed_globs = [
+  "tests/integration/device_servers/**",
+  "tests/manual/**",
+  "tests/unit/test_hamamatsu_streak.py",
+  "tests/unit/test_treatment_service.py",
+  "tests/unit/test_refactor_coverage.py",
+  "tests/unit/test_pytest_module_isolation.py",
+  "tests/unit/test_refactor_tooling.py",
+  "tests/device_servers/base/_test_support.py",
+  "tests/device_servers/base/test_base_behaviors.py",
+  "tests/device_servers/base/test_base_extended_contracts.py",
+  "tests/device_servers/motion/test_motion_recovery.py",
+  "tests/web/test_device_api*.py",
+  "tests/web/test_pump_probe_vd2_api.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "docs/refactoring/**",
+]
+
+[packages.T9]
+agent = "terra"
+description = "Conservative web security and WebSocket contracts"
+allowed_paths = [
+  "web/backend/app.py",
+  "web/backend/auth.py",
+  "web/backend/websocket_handler.py",
+  "web/backend/device_api.py",
+  "web/start_production.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "web/frontend/src/api/csrfRequest.js",
+  "web/frontend/src/api/csrfRequest.test.js",
+  "web/frontend/src/CamerasClients.js",
+  "web/frontend/src/DAQmxClients.js",
+  "web/frontend/src/Dashboard.js",
+  "web/frontend/src/PumpProbeVD2.js",
+  "scripts/refactor/verify_refactor.py",
+  "tests/unit/test_refactor_tooling.py",
+]
+allowed_globs = [
+  "web/frontend/src/components/**",
+  "web/frontend/src/tabs/**",
+  "web/frontend/src/utils/**",
+  "tests/web/test_auth_security*.py",
+  "docs/refactoring/**",
+]
+
+[packages.T10]
+agent = "terra"
+description = "Production startup, mutation authentication, and login throttling"
+allowed_paths = [
+  "web/backend/app.py",
+  "web/backend/auth.py",
+  "web/backend/device_api.py",
+  "web/backend/treatment_api.py",
+  "web/backend/pump_probe_vd2_api.py",
+  "web/backend/pump_probe_v0_api.py",
+  "web/backend/mutation_auth.py",
+  "web/start_production.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_login_rate_limit.py",
+  "tests/web/test_production_startup_security.py",
+  "tests/web/test_production_mutation_auth.py",
+  ".coveragerc",
+  "scripts/refactor/verify_coverage.py",
+  "tests/unit/test_refactor_coverage.py",
+  "web/frontend/src/api/treatmentClient.js",
+  "web/frontend/src/api/treatmentClient.test.js",
+  "web/frontend/src/PumpProbeVD2.js",
+  "web/frontend/src/PumpProbeVD2.test.js",
+  "web/frontend/src/pump-probe-v0/shared.js",
+  "web/frontend/src/pump-probe-v0/shared.test.js",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.L1]
 agent = "luna"
 description = "DG645 mechanical extraction"
@@ -116,3 +212,35 @@ allowed_globs = [
   "web/frontend/src/tabs/**",
   "web/frontend/src/utils/**",
 ]
+
+[packages.T11]
+agent = "terra"
+description = "Hardware mutation authorization and one-shot approval gate"
+allowed_paths = [
+  "web/backend/hardware_authorization.py",
+  "web/backend/app.py",
+  "web/backend/device_api.py",
+  "web/backend/pump_probe_v0_api.py",
+  "web/backend/pump_probe_vd2_api.py",
+  "web/backend/websocket_handler.py",
+  "web/backend/routes.py",
+  "web/start_production.py",
+  ".coveragerc",
+  "scripts/refactor/verify_coverage.py",
+  "tests/unit/test_refactor_coverage.py",
+  "tests/web/test_hardware_authorization.py",
+  "tests/web/test_hardware_authorization_routes.py",
+  "tests/web/test_hardware_authorization_device_mutations.py",
+  "tests/web/test_hardware_authorization_vd2.py",
+  "tests/web/test_hardware_authorization_websocket.py",
+  "tests/web/test_device_api_smoke.py",
+  "tests/web/test_device_api_psp.py",
+  "tests/web/test_routes_import_safety.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_production_startup_security.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "scripts/refactor/pytest_module_isolation.py",
+  "tests/unit/test_pytest_module_isolation.py",
+  "tests/_tango_stub.py",
+]
+allowed_globs = ["docs/refactoring/**"]

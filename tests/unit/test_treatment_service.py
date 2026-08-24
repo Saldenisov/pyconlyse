@@ -104,15 +104,16 @@ def test_stitch_od_dat_files_joins_same_delay_axis(service, tmp_path):
     summary = service.stitch_od_dat_files(first, second, output)
     payload = np.loadtxt(output)
 
-    assert summary["wavelengths"] == 4
+    assert summary["wavelengths"] == 5
     assert summary["timedelays"] == 3
     assert summary["wavelength_min"] == 420.0
     assert summary["wavelength_max"] == 450.0
     assert summary["overlap_range"] == [435.0, 440.0]
-    assert payload.shape == (5, 4)
+    assert payload.shape == (6, 4)
     assert payload[0, 1:].tolist() == delays
-    assert payload[1:, 0].tolist() == [420.0, 430.0, 440.0, 450.0]
-    assert payload[3, 1:].tolist() == [30.0, 40.0, 50.0]
+    assert payload[1:, 0].tolist() == [420.0, 430.0, 435.0, 440.0, 450.0]
+    assert payload[3, 1:].tolist() == [18.5, 26.25, 34.0]
+    assert payload[4, 1:].tolist() == [30.0, 40.0, 50.0]
 
 
 def test_stitch_od_dat_files_rejects_mismatched_delay_axis(service, tmp_path):

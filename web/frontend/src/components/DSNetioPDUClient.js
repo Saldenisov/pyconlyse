@@ -1,6 +1,7 @@
 // DSNetioPDUClient.js - Multi-device NETIO PDU web client
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { withCsrfToken } from '../api/csrfRequest';
 import './DSNetioPDUClient.css';
 
 const DSNetioPDUClient = ({ deviceNames = [] }) => {
@@ -53,11 +54,8 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
   }, [deviceNames]);
 
   const initializeWebSocket = () => {
-    const token = getCookie('access_token_cookie');
-    
     socketRef.current = io('/', {
       withCredentials: true,
-      auth: { token: token }
     });
 
     socketRef.current.on('connect', () => {
@@ -89,13 +87,6 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
         setError(`${data.device}: ${data.error}`);
       }
     });
-  };
-
-  const getCookie = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
   };
 
   const fetchAllDevicesData = async () => {
@@ -195,12 +186,13 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
         output.id === outputId ? (state ? 1 : 0) : output.state
       );
       
-      const response = await fetch(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
+      const url = `/api/device/${devicePath(deviceName)}/command/set_channels_states`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
-      });
+      }));
 
       await parseJsonOrThrow(response, `Failed to set output ${outputId} for ${deviceName}`);
 
@@ -239,12 +231,13 @@ const DSNetioPDUClient = ({ deviceNames = [] }) => {
       
       const states = device.outputs.map(() => state ? 1 : 0);
       
-      const response = await fetch(`/api/device/${devicePath(deviceName)}/command/set_channels_states`, {
+      const url = `/api/device/${devicePath(deviceName)}/command/set_channels_states`;
+      const response = await fetch(url, withCsrfToken(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
         body: JSON.stringify({ args: states })
-      });
+      }));
 
       await parseJsonOrThrow(response, `Failed to set all outputs for ${deviceName}`);
 
