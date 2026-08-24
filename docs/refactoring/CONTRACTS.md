@@ -60,6 +60,10 @@ Refactoring must preserve these contracts unless a separately approved migration
   database and per-device read callbacks. `/api/devices` retains its query,
   payload, cache-key, TTL, stale-refresh, sorting, and failure semantics;
   `DeviceManager` remains the owner of proxy identity and retry behavior.
+- DAQmx and PSP class catalogs share an import-inert read-only algorithm with
+  injected database/state reads. DAQmx preserves class order, first-match
+  de-duplication, and per-class failure skipping; PSP preserves duplicate rows.
+  Both retain sorted rows and state failures as `UNKNOWN` plus `available=false`.
 
 ### Web security and WebSocket
 

@@ -24,6 +24,7 @@ MINIMUM_MODULE_COVERAGE = {
     "utilities/dataio/hamamatsu_file_opener.py": 55.0,
     "utilities/dataio/opener.py": 75.0,
     "web/backend/device_api.py": 40.0,
+    "web/backend/device_catalog_service.py": 100.0,
     "web/backend/device_snapshot_service.py": 90.0,
     "web/backend/folder_api.py": 75.0,
     "web/backend/treatment_api.py": 65.0,

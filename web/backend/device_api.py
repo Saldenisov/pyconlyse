@@ -11,6 +11,7 @@ import numpy as np
 import tango
 import tango_gateway
 from device_snapshot_service import DeviceSnapshotService
+from device_catalog_service import DeviceCatalogService
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
 from hardware_authorization import (
@@ -859,6 +860,12 @@ _device_snapshot_service = DeviceSnapshotService(
     lambda: tango_gateway.create_database(),
     _read_device_snapshot,
 )
+_device_catalog_service = DeviceCatalogService()
+
+
+def _catalog_device_state(device_name):
+    """Read state through the existing DeviceManager cache without retries."""
+    return str(DeviceManager.get_device(device_name).state())
 
 
 def _get_starter_devices():
@@ -2103,38 +2110,14 @@ def list_daqmx_devices():
     """List DAQmx-related Tango devices (ZMQ reader and PSP supervision readers)."""
     try:
         db = tango_gateway.create_database()
-        seen = set()
-        devices = []
         probe_state = _query_bool('probe_state', True)
-
-        for class_name in DAQMX_DEVICE_CLASSES:
-            try:
-                class_devices = db.get_device_name('*', class_name)
-            except Exception:
-                continue
-
-            for device_name in class_devices:
-                device_name = str(device_name)
-                if device_name in seen:
-                    continue
-                seen.add(device_name)
-
-                state = 'UNKNOWN'
-                available = True
-                if probe_state:
-                    try:
-                        state = str(DeviceManager.get_device(device_name).state())
-                    except Exception:
-                        available = False
-
-                devices.append({
-                    'name': device_name,
-                    'class': class_name,
-                    'state': state,
-                    'available': available,
-                })
-
-        devices.sort(key=lambda item: item['name'])
+        devices = _device_catalog_service.list_class_devices(
+            db,
+            DAQMX_DEVICE_CLASSES,
+            probe_state,
+            _catalog_device_state,
+            deduplicate=True,
+        )
         return jsonify({'devices': devices, 'success': True})
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
@@ -2146,31 +2129,13 @@ def list_psp_devices():
     try:
         db = tango_gateway.create_database()
         probe_state = _query_bool('probe_state', True)
-        names = []
-        try:
-            names = db.get_device_name('*', 'DS_PSP')
-        except Exception:
-            names = []
-
-        devices = []
-        for device_name in names:
-            device_name = str(device_name)
-            state = 'UNKNOWN'
-            available = True
-            if probe_state:
-                try:
-                    state = str(DeviceManager.get_device(device_name).state())
-                except Exception:
-                    available = False
-
-            devices.append({
-                'name': device_name,
-                'class': 'DS_PSP',
-                'state': state,
-                'available': available,
-            })
-
-        devices.sort(key=lambda item: item['name'])
+        devices = _device_catalog_service.list_class_devices(
+            db,
+            ('DS_PSP',),
+            probe_state,
+            _catalog_device_state,
+            deduplicate=False,
+        )
         return jsonify({'devices': devices, 'success': True})
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500

@@ -105,6 +105,8 @@ class FakeDatabase:
     def get_device_name(self, _wildcard, class_name):
         if class_name == "DS_PSP":
             return ["manip/general/PSP"]
+        if class_name == "DS_DAQmx_ZMQ":
+            return ["manip/general/DAQ"]
         return []
 
 
@@ -133,7 +135,7 @@ def _make_client(monkeypatch):
 
 def test_list_psp_devices(monkeypatch):
     client, _ = _make_client(monkeypatch)
-    response = client.get("/api/psp/devices?probe_state=1")
+    response = client.get("/api/psp/devices")
     payload = response.get_json()
 
     assert response.status_code == 200
@@ -146,6 +148,31 @@ def test_list_psp_devices(monkeypatch):
             "state": "ON",
         }
     ]
+
+
+def test_list_daqmx_devices_defaults_to_state_probe_and_preserves_payload(monkeypatch):
+    client, _ = _make_client(monkeypatch)
+    response = client.get("/api/daqmx/devices")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload == {
+        "devices": [
+            {
+                "available": True,
+                "class": "DS_DAQmx_ZMQ",
+                "name": "manip/general/DAQ",
+                "state": "ON",
+            },
+            {
+                "available": True,
+                "class": "DS_PSP",
+                "name": "manip/general/PSP",
+                "state": "ON",
+            },
+        ],
+        "success": True,
+    }
 
 
 def test_get_vacuum_group_history(monkeypatch):

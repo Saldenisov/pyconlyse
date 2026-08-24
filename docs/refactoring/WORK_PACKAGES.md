@@ -191,6 +191,23 @@ Deliver:
 - Do not call Tango, start a monitor on import, alter DeviceServer/frontend/
   deployment code, or move mutating paths.
 
+### T16: Read-only DAQmx/PSP catalog boundary
+
+Scope is limited to `[packages.T16]` in `work-packages.toml`.
+
+Deliver:
+
+- Extract the shared class-query, state-fallback, filter/sort, and optional
+  de-duplication algorithm used by DAQmx and PSP read-only catalog routes.
+- Keep endpoint parsing, response/error facades, Tango gateway construction,
+  `DeviceManager`, DAQmx class definitions, PSP protocol/history/acknowledgment,
+  and all control paths in `device_api.py`.
+- Preserve DAQmx first-class-wins de-duplication and PSP duplicate retention;
+  retain default state probing and failure-to-`UNKNOWN`/`available=false` rows.
+- Require 100% statement coverage for the import-inert catalog service.
+- Do not move camera/spectrograph catalogs, command routes, DeviceServer code,
+  frontend/deployment code, or call Tango during verification.
+
 ### T9: Conservative web security and WebSocket contracts
 
 Scope:
@@ -369,8 +386,8 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Current full Python deny-network gate passed tooling 40; Python
-594 passed, 1 skipped; named-module coverage was 68.7%; frontend 10 suites/83
+one warning. Current full Python deny-network gate passed tooling 41; Python
+600 passed, 1 skipped; named-module coverage was 69.0%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

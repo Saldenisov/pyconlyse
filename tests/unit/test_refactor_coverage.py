@@ -81,6 +81,14 @@ class TestCoverageGate(unittest.TestCase):
             90.0,
         )
 
+    def test_t16_device_catalog_service_has_an_explicit_full_statement_floor(self):
+        self.assertEqual(
+            verify_coverage.MINIMUM_MODULE_COVERAGE[
+                "web/backend/device_catalog_service.py"
+            ],
+            100.0,
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {
