@@ -1,5 +1,6 @@
 import errno
 import importlib
+import json
 import socket
 from pathlib import Path
 
@@ -12,6 +13,34 @@ VALID_SECRET = "0123456789abcdef0123456789abcdef"
 
 
 @pytest.fixture
+def t11_environment(monkeypatch, tmp_path):
+    root = tmp_path / "external-t11"
+    approval = root / "approvals"
+    consumed = root / "consumed"
+    approval.mkdir(parents=True)
+    consumed.mkdir()
+    policy = root / "policy.json"
+    policy.write_text(json.dumps({
+        "version": 1,
+        "subjects": {"operator": {"roles": ["operator"]}},
+        "roles": {"operator": {}},
+        "operations": [],
+    }), encoding="utf-8")
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_POLICY_PATH", str(policy))
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_APPROVAL_DIR", str(approval))
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_CONSUMED_DIR", str(consumed))
+    policy.chmod(0o400)
+    approval.chmod(0o500)
+    root.chmod(0o500)
+    try:
+        yield root
+    finally:
+        root.chmod(0o700)
+        approval.chmod(0o700)
+        policy.chmod(0o600)
+
+
+@pytest.fixture
 def production_module(monkeypatch):
     monkeypatch.syspath_prepend(str(WEB_DIR))
     return importlib.import_module("start_production")
@@ -19,7 +48,11 @@ def production_module(monkeypatch):
 
 @pytest.fixture
 def app_module(monkeypatch):
+    from tests._tango_stub import install_tango_stub
+    install_tango_stub(monkeypatch)
     monkeypatch.syspath_prepend(str(BACKEND_DIR))
+    monkeypatch.setenv("TANGO_HOST", "stub.invalid:1")
+    monkeypatch.setenv("PYCONLYSE_TANGO_HOST", "stub.invalid:1")
     monkeypatch.setenv("PYCONLYSE_PRODUCTION", "false")
     monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
     return importlib.import_module("app")
@@ -63,7 +96,7 @@ def test_production_secret_minimum_is_enforced_before_startup_and_in_app(
 
 
 def test_production_accepts_a_32_byte_utf8_jwt_secret(
-    monkeypatch, production_module, app_module
+    monkeypatch, production_module, app_module, t11_environment
 ):
     secret = "é" * 16
     environment = _production_environment(secret)

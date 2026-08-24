@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 from http.cookies import SimpleCookie
@@ -11,6 +12,35 @@ from werkzeug.security import generate_password_hash
 
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "web" / "backend"
 WEB_DIR = BACKEND_DIR.parent
+
+
+@pytest.fixture
+def t11_environment(monkeypatch, tmp_path):
+    root = tmp_path / "external-t11"
+    approval = root / "approvals"
+    consumed = root / "consumed"
+    approval.mkdir(parents=True)
+    consumed.mkdir()
+    policy = root / "policy.json"
+    policy.write_text(json.dumps({
+        "version": 1,
+        "subjects": {"test-user": {"roles": ["operator"]}},
+        "roles": {"operator": {}},
+        "operations": [],
+        "starter_servers": {},
+    }), encoding="utf-8")
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_POLICY_PATH", str(policy))
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_APPROVAL_DIR", str(approval))
+    monkeypatch.setenv("PYCONLYSE_HARDWARE_CONSUMED_DIR", str(consumed))
+    policy.chmod(0o400)
+    approval.chmod(0o500)
+    root.chmod(0o500)
+    try:
+        yield root
+    finally:
+        root.chmod(0o700)
+        approval.chmod(0o700)
+        policy.chmod(0o600)
 
 
 def _is_web_module(module):
@@ -26,6 +56,8 @@ def _is_web_module(module):
 
 @pytest.fixture(autouse=True)
 def isolate_tango_environment(monkeypatch):
+    from tests._tango_stub import install_tango_stub
+    install_tango_stub(monkeypatch)
     original_sys_path = list(sys.path)
     original_web_modules = {
         name: module for name, module in sys.modules.items() if _is_web_module(module)
@@ -38,7 +70,7 @@ def isolate_tango_environment(monkeypatch):
         for name in ("TANGO_HOST", "PYCONLYSE_TANGO_HOST")
     }
     for name in original_values:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "stub.invalid:1")
     yield
     for name, value in original_values.items():
         if value is None:
@@ -211,7 +243,7 @@ def test_production_security_configuration_requires_explicit_values(monkeypatch)
 
 
 def test_production_security_configuration_uses_secure_cookie_csrf_and_cors(
-    monkeypatch,
+    monkeypatch, t11_environment,
 ):
     monkeypatch.delenv("PYCONLYSE_PRODUCTION", raising=False)
     app_module = importlib.import_module("app")

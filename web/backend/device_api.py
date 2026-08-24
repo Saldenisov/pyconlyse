@@ -11,6 +11,14 @@ import numpy as np
 import tango
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import verify_jwt_in_request
+from hardware_authorization import (
+    AuthorizationError,
+    authorization_config_from_environment,
+    authorization_required,
+    load_policy,
+    require_http_hardware,
+    trusted_starter_for_server,
+)
 from mutation_auth import install_mutation_auth
 
 device_api = Blueprint("device_api", __name__)
@@ -519,7 +527,7 @@ def _read_psp_group_history(device, group_name, seconds, limit):
     return normalized
 
 
-def _write_daqmx_channel(device, channel, value):
+def _write_daqmx_channel(device, channel, value, command_variant=None):
     """
     Attempt to write DAQmx/PSP variable using any supported command signature.
     Raises Exception when no supported write command is found.
@@ -531,6 +539,22 @@ def _write_daqmx_channel(device, channel, value):
     json_payload_name_value = json.dumps({"name": channel, "value": scalar_value})
     json_payload_channel_value = json.dumps({"channel": channel, "value": scalar_value})
     eq_payload = f"{channel}={scalar_value}"
+
+    if command_variant is not None:
+        if command_variant not in _DAQMX_WRITE_COMMANDS:
+            raise ValueError("Unsupported write command")
+        command_name = command_variant
+        if command_variant == "write_variable_json":
+            return device.command_inout(command_name, json_payload_name_value)
+        if command_variant == "set_variable_value_json":
+            return device.command_inout(command_name, json_payload_name_value)
+        if command_variant == "set_channel_value_json":
+            return device.command_inout(command_name, json_payload_channel_value)
+        if command_variant == "write_variable":
+            return device.command_inout(command_name, [channel, scalar_value])
+        if command_variant == "set_variable_value":
+            return device.command_inout(command_name, [channel, scalar_value])
+        return device.command_inout(command_name, [channel, scalar_value])
 
     if "write_variable_json" in commands:
         return device.command_inout(commands["write_variable_json"], json_payload_name_value)
@@ -586,11 +610,111 @@ def _maybe_require_auth():
     ):
         verify_jwt_in_request()
 
-# Debug endpoint to test WebSocket monitoring
-@device_api.route('/api/debug/monitor/<path:device_name>', methods=['GET'])
-def debug_monitor_device(device_name):
-    """Debug endpoint to manually trigger device monitoring"""
+
+def _hardware_payload():
+    """Return the JSON object used for an authorized hardware mutation."""
+    data = request.get_json(silent=True)
+    if data is None:
+        return {}
+    if not isinstance(data, dict):
+        return None
+    return data
+
+
+def _invalid_hardware_payload():
+    return jsonify({'error': 'JSON request body must be an object', 'success': False}), 400
+
+
+def _authorization_error_response(exc):
+    return jsonify({'error': exc.message, 'success': False, 'code': exc.code}), exc.status_code
+
+
+_CAMERA_PARAMETER_NAMES = frozenset({
+    'exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY',
+    'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal',
+    'binning_vertical', 'number_kinetics',
+})
+_SPECTROGRAPH_PARAMETER_NAMES = frozenset({
+    'wavelength_nm', 'grating', 'pixel_number_attr', 'pixel_width_um_attr',
+    'input_side_slit_um', 'output_side_slit_um', 'input_direct_slit_um',
+    'output_direct_slit_um',
+})
+_CAMERA_GRAB_COMMANDS = {
+    'start': ('start_grabbing', 'startgrabbing', 'StartGrabbing', 'start', 'on'),
+    'stop': ('stop_grabbing', 'stopgrabbing', 'StopGrabbing', 'stop', 'off'),
+}
+_CAMERA_TRIGGER_COMMANDS = ('TriggerSoftware', 'Trigger')
+_PSP_ACK_COMMANDS = ('acknowledge_command_json', 'AcknowledgeCommandJson')
+_DAQMX_WRITE_COMMANDS = (
+    'write_variable_json', 'set_variable_value_json', 'set_channel_value_json',
+    'write_variable', 'set_variable_value', 'set_channel_value',
+)
+_PSP_ACK_FIELDS = frozenset({
+    'command', 'id', 'ok', 'status', 'error', 'message', 'timestamp',
+    'command_variant',
+})
+
+
+def _mutation_payload(required=()):
+    data = _hardware_payload()
+    if data is None or not data:
+        return None
+    if any(name not in data for name in required):
+        return None
+    return data
+
+
+def _finite_number(value):
+    if isinstance(value, bool):
+        return None
     try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def _invalid_psp_acknowledgement():
+    if authorization_required():
+        return jsonify({
+            'error': 'Hardware request is invalid',
+            'success': False,
+            'code': 'hardware_approval_invalid',
+        }), 409
+    return jsonify({'error': 'Acknowledgment payload is invalid', 'success': False}), 400
+
+
+def _command_variant(data, candidates):
+    """Require one exact branch before authorization in an enforced mode."""
+    selected = data.get('command_variant')
+    if authorization_required():
+        if not isinstance(selected, str) or selected not in candidates:
+            return None
+        return selected
+    if selected is not None and (not isinstance(selected, str) or selected not in candidates):
+        return None
+    return selected
+
+
+def _parameter_write_plan(data):
+    names = sorted(data)
+    return (
+        [{'name': name, 'value': data[name]} for name in names],
+        names,
+    )
+
+# Debug endpoint to test WebSocket monitoring
+@device_api.route('/api/debug/monitor/<path:device_name>', methods=['GET', 'POST'])
+def debug_monitor_device(device_name):
+    """Expose a passive GET status and explicitly start monitoring by POST."""
+    try:
+        if request.method == 'GET':
+            return jsonify({
+                'device': device_name,
+                'monitoring': False,
+                'message': 'Use POST to start debug monitoring',
+                'success': True,
+            })
         from websocket_handler import monitor
         monitor.monitor_device(device_name, "debug_room")
         return jsonify({
@@ -920,46 +1044,68 @@ def control_server():
     """Control a device server through its Starter."""
     try:
         _maybe_require_auth()
-        data = request.get_json() or {}
-        action = str(data.get('action', '')).strip().lower()
+        data = _hardware_payload()
+        if data is None:
+            return _invalid_hardware_payload()
+        raw_action = data.get('action', '')
+        action = raw_action.strip().lower() if isinstance(raw_action, str) else ''
         server_name = data.get('server_name')
         device_name = data.get('device_name')
 
-        if not server_name and device_name:
-            server_name = _resolve_server_name(str(device_name))
-
-        if not server_name:
-            return jsonify({'error': 'server_name or device_name is required', 'success': False}), 400
-
-        server_name = str(server_name)
         if action not in {'start', 'restart', 'hard_kill'}:
             return jsonify({'error': 'Unsupported action', 'success': False}), 400
 
-        starter_name, starter, running_before, stopped_before = _find_starter_for_server(server_name)
+        if authorization_required() and not server_name:
+            return jsonify({'error': 'server_name is required', 'success': False}), 400
+        if not server_name and device_name:
+            server_name = _resolve_server_name(str(device_name))
+
+        if not isinstance(server_name, str) or not server_name.strip():
+            return jsonify({'error': 'server_name or device_name is required', 'success': False}), 400
+
+        server_name = server_name.strip()
+        trusted_starter = None
+        if authorization_required():
+            config = authorization_config_from_environment()
+            trusted_starter = trusted_starter_for_server(
+                load_policy(config.policy_path, strict=True), server_name
+            )
+        target_commands = {
+            'start': ('DevStart',),
+            'hard_kill': ('HardKillServer',),
+            'restart': ('DevStop', 'DevStart'),
+        }[action]
+        blocked = require_http_hardware(
+            action=action,
+            targets=[{'device': trusted_starter or server_name, 'command': command} for command in target_commands],
+            args={'action': action, 'server_name': server_name},
+            route_id='server.control',
+            wrapper_fields={'action', 'server_name'},
+        )
+        if blocked is not None:
+            return blocked
+
+        if trusted_starter is not None:
+            starter_name = trusted_starter
+            starter, running_before, stopped_before = _get_starter_server_lists(starter_name)
+        else:
+            starter_name, starter, running_before, stopped_before = _find_starter_for_server(server_name)
 
         if action == 'start':
-            if server_name not in running_before:
-                try:
-                    starter.command_inout('DevStart', server_name)
-                except Exception as exc:
-                    if not _is_already_running_error(exc):
-                        raise
+            try:
+                starter.command_inout('DevStart', server_name)
+            except Exception as exc:
+                if not _is_already_running_error(exc):
+                    raise
         elif action == 'hard_kill':
             starter.command_inout('HardKillServer', server_name)
             time.sleep(2)
         elif action == 'restart':
-            if server_name in running_before:
-                try:
-                    starter.command_inout('DevStop', server_name)
-                    time.sleep(2)
-                except Exception:
-                    pass
-
-                _, running_after_stop, _ = _get_starter_server_lists(starter_name)
-                if server_name in running_after_stop:
-                    starter.command_inout('HardKillServer', server_name)
-                    time.sleep(2)
-
+            try:
+                starter.command_inout('DevStop', server_name)
+                time.sleep(2)
+            except Exception:
+                pass
             try:
                 starter.command_inout('DevStart', server_name)
             except Exception as exc:
@@ -1000,6 +1146,8 @@ def control_server():
             'running_count': len(running_after),
             'stopped_count': len(stopped_after),
         })
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1081,9 +1229,8 @@ def get_device_attributes(device_name):
 def handle_attribute(device_name, attr_name):
     """Read or write a specific attribute"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             attr = device.read_attribute(attr_name)
             return jsonify({
                 'attribute': attr_name,
@@ -1095,12 +1242,27 @@ def handle_attribute(device_name, attr_name):
         
         elif request.method == 'POST':
             _maybe_require_auth()
-            data = request.get_json()
-            value = data.get('value')
+            data = _hardware_payload()
+            if data is None:
+                return _invalid_hardware_payload()
+            if 'value' not in data:
+                return jsonify({'error': 'No value provided', 'success': False}), 400
+            value = data['value']
             
             if value is None:
                 return jsonify({'error': 'No value provided', 'success': False}), 400
-            
+
+            blocked = require_http_hardware(
+                action='write',
+                targets=[{'device': str(device_name), 'command': 'write_attribute'}],
+                args={'attribute': str(attr_name), 'value': value},
+                route_id='device.attribute',
+                wrapper_fields={'value'},
+            )
+            if blocked is not None:
+                return blocked
+
+            device = DeviceManager.get_device(device_name)
             device.write_attribute(attr_name, value)
             # Read back the attribute to confirm
             attr = device.read_attribute(attr_name)
@@ -1113,6 +1275,8 @@ def handle_attribute(device_name, attr_name):
                 'success': True
             })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1121,8 +1285,19 @@ def execute_command(device_name, command_name):
     """Execute a device command"""
     try:
         _maybe_require_auth()
-        data = request.get_json() or {}
+        data = _hardware_payload()
+        if data is None:
+            return _invalid_hardware_payload()
         args = data.get('args')
+        blocked = require_http_hardware(
+            action='execute',
+            targets=[{'device': str(device_name), 'command': str(command_name)}],
+            args=args,
+            route_id='device.command',
+            wrapper_fields={'args'},
+        )
+        if blocked is not None:
+            return blocked
 
         def run_command():
             device = DeviceManager.get_device(device_name)
@@ -1159,6 +1334,8 @@ def execute_command(device_name, command_name):
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         traceback.print_exc()
         return jsonify({'error': str(e), 'traceback': traceback.format_exc(), 'success': False}), 500
@@ -1393,9 +1570,19 @@ def set_itest_slot_output(device_name, slot_id):
     """Set output state for specific iTest PSU slot"""
     try:
         _maybe_require_auth()
+        data = _mutation_payload(('state',))
+        if data is None or isinstance(data['state'], bool) or not isinstance(data['state'], int) or data['state'] not in (0, 1):
+            return jsonify({'error': 'state must be 0 or 1', 'success': False}), 400
+        state = int(data['state'])
+        blocked = require_http_hardware(
+            action='set_output',
+            targets=[{'device': str(device_name), 'command': 'set_output_state'}],
+            args={'slot_id': int(slot_id), 'state': state},
+            route_id='itest.output', wrapper_fields={'state'},
+        )
+        if blocked is not None:
+            return blocked
         device = DeviceManager.get_device(device_name)
-        data = request.get_json()
-        state = int(data.get('state', 0))
         
         # Use set_output_state command with [slot_id, state]
         device.command_inout('set_output_state', [int(slot_id), state])
@@ -1406,6 +1593,8 @@ def set_itest_slot_output(device_name, slot_id):
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1414,9 +1603,19 @@ def set_ds_itest_psu_current(device_name, slot_id):
     """Set current for specific DS iTest PSU slot with limit validation"""
     try:
         _maybe_require_auth()
+        data = _mutation_payload(('current',))
+        current_value = _finite_number(data.get('current')) if data is not None else None
+        if current_value is None:
+            return jsonify({'error': 'current must be finite numeric', 'success': False}), 400
+        blocked = require_http_hardware(
+            action='set_current',
+            targets=[{'device': str(device_name), 'command': 'set_current'}],
+            args={'slot_id': int(slot_id), 'current': current_value},
+            route_id='itest.current', wrapper_fields={'current'},
+        )
+        if blocked is not None:
+            return blocked
         device = DeviceManager.get_device(device_name)
-        data = request.get_json()
-        current_value = float(data.get('current', 0.0))
         
         # Get slot array index for validation
         ids = [int(x) for x in device.read_attribute('ids').value]  # Convert int64 to int
@@ -1461,6 +1660,8 @@ def set_ds_itest_psu_current(device_name, slot_id):
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1469,9 +1670,19 @@ def set_ds_itest_psu_state(device_name, slot_id):
     """Set output state for specific DS iTest PSU slot"""
     try:
         _maybe_require_auth()
+        data = _mutation_payload(('enabled',))
+        if data is None or type(data['enabled']) is not bool:
+            return jsonify({'error': 'enabled must be boolean', 'success': False}), 400
+        enabled = data['enabled']
+        blocked = require_http_hardware(
+            action='set_output',
+            targets=[{'device': str(device_name), 'command': 'set_output_state'}],
+            args={'slot_id': int(slot_id), 'enabled': enabled},
+            route_id='itest.state', wrapper_fields={'enabled'},
+        )
+        if blocked is not None:
+            return blocked
         device = DeviceManager.get_device(device_name)
-        data = request.get_json()
-        enabled = bool(data.get('enabled', False))
         
         # Use set_output_state command with [slot_id, state] - slot_id is the real slot ID
         device.command_inout('set_output_state', [int(slot_id), int(1 if enabled else 0)])
@@ -1493,6 +1704,8 @@ def set_ds_itest_psu_state(device_name, slot_id):
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1500,9 +1713,8 @@ def set_ds_itest_psu_state(device_name, slot_id):
 def handle_itest_current(device_name):
     """Handle iTest PSU current operations (legacy endpoint)"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             setpoint = device.read_attribute('CurrentSetpoint').value
             measured = device.read_attribute('MeasuredCurrent').value
             voltage = device.read_attribute('MeasuredVoltage').value
@@ -1528,9 +1740,38 @@ def handle_itest_current(device_name):
         
         elif request.method == 'POST':
             _maybe_require_auth()
-            data = request.get_json()
+            data = _mutation_payload(('action',))
+            if data is None or not isinstance(data.get('action'), str):
+                return jsonify({'error': 'Unknown action', 'success': False}), 400
             action = data.get('action')
             value = data.get('value')
+            commands = {
+                'set': 'write_attribute',
+                'inc_fine': 'IncCurrentFine',
+                'dec_fine': 'DecCurrentFine',
+                'inc_coarse': 'IncCurrentCoarse',
+                'dec_coarse': 'DecCurrentCoarse',
+            }
+            if action not in commands or (action == 'set' and _finite_number(value) is None):
+                return jsonify({'error': 'Unknown action', 'success': False}), 400
+            if authorization_required() and action != 'set':
+                return jsonify({
+                    'error': 'Hardware action is not authorized',
+                    'success': False,
+                    'code': 'hardware_not_authorized',
+                }), 403
+            if action == 'set':
+                value = _finite_number(value)
+            blocked = require_http_hardware(
+                action=action,
+                targets=[{'device': str(device_name), 'command': commands[action]}],
+                args={'action': action, 'value': value},
+                route_id='itest.current',
+                wrapper_fields={'action', 'value'} if action == 'set' else {'action'},
+            )
+            if blocked is not None:
+                return blocked
+            device = DeviceManager.get_device(device_name)
             
             # For set action, validate limits first
             if action == 'set' and value is not None:
@@ -1567,6 +1808,8 @@ def handle_itest_current(device_name):
             setpoint = device.read_attribute('CurrentSetpoint').value
             return jsonify({'current_setpoint': setpoint, 'success': True})
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1574,9 +1817,8 @@ def handle_itest_current(device_name):
 def handle_itest_slot_current(device_name, slot_id):
     """Handle iTest PSU current operations for specific slot with proper limits"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             # Read multi-slot arrays
             ids = [int(x) for x in device.read_attribute('ids').value]
             currents_setpoint = list(device.read_attribute('currents_setpoint').value)
@@ -1626,13 +1868,37 @@ def handle_itest_slot_current(device_name, slot_id):
         
         elif request.method == 'POST':
             _maybe_require_auth()
-            data = request.get_json() or {}
+            data = _mutation_payload()
+            if data is None:
+                return jsonify({'error': 'action is required', 'success': False}), 400
             action = data.get('action')
             value = data.get('value')
             if value is None and data.get('current') is not None:
                 value = data.get('current')
             if action is None and value is not None:
                 action = 'set'
+            if not isinstance(action, str) or action not in {'set', 'inc_fine', 'dec_fine', 'inc_coarse', 'dec_coarse'}:
+                return jsonify({'error': 'Unknown action', 'success': False}), 400
+            if authorization_required() and action != 'set':
+                return jsonify({
+                    'error': 'Hardware action is not authorized',
+                    'success': False,
+                    'code': 'hardware_not_authorized',
+                }), 403
+            if action == 'set':
+                value = _finite_number(value)
+                if value is None:
+                    return jsonify({'error': 'value must be numeric', 'success': False}), 400
+            allowed_fields = {'action', 'value', 'current'} if action == 'set' else {'action'}
+            blocked = require_http_hardware(
+                action=action,
+                targets=[{'device': str(device_name), 'command': 'set_current'}],
+                args={'slot_id': int(slot_id), 'action': action, 'value': value},
+                route_id='itest.slot_current', wrapper_fields=allowed_fields,
+            )
+            if blocked is not None:
+                return blocked
+            device = DeviceManager.get_device(device_name)
             
             # Get slot array index
             ids = [int(x) for x in device.read_attribute('ids').value]
@@ -1704,6 +1970,8 @@ def handle_itest_slot_current(device_name, slot_id):
                 'success': True
             })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1712,10 +1980,26 @@ def camera_capture(device_name):
     """Trigger camera capture"""
     try:
         _maybe_require_auth()
-        device = DeviceManager.get_device(device_name)
-        data = request.get_json() or {}
+        data = _hardware_payload()
+        if data is None or set(data) - {'exposure_time'}:
+            return jsonify({'error': 'Invalid capture payload', 'success': False}), 400
         
         exposure_time = data.get('exposure_time', 1.0)
+        if _finite_number(exposure_time) is None:
+            return jsonify({'error': 'exposure_time must be finite numeric', 'success': False}), 400
+        exposure_time = _finite_number(exposure_time)
+        targets = []
+        if 'exposure_time' in data:
+            targets.append({'device': str(device_name), 'command': 'write_attribute'})
+        targets.append({'device': str(device_name), 'command': 'StartAcquisition'})
+        blocked = require_http_hardware(
+            action='capture', targets=targets,
+            args={'exposure_time': exposure_time, 'set_exposure_time': 'exposure_time' in data},
+            route_id='camera.capture', wrapper_fields={'exposure_time'},
+        )
+        if blocked is not None:
+            return blocked
+        device = DeviceManager.get_device(device_name)
         
         # Set exposure time if provided
         if 'exposure_time' in data:
@@ -1731,6 +2015,8 @@ def camera_capture(device_name):
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1845,12 +2131,16 @@ def get_psp_group_history(device_name, group_name):
 def get_psp_pending_commands(device_name):
     """Read pending outbound commands queued for LabVIEW bridge."""
     try:
+        if _query_bool('pop', False):
+            return jsonify({
+                'error': 'pop=true is disabled; use a guarded mutation endpoint',
+                'success': False,
+            }), 400
         device = DeviceManager.get_device(device_name)
         commands = _list_device_commands_lower(device)
         limit = max(1, int(request.args.get('limit', 200)))
-        pop = _query_bool('pop', False)
 
-        cmd_name = commands.get('pop_pending_commands_json') if pop else commands.get('get_pending_commands_json')
+        cmd_name = commands.get('get_pending_commands_json')
         if not cmd_name:
             return jsonify({'error': 'Device does not support pending command queue', 'success': False}), 400
 
@@ -1868,7 +2158,7 @@ def get_psp_pending_commands(device_name):
             'device': device_name,
             'pending_count': pending_count,
             'items': make_json_safe(items),
-            'popped': bool(pop),
+            'popped': False,
             'success': True,
         })
     except Exception as e:
@@ -1880,19 +2170,46 @@ def acknowledge_psp_command(device_name):
     """Store LabVIEW execution acknowledgment for one queued command."""
     try:
         _maybe_require_auth()
+        data = _mutation_payload()
+        if data is None or set(data) - _PSP_ACK_FIELDS:
+            return _invalid_psp_acknowledgement()
+        if (
+            ('id' in data and (isinstance(data['id'], bool) or not isinstance(data['id'], (str, int))))
+            or ('command' in data and (not isinstance(data['command'], str) or not data['command'].strip()))
+            or ('ok' in data and type(data['ok']) is not bool)
+            or any(name in data and not isinstance(data[name], str) for name in ('status', 'error', 'message', 'timestamp'))
+        ):
+            return _invalid_psp_acknowledgement()
+        command_variant = _command_variant(data, _PSP_ACK_COMMANDS)
+        if authorization_required() and command_variant is None:
+            return _invalid_psp_acknowledgement()
+        if command_variant is None and data.get('command_variant') is not None:
+            return jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+        acknowledgement = {key: data[key] for key in _PSP_ACK_FIELDS - {'command_variant'} if key in data}
+        blocked = require_http_hardware(
+            action='acknowledge',
+            targets=[{'device': str(device_name), 'command': command_variant}] if command_variant else [{'device': str(device_name), 'command': command} for command in _PSP_ACK_COMMANDS],
+            args={'command_variant': command_variant or 'legacy_autodetect', 'acknowledgement': acknowledgement},
+            route_id='psp.ack', wrapper_fields=_PSP_ACK_FIELDS,
+        )
+        if blocked is not None:
+            return blocked
         device = DeviceManager.get_device(device_name)
-        commands = _list_device_commands_lower(device)
-        cmd_name = commands.get('acknowledge_command_json')
+        if command_variant is not None:
+            cmd_name = command_variant
+        else:
+            commands = _list_device_commands_lower(device)
+            cmd_name = commands.get('acknowledge_command_json')
         if not cmd_name:
             return jsonify({'error': 'Device does not support command acknowledgments', 'success': False}), 400
-
-        data = request.get_json() or {}
-        raw = device.command_inout(cmd_name, json.dumps(data))
+        raw = device.command_inout(cmd_name, json.dumps(acknowledgement))
         payload = _safe_json_loads(raw, default={})
         if not isinstance(payload, dict):
             payload = {'raw': make_json_safe(raw)}
 
         return jsonify({'device': device_name, **make_json_safe(payload), 'success': True})
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -1952,17 +2269,37 @@ def write_daqmx_channel(device_name):
     """Write one channel/variable value via DAQmx/PSP write command."""
     try:
         _maybe_require_auth()
-        device = DeviceManager.get_device(device_name)
-        data = request.get_json() or {}
-        channel = data.get('channel') or data.get('name') or data.get('variable')
+        data = _mutation_payload()
+        if data is None:
+            return jsonify({'error': 'channel is required', 'success': False}), 400
+        channel_fields = [name for name in ('channel', 'name', 'variable') if data.get(name) not in (None, '')]
+        if len(channel_fields) != 1:
+            return jsonify({'error': 'exactly one channel, name, or variable is required', 'success': False}), 400
+        channel = data[channel_fields[0]]
         value = data.get('value')
 
         if channel in (None, ''):
             return jsonify({'error': 'channel is required', 'success': False}), 400
         if value is None:
             return jsonify({'error': 'value is required', 'success': False}), 400
+        if not isinstance(channel, str) or not channel.strip():
+            return jsonify({'error': 'channel is required', 'success': False}), 400
+        command_variant = _command_variant(data, _DAQMX_WRITE_COMMANDS)
+        if authorization_required() and command_variant is None:
+            return jsonify({'error': 'command_variant is required', 'success': False}), 400
+        if command_variant is None and data.get('command_variant') is not None:
+            return jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+        blocked = require_http_hardware(
+            action='write',
+            targets=[{'device': str(device_name), 'command': command_variant}] if command_variant else [{'device': str(device_name), 'command': command} for command in _DAQMX_WRITE_COMMANDS],
+            args={'channel_selector': channel_fields[0], 'channel': channel.strip(), 'value': _to_scalar_value(value), 'command_variant': command_variant or 'legacy_autodetect'},
+            route_id='daqmx.write', wrapper_fields={'channel', 'name', 'variable', 'value', 'command_variant'},
+        )
+        if blocked is not None:
+            return blocked
+        device = DeviceManager.get_device(device_name)
 
-        result = _write_daqmx_channel(device, channel, value)
+        result = _write_daqmx_channel(device, channel, value, command_variant=command_variant)
         return jsonify({
             'device': device_name,
             'channel': str(channel),
@@ -1970,6 +2307,8 @@ def write_daqmx_channel(device_name):
             'result': make_json_safe(result),
             'success': True,
         })
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -2076,12 +2415,12 @@ def get_camera_info(device_name):
         return jsonify({'error': str(e), 'success': False}), 500
 
 @device_api.route('/api/camera/<path:device_name>/parameters', methods=['GET', 'POST'])
+@device_api.route('/api/device/camera/<path:device_name>/parameters', methods=['GET', 'POST'])
 def handle_camera_parameters(device_name):
     """Get or set camera parameters"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             parameters = {}
             param_names = ['exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY', 
                           'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal', 'binning_vertical',
@@ -2098,10 +2437,22 @@ def handle_camera_parameters(device_name):
         
         elif request.method == 'POST':
             _maybe_require_auth()
-            data = request.get_json()
+            data = _mutation_payload()
+            if data is None or set(data) - _CAMERA_PARAMETER_NAMES:
+                return jsonify({'error': 'Camera parameter batch is empty or contains unsupported attributes', 'success': False}), 400
+            writes, parameter_names = _parameter_write_plan(data)
+            blocked = require_http_hardware(
+                action='write_parameters',
+                targets=[{'device': str(device_name), 'command': 'write_attribute'} for _ in parameter_names],
+                args={'writes': writes}, route_id='camera.parameters', wrapper_fields=_CAMERA_PARAMETER_NAMES,
+            )
+            if blocked is not None:
+                return blocked
+            device = DeviceManager.get_device(device_name)
             results = {}
             
-            for param_name, param_value in data.items():
+            for param_name in parameter_names:
+                param_value = data[param_name]
                 try:
                     device.write_attribute(param_name, param_value)
                     # Read back to confirm
@@ -2112,6 +2463,8 @@ def handle_camera_parameters(device_name):
             
             return jsonify({'results': results, 'success': True})
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -2119,9 +2472,8 @@ def handle_camera_parameters(device_name):
 def handle_camera_grabbing(device_name):
     """Control camera grabbing (start/stop)"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             is_grabbing = _read_camera_is_grabbing(device)
             return jsonify({
                 'grabbing': is_grabbing,
@@ -2130,22 +2482,35 @@ def handle_camera_grabbing(device_name):
         
         elif request.method == 'POST':
             _maybe_require_auth()
-            data = request.get_json()
+            data = _mutation_payload(('action',))
+            if data is None or set(data) - {'action', 'command_variant'} or not isinstance(data.get('action'), str):
+                return jsonify({'error': 'Invalid action. Use "start" or "stop"', 'success': False}), 400
             action = data.get('action')  # 'start' or 'stop'
+            if action not in _CAMERA_GRAB_COMMANDS:
+                return jsonify({'error': 'Invalid action. Use "start" or "stop"', 'success': False}), 400
+            candidates = _CAMERA_GRAB_COMMANDS[action]
+            command_variant = _command_variant(data, candidates)
+            if authorization_required() and command_variant is None:
+                return jsonify({'error': 'command_variant is required', 'success': False}), 400
+            if command_variant is None and data.get('command_variant') is not None:
+                return jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+            blocked = require_http_hardware(
+                action=action,
+                targets=[{'device': str(device_name), 'command': command_variant}] if command_variant else [{'device': str(device_name), 'command': command} for command in candidates],
+                args={'action': action, 'command_variant': command_variant or 'legacy_autodetect'},
+                route_id='camera.grabbing', wrapper_fields={'action', 'command_variant'},
+            )
+            if blocked is not None:
+                return blocked
+            device = DeviceManager.get_device(device_name)
             
             if action == 'start':
-                command_name = _resolve_command_name(
-                    device,
-                    ['start_grabbing', 'startgrabbing', 'StartGrabbing', 'start', 'on']
-                )
+                command_name = command_variant or _resolve_command_name(device, candidates)
                 device.command_inout(command_name)
                 expected_grabbing = True
                 message = f'Grabbing start command sent ({command_name})'
             elif action == 'stop':
-                command_name = _resolve_command_name(
-                    device,
-                    ['stop_grabbing', 'stopgrabbing', 'StopGrabbing', 'stop', 'off']
-                )
+                command_name = command_variant or _resolve_command_name(device, candidates)
                 device.command_inout(command_name)
                 expected_grabbing = False
                 message = f'Grabbing stop command sent ({command_name})'
@@ -2166,6 +2531,8 @@ def handle_camera_grabbing(device_name):
                 'success': True
             })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -2279,9 +2646,8 @@ def get_spectrograph_info(device_name):
 def handle_spectrograph_parameters(device_name):
     """Get or set spectrograph parameters."""
     try:
-        device = DeviceManager.get_device(device_name)
-
         if request.method == 'GET':
+            device = DeviceManager.get_device(device_name)
             parameters = {}
             attr_names = [
                 'wavelength_nm', 'grating', 'pixel_number_attr',
@@ -2298,9 +2664,21 @@ def handle_spectrograph_parameters(device_name):
             return jsonify({'parameters': parameters, 'success': True})
 
         _maybe_require_auth()
-        data = request.get_json()
+        data = _mutation_payload()
+        if data is None or set(data) - _SPECTROGRAPH_PARAMETER_NAMES:
+            return jsonify({'error': 'Spectrograph parameter batch is empty or contains unsupported attributes', 'success': False}), 400
+        writes, parameter_names = _parameter_write_plan(data)
+        blocked = require_http_hardware(
+            action='write_parameters',
+            targets=[{'device': str(device_name), 'command': 'write_attribute'} for _ in parameter_names],
+            args={'writes': writes}, route_id='spectrograph.parameters', wrapper_fields=_SPECTROGRAPH_PARAMETER_NAMES,
+        )
+        if blocked is not None:
+            return blocked
+        device = DeviceManager.get_device(device_name)
         results = {}
-        for param_name, param_value in data.items():
+        for param_name in parameter_names:
+            param_value = data[param_name]
             try:
                 device.write_attribute(param_name, param_value)
                 attr = device.read_attribute(param_name)
@@ -2309,6 +2687,8 @@ def handle_spectrograph_parameters(device_name):
                 results[param_name] = {'success': False, 'error': str(exc)}
 
         return jsonify({'results': results, 'success': True})
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -2317,22 +2697,43 @@ def trigger_camera(device_name):
     """Trigger camera software trigger"""
     try:
         _maybe_require_auth()
+        data = _hardware_payload()
+        if data is None or set(data) - {'command_variant'}:
+            return jsonify({'error': 'Trigger accepts no payload', 'success': False}), 400
+        command_variant = _command_variant(data, _CAMERA_TRIGGER_COMMANDS)
+        if authorization_required() and command_variant is None:
+            return jsonify({'error': 'command_variant is required', 'success': False}), 400
+        if command_variant is None and data.get('command_variant') is not None:
+            return jsonify({'error': 'command_variant is invalid', 'success': False}), 400
+        blocked = require_http_hardware(
+            action='trigger',
+            targets=[{'device': str(device_name), 'command': command_variant}] if command_variant else [{'device': str(device_name), 'command': command} for command in _CAMERA_TRIGGER_COMMANDS],
+            args={'command_variant': command_variant or 'legacy_autodetect'},
+            route_id='camera.trigger', wrapper_fields={'command_variant'},
+        )
+        if blocked is not None:
+            return blocked
         device = DeviceManager.get_device(device_name)
         
-        # Execute software trigger if supported
-        try:
-            device.command_inout('TriggerSoftware')
-            message = 'Software trigger executed'
-        except:
-            # Fallback to generic trigger
-            device.command_inout('Trigger')
-            message = 'Trigger executed'
+        if command_variant is not None:
+            device.command_inout(command_variant)
+            message = 'Software trigger executed' if command_variant == 'TriggerSoftware' else 'Trigger executed'
+        else:
+            # Local opt-out retains legacy fallback behavior.
+            try:
+                device.command_inout('TriggerSoftware')
+                message = 'Software trigger executed'
+            except:
+                device.command_inout('Trigger')
+                message = 'Trigger executed'
         
         return jsonify({
             'message': message,
             'success': True
         })
     
+    except AuthorizationError as exc:
+        return _authorization_error_response(exc)
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 

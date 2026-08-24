@@ -11,6 +11,13 @@ import tango
 from flask import current_app, request
 from flask_jwt_extended import decode_token
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from hardware_authorization import (
+    AuthorizationError,
+    Operation,
+    authorization_required,
+    authorize_runtime_operation,
+    websocket_authorization_error,
+)
 
 # Configure logging - reduced verbosity
 logging.basicConfig(level=logging.WARNING)
@@ -60,6 +67,47 @@ def _socket_auth_allowed(_auth_payload=None):
         return True
     except Exception:
         return False
+
+
+def _socket_subject():
+    """Get identity only from the verified JWT cookie in an enforced mode."""
+    if not authorization_required():
+        return None
+    token = request.cookies.get(_jwt_access_cookie_name())
+    if not token:
+        raise AuthorizationError(
+            401,
+            "hardware_authentication_required",
+            "Authentication required",
+        )
+    try:
+        decoded = decode_token(str(token))
+    except Exception as exc:
+        raise AuthorizationError(
+            401,
+            "hardware_authentication_required",
+            "Authentication required",
+        ) from exc
+    subject = decoded.get("sub") if isinstance(decoded, dict) else None
+    if not isinstance(subject, str) or not subject.strip():
+        raise AuthorizationError(403, "hardware_not_authorized", "Hardware action is not authorized")
+    return subject
+
+
+def _command_error_identifiers(data):
+    """Return display-only identifiers after an authorization denial.
+
+    This deliberately runs only in the error path: a client payload must never
+    be inspected as a command envelope before an enforced cookie is rechecked.
+    """
+    if not isinstance(data, dict):
+        return "unknown", "unknown"
+    device_name = data.get("device")
+    command_name = data.get("command")
+    return (
+        device_name.strip() if isinstance(device_name, str) and device_name.strip() else "unknown",
+        command_name.strip() if isinstance(command_name, str) and command_name.strip() else "unknown",
+    )
 
 # Global SocketIO instance - will be initialized in app.py
 socketio = None
@@ -469,17 +517,38 @@ def init_socketio(app):
     @socketio.on('execute_command')
     def handle_execute_command(data):
         """Execute device command via WebSocket"""
+        device_name = 'unknown'
+        command_name = 'unknown'
         try:
+            # A Socket.IO connection can outlive cookie expiry/revocation.  In
+            # enforced mode, decode the current request cookie before looking
+            # at client-controlled command fields or acquiring a proxy.
+            subject = _socket_subject()
+            if not isinstance(data, dict):
+                raise AuthorizationError(409, 'hardware_approval_invalid', 'Hardware request is invalid')
+            # Local opt-out bypasses cookie/approval enforcement only.  It
+            # never re-enables legacy or identity-bearing client envelopes.
+            if set(data) - {'device', 'command', 'approval_nonce', 'args'}:
+                raise AuthorizationError(409, 'hardware_approval_invalid', 'Hardware request is invalid')
             device_name = data.get('device')
             command_name = data.get('command')
             args = data.get('args')
             
-            if not device_name or not command_name:
-                emit('error', {'message': 'Device name and command required'})
-                return
-
-            if not _socket_auth_allowed():
-                raise PermissionError("Authentication required")
+            if not isinstance(device_name, str) or not device_name.strip() or not isinstance(command_name, str) or not command_name.strip():
+                raise AuthorizationError(409, 'hardware_approval_invalid', 'Hardware request is invalid')
+            device_name = device_name.strip()
+            command_name = command_name.strip()
+            authorize_runtime_operation(
+                Operation(
+                    'WEBSOCKET',
+                    'websocket.execute_command',
+                    'device.command',
+                    ({'device': device_name, 'command': command_name},),
+                    args,
+                ),
+                data.get('approval_nonce'),
+                subject=subject,
+            )
             
             device = monitor.get_device(device_name)
             
@@ -498,6 +567,15 @@ def init_socketio(app):
             
             logger.info(f"Client executed command {command_name} on {device_name}")
             
+        except AuthorizationError as exc:
+            logger.warning("WebSocket hardware command authorization denied")
+            if device_name == 'unknown' and command_name == 'unknown':
+                device_name, command_name = _command_error_identifiers(data)
+            emit('command_error', {
+                'device': device_name,
+                'command': command_name,
+                **websocket_authorization_error(exc),
+            })
         except Exception as e:
             logger.error(f"Command execution error: {e}")
             emit('command_error', {

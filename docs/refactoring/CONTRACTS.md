@@ -30,6 +30,11 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Existing JSON keys, value types, error envelopes, and status codes remain unchanged.
 - Snapshot/cache behavior must remain observable and bounded by a documented TTL.
 - Server-control actions require explicit user invocation and must return operation status.
+- Enforced fallback routes must bind the exact `command_variant` to policy and
+  approval; changing command selection requires policy migration. Parameter
+  batch writes bind the complete deterministic ordered write plan.
+- Restart is never an implicit `HardKillServer` action. Server control must
+  bind its explicit action and trusted Starter target.
 
 ### Web security and WebSocket
 
@@ -62,8 +67,9 @@ Refactoring must preserve these contracts unless a separately approved migration
   clients behind NAT, and trusts `request.remote_addr` unless a reviewed proxy
   policy is added.
 - In production, and with explicit local opt-in, every non-safe method in the
-  device, treatment, VD2, and V0 APIs requires JWT authentication. The device
-  debug-monitor GET is also protected because it starts monitoring work.
+  device, treatment, VD2, and V0 APIs requires JWT authentication. Device
+  debug-monitor GET is passive; the explicit monitor-start POST requires
+  mutation authentication.
 - `treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers to
   mutation requests. Protected V0 frontend files are not modified by this
   package.
@@ -115,8 +121,9 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Coverage gates measure named refactored lifecycle/backend Python modules and
   pure frontend request/classification modules, then enforce committed
   baselines. Whole-tree legacy coverage is informational only.
-- WebSocket command allowlists and CI/dependency reproducibility are deferred
-  contracts; they require separate approved packages.
+- WebSocket commands use exact device/command/argument allowlists and
+  authenticated per-client authorization. CI/dependency reproducibility
+  remains deferred and requires a separate approved package.
 - Production server mode is unresolved: `websocket_handler.py` forces
   `async_mode='threading'`, while the launcher claims eventlet and eventlet is
   not a direct dependency. Deployment is blocked until one mode is selected,
@@ -124,3 +131,48 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Hardware mutations require roles, strict device/command/argument allowlists,
   and one-shot human approval bound to user, action, device, arguments, and
   expiry. JWT authentication alone is insufficient.
+
+### T11 hardware authorization
+
+- Policy is loaded only from a trusted external JSON path; policy and approval
+  directories are outside the repository and require restrictive ACLs.
+- JWT subject and role are server-derived. Authorization identifies explicit
+  `route_id`, action, ordered targets, device, command, and canonicalized args.
+- Canonical args reject unknown, duplicate, missing, wildcard, and non-finite
+  values and are bounded by closed policy schemas. Approval expiry is UTC and
+  may not exceed 300 seconds; nonce is exactly 256-bit lowercase hex.
+- Policy and approval inputs are external read-only files. Service startup
+  rejects repository-local paths, symlinks, and unsafe permissions; consumed
+  markers use a separate service-writable directory and atomic `O_EXCL`
+  creation, followed by file and parent-directory fsync; policy/approval reads
+  reject symlinks with `O_NOFOLLOW`.
+- Starter control uses a trusted policy `starter_servers` mapping. The service
+  never discovers or substitutes a Tango Starter target before approval.
+- Approval is one-shot and consumed with an atomic `O_EXCL` marker before any
+  proxy/Tango side effect. No approval-generation API or tool exists.
+- HTTP semantics: 401 missing/invalid authentication, 403 policy denial, 428
+  missing approval, 409 malformed, expired, mismatched, or replayed approval.
+- Production configuration fails closed. Local opt-out remains valid only when
+  explicitly configured. V0 safe reads remain compatible; protected V0 UI
+  mutations remain deploy-blocked.
+- V0 initialization and other active sequences return 403 under enforced auth
+  without a valid policy role and one-shot approval. Background monitor and VD2
+  preview reads remain passive and use only the read-frame command; active V0
+  polling is limited to an approved sequence.
+- Enforced iTest increment/decrement derived-value actions return 403 until an
+  exact ordered plan is represented in policy and approval; iTest set remains
+  behind the existing authorization gate.
+- Enforced VD2 initialize/deinitialize return 403 because conditional
+  recovery/PDU plans are not yet bound as exact approved plans. Enforced V0
+  Tango run/realtime start returns 403 because repeated cycles and complete
+  argument plans are not yet fully bound. Explicit local opt-out preserves
+  legacy behavior. These UI and policy migrations remain deployment blockers;
+  no high-level workflow is treated as authorized by implication.
+
+### Web route import safety
+
+- Importing `web/backend/routes.py` is offline: no Tango `Database`,
+  `DeviceProxy`, remote/default `TANGO_HOST`, or network contact.
+- Tango database lookup is lazy and occurs only from an explicit runtime check.
+- Explicit `PYCONLYSE_TANGO_HOST` is preserved and mapped to `TANGO_HOST`;
+  there is no implicit remote host default.

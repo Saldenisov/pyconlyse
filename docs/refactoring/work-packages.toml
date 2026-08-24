@@ -212,3 +212,35 @@ allowed_globs = [
   "web/frontend/src/tabs/**",
   "web/frontend/src/utils/**",
 ]
+
+[packages.T11]
+agent = "terra"
+description = "Hardware mutation authorization and one-shot approval gate"
+allowed_paths = [
+  "web/backend/hardware_authorization.py",
+  "web/backend/app.py",
+  "web/backend/device_api.py",
+  "web/backend/pump_probe_v0_api.py",
+  "web/backend/pump_probe_vd2_api.py",
+  "web/backend/websocket_handler.py",
+  "web/backend/routes.py",
+  "web/start_production.py",
+  ".coveragerc",
+  "scripts/refactor/verify_coverage.py",
+  "tests/unit/test_refactor_coverage.py",
+  "tests/web/test_hardware_authorization.py",
+  "tests/web/test_hardware_authorization_routes.py",
+  "tests/web/test_hardware_authorization_device_mutations.py",
+  "tests/web/test_hardware_authorization_vd2.py",
+  "tests/web/test_hardware_authorization_websocket.py",
+  "tests/web/test_device_api_smoke.py",
+  "tests/web/test_device_api_psp.py",
+  "tests/web/test_routes_import_safety.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_production_startup_security.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "scripts/refactor/pytest_module_isolation.py",
+  "tests/unit/test_pytest_module_isolation.py",
+  "tests/_tango_stub.py",
+]
+allowed_globs = ["docs/refactoring/**"]

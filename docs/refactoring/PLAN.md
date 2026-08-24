@@ -111,6 +111,27 @@ device_family/
 - Run local tests and Everest software-only smoke tests.
 - Deploy or restart only after manual approval.
 
+### Phase 5.5: T11 hardware mutation gate
+
+- Add role-based, fail-closed authorization for every hardware mutation route
+  and WebSocket command.
+- Bind one-shot external approvals to server-derived user/role, route/action,
+  ordered targets, device/command, canonical args, UTC expiry, and a unique
+  lowercase 256-bit nonce.
+- Consume approvals atomically before any proxy/Tango side effect. Keep policy,
+  approvals, consumed markers, and ACLs outside the repository.
+- Preserve explicit local auth opt-outs only; no approval-generation endpoint.
+- Keep V0 safe reads covered and protected V0 UI mutations deploy-blocked.
+- Treat eventlet/threading mismatch as an independent deployment blocker.
+- Keep policy/approval JSON schemas closed and bounded; reject unknown,
+  duplicate, wildcard, non-finite, and over-sized values. Policy and approval
+  files are read-only service inputs; consumed markers are writable only by the
+  service account; policy/approval reads reject symlinks with `O_NOFOLLOW`,
+  while consumed markers use atomic `O_EXCL` plus file and parent-directory
+  fsync.
+- Verify collection under a network-denied sandbox and restore Tango/Taurus
+  modules and environment between test modules.
+
 ## Completion criteria
 
 - No production file remains a monolith solely for historical reasons.

@@ -25,7 +25,8 @@ or laboratory hardware. It never uses `git reset --hard`, `taskkill`, or
 6. `pyconlyse39` exists on Everest.
 7. Before any Tango restart: experiment stopped, stages stationary, shutters
    closed, and an operator has created a time-limited approval TOML outside
-   the repository.
+   the repository. This restart approval is separate from T11 web mutation
+   approvals, which are external JSON files.
 
 ## Web security provisioning
 
@@ -84,19 +85,34 @@ share it, NAT may combine users under one address, and `request.remote_addr`
 must only be trusted behind a separately reviewed proxy configuration.
 
 Production and explicit local auth enforcement cover all non-safe methods in
-device, treatment, VD2, and V0 APIs, including device debug-monitor GET because
-it starts monitoring work. `treatmentClient`, VD2 callers, and shared V0
-helpers attach CSRF headers.
-
-Protected `PumpProbeV0.js` direct unsafe POSTs remain outside T10 and currently
-include `/api/server/control` (line 283), `/api/pump-probe-v0/data/folder`
-(lines 338 and 366), and `/api/pump-probe-v0/data/load` (line 387). Production
-workflows remain deploy-blocked until an explicit V0 owner migrates them.
+device, treatment, VD2, and V0 APIs. Device debug-monitor GET is passive; the
+explicit monitor-start POST is authenticated and mutation-protected.
+`treatmentClient`, VD2 callers, and shared V0 helpers attach CSRF headers.
 
 T11 deployment blocker: hardware mutations require roles, strict device,
 command, and argument allowlists, plus one-shot human approval bound to user,
 action, device, arguments, and expiry. JWT authentication alone is
 insufficient. Eventlet/threading mode selection remains a separate blocker.
+
+T11 authorization provisioning is software-only and fail-closed. Policy JSON,
+approval JSON, and consumed-marker directories must be outside the repository
+with restrictive ACLs. The server derives JWT subject and role; callers cannot
+select either. Each approval binds explicit route ID, action, ordered targets,
+device, command, canonical args, UTC expiry, and a lowercase 256-bit hex nonce.
+Unknown, duplicate, missing, wildcard, or non-finite fields are rejected.
+Approval consumption uses an atomic `O_EXCL` marker before any proxy/Tango
+operation. There is no approval-generation API or tool. Expected HTTP errors
+are 401 (authentication), 403 (policy), 428 (missing approval), and 409
+(invalid/replayed approval). Existing explicit local opt-outs do not weaken
+production fail-closed validation. Protected V0 UI mutations remain
+deploy-blocked.
+
+Import-safety incident (fixed in T11): an earlier check showed that
+`web/backend/routes.py` could construct a Tango database at import time after
+applying a remote default host. The route now performs lazy lookup only; it
+does not set a remote default or construct Tango objects during import.
+Explicit `PYCONLYSE_TANGO_HOST` mapping to `TANGO_HOST` remains compatible.
+The regression test and network-denied collection audit are mandatory.
 
 ## Local Verification
 
@@ -160,9 +176,50 @@ and `tests/unit/test_refactor_coverage.py`; current T10 measurements/floors
 are app 55.0/50.0%, auth 87.0/80.0%, mutation_auth 100.0/90.0%, and
 start_production 58.7/50.0%.
 
-WebSocket command allowlists and CI dependency changes are deferred; these
-checks do not validate either item. The remaining protected V0 direct POSTs
-also remain outside this focused command.
+T11 focused checks (software-only):
+
+```bash
+/usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
+  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config \
+  tests/web/test_hardware_authorization.py \
+  tests/web/test_hardware_authorization_routes.py \
+  tests/web/test_hardware_authorization_websocket.py \
+  tests/web/test_hardware_authorization_device_mutations.py \
+  tests/web/test_hardware_authorization_vd2.py \
+  tests/web/test_routes_import_safety.py \
+  tests/unit/test_pytest_module_isolation.py
+```
+
+The focused T11 suite collected and passed 151 tests in both forward and
+reverse order, with one warning, under OS-level network denial. The default
+software-only lane collected 517 items with one collection skip and ran 510
+passed, 8 skipped, and 18 warnings. Full named-module statement coverage was
+67.3%; `hardware_authorization.py` was 70.9% (339/478), above its 60.0% floor;
+`device_api.py` was 52.4%. Frontend verification passed 6 suites/31 tests with
+96.11% statements and 89.87% branches; production build passed with existing
+hook and bundle-size warnings.
+
+T11 covers HTTP, WebSocket, device, VD2, and backend V0 mutation gates. The
+protected V0 UI files remain unchanged and cannot yet attach approval nonces;
+production V0 UI workflows therefore remain deploy-blocked. Background
+monitoring and VD2 preview are read-only polling paths; V0 active polling is
+available only for an already-authorized run/realtime sequence. Eventlet versus
+threading remains a separate deployment blocker.
+
+Fail-closed workflow blockers: enforced iTest increment/decrement derived-value
+actions return 403 until exact ordered plans are represented; iTest set remains
+behind its existing gate. Enforced VD2 initialize/deinitialize return 403
+because conditional recovery/PDU plans are not exact. Enforced V0 Tango
+run/realtime start returns 403 because repeated cycles and complete argument
+plans are not fully bound. Local opt-out preserves legacy behavior. Do not
+treat these high-level workflows as authorized until UI and policy migrations
+are reviewed and deployed.
+
+Enforced fallback routes require policy migration when their exact
+`command_variant` changes. Parameter-batch approvals bind the full ordered
+write plan. Restart approval never authorizes an implicit `HardKillServer`;
+server action and trusted Starter target must match explicitly. VD2 preview is
+a passive read-frame operation.
 
 Current production blocker: `web/backend/websocket_handler.py` forces
 `async_mode='threading'`, while `start_production.py` claims eventlet mode;
@@ -253,16 +310,16 @@ prohibited.
 
 1. Stop at the failed step and preserve terminal output.
 2. Do not use `git reset --hard`, `taskkill`, or `HardKillServer`.
-3. Create a revert commit on Mac:
-
-   ```bash
-   git revert <bad-commit>
-   git push origin develop
-   ```
-
-4. Deploy the revert through `deploy_everest.py`.
-5. Restart only affected servers through `restart_tango_servers.py`, with a
-   new human-created approval TOML.
+3. Disable hardware mutation access first, or isolate the web service, without
+   issuing equipment commands. Preserve authorization policy, approval, and
+   consumed-marker evidence for review.
+4. Through the operator-approved safety process, confirm that the service is
+   not issuing hardware mutations and that the laboratory state is safe. This
+   runbook prescribes no Tango, PDU, motion, shutter, power, deploy, or restart
+   commands.
+5. Only after steps 1–4, deploy a previously secure release or replacement
+   authorization gate through the separately approved deployment procedure.
+   A T11 revert must never restore JWT-only hardware mutation access.
 
 ## Required Manual Gate
 

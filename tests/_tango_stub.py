@@ -19,14 +19,35 @@ def install_tango_stub(monkeypatch) -> types.ModuleType:
         READ = 0
         READ_WRITE = 1
 
+    class _DevStateValue(int):
+        """Inert int-like Tango state with Tango's readable string form."""
+
+        def __new__(cls, value, name):
+            instance = int.__new__(cls, value)
+            instance.name = name
+            return instance
+
+        def __str__(self):
+            return self.name
+
+        def __repr__(self):
+            return str(int(self))
+
+        def __eq__(self, other):
+            if isinstance(other, str):
+                return self.name == other
+            return int.__eq__(self, other)
+
+        __hash__ = int.__hash__
+
     class DevState:
-        OFF = "OFF"
-        ON = "ON"
-        FAULT = "FAULT"
-        STANDBY = "STANDBY"
-        MOVING = "MOVING"
-        RUNNING = "RUNNING"
-        INIT = "INIT"
+        OFF = _DevStateValue(0, "OFF")
+        ON = _DevStateValue(1, "ON")
+        FAULT = _DevStateValue(2, "FAULT")
+        STANDBY = _DevStateValue(3, "STANDBY")
+        MOVING = _DevStateValue(4, "MOVING")
+        RUNNING = _DevStateValue(5, "RUNNING")
+        INIT = _DevStateValue(6, "INIT")
 
     class DispLevel:
         OPERATOR = 0

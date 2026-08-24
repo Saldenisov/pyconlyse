@@ -15,6 +15,7 @@ import numpy as np
 from flask import Blueprint, jsonify, request
 
 from mutation_auth import install_mutation_auth
+from hardware_authorization import authorization_required, require_http_hardware
 from pump_probe_v0_config import (
     ACCELERATOR_HZ,
     BACKGROUND_RANDOM_COUNTS,
@@ -478,7 +479,10 @@ class PumpProbeV0Controller:
 
     def _sync_locked(self):
         if self._control_mode_locked() == "tango":
-            self._sync_andor_spectra_locked()
+            # Passive idle reads must not begin an order.  Only an already
+            # authorized run/realtime operation may advance Tango acquisition.
+            if self._running or self._real_time:
+                self._sync_andor_spectra_locked()
             return
 
         now = time.monotonic()
@@ -727,8 +731,9 @@ class PumpProbeV0Controller:
 
     def configure(self, payload):
         with self._lock:
-            self._sync_locked()
-            self._sync_sample_stage_locked()
+            if self._control_mode_locked() != "tango":
+                self._sync_locked()
+                self._sync_sample_stage_locked()
             if self._running and self._run_writer is not None:
                 raise RuntimeError("Stop the active run before changing scan settings")
             self._configure_hardware_locked(payload)
@@ -773,9 +778,17 @@ class PumpProbeV0Controller:
 
     def set_running(self, running, payload=None):
         with self._lock:
-            self._sync_locked()
             next_running = bool(running)
             payload = payload or {}
+            if not next_running and self._control_mode_locked() == "tango":
+                # Clearing the authorized active flag must precede any state
+                # refresh: stopping an active sequence never polls or advances
+                # another camera order.
+                self._running = False
+                self._real_time = False
+                self._last_pulse_update = time.monotonic()
+                return self.state()
+            self._sync_locked()
             if not next_running and self._run_writer is not None:
                 self._finalize_run_locked("stopped")
                 return self.state()
@@ -788,13 +801,23 @@ class PumpProbeV0Controller:
             self._running = next_running
             if next_running:
                 self._real_time = False
+                if self._control_mode_locked() == "tango":
+                    self._sync_locked()
+            else:
+                self._real_time = False
             self._last_pulse_update = time.monotonic()
             return self.state()
 
     def set_real_time(self, enabled):
         with self._lock:
+            if not enabled and self._control_mode_locked() == "tango":
+                self._real_time = False
+                self._last_pulse_update = time.monotonic()
+                return self.state()
             self._sync_locked()
             self._real_time = bool(enabled)
+            if self._real_time and self._control_mode_locked() == "tango":
+                self._sync_locked()
             self._last_pulse_update = time.monotonic()
             return self.state()
 
@@ -1066,6 +1089,28 @@ class PumpProbeV0Controller:
 
     def hardware_preflight(self, fix=False):
         with self._lock:
+            if not fix:
+                # Passive diagnostics may read state/attributes and approved
+                # query commands, but never repair, move, power, recall, or
+                # start/register a camera order.
+                checks = []
+                checks.extend(self._check_owis_axes(fix=False))
+                checks.append(self._check_device("Andor UV-visible detector", self._hardware_config["andor_device"], fix=False))
+                checks.append(self._check_device("DAQmx card", self._hardware_config["daqmx_device"], fix=False))
+                checks.append(self._check_device("DG645 Tango server", self._hardware_config["dg645_device"], fix=False))
+                for item in REQUIRED_NETIO_OUTPUTS:
+                    checks.append(self._check_netio_output(item, fix=False))
+                checks.append(self._check_dg645_recall(apply_recall=False))
+                checks.append(self._check_counter_activity())
+                ok = all(check.get("ok") for check in checks)
+                return {
+                    "success": ok,
+                    "fixed": False,
+                    "message": "Passive hardware preflight" if ok else "Passive hardware preflight found unavailable hardware",
+                    "recommendation": "Use initialize only after a human approval if repair is required.",
+                    "checks": checks,
+                    "counter": self._counter_status_locked(),
+                }
             self._sync_locked()
             checks = []
             checks.extend(self._check_owis_axes(fix=fix))
@@ -1132,10 +1177,14 @@ class PumpProbeV0Controller:
             self._run_error = ""
             return self.state()
 
-    def state(self):
+    def state(self, advance_active=False):
         with self._lock:
-            self._sync_locked()
-            self._sync_sample_stage_locked()
+            tango_mode = self._control_mode_locked() == "tango"
+            if not tango_mode:
+                self._sync_locked()
+                self._sync_sample_stage_locked()
+            elif advance_active and (self._running or self._real_time):
+                self._sync_locked()
             state = {
                 "accelerator_hz": ACCELERATOR_HZ,
                 "spectrometer_hz": SPECTROMETER_HZ,
@@ -1150,11 +1199,13 @@ class PumpProbeV0Controller:
                 "total_pulses": self._total_pulses,
                 "spectrometer_frames": self._spectrometer_frames,
                 "andor_error": self._andor_error,
-                "daq_counter": self._counter_status_locked() if self._control_mode_locked() == "tango" else {
+                # Dashboard state is deliberately cached/no-probe in both
+                # modes: GET state must never create a Tango proxy or command.
+                "daq_counter": {
                     "value": None,
                     "rate_hz": 0.0,
                     "active": False,
-                    "error": "",
+                    "error": "not probed",
                 },
                 "position_mm": round(self._position_mm, 5),
                 "set_position_mm": round(self._set_position_mm, 5),
@@ -1187,20 +1238,156 @@ class PumpProbeV0Controller:
 _emulator = PumpProbeV0Controller()
 
 
+def _v0_hardware_config(payload=None):
+    config = _emulator.hardware_config()
+    payload = payload or {}
+    requested = payload.get("hardware_config") if isinstance(payload, dict) else None
+    if isinstance(requested, dict):
+        config = {**config, **{key: value for key, value in requested.items() if key in DEFAULT_HARDWARE_CONFIG}}
+    if isinstance(payload, dict) and "control_mode" in payload:
+        config["control_mode"] = payload["control_mode"]
+    return config
+
+
+def _v0_reject_runtime_hardware_rewire(payload):
+    """Production/local-auth policy owns physical V0 topology, not requests."""
+    if not authorization_required() or not isinstance(payload, dict):
+        return None
+    raw_config = payload.get("hardware_config")
+    if raw_config is None:
+        return None
+    if not isinstance(raw_config, dict) or set(raw_config) - {"control_mode"}:
+        return jsonify({
+            "success": False,
+            "error": "Hardware configuration rewiring is not authorized",
+            "code": "hardware_not_authorized",
+        }), 403
+    return None
+
+
+def _v0_tango_active(payload=None):
+    current = _clean_control_mode(_emulator.hardware_config().get("control_mode"))
+    requested = _clean_control_mode(_v0_hardware_config(payload).get("control_mode"))
+    return current == "tango" or requested == "tango"
+
+
+def _v0_reject_unbound_tango_sequence():
+    """Fail closed until V0 can bind its complete runtime plan to approval."""
+    return jsonify({
+        "success": False,
+        "error": "A precomputed exact hardware plan is required",
+        "code": "hardware_not_authorized",
+    }), 403
+
+
+def _v0_targets(config, action):
+    aggregator = str(config["owis_aggregator_device"])
+    backend = str(config["owis_backend_device"])
+    andor = str(config["andor_device"])
+    dg645 = str(config["dg645_device"])
+    daqmx = str(config["daqmx_device"])
+    if action == "v0.initialize":
+        targets = [
+            {"device": backend, "command": "get_status_axis"},
+            {"device": backend, "command": "read_position_axis"},
+            {"device": backend, "command": "turn_on_axis"},
+            {"device": dg645, "command": "scpi_write"},
+            {"device": dg645, "command": "scpi_query"},
+            {"device": daqmx, "command": "read_counter"},
+        ]
+        for output in REQUIRED_NETIO_OUTPUTS:
+            targets.append({"device": str(output["device"]), "command": "set_channels_states"})
+        return targets
+    if action in {"v0.stage-move", "v0.sample-stage-move"}:
+        return [{"device": aggregator, "command": "move_axis"}]
+    if action in {"v0.stage-stop", "v0.sample-stage-stop"}:
+        return [{"device": aggregator, "command": "stop_axis"}]
+    if action == "v0.run":
+        return [
+            {"device": dg645, "command": "scpi_write"},
+            {"device": dg645, "command": "scpi_query"},
+            {"device": andor, "command": "start_grabbing"},
+            {"device": andor, "command": "register_order"},
+            {"device": andor, "command": "is_order_ready"},
+            {"device": andor, "command": "give_order"},
+        ]
+    if action == "v0.realtime":
+        return [
+            {"device": andor, "command": "start_grabbing"},
+            {"device": andor, "command": "register_order"},
+            {"device": andor, "command": "is_order_ready"},
+            {"device": andor, "command": "give_order"},
+        ]
+    raise ValueError(f"Unsupported V0 hardware action: {action}")
+
+
+def _guard_v0_hardware(action, payload):
+    config = _v0_hardware_config(payload)
+    return require_http_hardware(action, _v0_targets(config, action), payload, route_id=action)
+
+
+def _v0_stage_move_args(payload, *, sample_stage=False):
+    with _emulator._lock:
+        config = _emulator.hardware_config()
+        if sample_stage:
+            position = _clamp(float(payload.get("position_mm", _emulator._sample_set_position_mm)), 0.0, 150.0)
+            axis = int(config["sample_stage_axis"])
+        else:
+            position = _emulator._set_position_mm
+            if "position_mm" in payload:
+                position = float(payload["position_mm"])
+            elif "delta_ps" in payload:
+                position -= float(payload["delta_ps"]) * MM_PER_PS
+            elif "delta_mm" in payload:
+                position += float(payload["delta_mm"])
+            position = _clamp(position, STAGE_MIN_MM, STAGE_MAX_MM)
+            axis = int(config["delay_line_axis"])
+    return {"axis": axis, "position_mm": float(position)}
+
+
+def _v0_stage_stop_args(*, sample_stage=False):
+    config = _emulator.hardware_config()
+    axis_name = "sample_stage_axis" if sample_stage else "delay_line_axis"
+    return {"axis": int(config[axis_name])}
+
+
+def _v0_sequence_args(payload, *, realtime=False):
+    config = _v0_hardware_config(payload)
+    recall = _load_dg645_recall_config(config.get("dg645_recall_config"))
+    args = {
+        "spectrometer_burst": int(SPECTROMETER_BURST),
+        "order_token": "device_generated",
+    }
+    if not realtime:
+        args.update({
+            "dg645_preflight_policy": str(config.get("dg645_preflight_policy") or "apply_recall_then_verify").strip().lower(),
+            "dg645_recall_slot": int(recall.get("recall_slot", 8)),
+        })
+    return args
+
+
 @pump_probe_v0_api.route("/state", methods=["GET"])
 def pump_probe_state():
-    return jsonify(_emulator.state())
+    return jsonify(_emulator.state(advance_active=True))
 
 
 @pump_probe_v0_api.route("/config", methods=["POST"])
 def pump_probe_configure():
-    return jsonify(_emulator.configure(request.get_json(silent=True) or {}))
+    payload = request.get_json(silent=True) or {}
+    rejected = _v0_reject_runtime_hardware_rewire(payload)
+    if rejected is not None:
+        return rejected
+    return jsonify(_emulator.configure(payload))
 
 
 @pump_probe_v0_api.route("/hardware-config", methods=["GET", "POST"])
 def pump_probe_hardware_config():
     if request.method == "POST":
-        return jsonify(_emulator.configure(request.get_json(silent=True) or {}))
+        payload = request.get_json(silent=True) or {}
+        rejected = _v0_reject_runtime_hardware_rewire(payload)
+        if rejected is not None:
+            return rejected
+        return jsonify(_emulator.configure(payload))
     return jsonify({
         "success": True,
         "hardware_config": _emulator.hardware_config(),
@@ -1218,6 +1405,16 @@ def pump_probe_hardware_preflight():
 @pump_probe_v0_api.route("/hardware/initialize", methods=["POST"])
 def pump_probe_hardware_initialize():
     try:
+        payload = request.get_json(silent=True) or {}
+        if authorization_required():
+            return jsonify({
+                "success": False,
+                "error": "Hardware action is not authorized",
+                "code": "hardware_not_authorized",
+            }), 403
+        blocked = _guard_v0_hardware("v0.initialize", payload)
+        if blocked is not None:
+            return blocked
         return jsonify(_emulator.hardware_preflight(fix=True))
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
@@ -1227,6 +1424,12 @@ def pump_probe_hardware_initialize():
 def pump_probe_run():
     payload = request.get_json(silent=True) or {}
     try:
+        if _v0_tango_active(payload) and bool(payload.get("running", True)):
+            if authorization_required():
+                return _v0_reject_unbound_tango_sequence()
+            blocked = _guard_v0_hardware("v0.run", _v0_sequence_args(payload))
+            if blocked is not None:
+                return blocked
         return jsonify(_emulator.set_running(payload.get("running", True), payload))
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
@@ -1235,6 +1438,12 @@ def pump_probe_run():
 @pump_probe_v0_api.route("/realtime", methods=["POST"])
 def pump_probe_realtime():
     payload = request.get_json(silent=True) or {}
+    if _v0_tango_active(payload) and bool(payload.get("enabled", True)):
+        if authorization_required():
+            return _v0_reject_unbound_tango_sequence()
+        blocked = _guard_v0_hardware("v0.realtime", _v0_sequence_args(payload, realtime=True))
+        if blocked is not None:
+            return blocked
     return jsonify(_emulator.set_real_time(payload.get("enabled", True)))
 
 
@@ -1247,7 +1456,14 @@ def pump_probe_faraday():
 @pump_probe_v0_api.route("/stage/move", methods=["POST"])
 def pump_probe_stage_move():
     try:
-        return jsonify(_emulator.move_stage(request.get_json(silent=True) or {}))
+        payload = request.get_json(silent=True) or {}
+        if _v0_tango_active(payload):
+            normalized = _v0_stage_move_args(payload)
+            blocked = _guard_v0_hardware("v0.stage-move", normalized)
+            if blocked is not None:
+                return blocked
+            return jsonify(_emulator.move_stage({"position_mm": normalized["position_mm"]}))
+        return jsonify(_emulator.move_stage(payload))
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -1255,6 +1471,10 @@ def pump_probe_stage_move():
 @pump_probe_v0_api.route("/stage/stop", methods=["POST"])
 def pump_probe_stage_stop():
     try:
+        if _v0_tango_active():
+            blocked = _guard_v0_hardware("v0.stage-stop", _v0_stage_stop_args())
+            if blocked is not None:
+                return blocked
         return jsonify(_emulator.stop_stage())
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
@@ -1263,7 +1483,14 @@ def pump_probe_stage_stop():
 @pump_probe_v0_api.route("/sample-stage/move", methods=["POST"])
 def pump_probe_sample_stage_move():
     try:
-        return jsonify(_emulator.move_sample_stage(request.get_json(silent=True) or {}))
+        payload = request.get_json(silent=True) or {}
+        if _v0_tango_active(payload):
+            normalized = _v0_stage_move_args(payload, sample_stage=True)
+            blocked = _guard_v0_hardware("v0.sample-stage-move", normalized)
+            if blocked is not None:
+                return blocked
+            return jsonify(_emulator.move_sample_stage({"position_mm": normalized["position_mm"]}))
+        return jsonify(_emulator.move_sample_stage(payload))
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -1271,6 +1498,10 @@ def pump_probe_sample_stage_move():
 @pump_probe_v0_api.route("/sample-stage/stop", methods=["POST"])
 def pump_probe_sample_stage_stop():
     try:
+        if _v0_tango_active():
+            blocked = _guard_v0_hardware("v0.sample-stage-stop", _v0_stage_stop_args(sample_stage=True))
+            if blocked is not None:
+                return blocked
         return jsonify(_emulator.stop_sample_stage())
     except Exception as exc:
         return jsonify({"success": False, "error": str(exc)}), 400

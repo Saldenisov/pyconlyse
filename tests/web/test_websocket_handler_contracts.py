@@ -6,6 +6,7 @@ import math
 import sys
 import types
 from types import SimpleNamespace
+from pathlib import Path
 
 import pytest
 
@@ -83,9 +84,13 @@ class FailingThread(FakeThread):
 @pytest.fixture
 def handler(monkeypatch):
     """Import handler against test Tango stub without retaining global state."""
+    backend = Path(__file__).resolve().parents[2] / "web" / "backend"
+    if str(backend) not in sys.path:
+        sys.path.insert(0, str(backend))
     flask_module = types.ModuleType("flask")
     flask_module.current_app = SimpleNamespace(config={})
     flask_module.request = SimpleNamespace(sid=None, cookies={})
+    flask_module.jsonify = lambda payload: payload
     socketio_module = types.ModuleType("flask_socketio")
     socketio_module.SocketIO = FakeSocketIO
     socketio_module.emit = lambda *_args, **_kwargs: None
@@ -93,10 +98,12 @@ def handler(monkeypatch):
     socketio_module.leave_room = lambda *_args, **_kwargs: None
     jwt_module = types.ModuleType("flask_jwt_extended")
     jwt_module.decode_token = lambda token: {"token": token}
+    jwt_module.get_jwt_identity = lambda: "alice"
     monkeypatch.setitem(sys.modules, "flask", flask_module)
     monkeypatch.setitem(sys.modules, "flask_socketio", socketio_module)
     monkeypatch.setitem(sys.modules, "flask_jwt_extended", jwt_module)
     monkeypatch.delitem(sys.modules, "web.backend.websocket_handler", raising=False)
+    monkeypatch.delitem(sys.modules, "hardware_authorization", raising=False)
     module = importlib.import_module("web.backend.websocket_handler")
     module.monitoring_rooms.clear()
     module.device_subscriptions.clear()
@@ -416,7 +423,10 @@ def test_execute_command_rechecks_cookie_auth_before_accessing_device(handler, m
     )
     monkeypatch.setattr(handler, "emit", lambda event, payload: socket_emits.append((event, payload)))
 
-    socket.handlers["execute_command"]({"device": "camera/test", "command": "State"})
+    socket.handlers["execute_command"]({
+        "device": "camera/test", "command": "State",
+        "approval_nonce": "a" * 64, "role": "admin", "subject": "mallory",
+    })
 
     assert socket_emits == [
         (
@@ -426,6 +436,36 @@ def test_execute_command_rechecks_cookie_auth_before_accessing_device(handler, m
                 "command": "State",
                 "error": "Authentication required",
                 "success": False,
+                "code": "hardware_authentication_required",
+                "status": 401,
             },
         )
     ]
+
+
+def test_execute_command_rejects_client_identity_and_legacy_nonce(handler, monkeypatch):
+    socket = handler.init_socketio(object())
+    monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a", cookies={}))
+    monkeypatch.setattr(handler.monitor, "get_device", lambda _device: pytest.fail("device access must be denied"))
+    emitted = []
+    monkeypatch.setattr(handler, "emit", lambda event, payload: emitted.append((event, payload)))
+    socket.handlers["execute_command"]({
+        "device": "camera/test", "command": "State", "nonce": "a" * 64,
+        "subject": "mallory", "role": "admin",
+    })
+    assert emitted[-1][0] == "command_error"
+    assert emitted[-1][1]["status"] == 401
+    assert emitted[-1][1]["code"] == "hardware_authentication_required"
+
+
+def test_execute_command_authenticates_before_envelope_validation(handler, monkeypatch):
+    socket = handler.init_socketio(object())
+    monkeypatch.setenv("PYCONLYSE_ENFORCE_DEVICE_AUTH", "true")
+    monkeypatch.setattr(handler, "request", SimpleNamespace(sid="client-a", cookies={}))
+    emitted = []
+    monkeypatch.setattr(handler, "emit", lambda event, payload: emitted.append((event, payload)))
+    socket.handlers["execute_command"]({"approval_nonce": "a" * 64})
+    assert emitted[-1][0] == "command_error"
+    assert emitted[-1][1]["status"] == 401
+    assert emitted[-1][1]["code"] == "hardware_authentication_required"

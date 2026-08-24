@@ -30,8 +30,6 @@ if str(BACKEND) not in sys.path:
 
 _install_tango_stub()
 
-device_api_module = importlib.import_module("device_api")
-
 
 class FakePSPDevice:
     def __init__(self):
@@ -111,7 +109,15 @@ class FakeDatabase:
 
 
 def _make_client(monkeypatch):
+    monkeypatch.setenv("TANGO_HOST", "stub.invalid:1")
+    monkeypatch.setenv("PYCONLYSE_TANGO_HOST", "stub.invalid:1")
+    sys.modules.pop("device_api", None)
+    device_api_module = importlib.import_module("device_api")
+    import mutation_auth
+    monkeypatch.setattr(mutation_auth, "mutation_auth_required", lambda: False)
     importlib.reload(device_api_module)
+    # Legacy per-route JWT preprocessing is outside this PSP contract fixture.
+    monkeypatch.setattr(device_api_module, "_maybe_require_auth", lambda: None)
     device_api_module.device_cache.clear()
 
     fake_device = FakePSPDevice()
@@ -176,12 +182,8 @@ def test_pending_commands_and_ack(monkeypatch):
     popped = client.get(
         "/api/psp/device/manip%2Fgeneral%2FPSP/commands/pending?limit=1&pop=1"
     )
-    popped_payload = popped.get_json()
-    assert popped.status_code == 200
-    assert popped_payload["success"] is True
-    assert popped_payload["popped"] is True
-    assert popped_payload["pending_count"] == 1
-    assert len(popped_payload["items"]) == 1
+    assert popped.status_code == 400
+    assert len(fake_device.pending) == 2
 
     ack = client.post(
         "/api/psp/device/manip%2Fgeneral%2FPSP/commands/ack",
@@ -192,5 +194,15 @@ def test_pending_commands_and_ack(monkeypatch):
     assert ack_payload["success"] is True
     assert ack_payload["ack"]["id"] == 1
 
-    # Queue actually shrank in fake after pop
-    assert len(fake_device.pending) == 1
+    assert len(fake_device.pending) == 2
+
+
+def test_psp_ack_requires_strict_server_derived_authorization(monkeypatch):
+    client, fake_device = _make_client(monkeypatch)
+    monkeypatch.setenv("PYCONLYSE_PRODUCTION", "true")
+    response = client.post(
+        "/api/psp/device/manip%2Fgeneral%2FPSP/commands/ack",
+        json={"id": 1, "ok": True, "role": "admin", "subject": "mallory"},
+    )
+    assert response.status_code == 409
+    assert fake_device.calls == []

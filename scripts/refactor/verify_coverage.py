@@ -29,6 +29,7 @@ MINIMUM_MODULE_COVERAGE = {
     "web/backend/app.py": 50.0,
     "web/backend/auth.py": 80.0,
     "web/backend/mutation_auth.py": 90.0,
+    "web/backend/hardware_authorization.py": 60.0,
     "web/start_production.py": 50.0,
 }
 MINIMUM_TOTAL_COVERAGE = 60.0

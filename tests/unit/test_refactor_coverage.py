@@ -43,6 +43,12 @@ class TestCoverageGate(unittest.TestCase):
             },
         )
 
+    def test_t11_hardware_authorization_has_statement_floor(self):
+        self.assertEqual(
+            verify_coverage.MINIMUM_MODULE_COVERAGE["web/backend/hardware_authorization.py"],
+            60.0,
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {

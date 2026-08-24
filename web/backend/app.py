@@ -101,18 +101,25 @@ def configure_security(flask_app):
         resources={r"/api/*": {"origins": origins}},
         supports_credentials=True,
     )
+    # Hardware authorization shares the existing production/local-auth gate.
+    # Validation completes before blueprints register routes.
+    if authorization_required():
+        try:
+            authorization_config_from_environment()
+        except AuthorizationError as exc:
+            raise RuntimeError(f"Hardware authorization configuration is invalid: {exc.message}") from exc
 
 
-# Default to the lab Tango DB, but never overwrite an explicit shell setting.
 _load_project_env(str(Path(__file__).resolve().parents[1] / ".env"))
-os.environ.setdefault(
-    "TANGO_HOST",
-    os.environ.get("PYCONLYSE_TANGO_HOST", "10.20.30.202:10000"),
-)
 
 from flask import Flask, jsonify, send_from_directory  # noqa: I001
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
+from hardware_authorization import (
+    AuthorizationError,
+    authorization_config_from_environment,
+    authorization_required,
+)
 
 from routes import routes        # Your additional API endpoints
 from folder_api import folder_api  # Folder-related endpoints

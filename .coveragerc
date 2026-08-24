@@ -18,6 +18,7 @@ include =
     web/backend/app.py
     web/backend/auth.py
     web/backend/mutation_auth.py
+    web/backend/hardware_authorization.py
     web/start_production.py
 
 [report]
