@@ -137,8 +137,25 @@ Deliver:
   re-exports; package-level names remain classes after a direct legacy
   submodule import.
 - Characterize current and legacy DAT axes plus the import boundary in unit
-  tests. This package has no Tango, hardware, SMB write, deployment, or
-  frontend scope.
+tests. This package has no Tango, hardware, SMB write, deployment, or
+frontend scope.
+
+### T13: Lazy web Tango gateway boundary
+
+Scope is limited to `[packages.T13]` in `work-packages.toml`.
+
+Deliver:
+
+- Put backend Tango database/proxy construction behind an import-inert gateway.
+- Migrate status routes and WebSocket monitoring to that gateway while
+  preserving route payloads, cache semantics, and error handling.
+- Prove that importing the gateway or its route consumers creates no database
+  or proxy, and that direct status/monitor operations still construct the same
+  target proxy only on demand.
+- Include the gateway in named-module coverage with a 100% statement floor.
+- Do not migrate device commands, DeviceServer code, deployment scripts, or
+  frontend files in this package. No Tango request or hardware action occurs in
+  verification.
 
 ### T9: Conservative web security and WebSocket contracts
 
@@ -318,8 +335,8 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Current full Python deny-network gate passed tooling 38; Python
-581 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
+one warning. Current full Python deny-network gate passed tooling 39; Python
+586 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

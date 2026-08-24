@@ -195,11 +195,15 @@ def test_get_device_caches_success_and_does_not_cache_connection_errors(handler,
         return FakeDevice()
 
     monitor = handler.DeviceMonitor()
-    monkeypatch.setattr(handler.tango, "DeviceProxy", make_device)
+    monkeypatch.setattr(handler.tango_gateway, "create_device_proxy", make_device)
     assert monitor.get_device("test/device") is monitor.get_device("test/device")
     assert created == ["test/device"]
 
-    monkeypatch.setattr(handler.tango, "DeviceProxy", lambda _name: (_ for _ in ()).throw(RuntimeError("offline")))
+    monkeypatch.setattr(
+        handler.tango_gateway,
+        "create_device_proxy",
+        lambda _name: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
     with pytest.raises(RuntimeError, match="offline"):
         monitor.get_device("offline/device")
     assert "offline/device" not in monitor.device_cache
@@ -217,7 +221,7 @@ def test_monitor_itest_payload_is_json_safe_and_uses_hardware_slot_ids(handler, 
     )
     fake_socket = FakeSocket()
     monitor = handler.DeviceMonitor()
-    monkeypatch.setattr(handler.tango, "DeviceProxy", lambda _name: device)
+    monkeypatch.setattr(handler.tango_gateway, "create_device_proxy", lambda _name: device)
     monkeypatch.setattr(handler, "socketio", fake_socket)
 
     monitor.monitor_device("power/itest/test", "room-1")
@@ -235,7 +239,11 @@ def test_monitor_itest_payload_is_json_safe_and_uses_hardware_slot_ids(handler, 
 def test_monitor_connection_failure_emits_device_error(handler, monkeypatch):
     fake_socket = FakeSocket()
     monitor = handler.DeviceMonitor()
-    monkeypatch.setattr(handler.tango, "DeviceProxy", lambda _name: FailingDevice())
+    monkeypatch.setattr(
+        handler.tango_gateway,
+        "create_device_proxy",
+        lambda _name: FailingDevice(),
+    )
     monkeypatch.setattr(handler, "socketio", fake_socket)
 
     monitor.monitor_device("camera/offline", "room-2")

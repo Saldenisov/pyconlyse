@@ -65,6 +65,14 @@ class TestCoverageGate(unittest.TestCase):
             },
         )
 
+    def test_t13_tango_gateway_has_an_explicit_full_statement_floor(self):
+        self.assertEqual(
+            verify_coverage.MINIMUM_MODULE_COVERAGE[
+                "web/backend/tango_gateway.py"
+            ],
+            100.0,
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {

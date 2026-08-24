@@ -206,6 +206,22 @@ allowed_globs = [
   "docs/refactoring/**",
 ]
 
+[packages.T13]
+agent = "terra"
+description = "Lazy web Tango gateway boundary"
+allowed_paths = [
+  ".coveragerc",
+  "web/backend/tango_gateway.py",
+  "web/backend/routes.py",
+  "web/backend/websocket_handler.py",
+  "scripts/refactor/verify_coverage.py",
+  "tests/web/test_tango_gateway.py",
+  "tests/web/test_routes_import_safety.py",
+  "tests/web/test_websocket_handler_contracts.py",
+  "tests/unit/test_refactor_coverage.py",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.T10]
 agent = "terra"
 description = "Production startup, mutation authentication, and login throttling"

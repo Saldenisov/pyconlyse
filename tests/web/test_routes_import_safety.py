@@ -39,6 +39,7 @@ def import_routes(monkeypatch, *, explicit_host=None):
         Database=FakeTango.Database,
         DeviceProxy=FakeTango.DeviceProxy,
     ))
+    sys.modules.pop("tango_gateway", None)
     sys.modules.pop("routes", None)
     return importlib.import_module("routes")
 
@@ -52,6 +53,15 @@ def test_import_is_offline_and_does_not_set_remote_default(monkeypatch):
     assert module.db is None
     app_source = (BACKEND / "app.py").read_text(encoding="utf-8")
     assert "10.20.30.202:10000" not in app_source
+
+
+def test_routes_delegate_tango_construction_to_gateway(monkeypatch):
+    module = import_routes(monkeypatch)
+    source = Path(module.__file__).read_text(encoding="utf-8")
+
+    assert "import tango" not in source.splitlines()
+    assert "tango.Database(" not in source
+    assert "tango.DeviceProxy(" not in source
 
 
 def test_explicit_pyconlyse_tango_host_is_preserved_without_database(monkeypatch):
@@ -112,10 +122,8 @@ def test_jive_routes_lazily_create_database_without_tango_status(
     monkeypatch, path, payload_key
 ):
     module = import_routes(monkeypatch)
-    module.tango = types.SimpleNamespace(
-        Database=DirectJiveDatabase,
-        DeviceProxy=FakeTango.DeviceProxy,
-    )
+    monkeypatch.setattr(module.tango_gateway, "create_database", DirectJiveDatabase)
+    monkeypatch.setattr(module.tango_gateway, "create_device_proxy", FakeTango.DeviceProxy)
     application = Flask(__name__)
     application.register_blueprint(module.routes)
 

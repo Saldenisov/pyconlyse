@@ -49,6 +49,10 @@ Refactoring must preserve these contracts unless a separately approved migration
   public reader classes and metadata until desktop callers migrate.
 - The named-module coverage gate includes every Python module in
   `utilities/dataio`; adding a reader requires an explicit committed floor.
+- Web status routes and WebSocket monitors use the lazy Tango gateway for
+  database/proxy construction. Importing either boundary must not construct a
+  database or proxy; live operations remain request-driven and retain their
+  existing cache and error semantics.
 
 ### Web security and WebSocket
 

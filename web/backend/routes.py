@@ -6,9 +6,9 @@ except Exception:  # pragma: no cover - fallback for broken stdlib sqlite bindin
         import pysqlite3 as sqlite3
     except Exception:
         sqlite3 = None
-import tango
 import os
 from datetime import datetime
+import tango_gateway
 
 # Never select a remote Tango database during import.  An explicitly supplied
 # PyConlyse host remains a compatibility input for a later, explicit request.
@@ -63,7 +63,7 @@ def check_tango_database():
 
     if db is None:
         try:
-            db = tango.Database()
+            db = tango_gateway.create_database()
             print("Reinitialized Tango Database connection.")
         except Exception as e:
             print("Could not reinitialize Tango Database:", e)
@@ -88,7 +88,7 @@ def get_tango_database():
     if db is not None:
         return db
     try:
-        db = tango.Database()
+        db = tango_gateway.create_database()
         print("Initialized Tango Database connection.")
     except Exception as exc:
         print("Could not initialize Tango Database:", exc)
@@ -97,7 +97,7 @@ def get_tango_database():
 def check_tango_device(address):
     """Check the state of a Tango device and return its state as a string."""
     try:
-        device = tango.DeviceProxy(address)
+        device = tango_gateway.create_device_proxy(address)
         state = device.state()
         print(f"Device {address} state: {state}")
         return state
@@ -123,7 +123,7 @@ def _starter_host_name(starter_name):
 
 def _starter_server_lists(starter_name):
     try:
-        starter = tango.DeviceProxy(starter_name)
+        starter = tango_gateway.create_device_proxy(starter_name)
         running = list(starter.command_inout('DevGetRunningServers', False))
         stopped = list(starter.command_inout('DevGetStopServers', False))
     except Exception as e:
@@ -158,7 +158,7 @@ def tango_status():
     for starter in starters:
         state = check_tango_device(starter)
         state_label = _normalize_state_label(state)
-        is_running = state in (tango.DevState.ON, tango.DevState.MOVING, tango.DevState.STANDBY)
+        is_running = tango_gateway.is_healthy_state(state)
         if is_running:
             downtime['tango'][starter] = {'status': True, 'last_checked': now, 'downtime_start': None}
         else:
@@ -312,7 +312,7 @@ def jive_device_details(device_name):
         # Try to get device state
         state = 'UNKNOWN'
         try:
-            device_proxy = tango.DeviceProxy(device_name)
+            device_proxy = tango_gateway.create_device_proxy(device_name)
             state = str(device_proxy.state())
         except Exception as e:
             print(f"Could not get state for {device_name}: {e}")

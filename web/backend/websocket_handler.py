@@ -7,10 +7,10 @@ import threading
 import time
 from datetime import datetime
 
-import tango
 from flask import current_app, request
 from flask_jwt_extended import decode_token
 from flask_socketio import SocketIO, emit, join_room, leave_room
+import tango_gateway
 from hardware_authorization import (
     AuthorizationError,
     Operation,
@@ -218,7 +218,7 @@ class DeviceMonitor:
         """Get device proxy with caching"""
         if device_name not in self.device_cache:
             try:
-                self.device_cache[device_name] = tango.DeviceProxy(device_name)
+                self.device_cache[device_name] = tango_gateway.create_device_proxy(device_name)
             except Exception as e:
                 logger.error(f"Failed to connect to device {device_name}: {e}")
                 raise

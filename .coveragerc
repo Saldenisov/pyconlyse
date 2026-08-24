@@ -18,6 +18,7 @@ include =
     web/backend/treatment_file_cache.py
     web/backend/treatment_network_path.py
     web/backend/treatment_service.py
+    web/backend/tango_gateway.py
     web/backend/vd2_measurement_protocol.py
     web/backend/websocket_handler.py
     web/backend/app.py

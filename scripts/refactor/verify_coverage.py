@@ -29,6 +29,7 @@ MINIMUM_MODULE_COVERAGE = {
     "web/backend/treatment_file_cache.py": 80.0,
     "web/backend/treatment_network_path.py": 55.0,
     "web/backend/treatment_service.py": 80.0,
+    "web/backend/tango_gateway.py": 100.0,
     "web/backend/vd2_measurement_protocol.py": 80.0,
     "web/backend/websocket_handler.py": 45.0,
     "web/backend/app.py": 50.0,

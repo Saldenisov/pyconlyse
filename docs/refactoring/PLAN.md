@@ -58,11 +58,11 @@ Owner: Terra, with Sol read-only review.
   WebSocket commands/subscriptions with per-SID locking. Local development may
   opt out only explicitly. Browser code never reads the HttpOnly access cookie.
 
-Current T8/T12 acceptance baseline on macOS is 582 automated tests collected,
-581 passed, 1 platform-specific skip, 68.4% coverage across the named
-refactored modules (including `utilities/dataio`), and all module floors
-passing. Host-drive opener scans are preserved under `tests/integration/data`
-and are not part of this baseline.
+Current T8/T12/T13 acceptance baseline on macOS is 587 automated tests
+collected, 586 passed, 1 platform-specific skip, 68.4% coverage across the
+named refactored modules (including `utilities/dataio` and the Tango gateway),
+and all module floors passing. Host-drive opener scans are preserved under
+`tests/integration/data` and are not part of this baseline.
 Windows/Everest must run the exact reviewed SHA before its checkout advances.
 
 ### Phase 1: DeviceServer stability foundation
@@ -103,6 +103,10 @@ device_family/
   neutral package directly. `gui.controllers.openers` remains a temporary
   identity-reexport compatibility surface for desktop callers until their
   imports are migrated separately.
+- **T13 — lazy Tango gateway boundary:** status routes and WebSocket monitoring
+  construct Tango databases/proxies only through a small backend gateway. Its
+  import must be inert; later `device_api.py` extractions migrate to the same
+  boundary without changing route payloads or command policy.
 - Split `device_api.py` into discovery/snapshots, Astor control, PDU, cameras, spectrographs, DAQmx, and generic device services.
 - Split treatment routes from file access, cache, conversion, OD calculation, selection, and export.
 - Split V0/VD2 acquisition orchestration from Flask route handlers.
