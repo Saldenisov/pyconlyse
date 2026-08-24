@@ -5,8 +5,8 @@ Every work package runs focused checks before full checks. Hardware remains off 
 ## Static checks
 
 ```bash
-conda run -n pyconlyse39 python -m compileall DeviceServers web/backend scripts/refactor tests
-conda run -n pyconlyse39 ruff check DeviceServers web/backend scripts/refactor tests
+conda run -n pyconlyse39 python -m compileall DeviceServers gui/controllers/openers web/backend scripts/refactor tests
+conda run -n pyconlyse39 ruff check --select F <changed-python-files>
 git diff --check
 git diff --cached --check
 ```
@@ -38,7 +38,7 @@ npm run build
 |---|---|
 | Device API | Snapshot caching, stale data, refresh, server control errors |
 | Contracts | Existing route methods, payloads, status codes, and error envelopes |
-| Treatment | File discovery, ZIP/H5/HIS handling, OD calculation, selectors, export |
+| Treatment | File discovery, ZIP/H5/HIS handling, current and legacy DAT orientation, OD calculation, selectors, export |
 | Pump-probe | Emulator acquisition, delay sequence, background/reference/signal grouping, persistence |
 | Concurrency | Duplicate polling prevention, cancellation, timeout, bounded worker count |
 | Paths | Local path, remote SMB path, missing folder, permission error |
@@ -98,11 +98,20 @@ explicit, opt-in lanes and are never selected by the full gate:
 | Legacy | `pytest -o addopts='' tests/legacy` | Historical compatibility characterization |
 | Main app / utilities | `pytest -o addopts='' tests/main_app tests/utilities` | GUI or standalone scripts |
 
+Host-data opener characterization is a narrower integration lane:
+
+```bash
+conda run -n pyconlyse39 python -m pytest -o addopts='' tests/integration/data
+```
+
+It may scan mounted experiment data and is intentionally excluded from the
+software-only gate; failures remain visible when that lane is invoked.
+
 Focused coverage command, run from repository root:
 
 ```bash
 conda run -n pyconlyse39 python -m coverage erase
-conda run -n pyconlyse39 python -m coverage run --rcfile=.coveragerc -m pytest --strict-config
+conda run -n pyconlyse39 python -m coverage run --rcfile=.coveragerc -m pytest --strict-config --deny-network
 conda run -n pyconlyse39 python -m coverage report --rcfile=.coveragerc --fail-under=60
 conda run -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
 conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
@@ -111,7 +120,7 @@ conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .cove
 T9 software-only focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config \
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
 cd web/frontend && npm test -- --watchAll=false --runInBand
 cd ../..
@@ -121,7 +130,7 @@ conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --fu
 T10 software-only focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config \
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py \
   tests/web/test_login_rate_limit.py \
   tests/web/test_production_startup_security.py \
@@ -146,8 +155,8 @@ cd ../..
 
 Focused Jest command covering hardwareApprovalRequest, treatmentClient, shared
 V0, PumpProbeVD2, HardwareApprovalControl, and standalone transport: 6
-suites/70 tests passed. Final full offline deny-network gate: tooling 26
-passed; Python 551 passed, 8 skipped; frontend 10 suites/83 tests; frontend
+suites/70 tests passed. Current full Python deny-network gate: tooling 32
+passed; Python 573 passed, 1 skipped; frontend 10 suites/83 tests; frontend
 coverage 96.66% statements, 90.08% branches, 97.87% functions, and 96.61%
 lines. Production build passed with existing hook/bundle warnings. Coverage
 verifies exact lowercase 64-hex input,
@@ -180,7 +189,7 @@ Focused software-only commands:
 
 ```bash
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config \
+  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_hardware_authorization.py \
   tests/web/test_hardware_authorization_routes.py \
   tests/web/test_hardware_authorization_websocket.py \
@@ -196,7 +205,7 @@ Coverage command (named modules only):
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
   conda run --no-capture-output -n pyconlyse39 python -m coverage erase
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m coverage run --branch --rcfile=.coveragerc -m pytest --strict-config <focused-tests>
+  conda run --no-capture-output -n pyconlyse39 python -m coverage run --branch --rcfile=.coveragerc -m pytest --strict-config --deny-network <focused-tests>
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
   conda run --no-capture-output -n pyconlyse39 python -m coverage json --rcfile=.coveragerc -o .coverage-refactor.json
 conda run -n pyconlyse39 python scripts/refactor/verify_coverage.py --json .coverage-refactor.json
@@ -211,7 +220,7 @@ and mocked Windows `CREATE_NEW`/write-through/flush failure paths;
 target binding; WebSocket command authorization; V0 safe-read regression; and
 production fail-closed configuration. No test may contact Tango or equipment.
 
-T11 focused measurement: the listed suite collected and passed 159 tests in
+Earlier T11 focused measurement: the listed suite collected and passed 159 tests in
 both forward and reverse order, with one warning, under OS-level network
 denial. Full named-module statement coverage was 68.0%;
 `web/backend/hardware_authorization.py` measured 71.2% statements (380/534),
@@ -220,8 +229,9 @@ above its committed 60.0% floor. Dedicated focused branch coverage measured
 `web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Final full offline deny-network evidence: tooling 26 passed; Python 551 passed,
-8 skipped; frontend 10 suites/83 tests with 96.66% statements, 90.08% branches,
+Current full Python deny-network evidence: tooling 32 passed; Python 573
+passed, 1 skipped, 18 warnings; named-module coverage 68.1%; frontend 10
+suites/83 tests with 96.66% statements, 90.08% branches,
 97.87% functions, and 96.61% lines; production build passed with existing
 hook/bundle warnings.
 
@@ -244,14 +254,14 @@ restart commands.
 T11 route import isolation:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config \
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_routes_import_safety.py
 ```
 
 The test installs a fake Tango module before import, clears host variables,
 and verifies zero database/proxy calls. It separately verifies explicit
 `PYCONLYSE_TANGO_HOST` mapping and lazy database construction only after an
-explicit check. The full gate must run this audit and the network-denied
+explicit check. The full gate must run this audit and the Python network-denied
 runtime lane; it may not use whole-tree legacy coverage as a release metric.
 
 Baseline floors use statement coverage and apply only to named refactored

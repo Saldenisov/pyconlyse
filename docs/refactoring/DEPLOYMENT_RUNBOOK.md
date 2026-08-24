@@ -198,10 +198,26 @@ for `src/api/csrfRequest.js`, `src/api/treatmentClient.js`, and
 main-app, and utilities suites remain opt-in and are not silently deleted or
 treated as software-only verification.
 
+The Python lane enables `--deny-network` before collection and propagates
+`PYCONLYSE_DENY_NETWORK=1` to nested pytest processes. External Python-socket
+DNS/TCP/UDP is blocked; literal loopback and AF_UNIX remain available for
+deterministic local tests. This is not an OS firewall for npm or native C
+transports; none of the latter are default-collected.
+
+Host-data opener characterization remains explicit and is not run during
+deployment verification:
+
+```bash
+conda run -n pyconlyse39 python -m pytest -o addopts='' tests/integration/data
+```
+
+This lane may scan mounted experiment data. It reports real characterization
+failures but cannot gate an exact-SHA software-only checkout update.
+
 Exact T9 software-only gate:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config \
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py tests/web/test_websocket_handler_contracts.py
 conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
 ```
@@ -214,7 +230,7 @@ The verification tool has no SSH, Tango, PDU, motion, shutter, or power code.
 T10 focused checks:
 
 ```bash
-conda run -n pyconlyse39 python -m pytest --strict-config \
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_auth_security.py \
   tests/web/test_login_rate_limit.py \
   tests/web/test_production_startup_security.py \
@@ -230,7 +246,7 @@ T11 focused checks (software-only):
 
 ```bash
 /usr/bin/sandbox-exec -p '(version 1) (allow default) (deny network*)' \
-  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config \
+  conda run --no-capture-output -n pyconlyse39 python -m pytest --strict-config --deny-network \
   tests/web/test_hardware_authorization.py \
   tests/web/test_hardware_authorization_routes.py \
   tests/web/test_hardware_authorization_websocket.py \
@@ -241,8 +257,9 @@ T11 focused checks (software-only):
 ```
 
 The focused T11 suite collected and passed 159 tests in both forward and
-reverse order, with one warning, under OS-level network denial. Final full
-offline deny-network gate passed tooling 26; Python 551 passed, 8 skipped;
+reverse order, with one warning, under OS-level network denial. Current full
+Python deny-network gate passed tooling 32; Python 573 passed, 1 skipped,
+with 68.1% named-module coverage;
 frontend 10 suites/83 tests with 96.66% statements, 90.08% branches, 97.87%
 functions, and 96.61% lines; production build passed with existing hook/bundle
 warnings. Existing named-module coverage remains recorded below.

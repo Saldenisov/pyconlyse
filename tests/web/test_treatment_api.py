@@ -1833,7 +1833,9 @@ def test_selection_view_uses_active_file_and_cursor_ranges(client):
     assert view_response.status_code == 200
     assert view_payload["selection"]["active_data_type"] == "ABS"
     assert view_payload["selection"]["map_index"] == 0
+    assert view_payload["selection"]["kinetics"]["x"] == [1.0, 2.0, 3.0]
     assert view_payload["selection"]["kinetics"]["y"] == [4.0, 5.0, 6.0]
+    assert view_payload["selection"]["spectrum"]["x"] == [500.0, 550.0, 600.0]
     assert view_payload["selection"]["spectrum"]["y"] == [1.0, 4.0, 7.0]
 
 
@@ -1898,7 +1900,7 @@ def test_selection_export_writes_averaged_kinetics_file(client):
 
     export_response = test_client.post(
         "/api/treatment/selection/export",
-        json={"user_type": "kinetics", "ranges": "2 1"},
+        json={"user_type": "kinetics", "ranges": "550 60"},
     )
     export_payload = export_response.get_json()
 
@@ -1910,8 +1912,8 @@ def test_selection_export_writes_averaged_kinetics_file(client):
 
     saved = np.loadtxt(output_path)
     assert saved.shape == (4, 2)
-    assert np.allclose(saved[:, 0], [1.0, 500.0, 550.0, 600.0])
-    assert np.allclose(saved[:, 1], [2.0, 4.0, 5.0, 6.0])
+    assert np.allclose(saved[:, 0], [50.0, 1.0, 2.0, 3.0])
+    assert np.allclose(saved[:, 1], [550.0, 4.0, 5.0, 6.0])
 
 
 def test_selection_export_writes_averaged_spectra_file(client):
@@ -1933,7 +1935,7 @@ def test_selection_export_writes_averaged_spectra_file(client):
 
     export_response = test_client.post(
         "/api/treatment/selection/export",
-        json={"user_type": "spectra", "ranges": "550 60"},
+        json={"user_type": "spectra", "ranges": "2 1"},
     )
     export_payload = export_response.get_json()
 
@@ -1945,8 +1947,8 @@ def test_selection_export_writes_averaged_spectra_file(client):
 
     saved = np.loadtxt(output_path)
     assert saved.shape == (4, 2)
-    assert np.allclose(saved[:, 0], [50.0, 1.0, 2.0, 3.0])
-    assert np.allclose(saved[:, 1], [550.0, 2.0, 5.0, 8.0])
+    assert np.allclose(saved[:, 0], [1.0, 500.0, 550.0, 600.0])
+    assert np.allclose(saved[:, 1], [2.0, 2.0, 5.0, 8.0])
 
 
 def test_cleaning_sam_endpoint_returns_service_summary(client, monkeypatch):

@@ -20,6 +20,9 @@ if str(BACKEND) not in sys.path:
 import pytest
 
 import hardware_authorization
+from tests.web._hardware_authorization_test_support import (
+    simulate_hardware_authorization_service_acl,
+)
 from hardware_authorization import (
     AuthorizationConfig,
     AuthorizationError,
@@ -165,6 +168,10 @@ def test_consumption_marker_exists_before_side_effect(tmp_path):
     assert (config.consumed_dir / f"{NONCE}.used").exists()
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="POSIX directory-fsync contract; Windows has dedicated WinAPI durability tests",
+)
 def test_directory_fsync_failure_fails_closed_after_consuming_marker(
     monkeypatch, tmp_path
 ):
@@ -461,6 +468,31 @@ def test_environment_config_requires_absolute_external_directories(monkeypatch, 
     assert config.policy_path.is_absolute()
     assert config.approval_dir.is_absolute()
     assert config.consumed_dir.is_absolute()
+
+
+def test_service_acl_simulation_keeps_authorization_inputs_readonly(
+    monkeypatch, tmp_path
+):
+    config = write_contract(tmp_path / "external", approval=approval())
+    environ = {
+        "PYCONLYSE_HARDWARE_POLICY_PATH": str(config.policy_path),
+        "PYCONLYSE_HARDWARE_APPROVAL_DIR": str(config.approval_dir),
+        "PYCONLYSE_HARDWARE_CONSUMED_DIR": str(config.consumed_dir),
+        "PYCONLYSE_ENFORCE_DEVICE_AUTH": "true",
+        "PYCONLYSE_PRODUCTION": "false",
+    }
+    simulate_hardware_authorization_service_acl(
+        monkeypatch,
+        policy_path=config.policy_path,
+        approval_dir=config.approval_dir,
+        consumed_dir=config.consumed_dir,
+    )
+
+    strict_config = hardware_authorization.authorization_config_from_environment(
+        environ
+    )
+
+    assert strict_config.require_readonly_approvals is True
 
 
 @pytest.mark.parametrize(

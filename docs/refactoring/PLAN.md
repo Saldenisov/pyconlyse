@@ -58,6 +58,12 @@ Owner: Terra, with Sol read-only review.
   WebSocket commands/subscriptions with per-SID locking. Local development may
   opt out only explicitly. Browser code never reads the HttpOnly access cookie.
 
+Current T8 acceptance baseline on macOS is 574 automated tests collected,
+573 passed, 1 platform-specific skip, 68.1% coverage across the named
+refactored modules, and all module floors passing. Host-drive opener scans are
+preserved under `tests/integration/data` and are not part of this baseline.
+Windows/Everest must run the exact reviewed SHA before its checkout advances.
+
 ### Phase 1: DeviceServer stability foundation
 
 Owner: Terra.
@@ -129,8 +135,10 @@ device_family/
   service account; policy/approval reads reject symlinks with `O_NOFOLLOW`,
   while consumed markers use atomic `O_EXCL` plus file and parent-directory
   fsync.
-- Verify collection under a network-denied sandbox and restore Tango/Taurus
-  modules and environment between test modules.
+- Verify Python collection/runtime under the cross-platform `--deny-network`
+  socket guard and restore socket functions, Tango/Taurus modules, and
+  environment after the session/test module. OS-level denial remains an
+  optional stricter audit, not a prerequisite for Windows parity.
 
 ## Completion criteria
 

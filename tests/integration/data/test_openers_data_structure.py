@@ -78,7 +78,10 @@ def test_his_and_h5_axes_agree_for_same_run():
     assert his_meas.data.shape == h5_meas.data.shape
     # either equal or equal after a transpose; enforce one of them
     same_direct = np.allclose(his_meas.data, h5_meas.data)
-    same_transposed = np.allclose(his_meas.data, h5_meas.data.T)
+    same_transposed = (
+        his_meas.data.shape == h5_meas.data.T.shape
+        and np.allclose(his_meas.data, h5_meas.data.T)
+    )
     assert same_direct or same_transposed, (
         "HIS/H5 data for same run differ more than a transpose would explain; "
         f"his_shape={his_meas.data.shape}, h5_shape={h5_meas.data.shape}"
@@ -125,14 +128,10 @@ def test_his_data_orientation_is_wavelengths_by_timedelays():
 def test_dat_data_orientation_matches_docstring():
     """Check ASCIIOpener orientation matches its documented table layout.
 
-    Docstring:
-        0 wave1 wave2   wave3   ...   waveN
-        timedelay1  X11   X12   X13 ... X1N
-        timedelay2  X21   X22   X23 ... X2N
-        ...
-
-    ASCIIOpener.read_map transposes data[1:, 1:], so the resulting
-    Measurement.data should again be (wavelengths, timedelays).
+    The preferred layout stores timedelays in the first row, wavelengths in
+    the first column, and a (wavelengths, timedelays) body. Legacy files with
+    inverse headers and a transposed body must resolve to the same canonical
+    Measurement orientation.
     """
 
     dat_files = sorted(DATA_VD.rglob("*.dat"))

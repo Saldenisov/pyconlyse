@@ -156,6 +156,33 @@ allowed_globs = [
   "docs/refactoring/**",
 ]
 
+[packages.T8W]
+agent = "terra"
+description = "Cross-platform software gate and DAT compatibility"
+allowed_paths = [
+  "gui/controllers/openers/ASCIIOpener.py",
+  "gui/controllers/openers/H5Opener.py",
+  "web/backend/treatment_service.py",
+  "scripts/refactor/pytest_network_guard.py",
+  "scripts/refactor/verify_refactor.py",
+  "tests/conftest.py",
+  "tests/integration/data/test_openers_data_structure.py",
+  "tests/integration/data/test_openers_random_sample.py",
+  "tests/unit/test_collection_hygiene.py",
+  "tests/unit/test_network_isolation.py",
+  "tests/unit/test_openers_orientation.py",
+  "tests/unit/test_refactor_tooling.py",
+  "tests/unit/test_treatment_service.py",
+  "tests/web/_hardware_authorization_test_support.py",
+  "tests/web/test_auth_security.py",
+  "tests/web/test_folder_api.py",
+  "tests/web/test_hardware_authorization.py",
+  "tests/web/test_hardware_authorization_routes.py",
+  "tests/web/test_production_startup_security.py",
+  "tests/web/test_treatment_api.py",
+]
+allowed_globs = ["docs/refactoring/**"]
+
 [packages.T10]
 agent = "terra"
 description = "Production startup, mutation authentication, and login throttling"

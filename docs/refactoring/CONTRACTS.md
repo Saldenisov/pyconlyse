@@ -35,6 +35,14 @@ Refactoring must preserve these contracts unless a separately approved migration
   batch writes bind the complete deterministic ordered write plan.
 - Restart is never an implicit `HardKillServer` action. Server control must
   bind its explicit action and trusted Starter target.
+- Treatment DAT exports use timedelays in the first row, wavelengths in the
+  first column, and body shape `(wavelengths, timedelays)`. The opener also
+  accepts the legacy inverse header layout and transposed body, but always
+  returns canonical axes and `Measurement.data` shape
+  `(wavelengths, timedelays)`.
+- SMB DAT export must close its local temporary handle before writing/copying
+  and remove the temporary file after success or failure. Route paths, response
+  keys, and saved table layout remain unchanged.
 
 ### Web security and WebSocket
 
@@ -141,12 +149,24 @@ Refactoring must preserve these contracts unless a separately approved migration
 - Default pytest collection contains automated software tests only.
   `tests/manual`, `tests/integration`, `tests/legacy`, `tests/main_app`, and
   `tests/utilities` are preserved but excluded from the default lane.
+- Live/random host-data opener checks live in `tests/integration/data`; they
+  remain explicitly collectable and may inspect an operator-selected data
+  host, but never count toward the reproducible default gate.
 - Tango and Taurus doubles are process-local to one collected test module or
   one test. A test may not leave fake protocol modules in `sys.modules` for a
   later file.
 - The full gate may import production code and use fakes, but may not create a
   Tango server, contact a Tango database, connect to equipment, or issue
   motion, shutter, power, PDU, or RemoteEx commands.
+- Permission tests model the web-service identity directly. They do not treat
+  Windows `chmod` as an NTFS ACL. POSIX parent-directory `fsync` and Windows
+  `CREATE_NEW`/write-through/`FlushFileBuffers` are separate durability
+  contracts with platform-applicable tests.
+- `verify_refactor.py --apply --full` enables `--deny-network` before pytest
+  collection. The guard blocks external Python-socket DNS/TCP/UDP, propagates
+  to nested pytest processes, and permits literal loopback and AF_UNIX only.
+  It does not claim to firewall native C/ctypes transports or frontend package
+  installation; no such native network client is default-collected.
 - Coverage gates measure named refactored lifecycle/backend Python modules and
   pure frontend request/classification modules, then enforce committed
   baselines. Whole-tree legacy coverage is informational only.

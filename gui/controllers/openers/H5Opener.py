@@ -6,7 +6,6 @@ Created on 05 june 2024
 
 # import logging
 import logging
-from functools import lru_cache
 from pathlib import Path
 import re
 from typing import Union, Tuple
@@ -15,7 +14,6 @@ import numpy as np
 
 from gui.controllers.openers.Opener import Opener, CriticalInfo
 from utilities.datastructures.mes_independent.measurments_dataclass import Measurement
-from utilities.myfunc import error_logger
 from utilities.errors.myexceptions import NoSuchFileType
 
 module_logger = logging.getLogger(__name__)
@@ -99,12 +97,7 @@ class H5Opener(Opener):
                 wavelengths = np.array(f["wavelengths"])
                 n_maps = f[self._data_key(f)].shape[0]
 
-                comments = ""
                 scalingyunit = self._time_unit_from_metadata(f, file_path)
-                if "metadata" in f:
-                    md = f["metadata"]
-                    if "description" in md.attrs:
-                        comments = self._as_text(md.attrs["description"])
 
             return CriticalInfo(
                 file_path=file_path,
@@ -151,7 +144,7 @@ class H5Opener(Opener):
             "H5Opener: unexpected raw_data 2D shape %s for file %s; "
             "expected (%d, %d) or (%d, %d)",
             data.shape,
-            file_path,
+            info.file_path,
             expected_t,
             expected_w,
             expected_w,
@@ -220,7 +213,7 @@ class H5Opener(Opener):
 
         # Inspect one slice to decide orientation.
         sample = data3d[0]
-        sample_reoriented = self._reorient_data2d(sample, info)
+        self._reorient_data2d(sample, info)
 
         # Apply the same transformation to the whole stack by checking whether
         # a transpose was needed for the sample.

@@ -926,9 +926,15 @@ class TreatmentDataService:
         payload = self._build_ascii_export(data, info)
         if is_smb_path(raw_save_folder):
             save_path = smb_join(raw_save_folder, save_file_name)
-            with tempfile.NamedTemporaryFile(suffix=".dat", delete=True) as temp_file:
-                np.savetxt(temp_file.name, payload, delimiter="\t", fmt="%.4f")
-                bytes_written = copy_local_file_to_smb(temp_file.name, save_path)
+            temp_path = None
+            try:
+                with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as temp_file:
+                    temp_path = Path(temp_file.name)
+                np.savetxt(temp_path, payload, delimiter="\t", fmt="%.4f")
+                bytes_written = copy_local_file_to_smb(temp_path, save_path)
+            finally:
+                if temp_path is not None:
+                    temp_path.unlink(missing_ok=True)
             return {
                 "save_path": save_path,
                 "rows": int(payload.shape[0]),

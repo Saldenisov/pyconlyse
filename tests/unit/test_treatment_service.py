@@ -87,6 +87,27 @@ def _write_od_dat(file_path, data, wavelengths, timedelays):
     np.savetxt(file_path, payload, delimiter="\t", fmt="%.6g")
 
 
+def test_build_ascii_export_uses_wavelength_rows_and_timedelay_columns(service):
+    data = np.asarray([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+    info = SimpleNamespace(
+        wavelengths=np.asarray([500.0, 550.0]),
+        timedelays=np.asarray([-1.0, 0.0, 2.0]),
+    )
+
+    payload = service._build_ascii_export(data, info)
+
+    np.testing.assert_array_equal(
+        payload,
+        np.asarray(
+            [
+                [0.0, -1.0, 0.0, 2.0],
+                [500.0, 1.0, 2.0, 3.0],
+                [550.0, 4.0, 5.0, 6.0],
+            ]
+        ),
+    )
+
+
 def test_parse_average_ranges_supports_desktop_formats(service):
     parsed = service._parse_average_ranges("500+-10; 600 5; 700")
 
@@ -679,7 +700,7 @@ def test_calc_abs_his_noise_uses_noise_average_and_pair_order(
     assert runtime["result_ready"] is True
 
 
-def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
+def _prepare_smb_result(service, monkeypatch, tmp_path):
     abs_path = tmp_path / "abs.his"
     base_path = tmp_path / "base.his"
     noise_path = tmp_path / "bruit.his"
@@ -700,19 +721,7 @@ def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
             return noise_opener, info
         raise AssertionError(f"Unexpected path {path}")
 
-    copied = {}
-
-    def fake_copy_local_file_to_smb(local_path, smb_path):
-        copied["smb_path"] = smb_path
-        copied["payload"] = Path(local_path).read_text(encoding="utf-8")
-        return len(copied["payload"].encode("utf-8"))
-
     monkeypatch.setattr(service, "_get_opener_and_info", fake_get_opener_and_info)
-    monkeypatch.setattr(
-        treatment_service_module,
-        "copy_local_file_to_smb",
-        fake_copy_local_file_to_smb,
-    )
 
     service.calc_abs(
         "session-save-smb",
@@ -725,6 +734,53 @@ def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
             },
         },
     )
+
+
+def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
+    _prepare_smb_result(service, monkeypatch, tmp_path)
+    temp_path = tmp_path / "smb-export.dat"
+    handles = []
+
+    class TrackingTemporaryFile:
+        def __init__(self, path):
+            self.name = str(path)
+            self.closed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            self.close()
+
+        def close(self):
+            self.closed = True
+
+    def fake_named_temporary_file(**kwargs):
+        assert kwargs == {"suffix": ".dat", "delete": False}
+        handle = TrackingTemporaryFile(temp_path)
+        handles.append(handle)
+        return handle
+
+    copied = {}
+
+    def fake_copy_local_file_to_smb(local_path, smb_path):
+        assert len(handles) == 1
+        assert handles[0].closed is True
+        copied["smb_path"] = smb_path
+        copied["payload"] = Path(local_path).read_text(encoding="utf-8")
+        return len(copied["payload"].encode("utf-8"))
+
+    monkeypatch.setattr(
+        treatment_service_module.tempfile,
+        "NamedTemporaryFile",
+        fake_named_temporary_file,
+    )
+    monkeypatch.setattr(
+        treatment_service_module,
+        "copy_local_file_to_smb",
+        fake_copy_local_file_to_smb,
+    )
+
     saved = service.save_result(
         "session-save-smb",
         {
@@ -737,3 +793,44 @@ def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
     assert copied["smb_path"] == saved["save_path"]
     assert "500.0000" in copied["payload"]
     assert "0.4771" in copied["payload"]
+    assert temp_path.exists() is False
+
+
+def test_save_result_removes_smb_temp_file_when_copy_fails(service, monkeypatch, tmp_path):
+    _prepare_smb_result(service, monkeypatch, tmp_path)
+    temp_path = tmp_path / "smb-export-failure.dat"
+
+    class TrackingTemporaryFile:
+        name = str(temp_path)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            self.close()
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(
+        treatment_service_module.tempfile,
+        "NamedTemporaryFile",
+        lambda **_kwargs: TrackingTemporaryFile(),
+    )
+
+    def failing_copy(local_path, _smb_path):
+        assert Path(local_path).exists()
+        raise OSError("SMB copy failed")
+
+    monkeypatch.setattr(treatment_service_module, "copy_local_file_to_smb", failing_copy)
+
+    with pytest.raises(OSError, match="SMB copy failed"):
+        service.save_result(
+            "session-save-smb",
+            {
+                "save_folder": "smb://10.20.30.202/e/DATA_VD2/20260127",
+                "save_file_name": "water_test",
+            },
+        )
+
+    assert temp_path.exists() is False

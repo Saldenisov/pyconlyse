@@ -97,6 +97,30 @@ backend, and pure frontend coverage floors; and an executable local `--full`
 gate. This package does not operate Tango, hardware, PDU, motion, shutters, or
 deploy tooling.
 
+### T8W: Cross-platform gate and data contracts
+
+Scope is limited to `[packages.T8W]` in `work-packages.toml`.
+
+Deliver:
+
+- Preserve host-drive/random opener scans in `tests/integration/data`; default
+  collection must exclude them and explicit integration collection must still
+  discover them. Shape-mismatched comparisons must fail as assertions, not
+  crash during NumPy broadcasting.
+- Keep current and legacy DAT layouts readable as canonical
+  `(wavelengths, timedelays)` measurements.
+- Close SMB export temporary handles before writes/copies on Windows and
+  remove temporary files on success and failure.
+- Model the web-service ACL explicitly in tests instead of relying on Windows
+  `chmod`; test POSIX directory `fsync` and Windows WinAPI durability in their
+  applicable lanes.
+- Enable the Python socket guard before collection, propagate it to nested
+  pytest processes, and block external DNS/TCP/UDP while permitting literal
+  loopback and AF_UNIX deterministic tests. Native C transports remain outside
+  this Python-boundary guarantee and are absent from default collection.
+- Preserve HTTP payloads, production authorization checks, protected V0 files,
+  and all hardware/deployment prohibitions.
+
 ### T9: Conservative web security and WebSocket contracts
 
 Scope:
@@ -275,8 +299,9 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Final full offline deny-network gate passed tooling 26; Python
-551 passed, 8 skipped; frontend 10 suites/83 tests with 96.66% statements,
+one warning. Current full Python deny-network gate passed tooling 32; Python
+573 passed, 1 skipped; named-module coverage was 68.1%; frontend 10 suites/83
+tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import
 safety, and module-isolation regressions. V0 initialization is rejected with

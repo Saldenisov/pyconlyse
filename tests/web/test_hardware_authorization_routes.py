@@ -16,6 +16,10 @@ if str(BACKEND) not in sys.path:
 
 import pytest
 
+from tests.web._hardware_authorization_test_support import (
+    simulate_hardware_authorization_service_acl,
+)
+
 
 DANGEROUS_ROUTES = [
     ("device.command", "POST", "/api/device/motor/command/move_axis"),
@@ -235,6 +239,12 @@ def test_generic_device_command_consumes_readonly_approval_before_proxy_side_eff
     monkeypatch.setenv("PYCONLYSE_HARDWARE_POLICY_PATH", str(policy_path))
     monkeypatch.setenv("PYCONLYSE_HARDWARE_APPROVAL_DIR", str(approval_dir))
     monkeypatch.setenv("PYCONLYSE_HARDWARE_CONSUMED_DIR", str(consumed_dir))
+    simulate_hardware_authorization_service_acl(
+        monkeypatch,
+        policy_path=policy_path,
+        approval_dir=approval_dir,
+        consumed_dir=consumed_dir,
+    )
 
     marker = consumed_dir / f"{nonce}.used"
     command_calls = []
@@ -257,24 +267,14 @@ def test_generic_device_command_consumes_readonly_approval_before_proxy_side_eff
     with application.app_context():
         token = create_access_token(identity="alice")
 
-    try:
-        policy_path.chmod(0o400)
-        approval_path.chmod(0o400)
-        approval_dir.chmod(0o500)
-        root.chmod(0o500)
-        response = application.test_client().post(
-            "/api/device/motor/test/command/move_axis",
-            json={"args": args},
-            headers={
-                "Authorization": f"Bearer {token}",
-                "X-PYCONLYSE-HARDWARE-APPROVAL": nonce,
-            },
-        )
-    finally:
-        root.chmod(0o700)
-        approval_dir.chmod(0o700)
-        approval_path.chmod(0o600)
-        policy_path.chmod(0o600)
+    response = application.test_client().post(
+        "/api/device/motor/test/command/move_axis",
+        json={"args": args},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-PYCONLYSE-HARDWARE-APPROVAL": nonce,
+        },
+    )
 
     assert response.status_code == 200, response.get_json()
     assert response.get_json()["success"] is True

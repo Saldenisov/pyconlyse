@@ -19,7 +19,13 @@ from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ENVIRONMENT = "pyconlyse39"
-LINT_ROOTS = ("DeviceServers", "web/backend", "scripts/refactor", "tests")
+LINT_ROOTS = (
+    "DeviceServers",
+    "gui/controllers/openers",
+    "web/backend",
+    "scripts/refactor",
+    "tests",
+)
 NON_SOFTWARE_TEST_PREFIXES = (
     "tests/manual",
     "tests/integration",
@@ -32,6 +38,7 @@ SOFTWARE_TEST_COMMAND = (
     "-m",
     "pytest",
     "--strict-config",
+    "--deny-network",
 )
 COVERAGE_CONFIG = ".coveragerc"
 COVERAGE_JSON = ".coverage-refactor.json"
@@ -159,6 +166,7 @@ def build_verification_commands(
                 "compileall",
                 "-q",
                 "DeviceServers",
+                "gui/controllers/openers",
                 "web/backend",
                 "scripts/refactor",
                 "tests",
@@ -174,6 +182,8 @@ def build_verification_commands(
                 "-m",
                 "pytest",
                 "--strict-config",
+                "--deny-network",
+                "tests/unit/test_network_isolation.py",
                 "tests/unit/test_refactor_tooling.py",
                 "tests/unit/test_refactor_coverage.py",
                 "tests/unit/test_pytest_module_isolation.py",

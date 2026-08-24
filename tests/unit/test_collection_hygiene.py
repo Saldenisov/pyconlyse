@@ -53,6 +53,55 @@ def test_registration_probe_lives_in_manual_lane_and_is_not_default_collected():
     assert "add_ds_test_probe.py" not in output
 
 
+def test_opener_data_tests_live_in_integration_lane_and_are_not_default_collected():
+    old_paths = (
+        PROJECT_ROOT / "tests/test_openers_data_structure.py",
+        PROJECT_ROOT / "tests/test_openers_random_sample.py",
+    )
+    integration_paths = (
+        PROJECT_ROOT / "tests/integration/data/test_openers_data_structure.py",
+        PROJECT_ROOT / "tests/integration/data/test_openers_random_sample.py",
+    )
+
+    assert all(not path.exists() for path in old_paths)
+    assert all(path.is_file() for path in integration_paths)
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "-q"],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    output = completed.stdout + completed.stderr
+
+    assert completed.returncode == 0, output
+    for path in integration_paths:
+        assert path.name not in output
+
+    integration_collection = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--collect-only",
+            "-q",
+            "-o",
+            "addopts=",
+            *(str(path.relative_to(PROJECT_ROOT)) for path in integration_paths),
+        ],
+        cwd=PROJECT_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    integration_output = integration_collection.stdout + integration_collection.stderr
+
+    assert integration_collection.returncode == 0, integration_output
+    for path in integration_paths:
+        assert path.name in integration_output
+
+
 def test_registration_probe_import_does_not_construct_database(monkeypatch):
     manual_path = PROJECT_ROOT / (
         "tests/manual/device_servers/testing/add_ds_test_probe.py"

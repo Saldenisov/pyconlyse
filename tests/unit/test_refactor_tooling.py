@@ -27,6 +27,7 @@ class TestRefactorTooling(unittest.TestCase):
         compileall = next(command for command in argv if "compileall" in command)
         ruff = next(command for command in argv if "ruff" in command)
         self.assertIn("tests", compileall)
+        self.assertIn("gui/controllers/openers", compileall)
         self.assertEqual(
             ruff,
             (
@@ -131,6 +132,13 @@ class TestRefactorTooling(unittest.TestCase):
             changed_files=changed_files,
         )
         argv = [command.argv for command in commands]
+        tooling = next(
+            command
+            for command in argv
+            if "tests/unit/test_refactor_tooling.py" in command
+        )
+        self.assertIn("--deny-network", tooling)
+        self.assertIn("tests/unit/test_network_isolation.py", tooling)
         ruff = next(command for command in argv if "ruff" in command)
         self.assertEqual(
             ruff,
@@ -161,6 +169,7 @@ class TestRefactorTooling(unittest.TestCase):
                 "-m",
                 "pytest",
                 "--strict-config",
+                "--deny-network",
             ),
             argv,
         )

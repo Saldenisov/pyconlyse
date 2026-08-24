@@ -13,6 +13,10 @@ from werkzeug.security import generate_password_hash
 BACKEND_DIR = Path(__file__).resolve().parents[2] / "web" / "backend"
 WEB_DIR = BACKEND_DIR.parent
 
+from tests.web._hardware_authorization_test_support import (
+    simulate_hardware_authorization_service_acl,
+)
+
 
 @pytest.fixture
 def t11_environment(monkeypatch, tmp_path):
@@ -32,15 +36,13 @@ def t11_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("PYCONLYSE_HARDWARE_POLICY_PATH", str(policy))
     monkeypatch.setenv("PYCONLYSE_HARDWARE_APPROVAL_DIR", str(approval))
     monkeypatch.setenv("PYCONLYSE_HARDWARE_CONSUMED_DIR", str(consumed))
-    policy.chmod(0o400)
-    approval.chmod(0o500)
-    root.chmod(0o500)
-    try:
-        yield root
-    finally:
-        root.chmod(0o700)
-        approval.chmod(0o700)
-        policy.chmod(0o600)
+    simulate_hardware_authorization_service_acl(
+        monkeypatch,
+        policy_path=policy,
+        approval_dir=approval,
+        consumed_dir=consumed,
+    )
+    yield root
 
 
 def _is_web_module(module):

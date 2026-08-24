@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 
 from flask import Flask
@@ -24,6 +25,15 @@ def _make_client(tmp_path, monkeypatch):
     app = Flask(__name__)
     app.register_blueprint(folder_api)
     return app.test_client()
+
+
+def _assert_mocked_foreign_platform_path(actual, expected):
+    if os.name == "nt":
+        assert os.path.normcase(os.path.normpath(actual)) == os.path.normcase(
+            os.path.normpath(expected)
+        )
+    else:
+        assert actual == expected
 
 
 def test_folder_contents_allows_paths_inside_root(tmp_path, monkeypatch):
@@ -70,8 +80,10 @@ def test_default_allowed_root_follows_platform(monkeypatch):
     assert get_allowed_root() == "E:/Data/DATA_VD2"
 
     monkeypatch.setattr("folder_api.platform.system", lambda: "Darwin")
-    assert get_default_allowed_root() == "/dev/DATA/VD2"
-    assert get_allowed_root() == "/dev/DATA/VD2"
+    _assert_mocked_foreign_platform_path(
+        get_default_allowed_root(), "/dev/DATA/VD2"
+    )
+    _assert_mocked_foreign_platform_path(get_allowed_root(), "/dev/DATA/VD2")
 
 
 def test_treatment_root_env_takes_precedence(tmp_path, monkeypatch):
@@ -96,7 +108,14 @@ def test_treatment_root_base_limits_windows_and_everest(monkeypatch):
 
     monkeypatch.setattr("folder_api.platform.system", lambda: "Darwin")
     monkeypatch.setattr("folder_api.socket.gethostname", lambda: "macbook")
-    assert get_treatment_root_bases() == ["/dev/DATA", "/Volumes"]
+    actual = get_treatment_root_bases()
+    expected = ["/dev/DATA", "/Volumes"]
+    if os.name == "nt":
+        assert [os.path.normcase(os.path.normpath(path)) for path in actual] == [
+            os.path.normcase(os.path.normpath(path)) for path in expected
+        ]
+    else:
+        assert actual == expected
 
 
 def test_set_allowed_root_must_stay_inside_runtime_base(tmp_path, monkeypatch):
