@@ -19,6 +19,7 @@ imutils = "==0.5.4"
 imageio = "==2.37.0"
 msgpack = "==1.1.1"
 msl-loadlib = "==0.10.0"
+msl-equipment = { git = "https://github.com/MSLNZ/msl-equipment.git", rev = "975fc34077677cecaaf7bf42132425339c2d0690" } # v0.2.0
 lxml = "==4.9.4"
 keyboard = "==0.13.5"
 opencv-python = "==4.11.0.86"

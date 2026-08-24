@@ -2895,6 +2895,53 @@ files = [
 ]
 
 [[package]]
+name = "msl-equipment"
+version = "0.2.0"
+description = "Manage and communicate with equipment in the laboratory"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = []
+develop = false
+
+[package.dependencies]
+msl-io = "*"
+msl-loadlib = "*"
+numpy = "*"
+pyserial = ">=3.0"
+pyzmq = "*"
+
+[package.extras]
+dev = ["nidaqmx", "pytest (>=4.4)", "pytest-cov", "pyvisa (>=1.6)", "pyvisa-py", "sphinx (>2)", "sphinx-rtd-theme (>0.5)"]
+docs = ["sphinx (>2)", "sphinx-rtd-theme (>0.5)"]
+tests = ["nidaqmx", "pytest (>=4.4)", "pytest-cov", "pyvisa (>=1.6)", "pyvisa-py"]
+
+[package.source]
+type = "git"
+url = "https://github.com/MSLNZ/msl-equipment.git"
+reference = "975fc34077677cecaaf7bf42132425339c2d0690"
+resolved_reference = "975fc34077677cecaaf7bf42132425339c2d0690"
+
+[[package]]
+name = "msl-io"
+version = "0.4.0"
+description = "Read and write data files"
+optional = false
+python-versions = ">=3.9"
+groups = ["main"]
+files = [
+    {file = "msl_io-0.4.0-py3-none-any.whl", hash = "sha256:34b4b82b5b522966fc7fcb1f348feb0acbeaba05f1f0453c4f10c35536b67de3"},
+    {file = "msl_io-0.4.0.tar.gz", hash = "sha256:85635f748b880af09a63f94145f456bfc80ec85db45c4b91731a15ba5f86f831"},
+]
+
+[package.dependencies]
+numpy = "*"
+
+[package.extras]
+google = ["google-api-python-client", "google-auth-httplib2", "google-auth-oauthlib"]
+h5py = ["h5py"]
+
+[[package]]
 name = "msl-loadlib"
 version = "0.10.0"
 description = "Load a shared library (and access a 32-bit library from 64-bit Python)"
@@ -10275,4 +10322,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "f51e71bdfeafedd278463dff4f7dcb70e30bb70b36e425efc86f310bce51a8e3"
+content-hash = "650c0c121cb5567b4b1af9fe0db306b3fcfb5fd82b0079d31f6da5cbe8221217"
