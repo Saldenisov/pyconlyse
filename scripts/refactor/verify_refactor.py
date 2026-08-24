@@ -19,9 +19,18 @@ from typing import Callable, Iterable, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_ENVIRONMENT = "pyconlyse39"
+COMPILE_ROOTS = (
+    "DeviceServers",
+    "gui/controllers/openers",
+    "utilities",
+    "web/backend",
+    "scripts/refactor",
+    "tests",
+)
 LINT_ROOTS = (
     "DeviceServers",
     "gui/controllers/openers",
+    "utilities/dataio",
     "web/backend",
     "scripts/refactor",
     "tests",
@@ -172,11 +181,7 @@ def build_verification_commands(
                 "-m",
                 "compileall",
                 "-q",
-                "DeviceServers",
-                "gui/controllers/openers",
-                "web/backend",
-                "scripts/refactor",
-                "tests",
+                *COMPILE_ROOTS,
             )
         ),
         Command(

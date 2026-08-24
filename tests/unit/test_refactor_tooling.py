@@ -29,6 +29,7 @@ class TestRefactorTooling(unittest.TestCase):
         ruff = next(command for command in argv if "ruff" in command)
         self.assertIn("tests", compileall)
         self.assertIn("gui/controllers/openers", compileall)
+        self.assertIn("utilities", compileall)
         self.assertEqual(
             ruff,
             (
@@ -123,6 +124,47 @@ class TestRefactorTooling(unittest.TestCase):
         self.assertEqual(
             verify_refactor.changed_python_files(runner),
             ("tests/unit/test_refactor_tooling.py",),
+        )
+
+    def test_shared_dataio_changes_are_compiled_and_linted_in_quick_and_full_gates(self):
+        changed_files = ("utilities/dataio/ascii_opener.py",)
+        expected_ruff = (
+            "conda",
+            "run",
+            "-n",
+            "pyconlyse39",
+            "ruff",
+            "check",
+            "--select",
+            "F",
+            *changed_files,
+        )
+        for full in (False, True):
+            commands = verify_refactor.build_verification_commands(
+                full=full,
+                changed_files=changed_files,
+            )
+            argv = [command.argv for command in commands]
+            compileall = next(command for command in argv if "compileall" in command)
+            ruff = next(command for command in argv if "ruff" in command)
+            self.assertIn("utilities", compileall)
+            self.assertEqual(ruff, expected_ruff)
+
+    def test_changed_python_files_includes_shared_dataio_not_utility_scratch_scripts(self):
+        outputs = iter(
+            (
+                "utilities/dataio/ascii_opener.py\nutilities/mytests/socket_CLIENT.py\n",
+                "",
+                "utilities/prev_projects/old_reader.py\n",
+            )
+        )
+
+        def runner(argv, **_kwargs):
+            return subprocess.CompletedProcess(argv, 0, next(outputs), "")
+
+        self.assertEqual(
+            verify_refactor.changed_python_files(runner),
+            ("utilities/dataio/ascii_opener.py",),
         )
 
     def test_full_verification_is_software_only_and_includes_frontend(self):

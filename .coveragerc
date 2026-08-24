@@ -7,6 +7,11 @@ include =
     DeviceServers/motion/owis/DS_OWIS_delay_line.py
     DeviceServers/cameras/avantes/DS_AVANTES_CCD.py
     DeviceServers/cameras/basler/DS_Basler_camera.py
+    utilities/dataio/__init__.py
+    utilities/dataio/ascii_opener.py
+    utilities/dataio/h5_opener.py
+    utilities/dataio/hamamatsu_file_opener.py
+    utilities/dataio/opener.py
     web/backend/device_api.py
     web/backend/folder_api.py
     web/backend/treatment_api.py

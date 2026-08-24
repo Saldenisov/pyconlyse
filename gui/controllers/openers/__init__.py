@@ -1,31 +1,30 @@
-from enum import Enum
+"""Compatibility exports for legacy GUI opener imports.
 
-from .ASCIIOpener import *
-from .HamamatsuFileOpener import *
-from .Opener import *
+Implementations live in :mod:`utilities.dataio` so non-GUI consumers do not
+need to import the desktop controller package.
+"""
+
+# Load legacy shim modules eagerly, then bind their classes back onto this
+# package. This keeps ``from gui.controllers.openers import ASCIIOpener`` a
+# class even after callers import the historical submodule path directly.
+from .ASCIIOpener import ASCIIOpener
+from .HamamatsuFileOpener import CriticalInfoHamamatsu, HamamatsuFileOpener
+from .Opener import CriticalInfo, Opener
 
 try:
     from .H5Opener import H5Opener
-    import h5py as _h5py
-
-    if not hasattr(_h5py, "File"):
-        H5Opener = None
 except (ModuleNotFoundError, ImportError, AttributeError):
     H5Opener = None
 
+from utilities.dataio import OPENER_ACCRODANCE, OpenersTypes
 
-class OpenersTypes(Enum):
-    Hamamatsu = 'Hamamatsu'
-    ASCII = 'ASCII'
-    H5Opener = 'H5'
-
-
-OPENER_ACCRODANCE = {
-    '.his': OpenersTypes.Hamamatsu,
-    '.img': OpenersTypes.Hamamatsu,
-    '.dat': OpenersTypes.ASCII,
-    '.raw': OpenersTypes.ASCII,
-}
-
-if H5Opener is not None:
-    OPENER_ACCRODANCE['.h5'] = OpenersTypes.H5Opener
+__all__ = [
+    "ASCIIOpener",
+    "CriticalInfo",
+    "CriticalInfoHamamatsu",
+    "H5Opener",
+    "HamamatsuFileOpener",
+    "OPENER_ACCRODANCE",
+    "Opener",
+    "OpenersTypes",
+]

@@ -58,10 +58,11 @@ Owner: Terra, with Sol read-only review.
   WebSocket commands/subscriptions with per-SID locking. Local development may
   opt out only explicitly. Browser code never reads the HttpOnly access cookie.
 
-Current T8 acceptance baseline on macOS is 575 automated tests collected,
-574 passed, 1 platform-specific skip, 68.1% coverage across the named
-refactored modules, and all module floors passing. Host-drive opener scans are
-preserved under `tests/integration/data` and are not part of this baseline.
+Current T8/T12 acceptance baseline on macOS is 582 automated tests collected,
+581 passed, 1 platform-specific skip, 68.4% coverage across the named
+refactored modules (including `utilities/dataio`), and all module floors
+passing. Host-drive opener scans are preserved under `tests/integration/data`
+and are not part of this baseline.
 Windows/Everest must run the exact reviewed SHA before its checkout advances.
 
 ### Phase 1: DeviceServer stability foundation
@@ -97,6 +98,11 @@ device_family/
 
 ### Phase 3: Backend boundaries
 
+- **T12 — shared data I/O boundary:** keep H5/DAT/HIS readers and their
+  `Measurement` conversion in `utilities/dataio`; web treatment imports this
+  neutral package directly. `gui.controllers.openers` remains a temporary
+  identity-reexport compatibility surface for desktop callers until their
+  imports are migrated separately.
 - Split `device_api.py` into discovery/snapshots, Astor control, PDU, cameras, spectrographs, DAQmx, and generic device services.
 - Split treatment routes from file access, cache, conversion, OD calculation, selection, and export.
 - Split V0/VD2 acquisition orchestration from Flask route handlers.

@@ -2,9 +2,7 @@ from pathlib import Path
 
 import numpy as np
 
-from gui.controllers.openers.ASCIIOpener import ASCIIOpener
-from gui.controllers.openers.H5Opener import H5Opener
-from gui.controllers.openers.Opener import CriticalInfo
+from utilities.dataio import ASCIIOpener, H5Opener, CriticalInfo
 
 
 def _critical_info(path: Path, wavelengths, timedelays) -> CriticalInfo:

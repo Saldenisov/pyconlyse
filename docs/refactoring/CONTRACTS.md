@@ -43,6 +43,12 @@ Refactoring must preserve these contracts unless a separately approved migration
 - SMB DAT export must close its local temporary handle before writing/copying
   and remove the temporary file after success or failure. Route paths, response
   keys, and saved table layout remain unchanged.
+- GUI-independent H5/DAT/HIS readers live in `utilities.dataio`. The web
+  treatment service imports that package directly; legacy
+  `gui.controllers.openers` imports remain identity re-exports of the same
+  public reader classes and metadata until desktop callers migrate.
+- The named-module coverage gate includes every Python module in
+  `utilities/dataio`; adding a reader requires an explicit committed floor.
 
 ### Web security and WebSocket
 

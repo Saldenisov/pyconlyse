@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from scripts.refactor import verify_coverage
 
@@ -49,6 +50,21 @@ class TestCoverageGate(unittest.TestCase):
             60.0,
         )
 
+    def test_b1_shared_dataio_modules_have_explicit_floors(self):
+        self.assertEqual(
+            {
+                "utilities/dataio/__init__.py": 75.0,
+                "utilities/dataio/ascii_opener.py": 55.0,
+                "utilities/dataio/h5_opener.py": 70.0,
+                "utilities/dataio/hamamatsu_file_opener.py": 55.0,
+                "utilities/dataio/opener.py": 75.0,
+            },
+            {
+                path: verify_coverage.MINIMUM_MODULE_COVERAGE.get(path)
+                for path in verify_coverage._dataio_source_modules()
+            },
+        )
+
     def test_accepts_all_focused_module_floors(self):
         payload = _payload(
             {
@@ -71,6 +87,41 @@ class TestCoverageGate(unittest.TestCase):
 
         with self.assertRaisesRegex(verify_coverage.CoverageGateError, "omitted"):
             verify_coverage.check_coverage_payload(payload)
+
+    def test_rejects_missing_shared_dataio_module(self):
+        missing_path = "utilities/dataio/opener.py"
+        payload = _payload(
+            {
+                path: 90.0
+                for path in verify_coverage.MINIMUM_MODULE_COVERAGE
+                if path != missing_path
+            }
+        )
+
+        with self.assertRaisesRegex(verify_coverage.CoverageGateError, missing_path):
+            verify_coverage.check_coverage_payload(payload)
+
+    def test_rejects_new_shared_dataio_module_without_a_coverage_floor(self):
+        payload = _payload(
+            {
+                path: 90.0
+                for path in verify_coverage.MINIMUM_MODULE_COVERAGE
+            }
+        )
+        source_modules = verify_coverage._dataio_source_modules() | {
+            "utilities/dataio/new_reader.py"
+        }
+
+        with patch.object(
+            verify_coverage,
+            "_dataio_source_modules",
+            return_value=source_modules,
+        ):
+            with self.assertRaisesRegex(
+                verify_coverage.CoverageGateError,
+                "utilities/dataio/new_reader.py",
+            ):
+                verify_coverage.check_coverage_payload(payload)
 
     def test_rejects_a_module_regression_even_when_total_is_high(self):
         payload = _payload(

@@ -258,8 +258,8 @@ T11 focused checks (software-only):
 
 The focused T11 suite collected and passed 159 tests in both forward and
 reverse order, with one warning, under OS-level network denial. Current full
-Python deny-network gate passed tooling 33; Python 574 passed, 1 skipped,
-with 68.1% named-module coverage;
+Python deny-network gate passed tooling 38; Python 581 passed, 1 skipped,
+with 68.4% named-module coverage;
 frontend 10 suites/83 tests with 96.66% statements, 90.08% branches, 97.87%
 functions, and 96.61% lines; production build passed with existing hook/bundle
 warnings. Existing named-module coverage remains recorded below.

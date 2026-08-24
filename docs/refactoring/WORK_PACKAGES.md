@@ -121,6 +121,25 @@ Deliver:
 - Preserve HTTP payloads, production authorization checks, protected V0 files,
   and all hardware/deployment prohibitions.
 
+### T12: Shared data I/O boundary
+
+Scope is limited to `[packages.T12]` in `work-packages.toml`.
+
+Deliver:
+
+- Move H5, DAT, and HIS opener implementations from the GUI controller
+  namespace to `utilities/dataio` without duplicating implementation.
+- Make `web/backend/treatment_service.py` depend on the shared package rather
+  than `gui.controllers.openers`.
+- Keep the software gate's changed-file lint and compile scope inclusive of
+  `utilities/dataio` without broadening it to historical utility scripts.
+- Preserve all legacy GUI module and package import paths as identity
+  re-exports; package-level names remain classes after a direct legacy
+  submodule import.
+- Characterize current and legacy DAT axes plus the import boundary in unit
+  tests. This package has no Tango, hardware, SMB write, deployment, or
+  frontend scope.
+
 ### T9: Conservative web security and WebSocket contracts
 
 Scope:
@@ -299,8 +318,8 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Current full Python deny-network gate passed tooling 33; Python
-574 passed, 1 skipped; named-module coverage was 68.1%; frontend 10 suites/83
+one warning. Current full Python deny-network gate passed tooling 38; Python
+581 passed, 1 skipped; named-module coverage was 68.4%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

@@ -5,7 +5,7 @@ Every work package runs focused checks before full checks. Hardware remains off 
 ## Static checks
 
 ```bash
-conda run -n pyconlyse39 python -m compileall DeviceServers gui/controllers/openers web/backend scripts/refactor tests
+conda run -n pyconlyse39 python -m compileall DeviceServers gui/controllers/openers utilities/dataio web/backend scripts/refactor tests
 conda run -n pyconlyse39 ruff check --select F <changed-python-files>
 git diff --check
 git diff --cached --check
@@ -127,6 +127,26 @@ cd ../..
 conda run -n pyconlyse39 python scripts/refactor/verify_refactor.py --apply --full
 ```
 
+T12 shared data I/O focused checks:
+
+```bash
+conda run -n pyconlyse39 python -m pytest --strict-config --deny-network \
+  tests/unit/test_dataio_boundary.py \
+  tests/unit/test_openers_orientation.py \
+  tests/unit/test_treatment_service.py \
+  tests/unit/test_vd2_acquisition.py
+```
+
+Required cases: web treatment imports `utilities.dataio` without importing the
+GUI opener namespace; legacy package and direct-submodule imports are identity
+re-exports of the shared symbols; current and legacy DAT layouts return the
+canonical `(wavelengths, timedelays)` data shape.
+
+The full named-module coverage report enforces statement floors of 75%, 55%,
+70%, 55%, and 75% for `utilities/dataio/__init__.py`, `ascii_opener.py`,
+`h5_opener.py`, `hamamatsu_file_opener.py`, and `opener.py`, respectively. A
+new shared reader without an explicit floor fails the gate.
+
 T10 software-only focused checks:
 
 ```bash
@@ -155,8 +175,8 @@ cd ../..
 
 Focused Jest command covering hardwareApprovalRequest, treatmentClient, shared
 V0, PumpProbeVD2, HardwareApprovalControl, and standalone transport: 6
-suites/70 tests passed. Current full Python deny-network gate: tooling 33
-passed; Python 574 passed, 1 skipped; frontend 10 suites/83 tests; frontend
+suites/70 tests passed. Current full Python deny-network gate: tooling 38
+passed; Python 581 passed, 1 skipped; frontend 10 suites/83 tests; frontend
 coverage 96.66% statements, 90.08% branches, 97.87% functions, and 96.61%
 lines. Production build passed with existing hook/bundle warnings. Coverage
 verifies exact lowercase 64-hex input,
@@ -229,8 +249,8 @@ above its committed 60.0% floor. Dedicated focused branch coverage measured
 `web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Current full Python deny-network evidence: tooling 33 passed; Python 574
-passed, 1 skipped, 18 warnings; named-module coverage 68.1%; frontend 10
+Current full Python deny-network evidence: tooling 38 passed; Python 581
+passed, 1 skipped, 18 warnings; named-module coverage 68.4%; frontend 10
 suites/83 tests with 96.66% statements, 90.08% branches,
 97.87% functions, and 96.61% lines; production build passed with existing
 hook/bundle warnings.

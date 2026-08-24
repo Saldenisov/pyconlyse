@@ -18,6 +18,11 @@ MINIMUM_MODULE_COVERAGE = {
     "DeviceServers/motion/owis/DS_OWIS_delay_line.py": 65.0,
     "DeviceServers/cameras/avantes/DS_AVANTES_CCD.py": 40.0,
     "DeviceServers/cameras/basler/DS_Basler_camera.py": 30.0,
+    "utilities/dataio/__init__.py": 75.0,
+    "utilities/dataio/ascii_opener.py": 55.0,
+    "utilities/dataio/h5_opener.py": 70.0,
+    "utilities/dataio/hamamatsu_file_opener.py": 55.0,
+    "utilities/dataio/opener.py": 75.0,
     "web/backend/device_api.py": 40.0,
     "web/backend/folder_api.py": 75.0,
     "web/backend/treatment_api.py": 65.0,
@@ -68,7 +73,24 @@ def coverage_percentages(payload: Mapping[str, object]) -> dict[str, float]:
     return results
 
 
+def _dataio_source_modules() -> set[str]:
+    dataio_root = PROJECT_ROOT / "utilities/dataio"
+    return {
+        path.relative_to(PROJECT_ROOT).as_posix()
+        for path in dataio_root.glob("*.py")
+    }
+
+
 def check_coverage_payload(payload: Mapping[str, object]) -> dict[str, float]:
+    unconfigured_dataio_modules = sorted(
+        _dataio_source_modules() - set(MINIMUM_MODULE_COVERAGE)
+    )
+    if unconfigured_dataio_modules:
+        raise CoverageGateError(
+            "Coverage floors omitted for shared data I/O: "
+            + ", ".join(unconfigured_dataio_modules)
+        )
+
     percentages = coverage_percentages(payload)
     missing = sorted(set(MINIMUM_MODULE_COVERAGE) - set(percentages))
     if missing:
