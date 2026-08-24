@@ -58,8 +58,8 @@ Owner: Terra, with Sol read-only review.
   WebSocket commands/subscriptions with per-SID locking. Local development may
   opt out only explicitly. Browser code never reads the HttpOnly access cookie.
 
-Current T8 acceptance baseline on macOS is 574 automated tests collected,
-573 passed, 1 platform-specific skip, 68.1% coverage across the named
+Current T8 acceptance baseline on macOS is 575 automated tests collected,
+574 passed, 1 platform-specific skip, 68.1% coverage across the named
 refactored modules, and all module floors passing. Host-drive opener scans are
 preserved under `tests/integration/data` and are not part of this baseline.
 Windows/Everest must run the exact reviewed SHA before its checkout advances.

@@ -299,8 +299,8 @@ occurs after an explicit runtime check. An explicitly supplied
 
 T11 collection evidence: under OS-level network denial, the focused listed
 suite collected and passed 159 tests in both forward and reverse order, with
-one warning. Current full Python deny-network gate passed tooling 32; Python
-573 passed, 1 skipped; named-module coverage was 68.1%; frontend 10 suites/83
+one warning. Current full Python deny-network gate passed tooling 33; Python
+574 passed, 1 skipped; named-module coverage was 68.1%; frontend 10 suites/83
 tests with 96.66% statements,
 90.08% branches, 97.87% functions, and 96.61% lines. Manual probes, legacy, integration, main-app, and utilities stay
 explicit opt-in lanes. T11 covers device mutation, VD2, WebSocket, import

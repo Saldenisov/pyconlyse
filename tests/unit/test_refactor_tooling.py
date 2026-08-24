@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.refactor import deploy_everest, restart_tango_servers, verify_refactor
 
@@ -186,14 +187,15 @@ class TestRefactorTooling(unittest.TestCase):
             ),
             argv,
         )
-        self.assertIn(("npm", "ci", "--legacy-peer-deps"), argv)
+        npm = verify_refactor.npm_executable()
+        self.assertIn((npm, "ci", "--legacy-peer-deps"), argv)
         self.assertIn(
             "--collectCoverageFrom=src/api/csrfRequest.js",
             verify_refactor.FRONTEND_COVERAGE_ARGS,
         )
         self.assertIn(
             (
-                "npm",
+                npm,
                 "test",
                 "--",
                 "--watchAll=false",
@@ -201,7 +203,20 @@ class TestRefactorTooling(unittest.TestCase):
             ),
             argv,
         )
-        self.assertIn(("npm", "run", "build"), argv)
+        self.assertIn((npm, "run", "build"), argv)
+
+    def test_frontend_commands_use_platform_specific_npm_executable(self):
+        with patch.object(verify_refactor.sys, "platform", "win32"):
+            windows_commands = verify_refactor.build_verification_commands(include_frontend=True)
+        with patch.object(verify_refactor.sys, "platform", "linux"):
+            posix_commands = verify_refactor.build_verification_commands(include_frontend=True)
+
+        windows_argv = [
+            command.argv for command in windows_commands if command.cwd.name == "frontend"
+        ]
+        posix_argv = [command.argv for command in posix_commands if command.cwd.name == "frontend"]
+        self.assertEqual([command[0] for command in windows_argv], ["npm.cmd"] * 3)
+        self.assertEqual([command[0] for command in posix_argv], ["npm"] * 3)
 
     def test_deploy_tests_exact_sha_in_detached_worktree_before_fast_forward(self):
         commit = "a" * 40

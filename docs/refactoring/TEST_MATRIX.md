@@ -155,8 +155,8 @@ cd ../..
 
 Focused Jest command covering hardwareApprovalRequest, treatmentClient, shared
 V0, PumpProbeVD2, HardwareApprovalControl, and standalone transport: 6
-suites/70 tests passed. Current full Python deny-network gate: tooling 32
-passed; Python 573 passed, 1 skipped; frontend 10 suites/83 tests; frontend
+suites/70 tests passed. Current full Python deny-network gate: tooling 33
+passed; Python 574 passed, 1 skipped; frontend 10 suites/83 tests; frontend
 coverage 96.66% statements, 90.08% branches, 97.87% functions, and 96.61%
 lines. Production build passed with existing hook/bundle warnings. Coverage
 verifies exact lowercase 64-hex input,
@@ -229,7 +229,7 @@ above its committed 60.0% floor. Dedicated focused branch coverage measured
 `web/backend/device_api.py` statement coverage was 54.3%. The 49.3% total for
 selected changed monoliths is informational and is not the gate baseline.
 
-Current full Python deny-network evidence: tooling 32 passed; Python 573
+Current full Python deny-network evidence: tooling 33 passed; Python 574
 passed, 1 skipped, 18 warnings; named-module coverage 68.1%; frontend 10
 suites/83 tests with 96.66% statements, 90.08% branches,
 97.87% functions, and 96.61% lines; production build passed with existing

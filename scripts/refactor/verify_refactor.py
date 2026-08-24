@@ -70,6 +70,13 @@ class Command:
         return " ".join(self.argv)
 
 
+def npm_executable(platform_name: str | None = None) -> str:
+    """Return npm's executable name for subprocess argv on this platform."""
+    if (platform_name or sys.platform).startswith("win"):
+        return "npm.cmd"
+    return "npm"
+
+
 def validate_branch(branch: str) -> str:
     if not _BRANCH_PATTERN.fullmatch(branch):
         raise RefactorToolError(f"Unsafe branch name: {branch!r}")
@@ -287,14 +294,15 @@ def build_verification_commands(
             ]
         )
     if include_frontend:
+        npm = npm_executable()
         commands.extend(
             [
-                Command(("npm", "ci", "--legacy-peer-deps"), PROJECT_ROOT / "web/frontend"),
+                Command((npm, "ci", "--legacy-peer-deps"), PROJECT_ROOT / "web/frontend"),
                 Command(
-                    ("npm", "test", "--", "--watchAll=false", *FRONTEND_COVERAGE_ARGS),
+                    (npm, "test", "--", "--watchAll=false", *FRONTEND_COVERAGE_ARGS),
                     PROJECT_ROOT / "web/frontend",
                 ),
-                Command(("npm", "run", "build"), PROJECT_ROOT / "web/frontend"),
+                Command((npm, "run", "build"), PROJECT_ROOT / "web/frontend"),
             ]
         )
     return tuple(commands)
