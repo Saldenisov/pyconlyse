@@ -13,6 +13,7 @@ if str(BACKEND) not in sys.path:
 
 from treatment_service import TreatmentDataService
 import treatment_service as treatment_service_module
+from utilities.dataio import H5Opener
 
 
 class FakeOpener:
@@ -403,7 +404,7 @@ def test_cleaning_view_for_cleaned_h5_includes_deleted_frames(service, tmp_path)
     assert file_info["original_number_maps"] == 3
 
 
-def test_restore_cleaned_h5_file_moves_deleted_back_to_raw_data(service, tmp_path):
+def test_restore_cleaned_h5_file_migrates_legacy_deleted_maps_to_selection(service, tmp_path):
     h5py = treatment_service_module.h5py
     if h5py is None:
         pytest.skip("h5py is not available")
@@ -438,8 +439,87 @@ def test_restore_cleaned_h5_file_moves_deleted_back_to_raw_data(service, tmp_pat
         np.testing.assert_allclose(h5_file["raw_data"][2], kept2)
         assert h5_file["metadata"].attrs["cleaned_measurements"] == 3
         assert bool(h5_file["metadata"].attrs["restored_from_deleted"]) is True
-        assert h5_file["deleted"]["data"].shape[0] == 0
-        assert list(h5_file["deleted"].attrs["indices"]) == []
+        assert "deleted" not in h5_file
+        assert h5_file["metadata"].attrs["h5_schema_version"] == 2
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, True, True]
+
+
+def test_cleaned_h5_preserves_raw_maps_and_uses_selection_for_averages(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    output_path = tmp_path / "ABS13113.h5"
+    maps = [
+        _measurement([[1.0, 1.0], [1.0, 1.0]]),
+        _measurement([[100.0, 100.0], [100.0, 100.0]]),
+        _measurement([[3.0, 3.0], [3.0, 3.0]]),
+    ]
+    info = _critical_info(output_path, 3, [500.0, 550.0], [10.0, 20.0])
+    removed_records = [{"index": 1, "reason": "angle", "sam_angle": 30.0}]
+
+    service._write_cleaned_h5(
+        output_path=output_path,
+        info=info,
+        kept_measurements=[maps[0], maps[2]],
+        removed_measurements=[maps[1]],
+        original_file_path=output_path,
+        original_measurements=3,
+        angle_threshold=20.0,
+        surface_threshold=10.0,
+        kept_indices=[0, 2],
+        removed_indices=[1],
+        removed_records=removed_records,
+    )
+
+    with h5py.File(output_path, "r") as h5_file:
+        assert h5_file["raw_data"].shape == (3, 2, 2)
+        np.testing.assert_allclose(h5_file["raw_data"][1], maps[1].data)
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, False, True]
+        assert "deleted" not in h5_file
+        assert h5_file["map_selection"].attrs["method"] == "sam"
+
+    opener = H5Opener()
+    selected_maps = list(opener.give_all_maps(output_path))
+    raw_maps = list(opener.give_all_maps(output_path, include_excluded=True))
+
+    assert [measurement.original_index for measurement in selected_maps] == [0, 2]
+    assert [measurement.original_index for measurement in raw_maps] == [0, 1, 2]
+    np.testing.assert_allclose(opener.average_map(output_path), np.full((2, 2), 2.0))
+
+
+def test_restore_clears_selection_without_rewriting_raw_maps(service, tmp_path):
+    h5py = treatment_service_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    output_path = tmp_path / "ABS13114.h5"
+    raw_data = np.asarray(
+        [
+            [[1.0, 1.0], [1.0, 1.0]],
+            [[100.0, 100.0], [100.0, 100.0]],
+            [[3.0, 3.0], [3.0, 3.0]],
+        ]
+    )
+    with h5py.File(output_path, "w") as h5_file:
+        metadata = h5_file.create_group("metadata")
+        selection = h5_file.create_group("map_selection")
+        h5_file.create_dataset("timedelays", data=np.asarray([10.0, 20.0]))
+        h5_file.create_dataset("wavelengths", data=np.asarray([500.0, 550.0]))
+        h5_file.create_dataset("raw_data", data=raw_data)
+        selection.create_dataset("included", data=np.asarray([True, False, True]))
+        selection.attrs["records_json"] = '[{"index":1,"reason":"angle"}]'
+        metadata.attrs["original_measurements"] = 3
+        metadata.attrs["cleaned_measurements"] = 2
+
+    restored = service.restore_cleaned_h5_file(output_path)
+
+    assert restored["restored"] is True
+    assert restored["restored_measurements"] == 1
+    with h5py.File(output_path, "r") as h5_file:
+        np.testing.assert_allclose(h5_file["raw_data"][:], raw_data)
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, True, True]
+        assert h5_file["metadata"].attrs["cleaned_measurements"] == 3
 
 
 def test_save_sam_cleaned_h5_defaults_to_source_folder_and_stem(
@@ -504,6 +584,7 @@ def test_convert_file_to_h5_uses_gzip_level_4(service, monkeypatch, tmp_path):
     opener = FakeOpener(measurements)
     opener.paths[source_path] = info
 
+    real_get_opener_and_info = service._get_opener_and_info
     monkeypatch.setattr(service, "_get_opener_and_info", lambda path: (opener, info))
 
     progress = []
@@ -523,13 +604,34 @@ def test_convert_file_to_h5_uses_gzip_level_4(service, monkeypatch, tmp_path):
         assert h5_file["metadata"].attrs["compression_level"] == 4
         assert h5_file["metadata"].attrs["time_scale"] == "ps"
         assert h5_file["metadata"].attrs["scaling_yunit"] == "ps"
+        assert h5_file["metadata"].attrs["h5_schema_version"] == 2
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, True]
 
+    with h5py.File(output_path, "r+") as h5_file:
+        h5_file["map_selection"]["included"][1] = False
+        h5_file["map_selection"].attrs["method"] = "sam"
+        h5_file["map_selection"].attrs["sam_angle_threshold"] = 20.0
+        h5_file["map_selection"].attrs["records_json"] = '[{"index":1,"reason":"angle"}]'
+
+    monkeypatch.setattr(service, "_get_opener_and_info", real_get_opener_and_info)
     overwrite_summary = service.convert_file_to_h5(output_path, output_path)
     assert overwrite_summary["output_path"] == str(output_path)
     with h5py.File(output_path, "r") as h5_file:
         raw_data = h5_file["raw_data"]
         assert raw_data.compression == "gzip"
         assert raw_data.compression_opts == 4
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, False]
+        assert h5_file["map_selection"].attrs["sam_angle_threshold"] == 20.0
+
+    copied_path = tmp_path / "ABS12886_copy.h5"
+    copied_summary = service.convert_file_to_h5(output_path, copied_path)
+    assert copied_summary["output_path"] == str(copied_path)
+    with h5py.File(copied_path, "r") as h5_file:
+        assert h5_file["raw_data"].shape == (2, 2, 2)
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, False]
+        assert h5_file["map_selection"].attrs["method"] == "sam"
+        assert h5_file["map_selection"].attrs["sam_angle_threshold"] == 20.0
+        assert h5_file["map_selection"].attrs["records_json"] == '[{"index":1,"reason":"angle"}]'
 
 
 def test_convert_hamamatsu_his_to_h5_streams_directly(service, monkeypatch, tmp_path):
@@ -583,6 +685,7 @@ def test_convert_hamamatsu_his_to_h5_streams_directly(service, monkeypatch, tmp_
         assert raw_data.compression == "gzip"
         assert h5_file["metadata"].attrs["time_scale"] == "ps"
         assert h5_file["metadata"].attrs["scaling_yunit"] == "ps"
+        assert h5_file["map_selection"]["included"][:].tolist() == [True, True]
         np.testing.assert_allclose(raw_data[0], first_map.transpose())
         np.testing.assert_allclose(raw_data[1], second_map.transpose())
 

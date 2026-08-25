@@ -36,6 +36,28 @@ class H5Opener(Opener):
         return np.asarray(h5_file["metadata"].attrs["kept_indices"], dtype=int)
 
     @staticmethod
+    def _selection_mask(h5_file, raw_map_count: int) -> np.ndarray:
+        """Return the active-map mask for canonical H5 treatment files.
+
+        Files written before the non-destructive cleaning schema have no
+        ``map_selection`` group.  They therefore retain their historical
+        behaviour: every map physically present in ``raw_data`` is active.
+        """
+        if "map_selection" not in h5_file:
+            return np.ones(raw_map_count, dtype=bool)
+        selection_group = h5_file["map_selection"]
+        if "included" not in selection_group:
+            return np.ones(raw_map_count, dtype=bool)
+        included = np.asarray(selection_group["included"], dtype=bool)
+        if included.shape != (raw_map_count,):
+            module_logger.warning(
+                "H5Opener: ignoring malformed map_selection/included with shape %s",
+                included.shape,
+            )
+            return np.ones(raw_map_count, dtype=bool)
+        return included
+
+    @staticmethod
     def _original_measurements(h5_file):
         if "metadata" not in h5_file:
             return None
@@ -169,6 +191,9 @@ class H5Opener(Opener):
                 data = f[data_key][map_index]
                 kept_indices = self._kept_indices(f)
                 original_measurements = self._original_measurements(f)
+                has_map_selection = (
+                    "map_selection" in f and "included" in f["map_selection"]
+                )
                 comments = ""
                 if "metadata" in f and "description" in f["metadata"].attrs:
                     comments = self._as_text(f["metadata"].attrs["description"])
@@ -187,8 +212,14 @@ class H5Opener(Opener):
                 timedelays=info.timedelays,
                 time_scale=scalingyunit,
             )
-            if kept_indices is not None and map_index < len(kept_indices):
+            if (
+                kept_indices is not None
+                and not has_map_selection
+                and map_index < len(kept_indices)
+            ):
                 measurement.original_index = int(kept_indices[map_index])
+            else:
+                measurement.original_index = int(map_index)
             if original_measurements is not None:
                 measurement.original_measurements = int(original_measurements)
             return (measurement, "")
@@ -210,6 +241,11 @@ class H5Opener(Opener):
         info: CriticalInfo = self.paths[file_path]
         with h5py.File(file_path, "r") as f:
             data3d = np.array(f[self._data_key(f)])
+            selection_mask = self._selection_mask(f, data3d.shape[0])
+
+        data3d = data3d[selection_mask]
+        if data3d.shape[0] == 0:
+            raise ValueError("H5 map selection excludes every map")
 
         # Inspect one slice to decide orientation.
         sample = data3d[0]
@@ -227,8 +263,18 @@ class H5Opener(Opener):
         avg = np.average(data3d, axis=0)
         return avg
 
-    def give_all_maps(self, file_path) -> Union[Measurement, Tuple[bool, str]]:
-        """Yield maps with data shaped (wavelengths, timedelays)."""
+    def give_all_maps(
+        self,
+        file_path,
+        include_excluded: bool = False,
+    ) -> Union[Measurement, Tuple[bool, str]]:
+        """Yield active maps, or every raw map when cleaning needs an audit view.
+
+        ``raw_data`` is deliberately never filtered on disk.  The default view
+        honours ``map_selection/included`` so downstream averages and OD
+        calculations use the selected maps only.  Cleaning callers pass
+        ``include_excluded=True`` to inspect and re-evaluate the full archive.
+        """
         res = True
         if file_path not in self.paths:
             res, comments = self.fill_critical_info(file_path)
@@ -239,11 +285,20 @@ class H5Opener(Opener):
                 data3d = np.array(f[data_key])
                 kept_indices = self._kept_indices(f)
                 original_measurements = self._original_measurements(f)
+                selection_mask = self._selection_mask(f, data3d.shape[0])
+                has_map_selection = (
+                    "map_selection" in f and "included" in f["map_selection"]
+                )
                 comments = ""
                 if "metadata" in f and "description" in f["metadata"].attrs:
                     comments = f["metadata"].attrs["description"]
 
-            for index, data_i in enumerate(data3d):
+            indices = np.arange(data3d.shape[0], dtype=int)
+            if not include_excluded:
+                indices = indices[selection_mask]
+
+            for index in indices:
+                data_i = data3d[int(index)]
                 data_i = self._reorient_data2d(data_i, info)
                 measurement = Measurement(
                     type=file_path.suffix,
@@ -255,8 +310,14 @@ class H5Opener(Opener):
                     timedelays=info.timedelays,
                     time_scale=info.scaling_yunit,
                 )
-                if kept_indices is not None and index < len(kept_indices):
+                if (
+                    kept_indices is not None
+                    and not has_map_selection
+                    and index < len(kept_indices)
+                ):
                     measurement.original_index = int(kept_indices[index])
+                else:
+                    measurement.original_index = int(index)
                 if original_measurements is not None:
                     measurement.original_measurements = int(original_measurements)
                 yield measurement

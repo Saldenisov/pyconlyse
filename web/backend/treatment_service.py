@@ -438,7 +438,10 @@ class TreatmentDataService:
         if not hasattr(opener, "give_all_maps"):
             raise ValueError("Selected file type does not support cleaning preview")
 
-        measurements = runtime_measurements or list(opener.give_all_maps(active_file_path))
+        measurements = runtime_measurements or self._give_all_maps_for_cleaning(
+            opener,
+            active_file_path,
+        )
         if not has_cleaning_state:
             measurements, includes_deleted = self._reconstruct_h5_measurements_with_deleted(
                 active_file_path,
@@ -501,12 +504,76 @@ class TreatmentDataService:
             wavelengths = np.asarray(h5_file["wavelengths"], dtype=float)
             timedelays = np.asarray(h5_file["timedelays"], dtype=float)
             metadata_attrs = dict(h5_file["metadata"].attrs) if "metadata" in h5_file else {}
+            has_map_selection = (
+                "map_selection" in h5_file
+                and "included" in h5_file["map_selection"]
+            )
+            selection_mask = (
+                np.asarray(h5_file["map_selection"]["included"], dtype=bool)
+                if has_map_selection
+                else None
+            )
+            selection_records = []
+            if has_map_selection and "records_json" in h5_file["map_selection"].attrs:
+                try:
+                    selection_records = json.loads(
+                        str(h5_file["map_selection"].attrs["records_json"])
+                    )
+                except (TypeError, ValueError):
+                    selection_records = []
             kept_indices = (
                 [int(value) for value in np.asarray(metadata_attrs.get("kept_indices"), dtype=int).tolist()]
                 if "kept_indices" in metadata_attrs
                 else list(range(raw_data.shape[0]))
             )
             deleted_data, deleted_indices, deleted_records = self._existing_deleted_payload(path)
+
+        if has_map_selection:
+            if selection_mask.shape != (raw_data.shape[0],):
+                raise ValueError("H5 map_selection/included does not match raw_data")
+            restored_count = int(np.count_nonzero(~selection_mask))
+            if restored_count == 0:
+                return {
+                    "file_path": str(path),
+                    "restored": False,
+                    "restored_measurements": 0,
+                    "current_measurements": int(raw_data.shape[0]),
+                    "original_measurements": int(raw_data.shape[0]),
+                }
+
+            with h5py.File(path, "r+") as h5_file:
+                metadata_group = h5_file.require_group("metadata")
+                selection_group = h5_file["map_selection"]
+                del selection_group["included"]
+                selection_group.create_dataset(
+                    "included",
+                    data=np.ones(raw_data.shape[0], dtype=bool),
+                )
+                selection_group.attrs["schema_version"] = 1
+                selection_group.attrs["method"] = "restore"
+                selection_group.attrs["records_json"] = "[]"
+                for attr_name in ("sam_angle_threshold", "sam_surface_threshold"):
+                    if attr_name in selection_group.attrs:
+                        del selection_group.attrs[attr_name]
+                metadata_group.attrs["original_measurements"] = int(raw_data.shape[0])
+                metadata_group.attrs["cleaned_measurements"] = int(raw_data.shape[0])
+                metadata_group.attrs["h5_schema_version"] = 2
+                metadata_group.attrs["kept_indices"] = np.arange(
+                    raw_data.shape[0], dtype=np.int64
+                )
+                metadata_group.attrs["removed_indices"] = np.asarray([], dtype=np.int64)
+                metadata_group.attrs["removed_records_json"] = "[]"
+                metadata_group.attrs["restored_excluded_measurements"] = restored_count
+                metadata_group.attrs["restored_from_map_selection"] = True
+
+            return {
+                "file_path": str(path),
+                "restored": True,
+                "restored_measurements": restored_count,
+                "current_measurements": int(raw_data.shape[0]),
+                "original_measurements": int(raw_data.shape[0]),
+                "previous_removed_records": selection_records[:128],
+            }
 
         if deleted_data.size == 0 or not deleted_indices:
             return {
@@ -535,10 +602,10 @@ class TreatmentDataService:
         metadata_attrs["removed_records_json"] = "[]"
         metadata_attrs["restored_deleted_measurements"] = restored_count
         metadata_attrs["restored_from_deleted"] = True
+        metadata_attrs["h5_schema_version"] = 2
 
         with h5py.File(path, "w") as h5_file:
             metadata_group = h5_file.create_group("metadata")
-            deleted_group = h5_file.create_group("deleted")
             h5_file.create_dataset("timedelays", data=timedelays)
             h5_file.create_dataset("wavelengths", data=wavelengths)
             h5_file.create_dataset(
@@ -547,16 +614,13 @@ class TreatmentDataService:
                 compression="gzip",
                 compression_opts=4,
             )
+            self._write_map_selection(
+                h5_file,
+                np.ones(restored_data.shape[0], dtype=bool),
+                method="restore",
+            )
             for key, value in metadata_attrs.items():
                 metadata_group.attrs[key] = value
-            deleted_group.create_dataset(
-                "data",
-                data=np.empty((0,) + tuple(restored_data.shape[1:]), dtype=float),
-                compression="gzip",
-                compression_opts=4,
-            )
-            deleted_group.attrs["indices"] = np.asarray([], dtype=np.int64)
-            deleted_group.attrs["records_json"] = "[]"
 
         return {
             "file_path": str(path),
@@ -734,10 +798,31 @@ class TreatmentDataService:
         source = Path(source_path).expanduser()
         if not source.is_file():
             raise ValueError("Selected file does not exist")
+        target = Path(output_path).expanduser()
 
         opener, info = self._get_opener_and_info(source)
         if not hasattr(opener, "give_all_maps"):
             raise ValueError("Selected file type does not support H5 conversion")
+
+        if isinstance(opener, H5Opener) and source.resolve() == target.resolve():
+            with h5py.File(source, "r") as h5_file:
+                is_canonical_h5 = (
+                    "raw_data" in h5_file
+                    and "map_selection" in h5_file
+                    and "included" in h5_file["map_selection"]
+                )
+                raw_map_count = (
+                    int(h5_file["raw_data"].shape[0]) if "raw_data" in h5_file else 0
+                )
+            if is_canonical_h5:
+                return {
+                    "source_path": str(source),
+                    "output_path": str(target),
+                    "original_measurements": raw_map_count,
+                    "compression": "gzip",
+                    "compression_level": 4,
+                }
+
         if all(
             hasattr(info, attr)
             for attr in (
@@ -750,14 +835,43 @@ class TreatmentDataService:
         ):
             return self._convert_hamamatsu_file_to_h5(source, output_path, info, progress_callback)
 
-        measurements = iter(opener.give_all_maps(source))
+        selection_mask = None
+        selection_records = []
+        selection_method = "all"
+        selection_angle_threshold = None
+        selection_surface_threshold = None
+        if isinstance(opener, H5Opener):
+            with h5py.File(source, "r") as h5_file:
+                raw_map_count = int(h5_file["raw_data"].shape[0])
+                candidate_mask = H5Opener._selection_mask(h5_file, raw_map_count)
+                if "map_selection" in h5_file and "included" in h5_file["map_selection"]:
+                    selection_mask = candidate_mask
+                    selection_group = h5_file["map_selection"]
+                    selection_method = str(selection_group.attrs.get("method", "all"))
+                    if "sam_angle_threshold" in selection_group.attrs:
+                        selection_angle_threshold = float(
+                            selection_group.attrs["sam_angle_threshold"]
+                        )
+                    if "sam_surface_threshold" in selection_group.attrs:
+                        selection_surface_threshold = float(
+                            selection_group.attrs["sam_surface_threshold"]
+                        )
+                    records_json = selection_group.attrs.get("records_json", "[]")
+                    if isinstance(records_json, bytes):
+                        records_json = records_json.decode("utf-8", errors="ignore")
+                    try:
+                        selection_records = json.loads(str(records_json))
+                    except (TypeError, ValueError):
+                        selection_records = []
+            measurements = iter(opener.give_all_maps(source, include_excluded=True))
+        else:
+            measurements = iter(opener.give_all_maps(source))
         first_measurement = next(measurements, None)
         if first_measurement is None:
             raise ValueError("No measurements were found in the selected file")
 
         first_map = np.asarray(first_measurement.data, dtype=float)
         expected_measurements = int(getattr(info, "number_maps", 0) or 0) or 1
-        target = Path(output_path).expanduser()
         target.parent.mkdir(parents=True, exist_ok=True)
 
         with h5py.File(target, "w") as h5_file:
@@ -780,12 +894,23 @@ class TreatmentDataService:
                 written_measurements = index + 1
                 if progress_callback:
                     progress_callback(written_measurements, expected_measurements)
+            self._write_map_selection(
+                h5_file,
+                selection_mask
+                if selection_mask is not None
+                else np.ones(written_measurements, dtype=bool),
+                records=selection_records,
+                method=selection_method,
+                angle_threshold=selection_angle_threshold,
+                surface_threshold=selection_surface_threshold,
+            )
             description = getattr(info, "header", "") or ""
             time_scale = getattr(info, "scaling_yunit", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["source_file"] = str(source)
             metadata_group.attrs["original_measurements"] = int(written_measurements)
-            metadata_group.attrs["converted_without_cleaning"] = True
+            metadata_group.attrs["converted_without_cleaning"] = selection_mask is None
+            metadata_group.attrs["h5_schema_version"] = 2
             metadata_group.attrs["compression"] = "gzip"
             metadata_group.attrs["compression_level"] = 4
             metadata_group.attrs["time_scale"] = str(time_scale)
@@ -844,12 +969,18 @@ class TreatmentDataService:
                     if progress_callback:
                         progress_callback(map_index + 1, number_maps)
 
+            self._write_map_selection(
+                h5_file,
+                np.ones(number_maps, dtype=bool),
+            )
+
             description = getattr(info, "header", "") or ""
             time_scale = getattr(info, "scaling_yunit", "") or ""
             metadata_group.attrs["description"] = str(description).replace("\0", "").encode("utf-8")
             metadata_group.attrs["source_file"] = str(source)
             metadata_group.attrs["original_measurements"] = number_maps
             metadata_group.attrs["converted_without_cleaning"] = True
+            metadata_group.attrs["h5_schema_version"] = 2
             metadata_group.attrs["compression"] = "gzip"
             metadata_group.attrs["compression_level"] = 4
             metadata_group.attrs["time_scale"] = str(time_scale)
@@ -1420,7 +1551,7 @@ class TreatmentDataService:
             raise ValueError("Selected file type does not support SAM cleaning")
 
         if measurements is None:
-            measurements = list(opener.give_all_maps(file_path))
+            measurements = self._give_all_maps_for_cleaning(opener, file_path)
             measurements, source_includes_deleted = self._reconstruct_h5_measurements_with_deleted(
                 file_path,
                 info,
@@ -1545,6 +1676,43 @@ class TreatmentDataService:
         return file_path, info, measurements, kept_measurements, removed_measurements, summary
 
     @staticmethod
+    def _give_all_maps_for_cleaning(opener, file_path: Path) -> List[object]:
+        """Read all source maps, including maps excluded by a prior H5 selection.
+
+        Non-H5 openers keep their established one-argument contract.  Canonical
+        H5 files expose the optional flag so cleaning can be recomputed against
+        the complete acquisition rather than a previous selected subset.
+        """
+        if isinstance(opener, H5Opener):
+            return list(opener.give_all_maps(file_path, include_excluded=True))
+        return list(opener.give_all_maps(file_path))
+
+    @staticmethod
+    def _write_map_selection(
+        h5_file,
+        included: np.ndarray,
+        *,
+        records: Optional[List[Dict[str, object]]] = None,
+        method: str = "all",
+        angle_threshold: Optional[float] = None,
+        surface_threshold: Optional[float] = None,
+    ) -> None:
+        """Write the canonical non-destructive map-selection contract."""
+        selected = np.asarray(included, dtype=bool)
+        selection_group = h5_file.create_group("map_selection")
+        selection_group.create_dataset("included", data=selected)
+        selection_group.attrs["schema_version"] = 1
+        selection_group.attrs["method"] = str(method)
+        selection_group.attrs["records_json"] = json.dumps(
+            records or [],
+            separators=(",", ":"),
+        )
+        if angle_threshold is not None:
+            selection_group.attrs["sam_angle_threshold"] = float(angle_threshold)
+        if surface_threshold is not None:
+            selection_group.attrs["sam_surface_threshold"] = float(surface_threshold)
+
+    @staticmethod
     def _existing_deleted_records(file_path: Path) -> List[Dict[str, object]]:
         path = Path(file_path).expanduser()
         if path.suffix.lower() == ".h5" and h5py is not None:
@@ -1638,42 +1806,56 @@ class TreatmentDataService:
         removed_records: Optional[List[Dict[str, object]]] = None,
         preserve_existing_deleted: bool = True,
     ) -> None:
-        raw_data = np.asarray([measurement.data for measurement in kept_measurements], dtype=float)
-        kept_indices_array = np.asarray(kept_indices or [], dtype=np.int64)
-        removed_indices_array = np.asarray(removed_indices or [], dtype=np.int64)
-        if preserve_existing_deleted:
-            existing_deleted_data, existing_deleted_indices, existing_deleted_records = (
-                TreatmentDataService._existing_deleted_payload(original_file_path)
+        """Write a canonical H5 without physically removing rejected maps.
+
+        ``raw_data`` is the complete acquisition in original map order.  The
+        authoritative cleaning result is ``map_selection/included``.  The
+        compatibility parameter is intentionally retained for callers from the
+        legacy save flow, but old ``/deleted`` payloads are migrated instead of
+        copied into newly written files.
+        """
+        del preserve_existing_deleted
+
+        total = int(original_measurements)
+        if total <= 0:
+            raise ValueError("Cannot write H5 map selection without measurements")
+
+        selected_indices = [int(index) for index in (kept_indices or [])]
+        if len(selected_indices) != len(kept_measurements):
+            selected_indices = [
+                int(getattr(measurement, "original_index", index))
+                for index, measurement in enumerate(kept_measurements)
+            ]
+        rejected_indices = [int(index) for index in (removed_indices or [])]
+        rejected_measurements = list(removed_measurements or [])
+        if len(rejected_indices) != len(rejected_measurements):
+            rejected_indices = [
+                int(getattr(measurement, "original_index", index))
+                for index, measurement in enumerate(rejected_measurements)
+            ]
+
+        indexed_maps: Dict[int, np.ndarray] = {}
+        for index, measurement in zip(selected_indices, kept_measurements):
+            indexed_maps[int(index)] = np.asarray(measurement.data, dtype=float)
+        for index, measurement in zip(rejected_indices, rejected_measurements):
+            if int(index) in indexed_maps:
+                raise ValueError(f"Map {index} is both selected and excluded")
+            indexed_maps[int(index)] = np.asarray(measurement.data, dtype=float)
+
+        expected_indices = set(range(total))
+        if set(indexed_maps) != expected_indices:
+            raise ValueError(
+                "SAM cleaning did not retain a complete map archive; refusing to write a lossy H5"
             )
-        else:
-            existing_deleted_data, existing_deleted_indices, existing_deleted_records = (
-                np.asarray([], dtype=float),
-                [],
-                [],
-            )
-        current_removed_records = list(removed_records or [])[len(existing_deleted_records):]
-        current_removed_data = np.asarray(
-            [measurement.data for measurement in (removed_measurements or [])],
-            dtype=float,
-        )
-        current_removed_indices = [
-            int(record.get("index"))
-            for record in current_removed_records
-            if record.get("index") is not None
-        ]
-        if existing_deleted_data.size and current_removed_data.size:
-            deleted_data = np.concatenate([existing_deleted_data, current_removed_data], axis=0)
-        elif existing_deleted_data.size:
-            deleted_data = existing_deleted_data
-        elif current_removed_data.size:
-            deleted_data = current_removed_data
-        else:
-            deleted_data = np.empty((0,) + tuple(raw_data.shape[1:]), dtype=float)
-        deleted_indices = existing_deleted_indices + current_removed_indices
+
+        raw_data = np.asarray([indexed_maps[index] for index in range(total)], dtype=float)
+        included = np.zeros(total, dtype=bool)
+        included[np.asarray(selected_indices, dtype=int)] = True
+        kept_indices_array = np.flatnonzero(included).astype(np.int64)
+        removed_indices_array = np.flatnonzero(~included).astype(np.int64)
 
         with h5py.File(output_path, "w") as h5_file:
             metadata_group = h5_file.create_group("metadata")
-            deleted_group = h5_file.create_group("deleted")
             h5_file.create_dataset("timedelays", data=np.asarray(info.timedelays, dtype=float))
             h5_file.create_dataset("wavelengths", data=np.asarray(info.wavelengths, dtype=float))
             h5_file.create_dataset(
@@ -1682,7 +1864,14 @@ class TreatmentDataService:
                 compression="gzip",
                 compression_opts=4,
             )
-            deleted_group.create_dataset("data", data=deleted_data, compression="gzip", compression_opts=4)
+            TreatmentDataService._write_map_selection(
+                h5_file,
+                included,
+                records=removed_records,
+                method="sam",
+                angle_threshold=angle_threshold,
+                surface_threshold=surface_threshold,
+            )
 
             description = getattr(info, "header", "") or ""
             time_scale = getattr(info, "scaling_yunit", "") or ""
@@ -1694,16 +1883,12 @@ class TreatmentDataService:
             metadata_group.attrs["time_scale"] = str(time_scale)
             metadata_group.attrs["scaling_yunit"] = str(time_scale)
             metadata_group.attrs["original_file"] = str(original_file_path)
-            metadata_group.attrs["original_measurements"] = int(original_measurements)
-            metadata_group.attrs["cleaned_measurements"] = int(len(kept_measurements))
+            metadata_group.attrs["original_measurements"] = total
+            metadata_group.attrs["cleaned_measurements"] = int(np.count_nonzero(included))
+            metadata_group.attrs["h5_schema_version"] = 2
             metadata_group.attrs["kept_indices"] = kept_indices_array
             metadata_group.attrs["removed_indices"] = removed_indices_array
             metadata_group.attrs["removed_records_json"] = json.dumps(
-                removed_records or [],
-                separators=(",", ":"),
-            )
-            deleted_group.attrs["indices"] = np.asarray(deleted_indices, dtype=np.int64)
-            deleted_group.attrs["records_json"] = json.dumps(
                 removed_records or [],
                 separators=(",", ":"),
             )
