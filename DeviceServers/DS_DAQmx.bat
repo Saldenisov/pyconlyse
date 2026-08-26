@@ -35,7 +35,7 @@ if "%INSTANCE_NAME%"=="" (
 set "DS_TITLE=DS_DAQmx [%INSTANCE_NAME%]"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\control\daqmx" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set DISABLE_ARCHIVE=1 && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_DAQmx device server... && python DS_DAQmx.py %INSTANCE_NAME%"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\control\daqmx" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set DISABLE_ARCHIVE=1 && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_DAQmx device server... && %PYCONLYSE_PYTHON% DS_DAQmx.py %INSTANCE_NAME%"
 ) else (
-    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\control\daqmx" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set DISABLE_ARCHIVE=1 && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_DAQmx device server... && python DS_DAQmx.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\control\daqmx" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set DISABLE_ARCHIVE=1 && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_DAQmx device server... && %PYCONLYSE_PYTHON% DS_DAQmx.py %INSTANCE_NAME%"
 )

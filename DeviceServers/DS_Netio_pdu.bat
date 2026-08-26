@@ -53,7 +53,7 @@ set "DS_TITLE=DS_Netio_pdu [%INSTANCE_NAME%]"
 set "LOGGED_LAUNCHER=%PYCONLYSE%\DeviceServers\run_logged_server.cmd"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\netio" cmd /k call "%LOGGED_LAUNCHER%" "DS_Netio_pdu" "%INSTANCE_NAME%" "%PYCONLYSE%\DeviceServers\power\netio" "DS_Netio_pdu.py" "DISABLE_ARCHIVE=1"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\netio" cmd /k call "%LOGGED_LAUNCHER%" "DS_Netio_pdu" "%INSTANCE_NAME%" "%PYCONLYSE%\DeviceServers\power\netio" "DS_Netio_pdu.py" "DISABLE_ARCHIVE=1"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
     start "%DS_TITLE%" cmd /k call "%LOGGED_LAUNCHER%" "DS_Netio_pdu" "%INSTANCE_NAME%" "%PYCONLYSE%\DeviceServers\power\netio" "DS_Netio_pdu.py" "DISABLE_ARCHIVE=1"

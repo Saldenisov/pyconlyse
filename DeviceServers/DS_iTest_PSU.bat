@@ -53,10 +53,10 @@ REM Start the device server in a Windows Terminal tab if possible; otherwise fal
 set "DS_TITLE=DS_iTest_PSU [%INSTANCE_NAME%]"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\iTest" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_iTest_PSU device server... && python DS_itest_psu.py %INSTANCE_NAME%"
+wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\power\iTest" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_iTest_PSU device server... && %PYCONLYSE_PYTHON% DS_itest_psu.py %INSTANCE_NAME%"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\power\iTest" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_iTest_PSU device server... && python DS_itest_psu.py %INSTANCE_NAME%"
+start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\power\iTest" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_iTest_PSU device server... && %PYCONLYSE_PYTHON% DS_itest_psu.py %INSTANCE_NAME%"
 )
 
 echo Device server started in terminal tab/window!

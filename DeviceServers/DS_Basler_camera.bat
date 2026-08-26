@@ -55,10 +55,10 @@ REM Start the device server in a Windows Terminal tab if possible; otherwise fal
 set "DS_TITLE=DS_Basler_camera [%INSTANCE_NAME%]"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\cameras\basler" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && python DS_Basler_camera.py %INSTANCE_NAME%"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\cameras\basler" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && %PYCONLYSE_PYTHON% DS_Basler_camera.py %INSTANCE_NAME%"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\basler" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && python DS_Basler_camera.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\basler" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Basler_camera device server... && %PYCONLYSE_PYTHON% DS_Basler_camera.py %INSTANCE_NAME%"
 )
 
 echo Device server started in terminal tab/window!

@@ -53,10 +53,10 @@ set PYTHONPATH=%PYCONLYSE%
 REM Start the device server in a Windows Terminal tab if possible; otherwise fallback to a new window
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%DEVICE_DIR%" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_KEYSIGHT_33509B device server... && python DS_KEYSIGHT_33509B.py %INSTANCE_NAME%"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%DEVICE_DIR%" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_KEYSIGHT_33509B device server... && %PYCONLYSE_PYTHON% DS_KEYSIGHT_33509B.py %INSTANCE_NAME%"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-    start "%DS_TITLE%" cmd /k "cd /d "%DEVICE_DIR%" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_KEYSIGHT_33509B device server... && python DS_KEYSIGHT_33509B.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k "cd /d "%DEVICE_DIR%" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_KEYSIGHT_33509B device server... && %PYCONLYSE_PYTHON% DS_KEYSIGHT_33509B.py %INSTANCE_NAME%"
 )
 
 echo Device server started in terminal tab/window!

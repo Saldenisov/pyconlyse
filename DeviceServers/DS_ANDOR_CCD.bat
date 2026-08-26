@@ -42,10 +42,10 @@ set DISABLE_ARCHIVE=1
 set "DS_TITLE=DS_ANDOR_CCD [%INSTANCE_NAME%]"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\cameras\andor" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_ANDOR_CCD device server... && python DS_ANDOR_CCD.py %INSTANCE_NAME%"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\cameras\andor" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_ANDOR_CCD device server... && %PYCONLYSE_PYTHON% DS_ANDOR_CCD.py %INSTANCE_NAME%"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\andor" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_ANDOR_CCD device server... && python DS_ANDOR_CCD.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\cameras\andor" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && set PYTHONPATH=%PYCONLYSE% && echo Starting DS_ANDOR_CCD device server... && %PYCONLYSE_PYTHON% DS_ANDOR_CCD.py %INSTANCE_NAME%"
 )
 
 echo Device server started in terminal tab/window!

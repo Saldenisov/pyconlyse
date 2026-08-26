@@ -1,7 +1,7 @@
 @echo off
 REM =====================================================
 REM DS_Standa_Motor Wrapper for Astor
-REM Launches the Python device server in a visible terminal
+REM Launches the %PYCONLYSE_PYTHON% device server in a visible terminal
 REM =====================================================
 
 setlocal enabledelayedexpansion
@@ -39,8 +39,8 @@ set DISABLE_ARCHIVE=1
 set "DS_TITLE=DS_Standa_Motor [%INSTANCE_NAME%]"
 where wt >nul 2>&1
 if %errorlevel%==0 (
-    wt -w 0 nt --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\motion\standa" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && python DS_Standa_Motor.py %INSTANCE_NAME%"
+    wt -w PyconlyseTango new-tab --title "%DS_TITLE%" -d "%PYCONLYSE%\DeviceServers\motion\standa" cmd /k "call "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && %PYCONLYSE_PYTHON% DS_Standa_Motor.py %INSTANCE_NAME%"
 ) else (
     echo Windows Terminal not found; starting in a separate window...
-    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\motion\standa" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && python DS_Standa_Motor.py %INSTANCE_NAME%"
+    start "%DS_TITLE%" cmd /k "cd /d "%PYCONLYSE%\DeviceServers\motion\standa" && "%ANACONDA%\Scripts\activate.bat" %PYCONLYSE_ENV% && echo Starting DS_Standa_Motor device server... && %PYCONLYSE_PYTHON% DS_Standa_Motor.py %INSTANCE_NAME%"
 )

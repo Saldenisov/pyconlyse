@@ -66,6 +66,7 @@ class DS_Netio_pdu(DS_PDU):
         super().init_device()
         self.register_variables_for_archive()
         self.turn_on()
+        print(f"NETIO_STARTUP_COMPLETE: device={self.get_name()} state={self.get_state()}", flush=True)
 
     def _addr(self):
         return f"http://{self.ip_address}/netio.json"
