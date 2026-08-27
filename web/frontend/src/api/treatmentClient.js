@@ -68,6 +68,9 @@ export function postTreatment(sessionId, url, body = {}) {
     '/api/treatment/average-noise',
     '/api/treatment/calc-abs',
     '/api/treatment/cleaning/save',
+    '/api/treatment/queue',
+    '/api/treatment/queue/folder-set',
+    '/api/treatment/queue/run',
     '/api/treatment/stitch/od',
     '/api/treatment/stitch/od/preview',
     '/api/treatment/save',
@@ -150,6 +153,31 @@ export function fetchSelection(sessionId) {
 
 export function fetchCleaningView(sessionId) {
   return requestTreatment('/api/treatment/cleaning/view', {
+    headers: buildHeaders(sessionId),
+  });
+}
+
+export function fetchTreatmentQueue(sessionId) {
+  return requestTreatment('/api/treatment/queue', {
+    headers: buildHeaders(sessionId),
+  });
+}
+
+export function enqueueTreatmentRecipe(sessionId, payload) {
+  return postTreatment(sessionId, '/api/treatment/queue', payload);
+}
+
+export function enqueueStandardFolderTreatment(sessionId, payload) {
+  return postTreatment(sessionId, '/api/treatment/queue/folder-set', payload);
+}
+
+export function runTreatmentQueue(sessionId) {
+  return postTreatment(sessionId, '/api/treatment/queue/run');
+}
+
+export function removeTreatmentQueueJob(sessionId, jobId) {
+  return requestTreatment(`/api/treatment/queue/${encodeURIComponent(jobId)}`, {
+    method: 'DELETE',
     headers: buildHeaders(sessionId),
   });
 }

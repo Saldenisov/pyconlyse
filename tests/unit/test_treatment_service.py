@@ -844,29 +844,15 @@ def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
     temp_path = tmp_path / "smb-export.dat"
     handles = []
 
-    class TrackingTemporaryFile:
-        def __init__(self, path):
-            self.name = str(path)
-            self.closed = False
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, _exc_type, _exc_value, _traceback):
-            self.close()
-
-        def close(self):
-            self.closed = True
-
     def fake_named_temporary_file(**kwargs):
-        assert kwargs == {"suffix": ".dat", "delete": False}
-        handle = TrackingTemporaryFile(temp_path)
+        assert kwargs == {"mode": "w", "suffix": ".dat", "delete": False}
+        handle = open(temp_path, "w", encoding="utf-8")
         handles.append(handle)
         return handle
 
     copied = {}
 
-    def fake_copy_local_file_to_smb(local_path, smb_path):
+    def fake_copy_local_file_to_smb_atomic(local_path, smb_path):
         assert len(handles) == 1
         assert handles[0].closed is True
         copied["smb_path"] = smb_path
@@ -880,8 +866,8 @@ def test_save_result_writes_dat_to_smb_folder(service, monkeypatch, tmp_path):
     )
     monkeypatch.setattr(
         treatment_service_module,
-        "copy_local_file_to_smb",
-        fake_copy_local_file_to_smb,
+        "copy_local_file_to_smb_atomic",
+        fake_copy_local_file_to_smb_atomic,
     )
 
     saved = service.save_result(
@@ -903,29 +889,21 @@ def test_save_result_removes_smb_temp_file_when_copy_fails(service, monkeypatch,
     _prepare_smb_result(service, monkeypatch, tmp_path)
     temp_path = tmp_path / "smb-export-failure.dat"
 
-    class TrackingTemporaryFile:
-        name = str(temp_path)
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, _exc_type, _exc_value, _traceback):
-            self.close()
-
-        def close(self):
-            return None
-
     monkeypatch.setattr(
         treatment_service_module.tempfile,
         "NamedTemporaryFile",
-        lambda **_kwargs: TrackingTemporaryFile(),
+        lambda **_kwargs: open(temp_path, "w", encoding="utf-8"),
     )
 
     def failing_copy(local_path, _smb_path):
         assert Path(local_path).exists()
         raise OSError("SMB copy failed")
 
-    monkeypatch.setattr(treatment_service_module, "copy_local_file_to_smb", failing_copy)
+    monkeypatch.setattr(
+        treatment_service_module,
+        "copy_local_file_to_smb_atomic",
+        failing_copy,
+    )
 
     with pytest.raises(OSError, match="SMB copy failed"):
         service.save_result(

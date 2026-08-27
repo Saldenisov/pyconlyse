@@ -384,8 +384,12 @@ def copy_local_file_to_smb_atomic(local_path, smb_path: str, progress_callback=N
         smb_parent(smb_path),
         f"~{uuid4().hex[:8]}.tmp",
     )
-    bytes_written = copy_local_file_to_smb(local_path, temp_path, progress_callback=progress_callback)
     try:
+        bytes_written = copy_local_file_to_smb(
+            local_path,
+            temp_path,
+            progress_callback=progress_callback,
+        )
         server, _share, _remote_path = split_smb_path(smb_path)
         _register_session(server)
         attempts = _smb_lock_retry_count()
@@ -440,3 +444,37 @@ def smb_remove(path: str) -> None:
                     continue
                 raise _smb_locked_value_error(path, exc, "delete target", attempts) from exc
             raise _smb_value_error(path, exc) from exc
+
+
+def smb_rename(source_path: str, target_path: str) -> None:
+    """Rename a file within one SMB share without replacing an existing target."""
+    source_server, source_share, _source_remote_path = split_smb_path(source_path)
+    target_server, target_share, _target_remote_path = split_smb_path(target_path)
+    if (
+        source_server.lower() != target_server.lower()
+        or source_share.lower() != target_share.lower()
+    ):
+        raise ValueError("SMB rename source and target must be on the same share")
+
+    attempts = _smb_lock_retry_count()
+    delay = _smb_lock_retry_delay()
+    for attempt in range(1, attempts + 1):
+        try:
+            _register_session(source_server)
+            _smbclient().rename(smb_to_unc(source_path), smb_to_unc(target_path))
+            return
+        except ValueError:
+            raise
+        except Exception as exc:
+            if _is_smb_credit_error(exc):
+                if attempt < attempts:
+                    _reset_smb_connection_cache()
+                    time.sleep(min(delay, 0.5) * attempt)
+                    continue
+                raise _smb_value_error(source_path, exc) from exc
+            if _is_smb_lock_error(exc):
+                if attempt < attempts:
+                    time.sleep(delay)
+                    continue
+                raise _smb_locked_value_error(source_path, exc, "rename target", attempts) from exc
+            raise _smb_value_error(source_path, exc) from exc

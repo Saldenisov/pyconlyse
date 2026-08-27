@@ -19,7 +19,6 @@ import VacuumClients from './VacuumClients';
 import Login from './Login';
 import PumpProbeV0 from './PumpProbeV0';
 import PumpProbeVD2 from './PumpProbeVD2';
-import HardwareApprovalControl from './components/HardwareApprovalControl';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 function App() {
@@ -27,7 +26,6 @@ function App() {
     <Router>
       <div>
         <Navbar />
-        <HardwareApprovalControl />
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/equipment" element={<Equipment />} />

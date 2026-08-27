@@ -40,7 +40,7 @@ function buildTreatmentSessionId(profile) {
   return `browser:${getBrowserNamespace()}:profile:${normalizedProfile}`;
 }
 
-const DataWindowVD2 = ({ profile = 'VD2' }) => {
+const DataWindowVD2 = ({ profile = 'VD2', layoutMode = 'classic' }) => {
   const treatmentProfile = String(profile || 'VD2').trim().toUpperCase();
   const treatmentSessionId = useMemo(
     () => buildTreatmentSessionId(treatmentProfile),
@@ -93,16 +93,26 @@ const DataWindowVD2 = ({ profile = 'VD2' }) => {
     requestSelectionRefresh,
     treatmentProfile,
     treatmentSessionId,
+    treatmentLayoutMode: layoutMode,
   };
   
   return (
     <TreatmentContext.Provider value={contextValue}>
-      <div className="graph-window">
-        <TopSection />
-        <div className="bottom-section">
+      <main className={`graph-window treatment-layout-${layoutMode}`}>
+        <section className="treatment-preview-workspace" aria-labelledby="treatment-preview-title">
+          <div className="workspace-section-heading">
+            <div>
+              <p className="workspace-kicker">Workspace</p>
+              <h2 id="treatment-preview-title">Preview</h2>
+            </div>
+            <p>Inspect an assigned map, then define wavelength and delay ranges.</p>
+          </div>
+          <TopSection />
+        </section>
+        <section className="bottom-section" aria-label="Treatment inputs and processing">
           <TabsControl />
-        </div>
-      </div>
+        </section>
+      </main>
     </TreatmentContext.Provider>
   );
 };

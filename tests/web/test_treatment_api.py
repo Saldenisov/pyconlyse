@@ -80,6 +80,8 @@ def _write_gzip_h5(file_path, compression_level=9):
             compression="gzip",
             compression_opts=compression_level,
         )
+        selection = h5_file.create_group("map_selection")
+        selection.create_dataset("included", data=np.ones(2, dtype=bool))
         metadata = h5_file.create_group("metadata")
         metadata.attrs["compression"] = "gzip"
         metadata.attrs["compression_level"] = compression_level
@@ -725,7 +727,7 @@ def test_compress_and_assign_converts_his_to_h5_and_deletes_source(client, monke
     output_file = tmp_path / "ABS12886.h5"
 
     def fake_convert(source_path, output_path, progress_callback=None):
-        Path(output_path).write_bytes(b"compressed h5 payload")
+        _write_gzip_h5(output_path)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -748,11 +750,11 @@ def test_compress_and_assign_converts_his_to_h5_and_deletes_source(client, monke
     assert response.status_code == 200
     assert not source_file.exists()
     assert output_file.is_file()
-    assert cached_path.read_bytes() == b"compressed h5 payload"
+    assert cached_path.read_bytes() == output_file.read_bytes()
     assert payload["conversion"]["converted"] is True
     assert payload["conversion"]["deleted_source"] is True
     assert payload["conversion"]["source_size_bytes"] == len(b"fake his payload")
-    assert payload["conversion"]["output_size_bytes"] == len(b"compressed h5 payload")
+    assert payload["conversion"]["output_size_bytes"] == output_file.stat().st_size
     assert payload["session"]["paths"]["ABS"] == str(cached_path)
     assert payload["session"]["path_sources"]["ABS"] == str(output_file)
 
@@ -913,6 +915,31 @@ def test_compress_file_skips_existing_gzip_h5(client, monkeypatch):
     assert payload["conversion"]["compression_level"] == 9
 
 
+def test_compress_keeps_his_when_output_h5_verification_fails(client, monkeypatch):
+    test_client, tmp_path = client
+    source_file = tmp_path / "ABS12886.his"
+    source_file.write_bytes(b"his source")
+
+    def fake_convert(_source_path, output_path, progress_callback=None):
+        Path(output_path).write_bytes(b"not an h5 file")
+        return {"output_path": str(output_path)}
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "convert_file_to_h5",
+        fake_convert,
+    )
+
+    response = test_client.post(
+        "/api/treatment/session/compress-file",
+        json={"file_path": str(source_file)},
+    )
+
+    assert response.status_code == 400
+    assert "verification failed" in response.get_json()["error"]
+    assert source_file.is_file()
+
+
 def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, monkeypatch):
     test_client, tmp_path = client
     folder = tmp_path / "20260127"
@@ -928,8 +955,11 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     )
     assert config_response.status_code == 200
 
+    conversion_sizes = {}
+
     def fake_convert(source_path, output_path, progress_callback=None):
-        Path(output_path).write_bytes(b"converted h5")
+        _write_gzip_h5(output_path)
+        conversion_sizes[str(output_path)] = Path(output_path).stat().st_size
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -988,9 +1018,11 @@ def test_folder_set_convert_clean_deletes_his_and_assigns_cleaned_h5(client, mon
     assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
     assert payload["folder_set"]["conversions"]["BASE"]["deleted_source"] is True
     assert payload["folder_set"]["conversions"]["ABS"]["source_size_bytes"] == len(b"abs his")
-    assert payload["folder_set"]["conversions"]["ABS"]["output_size_bytes"] == len(b"converted h5")
+    assert payload["folder_set"]["conversions"]["ABS"]["output_size_bytes"] == conversion_sizes[
+        str(folder / "ABS12886.h5")
+    ]
     assert payload["folder_set"]["conversions"]["ABS"]["space_change_bytes"] == (
-        len(b"converted h5") - len(b"abs his")
+        conversion_sizes[str(folder / "ABS12886.h5")] - len(b"abs his")
     )
     assert payload["folder_set"]["cleaned"]["ABS"]["output_path"] == str(folder / "ABS12886.h5")
     assert payload["session"]["path_sources"]["ABS"] == str(folder / "ABS12886.h5")
@@ -1212,8 +1244,7 @@ def test_folder_set_convert_replaces_existing_gzip_h5_from_his(client, monkeypat
     def fake_convert(source_path, output_path, progress_callback=None):
         if progress_callback:
             progress_callback(1, 1)
-        source = Path(source_path)
-        Path(output_path).write_bytes(f"converted {source.stem}".encode("ascii"))
+        _write_gzip_h5(output_path, compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -1237,8 +1268,8 @@ def test_folder_set_convert_replaces_existing_gzip_h5_from_his(client, monkeypat
     assert response.status_code == 200
     assert not abs_his.exists()
     assert not base_his.exists()
-    assert abs_h5.read_bytes() == b"converted ABS001"
-    assert base_h5.read_bytes() == b"converted BASE001"
+    assert abs_h5.is_file()
+    assert base_h5.is_file()
     assert payload["folder_set"]["conversions"]["ABS"]["converted"] is True
     assert payload["folder_set"]["conversions"]["ABS"]["overwritten"] is True
     assert payload["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
@@ -1267,7 +1298,7 @@ def test_folder_set_convert_mixed_h5_and_his_converts_remaining_his(client, monk
     def fake_convert(source_path, output_path, progress_callback=None):
         if progress_callback:
             progress_callback(1, 1)
-        Path(output_path).write_bytes(b"converted base h5")
+        _write_gzip_h5(output_path, compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -1290,7 +1321,7 @@ def test_folder_set_convert_mixed_h5_and_his_converts_remaining_his(client, monk
 
     assert response.status_code == 200
     assert not base_his.exists()
-    assert base_h5.read_bytes() == b"converted base h5"
+    assert base_h5.is_file()
     assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
     assert payload["folder_set"]["conversions"]["BASE"]["converted"] is True
     assert payload["folder_set"]["conversions"]["BASE"]["deleted_source"] is True
@@ -1312,8 +1343,7 @@ def test_folder_set_his_noise_mode_detects_separate_abs_base_folder(client, monk
     def fake_convert(source_path, output_path, progress_callback=None):
         if progress_callback:
             progress_callback(1, 1)
-        source = Path(source_path)
-        Path(output_path).write_bytes(f"converted {source.stem}".encode("ascii"))
+        _write_gzip_h5(output_path, compression_level=4)
         return {
             "source_path": str(source_path),
             "output_path": str(output_path),
@@ -1336,7 +1366,7 @@ def test_folder_set_his_noise_mode_detects_separate_abs_base_folder(client, monk
 
     assert response.status_code == 200
     assert not base_his.exists()
-    assert base_h5.read_bytes() == b"converted BASE13116"
+    assert base_h5.is_file()
     assert payload["session"]["exp_type"] == "ABS+BASE+NOISE"
     assert payload["folder_set"]["conversions"]["ABS"]["reused_compressed"] is True
     assert payload["folder_set"]["conversions"]["BASE"]["converted"] is True
@@ -1419,6 +1449,33 @@ def test_folder_set_start_reports_job_progress(client, monkeypatch):
     assert job["payload"]["folder_set"]["conversions"]["ABS"]["deleted_source"] is True
     assert job["payload"]["session"]["path_sources"]["ABS"] == str(folder / "ABS001.h5")
     assert job["payload"]["session"]["path_sources"]["BASE"] == str(folder / "BASE001.h5")
+
+
+def test_folder_set_start_rejects_concurrent_session_operation(client, monkeypatch):
+    test_client, tmp_path = client
+
+    def slow_folder_operation(*_args, **_kwargs):
+        time.sleep(0.2)
+        return {"folder_set": {}}
+
+    monkeypatch.setattr(
+        treatment_api_module,
+        "_set_inputs_from_folder_job_payload",
+        slow_folder_operation,
+    )
+
+    first = test_client.post(
+        "/api/treatment/session/folder-set/start",
+        json={"folder_path": str(tmp_path)},
+    )
+    second = test_client.post(
+        "/api/treatment/session/folder-set/start",
+        json={"folder_path": str(tmp_path)},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 409
+    assert "already running" in second.get_json()["error"]
 
 
 def test_auto_assign_smb_folder_caches_abs_base_bruit_his(client, monkeypatch):
@@ -2192,7 +2249,7 @@ def test_cleaning_save_deletes_source_his_after_h5_is_written(client, monkeypatc
     saved_path = tmp_path / "ABS12886.h5"
 
     def fake_save(session_id, session_state, angle_threshold, surface_threshold, output_file_name=""):
-        saved_path.write_bytes(b"fake h5")
+        _write_gzip_h5(saved_path, compression_level=4)
         return {
             "file_path": str(source_file),
             "source_file_path": str(source_file),
@@ -2284,6 +2341,114 @@ def test_cleaning_file_save_endpoint_uses_explicit_file_path(client, monkeypatch
     assert captured["surface_threshold"] == 7.5
     assert captured["output_file_name"] == "tree_file_cleaned.h5"
     assert payload["cleaning"]["output_path"] == str(saved_path)
+
+
+def test_calc_abs_rejects_unapplied_cleaning_preview(client, monkeypatch):
+    test_client, _tmp_path = client
+    calc_calls = []
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "runtime_status",
+        lambda _session_id: {"cleaning_ready": True},
+    )
+
+    def fail_if_called(*_args, **_kwargs):
+        calc_calls.append(True)
+        raise AssertionError("OD calculation must not run for a preview-only mask")
+
+    monkeypatch.setattr(treatment_api_module.treatment_service, "calc_abs", fail_if_called)
+
+    response = test_client.post("/api/treatment/calc-abs")
+    payload = response.get_json()
+
+    assert response.status_code == 400
+    assert payload["success"] is False
+    assert payload["error"] == "Cleaning preview is not applied; apply mask to H5 or reset preview."
+    assert calc_calls == []
+
+
+def test_session_exposes_transient_cleaning_preview_separately_from_persisted_masks(
+    client, monkeypatch
+):
+    test_client, tmp_path = client
+    source_file = tmp_path / "preview_contract.dat"
+    _write_dat(source_file, np.ones((2, 2)))
+    assign_response = test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(source_file)},
+    )
+    assert assign_response.status_code == 200
+
+    monkeypatch.setattr(
+        treatment_api_module.treatment_service,
+        "runtime_status",
+        lambda _session_id: {
+            "cleaning_ready": True,
+            "cleaning_file_path": str(source_file),
+            "cleaning_current_measurements": 6,
+            "cleaning_original_measurements": 8,
+        },
+    )
+    payload = test_client.get("/api/treatment/session").get_json()
+
+    assert payload["session"]["cleaning_preview"] == {
+        "ready": True,
+        "file_path": str(source_file),
+        "data_type": "ABS",
+        "current_measurements": 6,
+        "original_measurements": 8,
+    }
+    assert payload["session"]["map_selections"]["ABS"]["applied"] is False
+    assert payload["session"]["map_selections"]["ABS"]["included_count"] is None
+
+
+def test_cleaning_save_reassigns_role_and_reports_applied_map_mask(client, monkeypatch):
+    h5py = treatment_api_module.h5py
+    if h5py is None:
+        pytest.skip("h5py is not available")
+
+    test_client, tmp_path = client
+    source_file = tmp_path / "abs_mask_source.dat"
+    _write_dat(source_file, np.ones((2, 2)))
+    assert test_client.post(
+        "/api/treatment/session/path",
+        json={"data_type": "ABS", "file_path": str(source_file)},
+    ).status_code == 200
+    saved_path = tmp_path / "abs_mask_applied.h5"
+
+    def fake_save(*_args, **_kwargs):
+        with h5py.File(saved_path, "w") as h5_file:
+            h5_file.create_dataset("timedelays", data=np.asarray([1.0, 2.0]))
+            h5_file.create_dataset("wavelengths", data=np.asarray([500.0, 550.0]))
+            h5_file.create_dataset("raw_data", data=np.ones((2, 2, 2), dtype=float))
+            selection = h5_file.create_group("map_selection")
+            selection.create_dataset("included", data=np.asarray([True, False]))
+            selection.attrs["method"] = "sam"
+        return {
+            "file_path": str(source_file),
+            "output_path": str(saved_path),
+            "original_measurements": 2,
+            "cleaned_measurements": 1,
+            "removed_measurements": 1,
+        }
+
+    monkeypatch.setattr(treatment_api_module.treatment_service, "save_sam_cleaned_h5", fake_save)
+    response = test_client.post(
+        "/api/treatment/cleaning/save",
+        json={"angle_threshold": 1.0, "surface_threshold": 1.0},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["cleaning"]["assigned_path"] == str(saved_path)
+    assert payload["session"]["paths"]["ABS"] == str(saved_path)
+    assert payload["session"]["map_selections"]["ABS"] == {
+        "applied": True,
+        "included_count": 1,
+        "total_count": 2,
+        "method": "sam",
+    }
 
 
 def test_treatment_sessions_are_isolated_per_client(tmp_path, monkeypatch):

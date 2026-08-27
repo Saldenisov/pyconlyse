@@ -13,11 +13,13 @@ import {
   fetchCompressionJob,
   fetchFileSummary,
   fetchFolderListing,
-  fetchFolderSetJob,
+  fetchTreatmentQueue,
   fetchTreatmentSession,
+  enqueueStandardFolderTreatment,
+  enqueueTreatmentRecipe,
   postTreatment,
+  removeTreatmentQueueJob,
   startCompressionJob,
-  startFolderSetJob,
   updateSelectionConfig,
 } from './api/treatmentClient';
 import './css/DataWindowVD2.css';
@@ -103,13 +105,14 @@ const ParametersZone = ({
   onCommitSaveFileName,
   onReset,
   profileName,
+  layoutMode,
 }) => {
   const isAbsBaseNoiseMode = session.exp_type === 'ABS+BASE+NOISE';
 
   return (
     <div className="parameters-zone">
       <div className="parameters-zone-header">
-        <h3>Treatment Session</h3>
+        <h3>{layoutMode === 'studio' ? 'Processing' : 'Treatment Session'}</h3>
         <span>
           Profile: <strong>{profileName}</strong>
         </span>
@@ -448,54 +451,31 @@ function formatFrameCount(summary) {
   return String(Math.round(current));
 }
 
-function summarizeFolderSet(payload, label, folderPath) {
-  const folderSet = payload.folder_set || {};
-  const assignedTypes = Object.keys(folderSet.assigned || {});
-  const conversions = Object.values(folderSet.conversions || {});
-  const cleanedTypes = Object.keys(folderSet.cleaned || {});
-  const converted = conversions.filter((item) => item.converted && !item.overwritten);
-  const overwritten = conversions.filter((item) => item.overwritten);
-  const reused = conversions.filter((item) => item.converted === false);
-  const deletedHisCount = conversions.filter((item) => item.deleted_source).length;
-  const changedFiles = conversions.filter((item) => item.converted || item.overwritten);
-  const sourceBytes = changedFiles.reduce(
-    (total, item) => total + Number(item.source_size_bytes || 0),
-    0
-  );
-  const outputBytes = changedFiles.reduce(
-    (total, item) => total + Number(item.output_size_bytes || 0),
-    0
-  );
-  const spaceChange = outputBytes - sourceBytes;
-  const lines = [`${label} completed for ${pathName(folderPath)}.`];
-
-  if (assignedTypes.length) {
-    lines.push(`Assigned: ${assignedTypes.join(', ')}.`);
+function mergeTreatmentQueue(current, incoming) {
+  if (!incoming) {
+    return current || { running: false, jobs: [] };
   }
-  if (conversions.length) {
-    lines.push(
-      `Converted HIS: ${converted.length}; overwritten H5: ${overwritten.length}; reused H5: ${reused.length}; removed HIS: ${deletedHisCount}.`
-    );
-  }
-  if (changedFiles.length) {
-    const percent = sourceBytes
-      ? `${((spaceChange / sourceBytes) * 100).toFixed(1)}%`
-      : '0.0%';
-    lines.push(
-      `Disk: ${formatFileSize(sourceBytes)} source -> ${formatFileSize(outputBytes)} H5 (${formatSignedFileSize(spaceChange)}, ${percent}).`
-    );
-    lines.push('H5 raw_data compression: gzip level 4; file can still grow if source is already compact.');
-  }
-  if (cleanedTypes.length) {
-    lines.push(`Cleaned: ${cleanedTypes.join(', ')}.`);
-  }
-  if (folderSet.auto_calculated) {
-    lines.push('OD calculated and displayed.');
-  }
-  if (folderSet.auto_calc_error) {
-    lines.push(`OD calculation skipped: ${folderSet.auto_calc_error}`);
-  }
-  return lines.join('\n');
+  const statusRank = { queued: 0, running: 1, completed: 2, failed: 2 };
+  const jobs = [...(current?.jobs || [])];
+  const indices = new Map(jobs.map((job, index) => [job.job_id, index]));
+  (incoming.jobs || []).forEach((job) => {
+    const index = indices.get(job.job_id);
+    if (index === undefined) {
+      indices.set(job.job_id, jobs.length);
+      jobs.push(job);
+      return;
+    }
+    const previous = jobs[index];
+    jobs[index] = (statusRank[previous?.status] || 0) > (statusRank[job?.status] || 0)
+      ? previous
+      : job;
+  });
+  return {
+    ...(current || {}),
+    ...incoming,
+    running: Boolean(current?.running || incoming.running),
+    jobs,
+  };
 }
 
 function summarizeFileCompression(payload, dataType = '') {
@@ -540,40 +520,30 @@ function summarizeCompressionProgress(job, filePath) {
   return lines.join('\n');
 }
 
-function summarizeFolderSetProgress(job, label, folderPath) {
+export function summarizeFolderSetProgress(job, folderPath) {
   const current = Number(job?.current_items || 0);
   const total = Number(job?.total_items || 0);
   const files = Object.entries(job?.files || {});
-  const lines = [
-    `${label} running for ${pathName(folderPath)}.`,
-    job?.message || 'Working...',
-  ];
-
-  if (total > 0) {
-    lines.push(`${current}/${total}`);
-  }
-  files.forEach(([dataType, item]) => {
-    const source = item?.output_path || item?.source_path || '';
-    const status = item?.status || 'queued';
-    const phase = item?.phase ? `/${item.phase}` : '';
-    const itemCurrent = Number(item?.current || 0);
-    const itemTotal = Number(item?.total || 0);
-    const itemPercent = itemTotal > 0
-      ? ` (${Math.min(100, (itemCurrent / itemTotal) * 100).toFixed(1)}%)`
-      : '';
-    let progress = '';
-    if (itemTotal > 0 && item?.phase === 'convert') {
-      progress = ` ${itemCurrent}/${itemTotal} maps${itemPercent}`;
-    } else if (itemTotal > 0) {
-      progress = ` ${formatFileSize(itemCurrent)}/${formatFileSize(itemTotal)}${itemPercent}`;
-    }
-    const message = item?.message ? ` - ${item.message}` : '';
-    lines.push(`${dataType}: ${status}${phase}${progress}${message}${source ? ` - ${pathName(source)}` : ''}`);
-  });
-  if (job?.phase === 'converting') {
-    lines.push('H5 raw_data compression: gzip level 4.');
-  }
-  return lines.join('\n');
+  const messageMatch = String(job?.message || '').match(/^([A-Z+]+):.*?(\d+)\/(\d+)/);
+  const activeFile = files.find(([, item]) => item?.status === 'running') || files[0];
+  const [activeType, activeItem] = activeFile || [];
+  const itemCurrent = Number(activeItem?.current || 0);
+  const itemTotal = Number(activeItem?.total || 0);
+  const phaseLabel = {
+    checking: 'Checking',
+    converting: 'Converting',
+    assigning: 'Assigning',
+    cleaning: 'Cleaning',
+  }[job?.phase] || 'Working';
+  const activeProgress = messageMatch
+    ? `${messageMatch[1]} ${messageMatch[2]}/${messageMatch[3]}`
+    : activeType && itemTotal > 0
+      ? `${activeType} ${itemCurrent}/${itemTotal}`
+      : activeType
+        ? `${activeType} ${activeItem?.phase || activeItem?.status || ''}`.trim()
+        : phaseLabel;
+  const overallProgress = total > 0 ? `${current}/${total}` : '';
+  return [pathName(folderPath), activeProgress, overallProgress].filter(Boolean).join(' · ');
 }
 
 function wait(ms) {
@@ -609,6 +579,85 @@ function folderPathChain(folderPath, allowedRoot) {
   return chain;
 }
 
+function roleSelectionStatus(session, dataType) {
+  const selections =
+    session?.map_selections ||
+    session?.map_selection ||
+    session?.cleaning_selections ||
+    {};
+  const selection = selections?.[dataType];
+
+  if (!selection || typeof selection !== 'object') {
+    return null;
+  }
+
+  const included = Number(selection.included_count ?? selection.included ?? selection.kept_count);
+  const total = Number(selection.total_count ?? selection.total ?? selection.original_count);
+  const isApplied = selection.applied ?? selection.persisted ?? selection.saved;
+  const method = String(selection.method || '').trim().toLowerCase();
+
+  return {
+    included: Number.isFinite(included) ? included : null,
+    total: Number.isFinite(total) ? total : null,
+    isApplied: typeof isApplied === 'boolean' ? isApplied : null,
+    method,
+  };
+}
+
+function backendCleaningPreview(session) {
+  const preview = session?.cleaning_preview;
+  if (!preview?.ready) {
+    return null;
+  }
+
+  const paths = session?.paths || {};
+  const sources = session?.path_sources || {};
+  const requestedType = String(preview.data_type || '').trim();
+  const dataType =
+    (requestedType && paths[requestedType] && requestedType) ||
+    Object.keys(paths).find(
+      (role) => paths[role] === preview.file_path || sources[role] === preview.file_path
+    );
+
+  if (!dataType) {
+    return null;
+  }
+
+  return {
+    dataType,
+    sourcePath: sources[dataType] || paths[dataType] || '',
+    backend: true,
+    stale: true,
+    invalidated: true,
+    sourceMeasurements: preview.source_measurements,
+    cleanedMeasurements: preview.cleaned_measurements,
+  };
+}
+
+function MapSelectionStatus({ selection }) {
+  if (!selection) {
+    return null;
+  }
+
+  const hasCounts = selection.included !== null && selection.total !== null;
+  const allMapsIncluded =
+    hasCounts && selection.included === selection.total &&
+    (selection.method === 'all' || selection.isApplied === false);
+  const text = allMapsIncluded
+    ? 'Raw · all maps included'
+    : hasCounts
+      ? `${selection.included} / ${selection.total} maps included${selection.isApplied === true ? ' · Applied mask' : ''}`
+      : selection.isApplied === false
+        ? 'No persisted H5 map selection'
+        : 'Map selection available';
+
+  return (
+    <small className={`assigned-path-selection ${selection.isApplied === false && !allMapsIncluded ? 'is-pending' : ''}`}>
+      {text}
+    </small>
+  );
+}
+
 const AssignedPaths = ({ session }) => {
   const paths = session.paths || {};
   const dataPaths = ['ABS', 'BASE', 'ABS+BASE', 'ABS+BASE+NOISE']
@@ -625,18 +674,27 @@ const AssignedPaths = ({ session }) => {
       {dataPaths.length > 0 && (
         <div className="assigned-path-group">
           <strong>Data</strong>
-          {dataPaths.map(([dataType, filePath]) => (
-            <div key={dataType} className="assigned-path-row">
-              <span>{dataType}</span>
-              <span>{filePath}</span>
-            </div>
-          ))}
+          {dataPaths.map(([dataType, filePath]) => {
+            const selection = roleSelectionStatus(session, dataType);
+            return (
+              <div key={dataType} className="assigned-path-row">
+                <span>{dataType}</span>
+                <span>
+                  {filePath}
+                  <MapSelectionStatus selection={selection} />
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
       {noisePath && (
         <div className="assigned-path-row">
           <span>NOISE</span>
-          <span>{noisePath}</span>
+          <span>
+            {noisePath}
+            <MapSelectionStatus selection={roleSelectionStatus(session, 'NOISE')} />
+          </span>
         </div>
       )}
       {Object.entries(paths)
@@ -941,6 +999,8 @@ const TabsControl = () => {
   const treatmentContext = useContext(TreatmentContext);
   const treatmentSessionId = treatmentContext?.treatmentSessionId || '';
   const treatmentProfile = String(treatmentContext?.treatmentProfile || 'VD2').toUpperCase();
+  const treatmentLayoutMode = treatmentContext?.treatmentLayoutMode || 'classic';
+  const isStudioLayout = treatmentLayoutMode === 'studio';
   const requestSelectionRefresh = treatmentContext?.requestSelectionRefresh;
   const [activeTab, setActiveTab] = useState('files');
   const [treatment, setTreatment] = useState(null);
@@ -968,6 +1028,12 @@ const TabsControl = () => {
   const [selectionMessage, setSelectionMessage] = useState('');
   const [cleaningSummary, setCleaningSummary] = useState(null);
   const [cleaningView, setCleaningView] = useState(null);
+  const [pendingCleaningPreview, setPendingCleaningPreview] = useState(null);
+  const [savedResultPath, setSavedResultPath] = useState('');
+  const [treatmentQueue, setTreatmentQueue] = useState(null);
+  const [queueLabel, setQueueLabel] = useState('');
+  const [queueApplyCleaning, setQueueApplyCleaning] = useState(true);
+  const [isQueueLoading, setIsQueueLoading] = useState(false);
   const [isCleaningViewLoading, setIsCleaningViewLoading] = useState(false);
   const [stitchFileA, setStitchFileA] = useState('');
   const [stitchFileB, setStitchFileB] = useState('');
@@ -993,6 +1059,7 @@ const TabsControl = () => {
   const isV0Profile = treatmentProfile === 'V0';
 
   const session = treatment ? treatment.session : null;
+  const persistedCleaningPreview = useMemo(() => backendCleaningPreview(session), [session]);
   const requiredDataTypes =
     session?.required_data_types || requiredDataTypesForExpType(session?.exp_type);
   const assignableDataTypes =
@@ -1008,9 +1075,41 @@ const TabsControl = () => {
       ? (session?.path_sources?.[cleaningActiveDataType] || session?.paths?.[cleaningActiveDataType] || '')
       : '';
   const cleaningOutputName = h5NameForPath(cleaningSourcePath);
+  const isOperationRunning = isBusy;
   const busyElapsedSeconds =
-    isBusy && busyStartedAt ? Math.max(0, Math.floor((busyNow - busyStartedAt) / 1000)) : 0;
+    isOperationRunning && busyStartedAt ? Math.max(0, Math.floor((busyNow - busyStartedAt) / 1000)) : 0;
   const filesGridTemplate = `${filesLayout.parameters}px 6px minmax(620px, 1fr) 6px ${filesLayout.selected}px`;
+  const queueJobs = Array.isArray(treatmentQueue?.jobs) ? treatmentQueue.jobs : [];
+  const queueHisDataTypes = assignedCleaningTypes.filter((dataType) =>
+    String(session?.path_sources?.[dataType] || session?.paths?.[dataType] || '').toLowerCase().endsWith('.his')
+  );
+  const queueConvertibleHisDataTypes = queueHisDataTypes.filter((dataType) =>
+    ['ABS', 'BASE', 'NOISE'].includes(dataType)
+  );
+  const queueOutputConfigured = Boolean(session?.save_folder && session?.save_file_name);
+  const queueSupportsCurrentRecipeCleaning =
+    assignedCleaningTypes.length > 0 &&
+    assignedCleaningTypes.every((dataType) => ['ABS', 'BASE', 'NOISE'].includes(dataType));
+  const canApplyCleaningPreview = Boolean(
+    pendingCleaningPreview &&
+    !pendingCleaningPreview.backend &&
+    !pendingCleaningPreview.stale &&
+    !pendingCleaningPreview.invalidated &&
+    pendingCleaningPreview.dataType === cleaningActiveDataType &&
+    pendingCleaningPreview.angleThreshold === cleaningAngleThreshold &&
+    pendingCleaningPreview.surfaceThreshold === cleaningSurfaceThreshold
+  );
+
+  const requireAppliedCleaningPreview = useCallback(() => {
+    if (!pendingCleaningPreview) {
+      return false;
+    }
+    setActiveTab('cleaning');
+    setError(
+      `Cleaning preview for ${pendingCleaningPreview.dataType} is not applied. Apply mask to H5 or reset the preview before calculating OD.`
+    );
+    return true;
+  }, [pendingCleaningPreview]);
 
   const handleFilesColumnResizeStart = useCallback((edge, event) => {
     event.preventDefault();
@@ -1058,7 +1157,7 @@ const TabsControl = () => {
   }, [filesLayout]);
 
   useEffect(() => {
-    if (!isBusy) {
+    if (!isOperationRunning) {
       return undefined;
     }
     if (!busyStartedAt) {
@@ -1066,13 +1165,13 @@ const TabsControl = () => {
     }
     const timerId = window.setInterval(() => setBusyNow(Date.now()), 1000);
     return () => window.clearInterval(timerId);
-  }, [busyStartedAt, isBusy]);
+  }, [busyStartedAt, isOperationRunning]);
 
   useEffect(() => {
-    if (!isBusy) {
+    if (!isOperationRunning) {
       setBusyStartedAt(null);
     }
-  }, [isBusy]);
+  }, [isOperationRunning]);
 
   useEffect(() => {
     if (activeTab === 'selection' || (isV0Profile && activeTab !== 'files')) {
@@ -1087,6 +1186,105 @@ const TabsControl = () => {
       requestSelectionRefresh();
     }
     return payload;
+  };
+
+  const refreshTreatmentQueue = useCallback(async (isCurrent = () => true) => {
+    const payload = await fetchTreatmentQueue(treatmentSessionId);
+    if (isCurrent()) {
+      setTreatmentQueue(payload?.queue || { running: false, jobs: [] });
+    }
+    return payload;
+  }, [treatmentSessionId]);
+
+  const handleQueueEnqueue = async () => {
+    if (requireAppliedCleaningPreview()) {
+      return;
+    }
+    if (!queueOutputConfigured) {
+      setError('Set Save Folder and Save File Name before adding a queue recipe.');
+      return;
+    }
+    if (queueApplyCleaning && !queueSupportsCurrentRecipeCleaning) {
+      setError('Use Set/Convert/Clean/Calc for automatic SAM cleaning of paired inputs.');
+      return;
+    }
+
+    const dataTypes = assignedCleaningTypes.filter((dataType) => session?.paths?.[dataType]);
+    const cleaning = queueApplyCleaning
+      ? {
+          state: 'pending',
+          enabled: true,
+          angle_threshold: Number.parseFloat(cleaningAngleThreshold),
+          surface_threshold: Number.parseFloat(cleaningSurfaceThreshold),
+          data_types: dataTypes,
+        }
+      : { state: 'not_requested', enabled: false, data_types: [] };
+
+    setError('');
+    setIsQueueLoading(true);
+    try {
+      const payload = await enqueueTreatmentRecipe(treatmentSessionId, {
+        label: queueLabel.trim() || pathName(session?.folder_path) || 'Treatment recipe',
+        profile: treatmentProfile,
+        convert_to_h5: queueConvertibleHisDataTypes.length > 0 ? queueConvertibleHisDataTypes : false,
+        cleaning,
+      });
+      setTreatmentQueue((current) => mergeTreatmentQueue(current, payload?.queue));
+      setQueueLabel('');
+      setOperationMessage(
+        `Current recipe ${payload?.started ? 'started' : 'queued behind active work'}.`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsQueueLoading(false);
+    }
+  };
+
+  const handleQueueStandardFolder = async (
+    folderPath,
+    { label, convert, clean, calculate }
+  ) => {
+    if (!folderPath) {
+      return;
+    }
+    setError('');
+    try {
+      const payload = await enqueueStandardFolderTreatment(treatmentSessionId, {
+        folder_path: folderPath,
+        label: pathName(folderPath) || label,
+        profile: treatmentProfile,
+        convert,
+        clean,
+        calculate,
+        angle_threshold: Number(cleaningAngleThreshold),
+        surface_threshold: Number(cleaningSurfaceThreshold),
+      });
+      setTreatmentQueue((current) => mergeTreatmentQueue(current, payload?.queue));
+      setOperationMessage(
+        `${label} ${payload?.started ? 'started' : 'queued'} for ${pathName(folderPath)}.`
+      );
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setFolderContextMenu(null);
+    }
+  };
+
+  const handleQueueRemove = async (jobId) => {
+    if (!jobId) {
+      return;
+    }
+    setError('');
+    setIsQueueLoading(true);
+    try {
+      const payload = await removeTreatmentQueueJob(treatmentSessionId, jobId);
+      setTreatmentQueue(payload?.queue || { running: false, jobs: [] });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIsQueueLoading(false);
+    }
   };
 
   const loadFileSummary = useCallback(
@@ -1252,6 +1450,47 @@ const TabsControl = () => {
   ]);
 
   useEffect(() => {
+    if (!isStudioLayout || !treatmentSessionId) {
+      return undefined;
+    }
+    let cancelled = false;
+    const isCurrent = () => !cancelled;
+    refreshTreatmentQueue(isCurrent).catch((err) => {
+      if (!cancelled) {
+        setError(err.message);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isStudioLayout, refreshTreatmentQueue, treatmentSessionId]);
+
+  useEffect(() => {
+    if (!isStudioLayout || !treatmentQueue?.running) {
+      return undefined;
+    }
+    let cancelled = false;
+    let timeoutId;
+    const poll = async () => {
+      try {
+        await refreshTreatmentQueue(() => !cancelled);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message);
+        }
+      }
+      if (!cancelled) {
+        timeoutId = window.setTimeout(poll, 1500);
+      }
+    };
+    timeoutId = window.setTimeout(poll, 1500);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isStudioLayout, refreshTreatmentQueue, treatmentQueue?.running]);
+
+  useEffect(() => {
     if (activeTab === 'cleaning') {
       refreshCleaningView();
     }
@@ -1278,6 +1517,23 @@ const TabsControl = () => {
     setDraftSaveFileName(session.save_file_name || '');
     setDraftAllowedRoot(treatment?.allowed_root || '');
   }, [session, treatment?.allowed_root]);
+
+  useEffect(() => {
+    if (!persistedCleaningPreview) {
+      return;
+    }
+    setPendingCleaningPreview((current) => {
+      if (
+        current &&
+        !current.backend &&
+        current.dataType === persistedCleaningPreview.dataType &&
+        current.sourcePath === persistedCleaningPreview.sourcePath
+      ) {
+        return current;
+      }
+      return persistedCleaningPreview;
+    });
+  }, [persistedCleaningPreview]);
 
   useEffect(() => {
     if (!treeRoot && (session?.folder_path || treatment?.allowed_root)) {
@@ -1601,55 +1857,6 @@ const TabsControl = () => {
     });
   };
 
-  const handleFolderSet = async (folderPath, convert = false, clean = false) => {
-    if (!folderPath) {
-      return;
-    }
-
-    setError('');
-    const label = clean ? 'Set/Convert/Clean' : convert ? 'Set/Convert' : 'Set';
-    setOperationMessage(`${label} started for ${pathName(folderPath)}.`);
-    setIsBusy(true);
-    try {
-      const started = await startFolderSetJob(treatmentSessionId, {
-        folder_path: folderPath,
-        convert,
-        clean,
-        angle_threshold: Number(cleaningAngleThreshold),
-        surface_threshold: Number(cleaningSurfaceThreshold),
-      });
-      let job = started.folder_set_job;
-      setOperationMessage(summarizeFolderSetProgress(job, label, folderPath));
-      while (job?.status === 'running') {
-        await wait(500);
-        const statusPayload = await fetchFolderSetJob(treatmentSessionId, job.job_id);
-        job = statusPayload.folder_set_job;
-        setOperationMessage(summarizeFolderSetProgress(job, label, folderPath));
-      }
-      if (job?.status === 'error') {
-        throw new Error(job.error || job.message || `${label} failed.`);
-      }
-      const payload = job?.payload || { folder_set: job?.folder_set };
-      setTreatment(payload);
-      if (requestSelectionRefresh) {
-        requestSelectionRefresh();
-      }
-      await refreshFolderListing(folderPath);
-      setExpandedFolders((current) => {
-        const next = new Set(current);
-        next.add(folderPath);
-        return next;
-      });
-      setOperationMessage(summarizeFolderSet(payload, label, folderPath));
-    } catch (err) {
-      setError(err.message);
-      setOperationMessage(`${label} failed for ${pathName(folderPath)}.`);
-    } finally {
-      setFolderContextMenu(null);
-      setIsBusy(false);
-    }
-  };
-
   const handleAverageNoise = async () => {
     setError('');
     setIsBusy(true);
@@ -1666,11 +1873,15 @@ const TabsControl = () => {
   };
 
   const handleCalcAbs = async () => {
+    if (requireAppliedCleaningPreview()) {
+      return;
+    }
     setError('');
     setIsBusy(true);
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/calc-abs');
       setTreatment(payload);
+      setSavedResultPath('');
       if (requestSelectionRefresh) {
         requestSelectionRefresh();
       }
@@ -1688,11 +1899,26 @@ const TabsControl = () => {
     try {
       const payload = await postTreatment(treatmentSessionId, '/api/treatment/save');
       setTreatment(payload);
-      setOperationMessage(`Result saved to ${payload.saved.save_path}`);
+      const savePath = String(payload?.saved?.save_path || '');
+      setSavedResultPath(savePath);
+      setOperationMessage(savePath ? `Result saved to ${savePath}` : 'Result saved on the backend.');
     } catch (err) {
       setError(err.message);
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  const handleCopySavedResultPath = async () => {
+    if (!savedResultPath) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(savedResultPath);
+      setError('');
+      setOperationMessage('Result path copied.');
+    } catch (_error) {
+      setError('Could not copy the result path. Select and copy it manually.');
     }
   };
 
@@ -1789,6 +2015,12 @@ const TabsControl = () => {
     if (!dataType || dataType === session?.active_data_type) {
       return;
     }
+    if (pendingCleaningPreview && pendingCleaningPreview.dataType !== dataType) {
+      setError(
+        `Apply or reset the ${pendingCleaningPreview.dataType} cleaning preview before selecting another role.`
+      );
+      return;
+    }
 
     setError('');
     setOperationMessage('');
@@ -1812,7 +2044,39 @@ const TabsControl = () => {
     }
   };
 
+  const handleCleaningThresholdChange = (field, value) => {
+    if (field === 'angle') {
+      setCleaningAngleThreshold(value);
+    } else {
+      setCleaningSurfaceThreshold(value);
+    }
+    if (pendingCleaningPreview) {
+      setPendingCleaningPreview((current) => current && {
+        ...current,
+        invalidated: true,
+      });
+      setOperationMessage('Cleaning preview invalidated after threshold change. Preview cleaning again before applying a mask to H5.');
+    }
+  };
+
   const handleCleaningAction = async (mode) => {
+    if (
+      mode === 'analyze' &&
+      pendingCleaningPreview &&
+      pendingCleaningPreview.dataType !== cleaningActiveDataType
+    ) {
+      setError(
+        `Apply or reset the ${pendingCleaningPreview.dataType} cleaning preview before previewing another role.`
+      );
+      return;
+    }
+    if (
+      mode === 'save' &&
+      !canApplyCleaningPreview
+    ) {
+      setError('Preview cleaning again with the current thresholds before applying a map selection to H5.');
+      return;
+    }
     setError('');
     setSelectionMessage('');
     setIsBusy(true);
@@ -1837,6 +2101,7 @@ const TabsControl = () => {
 
       if (mode === 'reset') {
         setCleaningSummary(null);
+        setPendingCleaningPreview(null);
         if (payload.cleaning_view) {
           setCleaningView(payload.cleaning_view);
         } else {
@@ -1850,6 +2115,7 @@ const TabsControl = () => {
       } else if (mode === 'restore') {
         setTreatment(payload);
         setCleaningSummary(payload.cleaning);
+        setPendingCleaningPreview(null);
         if (payload.cleaning_view) {
           setCleaningView(payload.cleaning_view);
         }
@@ -1862,8 +2128,8 @@ const TabsControl = () => {
         }
         setOperationMessage(
           payload.cleaning?.restored
-            ? `Denoising restored ${payload.cleaning.restored_measurements} maps into raw_data.`
-            : 'No deleted maps were stored in this H5.'
+            ? `Re-included ${payload.cleaning.restored_measurements} maps for processing.`
+            : 'All raw maps are already included.'
         );
         if (requestSelectionRefresh) {
           requestSelectionRefresh();
@@ -1875,6 +2141,7 @@ const TabsControl = () => {
         }
         if (mode === 'save') {
           setTreatment(payload);
+          setPendingCleaningPreview(null);
           setOperationMessage(
             `Cleaned H5 saved to ${payload.cleaning.output_path} and assigned as ${payload.cleaning.assigned_data_type || session?.active_data_type || 'active file'}.`
           );
@@ -1883,13 +2150,26 @@ const TabsControl = () => {
           }
           refreshCleaningView();
         } else if (payload.cleaning.state_updated === false) {
+          setPendingCleaningPreview(null);
           setOperationMessage(payload.cleaning.warning || 'No measurements passed the thresholds.');
         } else if (payload.cleaning.source_measurements !== payload.cleaning.original_measurements) {
+          setPendingCleaningPreview({
+            dataType: cleaningActiveDataType,
+            sourcePath: cleaningSourcePath,
+            angleThreshold: cleaningAngleThreshold,
+            surfaceThreshold: cleaningSurfaceThreshold,
+          });
           setOperationMessage(
-            `SAM pass applied to ${payload.cleaning.source_measurements} already-cleaned maps.`
+            `Cleaning preview prepared from ${payload.cleaning.source_measurements} currently included maps. Apply mask to H5 before calculating OD.`
           );
         } else {
-          setOperationMessage('SAM cleaning pass applied to the original file maps.');
+          setPendingCleaningPreview({
+            dataType: cleaningActiveDataType,
+            sourcePath: cleaningSourcePath,
+            angleThreshold: cleaningAngleThreshold,
+            surfaceThreshold: cleaningSurfaceThreshold,
+          });
+          setOperationMessage('Cleaning preview prepared from original file maps. Apply mask to H5 before calculating OD.');
         }
       }
     } catch (err) {
@@ -2107,10 +2387,18 @@ const TabsControl = () => {
           >
             {file.name}
           </button>
-          <span className="explorer-file-meta">S:{formatFileSize(file.size_bytes)}</span>
-          <span className="explorer-file-meta">F:{frames}</span>
-          <span className="explorer-file-meta">T:{timeRange}</span>
-          <span className="explorer-file-meta">W:{wavelengths}</span>
+          <span className="explorer-file-meta explorer-file-size" title={`Size: ${formatFileSize(file.size_bytes)}`}>
+            S:{formatFileSize(file.size_bytes)}
+          </span>
+          <span className="explorer-file-meta explorer-file-frames" title={`Frames: ${frames}`}>
+            F:{frames}
+          </span>
+          <span className="explorer-file-meta explorer-file-time" title={`Time: ${timeRange}`}>
+            T:{timeRange}
+          </span>
+          <span className="explorer-file-meta explorer-file-wavelength" title={`Wavelength: ${wavelengths}`}>
+            W:{wavelengths}
+          </span>
         </div>
       );
     });
@@ -2222,14 +2510,36 @@ const TabsControl = () => {
     <div className="tabs-control">
       {!isV0Profile && (
         <div className="tabs">
-          <button onClick={() => setActiveTab('files')}>Files</button>
-          <button onClick={() => setActiveTab('cleaning')} disabled={isBusy}>
+          <button
+            className={activeTab === 'files' ? 'is-active' : ''}
+            onClick={() => setActiveTab('files')}
+            aria-pressed={activeTab === 'files'}
+          >
+            {isStudioLayout ? 'Workspace' : 'Files'}
+          </button>
+          <button
+            className={activeTab === 'cleaning' ? 'is-active' : ''}
+            onClick={() => setActiveTab('cleaning')}
+            aria-pressed={activeTab === 'cleaning'}
+            disabled={isBusy}
+          >
             Cleaning
           </button>
-          <button onClick={() => setActiveTab('stitch')} disabled={isBusy}>
-            Stitch
+          <button
+            className={`secondary-tab ${activeTab === 'stitch' ? 'is-active' : ''}`}
+            onClick={() => setActiveTab('stitch')}
+            aria-pressed={activeTab === 'stitch'}
+            disabled={isBusy}
+          >
+            {isStudioLayout ? 'Advanced: Stitch' : 'Stitch'}
           </button>
-          <button onClick={() => setActiveTab('info')}>Info</button>
+          <button
+            className={activeTab === 'info' ? 'is-active' : ''}
+            onClick={() => setActiveTab('info')}
+            aria-pressed={activeTab === 'info'}
+          >
+            Info
+          </button>
         </div>
       )}
       <div className="tab-content">
@@ -2256,17 +2566,23 @@ const TabsControl = () => {
                     onCommitSaveFileName={handleCommitSaveFileName}
                     onReset={handleReset}
                     profileName={treatmentProfile}
+                    layoutMode={treatmentLayoutMode}
                   />
                 </div>
                 <div
-                  className="column-resizer"
+                  className="column-resizer source-resizer"
                   role="separator"
-                  aria-label="Resize Treatment Session"
+                  aria-label="Resize source files"
                   onMouseDown={(event) => handleFilesColumnResizeStart('parameters', event)}
                 />
               </>
             )}
             <div className="zone files-folder">
+              {isStudioLayout ? (
+                <div className="zone-heading">
+                  <h3>Source files</h3>
+                </div>
+              ) : <h3>Files</h3>}
               <div className="data-root-control">
                 <label>
                   Data Root
@@ -2281,7 +2597,7 @@ const TabsControl = () => {
                 </label>
               </div>
               <div className="folder-selection-header">
-                <button onClick={handleFolderTreeOpen} disabled={isBusy || !explorerRoot}>
+                <button onClick={handleFolderTreeOpen} disabled={!explorerRoot}>
                   Select Folder
                 </button>
               </div>
@@ -2383,20 +2699,57 @@ const TabsControl = () => {
                   onClick={(event) => event.stopPropagation()}
                 >
                   <button
-                    onClick={() => handleFolderSet(folderContextMenu.folder.path, true)}
-                    disabled={isBusy}
+                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+                      label: 'Set/Convert',
+                      convert: true,
+                      clean: false,
+                      calculate: false,
+                    })}
+                    disabled={isBusy || isQueueLoading}
                   >
                     Set/Convert
                   </button>
                   <button
-                    onClick={() => handleFolderSet(folderContextMenu.folder.path, true, true)}
-                    disabled={isBusy}
+                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+                      label: 'Set/Convert/Clean',
+                      convert: true,
+                      clean: true,
+                      calculate: false,
+                    })}
+                    disabled={isBusy || isQueueLoading}
                   >
                     Set/Convert/Clean
                   </button>
                   <button
-                    onClick={() => handleFolderSet(folderContextMenu.folder.path, false)}
-                    disabled={isBusy}
+                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+                      label: 'Set/Convert/Calc',
+                      convert: true,
+                      clean: false,
+                      calculate: true,
+                    })}
+                    disabled={isBusy || isQueueLoading}
+                  >
+                    Set/Convert/Calc
+                  </button>
+                  <button
+                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+                      label: 'Set/Convert/Clean/Calc',
+                      convert: true,
+                      clean: true,
+                      calculate: true,
+                    })}
+                    disabled={isBusy || isQueueLoading}
+                  >
+                    Set/Convert/Clean/Calc
+                  </button>
+                  <button
+                    onClick={() => handleQueueStandardFolder(folderContextMenu.folder.path, {
+                      label: 'Set',
+                      convert: false,
+                      clean: false,
+                      calculate: false,
+                    })}
+                    disabled={isBusy || isQueueLoading}
                   >
                     Set
                   </button>
@@ -2406,28 +2759,130 @@ const TabsControl = () => {
             {!isV0Profile && (
               <>
                 <div
-                  className="column-resizer"
+                  className="column-resizer roles-resizer"
                   role="separator"
-                  aria-label="Resize Selected Files"
+                  aria-label="Resize processing controls"
                   onMouseDown={(event) => handleFilesColumnResizeStart('selected', event)}
                 />
                 <div className="zone raw-data-kinetics">
-                  <h3>Selected Files</h3>
+                  {isStudioLayout ? (
+                    <div className="zone-heading">
+                      <h3>Input roles</h3>
+                    </div>
+                  ) : <h3>Selected Files</h3>}
                   <AssignedPaths session={session} />
-                  <div style={{ marginTop: '15px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                  <div className="treatment-primary-actions">
                     <button onClick={handleAverageNoise} disabled={isBusy || !canAverageNoise}>
                       Average Noise
                     </button>
-                    <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc}>
+                    <button onClick={handleCalcAbs} disabled={isBusy || !session.ready_for_calc || Boolean(pendingCleaningPreview)}>
                       Calculate OD
                     </button>
                     <button onClick={handleSave} disabled={isBusy || !session.result_ready}>
                       Save Result
                     </button>
                   </div>
+                  {pendingCleaningPreview && (
+                    <div className="treatment-cleaning-pending" role="status">
+                      <strong>Cleaning preview not applied</strong>
+                      <span>
+                        {pendingCleaningPreview.stale
+                          ? `${pendingCleaningPreview.dataType} has a backend cleaning preview. Preview again with the current thresholds before applying it.`
+                          : `${pendingCleaningPreview.dataType} still uses its previous H5 map selection for processing.`}
+                      </span>
+                      <button type="button" onClick={() => setActiveTab('cleaning')} disabled={isBusy}>
+                        Review cleaning
+                      </button>
+                    </div>
+                  )}
+                  {savedResultPath && (
+                    <div className="treatment-save-receipt" role="status">
+                      <strong>Result saved</strong>
+                      <code title={savedResultPath}>{savedResultPath}</code>
+                      <button type="button" onClick={handleCopySavedResultPath}>
+                        Copy path
+                      </button>
+                    </div>
+                  )}
+                  {isStudioLayout && (
+                    <section className="treatment-queue" aria-labelledby="treatment-queue-heading">
+                      <div className="treatment-queue-heading">
+                        <h4 id="treatment-queue-heading">Queue</h4>
+                        <span className={`treatment-queue-status ${treatmentQueue?.running ? 'is-running' : ''}`}>
+                          {treatmentQueue?.running ? 'Running' : 'Idle'}
+                        </span>
+                      </div>
+                      <input
+                        className="treatment-queue-label-input"
+                        type="text"
+                        aria-label="Queue label"
+                        value={queueLabel}
+                        onChange={(event) => setQueueLabel(event.target.value)}
+                        placeholder={pathName(session.folder_path) || 'Sample name'}
+                        disabled={isQueueLoading || isBusy}
+                      />
+                      <label
+                        className="treatment-queue-option"
+                        title={
+                          queueSupportsCurrentRecipeCleaning
+                            ? `Use current SAM thresholds for ${assignedCleaningTypes.join(', ')}.`
+                            : 'Used for automatic cleaning when queuing a folder.'
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={queueApplyCleaning}
+                          onChange={(event) => setQueueApplyCleaning(event.target.checked)}
+                          disabled={isQueueLoading || isBusy}
+                        />
+                        SAM cleaning
+                      </label>
+                      <div className="treatment-queue-actions">
+                        <button
+                          type="button"
+                          onClick={handleQueueEnqueue}
+                          disabled={
+                            isQueueLoading ||
+                            isBusy ||
+                            !session.ready_for_calc ||
+                            !queueOutputConfigured ||
+                            Boolean(pendingCleaningPreview)
+                          }
+                        >
+                          Add recipe
+                        </button>
+                      </div>
+                      {queueJobs.length > 0 ? (
+                        <ol className="treatment-queue-jobs" aria-live="polite">
+                          {queueJobs.map((job) => (
+                            <li key={job.job_id || `${job.label}-${job.created_at || ''}`} className={`is-${job.status || 'queued'}`}>
+                              <div>
+                                <strong>{job.label || job.recipe?.label || 'Treatment recipe'}</strong>
+                                <span>{job.status || 'queued'} · {job.phase || 'queued'}</span>
+                              </div>
+                              {job.status === 'queued' && job.job_id && (
+                                <button
+                                  type="button"
+                                  className="treatment-queue-remove"
+                                  onClick={() => handleQueueRemove(job.job_id)}
+                                  disabled={isQueueLoading}
+                                >
+                                  Remove
+                                </button>
+                              )}
+                              {(job.message || job.error) && <p>{job.error || job.message}</p>}
+                              {(job.saved?.save_path || job.result?.save_path) && (
+                                <code>{job.saved?.save_path || job.result?.save_path}</code>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                    </section>
+                  )}
                   {operationMessage && (
-                    <p className={`treatment-operation-message ${isBusy ? 'is-active' : ''}`}>
-                      {isBusy && (
+                  <p className={`treatment-operation-message ${isOperationRunning ? 'is-active' : ''}`}>
+                    {isOperationRunning && (
                         <span className="treatment-operation-live">
                           <span className="treatment-operation-spinner" aria-hidden="true"></span>
                           <span>{busyElapsedSeconds}s</span>
@@ -2443,6 +2898,7 @@ const TabsControl = () => {
         )}
         {activeTab === 'cleaning' && (
           <div className="tab-panel cleaning-tab">
+            {error && <p className="treatment-error">{error}</p>}
             <div className="cleaning-main">
               <CleaningKineticsPreview view={cleaningView} />
               <div className="cleaning-controls">
@@ -2474,7 +2930,7 @@ const TabsControl = () => {
                     min="0.01"
                     step="0.1"
                     value={cleaningAngleThreshold}
-                    onChange={(event) => setCleaningAngleThreshold(event.target.value)}
+                    onChange={(event) => handleCleaningThresholdChange('angle', event.target.value)}
                   />
                 </label>
                 <label>
@@ -2484,7 +2940,7 @@ const TabsControl = () => {
                     min="0.01"
                     step="0.1"
                     value={cleaningSurfaceThreshold}
-                    onChange={(event) => setCleaningSurfaceThreshold(event.target.value)}
+                    onChange={(event) => handleCleaningThresholdChange('surface', event.target.value)}
                   />
                 </label>
                 <label>
@@ -2498,18 +2954,31 @@ const TabsControl = () => {
                 </label>
                 <div className="cleaning-actions">
                   <button onClick={() => handleCleaningAction('analyze')} disabled={isBusy}>
-                    Clean
+                    Preview cleaning
                   </button>
                   <button onClick={() => handleCleaningAction('reset')} disabled={isBusy}>
-                    Reset
+                    Reset preview
                   </button>
                   <button onClick={() => handleCleaningAction('restore')} disabled={isBusy || !String(cleaningSourcePath || '').toLowerCase().endsWith('.h5')}>
-                    Restore H5
+                    Restore raw-map selection
                   </button>
-                  <button onClick={() => handleCleaningAction('save')} disabled={isBusy}>
-                    Clean and Save
+                  <button
+                    onClick={() => handleCleaningAction('save')}
+                    disabled={
+                      isBusy ||
+                      !canApplyCleaningPreview
+                    }
+                  >
+                    Apply mask to H5
                   </button>
                 </div>
+                {pendingCleaningPreview && (
+                  <p className="cleaning-preview-notice" role="status">
+                    {pendingCleaningPreview.stale || pendingCleaningPreview.invalidated
+                      ? `Preview for ${pendingCleaningPreview.dataType} must be refreshed with the current thresholds before it can be applied. Calculate OD remains blocked until you apply or reset it.`
+                      : `Preview for ${pendingCleaningPreview.dataType} is not applied. Calculate OD is blocked until you apply its mask to H5 or reset the preview.`}
+                  </p>
+                )}
               </div>
             </div>
               {cleaningSummary && (

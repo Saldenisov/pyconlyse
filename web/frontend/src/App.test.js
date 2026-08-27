@@ -6,4 +6,5 @@ test('renders the PyConlyse home page', () => {
   expect(
     screen.getByRole('heading', { name: /welcome to pyconlyse/i })
   ).toBeInTheDocument();
+  expect(screen.queryByLabelText('Hardware approval')).not.toBeInTheDocument();
 });

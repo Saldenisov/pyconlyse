@@ -6,7 +6,12 @@ import {
   fetchFolderListing,
   fetchSelection,
   fetchTreatmentPreview,
+  fetchTreatmentQueue,
+  enqueueStandardFolderTreatment,
+  enqueueTreatmentRecipe,
   postTreatment,
+  removeTreatmentQueueJob,
+  runTreatmentQueue,
   startCompressionJob,
   startFolderSetJob,
   fetchTreatmentSession,
@@ -182,6 +187,9 @@ describe('treatmentClient request contracts', () => {
     ['fetchTreatmentPreview', fetchTreatmentPreview, '/api/treatment/preview?data_type=raw%20data&map_index=0', 'GET'],
     ['fetchSelection', fetchSelection, '/api/treatment/selection', 'GET'],
     ['fetchCleaningView', fetchCleaningView, '/api/treatment/cleaning/view', 'GET'],
+    ['fetchTreatmentQueue', fetchTreatmentQueue, '/api/treatment/queue', 'GET'],
+    ['enqueueStandardFolderTreatment', enqueueStandardFolderTreatment, '/api/treatment/queue/folder-set', 'POST'],
+    ['runTreatmentQueue', runTreatmentQueue, '/api/treatment/queue/run', 'POST'],
   ])('%s targets expected route', async (_name, wrapper, expectedUrl, method) => {
     global.fetch.mockResolvedValue({
       ok: true,
@@ -196,6 +204,9 @@ describe('treatmentClient request contracts', () => {
       fetchTreatmentPreview: ['sid', 'raw data'],
       fetchSelection: ['sid'],
       fetchCleaningView: ['sid'],
+      fetchTreatmentQueue: ['sid'],
+      enqueueStandardFolderTreatment: ['sid', { folder_path: '/input' }],
+      runTreatmentQueue: ['sid'],
     }[_name];
     await wrapper(...args);
     expect(global.fetch).toHaveBeenCalledWith(
@@ -203,6 +214,54 @@ describe('treatmentClient request contracts', () => {
       expect.objectContaining({
         ...(method === 'POST' ? { method: 'POST', body: expect.any(String) } : {}),
         headers: expect.objectContaining({ 'X-Treatment-Session-Id': 'sid' }),
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  test('removeTreatmentQueueJob targets encoded queue job route', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ success: true, queue: { jobs: [] } }),
+    });
+
+    await removeTreatmentQueueJob('sid', 'job/1');
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/treatment/queue/job%2F1',
+      expect.objectContaining({
+        method: 'DELETE',
+        headers: expect.objectContaining({ 'X-Treatment-Session-Id': 'sid' }),
+        signal: expect.any(AbortSignal),
+      })
+    );
+  });
+
+  test('enqueueTreatmentRecipe posts the complete immutable recipe payload', async () => {
+    global.fetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest.fn().mockResolvedValue({ success: true, queue: { jobs: [] } }),
+    });
+    const recipe = {
+      label: 'run-001',
+      cleaning: {
+        state: 'pending',
+        angle_threshold: 1.5,
+        surface_threshold: 7,
+        data_types: ['ABS'],
+      },
+    };
+
+    await enqueueTreatmentRecipe('sid', recipe);
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/treatment/queue',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-Treatment-Session-Id': 'sid' }),
+        body: JSON.stringify(recipe),
         signal: expect.any(AbortSignal),
       })
     );

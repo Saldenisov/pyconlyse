@@ -1,5 +1,6 @@
-import logging
 import json
+import logging
+import os
 import re
 import sys
 import tempfile
@@ -22,19 +23,18 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from utilities.dataio import (
-    ASCIIOpener,
-    H5Opener,
-    HamamatsuFileOpener,
-    OPENER_ACCRODANCE,
-    OpenersTypes,
-)
 from treatment_network_path import (
-    copy_local_file_to_smb,
     copy_local_file_to_smb_atomic,
     is_smb_path,
     smb_join,
     smb_parent,
+)
+from utilities.dataio import (
+    OPENER_ACCRODANCE,
+    ASCIIOpener,
+    H5Opener,
+    HamamatsuFileOpener,
+    OpenersTypes,
 )
 
 module_logger = logging.getLogger(__name__)
@@ -1059,10 +1059,16 @@ class TreatmentDataService:
             save_path = smb_join(raw_save_folder, save_file_name)
             temp_path = None
             try:
-                with tempfile.NamedTemporaryFile(suffix=".dat", delete=False) as temp_file:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    suffix=".dat",
+                    delete=False,
+                ) as temp_file:
                     temp_path = Path(temp_file.name)
-                np.savetxt(temp_path, payload, delimiter="\t", fmt="%.4f")
-                bytes_written = copy_local_file_to_smb(temp_path, save_path)
+                    np.savetxt(temp_file, payload, delimiter="\t", fmt="%.4f")
+                    temp_file.flush()
+                    os.fsync(temp_file.fileno())
+                bytes_written = copy_local_file_to_smb_atomic(temp_path, save_path)
             finally:
                 if temp_path is not None:
                     temp_path.unlink(missing_ok=True)
@@ -1075,11 +1081,28 @@ class TreatmentDataService:
 
         save_folder = Path(raw_save_folder).expanduser()
         save_path = save_folder / save_file_name
-        np.savetxt(str(save_path), payload, delimiter="\t", fmt="%.4f")
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".dat",
+                prefix=f".{save_file_name}.",
+                dir=save_folder,
+                delete=False,
+            ) as temp_file:
+                temp_path = Path(temp_file.name)
+                np.savetxt(temp_file, payload, delimiter="\t", fmt="%.4f")
+                temp_file.flush()
+                os.fsync(temp_file.fileno())
+            os.replace(temp_path, save_path)
+        finally:
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
         return {
             "save_path": str(save_path),
             "rows": int(payload.shape[0]),
             "cols": int(payload.shape[1]),
+            "bytes": int(save_path.stat().st_size),
         }
 
     def stitch_od_dat_files(

@@ -43,6 +43,34 @@ def test_copy_local_file_to_smb_atomic_replaces_target(monkeypatch, tmp_path):
     assert calls["replace"][1] == r"\\10.20.30.202\e\DATA_VD2\run\ABS13113.h5"
 
 
+def test_smb_rename_uses_same_share(monkeypatch):
+    calls = {}
+
+    class FakeSmbClient:
+        def rename(self, source, target):
+            calls["rename"] = (source, target)
+
+    monkeypatch.setattr(network_path, "_smbclient", lambda: FakeSmbClient())
+
+    network_path.smb_rename(
+        "smb://10.20.30.202/e/DATA_VD2/run/result.dat",
+        "smb://10.20.30.202/e/DATA_VD2/run/result_old1_1.dat",
+    )
+
+    assert calls["rename"] == (
+        r"\\10.20.30.202\e\DATA_VD2\run\result.dat",
+        r"\\10.20.30.202\e\DATA_VD2\run\result_old1_1.dat",
+    )
+
+
+def test_smb_rename_rejects_different_shares():
+    with pytest.raises(ValueError, match="same share"):
+        network_path.smb_rename(
+            "smb://10.20.30.202/e/DATA_VD2/run/result.dat",
+            "smb://10.20.30.202/f/DATA_VD2/run/result_old1_1.dat",
+        )
+
+
 def test_copy_local_file_to_smb_atomic_reports_locked_target(monkeypatch, tmp_path):
     source = tmp_path / "ABS13113.h5"
     source.write_bytes(b"h5")
@@ -73,6 +101,37 @@ def test_copy_local_file_to_smb_atomic_reports_locked_target(monkeypatch, tmp_pa
         )
 
     assert removed["path"].startswith(r"\\10.20.30.202\e\DATA_VD2\run\~")
+
+
+def test_copy_local_file_to_smb_atomic_removes_partial_upload_on_copy_failure(
+    monkeypatch, tmp_path
+):
+    source = tmp_path / "ABS13113.h5"
+    source.write_bytes(b"h5")
+    uploaded = {}
+    removed = {}
+
+    def partial_copy(_local_path, temp_path, progress_callback=None):
+        uploaded["path"] = temp_path
+        if progress_callback:
+            progress_callback(1)
+        raise OSError("partial upload failed")
+
+    monkeypatch.setattr(network_path, "copy_local_file_to_smb", partial_copy)
+    monkeypatch.setattr(
+        network_path,
+        "smb_remove",
+        lambda temp_path: removed.setdefault("path", temp_path),
+    )
+
+    with pytest.raises(ValueError, match="partial upload failed"):
+        network_path.copy_local_file_to_smb_atomic(
+            source,
+            "smb://10.20.30.202/e/DATA_VD2/run/ABS13113.h5",
+        )
+
+    assert removed["path"] == uploaded["path"]
+    assert removed["path"].endswith(".tmp")
 
 
 def test_copy_smb_file_to_local_retries_locked_source(monkeypatch, tmp_path):
