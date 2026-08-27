@@ -1,96 +1,155 @@
 @echo off
 REM =====================================================
 REM TANGO INFRASTRUCTURE - Windows Auto Startup
-REM This script starts Tango Database and Starter on Windows boot
-REM Place this in Windows Startup folder or Task Scheduler
+REM Database and Starter are launched only when absent.
+REM Readiness is detected instead of sleeping for a fixed delay.
 REM =====================================================
 
-setlocal enabledelayedexpansion
+setlocal EnableExtensions EnableDelayedExpansion
+set "SCRIPT_DIR=%~dp0"
+set "LOG_FILE=%SCRIPT_DIR%tango_windows_startup.log"
+set "DB_READY_TIMEOUT_SECONDS=60"
+set "STARTER_READY_TIMEOUT_SECONDS=30"
+if not defined PYCONLYSE for %%I in ("%SCRIPT_DIR%\..\..") do set "PYCONLYSE=%%~fI"
+set "TANGO_PROBE=%SCRIPT_DIR%probe_tango_readiness.py"
 
-REM Set script directory
-set SCRIPT_DIR=%~dp0
-set LOG_FILE=%SCRIPT_DIR%tango_windows_startup.log
+call :log "Tango infrastructure startup requested"
 
-echo.
-echo =====================================================
-echo TANGO INFRASTRUCTURE - Windows Startup Service
-echo =====================================================
-echo [%date% %time%] Starting Tango Infrastructure...
-echo [%date% %time%] Starting Tango Infrastructure... >> "%LOG_FILE%"
-
-REM Validate environment
 if not defined TANGO_ROOT (
-    echo ERROR: TANGO_ROOT environment variable not set!
-    echo [%date% %time%] ERROR: TANGO_ROOT environment variable not set! >> "%LOG_FILE%"
-    pause
+    call :log "ERROR: TANGO_ROOT environment variable not set"
     exit /b 1
 )
 
-echo TANGO_ROOT: %TANGO_ROOT%
-echo [%date% %time%] TANGO_ROOT: %TANGO_ROOT% >> "%LOG_FILE%"
-echo.
-
-REM Step 1: Start Tango Database in separate terminal
-echo [%date% %time%] === STARTING TANGO DATABASE ===
-echo [%date% %time%] === STARTING TANGO DATABASE === >> "%LOG_FILE%"
-echo Starting Tango Database in separate terminal...
-start "Tango-Database-Service" cmd /k "%TANGO_ROOT%\bin\start-db.bat"
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to start Tango Database terminal
-    echo [%date% %time%] ERROR: Failed to start Tango Database >> "%LOG_FILE%"
-    pause
+if not exist "%TANGO_ROOT%\bin\start-db.bat" (
+    call :log "ERROR: start-db.bat missing under %TANGO_ROOT%\bin"
     exit /b 1
 )
-echo Database terminal started successfully
 
-REM Wait for database to initialize
-echo Waiting for database to initialize (10 seconds)...
-echo Please wait...
-
-REM Step 2: Start Tango Starter in separate terminal
-echo.
-echo [%date% %time%] === STARTING TANGO STARTER ===
-echo [%date% %time%] === STARTING TANGO STARTER === >> "%LOG_FILE%"
-echo Starting Tango Starter in separate terminal...
-
-REM Get hostname for starter
-set HOSTNAME=%COMPUTERNAME%
-if not defined HOSTNAME (
-    for /f "tokens=*" %%i in ('powershell -Command "$env:COMPUTERNAME"') do set HOSTNAME=%%i
-)
-if not defined HOSTNAME set HOSTNAME=localhost
-echo Using hostname: %HOSTNAME%
-
-start "Tango-Starter-%HOSTNAME%" cmd /k "%TANGO_ROOT%\bin\Starter.exe %HOSTNAME%"
-if %errorlevel% neq 0 (
-    echo ERROR: Failed to start Tango Starter terminal
-    echo [%date% %time%] ERROR: Failed to start Tango Starter >> "%LOG_FILE%"
-    pause
+if not exist "%TANGO_ROOT%\bin\Starter.exe" (
+    call :log "ERROR: Starter.exe missing under %TANGO_ROOT%\bin"
     exit /b 1
 )
-echo Starter terminal started successfully
+if not exist "%TANGO_PROBE%" (
+    call :log "ERROR: Tango readiness probe missing: %TANGO_PROBE%"
+    exit /b 1
+)
+call "%PYCONLYSE%\DeviceServers\prepare_python_runtime.cmd"
+if errorlevel 1 (
+    call :log "ERROR: PYCONLYSE_PYTHON could not be resolved"
+    exit /b 1
+)
 
-echo.
-echo [%date% %time%] === TANGO INFRASTRUCTURE STARTUP COMPLETED ===
-echo [%date% %time%] === TANGO INFRASTRUCTURE STARTUP COMPLETED === >> "%LOG_FILE%"
+set "DB_PORT=10000"
+if defined TANGO_HOST (
+    for /f "tokens=2 delims=:" %%A in ("%TANGO_HOST%") do set "DB_PORT=%%A"
+)
+if not defined DB_PORT set "DB_PORT=10000"
 
-REM Show status
-echo.
-echo =====================================================
-echo TANGO INFRASTRUCTURE STATUS:
-echo =====================================================
-echo - Database: Running in separate terminal (Tango-Database-Service)
-echo - Starter:  Running in separate terminal (Tango-Starter-%HOSTNAME%)
-echo - Log file: %LOG_FILE%
-echo.
-echo You should now see 2 additional terminal windows:
-echo   1. Tango Database (running start-db.bat)
-echo   2. Tango Starter (running Starter.exe)
-echo.
-echo This main window will close in 10 seconds...
-echo.
+set "HOSTNAME=%COMPUTERNAME%"
+if not defined HOSTNAME set "HOSTNAME=localhost"
+set "PYCONLYSE_STARTER_HOST=%HOSTNAME%"
+call :log "TANGO_ROOT=%TANGO_ROOT%; TANGO_HOST=%TANGO_HOST%; database_port=%DB_PORT%; hostname=%HOSTNAME%"
 
-REM Countdown (simplified)
-echo Closing window...
+call :port_listening "%DB_PORT%"
+if not errorlevel 1 goto database_ready
 
+call :log "DATABASE launch requested"
+start "Tango-Database-Service" /min cmd /k ""%TANGO_ROOT%\bin\start-db.bat""
+if errorlevel 1 (
+    call :log "ERROR: database terminal could not be launched"
+    exit /b 1
+)
+
+call :wait_for_port "%DB_PORT%" "%DB_READY_TIMEOUT_SECONDS%"
+if errorlevel 1 (
+    call :log "ERROR: database port %DB_PORT% not ready within %DB_READY_TIMEOUT_SECONDS%s"
+    exit /b 1
+)
+goto start_starter
+
+:database_ready
+call :log "DATABASE already listening on port %DB_PORT%"
+call :wait_for_port "%DB_PORT%" "%DB_READY_TIMEOUT_SECONDS%"
+if errorlevel 1 (
+    call :log "ERROR: Tango database probe did not succeed within %DB_READY_TIMEOUT_SECONDS%s"
+    exit /b 1
+)
+
+:start_starter
+call :starter_for_host_running
+if not errorlevel 1 goto wait_for_starter
+
+call :log "STARTER launch requested for %HOSTNAME%"
+start "Tango-Starter-%HOSTNAME%" /min cmd /k ""%TANGO_ROOT%\bin\Starter.exe" %HOSTNAME%"
+if errorlevel 1 (
+    call :log "ERROR: Starter terminal could not be launched"
+    exit /b 1
+)
+
+:wait_for_starter
+call :wait_for_starter "%STARTER_READY_TIMEOUT_SECONDS%"
+if errorlevel 1 (
+    call :log "ERROR: Starter %HOSTNAME% was not Tango-ready within %STARTER_READY_TIMEOUT_SECONDS%s"
+    exit /b 1
+)
+goto complete
+
+:complete
+call :log "TANGO_STARTUP_COMPLETE database_port=%DB_PORT% starter_host=%HOSTNAME%"
+exit /b 0
+
+:port_listening
+netstat -an | findstr /r /c:":%~1 .*LISTENING" >nul 2>&1
+exit /b %errorlevel%
+
+:wait_for_port
+set /a "elapsed=0"
+:wait_for_port_loop
+call :port_listening "%~1"
+if not errorlevel 1 (
+    call :probe_database
+    if not errorlevel 1 (
+        call :log "DATABASE_READY port=%~1 elapsed_seconds=!elapsed!"
+        exit /b 0
+    )
+)
+if !elapsed! GEQ %~2 exit /b 1
+timeout /t 1 /nobreak >nul
+set /a "elapsed+=1"
+goto wait_for_port_loop
+
+:probe_database
+"%PYCONLYSE_PYTHON%" "%TANGO_PROBE%" --database >nul 2>&1
+exit /b %errorlevel%
+
+:starter_for_host_running
+powershell.exe -NoProfile -NonInteractive -Command "$name = [regex]::Escape($env:PYCONLYSE_STARTER_HOST); $pattern = '(^|\s)\"?' + $name + '\"?(\s|$)'; $match = Get-CimInstance Win32_Process -Filter \"Name = 'Starter.exe'\" | Where-Object { $_.CommandLine -match $pattern } | Select-Object -First 1; if ($match) { exit 0 }; exit 1" >nul 2>&1
+exit /b %errorlevel%
+
+:probe_starter
+"%PYCONLYSE_PYTHON%" "%TANGO_PROBE%" --starter "tango/admin/%PYCONLYSE_STARTER_HOST%" >nul 2>&1
+exit /b %errorlevel%
+
+:wait_for_starter
+set /a "elapsed=0"
+:wait_for_starter_loop
+call :starter_for_host_running
+if not errorlevel 1 (
+    call :probe_starter
+    if not errorlevel 1 (
+        call :log "STARTER_READY host=%PYCONLYSE_STARTER_HOST% elapsed_seconds=!elapsed!"
+        exit /b 0
+    )
+)
+if !elapsed! GEQ %~1 exit /b 1
+timeout /t 1 /nobreak >nul
+set /a "elapsed+=1"
+goto wait_for_starter_loop
+
+:log
+setlocal DisableDelayedExpansion
+set "MESSAGE=%~1"
+echo [%date% %time%] %MESSAGE%
+>> "%LOG_FILE%" echo [%date% %time%] %MESSAGE%
+endlocal
 exit /b 0

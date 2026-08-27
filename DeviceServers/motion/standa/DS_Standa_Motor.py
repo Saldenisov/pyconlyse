@@ -2,11 +2,26 @@
 
 
 import ctypes
+import os
 import sys
 import time
 from pathlib import Path
 from time import sleep
 from typing import Tuple, Union
+
+_STARTUP_TRACE_ORIGIN = time.perf_counter()
+_STARTUP_TRACE_ENABLED = os.environ.get("PYCONLYSE_STARTUP_TIMING", "").strip() == "1"
+
+
+def _startup_trace(label):
+    if _STARTUP_TRACE_ENABLED:
+        print(
+            "STARTUP_TIMING "
+            f"{label} elapsed_ms={(time.perf_counter() - _STARTUP_TRACE_ORIGIN) * 1000:.3f} "
+            f"wall_ns={time.time_ns()}",
+            flush=True,
+        )
+
 
 app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
@@ -143,6 +158,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         return self._power_status
 
     def init_device(self):
+        global _STARTUP_TRACE_ENABLED
+        _startup_trace("init_device_enter")
         self._power_status = self.POWER_STATES[0]
         self._temperature = None
         self._power_current = 0
@@ -152,7 +169,9 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._standa_recovery_delay_s = max(
             0.1, float(self.usb_recovery_initial_delay_s or 3.0)
         )
+        _startup_trace("base_init_enter")
         super().init_device()
+        _startup_trace("base_init_exit")
         attr_prop = self.position.get_properties()
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
@@ -165,6 +184,8 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                 f"{self.device_name} controller discovered; awaiting explicit turn_on.",
                 True,
             )
+        _startup_trace("init_device_exit")
+        _STARTUP_TRACE_ENABLED = False
 
 
     def register_variables_for_archive(self):
@@ -235,6 +256,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         )
 
     def find_device(self):
+        _startup_trace("find_device_enter")
         state_ok = self.check_func_allowance(self.find_device)
         discovered_uri = b""
         if not state_ok:
@@ -245,7 +267,11 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             # Enumeration itself opens every connected controller.  A single
             # host-wide lock prevents simultaneous recoveries from disrupting
             # one another when USB is noisy during accelerator operation.
-            with self._transport_lock():
+            _startup_trace("transport_lock_wait")
+            # Discovery is passive and can be retried by recovery. Do not hold
+            # Tango registration for the normal one-second command lock wait.
+            with self._transport_lock(timeout_s=0.1):
+                _startup_trace("transport_lock_acquired")
                 lib.set_bindy_key(
                     str(Path(ximc_dir / arch_type / "keyfile.sqlite")).encode("utf-8")
                 )
@@ -253,7 +279,9 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                     EnumerateFlags.ENUMERATE_PROBE + EnumerateFlags.ENUMERATE_NETWORK
                 )
                 enum_hints = f"addr={self.ip_address}".encode()
+                _startup_trace("enumerate_devices_enter")
                 devenum = lib.enumerate_devices(probe_flags, enum_hints)
+                _startup_trace("enumerate_devices_exit")
                 device_counts = lib.get_device_count(devenum)
                 for index in range(max(0, device_counts)):
                     uri = lib.get_device_name(devenum, index)
@@ -285,6 +313,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._device_id_internal = 0 if discovered_uri else -1
         if discovered_uri:
             self.set_state(DevState.STANDBY)
+        _startup_trace("find_device_exit")
 
     def read_position_local(self) -> Union[int, str]:
         if not self._has_open_transport():

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 from unittest.mock import patch
 
 from scripts.refactor import deploy_everest, restart_tango_servers, verify_refactor
@@ -301,21 +302,32 @@ class TestRefactorTooling(unittest.TestCase):
         with self.assertRaisesRegex(verify_refactor.RefactorToolError, "local HEAD"):
             deploy_everest.assert_local_head("b" * 40, runner)
 
-    def _write_approval(self, directory: Path, *, commit: str, servers: list[str], expires_at: datetime, hardware_safe: bool = True) -> Path:
-        approval = directory / "restart-approval.toml"
-        approval.write_text(
-            "\n".join(
-                [
-                    f'commit = "{commit}"',
-                    "servers = [" + ", ".join(f'\"{server}\"' for server in servers) + "]",
-                    'approver = "Lab operator"',
-                    f"hardware_safe = {'true' if hardware_safe else 'false'}",
-                    f'expires_at_utc = "{expires_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")}"',
-                    "",
-                ]
-            ),
-            encoding="utf-8",
+    def _write_approval(
+        self,
+        directory: Path,
+        *,
+        commit: str,
+        servers: list[str],
+        expires_at: datetime,
+        hardware_safe: bool = True,
+        target: Optional[str] = None,
+    ) -> Path:
+        lines = [
+            f'commit = "{commit}"',
+            "servers = [" + ", ".join(f'\"{server}\"' for server in servers) + "]",
+        ]
+        if target is not None:
+            lines.append(f'target = "{target}"')
+        lines.extend(
+            [
+                'approver = "Lab operator"',
+                f"hardware_safe = {'true' if hardware_safe else 'false'}",
+                f'expires_at_utc = "{expires_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")}"',
+                "",
+            ]
         )
+        approval = directory / "restart-approval.toml"
+        approval.write_text("\n".join(lines), encoding="utf-8")
         return approval
 
     def test_restart_accepts_external_approval_bound_to_commit_and_ordered_servers(self):
@@ -379,6 +391,87 @@ class TestRefactorTooling(unittest.TestCase):
         self.assertNotIn("HardKillServer", script)
         self.assertNotIn("taskkill", script)
         self.assertNotIn("PDU", script)
+
+    def test_restart_supports_approved_elysium2_target_and_emits_timing(self):
+        commit = "9" * 40
+        servers = ["DS_DG645/main"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            approval_path = self._write_approval(
+                Path(temp_dir),
+                commit=commit,
+                servers=servers,
+                target="elysium2",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            )
+            approval = restart_tango_servers.load_restart_approval(
+                approval_path,
+                commit,
+                servers,
+                target="elysium2",
+            )
+        self.assertEqual(approval.target, "elysium2")
+
+        target = restart_tango_servers.resolve_tango_restart_target("elysium2")
+        self.assertEqual(target.ssh_host, "elysium2")
+        self.assertEqual(target.starter_device, "tango/admin/elysium2")
+        script = restart_tango_servers.build_restart_powershell(
+            servers,
+            commit,
+            repository=target.repository,
+            environment=target.environment,
+            starter_device=target.starter_device,
+            target_name=target.name,
+        )
+        self.assertIn("TANGO_RESTART_TIMING", script)
+        self.assertIn("poll_interval_s = 0.2", script)
+        self.assertIn("timeout_s = 30.0", script)
+        self.assertIn("tango/admin/elysium2", script)
+
+    def test_restart_rejects_approval_for_another_target(self):
+        commit = "8" * 40
+        servers = ["DS_DG645/main"]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            approval_path = self._write_approval(
+                Path(temp_dir),
+                commit=commit,
+                servers=servers,
+                target="everest",
+                expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            )
+            with self.assertRaisesRegex(verify_refactor.RefactorToolError, "target"):
+                restart_tango_servers.load_restart_approval(
+                    approval_path,
+                    commit,
+                    servers,
+                    target="elysium2",
+                )
+
+    def test_windows_startup_launchers_wait_for_readiness_and_log_timing(self):
+        startup_root = verify_refactor.PROJECT_ROOT / "bin" / "windows_startup"
+        everest = (startup_root / "tango_windows_startup.cmd").read_text(encoding="utf-8")
+        elysium2 = (startup_root / "start_elysium2.bat").read_text(encoding="utf-8")
+
+        self.assertIn(":wait_for_port", everest)
+        self.assertIn("DATABASE_READY", everest)
+        self.assertIn("TANGO_STARTUP_COMPLETE", everest)
+        self.assertIn("probe_tango_readiness.py", everest)
+        self.assertIn("starter_for_host_running", everest)
+        self.assertNotIn("Waiting for database to initialize (10 seconds)", everest)
+        self.assertIn(":wait_for_starter", elysium2)
+        self.assertIn("ELYSIUM2_STARTER_READY", elysium2)
+        self.assertIn("ELYSIUM2_STARTER_COMPLETE", elysium2)
+
+    def test_startup_setup_persists_validated_python_for_the_system_task(self):
+        setup = (
+            verify_refactor.PROJECT_ROOT
+            / "bin"
+            / "windows_startup"
+            / "setup_tango_windows_startup.ps1"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn('SetEnvironmentVariable("PYCONLYSE_PYTHON", $PythonExecutable, "Machine")', setup)
+        self.assertIn("$previousPythonExecutable", setup)
+        self.assertIn("Restored previous machine PYCONLYSE_PYTHON", setup)
 
     def test_invalid_server_names_are_rejected(self):
         with self.assertRaisesRegex(verify_refactor.RefactorToolError, "Unsafe Tango server"):

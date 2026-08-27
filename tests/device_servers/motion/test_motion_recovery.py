@@ -271,6 +271,34 @@ def test_standa_discovery_closes_probe_handle_without_turning_axis_off():
     assert closed == [True]
 
 
+def test_standa_discovery_uses_short_passive_transport_wait():
+    device = _make_standa()
+    device.set_state(standa_module.DevState.OFF)
+    observed_timeouts = []
+
+    class AvailableLock:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, *_args):
+            return False
+
+    def transport_lock(timeout_s=None):
+        observed_timeouts.append(timeout_s)
+        return AvailableLock()
+
+    device._transport_lock = transport_lock
+    standa_module.lib = types.SimpleNamespace(
+        set_bindy_key=lambda _path: None,
+        enumerate_devices=lambda *_args: object(),
+        get_device_count=lambda _enum: 0,
+    )
+
+    device.find_device()
+
+    assert observed_timeouts == [0.1]
+
+
 def _fill_standa_status(status_ptr):
     status = status_ptr._obj
     status.CurT = 245

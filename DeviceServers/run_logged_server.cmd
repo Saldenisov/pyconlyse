@@ -8,6 +8,7 @@ set "INSTANCE_NAME=%~2"
 set "DEVICE_DIR=%~3"
 set "DEVICE_SCRIPT=%~4"
 set "SERVER_ENVIRONMENT=%~5"
+set "SERVER_EXTRA_ARGUMENT=%~6"
 
 if "%SERVER_NAME%"=="" (
     echo ERROR: Server name is required.
@@ -26,39 +27,41 @@ if "%DEVICE_SCRIPT%"=="" (
     exit /b 2
 )
 
+if not defined PYCONLYSE set "PYCONLYSE=C:\dev\pyconlyse"
 if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
-if not defined PYCONLYSE_PYTHON set "PYCONLYSE_PYTHON=python"
 if not defined PYCONLYSE_LOG_DIR set "PYCONLYSE_LOG_DIR=C:\temp\ds.log"
 if not "%SERVER_ENVIRONMENT%"=="" set "%SERVER_ENVIRONMENT%"
 
 if not exist "%PYCONLYSE_LOG_DIR%" mkdir "%PYCONLYSE_LOG_DIR%"
 set "PYCONLYSE_DS_LOG_FILE=%PYCONLYSE_LOG_DIR%\%SERVER_NAME%_%INSTANCE_NAME%.log"
+echo ==== %date% %time% runner entered %SERVER_NAME%/%INSTANCE_NAME% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
 set "PYCONLYSE_DS_SCRIPT=%DEVICE_SCRIPT%"
 set "PYCONLYSE_DS_INSTANCE=%INSTANCE_NAME%"
-
-if not defined ANACONDA (
-    echo ERROR: ANACONDA environment variable is not set. >> "%PYCONLYSE_DS_LOG_FILE%"
-    echo ERROR: ANACONDA environment variable is not set.
-    exit /b 2
-)
+set "PYCONLYSE_DS_EXTRA_ARGUMENT=%SERVER_EXTRA_ARGUMENT%"
 
 cd /d "%DEVICE_DIR%"
-call "%ANACONDA%\Scripts\activate.bat" "%PYCONLYSE_ENV%"
+call "%~dp0prepare_python_runtime.cmd"
 if errorlevel 1 (
-    echo ERROR: Could not activate conda environment %PYCONLYSE_ENV%. >> "%PYCONLYSE_DS_LOG_FILE%"
-    echo ERROR: Could not activate conda environment %PYCONLYSE_ENV%.
-    exit /b 3
+    echo ERROR: No direct PYCONLYSE_PYTHON executable found. >> "%PYCONLYSE_DS_LOG_FILE%"
+    echo ERROR: No direct PYCONLYSE_PYTHON executable found.
+    exit /b 2
 )
+echo ==== %date% %time% direct runtime ready %PYCONLYSE_PYTHON% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
 
-if defined PYCONLYSE set "PYTHONPATH=%PYCONLYSE%"
+set "PYTHONPATH=%PYCONLYSE%;%PYTHONPATH%"
+set "PYTHONUNBUFFERED=1"
 echo ==== %date% %time% starting %SERVER_NAME%/%INSTANCE_NAME% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
+echo PYCONLYSE_PYTHON=%PYCONLYSE_PYTHON% source=%PYCONLYSE_PYTHON_SOURCE% >> "%PYCONLYSE_DS_LOG_FILE%"
 echo Log file: %PYCONLYSE_DS_LOG_FILE%
 echo Starting %SERVER_NAME%/%INSTANCE_NAME%...
-if defined DISABLE_ARCHIVE echo DISABLE_ARCHIVE=%DISABLE_ARCHIVE%
 
-REM Older Windows PowerShell lacks Tee-Object -Encoding. Write UTF-8 explicitly
-REM while preserving the same output in this terminal.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$utf8 = New-Object System.Text.UTF8Encoding($false); & $env:PYCONLYSE_PYTHON $env:PYCONLYSE_DS_SCRIPT $env:PYCONLYSE_DS_INSTANCE 2>&1 | ForEach-Object { $line = ($_ | Out-String); [Console]::Out.Write($line); [System.IO.File]::AppendAllText($env:PYCONLYSE_DS_LOG_FILE, $line, $utf8) }; exit $LASTEXITCODE"
+REM Start the configured interpreter directly. A separate terminal tab tails
+REM this log, so PowerShell/Tee startup is not part of Tango registration.
+if defined PYCONLYSE_DS_EXTRA_ARGUMENT (
+    "%PYCONLYSE_PYTHON%" %PYCONLYSE_DS_SCRIPT% %PYCONLYSE_DS_INSTANCE% %PYCONLYSE_DS_EXTRA_ARGUMENT% >> "%PYCONLYSE_DS_LOG_FILE%" 2>&1
+) else (
+    "%PYCONLYSE_PYTHON%" %PYCONLYSE_DS_SCRIPT% %PYCONLYSE_DS_INSTANCE% >> "%PYCONLYSE_DS_LOG_FILE%" 2>&1
+)
 set "EXIT_CODE=%ERRORLEVEL%"
 echo ==== %date% %time% exited with %EXIT_CODE% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
 exit /b %EXIT_CODE%

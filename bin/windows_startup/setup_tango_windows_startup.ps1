@@ -18,7 +18,15 @@
 #>
 
 [CmdletBinding()]
-param()
+param(
+    [ValidateRange(0, 300)]
+    [int]$StartupDelaySeconds = 5,
+    [ValidateSet("headless")]
+    [string]$LaunchMode = "headless",
+    [string]$PythonExecutable = "",
+    [switch]$Apply,
+    [switch]$StartNow
+)
 
 # Script configuration
 $ErrorActionPreference = 'Stop'
@@ -32,6 +40,12 @@ Write-Host "=" * 60 -ForegroundColor Green
 Write-Host "TANGO INFRASTRUCTURE - Windows Startup Setup" -ForegroundColor Green
 Write-Host "=" * 60 -ForegroundColor Green
 Write-Host
+
+if (-not $Apply) {
+    Write-Host "Dry run. No scheduled task is created, replaced, or started." -ForegroundColor Yellow
+    Write-Host "Use -Apply to change the task and -StartNow to start it afterwards." -ForegroundColor Yellow
+    exit 0
+}
 
 # Verify we're running as administrator
 if (-not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")) {
@@ -48,8 +62,17 @@ if (-not $tangoRoot -or -not (Test-Path $tangoRoot)) {
     exit 1
 }
 
+if (-not $PythonExecutable) {
+    $PythonExecutable = [Environment]::GetEnvironmentVariable("PYCONLYSE_PYTHON", "Machine")
+}
+if (-not $PythonExecutable -or -not [IO.Path]::IsPathFullyQualified($PythonExecutable) -or -not (Test-Path $PythonExecutable)) {
+    Write-Error "A valid absolute PYCONLYSE_PYTHON is required for the SYSTEM task."
+    exit 1
+}
+
 Write-Host "✓ Running as Administrator" -ForegroundColor Green
 Write-Host "✓ TANGO_ROOT found: $tangoRoot" -ForegroundColor Green
+Write-Host "✓ PYCONLYSE_PYTHON found: $PythonExecutable" -ForegroundColor Green
 Write-Host "✓ Script location: $ScriptPath" -ForegroundColor Green
 Write-Host
 
@@ -62,13 +85,23 @@ if (-not (Test-Path $TangoStartupScript)) {
 Write-Host "✓ Startup script found: $TangoStartupScript" -ForegroundColor Green
 Write-Host
 
+$previousPythonExecutable = [Environment]::GetEnvironmentVariable("PYCONLYSE_PYTHON", "Machine")
+$pythonEnvironmentChanged = $false
+
 try {
     Write-Host "Creating Windows Task Scheduler job for Tango Infrastructure..." -ForegroundColor Yellow
+    if ($previousPythonExecutable -ne $PythonExecutable) {
+        [Environment]::SetEnvironmentVariable("PYCONLYSE_PYTHON", $PythonExecutable, "Machine")
+        $pythonEnvironmentChanged = $true
+        Write-Host "✓ Persisted PYCONLYSE_PYTHON for the SYSTEM task" -ForegroundColor Green
+    }
     
     # Remove existing task if it exists
     $taskName = "TangoInfrastructureStartup"
     $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    $backupXml = $null
     if ($existingTask) {
+        $backupXml = Export-ScheduledTask -TaskName $taskName
         Write-Host "Removing existing task: $taskName" -ForegroundColor Yellow
         Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
     }
@@ -76,29 +109,32 @@ try {
     # Create task action
     $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c `"$TangoStartupScript`""
     
-    # Create task trigger (at startup, with delay)
+    # This installer is intentionally headless: Session 0 cannot host visible
+    # Windows Terminal tabs. Configure any interactive Starter task separately.
     $trigger = New-ScheduledTaskTrigger -AtStartup
-    $trigger.Delay = "PT30S"  # 30 second delay after boot
+    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $trigger.Delay = "PT${StartupDelaySeconds}S"
     
     # Create task settings
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartOnFailure -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
-    
-    # Create task principal (run as SYSTEM)
-    $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     
     # Register the task
     Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Description "Automatically starts Tango Database and Starter on Windows boot"
     
     Write-Host "✓ Task Scheduler job created successfully!" -ForegroundColor Green
     Write-Host "  Task Name: $taskName" -ForegroundColor Cyan
-    Write-Host "  Runs at: Windows startup (30 second delay)" -ForegroundColor Cyan
+    Write-Host "  Mode: $LaunchMode" -ForegroundColor Cyan
+    Write-Host "  Runs after: $StartupDelaySeconds second delay" -ForegroundColor Cyan
     Write-Host "  Script: $TangoStartupScript" -ForegroundColor Cyan
     Write-Host
     
-    # Test the task
-    Write-Host "Testing the scheduled task..." -ForegroundColor Yellow
+    if (-not $StartNow) {
+        Write-Host "Task registered. It was not started; use -StartNow after operator review." -ForegroundColor Yellow
+        return
+    }
+
+    Write-Host "Starting the scheduled task..." -ForegroundColor Yellow
     Start-ScheduledTask -TaskName $taskName
-    
     Start-Sleep -Seconds 5
     
     # Check task status
@@ -124,9 +160,9 @@ try {
     Write-Host
     Write-Host "What happens now:" -ForegroundColor Cyan
     Write-Host "✓ Tango Database and Starter will automatically start on Windows boot" -ForegroundColor Green
-    Write-Host "✓ 30-second delay after boot to allow system to stabilize" -ForegroundColor Green
+    Write-Host "✓ $StartupDelaySeconds-second delay; passive Tango probes gate startup" -ForegroundColor Green
     Write-Host "✓ Automatic restart if services crash (up to 3 attempts)" -ForegroundColor Green
-    Write-Host "✓ Services run in background (minimized windows)" -ForegroundColor Green
+    Write-Host "✓ Headless Session 0 mode; visible Windows Terminal tabs are not expected" -ForegroundColor Yellow
     Write-Host
     Write-Host "Log files location:" -ForegroundColor Cyan
     Write-Host "  $ScriptPath\tango_db_startup.log" -ForegroundColor White
@@ -138,6 +174,18 @@ try {
     Write-Host
 
 } catch {
+    if ($backupXml) {
+        try {
+            Register-ScheduledTask -TaskName $taskName -Xml $backupXml -Force | Out-Null
+            Write-Warning "Restored previous task after setup failure."
+        } catch {
+            Write-Error "Could not restore previous task: $($_.Exception.Message)"
+        }
+    }
+    if ($pythonEnvironmentChanged) {
+        [Environment]::SetEnvironmentVariable("PYCONLYSE_PYTHON", $previousPythonExecutable, "Machine")
+        Write-Warning "Restored previous machine PYCONLYSE_PYTHON after setup failure."
+    }
     Write-Error "Failed to create scheduled task: $_"
     Write-Host "Error details: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
