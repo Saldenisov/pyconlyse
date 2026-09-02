@@ -285,14 +285,27 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         except (TypeError, ValueError):
             enabled = True
 
-        if self._device_id_internal == -1:
-            return False
         if not enabled:
-            self.set_state(DevState.STANDBY)
-            self.info(
-                f"{self.device_name} controller discovered; startup initialisation is disabled.",
-                True,
+            if self._device_id_internal != -1:
+                self.set_state(DevState.STANDBY)
+                self.info(
+                    f"{self.device_name} controller discovered; startup initialisation is disabled.",
+                    True,
+                )
+            return False
+
+        if self._device_id_internal == -1:
+            message = (
+                f"{self.device_name} startup initialisation failed: "
+                "controller was not discovered"
             )
+            self.set_hardware_lifecycle(
+                HardwareConnectionState.DISCONNECTED,
+                InitializationState.FAILED,
+                message,
+            )
+            self.set_state(DevState.FAULT)
+            self.error(message)
             return False
 
         self.info(

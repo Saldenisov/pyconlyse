@@ -288,6 +288,20 @@ def test_standa_startup_initialization_failure_sets_fault():
     assert device.get_state() == standa_module.DevState.FAULT
 
 
+def test_standa_startup_initialization_marks_missing_controller_failed():
+    device = _make_standa()
+    device.initialize_on_startup = 1
+    device._device_id_internal = -1
+    calls = []
+    device.turn_on_local = lambda: calls.append("turn_on") or 0
+
+    assert device._initialize_on_startup_if_requested() is False
+    assert calls == []
+    assert device.get_state() == standa_module.DevState.FAULT
+    assert device.hardware_connection_state() == "DISCONNECTED"
+    assert device.initialization_state() == "FAILED"
+
+
 def test_standa_startup_initialization_can_be_disabled_for_service():
     device = _make_standa()
     device.initialize_on_startup = 0
