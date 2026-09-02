@@ -262,6 +262,43 @@ def test_standa_explicit_turn_on_marks_axis_ready_only_after_stop_and_read():
     assert device.initialization_state() == "SUCCEEDED"
 
 
+def test_standa_startup_initialization_leaves_discovered_axis_ready():
+    device = _make_standa()
+    device.initialize_on_startup = 1
+    calls = []
+
+    def initialize():
+        calls.append("turn_on")
+        device.set_state(standa_module.DevState.ON)
+        return 0
+
+    device.turn_on_local = initialize
+
+    assert device._initialize_on_startup_if_requested() is True
+    assert calls == ["turn_on"]
+    assert device.get_state() == standa_module.DevState.ON
+
+
+def test_standa_startup_initialization_failure_sets_fault():
+    device = _make_standa()
+    device.initialize_on_startup = 1
+    device.turn_on_local = lambda: "controller unavailable"
+
+    assert device._initialize_on_startup_if_requested() is False
+    assert device.get_state() == standa_module.DevState.FAULT
+
+
+def test_standa_startup_initialization_can_be_disabled_for_service():
+    device = _make_standa()
+    device.initialize_on_startup = 0
+    calls = []
+    device.turn_on_local = lambda: calls.append("turn_on") or 0
+
+    assert device._initialize_on_startup_if_requested() is False
+    assert calls == []
+    assert device.get_state() == standa_module.DevState.STANDBY
+
+
 def test_standa_usb_loss_during_motion_blocks_automatic_recovery():
     device = _make_standa()
     device._standa_handle_open = True

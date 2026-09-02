@@ -99,7 +99,7 @@ except Exception:
 class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     """Device Server (Tango) controlling Standa hardware through libximc.dll."""
 
-    _version_ = "0.6"
+    _version_ = "0.7"
     _model_ = "STANDA step motor"
     polling_local = 1500
     recovery_fault_threshold = 10
@@ -118,6 +118,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     usb_read_retry_delay_s = device_property(dtype=float, default_value=0.05)
     resume_connection_after_loss = device_property(dtype=int, default_value=1)
     enumerate_network_devices = device_property(dtype=int, default_value=0)
+    initialize_on_startup = device_property(dtype=int, default_value=1)
 
     # if it is done so leave it like this
     position = attribute(
@@ -272,16 +273,44 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
         self.register_variables_for_archive()
-        # Device-server startup only discovers the controller.  It must not
-        # initialise axes, stop a motion, or energise a motor.
-        if self._device_id_internal != -1 and self.get_state() != DevState.FAULT:
-            self.set_state(DevState.STANDBY)
-            self.info(
-                f"{self.device_name} controller discovered; awaiting explicit turn_on.",
-                True,
-            )
+        self._initialize_on_startup_if_requested()
         _startup_trace("init_device_exit")
         _STARTUP_TRACE_ENABLED = False
+
+    def _initialize_on_startup_if_requested(self) -> bool:
+        """Leave a discovered controller open and ready for immediate use."""
+
+        try:
+            enabled = bool(int(self.initialize_on_startup or 0))
+        except (TypeError, ValueError):
+            enabled = True
+
+        if self._device_id_internal == -1:
+            return False
+        if not enabled:
+            self.set_state(DevState.STANDBY)
+            self.info(
+                f"{self.device_name} controller discovered; startup initialisation is disabled.",
+                True,
+            )
+            return False
+
+        self.info(
+            f"Initialising {self.device_name} automatically at device-server startup.",
+            True,
+        )
+        result = self.turn_on_local()
+        if result in (None, 0) and self.get_state() == DevState.ON:
+            self.info(
+                f"{self.device_name} startup initialisation succeeded; axis is ready.",
+                True,
+            )
+            return True
+
+        self.set_state(DevState.FAULT)
+        message = f"{self.device_name} startup initialisation failed: {result}"
+        self.error(message)
+        return False
 
 
     def register_variables_for_archive(self):
@@ -685,7 +714,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self.set_hardware_lifecycle(
             HardwareConnectionState.CONNECTING,
             InitializationState.IN_PROGRESS,
-            "opening STANDA transport for explicit axis initialisation",
+            "opening STANDA transport for axis initialisation",
         )
         if self._device_id_internal == -1 or not self._uri:
             self.info(f"Searching for device: {self.device_id}", True)
@@ -695,7 +724,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self.set_hardware_lifecycle(
                 HardwareConnectionState.DISCONNECTED,
                 InitializationState.FAILED,
-                "STANDA controller was not found during explicit initialisation",
+                "STANDA controller was not found during axis initialisation",
             )
             return f"Could NOT turn on {self.device_name}: Device could not be found."
 

@@ -19,9 +19,8 @@ ALIGNMENT_STANDA_POWER_PROPERTIES = {
     "power_dependency_device": "manip/V0/PDU_VO",
     "power_dependency_output_id": 3,
     "power_on_settle_seconds": 5.0,
-    # Startup and power restoration remain passive. Axes are initialised only
-    # through an explicit operator command after selecting an optical point.
-    "power_dependency_auto_turn_on": 0,
+    # A powered Standa DS must be immediately usable after startup or recovery.
+    "power_dependency_auto_turn_on": 1,
 }
 
 STANDA_RELIABILITY_PROPERTIES = {
@@ -34,6 +33,8 @@ STANDA_RELIABILITY_PROPERTIES = {
     # Vendor recommendation for command_wait_for_stop; 5 ms doubled traffic.
     "wait_time": 10,
     "resume_connection_after_loss": 1,
+    # Open, verify, stop safely, and read the axis position during DS startup.
+    "initialize_on_startup": 1,
     # These controllers are local COM/USB devices; network probing adds noise.
     "enumerate_network_devices": 0,
 }

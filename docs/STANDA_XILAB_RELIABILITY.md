@@ -5,8 +5,10 @@ Date: 2026-09-02
 ## Outcome
 
 The Standa Tango device server now follows the transport behavior documented
-for XILab/libximc more closely. The update does not move an axis at startup and
-does not reopen automatically after a connection loss during motion.
+for XILab/libximc more closely. A discovered controller is automatically opened,
+serial-verified, stopped, and position-checked at startup so the axis is ready
+for work. No movement command is issued. The server does not reopen
+automatically after a connection loss during motion.
 
 The important changes are:
 
@@ -26,6 +28,8 @@ The important changes are:
   read once; motion and write commands are never retried automatically;
 - use the vendor-recommended 10 ms refresh interval while waiting for movement
   to stop instead of 5 ms;
+- initialize discovered controllers automatically at DS startup, leaving a
+  successful axis in Tango `ON` with lifecycle state `READY`;
 - safely reopen a previously initialized, stationary controller after a loss,
   validating status and position without issuing move or stop;
 - expose the loaded backend/version and persistent transport error counters as
@@ -58,10 +62,11 @@ all different controllers to share one command lock.
 
 ## Safety behavior
 
-- Server startup remains passive: discovery may set `STANDBY`, but the motor
-  handle is not kept open and no movement command is issued.
-- Explicit initialization opens the cached URI, verifies the physical serial,
-  then performs the existing stop/read initialization sequence.
+- Server startup opens the cached URI, verifies the physical serial, sends the
+  existing stop command, reads the current position, and leaves the handle open.
+  It sends no movement command. Success is reported as `ON/READY`; failure is
+  reported as `FAULT`.
+- `initialize_on_startup=0` is retained as an explicit maintenance override.
 - A loss while the axis is not moving may reopen the same verified controller.
   Reopening sends no move or stop command.
 - A loss detected while state is `MOVING` sets `FAULT`, disables automatic
@@ -79,6 +84,7 @@ all different controllers to share one command lock.
 | `usb_read_retry_delay_s` | 0.05 | Delay before the retry |
 | `resume_connection_after_loss` | 1 | Reopen a previously initialized stationary axis |
 | `enumerate_network_devices` | 0 | Keep USB discovery local unless explicitly needed |
+| `initialize_on_startup` | 1 | Initialize a discovered controller and leave it ready |
 | `wait_time` | 10 | Movement status refresh interval in milliseconds |
 
 Apply these to existing Tango devices with:
@@ -122,9 +128,10 @@ Do not restart every Standa server simultaneously for the first deployment.
 
    Expected output: `official-pypi 3.0.4`.
 5. Register the reliability properties using the command above.
-6. Restart one non-critical Standa server in Astor. It should start passively.
-7. Confirm the diagnostic attributes, explicitly initialize the axis, perform a
-   small known-safe move, and observe it for at least 30 minutes.
+6. Restart one non-critical Standa server in Astor. It should reach `ON/READY`
+   automatically without issuing a movement command.
+7. Confirm the diagnostic attributes, perform a small known-safe move, and
+   observe it for at least 30 minutes.
 8. If stable, restart the remaining servers in small groups rather than all at
    once. The shared discovery cache will prevent repeated full-bus scans.
 
