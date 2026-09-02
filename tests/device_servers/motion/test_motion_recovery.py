@@ -101,6 +101,10 @@ def _isolated_standa_discovery_cache(monkeypatch, tmp_path):
         "PYCONLYSE_STANDA_DISCOVERY_CACHE",
         str(tmp_path / "standa-discovery.json"),
     )
+    monkeypatch.setenv(
+        "PYCONLYSE_STANDA_TRANSPORT_LOCK",
+        str(tmp_path / "standa-ximc.lock"),
+    )
 
 
 def _make_standa():
