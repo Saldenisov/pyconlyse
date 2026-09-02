@@ -2390,6 +2390,18 @@ files = [
 ]
 
 [[package]]
+name = "libximc"
+version = "3.0.4"
+description = "Package for operating STANDA 8SMC5 controllers"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "libximc-3.0.4-py3-none-any.whl", hash = "sha256:56a3a2783dc3660386e675b75d3be93ae2a36895d853d71e99c17ae4184b8b41"},
+    {file = "libximc-3.0.4.tar.gz", hash = "sha256:4e41b91350a3a1e340ac4d0085dd1fad1953cc9327f656f755b1b311f21d4bd8"},
+]
+
+[[package]]
 name = "llvmlite"
 version = "0.43.0"
 description = "lightweight wrapper around basic LLVM functionality"
@@ -10322,4 +10334,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9"
-content-hash = "650c0c121cb5567b4b1af9fe0db306b3fcfb5fd82b0079d31f6da5cbe8221217"
+content-hash = "4a805bfc8fedc2e745657af243865914d648ccdaeee32f9313884a3b21299d71"

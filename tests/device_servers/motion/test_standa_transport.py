@@ -3,6 +3,7 @@ from threading import Event, Thread
 import pytest
 from DeviceServers.motion.standa.transport import (
     StandaTransportBusyError,
+    device_lock_path,
     exclusive_standa_transport,
 )
 
@@ -37,3 +38,16 @@ def test_standa_transport_lock_releases_after_scope(tmp_path):
         pass
     with exclusive_standa_transport(str(lock_path), timeout_seconds=0.1):
         pass
+
+
+def test_device_lock_path_is_stable_and_controller_specific(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "PYCONLYSE_STANDA_TRANSPORT_LOCK", str(tmp_path / "standa-ximc.lock")
+    )
+
+    first = device_lock_path("15731")
+    second = device_lock_path("15722")
+
+    assert first == tmp_path / "standa-ximc-15731.lock"
+    assert second == tmp_path / "standa-ximc-15722.lock"
+    assert first != second

@@ -25,6 +25,40 @@ def default_lock_path() -> Path:
     return Path(tempfile.gettempdir()) / "pyconlyse" / "standa-ximc.lock"
 
 
+def device_lock_path(device_key: str) -> Path:
+    """Return an exclusive-access lock for one physical controller.
+
+    libximc is thread safe and permits different controllers to be used in
+    parallel. Its exclusive-access restriction applies to the same controller,
+    so serializing every Standa axis behind one host-wide lock only adds queue
+    pressure and does not reproduce XILab's behavior.
+    """
+
+    safe_key = "".join(
+        character if character.isalnum() or character in "-_" else "_"
+        for character in str(device_key)
+    ).strip("_")
+    if not safe_key:
+        raise ValueError("device_key must contain at least one safe character")
+    return default_lock_path().with_name(f"standa-ximc-{safe_key}.lock")
+
+
+@contextmanager
+def exclusive_standa_device_transport(
+    device_key: str,
+    timeout_seconds: float = 1.0,
+    retry_seconds: float = 0.05,
+) -> Iterator[None]:
+    """Serialize calls for one controller while allowing other axes to run."""
+
+    with exclusive_standa_transport(
+        str(device_lock_path(device_key)),
+        timeout_seconds=timeout_seconds,
+        retry_seconds=retry_seconds,
+    ):
+        yield
+
+
 def _try_lock(handle) -> None:
     if os.name == "nt":
         import msvcrt

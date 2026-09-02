@@ -1,6 +1,42 @@
+import argparse
+
 from tango import Database, DbDevInfo
 
 db = Database()
+
+ALIGNMENT_STANDA_DEVICES = {
+    "elyse/motorized_devices/mm1_x",
+    "elyse/motorized_devices/mm1_y",
+    "elyse/motorized_devices/mm2_x",
+    "elyse/motorized_devices/mm2_y",
+    "manip/v0/mm3_x",
+    "manip/v0/mm3_y",
+    "manip/v0/mm4_x",
+    "manip/v0/mm4_y",
+}
+
+ALIGNMENT_STANDA_POWER_PROPERTIES = {
+    "power_dependency_device": "manip/V0/PDU_VO",
+    "power_dependency_output_id": 3,
+    "power_on_settle_seconds": 5.0,
+    # Startup and power restoration remain passive. Axes are initialised only
+    # through an explicit operator command after selecting an optical point.
+    "power_dependency_auto_turn_on": 0,
+}
+
+STANDA_RELIABILITY_PROPERTIES = {
+    # One host-level scan is shared briefly by all Standa server processes.
+    "usb_discovery_lock_timeout_s": 15.0,
+    "usb_discovery_cache_ttl_s": 30.0,
+    # Retry only idempotent reads after libximc resets its transmission state.
+    "usb_read_retry_count": 1,
+    "usb_read_retry_delay_s": 0.05,
+    # Vendor recommendation for command_wait_for_stop; 5 ms doubled traffic.
+    "wait_time": 10,
+    "resume_connection_after_loss": 1,
+    # These controllers are local COM/USB devices; network probing adds noise.
+    "enumerate_network_devices": 0,
+}
 
 names = {
     "00003D73": [
@@ -231,7 +267,34 @@ names = {
 }
 
 
-def main():
+def register_alignment_standa_power_dependencies(database=None):
+    """Register the shared output-3 dependency for exactly eight mount axes."""
+
+    target_db = database or db
+    for device_name in sorted(ALIGNMENT_STANDA_DEVICES):
+        target_db.put_device_property(
+            device_name, dict(ALIGNMENT_STANDA_POWER_PROPERTIES)
+        )
+
+
+def register_standa_reliability_properties(database=None):
+    """Apply transport reliability defaults to every registered Standa axis."""
+
+    target_db = database or db
+    for val in names.values():
+        target_db.put_device_property(
+            f"{val[0]}/{val[2]}", dict(STANDA_RELIABILITY_PROPERTIES)
+        )
+
+
+def main(power_dependencies_only=False, reliability_properties_only=False):
+    if power_dependencies_only:
+        register_alignment_standa_power_dependencies()
+        return
+    if reliability_properties_only:
+        register_standa_reliability_properties()
+        return
+
     i = 1
     a = []
     for uri, val in names.items():
@@ -246,7 +309,7 @@ def main():
             "ip_address": "10.20.30.204",
             "uri": uri,
             "friendly_name": val[1],
-            "wait_time": 5,
+            "wait_time": 10,
             "server_id": i,
             "preset_pos": val[3],
             "limit_min": val[4][0],
@@ -256,15 +319,10 @@ def main():
             "unit": val[6][0],
             "conversion": val[6][1],
             "always_on": 1,
+            **STANDA_RELIABILITY_PROPERTIES,
         }
-        if dev_name.lower().startswith("manip/v0/"):
-            properties.update(
-                {
-                    "power_dependency_device": "manip/V0/PDU_VO",
-                    "power_dependency_output_id": 3,
-                    "power_on_settle_seconds": 5.0,
-                }
-            )
+        if dev_name.lower() in ALIGNMENT_STANDA_DEVICES:
+            properties.update(ALIGNMENT_STANDA_POWER_PROPERTIES)
         db.put_device_property(dev_name, properties)
 
         i += 1
@@ -272,4 +330,19 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--power-dependencies-only",
+        action="store_true",
+        help="Only register PDU output 3 for the eight alignment Standas.",
+    )
+    parser.add_argument(
+        "--reliability-properties-only",
+        action="store_true",
+        help="Only register the Standa transport reliability properties.",
+    )
+    args = parser.parse_args()
+    main(
+        power_dependencies_only=args.power_dependencies_only,
+        reliability_properties_only=args.reliability_properties_only,
+    )

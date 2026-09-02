@@ -2,8 +2,9 @@ import platform
 from ctypes import *
 
 try:
-    from DeviceServers.STANDA.ximc import path_dll
-except ModuleNotFoundError:
+    from . import path_dll
+except ImportError:
+    # Compatibility with direct execution from the historic ``standa`` cwd.
     from ximc import path_dll
 
 path_dll = str(path_dll)

@@ -3,6 +3,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 
 def _install_tango_stub():
     if "tango" in sys.modules and "tango.server" in sys.modules:
@@ -90,6 +92,15 @@ _install_tango_stub()
 from DeviceServers.motion.owis import DS_OWIS_PS90 as owis_module
 from DeviceServers.motion.owis import DS_OWIS_Aggregator as aggregator_module
 from DeviceServers.motion.standa import DS_Standa_Motor as standa_module
+from DeviceServers.motion.standa.discovery_cache import store_discovery_map
+
+
+@pytest.fixture(autouse=True)
+def _isolated_standa_discovery_cache(monkeypatch, tmp_path):
+    monkeypatch.setenv(
+        "PYCONLYSE_STANDA_DISCOVERY_CACHE",
+        str(tmp_path / "standa-discovery.json"),
+    )
 
 
 def _make_standa():
@@ -168,6 +179,8 @@ def test_standa_usb_loss_schedules_passive_recovery_after_threshold():
     assert device._device_id_internal == -1
     assert device._standa_handle_open is False
     assert device._next_fault_recovery_at > 0
+    assert device.hardware_connection_state() == "DISCONNECTED"
+    assert device.initialization_state() == "FAILED"
 
 
 def test_standa_transient_usb_failure_does_not_fault_or_reconnect():
@@ -222,6 +235,27 @@ def test_standa_recovery_discovers_transport_without_axis_initialisation():
     assert calls == ["find"]
     assert device.get_state() == standa_module.DevState.STANDBY
     assert device._status_check_fault == 0
+    assert device.hardware_connection_state() == "CONNECTED"
+    assert device.initialization_state() == "NOT_REQUESTED"
+
+
+def test_standa_explicit_turn_on_marks_axis_ready_only_after_stop_and_read():
+    device = _make_standa()
+    device._standa_handle_open = False
+    calls = []
+
+    device._open_verified_transport = (
+        lambda uri: calls.append(("open_verified", uri)) or (9, "")
+    )
+    device.stop_movement_local = lambda: calls.append("stop") or 0
+    device.read_position_local = lambda: calls.append("read") or 0
+    device._reset_transport_recovery = lambda: None
+
+    assert device.turn_on_local() == 0
+    assert calls == [("open_verified", b"uri"), "stop", "read"]
+    assert device.get_state() == standa_module.DevState.ON
+    assert device.hardware_connection_state() == "READY"
+    assert device.initialization_state() == "SUCCEEDED"
 
 
 def test_standa_usb_loss_during_motion_blocks_automatic_recovery():
@@ -271,7 +305,7 @@ def test_standa_discovery_closes_probe_handle_without_turning_axis_off():
     assert closed == [True]
 
 
-def test_standa_discovery_uses_short_passive_transport_wait():
+def test_standa_discovery_waits_long_enough_for_one_shared_host_probe():
     device = _make_standa()
     device.set_state(standa_module.DevState.OFF)
     observed_timeouts = []
@@ -287,7 +321,7 @@ def test_standa_discovery_uses_short_passive_transport_wait():
         observed_timeouts.append(timeout_s)
         return AvailableLock()
 
-    device._transport_lock = transport_lock
+    device._discovery_transport_lock = transport_lock
     standa_module.lib = types.SimpleNamespace(
         set_bindy_key=lambda _path: None,
         enumerate_devices=lambda *_args: object(),
@@ -296,7 +330,102 @@ def test_standa_discovery_uses_short_passive_transport_wait():
 
     device.find_device()
 
-    assert observed_timeouts == [0.1]
+    assert observed_timeouts == [15.0]
+
+
+def test_standa_discovery_uses_enumerated_serial_and_frees_result():
+    device = _make_standa()
+    device.set_state(standa_module.DevState.OFF)
+    freed = []
+    opened = []
+
+    def get_enumerated_serial(_enum, _index, serial_ptr):
+        serial_ptr._obj.value = int(device.device_id)
+        return standa_module.Result.Ok
+
+    standa_module.lib = types.SimpleNamespace(
+        enumerate_devices=lambda *_args: object(),
+        get_device_count=lambda _enum: 1,
+        get_device_name=lambda _enum, _index: b"xi-com:test",
+        get_enumerate_device_serial=get_enumerated_serial,
+        open_device=lambda _uri: opened.append(True) or 7,
+        free_enumerate_devices=lambda enum: freed.append(enum) or 0,
+    )
+
+    device.find_device()
+
+    assert device._uri == b"xi-com:test"
+    assert opened == []
+    assert len(freed) == 1
+
+
+def test_standa_discovery_reuses_host_scan_without_probing_again():
+    device = _make_standa()
+    device.set_state(standa_module.DevState.OFF)
+    store_discovery_map({int(device.device_id): b"xi-com:cached"})
+    standa_module.lib = types.SimpleNamespace(
+        enumerate_devices=lambda *_args: (_ for _ in ()).throw(
+            AssertionError("a fresh host snapshot must suppress another bus probe")
+        )
+    )
+
+    device.find_device()
+
+    assert device._uri == b"xi-com:cached"
+    assert device._device_id_internal == 0
+    assert device._standa_handle_open is False
+
+
+def test_standa_idempotent_read_resets_locks_and_retries_once():
+    device = _make_standa()
+    calls = []
+
+    def read_status(*_args):
+        calls.append("read")
+        return (
+            standa_module.Result.Error
+            if calls.count("read") == 1
+            else standa_module.Result.Ok
+        )
+
+    standa_module.lib = types.SimpleNamespace(
+        get_status=read_status,
+        reset_locks=lambda: calls.append("reset") or standa_module.Result.Ok,
+    )
+
+    result = device._read_transport_call("get_status", read_status, 7, object())
+
+    assert result == standa_module.Result.Ok
+    assert calls == ["read", "reset", "read"]
+    assert device.transport_error_count() == 1
+    assert device.transport_retry_success_count() == 1
+
+
+def test_standa_recovery_reopens_initialized_axis_without_stop_or_move(monkeypatch):
+    device = _make_standa()
+    device._standa_resume_after_recovery = True
+    device._uri = b"xi-com:test"
+    device._last_known_uri = b"xi-com:test"
+    calls = []
+
+    device._resume_open_transport = lambda uri: calls.append(("resume", uri)) or True
+    device.find_device = lambda: (_ for _ in ()).throw(
+        AssertionError("known URI should be tried before full enumeration")
+    )
+
+    assert device._attempt_recover_connection() is True
+    assert calls == [("resume", b"xi-com:test")]
+
+
+def test_standa_motion_loss_still_blocks_safe_reopen():
+    device = _make_standa()
+    device._standa_resume_after_recovery = True
+    device._standa_auto_recovery_blocked = True
+    calls = []
+    device._resume_open_transport = lambda _uri: calls.append(True) or True
+
+    assert device._attempt_recover_connection() is False
+    assert calls == []
 
 
 def _fill_standa_status(status_ptr):
