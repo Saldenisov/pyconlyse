@@ -279,6 +279,37 @@ def test_standa_startup_initialization_leaves_discovered_axis_ready():
     assert device.get_state() == standa_module.DevState.ON
 
 
+def test_standa_startup_initialization_satisfies_pending_power_probe():
+    device = _make_standa()
+    device.initialize_on_startup = 1
+    device._power_probe_pending = True
+    device._power_probe_due_at = 123.0
+    device._last_power_probe_error = "previous failure"
+    device._power_dependency_state = types.SimpleNamespace(
+        configured=True,
+        powered=True,
+        detail="power PDU manip/V0/PDU_VO output 3",
+    )
+
+    def initialize():
+        device.set_state(standa_module.DevState.ON)
+        return 0
+
+    device.turn_on_local = initialize
+    device.probe_powered_hardware = lambda: (_ for _ in ()).throw(
+        AssertionError("a verified startup transport must cancel the delayed probe")
+    )
+
+    assert device._initialize_on_startup_if_requested() is True
+    assert device._power_probe_pending is False
+    assert device._power_probe_due_at == 0.0
+    assert device._last_power_probe_error == ""
+    assert "startup initialisation verified" in device.power_dependency_status()
+
+    device._run_power_dependency_probe_if_due()
+    assert device.get_state() == standa_module.DevState.ON
+
+
 def test_standa_startup_initialization_failure_sets_fault():
     device = _make_standa()
     device.initialize_on_startup = 1

@@ -273,7 +273,11 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         attr_prop.unit = self.unit
         self.position.set_properties(attr_prop)
         self.register_variables_for_archive()
-        self._initialize_on_startup_if_requested()
+        # The base power monitor may have scheduled a delayed safe probe.  Keep
+        # startup initialisation and that monitor mutually exclusive so the
+        # probe cannot invalidate a handle while it is being opened.
+        with self._get_lifecycle_lock():
+            self._initialize_on_startup_if_requested()
         _startup_trace("init_device_exit")
         _STARTUP_TRACE_ENABLED = False
 
@@ -308,12 +312,32 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self.error(message)
             return False
 
+        # A configured power dependency schedules its own delayed probe during
+        # base initialisation.  This Standa-specific startup path performs the
+        # stronger open/serial/status/position verification itself, so leaving
+        # that probe pending would make it run against an already-open ON axis.
+        # In that state find_device() is intentionally disallowed and the base
+        # probe would incorrectly report the powered controller as missing.
+        probe_was_pending = bool(getattr(self, "_power_probe_pending", False))
+        if probe_was_pending:
+            self._power_probe_pending = False
+            self._power_probe_due_at = 0.0
+
         self.info(
             f"Initialising {self.device_name} automatically at device-server startup.",
             True,
         )
         result = self.turn_on_local()
         if result in (None, 0) and self.get_state() == DevState.ON:
+            power_state = getattr(self, "_power_dependency_state", None)
+            if getattr(power_state, "configured", False) and getattr(
+                power_state, "powered", None
+            ) is True:
+                self._last_power_probe_error = ""
+                self._power_dependency_status = (
+                    f"{power_state.detail}; startup initialisation verified "
+                    "the hardware; axis is ready"
+                )
             self.info(
                 f"{self.device_name} startup initialisation succeeded; axis is ready.",
                 True,
@@ -321,6 +345,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             return True
 
         self.set_state(DevState.FAULT)
+        if probe_was_pending:
+            self._schedule_power_probe(
+                float(self.power_dependency_reconnect_seconds or 5.0)
+            )
         message = f"{self.device_name} startup initialisation failed: {result}"
         self.error(message)
         return False
