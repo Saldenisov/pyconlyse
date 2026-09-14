@@ -34,6 +34,8 @@ class LaserPointing(DS_General_Widget):
         self._pair_initialization_supported = False
         self._search_running = False
         self._active_actuator_group = 0
+        self.point_button_groups = []
+        self.point_buttons_by_state = {}
         self.db = Database()
         super().__init__(device_name, parent, vis_type)
         self.point_application_finished.connect(self._finish_point_application)
@@ -155,7 +157,6 @@ class LaserPointing(DS_General_Widget):
             manual_layout = QtWidgets.QVBoxLayout(manual_hardware)
             manual_layout.setContentsMargins(4, 4, 4, 4)
             manual_layout.setSpacing(5)
-            point_selector = None
 
             def register_ds(device_role, device_name):
                 extra = None
@@ -183,7 +184,7 @@ class LaserPointing(DS_General_Widget):
 
                 lo_controls.setContentsMargins(4, 4, 4, 4)
                 lo_controls.setSpacing(6)
-                point_selector = self.set_states()
+                lo_controls.addWidget(self.set_states("Automatic"))
                 self.add_automatic_search_controls(lo_controls, ds)
                 self.add_pair_initialization_controls(lo_controls, ds)
                 self.mount_interlock_status = QtWidgets.QLabel()
@@ -191,6 +192,11 @@ class LaserPointing(DS_General_Widget):
                 lo_controls.addWidget(self.mount_interlock_status)
                 lo_controls.addStretch(1)
                 self.set_active_actuator_group(0)
+
+                # Manual must retain the old point-selection workflow.  Use a
+                # second synchronized selector inside the tab so operators do
+                # not have to leave Manual before choosing an alignment plane.
+                manual_layout.addWidget(self.set_states("Manual"))
 
                 def add_widget_loc(lo_group_loc, group_devices):
                     try:
@@ -296,19 +302,11 @@ class LaserPointing(DS_General_Widget):
             mode_tabs.addTab(manual_scroll, "Manual")
             mode_tabs.setCurrentIndex(0)
             # Camera and signed XY error are shared operating views and stay
-            # visible in both modes. Optical points are also shared, matching
-            # the old global point selector: Manual uses a selected point to
-            # choose and unlock the corresponding mount pair. Only the lower
-            # right-hand controls switch between convergence and Standa/OWIS.
-            mode_column = QtWidgets.QWidget()
-            mode_column_layout = QtWidgets.QVBoxLayout(mode_column)
-            mode_column_layout.setContentsMargins(0, 0, 0, 0)
-            mode_column_layout.setSpacing(5)
-            if point_selector is not None:
-                mode_column_layout.addWidget(point_selector)
-            mode_column_layout.addWidget(mode_tabs, 1)
+            # visible in both modes. Each mode contains a synchronized optical
+            # point selector; the rest of the right-hand controls switch
+            # between convergence and Standa/OWIS.
             lo_total.addWidget(image_group, 5)
-            lo_total.addWidget(mode_column, 4)
+            lo_total.addWidget(mode_tabs, 4)
         else:
             # Direct mode: if controller is not available, try to create a widget for this device itself
             ds_widget = create_widget_for_device(self.dev_name, prefer_full=True)
@@ -328,8 +326,8 @@ class LaserPointing(DS_General_Widget):
         # noise. Keep the global widget unchanged and suppress them here.
         Qt.QTimer.singleShot(0, self.hide_update_param_buttons)
 
-        # Status stays at the top; optical presets now live above the mode tabs
-        # instead of appearing as an unrelated footer.
+        # Status stays at the top; optical presets live inside both operating
+        # tabs instead of appearing as an unrelated footer.
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
@@ -472,13 +470,17 @@ class LaserPointing(DS_General_Widget):
 
         self.controller_header = header
 
-    def set_states(self):
+    def set_states(self, mode=""):
         dev_name = self.dev_name
         ds: Device = getattr(self, f"ds_{dev_name}")
 
         self.rules: OrderedDict = eval(ds.get_rules)
         group = QtWidgets.QGroupBox("Optical points")
-        group.setObjectName("laserPointingOpticalPoints")
+        mode_name = str(mode).strip()
+        group.setObjectName(
+            f"laserPointingOpticalPoints{mode_name}" if mode_name
+            else "laserPointingOpticalPoints"
+        )
         group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         layout = QtWidgets.QGridLayout(group)
         layout.setContentsMargins(6, 5, 6, 5)
@@ -500,9 +502,9 @@ class LaserPointing(DS_General_Widget):
         )
         self.has_translation_planes = has_translation
         planes = ((1, 2, 3), (4, 5, 6))
-        self.point_button_group = QtWidgets.QButtonGroup(self)
-        self.point_button_group.setExclusive(True)
-        self.point_buttons_by_state = {}
+        button_group = QtWidgets.QButtonGroup(self)
+        button_group.setExclusive(True)
+        self.point_button_groups.append(button_group)
 
         for row, point_numbers in enumerate(planes):
             base_row = row * 2
@@ -535,8 +537,8 @@ class LaserPointing(DS_General_Widget):
                 button.clicked.connect(
                     partial(self.point_clicked, state, parameters, point_number)
                 )
-                self.point_button_group.addButton(button)
-                self.point_buttons_by_state[state] = button
+                button_group.addButton(button)
+                self.point_buttons_by_state.setdefault(state, []).append(button)
                 layout.addWidget(button, base_row + 1, column)
 
         if working:
@@ -545,8 +547,8 @@ class LaserPointing(DS_General_Widget):
             button.setCheckable(True)
             button.setToolTip(self._point_tooltip(state, parameters))
             button.clicked.connect(partial(self.point_clicked, state, parameters, 0))
-            self.point_button_group.addButton(button)
-            self.point_buttons_by_state[state] = button
+            button_group.addButton(button)
+            self.point_buttons_by_state.setdefault(state, []).append(button)
             layout.addWidget(button, 4, 0, 1, 3)
 
         return group
@@ -606,8 +608,7 @@ class LaserPointing(DS_General_Widget):
             self.search_start.setEnabled(True)
         if success:
             group_index = optical_point_group(f"point{point_number}")
-            button = getattr(self, "point_buttons_by_state", {}).get(state)
-            if button is not None:
+            for button in self._point_buttons(state):
                 button.setChecked(True)
             self.set_active_actuator_group(group_index)
             if hasattr(self, "search_status"):
@@ -621,19 +622,22 @@ class LaserPointing(DS_General_Widget):
                 self.search_status.setText(f"Could not apply {state}: {message}")
 
     def _set_point_buttons_enabled(self, enabled):
-        group = getattr(self, "point_button_group", None)
-        if group is not None:
+        for group in getattr(self, "point_button_groups", ()):
             for button in group.buttons():
                 button.setEnabled(bool(enabled))
 
     def _clear_point_selection(self):
-        group = getattr(self, "point_button_group", None)
-        if group is None:
-            return
-        group.setExclusive(False)
-        for button in group.buttons():
-            button.setChecked(False)
-        group.setExclusive(True)
+        for group in getattr(self, "point_button_groups", ()):
+            group.setExclusive(False)
+            for button in group.buttons():
+                button.setChecked(False)
+            group.setExclusive(True)
+
+    def _point_buttons(self, state):
+        buttons = getattr(self, "point_buttons_by_state", {}).get(state, ())
+        if isinstance(buttons, (list, tuple)):
+            return list(buttons)
+        return [buttons] if buttons is not None else []
 
     def set_active_actuator_group(self, group_index, reason=""):
         """Enable only an initialised pair belonging to the selected point."""
@@ -1133,10 +1137,11 @@ class LaserPointing(DS_General_Widget):
                     active_point = str(ds.active_point)
                 except Exception:
                     active_point = ""
-                button = getattr(self, "point_buttons_by_state", {}).get(active_point)
-                if button is not None:
-                    button.setChecked(True)
-                elif not active_point:
+                buttons = self._point_buttons(active_point)
+                if buttons:
+                    for button in buttons:
+                        button.setChecked(True)
+                else:
                     self._clear_point_selection()
                 self.set_active_actuator_group(optical_point_group(active_point))
         except Exception:
