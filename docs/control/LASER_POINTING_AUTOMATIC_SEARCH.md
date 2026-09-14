@@ -213,14 +213,18 @@ The composite Qt client is organised for two controllers side by side:
 - the raw Basler absolute X/Y traces are replaced by signed **ΔX/ΔY** values
   and a centred XY vector/trajectory directly below the camera;
 - the camera and signed XY view remain visible in both modes;
-- the **Automatic** tab contains optical points, active-pair initialisation,
-  search settings, and **Convergence over time**;
+- the shared **Optical points** selector remains visible above both tabs,
+  preserving the old point1–point6 workflow and selecting the active mount
+  pair for manual alignment;
+- the **Automatic** tab contains active-pair initialisation, search settings,
+  and **Convergence over time**;
 - the **Manual** tab replaces only the right-hand control column with Standa
   mount widgets and, for LaserPointing2, the required OWIS translation-stage
   widget. It does not show the convergence graph;
 - Standa controls use one row per device: state LED, friendly name, position,
   decrement, relative step, and increment. Optical-device widgets are omitted
-  from Manual because point presets are controller-owned automatic operations.
+  from Manual because point presets remain in the shared selector above the
+  tabs and are applied by the controller.
 
 Right-click the relative-step value in a Qt Standa row to select another step.
 

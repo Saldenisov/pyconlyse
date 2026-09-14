@@ -19,6 +19,9 @@ class Basler_camera(DS_General_Widget):
         super().__init__(device_name, parent, vis_type)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.image_listener)
+        # The camera may already be acquiring when a client opens.  Sync the
+        # toggle after the layouts and image timer have both been constructed.
+        QtCore.QTimer.singleShot(0, self._sync_grabbing_state)
 
     def register_DS_full(self, group_number=1):
         super(Basler_camera, self).register_DS_full()
@@ -51,6 +54,10 @@ class Basler_camera(DS_General_Widget):
         )
         button_start_grabbing.clicked.connect(self.grab_clicked)
 
+        self.grab_status_label = Qt.QLabel("")
+        self.grab_status_label.setWordWrap(True)
+        self.grab_status_label.setStyleSheet("color: #8B1E1E;")
+
         setattr(self, f"button_init_{dev_name}", TaurusCommandButton(command="init"))
         button_init: TaurusCommandButton = getattr(self, f"button_init_{dev_name}")
         button_init.setModel(dev_name)
@@ -65,6 +72,7 @@ class Basler_camera(DS_General_Widget):
 
         lo_buttons.addWidget(grabbing_led)
         lo_buttons.addWidget(button_start_grabbing)
+        lo_buttons.addWidget(self.grab_status_label)
         lo_buttons.addWidget(button_init)
         lo_buttons.addWidget(button_on)
         lo_buttons.addWidget(button_off)
@@ -106,8 +114,13 @@ class Basler_camera(DS_General_Widget):
         )
         button_start_grabbing.clicked.connect(self.grab_clicked)
 
+        self.grab_status_label = Qt.QLabel("")
+        self.grab_status_label.setWordWrap(True)
+        self.grab_status_label.setStyleSheet("color: #8B1E1E;")
+
         lo_status.addWidget(grabbing_led)
         lo_status.addWidget(button_start_grabbing)
+        lo_status.addWidget(self.grab_status_label)
 
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
@@ -261,22 +274,85 @@ class Basler_camera(DS_General_Widget):
     def width_change(self):
         print(self.width.getValue())
 
+    @staticmethod
+    def _camera_state_name(ds):
+        try:
+            state = ds.getDeviceProxy().state()
+        except Exception:
+            state = getattr(ds, "state", "UNKNOWN")
+        return str(state).strip().upper().rsplit(".", 1)[-1]
+
+    @staticmethod
+    def _read_grabbing_state(ds, fallback=False):
+        try:
+            return bool(ds.getDeviceProxy().read_attribute("isgrabbing").value)
+        except Exception:
+            try:
+                return bool(ds.isgrabbing)
+            except Exception:
+                return bool(fallback)
+
+    def _set_grabbing_ui(self, grabbing):
+        self.grabbing = bool(grabbing)
+        button = getattr(self, f"button_start_grabbing_{self.dev_name}", None)
+        if button is not None:
+            button.setText("Stop grab" if self.grabbing else "Grab")
+            button.setToolTip(
+                "Stop camera acquisition" if self.grabbing else "Start camera acquisition"
+            )
+        status = getattr(self, "grab_status_label", None)
+        if status is not None:
+            status.clear()
+        if hasattr(self, "timer"):
+            if self.grabbing:
+                self.timer.start(150)
+            else:
+                self.timer.stop()
+
+    def _show_grab_error(self, message):
+        button = getattr(self, f"button_start_grabbing_{self.dev_name}", None)
+        if button is not None:
+            button.setText("Grab failed")
+            button.setToolTip(str(message))
+        status = getattr(self, "grab_status_label", None)
+        if status is not None:
+            status.setText(str(message))
+
+    def _sync_grabbing_state(self):
+        ds: Device = getattr(self, f"ds_{self.dev_name}")
+        self._set_grabbing_ui(self._read_grabbing_state(ds, self.grabbing))
+
     def grab_clicked(self):
         ds: Device = getattr(self, f"ds_{self.dev_name}")
 
-        button_start_grabbing: TaurusCommandButton = getattr(
-            self, f"button_start_grabbing_{self.dev_name}"
-        )
-        if self.grabbing:
-            self.timer.stop()
-            ds.stop_grabbing()
-            self.grabbing = False
-            button_start_grabbing.setText("Grab")
-        else:
+        try:
+            grabbing = self._read_grabbing_state(ds, self.grabbing)
+            if grabbing:
+                ds.stop_grabbing()
+                if self._read_grabbing_state(ds, False):
+                    raise RuntimeError("Camera did not stop acquisition")
+                self._set_grabbing_ui(False)
+                return
+
+            # LaserPointing uses this minimal camera view and intentionally
+            # hides the separate Turn On control.  A Grab click is therefore
+            # the explicit operator request to open/configure the camera first.
+            if self._camera_state_name(ds) != "ON":
+                ds.turn_on()
+                state = self._camera_state_name(ds)
+                if state != "ON":
+                    raise RuntimeError(f"Camera could not be turned on (state={state})")
+
             ds.start_grabbing()
-            self.timer.start(150)
-            self.grabbing = True
-            button_start_grabbing.setText("Grabbing")
+            if not self._read_grabbing_state(ds, False):
+                error = str(getattr(ds, "last_error", "") or "").strip()
+                raise RuntimeError(error or "Camera did not start acquisition")
+            self._set_grabbing_ui(True)
+        except Exception as error:
+            self.grabbing = self._read_grabbing_state(ds, False)
+            if hasattr(self, "timer") and not self.grabbing:
+                self.timer.stop()
+            self._show_grab_error(f"Grab failed: {error}")
 
     def image_listener(self):
         ds: Device = getattr(self, f"ds_{self.dev_name}")

@@ -155,6 +155,7 @@ class LaserPointing(DS_General_Widget):
             manual_layout = QtWidgets.QVBoxLayout(manual_hardware)
             manual_layout.setContentsMargins(4, 4, 4, 4)
             manual_layout.setSpacing(5)
+            point_selector = None
 
             def register_ds(device_role, device_name):
                 extra = None
@@ -182,7 +183,7 @@ class LaserPointing(DS_General_Widget):
 
                 lo_controls.setContentsMargins(4, 4, 4, 4)
                 lo_controls.setSpacing(6)
-                lo_controls.addWidget(self.set_states())
+                point_selector = self.set_states()
                 self.add_automatic_search_controls(lo_controls, ds)
                 self.add_pair_initialization_controls(lo_controls, ds)
                 self.mount_interlock_status = QtWidgets.QLabel()
@@ -289,15 +290,25 @@ class LaserPointing(DS_General_Widget):
             )
 
             mode_tabs = QtWidgets.QTabWidget()
+            mode_tabs.setObjectName("laserPointingModeTabs")
             mode_tabs.setDocumentMode(True)
             mode_tabs.addTab(scroll, "Automatic")
             mode_tabs.addTab(manual_scroll, "Manual")
             mode_tabs.setCurrentIndex(0)
             # Camera and signed XY error are shared operating views and stay
-            # visible in both modes. Only the right-hand controls switch:
-            # Automatic includes convergence; Manual contains Standa/OWIS.
+            # visible in both modes. Optical points are also shared, matching
+            # the old global point selector: Manual uses a selected point to
+            # choose and unlock the corresponding mount pair. Only the lower
+            # right-hand controls switch between convergence and Standa/OWIS.
+            mode_column = QtWidgets.QWidget()
+            mode_column_layout = QtWidgets.QVBoxLayout(mode_column)
+            mode_column_layout.setContentsMargins(0, 0, 0, 0)
+            mode_column_layout.setSpacing(5)
+            if point_selector is not None:
+                mode_column_layout.addWidget(point_selector)
+            mode_column_layout.addWidget(mode_tabs, 1)
             lo_total.addWidget(image_group, 5)
-            lo_total.addWidget(mode_tabs, 4)
+            lo_total.addWidget(mode_column, 4)
         else:
             # Direct mode: if controller is not available, try to create a widget for this device itself
             ds_widget = create_widget_for_device(self.dev_name, prefer_full=True)
@@ -317,8 +328,8 @@ class LaserPointing(DS_General_Widget):
         # noise. Keep the global widget unchanged and suppress them here.
         Qt.QTimer.singleShot(0, self.hide_update_param_buttons)
 
-        # Status stays at the top; optical presets now live beside the automatic
-        # controls instead of appearing as an unrelated footer.
+        # Status stays at the top; optical presets now live above the mode tabs
+        # instead of appearing as an unrelated footer.
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
@@ -467,6 +478,7 @@ class LaserPointing(DS_General_Widget):
 
         self.rules: OrderedDict = eval(ds.get_rules)
         group = QtWidgets.QGroupBox("Optical points")
+        group.setObjectName("laserPointingOpticalPoints")
         group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
         layout = QtWidgets.QGridLayout(group)
         layout.setContentsMargins(6, 5, 6, 5)
