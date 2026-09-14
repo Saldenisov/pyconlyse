@@ -1,5 +1,6 @@
 import sys
 import types
+from enum import Enum
 from types import SimpleNamespace
 
 import tango
@@ -60,15 +61,32 @@ class FakeTimer:
 
 
 class FakeProxy:
+    class Source(Enum):
+        DEV = "direct"
+        CACHE_DEV = "cached"
+
     def __init__(self, device):
         self.device = device
+        self.source = self.Source.CACHE_DEV
+        self.cached_isgrabbing = device.isgrabbing
 
     def state(self):
         return self.device.state
 
+    def get_source(self):
+        return self.source
+
+    def set_source(self, source):
+        self.source = source
+
     def read_attribute(self, name):
         assert name == "isgrabbing"
-        return SimpleNamespace(value=self.device.isgrabbing)
+        value = (
+            self.device.isgrabbing
+            if self.source == self.Source.DEV
+            else self.cached_isgrabbing
+        )
+        return SimpleNamespace(value=value)
 
 
 class FakeCamera:
@@ -79,6 +97,7 @@ class FakeCamera:
         self.start_succeeds = start_succeeds
         self.calls = []
         self.proxy = FakeProxy(self)
+        self.before_stop = None
 
     def getDeviceProxy(self):
         return self.proxy
@@ -93,6 +112,8 @@ class FakeCamera:
 
     def stop_grabbing(self):
         self.calls.append("stop_grabbing")
+        if self.before_stop is not None:
+            self.before_stop()
         self.isgrabbing = False
 
 
@@ -134,7 +155,10 @@ def test_grab_turns_on_minimal_camera_before_starting_acquisition():
 def test_grab_stops_an_acquisition_already_running_on_the_server():
     camera = FakeCamera(state=tango.DevState.ON)
     camera.isgrabbing = True
+    camera.proxy.cached_isgrabbing = True
     widget, button, _status = make_widget(camera)
+    widget._set_grabbing_ui(True)
+    camera.before_stop = lambda: assert_image_timer_stopped(widget)
 
     Basler_camera.grab_clicked(widget)
 
@@ -142,6 +166,11 @@ def test_grab_stops_an_acquisition_already_running_on_the_server():
     assert widget.grabbing is False
     assert widget.timer.running is False
     assert button.text == "Grab"
+    assert camera.proxy.source == FakeProxy.Source.CACHE_DEV
+
+
+def assert_image_timer_stopped(widget):
+    assert widget.timer.running is False
 
 
 def test_grab_failure_is_visible_and_does_not_start_image_timer():

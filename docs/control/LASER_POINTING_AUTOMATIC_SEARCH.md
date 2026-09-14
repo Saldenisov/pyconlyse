@@ -216,6 +216,8 @@ The composite Qt client is organised for two controllers side by side:
 - the **Manual** tab contains the **Optical points** selector, preserving the
   old point1–point6 workflow and selecting the active mount pair for manual
   alignment;
+- the **Diaphragms** tab provides direct controls for the main-laser diaphragm
+  and both crimping diaphragms, separate from the compact alignment-mount rows;
 - the **Automatic** tab contains active-pair initialisation, search settings,
   and **Convergence over time**; its point sequence is controller-owned and it
   does not expose manual point buttons;
@@ -223,8 +225,8 @@ The composite Qt client is organised for two controllers side by side:
   mount widgets and, for LaserPointing2, the required OWIS translation-stage
   widget. It does not show the convergence graph;
 - Standa controls use one row per device: state LED, friendly name, position,
-  decrement, relative step, and increment. Optical-device widgets are omitted
-  from Manual because its point presets are applied by the controller.
+  decrement, relative step, and increment. Other optical-device widgets are
+  omitted from Manual because its point presets are applied by the controller.
 
 Right-click the relative-step value in a Qt Standa row to select another step.
 

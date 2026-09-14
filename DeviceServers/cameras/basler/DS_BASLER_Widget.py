@@ -283,14 +283,36 @@ class Basler_camera(DS_General_Widget):
         return str(state).strip().upper().rsplit(".", 1)[-1]
 
     @staticmethod
-    def _read_grabbing_state(ds, fallback=False):
+    def _read_grabbing_state(ds, fallback=False, direct=False):
+        proxy = None
+        original_source = None
+        source_changed = False
         try:
-            return bool(ds.getDeviceProxy().read_attribute("isgrabbing").value)
+            proxy = ds.getDeviceProxy()
+            if direct:
+                # ``isgrabbing`` is polled by Tango.  Immediately after a
+                # start/stop command the cached value can still describe the
+                # previous acquisition state, so command verification must
+                # read the device directly.
+                try:
+                    original_source = proxy.get_source()
+                    device_source = getattr(type(original_source), "DEV")
+                    proxy.set_source(device_source)
+                    source_changed = True
+                except Exception:
+                    pass
+            return bool(proxy.read_attribute("isgrabbing").value)
         except Exception:
             try:
                 return bool(ds.isgrabbing)
             except Exception:
                 return bool(fallback)
+        finally:
+            if source_changed and proxy is not None:
+                try:
+                    proxy.set_source(original_source)
+                except Exception:
+                    pass
 
     def _set_grabbing_ui(self, grabbing):
         self.grabbing = bool(grabbing)
@@ -326,10 +348,15 @@ class Basler_camera(DS_General_Widget):
         ds: Device = getattr(self, f"ds_{self.dev_name}")
 
         try:
-            grabbing = self._read_grabbing_state(ds, self.grabbing)
+            grabbing = self._read_grabbing_state(ds, self.grabbing, direct=True)
             if grabbing:
+                # Stop image polling before the command.  Reading ``image``
+                # asks the legacy Basler server to start acquisition when it
+                # is idle, so a timer tick here could otherwise undo Stop.
+                if hasattr(self, "timer"):
+                    self.timer.stop()
                 ds.stop_grabbing()
-                if self._read_grabbing_state(ds, False):
+                if self._read_grabbing_state(ds, False, direct=True):
                     raise RuntimeError("Camera did not stop acquisition")
                 self._set_grabbing_ui(False)
                 return
@@ -344,14 +371,14 @@ class Basler_camera(DS_General_Widget):
                     raise RuntimeError(f"Camera could not be turned on (state={state})")
 
             ds.start_grabbing()
-            if not self._read_grabbing_state(ds, False):
+            if not self._read_grabbing_state(ds, False, direct=True):
                 error = str(getattr(ds, "last_error", "") or "").strip()
                 raise RuntimeError(error or "Camera did not start acquisition")
             self._set_grabbing_ui(True)
         except Exception as error:
-            self.grabbing = self._read_grabbing_state(ds, False)
-            if hasattr(self, "timer") and not self.grabbing:
-                self.timer.stop()
+            self._set_grabbing_ui(
+                self._read_grabbing_state(ds, False, direct=True)
+            )
             self._show_grab_error(f"Grab failed: {error}")
 
     def image_listener(self):

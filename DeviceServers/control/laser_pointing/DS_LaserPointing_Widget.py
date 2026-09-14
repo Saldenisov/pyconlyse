@@ -158,6 +158,11 @@ class LaserPointing(DS_General_Widget):
             manual_layout.setContentsMargins(4, 4, 4, 4)
             manual_layout.setSpacing(5)
 
+            diaphragm_hardware = QtWidgets.QWidget()
+            diaphragm_layout = QtWidgets.QVBoxLayout(diaphragm_hardware)
+            diaphragm_layout.setContentsMargins(4, 4, 4, 4)
+            diaphragm_layout.setSpacing(5)
+
             def register_ds(device_role, device_name):
                 extra = None
                 if isinstance(device_name, tuple):
@@ -208,57 +213,80 @@ class LaserPointing(DS_General_Widget):
                     except KeyError:
                         pass
 
+                def add_control_group(target_layout, group_name, group_devices):
+                    group_box = Qt.QGroupBox(group_name)
+                    setattr(
+                        self,
+                        f"groupbox_{group_name}_{self.dev_name}",
+                        group_box,
+                    )
+
+                    lo_group_loc = Qt.QVBoxLayout()
+                    lo_group_loc.setContentsMargins(4, 5, 4, 4)
+                    lo_group_loc.setSpacing(3)
+
+                    if isinstance(group_devices, tuple) and len(group_devices) > 1:
+                        # The composite client can be narrow when multiple
+                        # cameras are open, so keep one device on each row.
+                        for device_role in group_devices:
+                            row_layout = Qt.QHBoxLayout()
+                            try:
+                                row_layout.addWidget(self.widgets[device_role])
+                            except KeyError:
+                                pass
+                            row_layout.setSpacing(4)
+                            lo_group_loc.addLayout(row_layout)
+                    else:
+                        add_widget_loc(lo_group_loc, group_devices)
+
+                    group_box.setSizePolicy(
+                        QtWidgets.QSizePolicy.Expanding,
+                        QtWidgets.QSizePolicy.Maximum,
+                    )
+                    group_box.setLayout(lo_group_loc)
+                    target_layout.addWidget(group_box)
+
+                self._diaphragm_roles = []
                 for group_name, group_devices in self.groups.items():
                     group_name_lower = group_name.lower()
+                    roles = (
+                        (group_devices,)
+                        if isinstance(group_devices, str)
+                        else tuple(group_devices)
+                    )
+                    diaphragm_roles = tuple(
+                        role for role in roles if "diaphragm" in str(role).lower()
+                    )
+                    if diaphragm_roles:
+                        diaphragm_group_name = (
+                            "Main laser diaphragm"
+                            if group_name_lower == "laser parameters"
+                            else group_name
+                        )
+                        add_control_group(
+                            diaphragm_layout,
+                            diaphragm_group_name,
+                            diaphragm_roles,
+                        )
+                        self._diaphragm_roles.extend(diaphragm_roles)
+                        for role in diaphragm_roles:
+                            widget = self.widgets.get(role)
+                            if hasattr(widget, "set_alignment_motion_enabled"):
+                                widget.set_alignment_motion_enabled(
+                                    True, "Direct diaphragm control"
+                                )
+
                     is_manual_hardware = (
                         "actuator" in group_name_lower
                         or "translation" in group_name_lower
                         or "stage" in group_name_lower
                         or "owis" in group_name_lower
                     )
-                    if not is_manual_hardware:
-                        continue
-
-                    group_box = Qt.QGroupBox(group_name)
-                    setattr(self, f"groupbox_{group_name}_{self.dev_name}", group_box)
-
-                    lo_group_loc = Qt.QVBoxLayout()
-                    lo_group_loc.setContentsMargins(4, 5, 4, 4)
-                    lo_group_loc.setSpacing(3)
-                    
-                    # For multiple devices, create rows with horizontal layouts
-                    if isinstance(group_devices, tuple) and len(group_devices) > 1:
-                        # The composite client shows Cam1 and Cam2 side by
-                        # side, leaving a narrow control column. One device per
-                        # row prevents any child widget from forcing a hidden
-                        # horizontal overflow.
-                        widgets_per_row = 1
-                        device_list = list(group_devices)
-                        
-                        for i in range(0, len(device_list), widgets_per_row):
-                            row_layout = Qt.QHBoxLayout()
-                            row_devices = device_list[i:i+widgets_per_row]
-                            
-                            for device_role in row_devices:
-                                try:
-                                    widget = self.widgets[device_role]
-                                    row_layout.addWidget(widget)
-                                except KeyError:
-                                    pass
-                                    
-                            row_layout.setSpacing(4)
-                            lo_group_loc.addLayout(row_layout)
-                    else:
-                        # Single device or string - add normally
-                        add_widget_loc(lo_group_loc, group_devices)
-                    
-                    group_box.setSizePolicy(
-                        QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Maximum
-                    )
-                    group_box.setLayout(lo_group_loc)
-                    manual_layout.addWidget(group_box)
+                    if is_manual_hardware:
+                        add_control_group(manual_layout, group_name, group_devices)
 
                 manual_layout.addStretch(1)
+                diaphragm_layout.addStretch(1)
             except Exception as e:
                 print(e)
             try:
@@ -293,16 +321,24 @@ class LaserPointing(DS_General_Widget):
                 QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
             )
 
+            diaphragm_scroll = QtWidgets.QScrollArea()
+            diaphragm_scroll.setWidget(diaphragm_hardware)
+            diaphragm_scroll.setWidgetResizable(True)
+            diaphragm_scroll.setSizePolicy(
+                QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
+            )
+
             mode_tabs = QtWidgets.QTabWidget()
             mode_tabs.setObjectName("laserPointingModeTabs")
             mode_tabs.setDocumentMode(True)
             mode_tabs.addTab(scroll, "Automatic")
             mode_tabs.addTab(manual_scroll, "Manual")
+            mode_tabs.addTab(diaphragm_scroll, "Diaphragms")
             mode_tabs.setCurrentIndex(0)
             # Camera and signed XY error are shared operating views and stay
-            # visible in both modes. Manual contains optical-point selection
-            # and Standa/OWIS controls; Automatic contains only the controls
-            # for its controller-owned sequence and convergence.
+            # visible in every mode. Manual contains optical-point selection
+            # and alignment mounts, Diaphragms provides direct iris controls,
+            # and Automatic owns its point sequence and convergence controls.
             lo_total.addWidget(image_group, 5)
             lo_total.addWidget(mode_tabs, 4)
         else:
