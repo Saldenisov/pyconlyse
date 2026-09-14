@@ -184,7 +184,6 @@ class LaserPointing(DS_General_Widget):
 
                 lo_controls.setContentsMargins(4, 4, 4, 4)
                 lo_controls.setSpacing(6)
-                lo_controls.addWidget(self.set_states("Automatic"))
                 self.add_automatic_search_controls(lo_controls, ds)
                 self.add_pair_initialization_controls(lo_controls, ds)
                 self.mount_interlock_status = QtWidgets.QLabel()
@@ -193,9 +192,8 @@ class LaserPointing(DS_General_Widget):
                 lo_controls.addStretch(1)
                 self.set_active_actuator_group(0)
 
-                # Manual must retain the old point-selection workflow.  Use a
-                # second synchronized selector inside the tab so operators do
-                # not have to leave Manual before choosing an alignment plane.
+                # Point selection belongs to the manual workflow. Automatic
+                # search owns its point sequence internally.
                 manual_layout.addWidget(self.set_states("Manual"))
 
                 def add_widget_loc(lo_group_loc, group_devices):
@@ -302,9 +300,9 @@ class LaserPointing(DS_General_Widget):
             mode_tabs.addTab(manual_scroll, "Manual")
             mode_tabs.setCurrentIndex(0)
             # Camera and signed XY error are shared operating views and stay
-            # visible in both modes. Each mode contains a synchronized optical
-            # point selector; the rest of the right-hand controls switch
-            # between convergence and Standa/OWIS.
+            # visible in both modes. Manual contains optical-point selection
+            # and Standa/OWIS controls; Automatic contains only the controls
+            # for its controller-owned sequence and convergence.
             lo_total.addWidget(image_group, 5)
             lo_total.addWidget(mode_tabs, 4)
         else:
@@ -326,8 +324,8 @@ class LaserPointing(DS_General_Widget):
         # noise. Keep the global widget unchanged and suppress them here.
         Qt.QTimer.singleShot(0, self.hide_update_param_buttons)
 
-        # Status stays at the top; optical presets live inside both operating
-        # tabs instead of appearing as an unrelated footer.
+        # Status stays at the top; optical presets live inside Manual instead
+        # of appearing as an unrelated footer.
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
