@@ -201,7 +201,8 @@ class Basler_camera(DS_General_Widget):
 
         # Enable antialiasing for prettier plots
         pg.setConfigOptions(antialias=True)
-        win = pg.GraphicsLayoutWidget(show=True, title="Point Tracking")
+        win = pg.GraphicsLayoutWidget(title="Point Tracking")
+        self.position_tracking_widget = win
         p1 = win.addPlot(title="X position", y=self.positions["X"])
         p1.setLabel("left", "X pos", units="pixel")
         p1.setLabel("bottom", "N of measurement", units="")
@@ -229,6 +230,19 @@ class Basler_camera(DS_General_Widget):
 
         # cmap = pg.colormap.get('CET-L9')
         self.view.setColorMap(cmap)
+
+    def set_position_tracking_visible(self, visible: bool):
+        """Show the raw X/Y traces outside LaserPointing composite views.
+
+        LaserPointing compares two observation planes, so absolute camera X/Y
+        jumps are expected and visually misleading there.  Its controller
+        supplies a time-based delta-error plot instead.
+        """
+
+        for name in ("position_tracking_widget", "label_X_pos", "label_Y_pos"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setVisible(bool(visible))
 
     def register_full_layouts(self):
         super(Basler_camera, self).register_full_layouts()

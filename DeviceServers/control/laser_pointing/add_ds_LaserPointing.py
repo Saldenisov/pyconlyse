@@ -1,3 +1,4 @@
+import json
 from collections import OrderedDict as od
 
 from tango import Database, DbDevInfo
@@ -31,6 +32,9 @@ names = {
                 "Actuators 2": ("ActuatorX2", "ActuatorY2"),
             }
         ),
+        # Basler1 optical sequence: points 1-3 close the first downstream
+        # diaphragm; points 4-6 close the second. The Elyse entry diaphragm is
+        # held near 10% for a small, accurately positioned beam.
         od(
             {
                 "point1": {
@@ -114,6 +118,9 @@ names = {
                 "Translation stages": ("TranslationStage1"),
             }
         ),
+        # Basler2 optical sequence: points 1-3 observe the near propagation
+        # plane; points 4-6 move the translation stage to -700 for a more
+        # sensitive, long-distance position/angle constraint.
         od(
             {
                 "point1": {
@@ -258,6 +265,31 @@ def main():
                 "groups": str(val[4]),
                 "controller_rules": str(val[5]),
                 "pid_groups": str(val[6]),
+                "automatic_search_defaults": json.dumps(
+                    {
+                        "mode": "sensitive",
+                        "initial_step": 10.0,
+                        "minimum_step": 2.0,
+                        "step_schedule": [10.0, 6.0, 2.0],
+                        "radius": 30.0,
+                        "tolerance_px": 2.0,
+                        "minimum_improvement_px": 0.1,
+                        "unchanged_response_tolerance_px": 0.25,
+                        "probe_repetitions": 3,
+                        "max_evaluations": 16,
+                        "max_cycles": 2,
+                        "samples": 3,
+                        "sample_interval_s": 0.2,
+                        "camera_frame_wait_s": 0.25,
+                        "motion_timeout_s": 180.0,
+                        "motion_poll_s": 0.2,
+                        "position_tolerance": 0.05,
+                        "position_stable_reads": 2,
+                        "groups": [],
+                        "point_pairs": {},
+                        "restore_point": "",
+                    }
+                ),
             },
         )
         i += 1
