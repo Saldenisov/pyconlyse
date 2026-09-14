@@ -44,3 +44,33 @@
 .device-clients-page .help-section h4 {
   margin: 0 0 8px 0;
 }
+
+.device-load-selector {
+  border: 1px solid #d0d5dd;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  background: #ffffff;
+}
+
+.device-load-selector h3 {
+  margin: 0 0 10px;
+}
+
+.device-load-selector-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.device-load-selector-list {
+  display: grid;
+  gap: 6px;
+}
+
+.device-load-selector-list label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}

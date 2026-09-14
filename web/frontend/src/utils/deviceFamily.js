@@ -1,6 +1,7 @@
 export const DEVICE_FAMILY_DEFINITIONS = [
   { key: 'itest_psu', label: 'iTest PSU' },
   { key: 'netio', label: 'NETIO PDU' },
+  { key: 'laser_pointing', label: 'Laser Pointing' },
   { key: 'camera', label: 'Cameras' },
   { key: 'motor', label: 'Motors' },
   { key: 'generic', label: 'Generic Tango' },
@@ -38,6 +39,14 @@ export function resolveDeviceFamily(deviceOrName, deviceClass = '') {
   }
   if (name.includes('netio') || name.includes('pdu') || familyClass.includes('netio')) {
     return 'netio';
+  }
+  if (
+    name.includes('laserpointing') ||
+    name.includes('laser-pointing') ||
+    familyClass.includes('laserpointing') ||
+    server.includes('laserpointing')
+  ) {
+    return 'laser_pointing';
   }
   if (
     name.includes('camera') ||

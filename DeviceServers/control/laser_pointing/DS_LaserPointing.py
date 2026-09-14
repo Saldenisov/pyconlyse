@@ -82,6 +82,7 @@ class DS_LaserPointing(DS_ControlPosition):
         "start_automatic_search": [DevState.ON],
         "stop_automatic_search": [DevState.ON],
         "apply_controller_point": [DevState.ON],
+        "select_manual_point": [DevState.ON],
         "initialize_active_pair": [DevState.ON],
         "move_active_actuator": [DevState.ON],
         **DS_ControlPosition.RULES,
@@ -108,6 +109,7 @@ class DS_LaserPointing(DS_ControlPosition):
         self._search_lock = Lock()
         self._search_stop = Event()
         self._search_thread: Optional[Thread] = None
+        self._point_application_thread: Optional[Thread] = None
         self._search_status = "idle"
         self._search_progress: Dict = {}
         self._search_history = []
@@ -227,6 +229,10 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 return -1
+            if self._point_application_is_running():
+                raise RuntimeError(
+                    "cannot start automatic search while applying an optical point"
+                )
             try:
                 config = dict(self._search_config)
                 if str(configuration).strip():
@@ -269,11 +275,13 @@ class DS_LaserPointing(DS_ControlPosition):
         doc_in="Controller point name, for example point3 or working.",
     )
     def apply_controller_point(self, point_name):
-        """Apply one complete optical preset through the controller.
+        """Start applying one complete optical preset through the controller.
 
         This is the browser-safe equivalent of clicking a point in the Qt
         composite widget: the controller owns all child-device coordination
-        and waits for actual motor readback before returning.
+        and publishes the point only after actual motor readback.  The Tango
+        command returns immediately so long optical movements do not occupy
+        the device serialization monitor and time out browser clients.
         """
         point_name = str(point_name).strip()
         if point_name not in self.controller_rules:
@@ -282,26 +290,97 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 raise RuntimeError("cannot apply a point while automatic search is running")
+            if self._point_application_is_running():
+                raise RuntimeError("another optical point is already being applied")
             self._search_stop.clear()
+            # A partially applied preset must not leave either mount pair
+            # unlocked under the previously selected point.
+            self._active_point = ""
+            self._actuator_initialization_status = {
+                "phase": "point_applying",
+                "group": 0,
+                "message": f"Applying {point_name}; alignment mounts are locked",
+            }
             self._search_progress = {
                 "phase": "manual_point",
                 "point": point_name,
                 "message": f"Applying {point_name}",
             }
-            try:
-                self._apply_point(point_name, dict(self._search_config))
-            except SearchCancelled as error:
-                self._search_progress = {
-                    "phase": "manual_point_cancelled",
-                    "point": point_name,
-                }
-                raise RuntimeError(f"applying {point_name} was cancelled") from error
+            self._point_application_thread = Thread(
+                target=self._point_application_worker,
+                args=(point_name, dict(self._search_config)),
+                name=f"{self.device_name}-apply-{point_name}",
+                daemon=True,
+            )
+            self._point_application_thread.start()
+        return 0
+
+    @command(
+        dtype_in=str,
+        dtype_out=int,
+        doc_in="Point name used only to select the active manual Standa pair.",
+    )
+    def select_manual_point(self, point_name):
+        """Select a manual mount pair without moving any laser-path hardware."""
+
+        point_name = str(point_name).strip()
+        if point_name not in self.controller_rules:
+            raise ValueError(f"unknown controller point: {point_name}")
+        if optical_point_group(point_name) == 0:
+            raise ValueError("manual Standa control requires a numbered optical point")
+
+        with self._search_lock:
+            if self._search_is_running():
+                raise RuntimeError(
+                    "cannot select a manual point while automatic search is running"
+                )
+            if self._point_application_is_running():
+                raise RuntimeError(
+                    "cannot select a manual point while an optical preset is applying"
+                )
+            self._publish_active_point(point_name)
+            self._search_progress = {
+                "phase": "manual_point_selected",
+                "point": point_name,
+                "message": (
+                    f"Selected {point_name} for manual Standa control; "
+                    "laser-path hardware was not moved"
+                ),
+            }
+        return 0
+
+    def _point_application_worker(self, point_name: str, config: Dict):
+        try:
+            self._apply_point(point_name, config)
+        except SearchCancelled:
+            self._search_progress = {
+                "phase": "manual_point_cancelled",
+                "point": point_name,
+                "message": f"Applying {point_name} was cancelled",
+            }
+            self._actuator_initialization_status = {
+                "phase": "point_application_cancelled",
+                "group": 0,
+                "message": f"Applying {point_name} was cancelled; mounts remain locked",
+            }
+        except Exception as error:
+            self._search_progress = {
+                "phase": "manual_point_error",
+                "point": point_name,
+                "message": f"Could not apply {point_name}: {error}",
+            }
+            self._actuator_initialization_status = {
+                "phase": "point_application_error",
+                "group": 0,
+                "message": f"Could not apply {point_name}; mounts remain locked",
+            }
+            self.error(self._search_progress["message"])
+        else:
             self._search_progress = {
                 "phase": "manual_point_complete",
                 "point": point_name,
                 "message": f"Applied {point_name}",
             }
-        return 0
 
     @command(dtype_out=int)
     def initialize_active_pair(self):
@@ -315,6 +394,10 @@ class DS_LaserPointing(DS_ControlPosition):
             if self._search_is_running():
                 raise RuntimeError(
                     "cannot initialise alignment mounts during automatic search"
+                )
+            if self._point_application_is_running():
+                raise RuntimeError(
+                    "cannot initialise alignment mounts while applying an optical point"
                 )
             group_index = optical_point_group(self._active_point)
             if group_index == 0:
@@ -400,6 +483,10 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 raise RuntimeError("manual actuator movement is locked during automatic search")
+            if self._point_application_is_running():
+                raise RuntimeError(
+                    "manual actuator movement is locked while applying an optical point"
+                )
             active_group = optical_point_group(self._active_point)
             if active_group == 0:
                 raise RuntimeError(
@@ -439,6 +526,13 @@ class DS_LaserPointing(DS_ControlPosition):
 
     def _search_is_running(self) -> bool:
         return self._search_thread is not None and self._search_thread.is_alive()
+
+    def _point_application_is_running(self) -> bool:
+        thread = getattr(self, "_point_application_thread", None)
+        return (
+            thread is not None
+            and thread.is_alive()
+        )
 
     @staticmethod
     def _normalise_search_config(value) -> Dict:
@@ -900,6 +994,14 @@ class DS_LaserPointing(DS_ControlPosition):
                 and "MOVING" not in state
             ):
                 return
+            # Mono-axis move_axis_abs returns only after the child command has
+            # stopped.  Waiting for the full automatic-search timeout after a
+            # stopped readback mismatch hides the real failure and blocks the
+            # controller's Tango monitor for minutes.
+            if "MOVING" not in state:
+                raise RuntimeError(
+                    f"motor stopped at {last_actual}, expected {target}"
+                )
             self._interruptible_sleep(config["motion_poll_s"])
         raise RuntimeError(
             f"motor did not reach {target} within {config['motion_timeout_s']} s; "
@@ -951,32 +1053,26 @@ class DS_LaserPointing(DS_ControlPosition):
 
     def _apply_point(self, point_name: str, config: Dict):
         self._raise_if_cancelled()
-        errors = []
-
-        def apply(role, value):
+        # Optical presets commonly contain several Standa-backed devices on
+        # the same host. Apply them deterministically so their Tango/libximc
+        # transactions cannot contend and leave a partial preset behind.
+        for role, value in self.controller_rules[point_name].items():
+            self._raise_if_cancelled()
+            device = self._device_for_role(role)
             try:
-                device = self._device_for_role(role)
                 if isinstance(value, (list, tuple)) and len(value) == 2:
                     self._move_multi_axis(device, value, config)
                 else:
                     self._move_single_axis(device, float(value), config)
             except Exception as error:
-                errors.append(f"{role}: {error}")
-
-        threads = [
-            Thread(target=apply, args=(role, value), daemon=True)
-            for role, value in self.controller_rules[point_name].items()
-        ]
-        for thread in threads:
-            thread.start()
-        for thread in threads:
-            thread.join()
-        if errors:
-            raise RuntimeError(
-                f"could not apply controller point {point_name}: " + "; ".join(errors)
-            )
+                raise RuntimeError(
+                    f"could not apply controller point {point_name}: {role}: {error}"
+                ) from error
         # Publish the point only after every child has reached its readback.
         # Both clients use this as the source of truth for the mount interlock.
+        self._publish_active_point(point_name)
+
+    def _publish_active_point(self, point_name: str):
         self._active_point = point_name
         group_index = optical_point_group(point_name)
         self._actuator_initialization_status = {

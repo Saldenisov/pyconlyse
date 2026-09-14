@@ -1,7 +1,9 @@
 # device_api.py - Enhanced Tango Device API for Browser Clients
+import ast
 import json
 import math
 import os
+import re
 import threading
 import time
 import traceback
@@ -54,6 +56,47 @@ def make_json_safe(value):
         return value
 
 
+def _parse_controller_mapping(value):
+    """Parse the trusted mapping representation exported by DS_ControlPosition.
+
+    OrderedDict uses a constructor-style repr which ``ast.literal_eval`` does
+    not accept directly.  Its argument is still a plain literal list of pairs,
+    so unwrap only that exact representation and keep arbitrary evaluation out
+    of the web process.
+    """
+    text = str(value or '').strip()
+    if text.startswith('OrderedDict(') and text.endswith(')'):
+        pairs = ast.literal_eval(text[len('OrderedDict('):-1])
+        return dict(pairs)
+    parsed = ast.literal_eval(text)
+    if not isinstance(parsed, dict):
+        raise ValueError('controller attribute is not a mapping')
+    return parsed
+
+
+def _read_selected_device_properties(device_name, property_names):
+    """Read a small immutable property set without enumerating every property."""
+    database = tango_gateway.create_database()
+    names = [str(name) for name in property_names]
+    try:
+        values = database.get_device_property(device_name, names)
+        if isinstance(values, dict):
+            return {name: make_json_safe(values.get(name, [])) for name in names}
+    except Exception:
+        pass
+
+    # Lightweight test gateways and older Tango bindings may only accept one
+    # property name at a time.
+    result = {}
+    for name in names:
+        try:
+            values = database.get_device_property(device_name, name)
+            result[name] = make_json_safe(values.get(name, []))
+        except Exception:
+            result[name] = []
+    return result
+
+
 def _read_attr_sequence(device, attr_name):
     """Best-effort read of an attribute as a Python list."""
     try:
@@ -97,6 +140,16 @@ def _is_delayed_tango_reconnect(exc):
     )
 
 
+def _is_transient_tango_read_failure(exc):
+    """Return whether a read can safely be retried after Tango releases its monitor."""
+    text = str(exc).lower()
+    return _is_delayed_tango_reconnect(exc) or (
+        "api_commandtimedout" in text
+        or "api_commandtimeout" in text
+        or "not able to acquire serialization" in text
+    )
+
+
 def _with_tango_retry(operation, attempts=4, delay=1.05):
     last_exc = None
     for attempt in range(max(1, int(attempts))):
@@ -104,7 +157,7 @@ def _with_tango_retry(operation, attempts=4, delay=1.05):
             return operation()
         except Exception as exc:
             last_exc = exc
-            if not _is_delayed_tango_reconnect(exc) or attempt + 1 >= attempts:
+            if not _is_transient_tango_read_failure(exc) or attempt + 1 >= attempts:
                 raise
             time.sleep(delay)
     raise last_exc
@@ -367,6 +420,23 @@ def _normalize_daqmx_channels(payload):
         })
     channels.sort(key=lambda item: item["name"])
     return channels
+
+
+def _laser_camera_number(value):
+    match = re.search(r'cam(?:era)?[_-]?(\d+)', str(value or ''), re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _is_owned_laser_flipper(role, camera_device):
+    """Match Shutter/Flipper N only to Camera N's manual controls."""
+
+    role_text = str(role or '')
+    if not re.search(r'shutter|flipper', role_text, re.IGNORECASE):
+        return False
+    role_numbers = re.findall(r'\d+', role_text)
+    return bool(role_numbers) and int(role_numbers[0]) == _laser_camera_number(
+        camera_device
+    )
 
 
 def _to_float_or_none(value):
@@ -635,7 +705,7 @@ def _authorization_error_response(exc):
 _CAMERA_PARAMETER_NAMES = frozenset({
     'exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY',
     'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal',
-    'binning_vertical', 'number_kinetics',
+    'binning_vertical', 'number_kinetics', 'center_gravity_threshold',
 })
 _SPECTROGRAPH_PARAMETER_NAMES = frozenset({
     'wavelength_nm', 'grating', 'pixel_number_attr', 'pixel_width_um_attr',
@@ -1451,6 +1521,435 @@ def get_device_properties(device_name):
 
         properties['success'] = True
         return jsonify(properties)
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@device_api.route('/api/laser-pointing/<path:device_name>/snapshot', methods=['GET'])
+def get_laser_pointing_snapshot(device_name):
+    """Return one normalized snapshot for the composite LaserPointing client."""
+    try:
+        def read_snapshot():
+            controller = DeviceManager.get_device(device_name)
+
+            def read_value(attribute_name):
+                return controller.read_attribute(attribute_name).value
+
+            def read_optional_json(attribute_name, default):
+                try:
+                    return json.loads(str(read_value(attribute_name) or '{}'))
+                except Exception:
+                    return default
+
+            def read_optional_text(attribute_name, default):
+                try:
+                    return str(read_value(attribute_name))
+                except Exception:
+                    return default
+
+            rules = _parse_controller_mapping(read_value('get_rules'))
+            device_map = _parse_controller_mapping(read_value('get_ds_dict'))
+            groups = _parse_controller_mapping(read_value('get_groups'))
+            commands = {str(name).lower() for name in controller.get_command_list()}
+            automatic_supported = 'start_automatic_search' in commands
+            point_supported = 'apply_controller_point' in commands
+            manual_point_selection_supported = 'select_manual_point' in commands
+            pair_initialization_supported = 'initialize_active_pair' in commands
+            interlocked_motion_supported = 'move_active_actuator' in commands
+            search_status = read_optional_text(
+                'automatic_search_status', 'server restart required'
+            )
+            search_progress = read_optional_json(
+                'automatic_search_progress',
+                {
+                    'phase': 'upgrade_required',
+                    'message': (
+                        'Restart DS_LaserPointing to activate automatic search '
+                        'and controller-owned point presets'
+                    ),
+                },
+            )
+            search_config = read_optional_json(
+                'automatic_search_config',
+                {
+                    'mode': 'sensitive',
+                    'step_schedule': [10.0, 6.0, 2.0],
+                    'radius': 30.0,
+                    'tolerance_px': 2.0,
+                    'max_evaluations': 16,
+                    'max_cycles': 2,
+                    'samples': 3,
+                },
+            )
+            search_history = read_optional_json('automatic_search_history', [])
+            if not isinstance(search_history, list):
+                search_history = []
+            pair_initialization = read_optional_json(
+                'actuator_initialization_status',
+                {
+                    'phase': 'upgrade_required',
+                    'group': 0,
+                    'message': 'Restart DS_LaserPointing to enable pair initialisation',
+                },
+            )
+            active_point = read_optional_text('active_point', '').strip()
+            try:
+                active_actuator_group = int(read_value('active_actuator_group'))
+            except Exception:
+                active_actuator_group = 0
+
+            camera_name = device_map.get('Camera', '')
+            camera = None
+            camera_state = 'UNKNOWN'
+            camera_grabbing = False
+            centroid = None
+            centroid_valid = False
+            if camera_name:
+                camera = DeviceManager.get_device(str(camera_name))
+                try:
+                    camera_state = str(camera.state())
+                except Exception:
+                    camera_state = 'UNKNOWN'
+                camera_grabbing = _read_camera_is_grabbing(camera)
+                try:
+                    centroid = ast.literal_eval(str(camera.read_attribute('cg').value))
+                except Exception:
+                    centroid = None
+                try:
+                    centroid_valid = bool(camera.read_attribute('cg_valid').value)
+                except Exception:
+                    centroid_valid = bool(centroid)
+
+            actuators = []
+            for role, specification in device_map.items():
+                if not str(role).lower().startswith('actuator'):
+                    continue
+                child_name = specification
+                if isinstance(specification, (list, tuple)):
+                    child_name = specification[0]
+                child = DeviceManager.get_device(str(child_name))
+                try:
+                    position = make_json_safe(child.read_attribute('position').value)
+                except Exception:
+                    position = None
+                try:
+                    state = str(child.state())
+                except Exception:
+                    state = 'UNKNOWN'
+                try:
+                    child_commands = {
+                        str(name).lower() for name in child.get_command_list()
+                    }
+                except Exception:
+                    child_commands = set()
+                lifecycle = {}
+                for attribute_name in (
+                    'hardware_connection_state',
+                    'initialization_state',
+                    'hardware_lifecycle_status',
+                ):
+                    try:
+                        lifecycle[attribute_name] = str(
+                            child.read_attribute(attribute_name).value
+                        )
+                    except Exception:
+                        lifecycle[attribute_name] = ''
+                connection = lifecycle['hardware_connection_state'].upper()
+                initialization = lifecycle['initialization_state'].upper()
+                state_name = state.upper().rsplit('.', 1)[-1]
+                disconnected = connection in {
+                    'DISCONNECTED',
+                    'POWER_OFF',
+                    'POWER_STATUS_UNAVAILABLE',
+                } or state_name in {'FAULT', 'OFF', 'UNKNOWN', 'UNREACHABLE'}
+                ready = not disconnected and (
+                    initialization == 'SUCCEEDED'
+                    or connection == 'READY'
+                    or state_name in {'ON', 'MOVING', 'RUNNING'}
+                )
+                actuators.append({
+                    'role': str(role),
+                    'device': str(child_name),
+                    'position': position,
+                    'state': state,
+                    **lifecycle,
+                    'disconnected': disconnected,
+                    'ready': ready,
+                    'move_supported': 'move_axis_abs' in child_commands,
+                })
+
+            other_devices = []
+            for role, specification in device_map.items():
+                role_name = str(role)
+                role_lower = role_name.lower()
+                is_diaphragm = 'diaphragm' in role_lower
+                is_half_wave_plate = (
+                    'halfwaveplate' in role_lower
+                    or 'half_wave_plate' in role_lower
+                    or 'lambda_2' in role_lower
+                )
+                is_flipper = _is_owned_laser_flipper(role_name, camera_name)
+                if not is_diaphragm and not is_half_wave_plate and not is_flipper:
+                    continue
+
+                child_name = specification
+                if isinstance(specification, (list, tuple)):
+                    child_name = specification[0]
+                child = DeviceManager.get_device(str(child_name))
+                try:
+                    position = make_json_safe(
+                        child.read_attribute('position').value
+                    )
+                except Exception:
+                    position = None
+                try:
+                    child_state = str(child.state())
+                except Exception:
+                    child_state = 'UNKNOWN'
+                try:
+                    child_commands = {
+                        str(name).lower() for name in child.get_command_list()
+                    }
+                except Exception:
+                    child_commands = set()
+
+                lifecycle = {}
+                for attribute_name in (
+                    'hardware_connection_state',
+                    'initialization_state',
+                    'hardware_lifecycle_status',
+                ):
+                    try:
+                        lifecycle[attribute_name] = str(
+                            child.read_attribute(attribute_name).value
+                        )
+                    except Exception:
+                        lifecycle[attribute_name] = ''
+
+                unit = ''
+                minimum = None
+                maximum = None
+                try:
+                    position_config = child.get_attribute_config('position')
+                    unit = str(getattr(position_config, 'unit', '') or '')
+                    for field_name, output_name in (
+                        ('min_value', 'minimum'), ('max_value', 'maximum')
+                    ):
+                        raw_value = getattr(position_config, field_name, None)
+                        try:
+                            numeric_value = float(raw_value)
+                        except (TypeError, ValueError):
+                            numeric_value = None
+                        if output_name == 'minimum':
+                            minimum = numeric_value
+                        else:
+                            maximum = numeric_value
+                except Exception:
+                    pass
+
+                properties = _read_selected_device_properties(
+                    str(child_name),
+                    ('friendly_name', 'preset_pos', 'unit', 'limit_min', 'limit_max'),
+                )
+
+                def first_property(name, default=''):
+                    values = properties.get(name, [])
+                    if isinstance(values, (list, tuple)) and values:
+                        return values[0]
+                    return values if values not in (None, []) else default
+
+                friendly_name = str(first_property('friendly_name', '') or '')
+                if not unit:
+                    unit = str(first_property('unit', '') or '')
+                if minimum is None:
+                    try:
+                        minimum = float(first_property('limit_min'))
+                    except (TypeError, ValueError):
+                        minimum = None
+                if maximum is None:
+                    try:
+                        maximum = float(first_property('limit_max'))
+                    except (TypeError, ValueError):
+                        maximum = None
+
+                preset_positions = []
+                raw_presets = properties.get('preset_pos', [])
+                if not isinstance(raw_presets, (list, tuple)):
+                    raw_presets = [raw_presets]
+                for raw_preset in raw_presets:
+                    try:
+                        preset = float(raw_preset)
+                    except (TypeError, ValueError):
+                        continue
+                    if preset not in preset_positions:
+                        preset_positions.append(preset)
+
+                connection = lifecycle['hardware_connection_state'].upper()
+                initialization = lifecycle['initialization_state'].upper()
+                state_name = child_state.upper().rsplit('.', 1)[-1]
+                disconnected = connection in {
+                    'DISCONNECTED',
+                    'POWER_OFF',
+                    'POWER_STATUS_UNAVAILABLE',
+                } or state_name in {'FAULT', 'OFF', 'UNKNOWN', 'UNREACHABLE'}
+                ready = not disconnected and (
+                    initialization == 'SUCCEEDED'
+                    or connection == 'READY'
+                    or state_name in {'ON', 'MOVING', 'RUNNING'}
+                )
+                other_devices.append({
+                    'role': role_name,
+                    'control_type': (
+                        'diaphragm'
+                        if is_diaphragm
+                        else ('half_wave_plate' if is_half_wave_plate else 'flipper')
+                    ),
+                    'friendly_name': friendly_name,
+                    'device': str(child_name),
+                    'position': position,
+                    'preset_positions': preset_positions,
+                    'unit': unit,
+                    'minimum': minimum,
+                    'maximum': maximum,
+                    'state': child_state,
+                    'move_supported': 'move_axis_abs' in child_commands,
+                    'stop_supported': 'stop_movement' in child_commands,
+                    **lifecycle,
+                    'disconnected': disconnected,
+                    'ready': ready,
+                })
+
+            manual_devices = []
+            for role, specification in device_map.items():
+                role_name = str(role)
+                role_lower = role_name.lower()
+                if role_lower.startswith('actuator') or not any(
+                    token in role_lower for token in ('translation', 'stage', 'owis')
+                ):
+                    continue
+
+                child_name = specification
+                axes = []
+                if isinstance(specification, (list, tuple)):
+                    child_name = specification[0]
+                    if len(specification) > 1:
+                        configured_axes = specification[1]
+                        if isinstance(configured_axes, (list, tuple)):
+                            axes = [int(axis) for axis in configured_axes]
+                        else:
+                            axes = [int(configured_axes)]
+
+                child = DeviceManager.get_device(str(child_name))
+                try:
+                    child_state = str(child.state())
+                except Exception:
+                    child_state = 'UNKNOWN'
+                try:
+                    child_commands = {
+                        str(name).lower() for name in child.get_command_list()
+                    }
+                except Exception:
+                    child_commands = set()
+
+                lifecycle = {}
+                for attribute_name in (
+                    'hardware_connection_state',
+                    'initialization_state',
+                    'hardware_lifecycle_status',
+                ):
+                    try:
+                        lifecycle[attribute_name] = str(
+                            child.read_attribute(attribute_name).value
+                        )
+                    except Exception:
+                        lifecycle[attribute_name] = ''
+
+                axis_snapshots = []
+                for axis in axes:
+                    position = None
+                    for attribute_name in (f'pos{axis}', f'position_axis_{axis}'):
+                        try:
+                            position = make_json_safe(
+                                child.read_attribute(attribute_name).value
+                            )
+                            break
+                        except Exception:
+                            pass
+                    axis_snapshots.append({
+                        'axis': axis,
+                        'position': position,
+                    })
+
+                connection = lifecycle['hardware_connection_state'].upper()
+                initialization = lifecycle['initialization_state'].upper()
+                state_name = child_state.upper().rsplit('.', 1)[-1]
+                disconnected = connection in {
+                    'DISCONNECTED',
+                    'POWER_OFF',
+                    'POWER_STATUS_UNAVAILABLE',
+                } or state_name in {'FAULT', 'OFF', 'UNKNOWN', 'UNREACHABLE'}
+                ready = not disconnected and (
+                    initialization == 'SUCCEEDED'
+                    or connection == 'READY'
+                    or state_name in {'ON', 'MOVING', 'RUNNING'}
+                )
+                manual_devices.append({
+                    'role': role_name,
+                    'device': str(child_name),
+                    'state': child_state,
+                    'axes': axis_snapshots,
+                    'move_supported': 'move_axis' in child_commands,
+                    **lifecycle,
+                    'disconnected': disconnected,
+                    'ready': ready,
+                })
+
+            return {
+                'device': device_name,
+                'state': str(controller.state()),
+                'rules': make_json_safe(rules),
+                'devices': make_json_safe(device_map),
+                'groups': make_json_safe(groups),
+                'automatic_search': {
+                    'status': search_status,
+                    'progress': make_json_safe(search_progress),
+                    'config': make_json_safe(search_config),
+                    'history': make_json_safe(search_history),
+                },
+                'pair_initialization': make_json_safe(pair_initialization),
+                'capabilities': {
+                    'automatic_search': automatic_supported,
+                    'apply_point': point_supported,
+                    'manual_point_selection': manual_point_selection_supported,
+                    'initialize_active_pair': pair_initialization_supported,
+                    'interlocked_motion': interlocked_motion_supported,
+                },
+                'active_point': active_point,
+                'active_actuator_group': active_actuator_group,
+                'camera': {
+                    'device': str(camera_name),
+                    'state': camera_state,
+                    'grabbing': camera_grabbing,
+                    'centroid': make_json_safe(centroid),
+                    'centroid_valid': centroid_valid,
+                },
+                'actuators': actuators,
+                'other_devices': other_devices,
+                # Compatibility for older clients that only render irises.
+                'diaphragms': [
+                    item for item in other_devices
+                    if item['control_type'] == 'diaphragm'
+                ],
+                'manual_devices': manual_devices,
+                'timestamp': datetime.now().isoformat(),
+            }
+
+        # Snapshot polling and controller commands share a cached DeviceProxy.
+        # Keep them serial so a busy request thread cannot contend for Tango's
+        # device serialization monitor, then retry monitor timeouts above.
+        with DeviceManager.operation_lock(device_name):
+            snapshot = _with_tango_retry(read_snapshot)
+        return jsonify({'snapshot': snapshot, 'success': True})
     except Exception as e:
         return jsonify({'error': str(e), 'success': False}), 500
 
@@ -2439,6 +2938,7 @@ def get_camera_info(device_name):
             'format_pixel', 'framerate', 'isgrabbing',
             'binning_horizontal', 'binning_vertical',
             'trigger_mode', 'trigger_delay',
+            'center_gravity_threshold',
             'cg', 'number_kinetics', 'track_count',
             'wavelengths_axis', 'temperature_current',
             'temperature_target', 'temperature_status',
@@ -2466,7 +2966,7 @@ def handle_camera_parameters(device_name):
             parameters = {}
             param_names = ['exposure_time', 'gain', 'width', 'height', 'offsetX', 'offsetY', 
                           'format_pixel', 'trigger_mode', 'trigger_delay', 'binning_horizontal', 'binning_vertical',
-                          'number_kinetics']
+                          'number_kinetics', 'center_gravity_threshold']
             
             for param in param_names:
                 try:
@@ -2544,32 +3044,50 @@ def handle_camera_grabbing(device_name):
             )
             if blocked is not None:
                 return blocked
-            device = DeviceManager.get_device(device_name)
-            
-            if action == 'start':
-                command_name = command_variant or _resolve_command_name(device, candidates)
-                device.command_inout(command_name)
-                expected_grabbing = True
-                message = f'Grabbing start command sent ({command_name})'
-            elif action == 'stop':
-                command_name = command_variant or _resolve_command_name(device, candidates)
-                device.command_inout(command_name)
-                expected_grabbing = False
-                message = f'Grabbing stop command sent ({command_name})'
-            else:
-                return jsonify({'error': 'Invalid action. Use "start" or "stop"', 'success': False}), 400
-            
-            # Confirm status with short polling to avoid stale immediate readback.
-            is_grabbing, state_confirmed = _wait_for_camera_grabbing(
-                device,
-                expected_state=expected_grabbing,
-            )
+            # Image polling and acquisition commands share one DeviceProxy.
+            # Serialize the command plus readback so an image request cannot
+            # restart acquisition between StopGrabbing and confirmation.
+            with DeviceManager.operation_lock(device_name):
+                device = DeviceManager.get_device(device_name)
+                powered_on = False
+                if action == 'start':
+                    try:
+                        camera_state = str(device.state()).upper().rsplit('.', 1)[-1]
+                    except Exception:
+                        camera_state = 'UNKNOWN'
+                    if camera_state == 'OFF':
+                        power_command = _resolve_command_name(
+                            device, ('turn_on', 'TurnOn', 'on')
+                        )
+                        _with_tango_retry(
+                            lambda: device.command_inout(power_command),
+                            attempts=3,
+                            delay=0.35,
+                        )
+                        powered_on = True
+                command_name = command_variant or _resolve_command_name(
+                    device, candidates
+                )
+                _with_tango_retry(
+                    lambda: device.command_inout(command_name),
+                    attempts=3,
+                    delay=0.35,
+                )
+                expected_grabbing = action == 'start'
+                message = f'Grabbing {action} command sent ({command_name})'
+
+                # Confirm status with short polling to avoid stale immediate readback.
+                is_grabbing, state_confirmed = _wait_for_camera_grabbing(
+                    device,
+                    expected_state=expected_grabbing,
+                )
             
             return jsonify({
                 'message': message,
                 'grabbing': is_grabbing,
                 'expected_grabbing': expected_grabbing,
                 'state_confirmed': state_confirmed,
+                'powered_on': powered_on,
                 'success': True
             })
     
@@ -2582,23 +3100,30 @@ def handle_camera_grabbing(device_name):
 def get_camera_image(device_name):
     """Get the last captured image from camera"""
     try:
-        device = DeviceManager.get_device(device_name)
-        
-        # Read image attribute
-        image_attr = device.read_attribute('image')
-        image_data = image_attr.value
-        
-        if image_data is None:
-            return jsonify({'error': 'No image available', 'success': False}), 404
-        
-        # Get center of gravity if available
-        cg_position = None
-        try:
-            cg_str = str(device.read_attribute('cg').value)
-            import ast
-            cg_position = ast.literal_eval(cg_str)
-        except:
-            pass
+        with DeviceManager.operation_lock(device_name):
+            device = DeviceManager.get_device(device_name)
+            # DS_CAMERA_CCD.image starts grabbing when acquisition is stopped.
+            # A passive browser preview must never turn the camera back on.
+            if not _read_camera_is_grabbing(device):
+                return jsonify({
+                    'error': 'Camera acquisition is stopped',
+                    'grabbing': False,
+                    'success': False,
+                }), 409
+
+            image_attr = device.read_attribute('image')
+            image_data = image_attr.value
+
+            if image_data is None:
+                return jsonify({'error': 'No image available', 'success': False}), 404
+
+            # Get center of gravity if available
+            cg_position = None
+            try:
+                cg_str = str(device.read_attribute('cg').value)
+                cg_position = ast.literal_eval(cg_str)
+            except Exception:
+                pass
         
         return jsonify({
             'image': make_json_safe(image_data),

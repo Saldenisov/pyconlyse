@@ -79,6 +79,13 @@ names = {
                     "CrimpingDiaphragm2": 10,
                     "HalfWavePlate1": 100,
                 },
+                "working": {
+                    "MainLaserDiaphragm1": 100,
+                    "Shutter1": -1,
+                    "CrimpingDiaphragm1": 100,
+                    "CrimpingDiaphragm2": 100,
+                    "HalfWavePlate1": 20.5,
+                },
             }
         ),
         {"group1": ("point1", "point3"), "group2": ("point4", "point6")},

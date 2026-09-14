@@ -20,6 +20,7 @@ from DeviceServers import get_class_match
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from DeviceServers.motion.standa.DS_STANDA_LaserPointing_Widget import Standa_LaserPointing
 from DeviceServers.control.laser_pointing.automatic_search import optical_point_group
+from DeviceServers.control.laser_pointing.widget_helpers import is_other_optical_role
 
 
 class LaserPointing(DS_General_Widget):
@@ -46,6 +47,7 @@ class LaserPointing(DS_General_Widget):
     def register_DS_full(self, group_number=1):
         super(LaserPointing, self).register_DS_full()
         dev_name = self.dev_name
+        optical_points_panel = None
         ds: Device = getattr(self, f"ds_{self.dev_name}")
         lo_group: Qt.QHBoxLayout = getattr(self, f"lo_group_{group_number}")
 
@@ -158,10 +160,10 @@ class LaserPointing(DS_General_Widget):
             manual_layout.setContentsMargins(4, 4, 4, 4)
             manual_layout.setSpacing(5)
 
-            diaphragm_hardware = QtWidgets.QWidget()
-            diaphragm_layout = QtWidgets.QVBoxLayout(diaphragm_hardware)
-            diaphragm_layout.setContentsMargins(4, 4, 4, 4)
-            diaphragm_layout.setSpacing(5)
+            other_hardware = QtWidgets.QWidget()
+            other_layout = QtWidgets.QVBoxLayout(other_hardware)
+            other_layout.setContentsMargins(4, 4, 4, 4)
+            other_layout.setSpacing(5)
 
             def register_ds(device_role, device_name):
                 extra = None
@@ -197,9 +199,10 @@ class LaserPointing(DS_General_Widget):
                 lo_controls.addStretch(1)
                 self.set_active_actuator_group(0)
 
-                # Point selection belongs to the manual workflow. Automatic
-                # search owns its point sequence internally.
-                manual_layout.addWidget(self.set_states("Manual"))
+                # Optical-point presets affect every operating mode, so keep
+                # their selector above the tabs instead of nesting it under
+                # Manual.
+                optical_points_panel = self.set_states("Shared")
 
                 def add_widget_loc(lo_group_loc, group_devices):
                     try:
@@ -246,7 +249,8 @@ class LaserPointing(DS_General_Widget):
                     group_box.setLayout(lo_group_loc)
                     target_layout.addWidget(group_box)
 
-                self._diaphragm_roles = []
+                self._other_optical_roles = []
+                camera_device = self.ds_dict.get("Camera", "")
                 for group_name, group_devices in self.groups.items():
                     group_name_lower = group_name.lower()
                     roles = (
@@ -254,26 +258,28 @@ class LaserPointing(DS_General_Widget):
                         if isinstance(group_devices, str)
                         else tuple(group_devices)
                     )
-                    diaphragm_roles = tuple(
-                        role for role in roles if "diaphragm" in str(role).lower()
+                    other_optical_roles = tuple(
+                        role
+                        for role in roles
+                        if is_other_optical_role(role, camera_device)
                     )
-                    if diaphragm_roles:
-                        diaphragm_group_name = (
-                            "Main laser diaphragm"
+                    if other_optical_roles:
+                        optical_group_name = (
+                            "Main laser optics"
                             if group_name_lower == "laser parameters"
                             else group_name
                         )
                         add_control_group(
-                            diaphragm_layout,
-                            diaphragm_group_name,
-                            diaphragm_roles,
+                            other_layout,
+                            optical_group_name,
+                            other_optical_roles,
                         )
-                        self._diaphragm_roles.extend(diaphragm_roles)
-                        for role in diaphragm_roles:
+                        self._other_optical_roles.extend(other_optical_roles)
+                        for role in other_optical_roles:
                             widget = self.widgets.get(role)
                             if hasattr(widget, "set_alignment_motion_enabled"):
                                 widget.set_alignment_motion_enabled(
-                                    True, "Direct diaphragm control"
+                                    True, "Direct optical control"
                                 )
 
                     is_manual_hardware = (
@@ -286,7 +292,7 @@ class LaserPointing(DS_General_Widget):
                         add_control_group(manual_layout, group_name, group_devices)
 
                 manual_layout.addStretch(1)
-                diaphragm_layout.addStretch(1)
+                other_layout.addStretch(1)
             except Exception as e:
                 print(e)
             try:
@@ -321,10 +327,10 @@ class LaserPointing(DS_General_Widget):
                 QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
             )
 
-            diaphragm_scroll = QtWidgets.QScrollArea()
-            diaphragm_scroll.setWidget(diaphragm_hardware)
-            diaphragm_scroll.setWidgetResizable(True)
-            diaphragm_scroll.setSizePolicy(
+            other_scroll = QtWidgets.QScrollArea()
+            other_scroll.setWidget(other_hardware)
+            other_scroll.setWidgetResizable(True)
+            other_scroll.setSizePolicy(
                 QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding
             )
 
@@ -333,12 +339,12 @@ class LaserPointing(DS_General_Widget):
             mode_tabs.setDocumentMode(True)
             mode_tabs.addTab(scroll, "Automatic")
             mode_tabs.addTab(manual_scroll, "Manual")
-            mode_tabs.addTab(diaphragm_scroll, "Diaphragms")
+            mode_tabs.addTab(other_scroll, "Other")
             mode_tabs.setCurrentIndex(0)
             # Camera and signed XY error are shared operating views and stay
-            # visible in every mode. Manual contains optical-point selection
-            # and alignment mounts, Diaphragms provides direct iris controls,
-            # and Automatic owns its point sequence and convergence controls.
+            # visible in every mode. Manual contains alignment mounts, Other
+            # provides direct diaphragm and λ/2 controls, and Automatic owns
+            # its point sequence and convergence controls.
             lo_total.addWidget(image_group, 5)
             lo_total.addWidget(mode_tabs, 4)
         else:
@@ -360,9 +366,10 @@ class LaserPointing(DS_General_Widget):
         # noise. Keep the global widget unchanged and suppress them here.
         Qt.QTimer.singleShot(0, self.hide_update_param_buttons)
 
-        # Status stays at the top; optical presets live inside Manual instead
-        # of appearing as an unrelated footer.
+        # Status and shared optical presets stay above every operating tab.
         lo_device.addLayout(lo_status)
+        if optical_points_panel is not None:
+            lo_device.addWidget(optical_points_panel)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
         

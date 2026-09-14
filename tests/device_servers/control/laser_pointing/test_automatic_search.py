@@ -1,5 +1,5 @@
 from math import hypot
-from threading import Lock
+from threading import Event, Lock
 
 import pytest
 
@@ -92,6 +92,104 @@ def test_active_pair_initialization_stops_after_first_axis_failure():
     assert events == ["ActuatorX1", "ActuatorY1"]
     assert controller._actuator_initialization_status["phase"] == "failed"
     assert controller._actuator_initialization_status["completed"] == ["ActuatorX1"]
+
+
+def test_point_application_returns_immediately_and_locks_mounts_until_readback():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_lock = Lock()
+    controller._search_stop = Event()
+    controller._search_thread = None
+    controller._point_application_thread = None
+    controller._active_point = "point3"
+    controller._actuator_initialization_status = {}
+    controller._search_progress = {}
+    controller._search_config = {}
+    controller.controller_rules = {"point1": {"Optic": 1.0}}
+    entered = Event()
+    release = Event()
+
+    def apply_point(point_name, _config):
+        entered.set()
+        release.wait(1)
+        controller._active_point = point_name
+
+    controller._apply_point = apply_point
+
+    assert DS_LaserPointing.apply_controller_point(controller, "point1") == 0
+    assert entered.wait(1)
+    assert controller._active_point == ""
+    assert controller._search_progress["phase"] == "manual_point"
+    assert controller._actuator_initialization_status["group"] == 0
+
+    release.set()
+    controller._point_application_thread.join(1)
+    assert controller._active_point == "point1"
+    assert controller._search_progress["phase"] == "manual_point_complete"
+
+
+def test_point_preset_devices_are_applied_sequentially():
+    controller = object.__new__(DS_LaserPointing)
+    controller.controller_rules = {
+        "point1": {"First": 1.0, "Second": 2.0, "Third": 3.0}
+    }
+    controller._active_point = ""
+    controller._actuator_initialization_status = {}
+    controller._raise_if_cancelled = lambda: None
+    controller._device_for_role = lambda role: role
+    events = []
+    controller._move_single_axis = (
+        lambda device, target, _config: events.append((device, target))
+    )
+
+    DS_LaserPointing._apply_point(controller, "point1", {})
+
+    assert events == [("First", 1.0), ("Second", 2.0), ("Third", 3.0)]
+    assert controller._active_point == "point1"
+
+
+def test_stopped_axis_readback_mismatch_fails_without_long_polling():
+    class Axis:
+        position = 0.0
+        state = "ON"
+
+        @staticmethod
+        def move_axis_abs(_target):
+            return None
+
+    controller = object.__new__(DS_LaserPointing)
+    controller._raise_if_cancelled = lambda: None
+    controller._interruptible_sleep = lambda _delay: pytest.fail(
+        "stopped mismatch must not be polled until the long motion timeout"
+    )
+    config = {
+        "motion_timeout_s": 180.0,
+        "motion_poll_s": 0.2,
+        "position_tolerance": 0.05,
+    }
+
+    with pytest.raises(RuntimeError, match="stopped at 0.0, expected -1.0"):
+        DS_LaserPointing._move_single_axis(controller, Axis(), -1.0, config)
+
+
+def test_manual_point_selection_unlocks_pair_without_moving_optical_hardware():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_lock = Lock()
+    controller._search_thread = None
+    controller._point_application_thread = None
+    controller.controller_rules = {"point1": {"CrimpingDiaphragm1": 40.0}}
+    controller._active_point = ""
+    controller._actuator_initialization_status = {}
+    controller._search_progress = {}
+    controller._device_for_role = lambda _role: pytest.fail(
+        "manual selection must not access optical hardware"
+    )
+
+    result = DS_LaserPointing.select_manual_point(controller, "point1")
+
+    assert result == 0
+    assert controller._active_point == "point1"
+    assert controller._actuator_initialization_status["group"] == 1
+    assert controller._search_progress["phase"] == "manual_point_selected"
 
 
 def test_pattern_search_converges_without_assuming_linear_response():

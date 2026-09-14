@@ -16,6 +16,7 @@ import CamerasClients from './CamerasClients';
 import SpectroscopyClients from './SpectroscopyClients';
 import DAQmxClients from './DAQmxClients';
 import VacuumClients from './VacuumClients';
+import LaserPointingClients from './LaserPointingClients';
 import Login from './Login';
 import PumpProbeV0 from './PumpProbeV0';
 import PumpProbeVD2 from './PumpProbeVD2';
@@ -41,6 +42,7 @@ function App() {
           <Route path="/spectroscopy-clients" element={<SpectroscopyClients />} />
           <Route path="/daqmx-clients" element={<DAQmxClients />} />
           <Route path="/vacuum-clients" element={<VacuumClients />} />
+          <Route path="/laser-pointing-clients" element={<LaserPointingClients />} />
           <Route path="/pump-probe-v0" element={<PumpProbeV0 />} />
           <Route path="/pump-probe-vd2" element={<PumpProbeVD2 />} />
           <Route path="/login" element={<Login />} />

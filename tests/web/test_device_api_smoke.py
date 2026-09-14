@@ -659,3 +659,328 @@ def test_itest_page_routes_smoke(monkeypatch):
     assert current_get_payload["success"] is True
     assert current_get_payload["slot_id"] == 11
     assert current_get_payload["current_setpoint"] == 1.2
+
+
+def test_laser_pointing_mapping_parser_accepts_exported_ordered_dict_repr():
+    device_api_module = importlib.import_module("device_api")
+
+    parsed = device_api_module._parse_controller_mapping(
+        "OrderedDict([('point1', {'CrimpingDiaphragm1': 40}), "
+        "('point3', {'CrimpingDiaphragm1': 10})])"
+    )
+
+    assert list(parsed) == ["point1", "point3"]
+    assert parsed["point3"]["CrimpingDiaphragm1"] == 10
+
+
+def test_laser_pointing_flipper_is_owned_by_matching_camera():
+    device_api_module = importlib.import_module("device_api")
+
+    assert device_api_module._is_owned_laser_flipper(
+        "Shutter1", "manip/V0/Cam1_V0"
+    )
+    assert not device_api_module._is_owned_laser_flipper(
+        "Shutter2", "manip/V0/Cam1_V0"
+    )
+    assert device_api_module._is_owned_laser_flipper(
+        "Shutter2", "manip/V0/Cam2_V0"
+    )
+    assert not device_api_module._is_owned_laser_flipper(
+        "Shutter1", "manip/V0/Cam2_V0"
+    )
+
+
+def test_tango_retry_handles_serialization_monitor_timeout(monkeypatch):
+    device_api_module = importlib.import_module("device_api")
+    calls = []
+    sleeps = []
+
+    def transient_read():
+        calls.append(True)
+        if len(calls) == 1:
+            raise RuntimeError(
+                "API_CommandTimedOut: Not able to acquire serialization monitor"
+            )
+        return "ready"
+
+    monkeypatch.setattr(device_api_module.time, "sleep", sleeps.append)
+
+    assert device_api_module._with_tango_retry(
+        transient_read, attempts=2, delay=0.25
+    ) == "ready"
+    assert len(calls) == 2
+    assert sleeps == [0.25]
+
+
+def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    controller_name = "manip/v0/laserpointing-cam1"
+    camera_name = "manip/v0/cam1"
+    x_name = "manip/v0/x1"
+    y_name = "manip/v0/y1"
+    stage_name = "manip/general/owis-aggregator"
+    diaphragm_name = "manip/v0/dv01"
+    half_wave_name = "manip/v0/l-2_1"
+    controller = FakeDevice(
+        controller_name,
+        attributes={
+            "get_rules": str({"point1": {"CrimpingDiaphragm1": 40}}),
+            "get_ds_dict": str({
+                "Camera": camera_name,
+                "ActuatorX1": x_name,
+                "ActuatorY1": y_name,
+                "CrimpingDiaphragm1": diaphragm_name,
+                "HalfWavePlate1": half_wave_name,
+                "TranslationStage1": (stage_name, [3]),
+            }),
+            "get_groups": str({
+                "Actuators 1": ("ActuatorX1", "ActuatorY1"),
+                "Translation stages": "TranslationStage1",
+            }),
+            "automatic_search_status": "running",
+            "automatic_search_progress": json.dumps({"phase": "measuring"}),
+            "automatic_search_config": json.dumps({"tolerance_px": 2}),
+            "automatic_search_history": json.dumps([
+                {
+                    "elapsed_s": 4.5,
+                    "error_px": 3.2,
+                    "actuator_group": 1,
+                    "diaphragm": 1,
+                }
+            ]),
+            "active_point": "point3",
+            "active_actuator_group": 1,
+            "actuator_initialization_status": json.dumps({
+                "phase": "ready_to_initialize",
+                "group": 1,
+            }),
+        },
+    )
+    controller.get_command_list = lambda: [
+        "start_automatic_search",
+        "apply_controller_point",
+        "select_manual_point",
+        "initialize_active_pair",
+        "move_active_actuator",
+    ]
+    devices[controller_name] = controller
+    devices[camera_name] = FakeDevice(
+        camera_name, attributes={
+            "cg": "{'X': 12, 'Y': 18}",
+            "cg_valid": True,
+            "isgrabbing": True,
+        }
+    )
+    devices[x_name] = FakeDevice(x_name, attributes={
+        "position": 1.5,
+        "hardware_connection_state": "READY",
+        "initialization_state": "SUCCEEDED",
+        "hardware_lifecycle_status": "axis ready",
+    })
+    devices[y_name] = FakeDevice(y_name, attributes={
+        "position": -2.0,
+        "hardware_connection_state": "DISCONNECTED",
+        "initialization_state": "NOT_REQUESTED",
+        "hardware_lifecycle_status": "USB unavailable",
+    })
+    devices[x_name]._state = "ON"
+    devices[y_name]._state = "STANDBY"
+    devices[stage_name] = FakeDevice(stage_name, attributes={
+        "pos3": -700.0,
+        "hardware_connection_state": "READY",
+        "initialization_state": "SUCCEEDED",
+        "hardware_lifecycle_status": "OWIS ready",
+    })
+    devices[diaphragm_name] = FakeDevice(
+        diaphragm_name,
+        attributes={
+            "position": 40.0,
+            "hardware_connection_state": "READY",
+            "initialization_state": "SUCCEEDED",
+            "hardware_lifecycle_status": "diaphragm ready",
+        },
+        attr_configs={"position": FakeAttributeConfig(unit="%")},
+    )
+    devices[half_wave_name] = FakeDevice(
+        half_wave_name,
+        attributes={
+            "position": 100.0,
+            "hardware_connection_state": "READY",
+            "initialization_state": "SUCCEEDED",
+            "hardware_lifecycle_status": "wave plate ready",
+        },
+        attr_configs={"position": FakeAttributeConfig(unit="%")},
+    )
+    fake_db = importlib.import_module("device_api").tango_gateway.create_database()
+    fake_db.properties[diaphragm_name] = {
+        "friendly_name": ["IrisExp_1"],
+        "preset_pos": ["0", "5", "10", "15", "25", "40", "100"],
+        "unit": ["%"],
+        "limit_min": ["0"],
+        "limit_max": ["100"],
+    }
+    fake_db.properties[half_wave_name] = {
+        "friendly_name": ["Lambda_2_Exp"],
+        "preset_pos": ["0", "5", "10", "15", "20", "50", "100"],
+        "unit": ["%"],
+        "limit_min": ["0"],
+        "limit_max": ["100"],
+    }
+
+    response = client.get(f"/api/laser-pointing/{controller_name}/snapshot")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    snapshot = payload["snapshot"]
+    assert snapshot["capabilities"]["interlocked_motion"] is True
+    assert snapshot["capabilities"]["manual_point_selection"] is True
+    assert snapshot["capabilities"]["initialize_active_pair"] is True
+    assert snapshot["active_point"] == "point3"
+    assert snapshot["active_actuator_group"] == 1
+    assert snapshot["automatic_search"]["history"][0]["elapsed_s"] == 4.5
+    assert snapshot["pair_initialization"]["group"] == 1
+    assert snapshot["camera"]["grabbing"] is True
+    assert snapshot["actuators"][0]["ready"] is True
+    assert snapshot["actuators"][0]["move_supported"] is True
+    assert snapshot["actuators"][1]["disconnected"] is True
+    assert snapshot["diaphragms"] == [{
+        "role": "CrimpingDiaphragm1",
+        "control_type": "diaphragm",
+        "friendly_name": "IrisExp_1",
+        "device": diaphragm_name,
+        "position": 40.0,
+        "preset_positions": [0.0, 5.0, 10.0, 15.0, 25.0, 40.0, 100.0],
+        "unit": "%",
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "state": "ON",
+        "move_supported": True,
+        "stop_supported": True,
+        "hardware_connection_state": "READY",
+        "initialization_state": "SUCCEEDED",
+        "hardware_lifecycle_status": "diaphragm ready",
+        "disconnected": False,
+        "ready": True,
+    }]
+    assert snapshot["other_devices"][1] == {
+        "role": "HalfWavePlate1",
+        "control_type": "half_wave_plate",
+        "friendly_name": "Lambda_2_Exp",
+        "device": half_wave_name,
+        "position": 100.0,
+        "preset_positions": [0.0, 5.0, 10.0, 15.0, 20.0, 50.0, 100.0],
+        "unit": "%",
+        "minimum": 0.0,
+        "maximum": 100.0,
+        "state": "ON",
+        "move_supported": True,
+        "stop_supported": True,
+        "hardware_connection_state": "READY",
+        "initialization_state": "SUCCEEDED",
+        "hardware_lifecycle_status": "wave plate ready",
+        "disconnected": False,
+        "ready": True,
+    }
+    assert snapshot["manual_devices"] == [{
+        "role": "TranslationStage1",
+        "device": stage_name,
+        "state": "ON",
+        "axes": [{"axis": 3, "position": -700.0}],
+        "move_supported": True,
+        "hardware_connection_state": "READY",
+        "initialization_state": "SUCCEEDED",
+        "hardware_lifecycle_status": "OWIS ready",
+        "disconnected": False,
+        "ready": True,
+    }]
+
+
+def test_stopped_camera_image_read_does_not_restart_acquisition(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    camera_name = "manip/v0/stopped-camera"
+    camera = FakeDevice(camera_name, attributes={
+        "isgrabbing": False,
+        "image": [[1, 2], [3, 4]],
+        "cg": "{'X': 1, 'Y': 1}",
+    })
+    reads = []
+    original_read = camera.read_attribute
+
+    def tracked_read(attribute_name):
+        reads.append(attribute_name)
+        return original_read(attribute_name)
+
+    camera.read_attribute = tracked_read
+    devices[camera_name] = camera
+
+    response = client.get(f"/api/camera/{camera_name}/image")
+    payload = response.get_json()
+
+    assert response.status_code == 409
+    assert payload["grabbing"] is False
+    assert payload["success"] is False
+    assert reads == ["isgrabbing"]
+
+
+def test_camera_stop_command_confirms_stopped_state(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    camera_name = "manip/v0/grabbing-camera"
+    camera = FakeDevice(camera_name, attributes={"isgrabbing": True})
+    camera.get_command_list = lambda: ["start_grabbing", "stop_grabbing"]
+
+    def command(command_name, args=None):
+        camera.command_calls.append((command_name, args))
+        if command_name == "stop_grabbing":
+            camera.attributes["isgrabbing"] = False
+        return 0
+
+    camera.command_inout = command
+    devices[camera_name] = camera
+
+    response = client.post(
+        f"/api/camera/{camera_name}/grabbing",
+        json={"action": "stop"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["grabbing"] is False
+    assert payload["state_confirmed"] is True
+    assert camera.command_calls == [("stop_grabbing", None)]
+
+
+def test_camera_start_powers_on_an_off_camera_first(monkeypatch):
+    client, devices = _make_client(monkeypatch)
+    camera_name = "manip/v0/off-camera"
+    camera = FakeDevice(camera_name, state="OFF", attributes={"isgrabbing": False})
+    camera.get_command_list = lambda: [
+        "turn_on", "start_grabbing", "stop_grabbing"
+    ]
+
+    def command(command_name, args=None):
+        camera.command_calls.append((command_name, args))
+        if command_name == "turn_on":
+            camera._state = "ON"
+        if command_name == "start_grabbing":
+            camera.attributes["isgrabbing"] = True
+        return 0
+
+    camera.command_inout = command
+    devices[camera_name] = camera
+
+    response = client.post(
+        f"/api/camera/{camera_name}/grabbing",
+        json={"action": "start"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["success"] is True
+    assert payload["powered_on"] is True
+    assert payload["grabbing"] is True
+    assert payload["state_confirmed"] is True
+    assert camera.command_calls == [
+        ("turn_on", None),
+        ("start_grabbing", None),
+    ]

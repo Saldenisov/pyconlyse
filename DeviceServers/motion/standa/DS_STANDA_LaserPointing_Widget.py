@@ -6,6 +6,7 @@ from PyQt5.QtCore import Qt
 from taurus import Device
 from taurus.qt.qtgui.display import TaurusLabel
 
+from DeviceServers.control.laser_pointing.widget_helpers import STANDA_STEP_SIZES
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
 
@@ -46,8 +47,9 @@ class Standa_LaserPointing(DS_General_Widget):
             # Get layouts
             lo_device = getattr(self, f"layout_main_{dev_name}")
 
-            # One compact row: state, name, live position, decrement, step,
-            # increment. The step label keeps its existing context menu.
+            # One compact row: state, name, live position, decrement, visible
+            # step selector, increment, and (for percentage-based optics) a
+            # preset selector.
             widget = QtWidgets.QWidget()
             widget.setObjectName("laserPointingStandaRow")
             widget.setStyleSheet(
@@ -95,31 +97,39 @@ class Standa_LaserPointing(DS_General_Widget):
             btn_left.setFixedSize(22, 22)
             btn_left.clicked.connect(partial(self.move_step, -1))
             
-            step_label = QtWidgets.QLabel(f"{self.relative_shift}")
-            step_label.setAlignment(Qt.AlignCenter)
-            step_label.setStyleSheet(
-                "background: #e9edf3; border: 1px solid #c8d0db; "
-                "border-radius: 3px; font-size: 9px;"
+            step_selector = QtWidgets.QComboBox()
+            step_selector.setAccessibleName(f"{friendly_name} movement step")
+            step_selector.setToolTip("Choose the relative movement step")
+            step_selector.setFixedSize(72, 22)
+            for step in STANDA_STEP_SIZES:
+                step_selector.addItem(f"Step {step:g}", step)
+            step_selector.setCurrentIndex(STANDA_STEP_SIZES.index(1.0))
+            step_selector.currentIndexChanged.connect(
+                lambda index, selector=step_selector: self.set_step_size(
+                    selector.itemData(index)
+                )
             )
-            step_label.setFixedSize(32, 22)
-            step_label.setToolTip("Right-click to choose the relative step")
 
             btn_right = QtWidgets.QPushButton("+")
             btn_right.setFixedSize(22, 22)
             btn_right.clicked.connect(partial(self.move_step, 1))
             
-            # Context menu for step size
-            step_label.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
-            step_label.customContextMenuRequested.connect(self.show_step_menu)
-            
             layout.addWidget(btn_left)
-            layout.addWidget(step_label)
+            layout.addWidget(step_selector)
             layout.addWidget(btn_right)
+
+            preset_selector = self._create_optical_preset_selector(ds)
+            if preset_selector is not None:
+                layout.addWidget(preset_selector)
             
             # Store references
-            setattr(self, f"step_label_{dev_name}", step_label)
+            setattr(self, f"step_selector_{dev_name}", step_selector)
+            if preset_selector is not None:
+                setattr(self, f"preset_selector_{dev_name}", preset_selector)
             self._alignment_row = widget
-            self._alignment_motion_controls = (btn_left, step_label, btn_right)
+            # Step selection is a local UI preference and remains available
+            # while the interlock prevents the two movement buttons.
+            self._alignment_motion_controls = (btn_left, btn_right)
             
             # Add to main layout
             lo_device.addWidget(widget)
@@ -157,6 +167,53 @@ class Standa_LaserPointing(DS_General_Widget):
         except Exception as e:
             print(f"Error moving {self.dev_name}: {e}")
 
+    def _create_optical_preset_selector(self, ds):
+        """Create old GUI-style presets for percentage and flipper optics."""
+
+        try:
+            unit_values = ds.get_property("unit").get("unit", [])
+            unit = str(unit_values[0]).strip() if unit_values else ""
+            raw_presets = ds.get_property("preset_pos").get("preset_pos", [])
+        except Exception:
+            return None
+        if unit.lower() not in {"%", "state"} or not raw_presets:
+            return None
+
+        selector = QtWidgets.QComboBox()
+        selector.setAccessibleName(f"{self.dev_name} position preset")
+        selector.setToolTip("Move to a configured optical position")
+        selector.setMinimumWidth(76)
+        selector.setFixedHeight(22)
+        suffix = "%" if unit == "%" else ""
+        selector.addItem(f"Preset {suffix}".rstrip(), None)
+        for raw_value in raw_presets:
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                continue
+            selector.addItem(f"{value:g}{suffix}", value)
+        if selector.count() == 1:
+            return None
+        selector.activated.connect(
+            lambda index, preset_selector=selector: self.move_to_preset(
+                preset_selector.itemData(index), preset_selector
+            )
+        )
+        return selector
+
+    def move_to_preset(self, target, selector=None):
+        """Move a percentage-based optic to a configured preset."""
+
+        if target is None or not self._alignment_motion_enabled:
+            return
+        try:
+            self.execute_action(float(target), self.ds, "move_axis_abs", True)
+        except Exception as error:
+            print(f"Error moving {self.dev_name} to preset {target}: {error}")
+        finally:
+            if selector is not None:
+                selector.setCurrentIndex(0)
+
     def set_alignment_motion_enabled(self, enabled: bool, reason: str = ""):
         """Apply the LaserPointing diaphragm-to-mount safety interlock."""
 
@@ -165,13 +222,9 @@ class Standa_LaserPointing(DS_General_Widget):
         for control in getattr(self, "_alignment_motion_controls", ()):
             control.setEnabled(self._alignment_motion_enabled)
             control.setToolTip(
-                "Right-click to choose the relative step"
-                if self._alignment_motion_enabled and isinstance(control, QtWidgets.QLabel)
-                else (
-                    "Alignment mount is active"
-                    if self._alignment_motion_enabled
-                    else self._alignment_lock_reason
-                )
+                "Alignment mount is active"
+                if self._alignment_motion_enabled
+                else self._alignment_lock_reason
             )
 
         self._refresh_alignment_row_style()
@@ -302,24 +355,12 @@ class Standa_LaserPointing(DS_General_Widget):
         self._refresh_alignment_state_led()
         self._refresh_alignment_row_style()
     
-    def show_step_menu(self, pos):
-        """Show context menu for step size selection"""
-        sender = self.sender()
-        menu = QtWidgets.QMenu()
-        
-        step_sizes = [0.1, 0.5, 1, 2, 5, 10, 20, 50]
-        
-        for step in step_sizes:
-            action = menu.addAction(f"{step}")
-            action.triggered.connect(partial(self.set_step_size, step))
-            
-        menu.exec_(sender.mapToGlobal(pos))
-    
     def set_step_size(self, step):
         """Set the step size"""
-        self.relative_shift = step
-        step_label = getattr(self, f"step_label_{self.dev_name}")
-        step_label.setText(f"{step}")
+        try:
+            self.relative_shift = float(step)
+        except (TypeError, ValueError):
+            return
         
     def set_the_control_value(self, value):
         """Set position from external control (e.g., states)"""
@@ -335,4 +376,10 @@ class Standa_LaserPointing(DS_General_Widget):
             print(f"{self.dev_name} is selected.")
             self.setStyleSheet("background-color: lightgreen; border: 1px solid black;")
             self.parent.active_widget = self.dev_name
-            self.parent.update_active_widget()
+            update_selection = getattr(self.parent, "update_active_widget", None)
+            if not callable(update_selection):
+                update_selection = getattr(
+                    self.parent, "update_background_widgets", None
+                )
+            if callable(update_selection):
+                update_selection()

@@ -1,4 +1,4 @@
-from threading import RLock
+from threading import Event, RLock
 
 from tests.device_servers.base._test_support import _install_tango_stub
 
@@ -11,9 +11,17 @@ from DeviceServers.cameras.basler import DS_Basler_camera as basler_module
 class FakeThread:
     def __init__(self, *args, **kwargs):
         self.daemon = False
+        self._alive = False
 
     def start(self):
+        self._alive = True
         return None
+
+    def is_alive(self):
+        return self._alive
+
+    def join(self, timeout=None):
+        self._alive = False
 
 
 class FakeCamera:
@@ -99,6 +107,7 @@ def make_device():
     device.device = None
     device.latestimage = True
     device.grabbing_thread = None
+    device._grabbing_stop_event = None
     device.info = lambda *args, **kwargs: None
     device.error = lambda *args, **kwargs: None
     device.fix_state = lambda: None
@@ -166,3 +175,36 @@ def test_explicit_turn_on_opens_once_applies_settings_and_grabs_only_on_command(
 
     assert device.start_grabbing_local() == 0
     assert camera.start_grabbing_calls == 1
+
+
+def test_stop_grabbing_marks_worker_shutdown_before_stopping_camera():
+    device = make_device()
+    camera = FakeCamera()
+    camera._open = True
+    camera._grabbing = True
+    stop_event = Event()
+    worker = FakeThread()
+    worker.start()
+    device.camera = camera
+    device._grabbing_stop_event = stop_event
+    device.grabbing_thread = worker
+
+    assert device.stop_grabbing_local() == 0
+
+    assert stop_event.is_set()
+    assert camera.stop_grabbing_calls == 1
+    assert camera.IsGrabbing() is False
+    assert device.grabbing_thread is None
+
+
+def test_image_read_is_passive_while_camera_is_stopped():
+    device = make_device()
+    camera = FakeCamera()
+    camera._open = True
+    expected_image = object()
+    device.camera = camera
+    device.last_image = expected_image
+
+    assert device.get_image() is expected_image
+    assert camera.start_grabbing_calls == 0
+    assert camera.IsGrabbing() is False

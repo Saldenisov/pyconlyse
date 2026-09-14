@@ -13,7 +13,7 @@ app_folder = Path(__file__).resolve().parents[3]
 sys.path.append(str(app_folder))
 
 from collections import OrderedDict
-from threading import Thread
+from threading import Event, Thread, current_thread
 from typing import Union
 
 import numpy as np
@@ -184,6 +184,9 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self.converter = None
         self.device = None
         self.grabbing_thread = None
+        self._grabbing_stop_event = None
+        self.CG_valid = False
+        self.CG_area = 0.0
         self._last_trigger_timeout_warning = 0.0
         super().init_device()
         self.register_variables_for_archive()
@@ -350,34 +353,35 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return None
 
     def get_image(self):
-        if not self.grabbing:
-            self.start_grabbing()
+        # Attribute reads are passive.  Several preview clients poll ``image``;
+        # letting a read call start_grabbing makes an explicit StopGrabbing
+        # impossible to hold while any such client remains open.
+        return self.last_image
 
     def calc_cg(self, image):
-        # apply thresholding
+        """Track the largest bright connected contour in the current frame."""
         cX, cY = 1024, 1024
+        self.CG_valid = False
+        self.CG_area = 0.0
         if cv2 is None:
             self.warn("OpenCV unavailable; center-of-gravity calculation skipped.")
             self.CG_position = {"X": cX, "Y": cY}
             return
         img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        ret, thresh = cv2.threshold(img, self.cg_threshold, 255, 0)
-        contours, hierarchy = cv2.findContours(
-            thresh, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+        _ret, thresh = cv2.threshold(img, self.cg_threshold, 255, cv2.THRESH_BINARY)
+        contours, _hierarchy = cv2.findContours(
+            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
         )
-        longest_contour = 0
-        longest_contour_index = 0
-        i = 0
         if contours:
-            for contour in contours:
-                if longest_contour < contour.shape[0]:
-                    longest_contour_index = i
-                    longest_contour = contour.shape[0]
-                i += 1
-            M = cv2.moments(contours[longest_contour_index])
+            # Vertex count depends on contour geometry and can select a thin,
+            # noisy outline. Area is a more stable discriminator for the spot.
+            tracked_contour = max(contours, key=cv2.contourArea)
+            self.CG_area = float(cv2.contourArea(tracked_contour))
+            M = cv2.moments(tracked_contour)
             if M["m00"] != 0:
                 cX = int(M["m10"] / M["m00"])
                 cY = int(M["m01"] / M["m00"])
+                self.CG_valid = True
 
         self.CG_position = {"X": cX, "Y": cY}
         data = self.form_archive_data(
@@ -412,12 +416,16 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             )
             self._last_trigger_timeout_warning = now
 
-    def wait(self, timeout):
+    def wait(self, timeout, stop_event=None):
+        # One event belongs to one acquisition worker.  Reusing a single
+        # boolean/event across stop -> start lets the old worker wake up after
+        # the new acquisition starts and contend for the same camera stream.
+        stop_event = stop_event or Event()
         i = 0
         max_errors = 10
         error_count = 0
 
-        while self.grabbing and error_count < max_errors:
+        while not stop_event.is_set() and self.grabbing and error_count < max_errors:
             # Check if camera is still available
             if (
                 not self.camera
@@ -436,6 +444,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 grab_result = self.camera.RetrieveResult(
                     timeout, pylon.TimeoutHandling_Return
                 )
+                # StopGrabbing intentionally interrupts RetrieveResult.  That
+                # invalid result is a clean shutdown, not a failed grab.
+                if (
+                    stop_event.is_set()
+                    or not self.camera
+                    or not self.camera.IsGrabbing()
+                ):
+                    break
                 if grab_result is not None and grab_result.IsValid() and grab_result.GrabSucceeded():
                     image = np.array(
                         self.converter.Convert(grab_result).GetArray(), copy=True
@@ -465,8 +481,15 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                     grab_result.Release()
 
         # Clean exit
-        if self.camera and self.camera.IsGrabbing():
+        if (
+            not stop_event.is_set()
+            and getattr(self, "_grabbing_stop_event", None) is stop_event
+            and self.camera
+            and self.camera.IsGrabbing()
+        ):
             self.stop_grabbing_local()
+        if getattr(self, "grabbing_thread", None) is current_thread():
+            self.grabbing_thread = None
         self.info("Wait thread exiting")
 
     def get_controller_status_local(self) -> Union[int, str]:
@@ -490,14 +513,23 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         if self.camera.IsGrabbing():
             return 0
 
+        previous_thread = getattr(self, "grabbing_thread", None)
+        if (
+            previous_thread is not None
+            and getattr(previous_thread, "is_alive", lambda: False)()
+        ):
+            return "Previous grabbing thread is still exiting"
+
         try:
+            stop_event = Event()
+            self._grabbing_stop_event = stop_event
             if self.latestimage:
                 self.info("Grabbing LatestImageOnly", True)
                 self.camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
                 # Start grabbing thread only if camera is grabbing
                 if self.camera.IsGrabbing():
                     self.grabbing_thread = Thread(
-                        target=self.wait, args=[self.timeoutt]
+                        target=self.wait, args=[self.timeoutt, stop_event]
                     )
                     self.grabbing_thread.daemon = True  # Make thread daemon
                     self.grabbing_thread.start()
@@ -507,7 +539,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
                 # Start grabbing thread only if camera is grabbing
                 if self.camera.IsGrabbing():
                     self.grabbing_thread = Thread(
-                        target=self.wait, args=[self.timeoutt]
+                        target=self.wait, args=[self.timeoutt, stop_event]
                     )
                     self.grabbing_thread.daemon = True  # Make thread daemon
                     self.grabbing_thread.start()
@@ -518,8 +550,22 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def stop_grabbing_local(self):
         try:
+            stop_event = getattr(self, "_grabbing_stop_event", None)
+            if stop_event is not None:
+                stop_event.set()
             if self.camera and self.camera.IsGrabbing():
                 self.camera.StopGrabbing()
+            worker = getattr(self, "grabbing_thread", None)
+            if worker is not None and worker is not current_thread():
+                join = getattr(worker, "join", None)
+                if join is not None:
+                    # StopGrabbing normally wakes RetrieveResult immediately.
+                    # A short join prevents a following start from overlapping
+                    # the old acquisition worker without blocking Tango for the
+                    # full external-trigger timeout.
+                    join(timeout=1.0)
+                if not getattr(worker, "is_alive", lambda: False)():
+                    self.grabbing_thread = None
             return 0
         except Exception as e:
             return str(e)
@@ -554,6 +600,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def write_center_gravity_threshold(self, value):
         self.cg_threshold = value
+
+    @attribute(label="Center of gravity is valid", dtype=bool, access=AttrWriteType.READ)
+    def cg_valid(self):
+        return self.CG_valid
+
+    @attribute(label="Tracked contour area", dtype=float, access=AttrWriteType.READ)
+    def cg_area(self):
+        return self.CG_area
 
 
 if __name__ == "__main__":

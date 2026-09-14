@@ -1,0 +1,90 @@
+.laser-pointing-page {
+  padding: 12px;
+}
+
+.laser-pointing-page .laser-pointing-page-header {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-height: 0;
+  margin-bottom: 8px;
+  padding: 10px 16px;
+  text-align: left;
+}
+
+.laser-pointing-page .laser-pointing-page-header h1 {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+
+.laser-pointing-page .laser-pointing-page-header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 0.82rem;
+}
+
+.laser-pointing-page .device-load-selector {
+  display: grid;
+  grid-template-columns: auto auto minmax(260px, 1fr);
+  gap: 8px 14px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+}
+
+.laser-pointing-page .device-load-selector h3,
+.laser-pointing-page .device-load-selector-actions {
+  margin: 0;
+}
+
+.laser-pointing-page .device-load-selector h3 {
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.laser-pointing-page .device-load-selector-actions {
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.laser-pointing-page .device-load-selector-actions button {
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
+.laser-pointing-page .device-load-selector-list {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 3px 12px;
+}
+
+.laser-pointing-page .device-load-selector-list label {
+  min-width: 0;
+  gap: 5px;
+  font-size: 0.78rem;
+}
+
+.laser-pointing-page .device-load-selector-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .laser-pointing-page .laser-pointing-page-header {
+    display: block;
+  }
+
+  .laser-pointing-page .laser-pointing-page-header p {
+    margin-top: 3px;
+  }
+
+  .laser-pointing-page .device-load-selector {
+    grid-template-columns: 1fr;
+  }
+
+  .laser-pointing-page .device-load-selector-actions {
+    flex-wrap: wrap;
+  }
+}
