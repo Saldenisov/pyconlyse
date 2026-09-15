@@ -20,7 +20,24 @@ from DeviceServers import get_class_match
 from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from DeviceServers.motion.standa.DS_STANDA_LaserPointing_Widget import Standa_LaserPointing
 from DeviceServers.control.laser_pointing.automatic_search import optical_point_group
-from DeviceServers.control.laser_pointing.widget_helpers import is_other_optical_role
+from DeviceServers.control.laser_pointing.widget_helpers import (
+    format_optical_status_value,
+    is_other_optical_role,
+    manual_alignment_motion_enabled,
+)
+
+
+class OpticalStatusValue(TaurusLabel):
+    """Taurus readback label with operator-friendly optical units."""
+
+    def __init__(self, role, parent=None):
+        self.optical_role = str(role)
+        super().__init__(parent)
+        self.setAutoTrim(False)
+        self.setAlignment(QtCore.Qt.AlignRight | QtCore.Qt.AlignVCenter)
+
+    def displayValue(self, value):
+        return format_optical_status_value(self.optical_role, value)
 
 
 class LaserPointing(DS_General_Widget):
@@ -48,6 +65,7 @@ class LaserPointing(DS_General_Widget):
         super(LaserPointing, self).register_DS_full()
         dev_name = self.dev_name
         optical_points_panel = None
+        component_status_panel = None
         ds: Device = getattr(self, f"ds_{self.dev_name}")
         lo_group: Qt.QHBoxLayout = getattr(self, f"lo_group_{group_number}")
 
@@ -203,6 +221,7 @@ class LaserPointing(DS_General_Widget):
                 # their selector above the tabs instead of nesting it under
                 # Manual.
                 optical_points_panel = self.set_states("Shared")
+                component_status_panel = self.build_component_status_panel()
 
                 def add_widget_loc(lo_group_loc, group_devices):
                     try:
@@ -318,7 +337,9 @@ class LaserPointing(DS_General_Widget):
             # Remove size constraints to allow full expansion
             scroll.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
             image_group = QtWidgets.QGroupBox("Image")
+            image_group.setObjectName("laserPointingImageGroup")
             image_group.setLayout(lo_image)
+            image_group.setMinimumWidth(560)
 
             manual_scroll = QtWidgets.QScrollArea()
             manual_scroll.setWidget(manual_hardware)
@@ -337,6 +358,7 @@ class LaserPointing(DS_General_Widget):
             mode_tabs = QtWidgets.QTabWidget()
             mode_tabs.setObjectName("laserPointingModeTabs")
             mode_tabs.setDocumentMode(True)
+            mode_tabs.setMinimumWidth(500)
             mode_tabs.addTab(scroll, "Automatic")
             mode_tabs.addTab(manual_scroll, "Manual")
             mode_tabs.addTab(other_scroll, "Other")
@@ -369,7 +391,16 @@ class LaserPointing(DS_General_Widget):
         # Status and shared optical presets stay above every operating tab.
         lo_device.addLayout(lo_status)
         if optical_points_panel is not None:
-            lo_device.addWidget(optical_points_panel)
+            shared_panel = QtWidgets.QWidget()
+            shared_layout = QtWidgets.QHBoxLayout(shared_panel)
+            shared_layout.setContentsMargins(0, 0, 0, 0)
+            shared_layout.setSpacing(6)
+            shared_layout.addWidget(
+                optical_points_panel, 0, QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop
+            )
+            if component_status_panel is not None:
+                shared_layout.addWidget(component_status_panel, 1)
+            lo_device.addWidget(shared_panel)
         lo_device.addLayout(lo_total)
         lo_device.addLayout(lo_buttons)
         
@@ -522,11 +553,15 @@ class LaserPointing(DS_General_Widget):
             f"laserPointingOpticalPoints{mode_name}" if mode_name
             else "laserPointingOpticalPoints"
         )
-        group.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed)
+        group.setSizePolicy(QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed)
+        group.setMinimumWidth(300)
+        group.setMaximumWidth(340)
+        group.setMinimumHeight(82)
+        group.setMaximumHeight(92)
         layout = QtWidgets.QGridLayout(group)
-        layout.setContentsMargins(6, 5, 6, 5)
-        layout.setHorizontalSpacing(4)
-        layout.setVerticalSpacing(4)
+        layout.setContentsMargins(5, 3, 5, 4)
+        layout.setHorizontalSpacing(3)
+        layout.setVerticalSpacing(2)
 
         numbered = []
         working = []
@@ -548,14 +583,20 @@ class LaserPointing(DS_General_Widget):
         self.point_button_groups.append(button_group)
 
         for row, point_numbers in enumerate(planes):
-            base_row = row * 2
             if has_translation:
-                plane_label = "Near plane · stage 0" if row == 0 else "Far plane · stage −700"
+                plane_label = "Near" if row == 0 else "Far"
             else:
-                plane_label = "Diaphragm 1" if row == 0 else "Diaphragm 2"
+                plane_label = "D1" if row == 0 else "D2"
             label = QtWidgets.QLabel(plane_label)
             label.setStyleSheet("font-size: 10px; font-weight: 600; color: #465568;")
-            layout.addWidget(label, base_row, 0, 1, 3)
+            label.setToolTip(
+                "Near plane · stage 0" if row == 0 and has_translation
+                else (
+                    "Far plane · stage −700" if has_translation
+                    else f"Diaphragm {row + 1}"
+                )
+            )
+            layout.addWidget(label, row, 0)
 
             for column, point_number in enumerate(point_numbers):
                 entry = next((item for item in numbered if item[0] == point_number), None)
@@ -563,16 +604,13 @@ class LaserPointing(DS_General_Widget):
                     continue
                 _, state, parameters = entry
                 aperture = self._point_aperture(parameters)
-                sensitivity = {40: "Wide", 20: "Medium", 10: "Fine"}.get(
-                    int(aperture) if aperture is not None else -1, "Preset"
-                )
                 detail = f"{int(aperture)}%" if aperture is not None else ""
-                button = QtWidgets.QPushButton(f"{point_number}  {sensitivity}\n{detail}")
+                button = QtWidgets.QPushButton(f"P{point_number} {detail}".rstrip())
                 button.setCheckable(True)
-                button.setMinimumHeight(38)
-                button.setMinimumWidth(0)
+                button.setFixedHeight(25)
+                button.setMinimumWidth(54)
                 button.setSizePolicy(
-                    QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+                    QtWidgets.QSizePolicy.Fixed, QtWidgets.QSizePolicy.Fixed
                 )
                 button.setToolTip(self._point_tooltip(state, parameters))
                 button.clicked.connect(
@@ -580,18 +618,231 @@ class LaserPointing(DS_General_Widget):
                 )
                 button_group.addButton(button)
                 self.point_buttons_by_state.setdefault(state, []).append(button)
-                layout.addWidget(button, base_row + 1, column)
+                layout.addWidget(button, row, column + 1)
 
         if working:
             state, parameters = working[0]
-            button = QtWidgets.QPushButton("Working / open")
+            button = QtWidgets.QPushButton("Working")
             button.setCheckable(True)
+            button.setFixedSize(68, 52)
             button.setToolTip(self._point_tooltip(state, parameters))
             button.clicked.connect(partial(self.point_clicked, state, parameters, 0))
             button_group.addButton(button)
             self.point_buttons_by_state.setdefault(state, []).append(button)
-            layout.addWidget(button, 4, 0, 1, 3)
+            layout.addWidget(button, 0, 4, 2, 1)
 
+        return group
+
+    @staticmethod
+    def _component_device_path(specification):
+        if isinstance(specification, (tuple, list)):
+            return str(specification[0]) if specification else ""
+        return str(specification or "")
+
+    @staticmethod
+    def _component_caption(role):
+        text = str(role or "")
+        lowered = text.lower()
+        digits = "".join(character for character in text if character.isdigit())
+        if "shutter" in lowered or "flipper" in lowered:
+            return f"Flipper {digits}".rstrip()
+        if "mainlaserdiaphragm" in lowered:
+            return f"Main D{digits}".rstrip()
+        if "crimpingdiaphragm" in lowered:
+            return f"Diaphragm {digits}".rstrip()
+        if "halfwaveplate" in lowered or "lambda" in lowered:
+            return "λ/2"
+        if "translation" in lowered:
+            return "DL"
+        return text
+
+    def _status_value_card(self, role, device_name, attribute_name="position"):
+        card = QtWidgets.QFrame()
+        card.setObjectName("laserComponentStatusCard")
+        card.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        card.setMinimumWidth(96)
+        card.setFixedHeight(25)
+        row = QtWidgets.QHBoxLayout(card)
+        row.setContentsMargins(4, 2, 4, 2)
+        row.setSpacing(3)
+
+        led = TaurusLed()
+        led.model = f"{device_name}/state"
+        led.setFixedSize(13, 13)
+        led.setToolTip(device_name)
+        caption = QtWidgets.QLabel(self._component_caption(role))
+        caption.setObjectName("laserComponentStatusCaption")
+        caption.setToolTip(device_name)
+        is_flipper = "shutter" in role.lower() or "flipper" in role.lower()
+        status_attribute = "endpoint_state" if is_flipper else attribute_name
+        value = OpticalStatusValue(role)
+        value.model = f"{device_name}/{status_attribute}"
+        value.bgRole = ""
+        value.setObjectName("laserComponentStatusValue")
+        value.setToolTip(
+            f"{device_name}/{status_attribute}"
+            + (
+                " · hardware end switch: RIGHT = DOWN, LEFT = UP / beam blocked"
+                if is_flipper
+                else ""
+            )
+        )
+
+        row.addWidget(led)
+        row.addWidget(caption)
+        row.addStretch(1)
+        row.addWidget(value)
+        return card
+
+    def _status_state_card(self, caption_text, devices):
+        card = QtWidgets.QFrame()
+        card.setObjectName("laserComponentStatusCard")
+        card.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        card.setMinimumWidth(96)
+        card.setFixedHeight(25)
+        row = QtWidgets.QHBoxLayout(card)
+        row.setContentsMargins(4, 2, 4, 2)
+        row.setSpacing(3)
+        caption = QtWidgets.QLabel(caption_text)
+        caption.setObjectName("laserComponentStatusCaption")
+        row.addWidget(caption)
+        row.addStretch(1)
+        for axis_name, device_name in devices:
+            axis = QtWidgets.QLabel(axis_name)
+            axis.setObjectName("laserComponentStatusAxis")
+            led = TaurusLed()
+            led.model = f"{device_name}/state"
+            led.setFixedSize(13, 13)
+            led.setToolTip(device_name)
+            row.addWidget(axis)
+            row.addWidget(led)
+        return card
+
+    def build_component_status_panel(self):
+        """Create a compact, passive overview of LaserPointing hardware."""
+
+        group = QtWidgets.QGroupBox("Main components · live status")
+        group.setObjectName("laserPointingComponentStatus")
+        group.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Fixed
+        )
+        group.setMinimumHeight(82)
+        group.setMaximumHeight(92)
+        grid = QtWidgets.QGridLayout(group)
+        grid.setContentsMargins(5, 3, 5, 4)
+        grid.setHorizontalSpacing(3)
+        grid.setVerticalSpacing(2)
+
+        cards = []
+        camera_name = self._component_device_path(self.ds_dict.get("Camera", ""))
+        if camera_name:
+            cards.append(self._status_state_card("Camera", (("", camera_name),)))
+
+        for index, roles in enumerate(self._actuator_role_groups, start=1):
+            devices = []
+            for role in roles:
+                device_name = self._component_device_path(self.ds_dict.get(role, ""))
+                if device_name:
+                    axis = "X" if "x" in str(role).lower() else "Y"
+                    devices.append((axis, device_name))
+            if devices:
+                cards.append(self._status_state_card(f"Standa {index}", devices))
+
+        status_devices = dict(self.ds_dict)
+        shutter1 = self._component_device_path(status_devices.get("Shutter1", ""))
+        if (
+            shutter1
+            and "Shutter2" not in status_devices
+            and shutter1.lower().endswith("/s1")
+        ):
+            status_devices["Shutter2"] = shutter1[:-1] + "2"
+
+        optical_roles = []
+        for role, specification in status_devices.items():
+            lowered = str(role).lower()
+            if any(
+                marker in lowered
+                for marker in (
+                    "shutter",
+                    "flipper",
+                    "diaphragm",
+                    "halfwaveplate",
+                    "lambda",
+                    "translation",
+                )
+            ):
+                attribute_name = "position"
+                if "translation" in lowered and isinstance(
+                    specification, (tuple, list)
+                ):
+                    axes = specification[1] if len(specification) > 1 else ()
+                    if not isinstance(axes, (tuple, list)):
+                        axes = (axes,)
+                    if axes:
+                        attribute_name = f"pos{int(axes[0])}"
+                optical_roles.append(
+                    (
+                        str(role),
+                        self._component_device_path(specification),
+                        attribute_name,
+                    )
+                )
+        optical_roles.sort(
+            key=lambda item: (
+                0
+                if "shutter" in item[0].lower()
+                or "flipper" in item[0].lower()
+                else 1,
+                item[0].lower(),
+            )
+        )
+        for role, device_name, attribute_name in optical_roles:
+            if device_name:
+                cards.append(
+                    self._status_value_card(role, device_name, attribute_name)
+                )
+
+        columns = max(1, math.ceil(len(cards) / 2.0))
+        for index, card in enumerate(cards):
+            grid.addWidget(card, index // columns, index % columns)
+        for column in range(columns):
+            grid.setColumnStretch(column, 1)
+
+        group.setStyleSheet(
+            """
+            QGroupBox#laserPointingComponentStatus {
+                font-weight: 600;
+            }
+            QFrame#laserComponentStatusCard {
+                background: #f4f7fa;
+                border: 1px solid #d5dde6;
+                border-radius: 3px;
+            }
+            QLabel#laserComponentStatusCaption {
+                color: #465568;
+                font-size: 9px;
+                border: none;
+                background: transparent;
+            }
+            QLabel#laserComponentStatusAxis {
+                color: #738092;
+                font-size: 8px;
+                border: none;
+                background: transparent;
+            }
+            QLabel#laserComponentStatusValue {
+                color: #172b44;
+                font-size: 9px;
+                font-weight: 700;
+                border: none;
+                background: transparent;
+            }
+            """
+        )
         return group
 
     @staticmethod
@@ -681,11 +932,20 @@ class LaserPointing(DS_General_Widget):
         return [buttons] if buttons is not None else []
 
     def set_active_actuator_group(self, group_index, reason=""):
-        """Enable only an initialised pair belonging to the selected point."""
+        """Expose every ready manual axis unless the controller owns motion."""
 
         group_index = int(group_index or 0)
         self._active_actuator_group = group_index
-        pair_ready = self._active_pair_is_ready(group_index)
+        role_groups = tuple(getattr(self, "_actuator_role_groups", ()))
+        ready_groups = {
+            index: self._active_pair_is_ready(index)
+            for index in range(1, len(role_groups) + 1)
+        }
+        controller_owns_motion = (
+            self._point_apply_busy
+            or self._pair_initialization_busy
+            or self._search_running
+        )
         if not reason:
             if group_index in (1, 2):
                 optical_name = (
@@ -694,32 +954,36 @@ class LaserPointing(DS_General_Widget):
                     else f"Diaphragm {group_index}"
                 )
                 reason = (
-                    f"{optical_name} selected — Standa pair {group_index} is active"
-                    if pair_ready
-                    else (
-                        f"{optical_name} selected — initialise Standa pair "
-                        f"{group_index} before moving"
-                    )
+                    f"{optical_name} selected — all initialized Standa "
+                    "actuators remain available in Manual"
                 )
             else:
-                reason = "Select point 1–3 or 4–6 to unlock its Standa pair"
+                reason = (
+                    "Manual mode — all initialized Standa actuators are available"
+                )
 
         for index, roles in enumerate(
-            getattr(self, "_actuator_role_groups", ()), start=1
+            role_groups, start=1
         ):
-            enabled = (
-                index == group_index
-                and pair_ready
-                and not self._pair_initialization_busy
+            pair_ready = ready_groups.get(index, False)
+            enabled = manual_alignment_motion_enabled(
+                pair_ready,
+                point_application_busy=self._point_apply_busy,
+                pair_initialization_busy=self._pair_initialization_busy,
+                automatic_search_running=self._search_running,
             )
             for role in roles:
                 widget = self.widgets.get(role)
                 if widget is None:
                     continue
                 lock_reason = (
-                    "Alignment mount is active"
+                    "Manual alignment control is available"
                     if enabled
-                    else reason
+                    else (
+                        reason
+                        if controller_owns_motion
+                        else f"Standa pair {index} is not initialized"
+                    )
                 )
                 if hasattr(widget, "set_alignment_motion_enabled"):
                     widget.set_alignment_motion_enabled(enabled, lock_reason)
@@ -729,7 +993,7 @@ class LaserPointing(DS_General_Widget):
         label = getattr(self, "mount_interlock_status", None)
         if label is not None:
             label.setText(f"Mount interlock: {reason}")
-            if group_index in (1, 2) and pair_ready:
+            if ready_groups and all(ready_groups.values()) and not controller_owns_motion:
                 label.setStyleSheet(
                     "background: #e4f4e8; color: #195c2b; "
                     "border: 1px solid #9bc9a6; border-radius: 4px; padding: 5px;"
@@ -926,7 +1190,9 @@ class LaserPointing(DS_General_Widget):
         self.search_step_middle = double_spin(schedule[1], 0.1, 50.0, 2)
         self.search_step_fine = double_spin(schedule[2], 0.1, 50.0, 2)
         self.search_radius = double_spin(defaults.get("radius", 30.0), 0.1, 100.0, 2)
-        self.search_tolerance = double_spin(defaults.get("tolerance_px", 2.0), 0.0, 100.0, 2)
+        self.search_tolerance = double_spin(
+            defaults.get("roundness_tolerance_pct", 7.0), 0.0, 100.0, 2
+        )
 
         self.search_evaluations = QtWidgets.QSpinBox()
         self.search_evaluations.setRange(1, 500)
@@ -947,7 +1213,7 @@ class LaserPointing(DS_General_Widget):
         form.addWidget(self.search_step_fine, 1, 3)
         form.addWidget(QtWidgets.QLabel("Radius"), 2, 0)
         form.addWidget(self.search_radius, 2, 1)
-        form.addWidget(QtWidgets.QLabel("Tol. px"), 2, 2)
+        form.addWidget(QtWidgets.QLabel("Round err. %"), 2, 2)
         form.addWidget(self.search_tolerance, 2, 3)
         form.addWidget(QtWidgets.QLabel("Evals"), 3, 0)
         form.addWidget(self.search_evaluations, 3, 1)
@@ -970,7 +1236,7 @@ class LaserPointing(DS_General_Widget):
         self.convergence_plot.setTitle(
             "Convergence over time", color="#24364b", size="10pt"
         )
-        self.convergence_plot.setLabel("left", "Δ centroid", units="px")
+        self.convergence_plot.setLabel("left", "Roundness error", units="%")
         self.convergence_plot.setLabel("bottom", "Elapsed time", units="s")
         self.convergence_plot.showGrid(x=True, y=True, alpha=0.2)
         self.convergence_plot.addLegend(offset=(8, 8), labelTextColor="#24364b")
@@ -1015,10 +1281,11 @@ class LaserPointing(DS_General_Widget):
     def add_delta_coordinates_view(self, layout):
         """Place the directional centroid mismatch directly below the camera."""
 
-        group = QtWidgets.QGroupBox("XY delta between optical points")
+        group = QtWidgets.QGroupBox("Centroid diagnostic")
+        group.setObjectName("laserPointingCentroidDiagnostic")
         group.setToolTip(
             "ΔX and ΔY are reference-centroid minus test-centroid. "
-            "The target is the centre of the green tolerance circle."
+            "Automatic alignment optimizes beam roundness, not this displacement."
         )
         group_layout = QtWidgets.QVBoxLayout(group)
         group_layout.setContentsMargins(6, 5, 6, 6)
@@ -1063,7 +1330,7 @@ class LaserPointing(DS_General_Widget):
         )
         self.delta_tolerance_curve = self.delta_plot.plot(
             [], [], pen=pg.mkPen("#2f9e44", width=1.5, style=QtCore.Qt.DashLine),
-            name="Tolerance",
+            name="2 px display guide",
         )
         self.delta_trajectory = self.delta_plot.plot(
             [], [], pen=pg.mkPen("#7b8794", width=1.5)
@@ -1086,7 +1353,7 @@ class LaserPointing(DS_General_Widget):
         group_layout.addWidget(self.delta_plot)
 
         hint = QtWidgets.QLabel(
-            "Direction: reference − test centroid · centre (0, 0) is aligned"
+            "Display only · alignment minimizes beam roundness error"
         )
         hint.setAlignment(QtCore.Qt.AlignCenter)
         hint.setStyleSheet("color: #647386; font-size: 9px;")
@@ -1114,12 +1381,14 @@ class LaserPointing(DS_General_Widget):
             "minimum_step": step_schedule[-1],
             "step_schedule": step_schedule,
             "radius": self.search_radius.value(),
-            "tolerance_px": self.search_tolerance.value(),
+            "roundness_tolerance_pct": self.search_tolerance.value(),
             "max_evaluations": self.search_evaluations.value(),
             "samples": self.search_samples.value(),
             "max_cycles": self.search_max_cycles,
         }
+        previous_group = self._active_actuator_group
         try:
+            self._search_running = True
             self.set_active_actuator_group(
                 0, "Automatic search owns both mount pairs; manual movement is locked"
             )
@@ -1129,8 +1398,12 @@ class LaserPointing(DS_General_Widget):
             )
             if result not in (None, 0):
                 self.search_status.setText("Search is already running or configuration is invalid")
+                self._search_running = False
+                self.set_active_actuator_group(previous_group)
                 self._set_point_buttons_enabled(True)
         except Exception as error:
+            self._search_running = False
+            self.set_active_actuator_group(previous_group)
             self.search_status.setText(f"Could not start: {error}")
         self.update_automatic_search_status()
 
@@ -1158,7 +1431,8 @@ class LaserPointing(DS_General_Widget):
                 detail = (
                     f" — {progress.get('stage')} {progress.get('group')}, "
                     f"step {progress.get('motor_step', '?')}, "
-                    f"error {progress.get('error_px', 0):.2f} px"
+                    f"roundness error "
+                    f"{progress.get('roundness_error_pct', progress.get('error_px', 0)):.2f}%"
                 )
             elif progress.get("message"):
                 detail = f" — {progress['message']}"
@@ -1190,13 +1464,17 @@ class LaserPointing(DS_General_Widget):
             pass
 
     def update_convergence_plot(self, history, progress=None):
-        """Render error versus time and the directional XY mismatch."""
+        """Render roundness error and a non-controlling centroid diagnostic."""
 
         valid = []
         for observation in history if isinstance(history, list) else []:
             try:
                 elapsed = float(observation["elapsed_s"])
-                error = float(observation["error_px"])
+                error = float(
+                    observation.get(
+                        "roundness_error_pct", observation["error_px"]
+                    )
+                )
                 group = int(observation.get("actuator_group", 0))
                 delta_x, delta_y = (
                     float(value) for value in observation["delta_px"][:2]
@@ -1210,7 +1488,12 @@ class LaserPointing(DS_General_Widget):
                 delta_x, delta_y = (
                     float(value) for value in progress["delta_px"][:2]
                 )
-                error = float(progress.get("error_px", math.hypot(delta_x, delta_y)))
+                error = float(
+                    progress.get(
+                        "roundness_error_pct",
+                        progress.get("error_px", math.hypot(delta_x, delta_y)),
+                    )
+                )
                 group_name = str(progress.get("group", ""))
                 group = 0
                 for index, name in enumerate(getattr(self, "pid_groups", ()), start=1):
@@ -1249,7 +1532,9 @@ class LaserPointing(DS_General_Widget):
                 [item[3] for item in points], [item[4] for item in points]
             )
 
-        tolerance = max(0.0, self.search_tolerance.value())
+        # This circle is only a visual centroid-displacement guide. The search
+        # tolerance above is a percentage shape error and must not control it.
+        tolerance = 2.0
         angles = [2 * math.pi * index / 100 for index in range(101)]
         self.delta_tolerance_curve.setData(
             [tolerance * math.cos(angle) for angle in angles],

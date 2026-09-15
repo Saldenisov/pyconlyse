@@ -149,6 +149,7 @@ def test_standa_status_success_resets_fault_counter(monkeypatch):
             ("Ipwr", ctypes.c_int),
             ("Upwr", ctypes.c_int),
             ("PWRSts", ctypes.c_int),
+            ("GPIOFlags", ctypes.c_uint),
         ]
 
     monkeypatch.setattr(standa_module, "status_t", Status)
@@ -169,6 +170,16 @@ def test_standa_status_success_resets_fault_counter(monkeypatch):
     assert device._power_current == 12
     assert device._power_voltage == 3.3
     assert device._power_status == device.POWER_STATES[3]
+    assert device._endpoint_state == "RIGHT"
+
+
+def test_standa_endpoint_state_uses_physical_switches_not_numeric_position():
+    decode = standa_module.DS_Standa_Motor._endpoint_state_from_gpio_flags
+
+    assert decode(0x0001) == "RIGHT"
+    assert decode(0x0002) == "LEFT"
+    assert decode(0x0000) == "BETWEEN"
+    assert decode(0x0003) == "CONFLICT"
 
 
 def test_standa_usb_loss_schedules_passive_recovery_after_threshold():
@@ -520,6 +531,8 @@ def _fill_standa_status(status_ptr):
     status.Ipwr = 12
     status.Upwr = 330
     status.PWRSts = 3
+    if hasattr(status, "GPIOFlags"):
+        status.GPIOFlags = 0x0001
     return standa_module.Result.Ok
 
 

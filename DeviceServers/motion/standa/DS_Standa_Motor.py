@@ -48,6 +48,7 @@ from DeviceServers.motion.standa.transport import (
 try:
     from DeviceServers.motion.standa.ximc import (
         EnumerateFlags,
+        GPIOFlags,
         PositionFlags,
         Result,
         XIMC_BACKEND,
@@ -67,6 +68,12 @@ except Exception:
         ENUMERATE_NETWORK = 0
 
     EnumerateFlags = _EnumerateFlags
+
+    class _GPIOFlags:
+        STATE_RIGHT_EDGE = 0x0001
+        STATE_LEFT_EDGE = 0x0002
+
+    GPIOFlags = _GPIOFlags
     PositionFlags = object
 
     class _Result:
@@ -245,6 +252,25 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
     def last_transport_error_at_utc(self):
         return str(getattr(self, "_last_transport_error_at_utc", ""))
 
+    @attribute(
+        label="Physical endpoint state",
+        dtype=str,
+        access=AttrWriteType.READ,
+        display_level=DispLevel.OPERATOR,
+        polling_period=polling_local,
+        doc=(
+            "Hardware end-switch readback. RIGHT or LEFT identifies the active "
+            "physical endpoint; BETWEEN means neither switch is active."
+        ),
+    )
+    def endpoint_state(self):
+        # A passively discovered controller has a closed transport and its
+        # numeric position may merely be the process-start default.  End-switch
+        # status can still be sampled safely without initialising or moving it.
+        if not self._has_open_transport():
+            self._refresh_endpoint_state_passively()
+        return str(getattr(self, "_endpoint_state", "UNKNOWN"))
+
     def init_device(self):
         global _STARTUP_TRACE_ENABLED
         _startup_trace("init_device_enter")
@@ -260,6 +286,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._transport_retry_success_count = 0
         self._last_transport_error = ""
         self._last_transport_error_at_utc = ""
+        self._endpoint_state = "UNKNOWN"
         self._libximc_backend = XIMC_BACKEND
         self._libximc_backend_error = XIMC_BACKEND_ERROR
         self._libximc_runtime_version = runtime_version()
@@ -434,6 +461,69 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
                 if result != Result.Error:
                     return result
             return result
+
+    @staticmethod
+    def _endpoint_state_from_gpio_flags(gpio_flags) -> str:
+        """Decode the two physical end switches without using motor position."""
+
+        flags = int(gpio_flags or 0)
+        right_active = bool(flags & GPIOFlags.STATE_RIGHT_EDGE)
+        left_active = bool(flags & GPIOFlags.STATE_LEFT_EDGE)
+        if right_active and left_active:
+            return "CONFLICT"
+        if right_active:
+            return "RIGHT"
+        if left_active:
+            return "LEFT"
+        return "BETWEEN"
+
+    def _update_endpoint_state(self, controller_status) -> str:
+        self._endpoint_state = self._endpoint_state_from_gpio_flags(
+            getattr(controller_status, "GPIOFlags", 0)
+        )
+        return self._endpoint_state
+
+    def _refresh_endpoint_state_passively(self) -> str:
+        """Read end switches through a temporary handle, without any motion."""
+
+        uri = getattr(self, "_uri", b"") or getattr(self, "_last_known_uri", b"")
+        if not uri:
+            self._endpoint_state = "UNKNOWN"
+            return self._endpoint_state
+
+        handle = -1
+        try:
+            with self._transport_lock():
+                handle = lib.open_device(uri)
+                if handle < 0:
+                    self._endpoint_state = "UNKNOWN"
+                    return self._endpoint_state
+                try:
+                    serial = ctypes.c_uint()
+                    serial_result = lib.get_serial_number(
+                        handle, ctypes.byref(serial)
+                    )
+                    if (
+                        serial_result != Result.Ok
+                        or int(serial.value) != int(self.device_id)
+                    ):
+                        self._endpoint_state = "UNKNOWN"
+                        return self._endpoint_state
+
+                    controller_status = status_t()
+                    status_result = lib.get_status(
+                        handle, ctypes.byref(controller_status)
+                    )
+                    if status_result != Result.Ok:
+                        self._endpoint_state = "UNKNOWN"
+                        return self._endpoint_state
+                    return self._update_endpoint_state(controller_status)
+                finally:
+                    self._close_handle_locked(handle)
+                    handle = -1
+        except Exception:
+            self._endpoint_state = "UNKNOWN"
+            return self._endpoint_state
 
     def _has_open_transport(self) -> bool:
         return bool(
@@ -1003,6 +1093,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             result = f"USB exception: {error}"
 
         if result == Result.Ok:
+            self._update_endpoint_state(x_status)
             self._temperature = x_status.CurT / 10.0
             self._power_current = x_status.Ipwr
             self._power_voltage = x_status.Upwr / 100.0
