@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import LaserPointingController, {
   CameraPreview,
   ConvergenceChart,
@@ -7,9 +7,11 @@ import LaserPointingController, {
   actuatorGroupForPoint,
   actuatorGroupForRole,
   actuatorVisualState,
+  formatOpticalStatusValue,
   laserSnapshotErrorMessage,
   pointAperture,
   pointNumber,
+  roundnessError,
 } from './LaserPointingController';
 
 describe('LaserPointing optical point presentation', () => {
@@ -64,22 +66,35 @@ describe('LaserPointing optical point presentation', () => {
     ))).toBe('LaserPointing controller is busy; retrying automatically…');
   });
 
-  test('renders convergence as centroid error against elapsed time', () => {
+  test('uses beam roundness for automatic convergence while retaining legacy history', () => {
+    expect(roundnessError({ roundness_error_pct: 6.5, error_px: 99 })).toBe(6.5);
+    expect(roundnessError({ error_px: 4.25 })).toBe(4.25);
+
     render(
       <ConvergenceChart
-        tolerance={2}
+        tolerance={7}
         history={[
-          { elapsed_s: 0, error_px: 8, actuator_group: 1 },
-          { elapsed_s: 4.5, error_px: 3, actuator_group: 2 },
+          { elapsed_s: 0, roundness_error_pct: 12, error_px: 88, actuator_group: 1 },
+          { elapsed_s: 4.5, roundness_error_pct: 5.5, error_px: 77, actuator_group: 2 },
         ]}
       />
     );
 
     expect(screen.getByRole('img', {
-      name: /centroid separation convergence over elapsed time/i,
+      name: /beam roundness error convergence over elapsed time/i,
     })).toBeInTheDocument();
+    expect(screen.getByText('Roundness error (%)')).toBeInTheDocument();
+    expect(screen.getByText('Roundness tolerance')).toBeInTheDocument();
     expect(screen.getAllByText(/Diaphragm 1 · Standa pair 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Diaphragm 2 · Standa pair 2/i).length).toBeGreaterThan(0);
+  });
+
+  test('formats the desktop-equivalent passive optical readback', () => {
+    expect(formatOpticalStatusValue('Shutter2', -1)).toBe('IN');
+    expect(formatOpticalStatusValue('Shutter2', 1)).toBe('OUT');
+    expect(formatOpticalStatusValue('Shutter2', 0)).toBe('BETWEEN');
+    expect(formatOpticalStatusValue('CrimpingDiaphragm1', 40)).toBe('40%');
+    expect(formatOpticalStatusValue('HalfWavePlate1', 20.5)).toBe('20.5%');
   });
 
   test('renders signed XY delta values and a true centred vector view', () => {
@@ -88,7 +103,7 @@ describe('LaserPointing optical point presentation', () => {
         tolerance={2}
         history={[
           { delta_px: [7, -4], error_px: 8.06, actuator_group: 1 },
-          { delta_px: [1.25, -0.5], error_px: 1.35, actuator_group: 2 },
+          { delta_px: [1.25, -0.5], error_px: 99, actuator_group: 2 },
         ]}
       />
     );
@@ -241,13 +256,19 @@ describe('LaserPointing optical point presentation', () => {
       },
       automatic_search: {
         status: 'idle',
-        progress: {},
-        history: [{ elapsed_s: 1, error_px: 2.5, actuator_group: 1 }],
+        progress: {
+          phase: 'measuring',
+          reference_roundness_pct: 96,
+          test_roundness_pct: 91,
+          roundness_error_pct: 9,
+        },
+        history: [{ elapsed_s: 1, roundness_error_pct: 9, error_px: 9, actuator_group: 1 }],
         config: {
           mode: 'sensitive',
           step_schedule: [10, 6, 2],
           radius: 30,
           tolerance_px: 2,
+          roundness_tolerance_pct: 7,
           max_evaluations: 16,
           samples: 3,
         },
@@ -322,10 +343,18 @@ describe('LaserPointing optical point presentation', () => {
     const view = render(<LaserPointingController deviceName={snapshot.device} />);
     expect(await screen.findByRole('tab', { name: 'Automatic' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByText('Convergence over time')).toBeInTheDocument();
+    expect(screen.getByLabelText('Roundness error (%)')).toHaveValue(7);
+    expect(screen.getByRole('img', { name: /beam roundness error convergence/i })).toBeInTheDocument();
+    expect(screen.getByLabelText('Current beam roundness metrics')).toHaveTextContent('Reference 96.00%');
     expect(screen.queryByText('Standa alignment mounts')).not.toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
+    const componentStatus = screen.getByRole('region', { name: 'Main components live status' });
+    expect(within(componentStatus).getByText('Camera')).toBeInTheDocument();
+    expect(within(componentStatus).getByText('Standa 1')).toBeInTheDocument();
+    expect(within(componentStatus).getByText('40%')).toBeInTheDocument();
+    expect(within(componentStatus).getByText('IN')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /3 · Fine/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Point 3 Fine 10%/i }));
     expect(screen.getByLabelText('point3 optical state')).toBeInTheDocument();
     expect(screen.getByLabelText('CrimpingDiaphragm1 target aperture 10% open')).toBeInTheDocument();
     expect(screen.getByText('40% → 10%')).toBeInTheDocument();
@@ -341,13 +370,14 @@ describe('LaserPointing optical point presentation', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Manual' }));
     expect(screen.getByText('Standa alignment mounts')).toBeInTheDocument();
-    expect(screen.getByText('TranslationStage1')).toBeInTheDocument();
+    expect(screen.getAllByText('TranslationStage1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Axis 3')).toBeInTheDocument();
     expect(screen.getByText('Basler preview')).toBeInTheDocument();
-    expect(screen.getByText('XY delta between optical points')).toBeInTheDocument();
+    expect(screen.getByText('Centroid diagnostic')).toBeInTheDocument();
+    expect(screen.getByText(/automatic alignment minimizes beam roundness error/i)).toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /3 · Fine/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /6 · Fine/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Point 3 Fine 10%/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Point 6 Fine 10%/i })).toBeInTheDocument();
     expect(screen.queryByText('Active Standa pair')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Initialize active pair/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Convergence over time')).not.toBeInTheDocument();

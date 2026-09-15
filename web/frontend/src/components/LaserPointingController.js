@@ -58,6 +58,123 @@ const formatOpticalValue = (value) => {
   return Number.isInteger(numeric) ? numeric.toFixed(0) : numeric.toFixed(1);
 };
 
+const finiteNumber = (value) => {
+  if (value === null || value === undefined || value === '') return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+export const roundnessError = (observation = {}) => (
+  finiteNumber(observation.roundness_error_pct)
+  ?? finiteNumber(observation.error_px)
+);
+
+export const formatOpticalStatusValue = (role, value) => {
+  const numeric = finiteNumber(value);
+  if (numeric === null) return '—';
+  const normalized = String(role || '').toLowerCase().replace(/[ -]/g, '_');
+  if (/shutter|flipper/.test(normalized)) {
+    if (Math.abs(numeric + 1) <= 0.2) return 'IN';
+    if (Math.abs(numeric - 1) <= 0.2) return 'OUT';
+    return 'BETWEEN';
+  }
+  if (/diaphragm|halfwaveplate|half_wave_plate|lambda/.test(normalized)) {
+    return `${Number.isInteger(numeric) ? numeric.toFixed(0) : numeric.toFixed(1)}%`;
+  }
+  return formatOpticalValue(numeric);
+};
+
+const stateName = (value) => String(value || 'UNKNOWN').toUpperCase().split('.').pop();
+
+const componentVisualState = (component = {}) => {
+  const state = stateName(component.state);
+  if (component.disconnected || ['FAULT', 'OFF', 'UNKNOWN', 'UNREACHABLE'].includes(state)) {
+    return 'disconnected';
+  }
+  if (state === 'MOVING') return 'moving';
+  if (component.ready || ['ON', 'RUNNING'].includes(state)) return 'ready';
+  return actuatorVisualState(component);
+};
+
+export const ComponentStatusPanel = ({ snapshot = {} }) => {
+  const cards = [];
+  const camera = snapshot.camera || {};
+  if (camera.device) {
+    cards.push({
+      key: 'camera',
+      caption: 'Camera',
+      indicators: [{
+        label: stateName(camera.state),
+        visualState: componentVisualState(camera),
+        title: camera.device,
+      }],
+    });
+  }
+
+  Object.entries(snapshot.groups || {})
+    .filter(([name, roles]) => /^actuators/i.test(name) && Array.isArray(roles))
+    .forEach(([name, roles], index) => {
+      const indicators = roles.map((role) => {
+        const actuator = (snapshot.actuators || []).find((item) => item.role === role) || {};
+        return {
+          label: /x/i.test(role) ? 'X' : (/y/i.test(role) ? 'Y' : role),
+          visualState: componentVisualState(actuator),
+          title: actuator.device || role,
+        };
+      });
+      cards.push({ key: name, caption: `Standa ${index + 1}`, indicators });
+    });
+
+  (snapshot.other_devices || snapshot.diaphragms || []).forEach((device) => {
+    cards.push({
+      key: device.role,
+      caption: device.role,
+      value: formatOpticalStatusValue(device.role, device.position),
+      title: device.device,
+    });
+  });
+
+  (snapshot.manual_devices || []).forEach((device) => {
+    const value = (device.axes || []).map((axis) => (
+      `A${axis.axis} ${formatOpticalStatusValue(device.role, axis.position)}`
+    )).join(' · ') || stateName(device.state);
+    cards.push({
+      key: device.role,
+      caption: device.role,
+      value,
+      title: device.device,
+    });
+  });
+
+  return (
+    <section className="laser-component-status-panel" aria-label="Main components live status">
+      <div className="laser-section-heading">
+        <strong>Main components · live status</strong>
+        <span>Passive readback</span>
+      </div>
+      <div className="laser-component-status-grid">
+        {cards.map((card) => (
+          <div className="laser-component-status-card" key={card.key} title={card.title || ''}>
+            <span className="laser-component-status-caption">{card.caption}</span>
+            {card.indicators ? (
+              <span className="laser-component-indicators">
+                {card.indicators.map((indicator) => (
+                  <span key={`${card.key}-${indicator.label}`} title={indicator.title}>
+                    <i className={`laser-state-dot state-${indicator.visualState}`} />
+                    {indicator.label}
+                  </span>
+                ))}
+              </span>
+            ) : (
+              <strong className="laser-component-status-value">{card.value}</strong>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+};
+
 const OpticalPointState = ({ point, snapshot, transition }) => {
   if (!point) return null;
   const settings = point.settings || {};
@@ -485,8 +602,8 @@ export const CameraPreview = ({
         </details>
       )}
       <div className="laser-delta-heading">
-        <strong>XY delta between optical points</strong>
-        <span>Reference − test centroid · target (0, 0)</span>
+        <strong>Centroid diagnostic</strong>
+        <span>Display only · automatic alignment minimizes beam roundness error</span>
       </div>
       <DeltaVectorChart
         history={history}
@@ -502,7 +619,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
   const observations = history
     .map((item) => ({
       elapsed: Number(item.elapsed_s),
-      error: Number(item.error_px),
+      error: roundnessError(item),
       group: Number(item.actuator_group),
     }))
     .filter((item) => Number.isFinite(item.elapsed) && Number.isFinite(item.error));
@@ -510,7 +627,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
   if (!observations.length) {
     return (
       <div className="laser-convergence-empty">
-        The first centroid comparison will appear here when automatic alignment starts.
+        The first beam-roundness measurement will appear here when automatic alignment starts.
       </div>
     );
   }
@@ -535,7 +652,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
         className="laser-convergence-chart"
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label="Centroid separation convergence over elapsed time"
+        aria-label="Beam roundness error convergence over elapsed time"
       >
         {[0, 0.5, 1].map((fraction) => (
           <line
@@ -559,10 +676,10 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
             r="4"
             className={`laser-chart-point group-${item.group}`}
           >
-            <title>{`${item.elapsed.toFixed(1)} s · ${item.error.toFixed(2)} px · ${item.group === 1 ? group1Label : group2Label}`}</title>
+            <title>{`${item.elapsed.toFixed(1)} s · ${item.error.toFixed(2)}% roundness error · ${item.group === 1 ? group1Label : group2Label}`}</title>
           </circle>
         ))}
-        <text x="8" y={margin.top + plotHeight / 2} className="laser-chart-label" transform={`rotate(-90 8 ${margin.top + plotHeight / 2})`}>Δ centroid (px)</text>
+        <text x="8" y={margin.top + plotHeight / 2} className="laser-chart-label" transform={`rotate(-90 8 ${margin.top + plotHeight / 2})`}>Roundness error (%)</text>
         <text x={margin.left + plotWidth / 2} y={height - 7} className="laser-chart-label">Elapsed time (s)</text>
         <text x={margin.left - 7} y={margin.top + 4} textAnchor="end" className="laser-chart-tick">{maxError.toFixed(1)}</text>
         <text x={margin.left - 7} y={height - margin.bottom + 4} textAnchor="end" className="laser-chart-tick">0</text>
@@ -572,7 +689,7 @@ export const ConvergenceChart = ({ history = [], tolerance = 0, hasTranslation =
       <div className="laser-convergence-legend">
         <span><i className="group-1" />{group1Label}</span>
         <span><i className="group-2" />{group2Label}</span>
-        <span><i className="tolerance" />Tolerance</span>
+        <span><i className="tolerance" />Roundness tolerance</span>
       </div>
     </div>
   );
@@ -592,8 +709,9 @@ export function DeltaVectorChart({
     return {
       deltaX,
       deltaY,
-      error: Number.isFinite(Number(item.error_px))
-        ? Number(item.error_px) : Math.hypot(deltaX, deltaY),
+      // error_px is retained by the server as a compatibility alias for the
+      // roundness score.  The diagnostic magnitude must come from ΔX/ΔY.
+      error: Math.hypot(deltaX, deltaY),
       group: Number(item.actuator_group),
     };
   };
@@ -692,7 +810,7 @@ export function DeltaVectorChart({
       <div className="laser-convergence-legend laser-delta-legend">
         <span><i className="group-1" />{group1Label}</span>
         <span><i className="group-2" />{group2Label}</span>
-        <span><i className="tolerance" />Tolerance</span>
+        <span><i className="tolerance" />{safeTolerance.toFixed(1)} px display guide</span>
       </div>
     </div>
   );
@@ -1050,6 +1168,7 @@ const LaserPointingController = ({ deviceName }) => {
         step_schedule: schedule,
         initial_step: schedule[0],
         minimum_step: schedule[2],
+        roundness_tolerance_pct: finiteNumber(config.roundness_tolerance_pct) ?? 7,
       }),
       'Starting automatic search'
     );
@@ -1111,6 +1230,11 @@ const LaserPointingController = ({ deviceName }) => {
   const pointApplicationError = progress.phase === 'manual_point_error'
     ? progress.message : '';
   const convergenceHistory = snapshot?.automatic_search?.history || [];
+  const roundnessTolerance = finiteNumber(config?.roundness_tolerance_pct) ?? 7;
+  const centroidGuidePx = finiteNumber(config?.tolerance_px) ?? 2;
+  const progressRoundnessError = roundnessError(progress);
+  const referenceRoundness = finiteNumber(progress.reference_roundness_pct);
+  const testRoundness = finiteNumber(progress.test_roundness_pct);
   const activePoint = snapshot?.active_point || '';
   const activeActuatorGroup = actuatorGroupForPoint(activePoint);
   const activePairActuators = (snapshot?.actuators || []).filter(
@@ -1170,14 +1294,14 @@ const LaserPointingController = ({ deviceName }) => {
     <section className="laser-panel">
       <div className="laser-section-heading">
         <strong>Optical points</strong>
-        <span>Apply aperture and DL presets · visible in every mode</span>
+        <span>Apply point presets · shared across modes</span>
       </div>
       {[0, 1].map((planeIndex) => (
         <div className="laser-point-plane" key={planeIndex}>
           <span className="laser-plane-label">
             {hasTranslation
-              ? (planeIndex === 0 ? 'Near · stage 0' : 'Far · stage −700')
-              : `Diaphragm ${planeIndex + 1}`}
+              ? (planeIndex === 0 ? 'Near' : 'Far')
+              : `D${planeIndex + 1}`}
           </span>
           <div className="laser-point-buttons">
             {numberedPoints
@@ -1191,9 +1315,10 @@ const LaserPointingController = ({ deviceName }) => {
                     className={(pointTransition?.name || activePoint) === point.name ? 'selected' : ''}
                     onClick={() => activateOpticalPoint(point)}
                     disabled={pointControlsDisabled}
+                    aria-label={`Point ${point.number} ${pointSensitivity(aperture)} ${aperture !== null ? `${aperture}%` : 'preset'}`}
                     title={Object.entries(point.settings).map(([key, value]) => `${key}=${value}`).join(', ')}
                   >
-                    <strong>{point.number} · {pointSensitivity(aperture)}</strong>
+                    <strong>P{point.number}</strong>
                     <small>{aperture !== null ? `${aperture}%` : 'preset'}</small>
                   </button>
                 );
@@ -1294,7 +1419,10 @@ const LaserPointingController = ({ deviceName }) => {
         </div>
       )}
 
-      {renderOpticalPointSelector()}
+      <div className="laser-shared-overview">
+        {renderOpticalPointSelector()}
+        <ComponentStatusPanel snapshot={snapshot} />
+      </div>
 
       <div className="laser-mode-tabs" role="tablist" aria-label="LaserPointing operating mode">
         <button
@@ -1336,7 +1464,7 @@ const LaserPointingController = ({ deviceName }) => {
             )}
             history={convergenceHistory}
             progress={progress}
-            tolerance={config.tolerance_px}
+            tolerance={centroidGuidePx}
             hasTranslation={hasTranslation}
             onRefresh={loadSnapshot}
           />
@@ -1349,7 +1477,11 @@ const LaserPointingController = ({ deviceName }) => {
             <section className="laser-panel">
               <div className="laser-section-heading">
                 <strong>Automatic alignment</strong>
-                <span>{busy || progress.message || progress.phase || 'Ready'}</span>
+                <span>
+                  {busy || (progressRoundnessError !== null
+                    ? `${progress.stage || progress.phase || 'Measuring'} · roundness error ${progressRoundnessError.toFixed(2)}%`
+                    : (progress.message || progress.phase || 'Ready'))}
+                </span>
               </div>
               <div className="laser-search-form">
                 <label>
@@ -1377,8 +1509,8 @@ const LaserPointingController = ({ deviceName }) => {
                   <input type="number" min="0.1" value={config.radius} onChange={(event) => updateConfig('radius', Number(event.target.value))} />
                 </label>
                 <label>
-                  Tolerance (px)
-                  <input type="number" min="0" step="0.1" value={config.tolerance_px} onChange={(event) => updateConfig('tolerance_px', Number(event.target.value))} />
+                  Roundness error (%)
+                  <input type="number" min="0" max="100" step="0.1" value={roundnessTolerance} onChange={(event) => updateConfig('roundness_tolerance_pct', Number(event.target.value))} />
                 </label>
                 <label>
                   Evaluations
@@ -1389,6 +1521,13 @@ const LaserPointingController = ({ deviceName }) => {
                   <input type="number" min="1" value={config.samples} onChange={(event) => updateConfig('samples', Number(event.target.value))} />
                 </label>
               </div>
+              {(referenceRoundness !== null || testRoundness !== null || progressRoundnessError !== null) && (
+                <div className="laser-roundness-metrics" aria-label="Current beam roundness metrics">
+                  <span>Reference <strong>{referenceRoundness === null ? '—' : `${referenceRoundness.toFixed(2)}%`}</strong></span>
+                  <span>Test <strong>{testRoundness === null ? '—' : `${testRoundness.toFixed(2)}%`}</strong></span>
+                  <span>Error <strong>{progressRoundnessError === null ? '—' : `${progressRoundnessError.toFixed(2)}%`}</strong></span>
+                </div>
+              )}
               <div className="laser-search-actions">
                 <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
                   Start automatic search
@@ -1402,11 +1541,11 @@ const LaserPointingController = ({ deviceName }) => {
             <section className="laser-panel">
               <div className="laser-section-heading">
                 <strong>Convergence over time</strong>
-                <span>Centroid separation after each Standa correction</span>
+                <span>Closed-aperture beam-shape error after each Standa correction</span>
               </div>
               <ConvergenceChart
                 history={convergenceHistory}
-                tolerance={config.tolerance_px}
+                tolerance={roundnessTolerance}
                 hasTranslation={hasTranslation}
               />
             </section>
@@ -1432,7 +1571,7 @@ const LaserPointingController = ({ deviceName }) => {
                   ? (activePairReady
                     ? `Standa pair ${activeActuatorGroup} is active`
                     : `Standa pair ${activeActuatorGroup} is not ready`)
-                  : `Locked: select an optical point for Standa pair ${roleGroup || '?'}`;
+                  : `Manual control available · Standa pair ${roleGroup || '?'}`;
                 return (
                   <CompactActuator
                     key={actuator.role}
