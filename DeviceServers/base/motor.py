@@ -469,10 +469,16 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         return int(axis)
 
     def _validated_axis_move(self, args):
-        if not isinstance(args, (list, tuple)) or len(args) != 2:
+        # PyTango materializes ``dtype_in=[float]`` as a NumPy array at the
+        # server boundary.  Accept any unpackable two-value payload instead
+        # of restricting commands to the list/tuple types used by local tests.
+        if isinstance(args, (str, bytes)):
             raise ValueError("move_axis expects [axis, position]")
-        axis = self._validated_axis_id(args[0])
-        position = args[1]
+        try:
+            axis_arg, position = args
+        except (TypeError, ValueError):
+            raise ValueError("move_axis expects [axis, position]")
+        axis = self._validated_axis_id(axis_arg)
         if isinstance(position, bool):
             raise ValueError("position must be numeric")
         try:
@@ -546,14 +552,20 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
         doc_out=standard_str_output,
     )
     def define_position_axis(self, args):
-        if not isinstance(args, (list, tuple)) or len(args) != 2:
+        if isinstance(args, (str, bytes)):
             res = "define_position_axis expects [axis, position]"
             self.error(f"{self.device_name}: {res}")
             return res
-        axis_error = self._axis_error(args[0])
+        try:
+            axis_arg, position = args
+        except (TypeError, ValueError):
+            res = "define_position_axis expects [axis, position]"
+            self.error(f"{self.device_name}: {res}")
+            return res
+        axis_error = self._axis_error(axis_arg)
         if axis_error:
             return axis_error
-        normalized_args = [int(args[0]), args[1]]
+        normalized_args = [int(axis_arg), position]
         state_ok = self.check_func_allowance(self.define_position_axis)
         if state_ok == 1:
             res = self.define_position_axis_local(normalized_args)
@@ -761,9 +773,16 @@ class DS_MOTORIZED_MULTI_AXES(DS_General):
                     active_ids.pop(axis, None)
                     self._active_axis_motion_operation_ids = active_ids
 
-    @command(dtype_in=float, doc_in="Input is axis_id: int and then position value.")
+    @command(
+        dtype_in=[float],
+        doc_in="Input is axis_id: int and then position value.",
+        dtype_out=str,
+        doc_out=standard_str_output,
+    )
     def move_axis_abs(self, args):
-        self.move_axis(args)
+        """Backward-compatible alias for the multi-axis absolute move command."""
+
+        return self.move_axis(args)
 
     @abstractmethod
     def move_axis_local(self, args) -> Union[int, str]:

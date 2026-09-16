@@ -944,6 +944,15 @@ def test_multi_motor_move_axis_calls_local_when_allowed():
     assert device.positions() == "{1: 4.25, 2: 3.0}"
 
 
+def test_multi_motor_absolute_move_alias_uses_array_command_contract():
+    device = DummyMultiMotor()
+
+    result = device.move_axis_abs([1.0, 4.25])
+
+    assert result == "0"
+    assert device.move_calls == [[1, 4.25]]
+
+
 def test_multi_motor_move_axis_returns_message_when_state_disallowed():
     device = DummyMultiMotor()
     device.set_state(general_module.DevState.FAULT)

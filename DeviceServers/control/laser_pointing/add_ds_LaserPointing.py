@@ -15,6 +15,7 @@ names = {
             "Camera": "manip/V0/Cam1_V0",
             "MainLaserDiaphragm1": "elyse/motorized_devices/de1",
             "Shutter1": "manip/V0/s1",
+            "Shutter2": "manip/V0/s2",
             "CrimpingDiaphragm1": "manip/V0/dv01",
             "CrimpingDiaphragm2": "manip/V0/dv02",
             "ActuatorX1": "elyse/motorized_devices/mm1_x",
@@ -26,7 +27,7 @@ names = {
         od(
             {
                 "Laser Parameters": ("MainLaserDiaphragm1", "HalfWavePlate1"),
-                "Shutters": ("Shutter1"),
+                "Shutters": ("Shutter1", "Shutter2"),
                 "Crimping Diaphragms": ("CrimpingDiaphragm1", "CrimpingDiaphragm2"),
                 "Actuators 1": ("ActuatorX1", "ActuatorY1"),
                 "Actuators 2": ("ActuatorX2", "ActuatorY2"),
@@ -39,49 +40,42 @@ names = {
             {
                 "point1": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 40,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 20,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 10,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 40,
                     "HalfWavePlate1": 100,
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 20,
                     "HalfWavePlate1": 100,
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 10,
                     "HalfWavePlate1": 100,
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 100,
                     "CrimpingDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
@@ -132,8 +126,6 @@ names = {
             {
                 "point1": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -142,8 +134,6 @@ names = {
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -152,8 +142,6 @@ names = {
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -162,8 +150,6 @@ names = {
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -172,8 +158,6 @@ names = {
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -182,8 +166,6 @@ names = {
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -192,8 +174,6 @@ names = {
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,
-                    "Shutter1": 1,
-                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
                     "TranslationStage1": (3, 0),
@@ -243,7 +223,6 @@ names = {
             {
                 "starting_point": {
                     "MainLaserDiaphragm": 9.2,
-                    "Shutter1": -1,
                     "CrimpingDiaphragm": 20,
                 }
             }
@@ -251,6 +230,11 @@ names = {
         {},
     ],
 }
+
+
+# Flippers remain available as independent devices and status cards, but they
+# are intentionally excluded from every LaserPointing optical-point recipe.
+CAMERA_VERIFIED_ROLES = {}
 
 
 def main():
@@ -280,12 +264,14 @@ def main():
                         "step_schedule": [10.0, 6.0, 2.0],
                         "radius": 30.0,
                         "tolerance_px": 2.0,
+                        "roundness_tolerance_pct": 7.0,
                         "minimum_improvement_px": 0.1,
                         "unchanged_response_tolerance_px": 0.25,
                         "probe_repetitions": 3,
                         "max_evaluations": 16,
                         "max_cycles": 2,
                         "samples": 3,
+                        "invalid_frame_retries": 5,
                         "sample_interval_s": 0.2,
                         "camera_frame_wait_s": 0.25,
                         "motion_timeout_s": 180.0,
@@ -294,6 +280,9 @@ def main():
                         "position_stable_reads": 2,
                         "groups": [],
                         "point_pairs": {},
+                        "camera_verified_roles": CAMERA_VERIFIED_ROLES.get(
+                            dev_id, []
+                        ),
                         "restore_point": "",
                     }
                 ),

@@ -1,13 +1,12 @@
-import ast
 import json
 import sys
 from math import hypot
 from pathlib import Path
-from statistics import median
 from threading import Event, Lock, Thread
 from time import monotonic
 from typing import Dict, Optional, Sequence, Tuple, Union
 
+import numpy as np
 from tango import AttrWriteType, DevState, DispLevel
 from tango.server import attribute, command, device_property
 from taurus import Device
@@ -26,12 +25,14 @@ try:
         bounded_pattern_search,
         optical_point_group,
     )
+    from DeviceServers.control.laser_pointing.beam_metrics import beam_contour_symmetry
 except ModuleNotFoundError:
     from automatic_search import (
         SearchParameters,
         bounded_pattern_search,
         optical_point_group,
     )
+    from beam_metrics import beam_contour_symmetry
 
 
 DEFAULT_SEARCH_CONFIG = {
@@ -41,12 +42,14 @@ DEFAULT_SEARCH_CONFIG = {
     "step_schedule": [10.0, 6.0, 2.0],
     "radius": 30.0,
     "tolerance_px": 2.0,
+    "roundness_tolerance_pct": 7.0,
     "minimum_improvement_px": 0.1,
     "unchanged_response_tolerance_px": 0.25,
     "probe_repetitions": 3,
     "max_evaluations": 16,
     "max_cycles": 2,
     "samples": 3,
+    "invalid_frame_retries": 5,
     "sample_interval_s": 0.2,
     "camera_frame_wait_s": 0.25,
     "motion_timeout_s": 180.0,
@@ -55,6 +58,7 @@ DEFAULT_SEARCH_CONFIG = {
     "position_stable_reads": 2,
     "groups": [],
     "point_pairs": {},
+    "camera_verified_roles": [],
     "restore_point": "",
 }
 
@@ -68,13 +72,7 @@ class LaserNotVisible(RuntimeError):
 
 
 class DS_LaserPointing(DS_ControlPosition):
-    """Bounded automatic alignment through the configured diaphragm planes.
-
-    The entry diaphragm and the two measurement planes remain encoded by the
-    existing point rules.  Each search group compares a wider reference point
-    with a more sensitive closed-diaphragm point and moves its associated X/Y
-    actuator pair to minimise the centroid displacement.
-    """
+    """Alternate optical planes and minimise their beam-contour asymmetry."""
 
     RULES = {
         "start_cgc": [DevState.ON],
@@ -114,6 +112,7 @@ class DS_LaserPointing(DS_ControlPosition):
         self._search_progress: Dict = {}
         self._search_history = []
         self._search_started_at = None
+        self._last_beam_shape = None
         self._active_point = ""
         self._actuator_initialization_status = {
             "phase": "idle",
@@ -122,6 +121,22 @@ class DS_LaserPointing(DS_ControlPosition):
         }
 
         super().init_device()
+        # Flippers are deliberately outside the LaserPointing point path.  On
+        # this installation their mechanics move but their Standa readback can
+        # remain at the intermediate value, so point selection must neither
+        # command nor verify them.  Keep them in ds_dict/groups for the passive
+        # status panel and independent controls.
+        self.controller_rules = type(self.controller_rules)(
+            (
+                point_name,
+                {
+                    role: value
+                    for role, value in point_rule.items()
+                    if not self._is_flipper_role(role)
+                },
+            )
+            for point_name, point_rule in self.controller_rules.items()
+        )
         camera_name = self.ds_dict["Camera"]
         self.devices[camera_name] = Device(camera_name)
         self._search_config = self._normalise_search_config(
@@ -174,7 +189,7 @@ class DS_LaserPointing(DS_ControlPosition):
         access=AttrWriteType.READ,
     )
     def automatic_search_history(self):
-        """Chronological centroid-error observations for time-based plots."""
+        """Chronological beam-roundness observations for time-based plots."""
 
         return json.dumps(list(self._search_history), sort_keys=True)
 
@@ -552,6 +567,7 @@ class DS_LaserPointing(DS_ControlPosition):
             "minimum_step",
             "radius",
             "tolerance_px",
+            "roundness_tolerance_pct",
             "minimum_improvement_px",
             "unchanged_response_tolerance_px",
             "sample_interval_s",
@@ -566,6 +582,7 @@ class DS_LaserPointing(DS_ControlPosition):
             "max_evaluations",
             "max_cycles",
             "samples",
+            "invalid_frame_retries",
             "position_stable_reads",
         ):
             config[name] = int(config[name])
@@ -581,7 +598,7 @@ class DS_LaserPointing(DS_ControlPosition):
         SearchParameters(
             initial_step=config["initial_step"],
             minimum_step=config["minimum_step"],
-            tolerance_px=config["tolerance_px"],
+            tolerance_px=config["roundness_tolerance_pct"],
             max_evaluations=config["max_evaluations"],
             minimum_improvement_px=config["minimum_improvement_px"],
             step_schedule=tuple(config["step_schedule"]),
@@ -594,8 +611,10 @@ class DS_LaserPointing(DS_ControlPosition):
             raise ValueError("radius must be positive")
         if config["max_cycles"] < 1:
             raise ValueError("max_cycles must be at least 1")
-        if config["samples"] < 1:
-            raise ValueError("samples must be at least 1")
+        if config["samples"] < 1 or config["samples"] > 5:
+            raise ValueError("samples must be between 1 and 5")
+        if config["invalid_frame_retries"] < 0:
+            raise ValueError("invalid_frame_retries cannot be negative")
         if config["sample_interval_s"] < 0 or config["camera_frame_wait_s"] < 0:
             raise ValueError("camera measurement times cannot be negative")
         if config["motion_timeout_s"] <= 0 or config["motion_poll_s"] <= 0:
@@ -608,6 +627,9 @@ class DS_LaserPointing(DS_ControlPosition):
             raise ValueError("groups must be a JSON list")
         if not isinstance(config["point_pairs"], dict):
             raise ValueError("point_pairs must be a JSON object")
+        # Flippers are not part of optical-point application, so legacy
+        # camera-verified flipper entries from the Tango database are ignored.
+        config["camera_verified_roles"] = []
         config["restore_point"] = str(config["restore_point"]).strip()
         return config
 
@@ -622,7 +644,8 @@ class DS_LaserPointing(DS_ControlPosition):
                 raise RuntimeError(f"could not start camera acquisition: {error}")
 
             stages = self._point_stages(config)
-            last_stage_group_count = len(stages[-1][1])
+            self._validate_camera_verified_roles(config, stages)
+            config["_camera_verified_roles_validated"] = True
             converged = False
             search_origins = {}
             for cycle in range(1, config["max_cycles"] + 1):
@@ -640,9 +663,34 @@ class DS_LaserPointing(DS_ControlPosition):
                                 search_origins,
                             )
                             results.append(result)
-                    if results and all(
-                        result["best_error_px"] <= config["tolerance_px"]
-                        for result in results[-last_stage_group_count:]
+                    # The second mount can affect the first optical plane.
+                    # Revisit every sensitive point after the whole pass;
+                    # previously good scores cannot prove convergence.
+                    verification = []
+                    for group_name, point_pair in stages[-1][1]:
+                        self._raise_if_cancelled()
+                        point_name = point_pair[-1]
+                        self._measure_point(point_name, config)
+                        shape = self._read_beam_shape()
+                        verification.append({
+                            "group": group_name,
+                            "point": point_name,
+                            "roundness_error_pct": shape["roundness_error_pct"],
+                            "contour_centre_drift_px": shape.get(
+                                "contour_centre_drift_px"
+                            ),
+                        })
+                    self._search_progress = {
+                        "phase": "verifying",
+                        "cycle": cycle,
+                        "motor_step": motor_step,
+                        "points": verification,
+                        "results": results,
+                    }
+                    if verification and all(
+                        item["roundness_error_pct"]
+                        <= config["roundness_tolerance_pct"]
+                        for item in verification
                     ):
                         converged = True
                         break
@@ -655,8 +703,13 @@ class DS_LaserPointing(DS_ControlPosition):
                     raise ValueError(f"unknown restore_point {restore_point!r}")
                 self._apply_point(restore_point, config)
 
-            self._search_progress = {"phase": "finished", "results": results}
-            self._search_status = "completed"
+            self._search_progress = {
+                "phase": "finished" if converged else "not_converged",
+                "converged": converged,
+                "verification": verification,
+                "results": results,
+            }
+            self._search_status = "completed" if converged else "not converged"
         except SearchCancelled:
             self._search_progress = {"phase": "cancelled", "results": results}
             self._search_status = "cancelled"
@@ -725,6 +778,45 @@ class DS_LaserPointing(DS_ControlPosition):
             return [("medium", medium_pairs), ("sensitive", sensitive_pairs)]
         return [("sensitive", sensitive_pairs)]
 
+    def _validate_camera_verified_roles(self, config: Dict, stages) -> None:
+        """Allow a visible beam to stand in for static shutter readback.
+
+        This exception is deliberately narrow: the explicitly named role must
+        be a shutter/flipper, must occur in every point used by the run, and
+        must have one identical target throughout the sequence.  It therefore
+        cannot bypass a shutter transition that selects another optical path.
+        """
+
+        roles = config.get("camera_verified_roles", [])
+        if not roles:
+            return
+
+        points = []
+        for _stage_name, point_pairs in stages:
+            for _group_name, point_pair in point_pairs:
+                for point_name in point_pair:
+                    if point_name not in points:
+                        points.append(point_name)
+        restore_point = config.get("restore_point", "")
+        if restore_point and restore_point not in points:
+            points.append(restore_point)
+
+        for role in roles:
+            if role not in self.ds_dict:
+                raise ValueError(f"unknown camera-verified role {role!r}")
+            targets = []
+            for point_name in points:
+                point_rule = self.controller_rules.get(point_name, {})
+                if role not in point_rule:
+                    raise ValueError(
+                        f"camera-verified role {role!r} is missing from {point_name}"
+                    )
+                targets.append(point_rule[role])
+            if any(target != targets[0] for target in targets[1:]):
+                raise ValueError(
+                    f"camera-verified role {role!r} changes target during the run"
+                )
+
     @staticmethod
     def _less_sensitive_point(point_name: str) -> str:
         prefix = str(point_name).rstrip("0123456789")
@@ -750,13 +842,16 @@ class DS_LaserPointing(DS_ControlPosition):
     ) -> Dict:
         actuator_roles = self._actuator_roles_for_group(group_name)
         actuator_devices = [self._device_for_role(role) for role in actuator_roles]
-        start = tuple(float(device.position) for device in actuator_devices)
+        start = tuple(
+            self._fresh_position_and_state(device)[0]
+            for device in actuator_devices
+        )
         origin = search_origins.setdefault(group_name, start)
         bounds = self._search_bounds(actuator_devices, origin, config["radius"])
         parameters = SearchParameters(
             initial_step=motor_step,
             minimum_step=motor_step,
-            tolerance_px=config["tolerance_px"],
+            tolerance_px=config["roundness_tolerance_pct"],
             max_evaluations=config["max_evaluations"],
             minimum_improvement_px=config["minimum_improvement_px"],
             step_schedule=(motor_step,),
@@ -766,25 +861,46 @@ class DS_LaserPointing(DS_ControlPosition):
             ],
         )
         last_optical_signature = ()
+        best_visible_position = start
+        best_visible_score = float("inf")
+        baseline_centre = None
+        baseline_shape = None
+        target_point = point_pair[-1]
 
         def objective(position):
-            nonlocal last_optical_signature
+            nonlocal last_optical_signature, best_visible_position
+            nonlocal best_visible_score, baseline_centre, baseline_shape
             self._raise_if_cancelled()
             self._move_pair(actuator_devices, position, config)
-            reference = self._measure_point(point_pair[0], config)
-            test = self._measure_point(point_pair[1], config)
+            test = self._measure_point(target_point, config)
+            test_shape = self._read_beam_shape()
+            if baseline_centre is None:
+                baseline_centre = test
+                baseline_shape = test_shape
+            reference = baseline_centre
+            reference_shape = baseline_shape
             delta_x = reference[0] - test[0]
             delta_y = reference[1] - test[1]
-            score = hypot(delta_x, delta_y)
+            # Each threshold's border is fitted independently. A good beam
+            # has circular borders with coincident centres at all heights.
+            # Absolute camera position and baseline displacement are only
+            # diagnostics, never part of the actuator objective.
+            score = test_shape["roundness_error_pct"]
             self.previos_pos = {"X": reference[0], "Y": reference[1]}
             self.current_pos = {"X": test[0], "Y": test[1]}
             self.deltas = [delta_x, delta_y]
             last_optical_signature = (
-                reference[0],
-                reference[1],
                 test[0],
                 test[1],
+                test_shape["roundness_pct"],
+                test_shape.get("contour_centre_drift_px", 0.0),
             )
+            improved = (
+                score < best_visible_score - config["minimum_improvement_px"]
+            )
+            if improved:
+                best_visible_score = score
+                best_visible_position = tuple(position)
             self._search_progress = {
                 "phase": "measuring",
                 "cycle": cycle,
@@ -792,10 +908,18 @@ class DS_LaserPointing(DS_ControlPosition):
                 "group": group_name,
                 "motor_step": motor_step,
                 "points": list(point_pair),
+                "measured_point": target_point,
                 "actuator_position": list(position),
                 "reference_centroid": list(reference),
                 "test_centroid": list(test),
                 "delta_px": [delta_x, delta_y],
+                "reference_roundness_pct": reference_shape["roundness_pct"],
+                "test_roundness_pct": test_shape["roundness_pct"],
+                "roundness_error_pct": score,
+                "beam_shape": test_shape,
+                "score_metric": "contour_symmetry_error_pct",
+                # Compatibility for older clients; this value is a percent,
+                # not a centroid distance.
                 "error_px": score,
             }
             group_index = list(self.pid_groups).index(group_name) + 1
@@ -813,22 +937,50 @@ class DS_LaserPointing(DS_ControlPosition):
                 "stage": stage_name,
                 "motor_step": motor_step,
                 "points": list(point_pair),
+                "measured_point": target_point,
                 "actuator_position": list(position),
                 "delta_px": [delta_x, delta_y],
+                "reference_roundness_pct": reference_shape["roundness_pct"],
+                "test_roundness_pct": test_shape["roundness_pct"],
+                "roundness_error_pct": score,
+                "score_metric": "contour_symmetry_error_pct",
                 "error_px": score,
             }
             self._search_history.append(observation)
             self._search_progress["observation_index"] = observation["index"]
+            if not improved and tuple(position) != best_visible_position:
+                # Return every rejected probe to the last measured-good
+                # actuator position before trying another direction.
+                self._raise_if_cancelled()
+                self._move_pair(actuator_devices, best_visible_position, config)
             return score
 
-        result = bounded_pattern_search(
-            objective,
-            start=start,
-            bounds=bounds,
-            parameters=parameters,
-            cancelled=self._search_stop.is_set,
-            response_signature=lambda: last_optical_signature,
-        )
+        try:
+            result = bounded_pattern_search(
+                objective,
+                start=start,
+                bounds=bounds,
+                parameters=parameters,
+                cancelled=self._search_stop.is_set,
+                response_signature=lambda: last_optical_signature,
+            )
+        except SearchCancelled:
+            # Stop means stop: do not issue a rollback movement after the user
+            # has cancelled the search.
+            raise
+        except Exception as search_error:
+            # A probe can move the spot outside the usable optical path. Never
+            # leave the mount at that failed candidate: return to the best
+            # position for which both point centroids and the beam shape were
+            # actually visible.
+            try:
+                self._move_pair(actuator_devices, best_visible_position, config)
+            except Exception as restore_error:
+                raise RuntimeError(
+                    f"automatic probe failed ({search_error}); could not restore "
+                    f"last visible position {best_visible_position}: {restore_error}"
+                ) from search_error
+            raise
         if result.reason == "cancelled":
             raise SearchCancelled()
         self._move_pair(actuator_devices, result.best_position, config)
@@ -842,6 +994,7 @@ class DS_LaserPointing(DS_ControlPosition):
             "start_position": list(start),
             "search_origin": list(origin),
             "best_position": list(result.best_position),
+            "best_roundness_error_pct": result.best_score,
             "best_error_px": result.best_score,
             "evaluations": result.evaluations,
             "reason": result.reason,
@@ -985,8 +1138,7 @@ class DS_LaserPointing(DS_ControlPosition):
         while monotonic() < deadline:
             self._raise_if_cancelled()
             try:
-                last_actual = float(device.position)
-                state = str(device.state).upper()
+                last_actual, state = self._fresh_position_and_state(device)
             except Exception as error:
                 raise RuntimeError(f"could not read motor position/state: {error}")
             if (
@@ -1008,10 +1160,34 @@ class DS_LaserPointing(DS_ControlPosition):
             f"last readback was {last_actual}"
         )
 
+    @staticmethod
+    def _fresh_position_and_state(device) -> Tuple[float, str]:
+        """Read hardware-backed values instead of Taurus' polling cache."""
+
+        try:
+            proxy = device.getDeviceProxy()
+        except AttributeError:
+            return float(device.position), str(device.state).upper()
+
+        original_source = proxy.get_source()
+        direct_source = getattr(type(original_source), "DEV", None)
+        if direct_source is None:
+            raise RuntimeError("device proxy does not expose a direct-read source")
+        try:
+            proxy.set_source(direct_source)
+            position = float(proxy.read_attribute("position").value)
+            state = str(proxy.state()).upper()
+        finally:
+            proxy.set_source(original_source)
+        return position, state
+
     def _move_multi_axis(self, device, value, config):
         axis = int(value[0])
         target = float(value[1])
-        result = device.move_axis_abs([axis, target])
+        # Multi-axis OWIS servers expose move_axis as a DevVarDoubleArray.
+        # The historical move_axis_abs alias used to be declared as a scalar
+        # command and could not transport [axis, target] through Tango.
+        result = device.move_axis([float(axis), target])
         command_error = self._command_error(result)
         if command_error:
             raise RuntimeError(command_error)
@@ -1051,23 +1227,98 @@ class DS_LaserPointing(DS_ControlPosition):
         except (TypeError, ValueError):
             return "MOVING" in str(state).upper()
 
+    @staticmethod
+    def _is_flipper_role(role) -> bool:
+        normalized_role = str(role).lower()
+        return "shutter" in normalized_role or "flipper" in normalized_role
+
     def _apply_point(self, point_name: str, config: Dict):
         self._raise_if_cancelled()
         # Optical presets commonly contain several Standa-backed devices on
         # the same host. Apply them deterministically so their Tango/libximc
         # transactions cannot contend and leave a partial preset behind.
-        for role, value in self.controller_rules[point_name].items():
+        targets = [
+            (role, value)
+            for role, value in self.controller_rules[point_name].items()
+            if not self._is_flipper_role(role)
+        ]
+        working_point = str(point_name).strip().lower() == "working"
+        if working_point:
+            # Working is the safe open-beam preset. Enforce 100% for every
+            # configured diaphragm even if an older database rule is stale or
+            # omits one. Put diaphragms first so a later wave-plate or
+            # delay-line failure cannot leave an aperture closed.
+            configured_roles = list(getattr(self, "ds_dict", {}))
+            diaphragm_roles = []
+            for role in configured_roles + [role for role, _value in targets]:
+                if "diaphragm" in str(role).lower() and role not in diaphragm_roles:
+                    diaphragm_roles.append(role)
+            targets = (
+                [(role, 100.0) for role in diaphragm_roles]
+                + [
+                    (role, value)
+                    for role, value in targets
+                    if "diaphragm" not in str(role).lower()
+                ]
+            )
+        # Set apertures first, then the translation plane. Flippers have
+        # already been removed from the point path above.
+        def target_priority(item):
+            normalized_role = str(item[0]).lower()
+            if "diaphragm" in normalized_role:
+                return 0
+            if "translation" in normalized_role:
+                return 1
+            return 2
+
+        targets.sort(key=target_priority)
+
+        deferred_errors = []
+        for role, value in targets:
             self._raise_if_cancelled()
+            if (
+                config.get("_camera_verified_roles_validated")
+                and role in config.get("camera_verified_roles", [])
+            ):
+                self.info(
+                    f"Keeping {role} in its current position for {point_name}; "
+                    "the automatic measurement will verify the Basler centroid "
+                    "after the complete optical preset is applied."
+                )
+                continue
             device = self._device_for_role(role)
             try:
                 if isinstance(value, (list, tuple)) and len(value) == 2:
                     self._move_multi_axis(device, value, config)
                 else:
-                    self._move_single_axis(device, float(value), config)
+                    move_config = config
+                    numeric_value = float(value)
+                    if (
+                        "diaphragm" in str(role).lower()
+                        and numeric_value == 100.0
+                    ):
+                        # The percentage diaphragms mechanically stop just
+                        # below the nominal 100% coordinate (typically
+                        # 99.0-99.1%). Treat that readback as fully open while
+                        # retaining the tight tolerance for every other point.
+                        move_config = dict(config)
+                        move_config["position_tolerance"] = max(
+                            float(config.get("position_tolerance", 0.05)), 1.0
+                        )
+                    self._move_single_axis(device, numeric_value, move_config)
             except Exception as error:
+                normalized_role = str(role).lower()
+                if "diaphragm" in normalized_role:
+                    deferred_errors.append(f"{role}: {error}")
+                    continue
                 raise RuntimeError(
                     f"could not apply controller point {point_name}: {role}: {error}"
                 ) from error
+        if deferred_errors:
+            raise RuntimeError(
+                f"could not fully apply {point_name} after attempting all diaphragms: "
+                + "; ".join(deferred_errors)
+            )
         # Publish the point only after every child has reached its readback.
         # Both clients use this as the source of truth for the mount interlock.
         self._publish_active_point(point_name)
@@ -1085,40 +1336,78 @@ class DS_LaserPointing(DS_ControlPosition):
             ),
         }
 
+    @staticmethod
+    def _fresh_camera_image(camera):
+        """Take a direct image snapshot, bypassing any Taurus polling cache."""
+
+        try:
+            proxy = camera.getDeviceProxy()
+        except AttributeError:
+            return np.array(camera.image, copy=True)
+        original_source = proxy.get_source()
+        direct_source = getattr(type(original_source), "DEV", None)
+        if direct_source is None:
+            raise RuntimeError("camera proxy does not expose a direct-read source")
+        try:
+            proxy.set_source(direct_source)
+            return np.array(proxy.read_attribute("image").value, copy=True)
+        finally:
+            proxy.set_source(original_source)
+
+    def _read_beam_shape(self):
+        """Return the contour score calculated for the latest point sample."""
+
+        shape = getattr(self, "_last_beam_shape", None)
+        if shape is None:
+            raise LaserNotVisible("no recent beam-contour measurement is available")
+        return shape
+
     def _measure_point(self, point_name: str, config: Dict):
-        self._apply_point(point_name, config)
+        if getattr(self, "_active_point", None) != point_name:
+            self._apply_point(point_name, config)
         # Motion completion is readback-driven. This short wait only ensures
         # Basler has published a frame acquired after the final movement.
         self._interruptible_sleep(config["camera_frame_wait_s"])
         camera = self.devices[self.ds_dict["Camera"]]
-        x_values = []
-        y_values = []
+        self._last_beam_shape = None
+        frames = []
         for sample_index in range(config["samples"]):
-            self._raise_if_cancelled()
-            try:
-                centroid = ast.literal_eval(str(camera.cg))
-                x_value = float(centroid["X"])
-                y_value = float(centroid["Y"])
-            except Exception as error:
-                raise RuntimeError(f"invalid camera centroid: {error}")
-            try:
-                centroid_valid = bool(camera.cg_valid)
-            except Exception:
-                # Compatibility with an older Basler server during rollout.
-                centroid_valid = (x_value, y_value) not in (
-                    (0.0, 0.0),
-                    (1024.0, 1024.0),
-                )
-            if not centroid_valid:
-                raise LaserNotVisible(
-                    f"Basler camera did not detect the laser at {point_name}; "
-                    "check that the laser is present before restarting"
-                )
-            x_values.append(x_value)
-            y_values.append(y_value)
+            retries_remaining = config["invalid_frame_retries"]
+            while True:
+                self._raise_if_cancelled()
+                try:
+                    if not bool(camera.isgrabbing):
+                        raise ValueError("camera acquisition is stopped")
+                    frame = self._fresh_camera_image(camera)
+                    if frame.size == 0 or frame.ndim < 2:
+                        raise ValueError("camera returned an empty frame")
+                    frames.append(frame)
+                    break
+                except Exception as error:
+                    if retries_remaining <= 0:
+                        raise LaserNotVisible(
+                            f"Basler frame is unavailable at {point_name}: {error}"
+                        ) from error
+                    retries_remaining -= 1
+                    self._interruptible_sleep(max(
+                        config["camera_frame_wait_s"],
+                        config["sample_interval_s"],
+                    ))
             if sample_index + 1 < config["samples"]:
                 self._interruptible_sleep(config["sample_interval_s"])
-        return median(x_values), median(y_values)
+        try:
+            shape = beam_contour_symmetry(
+                frames,
+                threshold=float(camera.center_gravity_threshold),
+                width=int(camera.width),
+                height=int(camera.height),
+            )
+        except Exception as error:
+            raise LaserNotVisible(
+                f"Basler beam contours are invalid at {point_name}: {error}"
+            ) from error
+        self._last_beam_shape = shape
+        return tuple(shape["shape_centroid"])
 
     def _interruptible_sleep(self, duration: float):
         if duration > 0 and self._search_stop.wait(duration):

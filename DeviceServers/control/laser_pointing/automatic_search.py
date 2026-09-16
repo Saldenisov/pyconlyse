@@ -121,7 +121,7 @@ def bounded_pattern_search(
     """Minimise a noisy scalar objective with a bounded coordinate search.
 
     ``objective`` is responsible for moving the hardware to the requested
-    absolute position and returning the measured centroid-displacement norm.
+    absolute position and returning the measured beam-shape error.
     It must raise when a movement or measurement is invalid; errors are not
     swallowed because silently continuing after a hardware failure is unsafe.
     """

@@ -129,7 +129,7 @@ class OWIS_motor(DS_General_Widget):
                 TaurusLabel(),
                 TaurusWheelEdit(),
                 TaurusValueLineEdit(),
-                TaurusCommandButton(text="Set"),
+                TaurusCommandButton(text="Move"),
                 TaurusCommandButton(text="STOP"),
             )
             for axis in self.axes
@@ -147,6 +147,8 @@ class OWIS_motor(DS_General_Widget):
             setattr(self, f"pos_set{axis}_{dev_name}", button_set)
             setattr(self, f"pos_button_stop{axis}_{dev_name}", button_stop)
             lineedit.setMaximumWidth(80)
+            lineedit.setToolTip("Absolute target position")
+            button_set.setToolTip("Move this OWIS axis to the entered position")
             pos_lab_name.setStyleSheet(
                 "background-color: lightgreen; border: 1px solid black;"
             )
@@ -355,7 +357,11 @@ class OWIS_motor(DS_General_Widget):
         )
         try:
             pos = float(lineedit.text())
-            ds.define_position_axis([int(axis), pos])
+            # This is the operator's absolute motion control.  The old code
+            # called define_position_axis, which only relabelled the current
+            # coordinate and therefore made the long delay line appear not to
+            # move at all.
+            ds.move_axis([int(axis), pos])
         except ValueError:
             pass
 

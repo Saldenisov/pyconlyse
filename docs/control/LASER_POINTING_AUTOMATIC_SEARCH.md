@@ -5,8 +5,9 @@
 The controller aligns one laser beam through separated diaphragm planes. The
 Elyse entry diaphragm is closed near 10% to make the beam small, and downstream
 diaphragms (or a translated propagation plane) constrain beam position and
-angle. Basler centroid measurements provide the objective; the camera centre is
-not assumed to be the physical diaphragm centre.
+angle. The objective is beam symmetry: circular iso-intensity contours with a
+common centre. Neither the camera centre nor unchanged Basler centroid is an
+alignment target.
 
 The algorithm has been developed without access to the laser or motion
 hardware. The first run must therefore be supervised.
@@ -44,10 +45,14 @@ optimisation variable.
 
 ## Optical and motor sequence
 
-For each X/Y actuator pair the controller measures a wider reference setting
-and a closed setting, then minimises:
-
-`error = sqrt((X_reference - X_closed)^2 + (Y_reference - Y_closed)^2)`
+For each X/Y actuator pair the controller selects its active optical point
+(normally point 3 or point 6), captures three frames, and forms a median image.
+It sweeps nine thresholds from the outer beam toward the peak. At each useful
+height it extracts the contour surrounding the peak and fits a circle and
+ellipse. Noisy contours, clipped contours, and near-single-pixel contours are
+discarded. The error combines contour ellipticity, radial deviation from the
+fitted circle, and drift between the fitted contour centres. Absolute beam
+position in the image does not contribute to the error.
 
 Optical modes:
 
@@ -59,9 +64,11 @@ Optical modes:
 
 The default motor schedule is 10, 6, then 2 units. At each step size the first
 plane (point 3 in Sensitive mode) and then the second plane (point 6) are
-aligned. This repeats at the next smaller step. A second complete cycle is
-available because the two separated-plane adjustments can interact. The run
-ends early when both errors are within the pixel tolerance.
+aligned. After both adjustments the controller revisits both points and
+remeasures them; it declares convergence only when both remain below the
+symmetry-error tolerance in that complete pass. A second complete cycle is
+available because the separated-plane adjustments can interact. If the
+configured passes are exhausted, status is **not converged**, not completed.
 
 ## Mechanical stiction handling
 
@@ -73,8 +80,8 @@ search therefore distinguishes motor motion from optical response.
 - If the measured optical error is effectively unchanged, another step is
   added in the same direction, up to `probe_repetitions` (default 3).
 - Repeated additions stop immediately when an optical change is observed.
-- The best measured position is retained; a worse jump is not accepted as the
-  new centre.
+- A rejected probe returns the mount immediately to the last measured-good
+  position. On explicit Stop, no rollback movement is issued.
 - All candidates remain inside the configured radius and motor limits.
 
 This reproduces the manual add/add/jump behaviour while bounding the total
@@ -88,16 +95,18 @@ delay.
 
 - `DS_Standa_Motor.move_axis_abs` already blocks on the controller's
   `command_wait_for_stop`, reads the physical motor position, and rejects a
-  target/readback mismatch. The laser controller performs a final published
-  position and state check.
+  target/readback mismatch. The laser controller performs a final direct
+  hardware position and state check, explicitly bypassing Taurus' 1.5-second
+  polling cache so a successful move is not mistaken for a stopped mismatch.
 - The OWIS aggregator starts movement asynchronously. The laser controller
   repeatedly calls `get_status_axis` and `read_position_axis` until the axis is
   non-moving and stable at its target for two reads.
 - Both paths use a 180-second maximum motion timeout, 0.2-second polling, and a
   0.05-unit position tolerance by default.
 - After confirmed motion completion, a 0.25-second delay allows Basler to
-  publish a frame acquired at the new position. Three centroid samples are
-  then combined by their median.
+  publish a frame acquired at the new position. Three direct camera-image
+  snapshots (configurable from one to five) are combined by their median;
+  multiple contour thresholds are analysed within that one median image.
 
 These defaults come from the registered hardware settings. OWIS axis 3 is
 configured at speed 15 and must travel 700 units between the two propagation
@@ -108,10 +117,11 @@ frame periods after motion completion.
 
 ## Laser-loss and stop behaviour
 
-Basler publishes `cg_valid`. If it is false at any required point, the
-controller reports **laser not visible**, stops the procedure immediately, and
-does not issue a recovery scan or an automatic return movement. The operator
-must verify that the laser is present before restarting.
+If no usable frame or too few complete beam contours are present at a required
+point, the controller reports **laser not visible** and stops. It does not
+issue a recovery scan. After a failed probe it attempts to restore the last
+measured-good actuator position; after explicit Stop it makes no restoration
+movement.
 
 Manual Stop is cooperative. It interrupts polling, camera waits, and sampling
 as soon as the current blocking controller command returns. No new search or
@@ -131,9 +141,9 @@ The **Automatic alignment** panel exposes:
 - optical sequence: sensitive, medium, or staged;
 - coarse, middle, and fine motor steps;
 - maximum radius from each starting motor position;
-- final centroid-displacement tolerance in pixels;
+- final contour-symmetry error tolerance in percent;
 - maximum evaluations per group and step size;
-- camera samples per point;
+- camera frames per point (one to five, three by default);
 - start, stop, active group, motor step, and current error.
 
 Repeated interaction passes remain a DS default rather than an operator
@@ -143,16 +153,14 @@ the required diaphragm changes and Standa corrections.
 ### XY delta and convergence over time
 
 Both clients place a centred **ΔX versus ΔY** view immediately below the
-Basler camera image. It shows the current signed ΔX and ΔY values, the vector
-from the zero target to the latest mismatch, the trajectory of previous
-measurements, and a circular tolerance boundary. The centre `(0, 0)` means the
-two measured optical configurations have the same centroid. This view answers
-which direction remains to be corrected.
+Basler camera image. It compares the fitted contour centre at the current
+actuator candidate with the first measurement at that point. This is a
+diagnostic of spot motion only; the search does not drive this vector to zero.
 
 The automatic-alignment controls retain the scalar error against elapsed
 seconds:
 
-`delta centroid = sqrt(delta_x^2 + delta_y^2)`
+`contour symmetry error = 0.55 × ellipticity + 0.25 × radial fit error + 0.20 × centre drift`
 
 Absolute camera X and Y are not plotted in the LaserPointing composite because
 they are coordinates in two different optical configurations and therefore
@@ -161,8 +169,8 @@ is coloured as **Diaphragm 1 · Standa pair 1** or **Diaphragm 2 · Standa pair
 2**. The operator does not select a graph pair or cycle; a sample is added
 automatically after the controller changes the optical point, moves the active
 Standa pair, and measures both centroids. The time chart answers whether the
-sequence is converging and how mechanical stick-slip affected it. Its tolerance
-is drawn as a horizontal reference line.
+sequence is converging and how mechanical stick-slip affected it. Its
+percentage tolerance is drawn as a horizontal reference line.
 
 ### Diaphragm-to-mount interlock
 
@@ -342,9 +350,22 @@ Default configuration:
   "position_stable_reads": 2,
   "groups": [],
   "point_pairs": {},
+  "camera_verified_roles": [],
   "restore_point": ""
 }
 ```
+
+For a supervised run where an endpoint-style shutter has an unreliable
+position readback but the operator has confirmed the visible beam is already
+on the correct path, `camera_verified_roles` may name that shutter role. The
+controller then leaves that shutter untouched and requires a valid Basler
+centroid after every complete optical preset instead. This placement allows a
+closed fine aperture to be reopened before visibility is judged. The exception is rejected unless the role is
+a shutter/flipper with one identical target in every point used by the run; it
+cannot bypass a shutter transition. For Camera 1, a first-pair staged
+commissioning run uses `groups: ["group1"]`, `mode: "staged"`, and
+`camera_verified_roles: ["Shutter1"]`, which evaluates point 1 against point 2
+and then point 1 against point 3 using only ActuatorX1/Y1.
 
 `groups` can restrict a diagnostic run to `group1` or `group2`. `point_pairs`
 can override comparison pairs for an engineering test. Motion/readback and

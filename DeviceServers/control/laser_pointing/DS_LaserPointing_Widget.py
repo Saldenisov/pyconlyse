@@ -1198,7 +1198,7 @@ class LaserPointing(DS_General_Widget):
         self.search_evaluations.setRange(1, 500)
         self.search_evaluations.setValue(defaults.get("max_evaluations", 16))
         self.search_samples = QtWidgets.QSpinBox()
-        self.search_samples.setRange(1, 20)
+        self.search_samples.setRange(1, 5)
         self.search_samples.setValue(defaults.get("samples", 3))
         self.search_max_cycles = max(1, int(defaults.get("max_cycles", 2)))
 
@@ -1217,7 +1217,7 @@ class LaserPointing(DS_General_Widget):
         form.addWidget(self.search_tolerance, 2, 3)
         form.addWidget(QtWidgets.QLabel("Evals"), 3, 0)
         form.addWidget(self.search_evaluations, 3, 1)
-        form.addWidget(QtWidgets.QLabel("Samples"), 3, 2)
+        form.addWidget(QtWidgets.QLabel("Frames"), 3, 2)
         form.addWidget(self.search_samples, 3, 3)
 
         self.search_start = QtWidgets.QPushButton("Start automatic search")
@@ -1284,8 +1284,9 @@ class LaserPointing(DS_General_Widget):
         group = QtWidgets.QGroupBox("Centroid diagnostic")
         group.setObjectName("laserPointingCentroidDiagnostic")
         group.setToolTip(
-            "ΔX and ΔY are reference-centroid minus test-centroid. "
-            "Automatic alignment optimizes beam roundness, not this displacement."
+            "ΔX and ΔY compare the current contour centre with the first "
+            "measurement at this point. Automatic alignment optimizes "
+            "concentric-contour symmetry, not this displacement."
         )
         group_layout = QtWidgets.QVBoxLayout(group)
         group_layout.setContentsMargins(6, 5, 6, 6)

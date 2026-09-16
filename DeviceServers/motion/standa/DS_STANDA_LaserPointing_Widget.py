@@ -16,7 +16,7 @@ class Standa_LaserPointing(DS_General_Widget):
     def __init__(self, device_name: str, parent=None, vis_type=VisType.MIN):
         self.relative_shift = 1.0
         self._alignment_motion_enabled = False
-        self._alignment_lock_reason = "Select an optical point to unlock this mount pair"
+        self._alignment_lock_reason = "Waiting for LaserPointing safety status"
         self._alignment_recovery_level = ""
         self._alignment_recovery_message = ""
         self._alignment_connection_unavailable = False
