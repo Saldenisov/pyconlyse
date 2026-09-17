@@ -1,4 +1,5 @@
 import json
+import re
 import sys
 from math import hypot
 from pathlib import Path
@@ -121,21 +122,13 @@ class DS_LaserPointing(DS_ControlPosition):
         }
 
         super().init_device()
-        # Flippers are deliberately outside the LaserPointing point path.  On
-        # this installation their mechanics move but their Standa readback can
-        # remain at the intermediate value, so point selection must neither
-        # command nor verify them.  Keep them in ds_dict/groups for the passive
-        # status panel and independent controls.
-        self.controller_rules = type(self.controller_rules)(
-            (
-                point_name,
-                {
-                    role: value
-                    for role, value in point_rule.items()
-                    if not self._is_flipper_role(role)
-                },
-            )
-            for point_name, point_rule in self.controller_rules.items()
+        # Ignore legacy database flipper rules, which can address both cameras
+        # or use stale targets. Cam1 owns S1; Cam2 needs both S1 and S2.
+        # Numbered points block their path, while Working clears it only after
+        # the other optics have completed. Child motors record command state
+        # independently of their unreliable numeric position readback.
+        self.controller_rules = self._rules_with_owned_flipper(
+            self.controller_rules
         )
         camera_name = self.ds_dict["Camera"]
         self.devices[camera_name] = Device(camera_name)
@@ -1232,8 +1225,101 @@ class DS_LaserPointing(DS_ControlPosition):
         normalized_role = str(role).lower()
         return "shutter" in normalized_role or "flipper" in normalized_role
 
+    def _owned_flipper_roles(self):
+        device_map = getattr(self, "ds_dict", None) or {}
+        camera = str(device_map.get("Camera", ""))
+        match = re.search(r"cam(?:era)?[_-]?(\d+)", camera, re.IGNORECASE)
+        if not match:
+            return ()
+        camera_number = int(match.group(1))
+        controlled_numbers = {1, 2} if camera_number == 2 else {camera_number}
+        owned = []
+        for role in device_map:
+            role_number = re.search(r"(\d+)$", str(role))
+            if (
+                self._is_flipper_role(role)
+                and role_number
+                and int(role_number.group(1)) in controlled_numbers
+            ):
+                owned.append((int(role_number.group(1)), role))
+        return tuple(role for _number, role in sorted(owned))
+
+    @staticmethod
+    def _flipper_target_for_point(point_name):
+        if optical_point_group(point_name):
+            return -1.0
+        if str(point_name).strip().lower() == "working":
+            return 1.0
+        return None
+
+    def _rules_with_owned_flipper(self, rules):
+        owned_roles = self._owned_flipper_roles()
+        normalized = type(rules)()
+        for point_name, point_rule in rules.items():
+            targets = {
+                role: value
+                for role, value in point_rule.items()
+                if not self._is_flipper_role(role)
+            }
+            flipper_target = self._flipper_target_for_point(point_name)
+            if flipper_target is not None:
+                for role in owned_roles:
+                    targets[role] = flipper_target
+            normalized[point_name] = targets
+        return normalized
+
+    @staticmethod
+    def _fresh_flipper_command_state(device):
+        try:
+            proxy = device.getDeviceProxy()
+        except AttributeError:
+            return str(device.commanded_flipper_state).strip().upper()
+        original_source = proxy.get_source()
+        direct_source = getattr(type(original_source), "DEV", None)
+        try:
+            if direct_source is not None:
+                proxy.set_source(direct_source)
+            return str(
+                proxy.read_attribute("commanded_flipper_state").value
+            ).strip().upper()
+        finally:
+            if direct_source is not None:
+                proxy.set_source(original_source)
+
+    def _command_owned_flippers(self, point_name):
+        roles = self._owned_flipper_roles()
+        if not roles:
+            return
+        target = self._flipper_target_for_point(point_name)
+        if target is None:
+            return
+        expected = "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
+        for role in roles:
+            self._raise_if_cancelled()
+            device = self._device_for_role(role)
+            try:
+                if self._fresh_flipper_command_state(device) == expected:
+                    continue
+                result = device.move_axis_abs(target)
+                error = self._command_error(result)
+                if error:
+                    raise RuntimeError(error)
+                actual = self._fresh_flipper_command_state(device)
+                if actual != expected:
+                    raise RuntimeError(
+                        f"commanded state is {actual}, expected {expected}"
+                    )
+            except Exception as error:
+                raise RuntimeError(
+                    f"could not apply controller point {point_name}: {role}: {error}"
+                ) from error
+
     def _apply_point(self, point_name: str, config: Dict):
         self._raise_if_cancelled()
+        # Blocking happens before the other optical moves. Unblocking Working
+        # happens only after the entire open-beam recipe has succeeded.
+        if optical_point_group(point_name):
+            self._command_owned_flippers(point_name)
         # Optical presets commonly contain several Standa-backed devices on
         # the same host. Apply them deterministically so their Tango/libximc
         # transactions cannot contend and leave a partial preset behind.
@@ -1261,8 +1347,8 @@ class DS_LaserPointing(DS_ControlPosition):
                     if "diaphragm" not in str(role).lower()
                 ]
             )
-        # Set apertures first, then the translation plane. Flippers have
-        # already been removed from the point path above.
+        # Set apertures first, then the translation plane. The flipper is
+        # handled separately because its numeric position always reads zero.
         def target_priority(item):
             normalized_role = str(item[0]).lower()
             if "diaphragm" in normalized_role:
@@ -1319,6 +1405,8 @@ class DS_LaserPointing(DS_ControlPosition):
                 f"could not fully apply {point_name} after attempting all diaphragms: "
                 + "; ".join(deferred_errors)
             )
+        if working_point:
+            self._command_owned_flippers(point_name)
         # Publish the point only after every child has reached its readback.
         # Both clients use this as the source of truth for the mount interlock.
         self._publish_active_point(point_name)

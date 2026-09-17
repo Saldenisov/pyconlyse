@@ -70,13 +70,21 @@ export const roundnessError = (observation = {}) => (
 );
 
 export const formatOpticalStatusValue = (role, value) => {
-  const numeric = finiteNumber(value);
-  if (numeric === null) return '—';
   const normalized = String(role || '').toLowerCase().replace(/[ -]/g, '_');
   if (/shutter|flipper/.test(normalized)) {
-    if (Math.abs(numeric + 1) <= 0.2) return 'IN';
-    if (Math.abs(numeric - 1) <= 0.2) return 'OUT';
-    return 'BETWEEN';
+    const state = String(value || '').toUpperCase();
+    if (state === 'UP_BLOCKED') return 'UP · BLOCKED';
+    if (state === 'DOWN_CLEAR') return 'DOWN · CLEAR';
+    if (state === 'RIGHT') return 'DOWN';
+    if (state === 'LEFT') return 'UP · BLOCKED';
+    if (['BETWEEN', 'CONFLICT', 'UNKNOWN'].includes(state)) return state;
+  }
+  const numeric = finiteNumber(value);
+  if (numeric === null) return '—';
+  if (/shutter|flipper/.test(normalized)) {
+    if (Math.abs(numeric + 1) <= 0.2) return '−1';
+    if (Math.abs(numeric - 1) <= 0.2) return '+1';
+    return 'UNKNOWN';
   }
   if (/diaphragm|halfwaveplate|half_wave_plate|lambda/.test(normalized)) {
     return `${Number.isInteger(numeric) ? numeric.toFixed(0) : numeric.toFixed(1)}%`;
@@ -129,7 +137,11 @@ export const ComponentStatusPanel = ({ snapshot = {} }) => {
     cards.push({
       key: device.role,
       caption: device.role,
-      value: formatOpticalStatusValue(device.role, device.position),
+      value: formatOpticalStatusValue(
+        device.role,
+        device.control_type === 'flipper'
+          ? device.commanded_flipper_state : device.position,
+      ),
       title: device.device,
     });
   });
@@ -150,7 +162,7 @@ export const ComponentStatusPanel = ({ snapshot = {} }) => {
     <section className="laser-component-status-panel" aria-label="Main components live status">
       <div className="laser-section-heading">
         <strong>Main components · live status</strong>
-        <span>Passive readback</span>
+        <span>Readback / flipper command</span>
       </div>
       <div className="laser-component-status-grid">
         {cards.map((card) => (
@@ -258,23 +270,15 @@ const OpticalPointState = ({ point, snapshot, transition }) => {
 };
 
 const CAMERA_NUMERIC_PARAMETERS = [
-  { name: 'exposure_time', label: 'Exposure time (µs)', min: 'exposure_min', max: 'exposure_max', step: 'any' },
+  { name: 'offsetX', label: 'Offset X' },
+  { name: 'offsetY', label: 'Offset Y' },
+  { name: 'exposure_time', label: 'Exposure (µs)', min: 'exposure_min', max: 'exposure_max', step: 'any' },
   { name: 'gain', label: 'Gain', min: 'gain_min', max: 'gain_max', step: 'any' },
   { name: 'width', label: 'Width', min: 'width_min', max: 'width_max' },
   { name: 'height', label: 'Height', min: 'height_min', max: 'height_max' },
-  { name: 'offsetX', label: 'Offset X' },
-  { name: 'offsetY', label: 'Offset Y' },
-  { name: 'trigger_delay', label: 'Trigger delay', step: 'any' },
-  { name: 'binning_horizontal', label: 'Binning X', minValue: 1 },
-  { name: 'binning_vertical', label: 'Binning Y', minValue: 1 },
-  { name: 'center_gravity_threshold', label: 'Centroid threshold', minValue: 0 },
 ];
 
-const CAMERA_PARAMETER_NAMES = [
-  ...CAMERA_NUMERIC_PARAMETERS.map(({ name }) => name),
-  'trigger_mode',
-  'format_pixel',
-];
+const CAMERA_PARAMETER_NAMES = CAMERA_NUMERIC_PARAMETERS.map(({ name }) => name);
 
 export const laserSnapshotErrorMessage = (error) => {
   const message = String(error?.message || error || 'Snapshot failed');
@@ -304,6 +308,8 @@ export const CameraPreview = ({
   const [cameraInfo, setCameraInfo] = useState({});
   const [parameters, setParameters] = useState({});
   const [parameterBusy, setParameterBusy] = useState('');
+  const [cameraControlsLoaded, setCameraControlsLoaded] = useState(false);
+  const [cameraInfoLoading, setCameraInfoLoading] = useState(false);
   const [requestedGrabbing, setRequestedGrabbing] = useState(null);
   const previewEnabled = requestedGrabbing ?? enabled;
 
@@ -343,8 +349,17 @@ export const CameraPreview = ({
   useEffect(() => {
     setCameraInfo({});
     setParameters({});
-    loadCameraInfo();
-  }, [loadCameraInfo]);
+    setCameraControlsLoaded(false);
+    setCameraInfoLoading(false);
+  }, [camera]);
+
+  const handleCameraControlsToggle = async (event) => {
+    if (!event.currentTarget.open || cameraControlsLoaded) return;
+    setCameraControlsLoaded(true);
+    setCameraInfoLoading(true);
+    await loadCameraInfo();
+    setCameraInfoLoading(false);
+  };
 
   const loadFrame = useCallback(async () => {
     if (!camera || frameRequestInFlight.current) return;
@@ -454,7 +469,7 @@ export const CameraPreview = ({
       }
       setRequestedGrabbing(expectedGrabbing);
       if (onRefresh) await onRefresh();
-      await loadCameraInfo();
+      if (cameraControlsLoaded) await loadCameraInfo();
     } catch (requestError) {
       setRequestedGrabbing(null);
       setControlError(requestError.message);
@@ -536,9 +551,13 @@ export const CameraPreview = ({
       {controlError && <div className="laser-inline-error">{controlError}</div>}
       {frameError && <div className="laser-inline-error">{frameError}</div>}
       {camera && (
-        <details className="laser-camera-controls" open>
+        <details className="laser-camera-controls" onToggle={handleCameraControlsToggle}>
           <summary>Camera controls</summary>
-          <div className="laser-camera-parameter-grid">
+          {cameraInfoLoading && (
+            <div className="laser-camera-saving">Loading camera settings…</div>
+          )}
+          {cameraControlsLoaded && !cameraInfoLoading && (
+            <div className="laser-camera-parameter-grid">
             {CAMERA_NUMERIC_PARAMETERS.map((parameter) => (
               <label key={parameter.name}>
                 <span>{parameter.label}</span>
@@ -558,46 +577,8 @@ export const CameraPreview = ({
                 />
               </label>
             ))}
-            <label>
-              <span>Trigger mode</span>
-              <select
-                aria-label="Trigger mode"
-                value={parameters.trigger_mode ?? ''}
-                disabled={Boolean(parameterBusy)}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setParameters((current) => ({ ...current, trigger_mode: value }));
-                  writeParameter('trigger_mode', value);
-                }}
-              >
-                <option value="">Unavailable</option>
-                <option value="0">Off</option>
-                <option value="1">On</option>
-              </select>
-            </label>
-            <label>
-              <span>Pixel format</span>
-              <select
-                aria-label="Pixel format"
-                value={parameters.format_pixel ?? ''}
-                disabled={Boolean(parameterBusy)}
-                onChange={(event) => {
-                  const value = event.target.value;
-                  setParameters((current) => ({ ...current, format_pixel: value }));
-                  writeParameter('format_pixel', value);
-                }}
-              >
-                <option value="">Unavailable</option>
-                {parameters.format_pixel
-                  && !['Mono8', 'BayerRG8', 'BayerRG12', 'BayerRG12p'].includes(parameters.format_pixel)
-                  && <option value={parameters.format_pixel}>{parameters.format_pixel}</option>}
-                <option value="Mono8">Mono8</option>
-                <option value="BayerRG8">BayerRG8</option>
-                <option value="BayerRG12">BayerRG12</option>
-                <option value="BayerRG12p">BayerRG12p</option>
-              </select>
-            </label>
-          </div>
+            </div>
+          )}
           {parameterBusy && <div className="laser-camera-saving">Saving {parameterBusy}…</div>}
         </details>
       )}
@@ -946,6 +927,34 @@ const DiaphragmControl = ({ diaphragm, disabled, onMove, onStop }) => {
     const numericTarget = Number(value);
     if (Number.isFinite(numericTarget)) onMove(diaphragm, numericTarget);
   };
+
+  if (isFlipper) {
+    return (
+      <section className={`laser-panel laser-diaphragm-card ${disconnected ? 'disconnected' : ''}`}>
+        <div className="laser-section-heading">
+          <strong>{controlTitle}</strong>
+          <span>{diaphragm.device} · {String(diaphragm.state || 'UNKNOWN').split('.').pop()}</span>
+        </div>
+        <div className="laser-diaphragm-readback">
+          <span className={`laser-state-dot state-${visualState}`} />
+          <span>Last completed command</span>
+          <strong>{formatOpticalStatusValue(diaphragm.role, diaphragm.commanded_flipper_state)}</strong>
+        </div>
+        <div className="laser-diaphragm-controls laser-flipper-controls">
+          <button type="button" onClick={() => moveTo(-1)} disabled={controlsDisabled}>
+            −1 · Raise / block
+          </button>
+          <button type="button" onClick={() => moveTo(1)} disabled={controlsDisabled}>
+            +1 · Lower / clear
+          </button>
+          <button type="button" className="stop" onClick={() => onStop(diaphragm)}
+            disabled={disabled || disconnected || !diaphragm.stop_supported}>
+            Stop motion
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className={`laser-panel laser-diaphragm-card ${disconnected ? 'disconnected' : ''}`}>
@@ -1455,20 +1464,18 @@ const LaserPointingController = ({ deviceName }) => {
       </div>
 
       <div className="laser-controller-grid">
-        {activeTab !== 'other' && (
-          <CameraPreview
-            camera={snapshot.camera?.device}
-            state={snapshot.camera?.state}
-            enabled={snapshot.camera?.grabbing ?? !['OFF', 'FAULT', 'UNKNOWN'].includes(
-              String(snapshot.camera?.state || 'UNKNOWN').toUpperCase()
-            )}
-            history={convergenceHistory}
-            progress={progress}
-            tolerance={centroidGuidePx}
-            hasTranslation={hasTranslation}
-            onRefresh={loadSnapshot}
-          />
-        )}
+        <CameraPreview
+          camera={snapshot.camera?.device}
+          state={snapshot.camera?.state}
+          enabled={snapshot.camera?.grabbing ?? !['OFF', 'FAULT', 'UNKNOWN'].includes(
+            String(snapshot.camera?.state || 'UNKNOWN').toUpperCase()
+          )}
+          history={convergenceHistory}
+          progress={progress}
+          tolerance={centroidGuidePx}
+          hasTranslation={hasTranslation}
+          onRefresh={loadSnapshot}
+        />
 
         {activeTab === 'automatic' && (
           <div className="laser-control-column" role="tabpanel" aria-label="Automatic alignment">
@@ -1606,7 +1613,7 @@ const LaserPointingController = ({ deviceName }) => {
             <section className="laser-panel laser-diaphragm-intro">
               <div className="laser-section-heading">
                 <strong>Other optical controls</strong>
-                <span>Diaphragms, λ/2 plate, and this camera's flipper</span>
+                <span>Diaphragms, λ/2 plate, and controller-owned flippers</span>
               </div>
               <p>
                 Use the configured percentage presets or move each optic directly. These
@@ -1624,7 +1631,7 @@ const LaserPointingController = ({ deviceName }) => {
             ))}
             {!(snapshot.other_devices || snapshot.diaphragms || []).length && (
               <section className="laser-panel">
-                No diaphragm, λ/2, or camera flipper devices are configured for this controller.
+                No diaphragm, λ/2, or flipper devices are configured for this controller.
               </section>
             )}
           </div>

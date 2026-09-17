@@ -428,15 +428,19 @@ def _laser_camera_number(value):
 
 
 def _is_owned_laser_flipper(role, camera_device):
-    """Match Shutter/Flipper N only to Camera N's manual controls."""
+    """Cam1 controls S1; Cam2 controls both upstream S1 and its own S2."""
 
     role_text = str(role or '')
     if not re.search(r'shutter|flipper', role_text, re.IGNORECASE):
         return False
     role_numbers = re.findall(r'\d+', role_text)
-    return bool(role_numbers) and int(role_numbers[0]) == _laser_camera_number(
-        camera_device
-    )
+    if not role_numbers:
+        return False
+    camera_number = _laser_camera_number(camera_device)
+    role_number = int(role_numbers[0])
+    if camera_number == 2:
+        return role_number in (1, 2)
+    return role_number == camera_number
 
 
 def _to_float_or_none(value):
@@ -1576,6 +1580,7 @@ def get_laser_pointing_snapshot(device_name):
                     'step_schedule': [10.0, 6.0, 2.0],
                     'radius': 30.0,
                     'tolerance_px': 2.0,
+                    'roundness_tolerance_pct': 7.0,
                     'max_evaluations': 16,
                     'max_cycles': 2,
                     'samples': 3,
@@ -1702,6 +1707,14 @@ def get_laser_pointing_snapshot(device_name):
                     )
                 except Exception:
                     position = None
+                commanded_flipper_state = None
+                if is_flipper:
+                    try:
+                        commanded_flipper_state = str(
+                            child.read_attribute('commanded_flipper_state').value
+                        )
+                    except Exception:
+                        commanded_flipper_state = 'UNKNOWN'
                 try:
                     child_state = str(child.state())
                 except Exception:
@@ -1807,6 +1820,10 @@ def get_laser_pointing_snapshot(device_name):
                     'friendly_name': friendly_name,
                     'device': str(child_name),
                     'position': position,
+                    **(
+                        {'commanded_flipper_state': commanded_flipper_state}
+                        if is_flipper else {}
+                    ),
                     'preset_positions': preset_positions,
                     'unit': unit,
                     'minimum': minimum,

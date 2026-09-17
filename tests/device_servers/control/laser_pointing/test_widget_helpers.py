@@ -19,7 +19,7 @@ def test_other_optics_include_diaphragms_and_half_wave_plate():
     assert is_other_optical_role("Shutter1", "manip/V0/Cam1_V0")
     assert not is_other_optical_role("Shutter2", "manip/V0/Cam1_V0")
     assert is_other_optical_role("Shutter2", "manip/V0/Cam2_V0")
-    assert not is_other_optical_role("Shutter1", "manip/V0/Cam2_V0")
+    assert is_other_optical_role("Shutter1", "manip/V0/Cam2_V0")
 
 
 def test_compact_status_formats_flippers_from_hardware_end_switches():
@@ -27,6 +27,8 @@ def test_compact_status_formats_flippers_from_hardware_end_switches():
     assert format_optical_status_value("Flipper2", "LEFT") == "UP · BLOCKED"
     assert format_optical_status_value("Shutter1", "BETWEEN") == "BETWEEN"
     assert format_optical_status_value("Shutter1", "UNKNOWN") == "UNKNOWN"
+    assert format_optical_status_value("Shutter1", "UP_BLOCKED") == "UP · BLOCKED"
+    assert format_optical_status_value("Shutter1", "DOWN_CLEAR") == "DOWN · CLEAR"
 
 
 def test_compact_status_does_not_mislabel_numeric_flipper_position():

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import tango
 import taurus.core
+from PyQt5 import QtWidgets
 
 # The software-only collection lane installs intentionally inert Taurus
 # package shells.  Supply only the names needed to import the widget; these
@@ -35,6 +36,57 @@ widget_module.VisType = SimpleNamespace(FULL="full")
 sys.modules[widget_module.__name__] = widget_module
 
 from DeviceServers.cameras.basler.DS_BASLER_Widget import Basler_camera
+
+
+def test_laser_camera_controls_are_collapsed_and_bind_offsets_on_open(monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
+    class FakeSpinBox(QtWidgets.QSpinBox):
+        pass
+
+    monkeypatch.setitem(
+        Basler_camera._populate_laser_camera_controls.__globals__,
+        "TaurusValueSpinBox",
+        FakeSpinBox,
+    )
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    host = QtWidgets.QWidget()
+    layout = QtWidgets.QVBoxLayout(host)
+    camera_name = "manip/V0/Cam2_V0"
+    widget = SimpleNamespace(
+        dev_name=camera_name,
+        LASER_CAMERA_PARAMETERS=Basler_camera.LASER_CAMERA_PARAMETERS,
+        **{f"layout_image_{camera_name}": layout},
+    )
+    widget._populate_laser_camera_controls = lambda panel: (
+        Basler_camera._populate_laser_camera_controls(widget, panel)
+    )
+
+    Basler_camera.enable_laser_camera_controls(widget)
+
+    assert app is not None
+    assert layout.count() == 1
+    assert not widget.laser_camera_controls_toggle.isChecked()
+    assert widget.laser_camera_controls_panel.isHidden()
+    assert widget.laser_camera_parameter_editors == {}
+
+    widget.laser_camera_controls_toggle.click()
+
+    assert widget.laser_camera_controls_toggle.isChecked()
+    assert not widget.laser_camera_controls_panel.isHidden()
+    assert set(widget.laser_camera_parameter_editors) == {
+        "exposure_time", "gain", "width", "height", "offsetX", "offsetY"
+    }
+    assert widget.laser_camera_parameter_editors["offsetX"].model == (
+        f"{camera_name}/offsetX"
+    )
+    assert widget.laser_camera_parameter_editors["offsetY"].model == (
+        f"{camera_name}/offsetY"
+    )
+
+    widget.laser_camera_controls_toggle.click()
+    Basler_camera.enable_laser_camera_controls(widget)
+    assert widget.laser_camera_controls_panel.isHidden()
+    assert layout.count() == 1
 
 
 class FakeButton:

@@ -232,8 +232,8 @@ names = {
 }
 
 
-# Flippers remain available as independent devices and status cards, but they
-# are intentionally excluded from every LaserPointing optical-point recipe.
+# At server startup, DS_LaserPointing replaces any legacy flipper entries with
+# -1 numbered-point / +1 Working rules: Cam1 controls S1, Cam2 controls S1+S2.
 CAMERA_VERIFIED_ROLES = {}
 
 

@@ -26,7 +26,10 @@ def is_other_optical_role(role, camera_device=""):
     role_number = next(
         (int(value) for value in re.findall(r"\d+", normalized)), None
     )
-    return role_number is not None and role_number == _camera_number(camera_device)
+    camera_number = _camera_number(camera_device)
+    if camera_number == 2:
+        return role_number in (1, 2)
+    return role_number is not None and role_number == camera_number
 
 
 def format_optical_status_value(role, value):
@@ -36,6 +39,10 @@ def format_optical_status_value(role, value):
     normalized = str(role or "").lower().replace(" ", "").replace("-", "_")
     if "shutter" in normalized or "flipper" in normalized:
         endpoint = str(raw_value or "").strip().upper()
+        if endpoint == "UP_BLOCKED":
+            return "UP · BLOCKED"
+        if endpoint == "DOWN_CLEAR":
+            return "DOWN · CLEAR"
         if endpoint == "RIGHT":
             return "DOWN"
         if endpoint == "LEFT":

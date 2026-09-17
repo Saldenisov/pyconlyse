@@ -314,6 +314,184 @@ def test_working_point_excludes_all_flippers():
     assert controller._active_point == "working"
 
 
+@pytest.mark.parametrize("camera_number", [1, 2])
+def test_rule_normalization_uses_only_camera_owned_flipper(camera_number):
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "Camera": f"manip/V0/Cam{camera_number}_V0",
+        "Shutter1": "shutter-1",
+        "Shutter2": "shutter-2",
+    }
+    old_rules = {
+        **{
+            f"point{number}": {
+                "Shutter1": 1.0,
+                "Shutter2": 1.0,
+                "Diaphragm": float(number),
+            }
+            for number in range(1, 7)
+        },
+        "working": {"Shutter1": -1.0, "Shutter2": -1.0},
+    }
+
+    rules = controller._rules_with_owned_flipper(old_rules)
+    owned_roles = (
+        ("Shutter1", "Shutter2") if camera_number == 2 else ("Shutter1",)
+    )
+
+    for number in range(1, 7):
+        assert rules[f"point{number}"] == {
+            "Diaphragm": float(number),
+            **{role: -1.0 for role in owned_roles},
+        }
+    assert rules["working"] == {role: 1.0 for role in owned_roles}
+
+
+@pytest.mark.parametrize("camera_number", [1, 2])
+def test_all_numbered_points_block_only_owned_flipper_and_working_clears(camera_number):
+    class Flipper:
+        def __init__(self):
+            self.commanded_flipper_state = "UNKNOWN"
+            self.position = 0.0  # The physical device always reports zero.
+            self.commands = []
+
+        def move_axis_abs(self, target):
+            self.commands.append(target)
+            self.commanded_flipper_state = (
+                "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
+            )
+
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "Camera": f"manip/V0/Cam{camera_number}_V0",
+        "Shutter1": "shutter-1",
+        "Shutter2": "shutter-2",
+    }
+    controller.controller_rules = {
+        **{f"point{number}": {} for number in range(1, 7)},
+        "working": {},
+    }
+    owned_roles = (
+        ("Shutter1", "Shutter2") if camera_number == 2 else ("Shutter1",)
+    )
+    flippers = {"Shutter1": Flipper(), "Shutter2": Flipper()}
+    controller._device_for_role = flippers.__getitem__
+    controller._raise_if_cancelled = lambda: None
+    controller._active_point = ""
+    controller._actuator_initialization_status = {}
+
+    for number in range(1, 7):
+        DS_LaserPointing._apply_point(controller, f"point{number}", {})
+        for role in owned_roles:
+            assert flippers[role].commanded_flipper_state == "UP_BLOCKED"
+    DS_LaserPointing._apply_point(controller, "working", {})
+
+    for role in owned_roles:
+        assert flippers[role].commands == [-1.0, 1.0]
+        assert flippers[role].position == 0.0
+    if camera_number == 1:
+        assert flippers["Shutter2"].commands == []
+
+
+def test_cam2_working_completes_all_optics_before_lowering_both_flippers():
+    events = []
+
+    class Flipper:
+        def __init__(self, role):
+            self.role = role
+            self.commanded_flipper_state = "UP_BLOCKED"
+
+        def move_axis_abs(self, target):
+            events.append((self.role, target))
+            self.commanded_flipper_state = "DOWN_CLEAR"
+
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "Camera": "manip/V0/Cam2_V0",
+        "MainLaserDiaphragm1": "main-1",
+        "MainLaserDiaphragm2": "main-2",
+        "CrimpingDiaphragm1": "iris-1",
+        "CrimpingDiaphragm2": "iris-2",
+        "HalfWavePlate1": "wave-plate",
+        "TranslationStage1": ("dl", [3]),
+        "Shutter1": "shutter-1",
+        "Shutter2": "shutter-2",
+    }
+    controller.controller_rules = {
+        "working": {
+            "MainLaserDiaphragm1": 100.0,
+            "MainLaserDiaphragm2": 100.0,
+            "CrimpingDiaphragm1": 100.0,
+            "CrimpingDiaphragm2": 100.0,
+            "HalfWavePlate1": 20.5,
+            "TranslationStage1": (3, 0.0),
+        }
+    }
+    flippers = {role: Flipper(role) for role in ("Shutter1", "Shutter2")}
+    controller._device_for_role = lambda role: flippers.get(role, role)
+    controller._move_single_axis = (
+        lambda device, target, _config: events.append((device, target))
+    )
+    controller._move_multi_axis = (
+        lambda device, target, _config: events.append((device, target))
+    )
+    controller._raise_if_cancelled = lambda: None
+    controller._active_point = "point6"
+    controller._actuator_initialization_status = {}
+
+    DS_LaserPointing._apply_point(controller, "working", {})
+
+    assert events == [
+        ("MainLaserDiaphragm1", 100.0),
+        ("MainLaserDiaphragm2", 100.0),
+        ("CrimpingDiaphragm1", 100.0),
+        ("CrimpingDiaphragm2", 100.0),
+        ("TranslationStage1", (3, 0.0)),
+        ("HalfWavePlate1", 20.5),
+        ("Shutter1", 1.0),
+        ("Shutter2", 1.0),
+    ]
+    assert controller._active_point == "working"
+
+
+def test_cam2_working_does_not_lower_either_flipper_if_optics_fail():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {
+        "Camera": "manip/V0/Cam2_V0",
+        "CrimpingDiaphragm1": "iris-1",
+        "Shutter1": "shutter-1",
+        "Shutter2": "shutter-2",
+    }
+    controller.controller_rules = {"working": {"CrimpingDiaphragm1": 100.0}}
+    controller._device_for_role = lambda role: role
+    controller._move_single_axis = (
+        lambda _device, _target, _config: (_ for _ in ()).throw(
+            RuntimeError("diaphragm jammed")
+        )
+    )
+    controller._raise_if_cancelled = lambda: None
+    controller._active_point = "point6"
+
+    with pytest.raises(RuntimeError, match="diaphragm jammed"):
+        DS_LaserPointing._apply_point(controller, "working", {})
+    assert controller._active_point == "point6"
+
+
+def test_numbered_point_not_published_if_flipper_command_did_not_complete():
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "manip/V0/Cam1_V0", "Shutter1": "shutter-1"}
+    controller.controller_rules = {"point3": {}}
+    controller._raise_if_cancelled = lambda: None
+    controller._active_point = "working"
+    controller._device_for_role = lambda _role: SimpleNamespace(
+        commanded_flipper_state="UNKNOWN", move_axis_abs=lambda _target: None
+    )
+
+    with pytest.raises(RuntimeError, match="commanded state is UNKNOWN"):
+        DS_LaserPointing._apply_point(controller, "point3", {})
+    assert controller._active_point == "working"
+
+
 def test_multi_axis_point_move_uses_owis_array_command():
     class Owis:
         def __init__(self):

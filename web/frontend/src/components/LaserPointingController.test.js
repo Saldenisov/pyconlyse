@@ -90,9 +90,13 @@ describe('LaserPointing optical point presentation', () => {
   });
 
   test('formats the desktop-equivalent passive optical readback', () => {
-    expect(formatOpticalStatusValue('Shutter2', -1)).toBe('IN');
-    expect(formatOpticalStatusValue('Shutter2', 1)).toBe('OUT');
-    expect(formatOpticalStatusValue('Shutter2', 0)).toBe('BETWEEN');
+    expect(formatOpticalStatusValue('Shutter2', -1)).toBe('−1');
+    expect(formatOpticalStatusValue('Shutter2', 1)).toBe('+1');
+    expect(formatOpticalStatusValue('Shutter2', 0)).toBe('UNKNOWN');
+    expect(formatOpticalStatusValue('Shutter2', 'UP_BLOCKED')).toBe('UP · BLOCKED');
+    expect(formatOpticalStatusValue('Shutter2', 'DOWN_CLEAR')).toBe('DOWN · CLEAR');
+    expect(formatOpticalStatusValue('Shutter2', 'LEFT')).toBe('UP · BLOCKED');
+    expect(formatOpticalStatusValue('Shutter2', 'RIGHT')).toBe('DOWN');
     expect(formatOpticalStatusValue('CrimpingDiaphragm1', 40)).toBe('40%');
     expect(formatOpticalStatusValue('HalfWavePlate1', 20.5)).toBe('20.5%');
   });
@@ -162,6 +166,12 @@ describe('LaserPointing optical point presentation', () => {
       />
     );
 
+    expect(screen.queryByLabelText('Offset X')).not.toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam1_V0/info',
+      expect.anything()
+    );
+
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -173,8 +183,11 @@ describe('LaserPointing optical point presentation', () => {
     ));
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
 
+    fireEvent.click(screen.getByText('Camera controls'));
     const offsetX = await screen.findByLabelText('Offset X');
     expect(offsetX).toHaveValue(16);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(6);
+    expect(screen.queryByLabelText('Trigger mode')).not.toBeInTheDocument();
     fireEvent.change(offsetX, { target: { value: '32' } });
     fireEvent.blur(offsetX);
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
@@ -320,12 +333,26 @@ describe('LaserPointing optical point presentation', () => {
           stop_supported: true,
         },
         {
+          role: 'Shutter1',
+          control_type: 'flipper',
+          friendly_name: 'ShutterExp_1',
+          device: 'manip/V0/s1',
+          state: 'ON',
+          position: 0,
+          commanded_flipper_state: 'UP_BLOCKED',
+          unit: 'state',
+          ready: true,
+          move_supported: true,
+          stop_supported: true,
+        },
+        {
           role: 'Shutter2',
           control_type: 'flipper',
           friendly_name: 'ShutterExp_2',
           device: 'manip/V0/s2',
           state: 'ON',
           position: -1,
+          commanded_flipper_state: 'UP_BLOCKED',
           preset_positions: [-1, 1],
           unit: 'state',
           ready: true,
@@ -352,7 +379,7 @@ describe('LaserPointing optical point presentation', () => {
     expect(within(componentStatus).getByText('Camera')).toBeInTheDocument();
     expect(within(componentStatus).getByText('Standa 1')).toBeInTheDocument();
     expect(within(componentStatus).getByText('40%')).toBeInTheDocument();
-    expect(within(componentStatus).getByText('IN')).toBeInTheDocument();
+    expect(within(componentStatus).getAllByText('UP · BLOCKED')).toHaveLength(2);
 
     fireEvent.click(screen.getByRole('button', { name: /Point 3 Fine 10%/i }));
     expect(screen.getByLabelText('point3 optical state')).toBeInTheDocument();
@@ -398,11 +425,31 @@ describe('LaserPointing optical point presentation', () => {
     expect(screen.getByRole('tabpanel', { name: 'Other optical controls' })).toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
     expect(screen.getByLabelText('point3 optical state')).toBeInTheDocument();
-    expect(screen.queryByText('Basler preview')).not.toBeInTheDocument();
+    expect(screen.getByText('Basler preview')).toBeInTheDocument();
+    expect(screen.getByText(/controller-owned flippers/i)).toBeInTheDocument();
     expect(screen.getAllByText('CrimpingDiaphragm1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('λ/2 plate · HalfWavePlate1')).toBeInTheDocument();
+    expect(screen.getByText('Camera flipper · Shutter1')).toBeInTheDocument();
     expect(screen.getByText('Camera flipper · Shutter2')).toBeInTheDocument();
-    expect(screen.getByText('Flipper positions (state)')).toBeInTheDocument();
+    expect(screen.getAllByText('Last completed command')).toHaveLength(2);
+    const firstFlipper = screen.getByText('Camera flipper · Shutter1').closest('section');
+    fireEvent.click(within(firstFlipper).getByRole('button', { name: '+1 · Lower / clear' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/device/manip%2FV0%2Fs1/command/move_axis_abs',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ args: 1 }),
+      })
+    ));
+    const secondFlipper = screen.getByText('Camera flipper · Shutter2').closest('section');
+    fireEvent.click(within(secondFlipper).getByRole('button', { name: '+1 · Lower / clear' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/device/manip%2FV0%2Fs2/command/move_axis_abs',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ args: 1 }),
+      })
+    ));
     expect(screen.getByText('40.00 %')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set CrimpingDiaphragm1 to 25 %' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Set HalfWavePlate1 to 50 %' })).toBeInTheDocument();

@@ -271,6 +271,20 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._refresh_endpoint_state_passively()
         return str(getattr(self, "_endpoint_state", "UNKNOWN"))
 
+    @attribute(
+        label="Commanded flipper state",
+        dtype=str,
+        access=AttrWriteType.READ,
+        display_level=DispLevel.OPERATOR,
+        polling_period=polling_local,
+        doc=(
+            "Last completed state command: UP_BLOCKED for -1, DOWN_CLEAR "
+            "for +1. This is software command history, not physical readback."
+        ),
+    )
+    def commanded_flipper_state(self):
+        return str(getattr(self, "_commanded_flipper_state", "UNKNOWN"))
+
     def init_device(self):
         global _STARTUP_TRACE_ENABLED
         _startup_trace("init_device_enter")
@@ -287,6 +301,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._last_transport_error = ""
         self._last_transport_error_at_utc = ""
         self._endpoint_state = "UNKNOWN"
+        self._commanded_flipper_state = "UNKNOWN"
         self._libximc_backend = XIMC_BACKEND
         self._libximc_backend_error = XIMC_BACKEND_ERROR
         self._libximc_runtime_version = runtime_version()
@@ -542,6 +557,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         return lib.close_device(ctypes.byref(handle))
 
     def _invalidate_transport(self) -> None:
+        self._commanded_flipper_state = "UNKNOWN"
         device_handle = getattr(self, "_device_id_internal", -1)
         was_open = self._has_open_transport()
         current_uri = getattr(self, "_uri", b"")
@@ -997,6 +1013,7 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
             self._device_id_internal = -1
             self._uri = ""
             self._standa_handle_open = False
+            self._commanded_flipper_state = "UNKNOWN"
             return 0
         self.set_state(DevState.FAULT)
         return self.error(f"Could not turn off device {self.device_name}: {result}.")
@@ -1006,6 +1023,10 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         self._invalidate_transport()
 
     def move_axis_local(self, pos) -> Union[int, str]:
+        is_flipper = self._uses_commanded_flipper_state()
+        target_state = self._flipper_state_for_target(pos)
+        if is_flipper:
+            self._commanded_flipper_state = "UNKNOWN"
         if not self._has_open_transport():
             return (
                 f"Move command for {self.device_name} did NOT work: "
@@ -1037,9 +1058,39 @@ class DS_Standa_Motor(DS_MOTORIZED_MONO_AXIS):
         if result != Result.Ok:
             return f"{self.device_name} did NOT stop moving yet: {result}."
         self.set_state(DevState.ON)
+        if is_flipper:
+            self._commanded_flipper_state = target_state
         return 0
 
+    @staticmethod
+    def _flipper_state_for_target(target):
+        if float(target) == -1.0:
+            return "UP_BLOCKED"
+        if float(target) == 1.0:
+            return "DOWN_CLEAR"
+        return "UNKNOWN"
+
+    def _uses_commanded_flipper_state(self):
+        return (
+            str(self.unit).strip().lower() == "state"
+            and str(self.get_name()).strip().lower().endswith(("/s1", "/s2"))
+        )
+
+    def _motion_target_reached(self, target):
+        if self._uses_commanded_flipper_state():
+            expected = self._flipper_state_for_target(target)
+            return expected != "UNKNOWN" and getattr(
+                self, "_commanded_flipper_state", "UNKNOWN"
+            ) == expected
+        return super()._motion_target_reached(target)
+
+    def _refresh_motion_readback(self):
+        if not self._uses_commanded_flipper_state():
+            super()._refresh_motion_readback()
+
     def stop_movement_local(self) -> Union[int, str]:
+        if self._uses_commanded_flipper_state():
+            self._commanded_flipper_state = "UNKNOWN"
         if not self._has_open_transport():
             return (
                 f"Axis movement of device {self.device_name} cannot be stopped: "

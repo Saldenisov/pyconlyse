@@ -1,6 +1,7 @@
 import ctypes
 import sys
 import types
+from contextlib import nullcontext
 from pathlib import Path
 
 import pytest
@@ -121,6 +122,55 @@ def _make_standa():
     device._power_voltage = 0
     device._power_status = ""
     return device
+
+
+def test_standa_flipper_command_state_ignores_constant_zero_position(monkeypatch):
+    device = _make_standa()
+    device._name = "manip/v0/s1"
+    device.unit = "state"
+    device.conversion = 1250
+    device._standa_handle_open = True
+    device._position = 0.0
+    device._transport_lock = lambda: nullcontext()
+    commands = []
+    monkeypatch.setattr(
+        standa_module,
+        "lib",
+        types.SimpleNamespace(
+            command_move=lambda _handle, steps, microsteps: (
+                commands.append((steps, microsteps)) or standa_module.Result.Ok
+            ),
+            command_wait_for_stop=lambda _handle, _timeout: standa_module.Result.Ok,
+        ),
+    )
+
+    assert device.move_axis_local(-1.0) == 0
+    assert device.commanded_flipper_state() == "UP_BLOCKED"
+    assert device._motion_target_reached(-1.0)
+    device.read_position = lambda: pytest.fail("flipper must not read numeric position")
+    device._refresh_motion_readback()
+    assert device._position == 0.0
+    assert device.move_axis_local(1.0) == 0
+    assert device.commanded_flipper_state() == "DOWN_CLEAR"
+    assert device._motion_target_reached(1.0)
+    assert commands == [(-1250, 0), (1250, 0)]
+
+
+def test_standa_failed_flipper_command_keeps_state_unknown(monkeypatch):
+    device = _make_standa()
+    device._name = "manip/v0/s2"
+    device.unit = "state"
+    device._standa_handle_open = True
+    device._commanded_flipper_state = "DOWN_CLEAR"
+    device._transport_lock = lambda: nullcontext()
+    monkeypatch.setattr(
+        standa_module,
+        "lib",
+        types.SimpleNamespace(command_move=lambda *_args: -1),
+    )
+
+    assert "did NOT work" in device.move_axis_local(-1.0)
+    assert device.commanded_flipper_state() == "UNKNOWN"
 
 
 def _make_owis():

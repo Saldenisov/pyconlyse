@@ -852,7 +852,6 @@
 
 .laser-diaphragm-tab {
   display: grid;
-  grid-column: 1 / -1;
   gap: 12px;
 }
 
@@ -892,6 +891,10 @@
   gap: 8px;
   align-items: end;
   margin-top: 9px;
+}
+
+.laser-flipper-controls {
+  grid-template-columns: repeat(2, minmax(145px, 1fr)) minmax(105px, auto);
 }
 
 .laser-diaphragm-controls label {

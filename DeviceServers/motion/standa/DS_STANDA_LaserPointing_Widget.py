@@ -43,6 +43,15 @@ class Standa_LaserPointing(DS_General_Widget):
                 friendly_name = ds.get_property("friendly_name")["friendly_name"][0]
             except Exception:
                 pass
+            try:
+                unit_values = ds.get_property("unit").get("unit", [])
+                self._is_flipper = (
+                    bool(unit_values)
+                    and str(unit_values[0]).strip().lower() == "state"
+                    and str(dev_name).strip().lower().endswith(("/s1", "/s2"))
+                )
+            except Exception:
+                self._is_flipper = False
             
             # Get layouts
             lo_device = getattr(self, f"layout_main_{dev_name}")
@@ -76,13 +85,20 @@ class Standa_LaserPointing(DS_General_Widget):
             
             # Position
             pos_label = TaurusLabel()
-            pos_label.model = f"{dev_name}/position"
+            pos_label.model = (
+                f"{dev_name}/commanded_flipper_state"
+                if self._is_flipper else f"{dev_name}/position"
+            )
             pos_label.setAlignment(Qt.AlignCenter)
             pos_label.setStyleSheet(
                 "background: white; border: 1px solid #aeb8c5; "
                 "border-radius: 3px; font-size: 10px;"
             )
-            pos_label.setFixedSize(55, 22)
+            pos_label.setFixedSize(92 if self._is_flipper else 55, 22)
+            if self._is_flipper:
+                pos_label.setToolTip(
+                    "Last completed command only; not physical position readback"
+                )
             layout.addWidget(pos_label)
 
             # The compact LaserPointing row bypasses the generic status-row
@@ -104,6 +120,9 @@ class Standa_LaserPointing(DS_General_Widget):
             for step in STANDA_STEP_SIZES:
                 step_selector.addItem(f"Step {step:g}", step)
             step_selector.setCurrentIndex(STANDA_STEP_SIZES.index(1.0))
+            if self._is_flipper:
+                step_selector.setEnabled(False)
+                step_selector.setToolTip("Flipper commands are fixed at −1 and +1")
             step_selector.currentIndexChanged.connect(
                 lambda index, selector=step_selector: self.set_step_size(
                     selector.itemData(index)
@@ -160,8 +179,13 @@ class Standa_LaserPointing(DS_General_Widget):
         if not self._alignment_motion_enabled:
             return
         try:
-            current_pos = self.ds.position
-            new_pos = current_pos + (self.relative_shift * direction)
+            if getattr(self, "_is_flipper", False):
+                # Numeric Standa position stays at zero for these flippers.
+                # Match the verified manual convention exactly.
+                new_pos = float(direction)
+            else:
+                current_pos = self.ds.position
+                new_pos = current_pos + (self.relative_shift * direction)
             # Use non-blocking execute_action
             self.execute_action(new_pos, self.ds, "move_axis_abs", True)
         except Exception as e:

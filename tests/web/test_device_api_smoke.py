@@ -685,7 +685,7 @@ def test_laser_pointing_flipper_is_owned_by_matching_camera():
     assert device_api_module._is_owned_laser_flipper(
         "Shutter2", "manip/V0/Cam2_V0"
     )
-    assert not device_api_module._is_owned_laser_flipper(
+    assert device_api_module._is_owned_laser_flipper(
         "Shutter1", "manip/V0/Cam2_V0"
     )
 
@@ -721,6 +721,7 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     stage_name = "manip/general/owis-aggregator"
     diaphragm_name = "manip/v0/dv01"
     half_wave_name = "manip/v0/l-2_1"
+    flipper_name = "manip/v0/s1"
     controller = FakeDevice(
         controller_name,
         attributes={
@@ -731,6 +732,7 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
                 "ActuatorY1": y_name,
                 "CrimpingDiaphragm1": diaphragm_name,
                 "HalfWavePlate1": half_wave_name,
+                "Shutter1": flipper_name,
                 "TranslationStage1": (stage_name, [3]),
             }),
             "get_groups": str({
@@ -738,11 +740,20 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
                 "Translation stages": "TranslationStage1",
             }),
             "automatic_search_status": "running",
-            "automatic_search_progress": json.dumps({"phase": "measuring"}),
-            "automatic_search_config": json.dumps({"tolerance_px": 2}),
+            "automatic_search_progress": json.dumps({
+                "phase": "measuring",
+                "roundness_error_pct": 3.2,
+                "reference_roundness_pct": 96.0,
+                "test_roundness_pct": 93.0,
+            }),
+            "automatic_search_config": json.dumps({
+                "tolerance_px": 2,
+                "roundness_tolerance_pct": 7,
+            }),
             "automatic_search_history": json.dumps([
                 {
                     "elapsed_s": 4.5,
+                    "roundness_error_pct": 3.2,
                     "error_px": 3.2,
                     "actuator_group": 1,
                     "diaphragm": 1,
@@ -811,6 +822,14 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         },
         attr_configs={"position": FakeAttributeConfig(unit="%")},
     )
+    devices[flipper_name] = FakeDevice(
+        flipper_name,
+        attributes={
+            "position": 0.0,
+            "commanded_flipper_state": "UP_BLOCKED",
+        },
+        attr_configs={"position": FakeAttributeConfig(unit="state")},
+    )
     fake_db = importlib.import_module("device_api").tango_gateway.create_database()
     fake_db.properties[diaphragm_name] = {
         "friendly_name": ["IrisExp_1"],
@@ -838,6 +857,11 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     assert snapshot["active_point"] == "point3"
     assert snapshot["active_actuator_group"] == 1
     assert snapshot["automatic_search"]["history"][0]["elapsed_s"] == 4.5
+    assert (
+        snapshot["automatic_search"]["history"][0]["roundness_error_pct"]
+        == 3.2
+    )
+    assert snapshot["automatic_search"]["config"]["roundness_tolerance_pct"] == 7
     assert snapshot["pair_initialization"]["group"] == 1
     assert snapshot["camera"]["grabbing"] is True
     assert snapshot["actuators"][0]["ready"] is True
@@ -881,6 +905,11 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         "disconnected": False,
         "ready": True,
     }
+    flipper = next(
+        item for item in snapshot["other_devices"] if item["role"] == "Shutter1"
+    )
+    assert flipper["position"] == 0.0
+    assert flipper["commanded_flipper_state"] == "UP_BLOCKED"
     assert snapshot["manual_devices"] == [{
         "role": "TranslationStage1",
         "device": stage_name,

@@ -2,6 +2,7 @@ from collections import deque
 
 import numpy as np
 import pyqtgraph as pg
+from PyQt5 import QtCore as PyQtCore, QtWidgets
 from taurus import Device
 from taurus.core import TaurusDevState
 from taurus.external.qt import Qt, QtCore
@@ -13,6 +14,15 @@ from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 
 
 class Basler_camera(DS_General_Widget):
+    LASER_CAMERA_PARAMETERS = (
+        ("offsetX", "Offset X"),
+        ("offsetY", "Offset Y"),
+        ("exposure_time", "Exposure (µs)"),
+        ("gain", "Gain"),
+        ("width", "Width"),
+        ("height", "Height"),
+    )
+
     def __init__(self, device_name: str, parent=None, vis_type=VisType.FULL):
         self.grabbing = False
         self.positions = {"X": deque([], maxlen=120), "Y": deque([], maxlen=120)}
@@ -125,6 +135,69 @@ class Basler_camera(DS_General_Widget):
         lo_device.addLayout(lo_status)
         lo_device.addLayout(lo_image)
         lo_group.addLayout(lo_device)
+
+    def enable_laser_camera_controls(self):
+        """Add collapsed, lazily bound camera settings to the embedded view."""
+
+        if getattr(self, "laser_camera_controls_section", None) is not None:
+            return
+
+        lo_image = getattr(self, f"layout_image_{self.dev_name}")
+        section = QtWidgets.QWidget()
+        section.setObjectName("laserCameraControlsSection")
+        section_layout = QtWidgets.QVBoxLayout(section)
+        section_layout.setContentsMargins(0, 2, 0, 0)
+        section_layout.setSpacing(2)
+
+        toggle = QtWidgets.QToolButton(section)
+        toggle.setObjectName("laserCameraControlsToggle")
+        toggle.setText("Camera controls")
+        toggle.setAccessibleName("Camera controls")
+        toggle.setCheckable(True)
+        toggle.setToolButtonStyle(PyQtCore.Qt.ToolButtonTextBesideIcon)
+        toggle.setArrowType(PyQtCore.Qt.RightArrow)
+        section_layout.addWidget(toggle)
+
+        panel = QtWidgets.QFrame(section)
+        panel.setObjectName("laserCameraControlsPanel")
+        panel.setFrameShape(QtWidgets.QFrame.StyledPanel)
+        panel.setVisible(False)
+        section_layout.addWidget(panel)
+
+        self.laser_camera_controls_section = section
+        self.laser_camera_controls_toggle = toggle
+        self.laser_camera_controls_panel = panel
+        self.laser_camera_parameter_editors = {}
+
+        def show_controls(expanded):
+            if expanded and not self.laser_camera_parameter_editors:
+                self._populate_laser_camera_controls(panel)
+            panel.setVisible(expanded)
+            toggle.setArrowType(
+                PyQtCore.Qt.DownArrow if expanded else PyQtCore.Qt.RightArrow
+            )
+
+        toggle.toggled.connect(show_controls)
+        lo_image.addWidget(section)
+
+    def _populate_laser_camera_controls(self, panel):
+        grid = QtWidgets.QGridLayout(panel)
+        grid.setContentsMargins(5, 5, 5, 5)
+        grid.setHorizontalSpacing(6)
+        grid.setVerticalSpacing(4)
+        for index, (attribute_name, label_text) in enumerate(
+            self.LASER_CAMERA_PARAMETERS
+        ):
+            row, column = divmod(index, 3)
+            label = QtWidgets.QLabel(label_text, panel)
+            editor = TaurusValueSpinBox()
+            editor.setObjectName(f"laserCamera{attribute_name}Editor")
+            editor.setAccessibleName(label_text)
+            editor.setMinimumWidth(80)
+            editor.model = f"{self.dev_name}/{attribute_name}"
+            grid.addWidget(label, row, 2 * column)
+            grid.addWidget(editor, row, 2 * column + 1)
+            self.laser_camera_parameter_editors[attribute_name] = editor
 
     def set_camera_parameters(self):
         dev_name = self.dev_name

@@ -128,17 +128,14 @@ class LaserPointing(DS_General_Widget):
                 ds_class_widget = cm.get(ds_class_name)
                 if not ds_class_widget:
                     return QtWidgets.QLabel(f"Unknown device class: {ds_class_name} for {dev_path}")
-                # LaserPointing only needs the Basler image, centroid controls,
-                # and Grab command.  The full camera widget also constructs
-                # hidden Width/Height editors; Taurus immediately reads those
-                # GenICam nodes even when the camera makes them unavailable
-                # during acquisition/reconfiguration.  Use the dedicated
-                # minimal camera view here and keep the standalone Basler
-                # client unchanged.
+                # Keep the minimal preview/Grab view, with optional camera
+                # settings built only when the operator expands them. Creating
+                # Width/Height editors at startup reads GenICam nodes that may
+                # be unavailable while acquisition is running.
                 if ds_class_name == "DS_Basler_camera":
-                    return configure_laser_widget(
-                        ds_class_widget(dev_path, self, VisType.MIN)
-                    )
+                    camera_widget = ds_class_widget(dev_path, self, VisType.MIN)
+                    camera_widget.enable_laser_camera_controls()
+                    return configure_laser_widget(camera_widget)
                 # Try to instantiate widget; OWIS may require axes (extra)
                 if extra is not None:
                     try:
@@ -676,7 +673,7 @@ class LaserPointing(DS_General_Widget):
         caption.setObjectName("laserComponentStatusCaption")
         caption.setToolTip(device_name)
         is_flipper = "shutter" in role.lower() or "flipper" in role.lower()
-        status_attribute = "endpoint_state" if is_flipper else attribute_name
+        status_attribute = "commanded_flipper_state" if is_flipper else attribute_name
         value = OpticalStatusValue(role)
         value.model = f"{device_name}/{status_attribute}"
         value.bgRole = ""
@@ -684,7 +681,7 @@ class LaserPointing(DS_General_Widget):
         value.setToolTip(
             f"{device_name}/{status_attribute}"
             + (
-                " · hardware end switch: RIGHT = DOWN, LEFT = UP / beam blocked"
+                " · last completed command: −1 = UP / blocked, +1 = DOWN / clear"
                 if is_flipper
                 else ""
             )
