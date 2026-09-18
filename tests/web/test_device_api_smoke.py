@@ -759,6 +759,18 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
                     "diaphragm": 1,
                 }
             ]),
+            "alignment_reference_json": json.dumps({
+                "revision": 2,
+                "accepted_at_utc": "2026-09-18T08:00:00+00:00",
+            }),
+            "alignment_reference_revision": 2,
+            "alignment_pending_reference_json": json.dumps({
+                "session_id": "pending-session",
+            }),
+            "alignment_session_event_json": json.dumps({
+                "event_type": "search_completed",
+            }),
+            "alignment_session_event_count": 12,
             "active_point": "point3",
             "active_actuator_group": 1,
             "actuator_initialization_status": json.dumps({
@@ -769,6 +781,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     )
     controller.get_command_list = lambda: [
         "start_automatic_search",
+        "pause_automatic_search",
+        "resume_automatic_search",
+        "accept_alignment_reference",
         "apply_controller_point",
         "select_manual_point",
         "initialize_active_pair",
@@ -854,6 +869,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     assert snapshot["capabilities"]["interlocked_motion"] is True
     assert snapshot["capabilities"]["manual_point_selection"] is True
     assert snapshot["capabilities"]["initialize_active_pair"] is True
+    assert snapshot["capabilities"]["pause_search"] is True
+    assert snapshot["capabilities"]["resume_search"] is True
+    assert snapshot["capabilities"]["accept_alignment_reference"] is True
     assert snapshot["active_point"] == "point3"
     assert snapshot["active_actuator_group"] == 1
     assert snapshot["automatic_search"]["history"][0]["elapsed_s"] == 4.5
@@ -862,6 +880,9 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
         == 3.2
     )
     assert snapshot["automatic_search"]["config"]["roundness_tolerance_pct"] == 7
+    assert snapshot["automatic_search"]["reference_revision"] == 2
+    assert snapshot["automatic_search"]["pending_reference"]["session_id"] == "pending-session"
+    assert snapshot["automatic_search"]["session_event_count"] == 12
     assert snapshot["pair_initialization"]["group"] == 1
     assert snapshot["camera"]["grabbing"] is True
     assert snapshot["actuators"][0]["ready"] is True

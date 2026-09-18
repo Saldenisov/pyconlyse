@@ -1207,13 +1207,29 @@ class LaserPointing(DS_General_Widget):
         form.addWidget(self.search_samples, 3, 3)
 
         self.search_start = QtWidgets.QPushButton("Start automatic search")
-        self.search_stop = QtWidgets.QPushButton("Stop")
+        self.search_pause = QtWidgets.QPushButton("Pause")
+        self.search_resume = QtWidgets.QPushButton("Continue")
+        self.search_stop = QtWidgets.QPushButton("Cancel + restore")
+        self.search_accept = QtWidgets.QPushButton("Accept as next-day reference")
+        self.search_pause.setEnabled(False)
+        self.search_resume.setEnabled(False)
         self.search_stop.setEnabled(False)
+        self.search_accept.setEnabled(False)
         self.search_status = QtWidgets.QLabel("idle")
         self.search_status.setWordWrap(True)
         form.addWidget(self.search_start, 4, 0, 1, 2)
-        form.addWidget(self.search_stop, 4, 2, 1, 2)
-        form.addWidget(self.search_status, 5, 0, 1, 4)
+        form.addWidget(self.search_pause, 4, 2)
+        form.addWidget(self.search_resume, 4, 3)
+        form.addWidget(self.search_stop, 5, 0, 1, 2)
+        form.addWidget(self.search_accept, 5, 2, 1, 2)
+        form.addWidget(self.search_status, 6, 0, 1, 4)
+        self.search_reference = QtWidgets.QLabel("Stored reference: none")
+        self.search_reference.setWordWrap(True)
+        self.search_reference.setStyleSheet(
+            "color: #52657b; background: #f6f9fc; border: 1px solid #cbd7e5; "
+            "border-radius: 4px; padding: 4px;"
+        )
+        form.addWidget(self.search_reference, 7, 0, 1, 4)
 
         self.convergence_plot = pg.PlotWidget()
         self.convergence_plot.setBackground("#ffffff")
@@ -1254,10 +1270,13 @@ class LaserPointing(DS_General_Widget):
             pen=pg.mkPen("#2f9e44", width=1, style=QtCore.Qt.DashLine),
         )
         self.convergence_plot.addItem(self.convergence_tolerance)
-        form.addWidget(self.convergence_plot, 6, 0, 1, 4)
+        form.addWidget(self.convergence_plot, 8, 0, 1, 4)
 
         self.search_start.clicked.connect(self.start_automatic_search)
+        self.search_pause.clicked.connect(self.pause_automatic_search)
+        self.search_resume.clicked.connect(self.resume_automatic_search)
         self.search_stop.clicked.connect(self.stop_automatic_search)
+        self.search_accept.clicked.connect(self.accept_alignment_reference)
         layout.addWidget(group)
 
         self.search_timer = Qt.QTimer(self)
@@ -1398,7 +1417,33 @@ class LaserPointing(DS_General_Widget):
         try:
             getattr(self, f"ds_{self.dev_name}").stop_automatic_search()
         except Exception as error:
-            self.search_status.setText(f"Could not stop: {error}")
+            self.search_status.setText(f"Could not cancel and restore: {error}")
+        self.update_automatic_search_status()
+
+    def pause_automatic_search(self):
+        try:
+            getattr(self, f"ds_{self.dev_name}").pause_automatic_search()
+        except Exception as error:
+            self.search_status.setText(f"Could not pause: {error}")
+        self.update_automatic_search_status()
+
+    def resume_automatic_search(self):
+        try:
+            getattr(self, f"ds_{self.dev_name}").resume_automatic_search()
+        except Exception as error:
+            self.search_status.setText(f"Could not continue: {error}")
+        self.update_automatic_search_status()
+
+    def accept_alignment_reference(self):
+        try:
+            revision = getattr(
+                self, f"ds_{self.dev_name}"
+            ).accept_alignment_reference(json.dumps({"client": "pyqt5"}))
+            self.search_status.setText(
+                f"Accepted alignment reference revision {revision}"
+            )
+        except Exception as error:
+            self.search_status.setText(f"Could not save reference: {error}")
         self.update_automatic_search_status()
 
     def update_automatic_search_status(self):
@@ -1412,6 +1457,18 @@ class LaserPointing(DS_General_Widget):
                 history = json.loads(str(ds.automatic_search_history) or "[]")
             except Exception:
                 history = []
+            try:
+                pending_reference = json.loads(
+                    str(ds.alignment_pending_reference_json) or "{}"
+                )
+            except Exception:
+                pending_reference = {}
+            try:
+                reference = json.loads(str(ds.alignment_reference_json) or "{}")
+                revision = int(ds.alignment_reference_revision)
+            except Exception:
+                reference = {}
+                revision = 0
             self.update_convergence_plot(history, progress)
             detail = ""
             if progress.get("group"):
@@ -1424,15 +1481,45 @@ class LaserPointing(DS_General_Widget):
             elif progress.get("message"):
                 detail = f" — {progress['message']}"
             self.search_status.setText(status + detail)
-            running = status in ("running", "stopping")
-            self._search_running = running
-            self.search_start.setEnabled(not running and not self._point_apply_busy)
-            self.search_stop.setEnabled(running)
-            self._set_point_buttons_enabled(not running and not self._point_apply_busy)
+            running = status in (
+                "running", "pausing", "paused", "cancelling", "restoring"
+            )
+            paused = status in ("pausing", "paused")
+            cancelling = status in ("cancelling", "restoring")
+            session_locked = running or bool(pending_reference)
+            self._search_running = session_locked
+            self.search_start.setEnabled(
+                not session_locked and not self._point_apply_busy
+            )
+            self.search_pause.setEnabled(running and not paused and not cancelling)
+            self.search_resume.setEnabled(paused and not cancelling)
+            self.search_stop.setEnabled(
+                (running or bool(pending_reference)) and not cancelling
+            )
+            self.search_accept.setEnabled(bool(pending_reference) and not running)
+            if reference:
+                positions = ", ".join(
+                    f"{role} {float(axis.get('position', 0)):.3f}"
+                    for role, axis in reference.get("actuators", {}).items()
+                )
+                self.search_reference.setText(
+                    f"Stored reference r{revision} · "
+                    f"{reference.get('accepted_at_utc', 'saved')} · {positions}"
+                )
+            else:
+                self.search_reference.setText("Stored reference: none")
+            self._set_point_buttons_enabled(
+                not session_locked and not self._point_apply_busy
+            )
             if running:
                 self.set_active_actuator_group(
                     0,
                     "Automatic search owns both mount pairs; manual movement is locked",
+                )
+            elif pending_reference:
+                self.set_active_actuator_group(
+                    0,
+                    "Accept this alignment or cancel and restore its initial state",
                 )
             elif not self._point_apply_busy:
                 try:

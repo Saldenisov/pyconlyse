@@ -1471,12 +1471,21 @@ const LaserPointingController = ({ deviceName }) => {
     (point) => Object.prototype.hasOwnProperty.call(point.settings, 'TranslationStage1')
   );
   const searchStatus = snapshot?.automatic_search?.status || 'loading';
-  const running = ['running', 'stopping'].includes(searchStatus);
+  const running = [
+    'running', 'pausing', 'paused', 'cancelling', 'restoring',
+  ].includes(searchStatus);
+  const paused = searchStatus === 'paused' || searchStatus === 'pausing';
+  const cancelling = searchStatus === 'cancelling' || searchStatus === 'restoring';
   const progress = snapshot?.automatic_search?.progress || {};
   const pointApplying = progress.phase === 'manual_point';
   const pointApplicationError = progress.phase === 'manual_point_error'
     ? progress.message : '';
   const convergenceHistory = snapshot?.automatic_search?.history || [];
+  const acceptedReference = snapshot?.automatic_search?.reference || {};
+  const pendingReference = snapshot?.automatic_search?.pending_reference || {};
+  const hasAcceptedReference = Object.keys(acceptedReference).length > 0;
+  const hasPendingReference = Object.keys(pendingReference).length > 0;
+  const referenceRevision = snapshot?.automatic_search?.reference_revision || 0;
   const roundnessTolerance = finiteNumber(config?.roundness_tolerance_pct) ?? 7;
   const centroidGuidePx = finiteNumber(config?.tolerance_px) ?? 2;
   const progressRoundnessError = roundnessError(progress);
@@ -1498,6 +1507,7 @@ const LaserPointingController = ({ deviceName }) => {
     : '';
   const controlsDisabled = Boolean(busy)
     || running
+    || hasPendingReference
     || pointApplying
     || !snapshot?.capabilities?.interlocked_motion;
   const pointControlsDisabled = controlsDisabled || !snapshot?.capabilities?.apply_point;
@@ -1775,12 +1785,56 @@ const LaserPointingController = ({ deviceName }) => {
                 </div>
               )}
               <div className="laser-search-actions">
-                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
+                <button type="button" className="start" onClick={startSearch} disabled={Boolean(busy) || running || hasPendingReference || !snapshot.camera?.centroid_valid || !snapshot.capabilities?.automatic_search}>
                   Start automatic search
                 </button>
-                <button type="button" className="stop" onClick={() => execute('stop_automatic_search', undefined, 'Stopping')} disabled={Boolean(busy) || !running || !snapshot.capabilities?.automatic_search}>
-                  Stop
+                {!paused ? (
+                  <button type="button" onClick={() => execute('pause_automatic_search', undefined, 'Pausing')} disabled={Boolean(busy) || !running || cancelling || !snapshot.capabilities?.pause_search}>
+                    Pause
+                  </button>
+                ) : (
+                  <button type="button" className="start" onClick={() => execute('resume_automatic_search', undefined, 'Continuing')} disabled={Boolean(busy) || cancelling || !snapshot.capabilities?.resume_search}>
+                    Continue
+                  </button>
+                )}
+                <button type="button" className="stop" onClick={() => execute('stop_automatic_search', undefined, 'Cancelling and restoring initial state')} disabled={Boolean(busy) || (!running && !hasPendingReference) || cancelling || !snapshot.capabilities?.automatic_search}>
+                  {hasPendingReference ? 'Discard and restore' : 'Cancel and restore'}
                 </button>
+              </div>
+              {hasPendingReference && (
+                <div className="laser-reference-card" role="status" aria-label="Alignment awaiting acceptance">
+                  <strong>Alignment finished — operator confirmation required</strong>
+                  <span>
+                    {pendingReference.converged
+                      ? 'Search converged.'
+                      : 'Tolerance was not reached; accept only after checking the beam.'}
+                  </span>
+                  <button
+                    type="button"
+                    className="start"
+                    onClick={() => execute(
+                      'accept_alignment_reference',
+                      JSON.stringify({ client: 'web' }),
+                      'Saving next-day reference'
+                    )}
+                    disabled={Boolean(busy) || running || !snapshot.capabilities?.accept_alignment_reference}
+                  >
+                    Accept as next-day reference
+                  </button>
+                </div>
+              )}
+              <div className="laser-reference-card" aria-label="Accepted alignment reference">
+                <strong>Stored reference</strong>
+                {hasAcceptedReference ? (
+                  <span>
+                    Revision {referenceRevision} · {acceptedReference.accepted_at_utc || 'saved'} · {' '}
+                    {Object.entries(acceptedReference.actuators || {}).map(
+                      ([role, state]) => `${role} ${Number(state.position).toFixed(3)}`
+                    ).join(', ')}
+                  </span>
+                ) : (
+                  <span>No accepted reference has been stored yet.</span>
+                )}
               </div>
             </section>
 

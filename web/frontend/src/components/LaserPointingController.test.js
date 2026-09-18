@@ -405,6 +405,9 @@ describe('LaserPointing optical point presentation', () => {
       },
       capabilities: {
         automatic_search: true,
+        pause_search: true,
+        resume_search: true,
+        accept_alignment_reference: true,
         apply_point: true,
         manual_point_selection: true,
         initialize_active_pair: true,
@@ -419,6 +422,12 @@ describe('LaserPointing optical point presentation', () => {
           roundness_error_pct: 9,
         },
         history: [{ elapsed_s: 1, roundness_error_pct: 9, error_px: 9, actuator_group: 1 }],
+        pending_reference: {},
+        reference: {
+          accepted_at_utc: '2026-09-18T08:00:00Z',
+          actuators: { ActuatorX1: { position: 1.25 } },
+        },
+        reference_revision: 1,
         config: {
           mode: 'sensitive',
           step_schedule: [10, 6, 2],
@@ -516,6 +525,9 @@ describe('LaserPointing optical point presentation', () => {
     expect(screen.getByLabelText('Roundness error (%)')).toHaveValue(7);
     expect(screen.getByRole('img', { name: /beam roundness error convergence/i })).toBeInTheDocument();
     expect(screen.getByLabelText('Current beam roundness metrics')).toHaveTextContent('Reference 96.00%');
+    expect(screen.getByLabelText('Accepted alignment reference')).toHaveTextContent('Revision 1');
+    expect(screen.getByRole('button', { name: 'Pause' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel and restore' })).toBeDisabled();
     expect(screen.queryByText('Standa alignment mounts')).not.toBeInTheDocument();
     expect(screen.getByText('Optical points')).toBeInTheDocument();
     const componentStatus = screen.getByRole('region', { name: 'Main components live status' });
@@ -606,6 +618,69 @@ describe('LaserPointing optical point presentation', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ args: 20 }),
+      })
+    ));
+
+    view.unmount();
+    global.fetch = originalFetch;
+  });
+
+  test('requires acceptance or restore before a finished alignment can be changed', async () => {
+    const snapshot = {
+      device: 'manip/V0/LaserPointing-Cam1',
+      state: 'ON',
+      rules: {},
+      groups: {},
+      capabilities: {
+        automatic_search: true,
+        pause_search: true,
+        resume_search: true,
+        accept_alignment_reference: true,
+        apply_point: true,
+        manual_point_selection: true,
+        initialize_active_pair: true,
+        interlocked_motion: true,
+      },
+      automatic_search: {
+        status: 'awaiting acceptance',
+        progress: { phase: 'finished', acceptance_required: true },
+        history: [],
+        pending_reference: { session_id: 'session-3', converged: true },
+        reference: {},
+        reference_revision: 0,
+        config: {
+          mode: 'sensitive', step_schedule: [10, 6, 2], radius: 30,
+          tolerance_px: 2, roundness_tolerance_pct: 7,
+          max_evaluations: 16, samples: 3,
+        },
+      },
+      pair_initialization: {},
+      active_point: '',
+      camera: {
+        device: 'manip/V0/Cam1_V0', state: 'OFF', grabbing: false,
+        centroid_valid: true,
+      },
+      actuators: [],
+      other_devices: [],
+      manual_devices: [],
+    };
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ success: true, snapshot }),
+    });
+
+    const view = render(<LaserPointingController deviceName={snapshot.device} />);
+    expect(await screen.findByRole('button', { name: 'Accept as next-day reference' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Discard and restore' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Start automatic search' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept as next-day reference' }));
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/device/manip%2FV0%2FLaserPointing-Cam1/command/accept_alignment_reference',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ args: JSON.stringify({ client: 'web' }) }),
       })
     ));
 

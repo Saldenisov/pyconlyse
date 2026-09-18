@@ -1,6 +1,7 @@
+import json
 from enum import Enum
 from math import hypot
-from threading import Event, Lock
+from threading import Event, Lock, Thread
 from types import SimpleNamespace
 
 import pytest
@@ -1135,10 +1136,22 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
         "far": ("point4", "point6"),
     }
     controller._search_stop = Event()
+    controller._search_pause = Event()
     controller._search_progress = {}
     controller._search_history = []
     controller._search_status = "running"
     controller._search_started_at = None
+    controller._search_session_id = "session-1"
+    controller._pause_active = False
+    controller._active_point = "point3"
+    controller._capture_alignment_state = lambda: {
+        "active_point": controller._active_point,
+        "actuators": {},
+        "optics": {},
+    }
+    stored_candidates = []
+    controller._store_pending_reference = stored_candidates.append
+    controller._record_alignment_event = lambda *_args, **_kwargs: None
     controller._raise_if_cancelled = lambda: None
     controller._validate_camera_verified_roles = lambda *_args: None
     controller._point_stages = lambda _config: [("sensitive", [
@@ -1177,7 +1190,8 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
 
     DS_LaserPointing._automatic_search_worker(controller, config)
 
-    assert controller._search_status == "completed"
+    assert controller._search_status == "awaiting acceptance"
+    assert stored_candidates[0]["converged"] is True
     assert [(item["point"], item["roundness_error_pct"])
             for item in controller._search_progress["verification"]] == [
         ("point3", 2.0), ("point6", 2.0)
@@ -1187,6 +1201,176 @@ def test_automatic_worker_revisits_both_points_before_declaring_convergence():
         ("measure", "point3"), ("measure", "point6"),
     ]
     assert ("optimise", "near", 1.0) in calls
+
+
+def test_pause_and_continue_keep_the_same_search_worker():
+    class RunningThread:
+        @staticmethod
+        def is_alive():
+            return True
+
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_thread = RunningThread()
+    controller._search_pause = Event()
+    controller._search_status = "running"
+    controller._search_session_id = "session-1"
+    events = []
+    controller._record_alignment_event = (
+        lambda event_type, **_details: events.append(event_type)
+    )
+
+    assert DS_LaserPointing.pause_automatic_search(controller) == 0
+    assert controller._search_pause.is_set()
+    assert controller._search_status == "pausing"
+    assert controller._search_thread.is_alive()
+
+    assert DS_LaserPointing.resume_automatic_search(controller) == 0
+    assert not controller._search_pause.is_set()
+    assert controller._search_status == "running"
+    assert events == ["pause_requested", "resume_requested"]
+
+
+def test_pause_checkpoint_restores_in_progress_search_phase_on_continue():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_pause = Event()
+    controller._search_pause.set()
+    controller._search_stop = Event()
+    controller._search_session_id = "session-1"
+    controller._search_status = "pausing"
+    controller._search_progress = {"phase": "measuring", "group": "near"}
+    controller._pause_active = False
+    events = []
+    paused = Event()
+
+    def record(event_type, **_details):
+        events.append(event_type)
+        if event_type == "paused":
+            paused.set()
+
+    controller._record_alignment_event = record
+    worker = Thread(
+        target=DS_LaserPointing._wait_if_paused, args=(controller,), daemon=True
+    )
+    worker.start()
+    assert paused.wait(1)
+    assert controller._search_status == "paused"
+    controller._search_pause.clear()
+    worker.join(1)
+
+    assert not worker.is_alive()
+    assert controller._search_status == "running"
+    assert controller._search_progress["phase"] == "measuring"
+    assert events == ["paused", "resumed"]
+
+
+def test_cancel_restore_replays_all_captured_readbacks():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_stop = Event()
+    controller._search_stop.set()
+    controller._search_pause = Event()
+    controller._search_session_id = "session-1"
+    controller._search_progress = {}
+    controller._active_point = "point6"
+    controller._record_alignment_event = lambda *_args, **_kwargs: None
+    controller._device_for_role = lambda role: role
+    moves = []
+    controller._move_single_axis = (
+        lambda device, target, _config: moves.append((device, target))
+    )
+    controller._move_multi_axis = (
+        lambda device, target, _config: moves.append((device, list(target)))
+    )
+    state = {
+        "active_point": "point1",
+        "actuators": {
+            "ActuatorX1": {"position": 12.5},
+            "ActuatorY1": {"position": -7.0},
+        },
+        "optics": {
+            "CrimpingDiaphragm1": {
+                "kind": "single_axis", "position": 40.0,
+            },
+            "TranslationStage1": {
+                "kind": "multi_axis", "axis": 3, "position": -700.0,
+            },
+        },
+    }
+
+    DS_LaserPointing._restore_alignment_state(controller, state, {})
+
+    assert moves == [
+        ("ActuatorX1", 12.5),
+        ("ActuatorY1", -7.0),
+        ("CrimpingDiaphragm1", 40.0),
+        ("TranslationStage1", [3, -700.0]),
+    ]
+    assert controller._active_point == "point1"
+    assert controller._search_status == "cancelled and restored"
+    assert controller._search_progress["phase"] == "restored_initial_state"
+
+
+def test_accept_reference_appends_revision_without_erasing_history():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_thread = None
+    controller._alignment_pending_reference = {
+        "session_id": "session-2",
+        "actuators": {"ActuatorX1": {"position": 5.0}},
+    }
+    old_reference = json.dumps({"session_id": "session-1", "revision": 1})
+    controller._alignment_reference_history = [old_reference]
+    controller._alignment_reference = json.loads(old_reference)
+    controller._search_progress = {"phase": "finished"}
+    controller._search_status = "awaiting acceptance"
+    controller._search_session_id = "session-2"
+    controller._search_config = {"position_tolerance": 0.05}
+    controller._capture_alignment_state = lambda: {
+        "actuators": {"ActuatorX1": {"position": 5.0}},
+        "optics": {},
+    }
+    persisted = []
+    controller._persist_alignment_properties = persisted.append
+    controller._record_alignment_event = lambda *_args, **_kwargs: None
+    controller._push_alignment_value = lambda *_args, **_kwargs: None
+
+    revision = DS_LaserPointing.accept_alignment_reference(
+        controller, json.dumps({"comment": "beam checked"})
+    )
+
+    assert revision == 2
+    assert controller._alignment_reference["session_id"] == "session-2"
+    assert controller._alignment_reference["acceptance"]["comment"] == "beam checked"
+    assert controller._alignment_reference_history[0] == old_reference
+    assert len(controller._alignment_reference_history) == 2
+    assert persisted[0]["alignment_reference_history_property"][0] == old_reference
+    assert controller._alignment_pending_reference == {}
+
+
+def test_reference_acceptance_detects_post_search_hardware_movement():
+    controller = object.__new__(DS_LaserPointing)
+    controller._search_config = {"position_tolerance": 0.05}
+
+    mismatches = DS_LaserPointing._alignment_state_mismatches(
+        controller,
+        {
+            "actuators": {"ActuatorY2": {"position": 10.0}},
+            "optics": {
+                "Shutter1": {
+                    "kind": "flipper", "commanded_state": "UP_BLOCKED",
+                },
+            },
+        },
+        {
+            "actuators": {"ActuatorY2": {"position": 10.2}},
+            "optics": {
+                "Shutter1": {
+                    "kind": "flipper", "commanded_state": "DOWN_CLEAR",
+                },
+            },
+        },
+    )
+
+    assert any("ActuatorY2 moved by 0.200" in item for item in mismatches)
+    assert any("Shutter1 is DOWN_CLEAR" in item for item in mismatches)
 
 
 def test_stopped_axis_readback_mismatch_fails_without_long_polling():

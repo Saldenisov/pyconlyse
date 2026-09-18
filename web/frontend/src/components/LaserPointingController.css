@@ -811,7 +811,7 @@
 
 .laser-search-actions {
   display: grid;
-  grid-template-columns: 1fr 100px;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
   gap: 5px;
   margin-top: 5px;
 }
@@ -823,6 +823,7 @@
   color: white;
   font-weight: 700;
   cursor: pointer;
+  background: #376f9f;
 }
 
 .laser-search-actions .start {
@@ -831,6 +832,33 @@
 
 .laser-search-actions .stop {
   background: #b8292f;
+}
+
+.laser-reference-card {
+  display: grid;
+  gap: 5px;
+  margin-top: 7px;
+  padding: 8px;
+  border: 1px solid #cbd7e5;
+  border-radius: 6px;
+  background: #f6f9fc;
+  color: #52657b;
+  font-size: 0.74rem;
+}
+
+.laser-reference-card strong {
+  color: #24364b;
+}
+
+.laser-reference-card button {
+  justify-self: start;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: #1b7f45;
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .laser-roundness-metrics {
@@ -1324,6 +1352,7 @@
   .laser-actuator-list,
   .laser-manual-axis,
   .laser-diaphragm-controls,
+  .laser-search-actions,
   .laser-roundness-metrics {
     grid-template-columns: 1fr;
   }

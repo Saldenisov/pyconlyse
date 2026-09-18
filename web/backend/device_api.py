@@ -1556,6 +1556,11 @@ def get_laser_pointing_snapshot(device_name):
             groups = _parse_controller_mapping(read_value('get_groups'))
             commands = {str(name).lower() for name in controller.get_command_list()}
             automatic_supported = 'start_automatic_search' in commands
+            pause_supported = 'pause_automatic_search' in commands
+            resume_supported = 'resume_automatic_search' in commands
+            reference_acceptance_supported = (
+                'accept_alignment_reference' in commands
+            )
             point_supported = 'apply_controller_point' in commands
             manual_point_selection_supported = 'select_manual_point' in commands
             pair_initialization_supported = 'initialize_active_pair' in commands
@@ -1589,6 +1594,27 @@ def get_laser_pointing_snapshot(device_name):
             search_history = read_optional_json('automatic_search_history', [])
             if not isinstance(search_history, list):
                 search_history = []
+            alignment_reference = read_optional_json(
+                'alignment_reference_json', {}
+            )
+            pending_alignment_reference = read_optional_json(
+                'alignment_pending_reference_json', {}
+            )
+            alignment_session_event = read_optional_json(
+                'alignment_session_event_json', {}
+            )
+            try:
+                alignment_reference_revision = int(
+                    read_value('alignment_reference_revision')
+                )
+            except Exception:
+                alignment_reference_revision = 0
+            try:
+                alignment_session_event_count = int(
+                    read_value('alignment_session_event_count')
+                )
+            except Exception:
+                alignment_session_event_count = 0
             pair_initialization = read_optional_json(
                 'actuator_initialization_status',
                 {
@@ -1932,10 +1958,24 @@ def get_laser_pointing_snapshot(device_name):
                     'progress': make_json_safe(search_progress),
                     'config': make_json_safe(search_config),
                     'history': make_json_safe(search_history),
+                    'reference': make_json_safe(alignment_reference),
+                    'reference_revision': alignment_reference_revision,
+                    'pending_reference': make_json_safe(
+                        pending_alignment_reference
+                    ),
+                    'last_session_event': make_json_safe(
+                        alignment_session_event
+                    ),
+                    'session_event_count': alignment_session_event_count,
                 },
                 'pair_initialization': make_json_safe(pair_initialization),
                 'capabilities': {
                     'automatic_search': automatic_supported,
+                    'pause_search': pause_supported,
+                    'resume_search': resume_supported,
+                    'accept_alignment_reference': (
+                        reference_acceptance_supported
+                    ),
                     'apply_point': point_supported,
                     'manual_point_selection': manual_point_selection_supported,
                     'initialize_active_pair': pair_initialization_supported,

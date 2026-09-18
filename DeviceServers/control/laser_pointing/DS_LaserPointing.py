@@ -1,13 +1,15 @@
 import json
 import sys
+from datetime import datetime, timezone
 from math import hypot
 from pathlib import Path
 from threading import Event, Lock, Thread
 from time import monotonic
 from typing import Dict, Optional, Sequence, Tuple, Union
+from uuid import uuid4
 
 import numpy as np
-from tango import AttrWriteType, DevState, DispLevel
+from tango import AttrWriteType, Database, DevState, DispLevel
 from tango.server import attribute, command, device_property
 from taurus import Device
 
@@ -78,7 +80,10 @@ class DS_LaserPointing(DS_ControlPosition):
         "start_cgc": [DevState.ON],
         "stop_cgc": [DevState.ON],
         "start_automatic_search": [DevState.ON],
+        "pause_automatic_search": [DevState.ON],
+        "resume_automatic_search": [DevState.ON],
         "stop_automatic_search": [DevState.ON],
+        "accept_alignment_reference": [DevState.ON],
         "apply_controller_point": [DevState.ON],
         "select_manual_point": [DevState.ON],
         "initialize_active_pair": [DevState.ON],
@@ -92,11 +97,19 @@ class DS_LaserPointing(DS_ControlPosition):
     automatic_search_defaults = device_property(
         dtype=str, default_value=json.dumps(DEFAULT_SEARCH_CONFIG)
     )
+    alignment_reference_property = device_property(dtype=str, default_value="{}")
+    alignment_reference_history_property = device_property(dtype=(str,), default_value=[])
+    alignment_pending_reference_property = device_property(dtype=str, default_value="{}")
+    alignment_session_events_property = device_property(dtype=(str,), default_value=[])
 
     def init_device(self):
         old_stop = getattr(self, "_search_stop", None)
         if old_stop is not None:
+            self._restore_on_cancel = False
             old_stop.set()
+        old_pause = getattr(self, "_search_pause", None)
+        if old_pause is not None:
+            old_pause.clear()
 
         self.sample_time = 1
         self.cgc = False
@@ -105,13 +118,20 @@ class DS_LaserPointing(DS_ControlPosition):
         self.previos_pos = {"X": 0.0, "Y": 0.0}
         self.positions_before_pid = {}
         self._search_lock = Lock()
+        self._alignment_event_lock = Lock()
         self._search_stop = Event()
+        self._search_pause = Event()
         self._search_thread: Optional[Thread] = None
         self._point_application_thread: Optional[Thread] = None
         self._search_status = "idle"
         self._search_progress: Dict = {}
         self._search_history = []
         self._search_started_at = None
+        self._search_session_id = ""
+        self._search_initial_state = {}
+        self._restore_on_cancel = False
+        self._pause_active = False
+        self._progress_before_pause = {}
         self._last_beam_shape = None
         self._active_point = ""
         self._actuator_initialization_status = {
@@ -129,6 +149,24 @@ class DS_LaserPointing(DS_ControlPosition):
         self._search_config = self._normalise_search_config(
             self.automatic_search_defaults
         )
+        self._alignment_reference = self._json_object(
+            self.alignment_reference_property
+        )
+        self._alignment_pending_reference = self._json_object(
+            self.alignment_pending_reference_property
+        )
+        self._alignment_reference_history = self._string_list(
+            self.alignment_reference_history_property
+        )
+        self._alignment_session_events = self._string_list(
+            self.alignment_session_events_property
+        )
+        self._alignment_event_count = len(self._alignment_session_events)
+        self._alignment_event_json = (
+            self._alignment_session_events[-1]
+            if self._alignment_session_events else "{}"
+        )
+        self._configure_alignment_events()
         self.register_variables_for_archive()
         self.turn_on()
 
@@ -147,6 +185,7 @@ class DS_LaserPointing(DS_ControlPosition):
         return 0
 
     def turn_off_local(self) -> Union[int, str]:
+        self._restore_on_cancel = False
         self._search_stop.set()
         self.set_state(DevState.OFF)
         return 0
@@ -179,6 +218,51 @@ class DS_LaserPointing(DS_ControlPosition):
         """Chronological beam-roundness observations for time-based plots."""
 
         return json.dumps(list(self._search_history), sort_keys=True)
+
+    @attribute(
+        label="Last alignment session event",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+    )
+    def alignment_session_event_json(self):
+        return self._alignment_event_json
+
+    @attribute(
+        label="Alignment session event count",
+        dtype=int,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+    )
+    def alignment_session_event_count(self):
+        return int(self._alignment_event_count)
+
+    @attribute(
+        label="Accepted alignment reference",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+    )
+    def alignment_reference_json(self):
+        return json.dumps(self._alignment_reference, sort_keys=True)
+
+    @attribute(
+        label="Accepted alignment reference revision",
+        dtype=int,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+    )
+    def alignment_reference_revision(self):
+        return len(self._alignment_reference_history)
+
+    @attribute(
+        label="Alignment awaiting operator acceptance",
+        dtype=str,
+        display_level=DispLevel.OPERATOR,
+        access=AttrWriteType.READ,
+    )
+    def alignment_pending_reference_json(self):
+        return json.dumps(self._alignment_pending_reference, sort_keys=True)
 
     @attribute(
         label="Active optical point",
@@ -231,6 +315,11 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 return -1
+            if self._alignment_pending_reference:
+                raise RuntimeError(
+                    "accept the completed alignment or cancel and restore it "
+                    "before starting another search"
+                )
             if self._point_application_is_running():
                 raise RuntimeError(
                     "cannot start automatic search while applying an optical point"
@@ -249,27 +338,156 @@ class DS_LaserPointing(DS_ControlPosition):
                 return -1
 
             self._search_stop.clear()
+            self._search_pause.clear()
             self.cgc = True
             self._search_status = "running"
             self._search_history = []
             self._search_started_at = monotonic()
-            self._search_progress = {"phase": "starting", "config": config}
+            self._search_session_id = str(uuid4())
+            self._search_initial_state = {}
+            self._restore_on_cancel = True
+            self._pause_active = False
+            self._progress_before_pause = {}
+            self._search_progress = {
+                "phase": "starting",
+                "config": config,
+                "session_id": self._search_session_id,
+                "accepted_reference_revision": len(
+                    self._alignment_reference_history
+                ),
+            }
             self._search_thread = Thread(
                 target=self._automatic_search_worker,
                 args=(config,),
                 name=f"{self.device_name}-automatic-search",
                 daemon=True,
             )
+            self._record_alignment_event("search_start_requested")
             self._search_thread.start()
         return 0
 
     @command(dtype_out=int)
+    def pause_automatic_search(self):
+        """Pause at the next safe checkpoint without losing search state."""
+
+        if not self._search_is_running() or self._search_status != "running":
+            return -1
+        if self._search_pause.is_set():
+            return 0
+        self._search_pause.set()
+        self._search_status = "pausing"
+        self._record_alignment_event("pause_requested")
+        return 0
+
+    @command(dtype_out=int)
+    def resume_automatic_search(self):
+        """Continue the same worker, objective state, and convergence history."""
+
+        if (
+            not self._search_is_running()
+            or self._search_status not in ("pausing", "paused")
+            or not self._search_pause.is_set()
+        ):
+            return -1
+        self._search_pause.clear()
+        self._search_status = "running"
+        self._record_alignment_event("resume_requested")
+        return 0
+
+    @command(dtype_out=int)
     def stop_automatic_search(self):
+        """Cancel the search and asynchronously restore its captured baseline."""
+
+        if self._search_status in ("cancelling", "restoring"):
+            return -1
+        self._restore_on_cancel = True
+        if self._alignment_pending_reference:
+            candidate = dict(self._alignment_pending_reference)
+            baseline = candidate.get("initial_state") or self._search_initial_state
+            restore_config = dict(
+                candidate.get("search_config") or self._search_config
+            )
+            self._search_session_id = str(candidate.get("session_id", ""))
+            self._search_stop.clear()
+            self._search_pause.clear()
+            self._search_status = "restoring"
+            self._search_thread = Thread(
+                target=self._restore_completed_alignment_worker,
+                args=(baseline, restore_config),
+                name=f"{self.device_name}-restore-alignment",
+                daemon=True,
+            )
+            self._record_alignment_event("completed_alignment_rejected")
+            self._search_thread.start()
+            return 0
         self._search_stop.set()
+        self._search_pause.clear()
         self.cgc = False
         if self._search_is_running():
-            self._search_status = "stopping"
+            self._search_status = "cancelling"
+            self._record_alignment_event("cancel_and_restore_requested")
         return 0
+
+    @command(
+        dtype_in=str,
+        dtype_out=int,
+        doc_in="Optional JSON metadata, for example an operator comment.",
+    )
+    def accept_alignment_reference(self, metadata=""):
+        """Persist the completed state as a new, revisioned reference."""
+
+        if self._search_is_running():
+            raise RuntimeError("wait for automatic alignment to finish")
+        candidate = dict(self._alignment_pending_reference)
+        if not candidate:
+            raise RuntimeError("there is no completed alignment awaiting acceptance")
+        current_state = self._capture_alignment_state()
+        mismatches = self._alignment_state_mismatches(candidate, current_state)
+        if mismatches:
+            raise RuntimeError(
+                "alignment hardware changed after the search finished; "
+                "discard and restore or run the alignment again: "
+                + "; ".join(mismatches)
+            )
+        details = {}
+        if str(metadata).strip():
+            details = json.loads(str(metadata))
+            if not isinstance(details, dict):
+                raise ValueError("acceptance metadata must be a JSON object")
+        reference = {
+            **candidate,
+            "accepted_at_utc": self._utc_now(),
+            "acceptance": details,
+            "revision": len(self._alignment_reference_history) + 1,
+        }
+        encoded = json.dumps(reference, separators=(",", ":"), sort_keys=True)
+        history = [*self._alignment_reference_history, encoded]
+        self._persist_alignment_properties({
+            "alignment_reference_property": encoded,
+            "alignment_reference_history_property": history,
+            "alignment_pending_reference_property": "{}",
+        })
+        self._alignment_reference = reference
+        self._alignment_reference_history = history
+        self._alignment_pending_reference = {}
+        self._search_status = "reference accepted"
+        self._search_progress = {
+            **self._search_progress,
+            "acceptance_required": False,
+            "accepted_reference_revision": reference["revision"],
+            "accepted_at_utc": reference["accepted_at_utc"],
+        }
+        self._record_alignment_event(
+            "reference_accepted", revision=reference["revision"]
+        )
+        self._push_alignment_value(
+            "alignment_reference_json", self.alignment_reference_json()
+        )
+        self._push_alignment_value(
+            "alignment_reference_revision", reference["revision"]
+        )
+        self._push_alignment_value("alignment_pending_reference_json", "{}")
+        return reference["revision"]
 
     @command(
         dtype_in=str,
@@ -292,6 +510,10 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 raise RuntimeError("cannot apply a point while automatic search is running")
+            if self._alignment_acceptance_is_pending():
+                raise RuntimeError(
+                    "accept the completed alignment or cancel and restore it first"
+                )
             if self._point_application_is_running():
                 raise RuntimeError("another optical point is already being applied")
             self._search_stop.clear()
@@ -335,6 +557,10 @@ class DS_LaserPointing(DS_ControlPosition):
             if self._search_is_running():
                 raise RuntimeError(
                     "cannot select a manual point while automatic search is running"
+                )
+            if self._alignment_acceptance_is_pending():
+                raise RuntimeError(
+                    "accept the completed alignment or cancel and restore it first"
                 )
             if self._point_application_is_running():
                 raise RuntimeError(
@@ -396,6 +622,10 @@ class DS_LaserPointing(DS_ControlPosition):
             if self._search_is_running():
                 raise RuntimeError(
                     "cannot initialise alignment mounts during automatic search"
+                )
+            if self._alignment_acceptance_is_pending():
+                raise RuntimeError(
+                    "accept the completed alignment or cancel and restore it first"
                 )
             if self._point_application_is_running():
                 raise RuntimeError(
@@ -485,6 +715,10 @@ class DS_LaserPointing(DS_ControlPosition):
         with self._search_lock:
             if self._search_is_running():
                 raise RuntimeError("manual actuator movement is locked during automatic search")
+            if self._alignment_acceptance_is_pending():
+                raise RuntimeError(
+                    "accept the completed alignment or cancel and restore it first"
+                )
             if self._point_application_is_running():
                 raise RuntimeError(
                     "manual actuator movement is locked while applying an optical point"
@@ -535,6 +769,294 @@ class DS_LaserPointing(DS_ControlPosition):
             thread is not None
             and thread.is_alive()
         )
+
+    @staticmethod
+    def _utc_now() -> str:
+        return datetime.now(timezone.utc).isoformat(timespec="milliseconds")
+
+    @staticmethod
+    def _json_object(value) -> Dict:
+        try:
+            parsed = json.loads(str(value or "{}"))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _string_list(value):
+        if value in (None, ""):
+            return []
+        if isinstance(value, str):
+            return [value]
+        return [str(item) for item in value]
+
+    def _configure_alignment_events(self):
+        self._alignment_events_ready = False
+        for name in (
+            "alignment_session_event_json",
+            "alignment_session_event_count",
+            "alignment_reference_json",
+            "alignment_reference_revision",
+            "alignment_pending_reference_json",
+        ):
+            try:
+                self.set_change_event(name, True, False)
+                self.set_archive_event(name, True, False)
+            except Exception as error:
+                self.warn_stream(
+                    f"Cannot configure LaserPointing session event {name}: {error}"
+                )
+        self._alignment_events_ready = True
+
+    def _push_alignment_value(self, name, value):
+        if not getattr(self, "_alignment_events_ready", False):
+            return
+        for event_kind in ("change", "archive"):
+            try:
+                getattr(self, f"push_{event_kind}_event")(name, value)
+            except Exception as error:
+                self.warn_stream(
+                    f"Cannot push {event_kind} event for {name}: {error}"
+                )
+
+    def _persist_alignment_properties(self, properties):
+        """Write durable session data to the Tango database.
+
+        The Tango database is the authoritative persistent store available to
+        the device today. HDB++ can additionally retain every pushed event
+        after its Linux acceptance environment is activated.
+        """
+
+        get_name = getattr(self, "get_name", None)
+        if get_name is None:
+            # Unit-test instances are intentionally created without Tango's
+            # DeviceImpl. They still exercise the in-memory lifecycle.
+            return
+        Database().put_device_property(get_name(), properties)
+
+    def _record_alignment_event(self, event_type: str, **details):
+        event = {
+            "event_type": str(event_type),
+            "session_id": getattr(self, "_search_session_id", ""),
+            "status": getattr(self, "_search_status", "idle"),
+            "recorded_at_utc": self._utc_now(),
+            **details,
+        }
+        encoded = json.dumps(event, separators=(",", ":"), sort_keys=True)
+        lock = getattr(self, "_alignment_event_lock", None)
+        if lock is None:
+            lock = Lock()
+            self._alignment_event_lock = lock
+        with lock:
+            history = [*getattr(self, "_alignment_session_events", []), encoded]
+            try:
+                self._persist_alignment_properties({
+                    "alignment_session_events_property": history,
+                })
+            except Exception as error:
+                self.warn_stream(
+                    f"Could not persist alignment session event: {error}"
+                )
+            self._alignment_session_events = history
+            self._alignment_event_count = len(history)
+            self._alignment_event_json = encoded
+        self._push_alignment_value("alignment_session_event_json", encoded)
+        self._push_alignment_value(
+            "alignment_session_event_count", self._alignment_event_count
+        )
+
+    def _alignment_role_specs(self):
+        specs = {}
+        for rule in self.controller_rules.values():
+            for role, value in rule.items():
+                if role in self.ds_dict and role not in specs:
+                    specs[role] = value
+        return specs
+
+    def _capture_alignment_state(self) -> Dict:
+        state = {
+            "captured_at_utc": self._utc_now(),
+            "active_point": self._active_point,
+            "actuators": {},
+            "optics": {},
+        }
+        actuator_roles = []
+        for group_index in range(1, len(self.pid_groups) + 1):
+            _group_name, roles = self._actuator_group_entry(group_index)
+            actuator_roles.extend(roles)
+        for role in actuator_roles:
+            position, motor_state = self._fresh_position_and_state(
+                self._device_for_role(role)
+            )
+            state["actuators"][role] = {
+                "position": position,
+                "state": motor_state,
+            }
+
+        for role, specification in self._alignment_role_specs().items():
+            device = self._device_for_role(role)
+            if self._is_flipper_role(role):
+                command_state = self._fresh_flipper_command_state(device)
+                state["optics"][role] = {
+                    "kind": "flipper",
+                    "position": -1.0 if command_state == "UP_BLOCKED" else 1.0,
+                    "commanded_state": command_state,
+                }
+            elif isinstance(specification, (list, tuple)) and len(specification) == 2:
+                axis = int(specification[0])
+                state["optics"][role] = {
+                    "kind": "multi_axis",
+                    "axis": axis,
+                    "position": float(device.read_position_axis(axis)),
+                    "state": str(device.get_status_axis(axis)),
+                }
+            else:
+                position, motor_state = self._fresh_position_and_state(device)
+                state["optics"][role] = {
+                    "kind": "single_axis",
+                    "position": position,
+                    "state": motor_state,
+                }
+        return state
+
+    def _alignment_state_mismatches(self, reference: Dict, current: Dict):
+        tolerance = max(
+            0.05,
+            float(getattr(self, "_search_config", {}).get(
+                "position_tolerance", 0.05
+            )),
+        )
+        mismatches = []
+        for section in ("actuators", "optics"):
+            expected_items = reference.get(section, {})
+            actual_items = current.get(section, {})
+            for role, expected in expected_items.items():
+                actual = actual_items.get(role)
+                if actual is None:
+                    mismatches.append(f"{role} readback is unavailable")
+                    continue
+                if expected.get("kind") == "flipper":
+                    if actual.get("commanded_state") != expected.get("commanded_state"):
+                        mismatches.append(
+                            f"{role} is {actual.get('commanded_state')}, "
+                            f"expected {expected.get('commanded_state')}"
+                        )
+                    continue
+                try:
+                    delta = abs(
+                        float(actual["position"]) - float(expected["position"])
+                    )
+                except (KeyError, TypeError, ValueError):
+                    mismatches.append(f"{role} position is unavailable")
+                    continue
+                if delta > tolerance:
+                    mismatches.append(
+                        f"{role} moved by {delta:.3f} (limit {tolerance:.3f})"
+                    )
+        return mismatches
+
+    def _restore_alignment_state(self, state: Dict, config: Dict):
+        if not state:
+            raise RuntimeError("the automatic search baseline was not captured")
+        self._search_status = "restoring"
+        self._search_progress = {
+            "phase": "restoring_initial_state",
+            "session_id": self._search_session_id,
+            "message": "Restoring pre-search Standa and optical readbacks",
+        }
+        self._record_alignment_event("restore_started")
+
+        # Cancellation has reached the worker. Clear it only for the bounded
+        # rollback operations; no search evaluation can resume from here.
+        self._search_stop.clear()
+        self._search_pause.clear()
+        for role, snapshot in state.get("actuators", {}).items():
+            self._search_progress.update({
+                "restoring_role": role,
+                "message": f"Restoring {role} to {snapshot['position']}",
+            })
+            self._move_single_axis(
+                self._device_for_role(role), float(snapshot["position"]), config
+            )
+
+        # Restore apertures before translation/waveplate axes and flippers.
+        optics = list(state.get("optics", {}).items())
+        optics.sort(key=lambda item: (
+            0 if "diaphragm" in item[0].lower() else
+            1 if item[1].get("kind") == "multi_axis" else
+            3 if item[1].get("kind") == "flipper" else 2
+        ))
+        for role, snapshot in optics:
+            self._search_progress.update({
+                "restoring_role": role,
+                "message": f"Restoring {role} to {snapshot['position']}",
+            })
+            device = self._device_for_role(role)
+            if snapshot.get("kind") == "multi_axis":
+                self._move_multi_axis(
+                    device,
+                    [snapshot["axis"], snapshot["position"]],
+                    config,
+                )
+            elif snapshot.get("kind") == "flipper":
+                result = device.move_axis_abs(float(snapshot["position"]))
+                command_error = self._command_error(result)
+                if command_error:
+                    raise RuntimeError(f"{role}: {command_error}")
+                expected = str(snapshot.get("commanded_state", ""))
+                actual = self._fresh_flipper_command_state(device)
+                if expected and actual != expected:
+                    raise RuntimeError(
+                        f"{role} restored to {actual}, expected {expected}"
+                    )
+            else:
+                self._move_single_axis(device, float(snapshot["position"]), config)
+        self._active_point = str(state.get("active_point", ""))
+        self._search_progress = {
+            "phase": "restored_initial_state",
+            "session_id": self._search_session_id,
+            "message": "Cancelled alignment; restored the complete pre-search state",
+            "restored_state": state,
+        }
+        self._search_status = "cancelled and restored"
+        self._record_alignment_event("initial_state_restored")
+
+    def _store_pending_reference(self, candidate: Dict):
+        encoded = json.dumps(candidate, separators=(",", ":"), sort_keys=True)
+        self._persist_alignment_properties({
+            "alignment_pending_reference_property": encoded,
+        })
+        self._alignment_pending_reference = candidate
+        self._push_alignment_value("alignment_pending_reference_json", encoded)
+
+    def _clear_pending_reference(self):
+        self._persist_alignment_properties({
+            "alignment_pending_reference_property": "{}",
+        })
+        self._alignment_pending_reference = {}
+        self._push_alignment_value("alignment_pending_reference_json", "{}")
+
+    def _restore_completed_alignment_worker(self, baseline: Dict, config: Dict):
+        try:
+            self._restore_alignment_state(baseline, config)
+            self._clear_pending_reference()
+        except Exception as error:
+            self._search_status = f"restore failed: {error}"
+            self._search_progress = {
+                "phase": "restore_failed",
+                "session_id": self._search_session_id,
+                "message": str(error),
+            }
+            self._record_alignment_event("restore_failed", error=str(error))
+            self.error(
+                f"Could not restore rejected LaserPointing alignment: {error}"
+            )
+        finally:
+            self.cgc = False
+            self._search_pause.clear()
+
+    def _alignment_acceptance_is_pending(self) -> bool:
+        return bool(getattr(self, "_alignment_pending_reference", {}))
 
     @staticmethod
     def _normalise_search_config(value) -> Dict:
@@ -622,7 +1144,18 @@ class DS_LaserPointing(DS_ControlPosition):
 
     def _automatic_search_worker(self, config: Dict):
         results = []
+        verification = []
         try:
+            self._search_initial_state = self._capture_alignment_state()
+            self._search_progress = {
+                **self._search_progress,
+                "phase": "baseline_captured",
+                "initial_state": self._search_initial_state,
+                "message": "Captured pre-search state; starting alignment",
+            }
+            self._record_alignment_event(
+                "search_started", initial_state=self._search_initial_state
+            )
             camera = self.devices[self.ds_dict["Camera"]]
             try:
                 if not bool(camera.isgrabbing):
@@ -700,11 +1233,54 @@ class DS_LaserPointing(DS_ControlPosition):
                 "converged": converged,
                 "verification": verification,
                 "results": results,
+                "session_id": self._search_session_id,
+                "acceptance_required": True,
             }
-            self._search_status = "completed" if converged else "not converged"
+            self._raise_if_cancelled()
+            candidate = self._capture_alignment_state()
+            self._raise_if_cancelled()
+            candidate.update({
+                "session_id": self._search_session_id,
+                "completed_at_utc": self._utc_now(),
+                "converged": converged,
+                "verification": verification,
+                "initial_state": self._search_initial_state,
+                "search_config": config,
+            })
+            self._store_pending_reference(candidate)
+            self._search_status = "awaiting acceptance"
+            self._record_alignment_event(
+                "search_completed",
+                converged=converged,
+                acceptance_required=True,
+            )
         except SearchCancelled:
-            self._search_progress = {"phase": "cancelled", "results": results}
-            self._search_status = "cancelled"
+            if self._restore_on_cancel:
+                try:
+                    self._restore_alignment_state(self._search_initial_state, config)
+                except Exception as restore_error:
+                    self._search_progress = {
+                        "phase": "restore_failed",
+                        "message": str(restore_error),
+                        "results": results,
+                        "session_id": self._search_session_id,
+                    }
+                    self._search_status = f"restore failed: {restore_error}"
+                    self._record_alignment_event(
+                        "restore_failed", error=str(restore_error)
+                    )
+                    self.error(
+                        f"Automatic laser-pointing cancellation could not restore "
+                        f"its initial state: {restore_error}"
+                    )
+            else:
+                self._search_progress = {
+                    "phase": "cancelled_without_restore",
+                    "results": results,
+                    "session_id": self._search_session_id,
+                }
+                self._search_status = "cancelled"
+                self._record_alignment_event("search_cancelled_without_restore")
         except LaserNotVisible as error:
             self._search_progress = {
                 "phase": "laser_not_visible",
@@ -712,6 +1288,9 @@ class DS_LaserPointing(DS_ControlPosition):
                 "results": results,
             }
             self._search_status = f"laser not visible: {error}"
+            self._record_alignment_event(
+                "laser_not_visible", error=str(error)
+            )
             self.warn(f"Automatic laser-pointing search stopped: {error}", True)
         except Exception as error:
             self._search_progress = {
@@ -720,9 +1299,12 @@ class DS_LaserPointing(DS_ControlPosition):
                 "results": results,
             }
             self._search_status = f"error: {error}"
+            self._record_alignment_event("search_failed", error=str(error))
             self.error(f"Automatic laser-pointing search failed: {error}")
         finally:
             self.cgc = False
+            self._search_pause.clear()
+            self._pause_active = False
 
     def _point_stages(self, config: Dict):
         sensitive_pairs = []
@@ -1654,7 +2236,43 @@ class DS_LaserPointing(DS_ControlPosition):
             raise SearchCancelled()
         self._raise_if_cancelled()
 
+    def _wait_if_paused(self):
+        pause = getattr(self, "_search_pause", None)
+        if pause is None or not pause.is_set():
+            return
+        if not getattr(self, "_pause_active", False):
+            self._pause_active = True
+            self._progress_before_pause = dict(self._search_progress)
+            self._search_status = "paused"
+            self._search_progress = {
+                "phase": "paused",
+                "session_id": self._search_session_id,
+                "resume_phase": self._progress_before_pause.get("phase", ""),
+                "message": (
+                    "Paused at a safe checkpoint; Continue resumes this same search"
+                ),
+            }
+            self._record_alignment_event(
+                "paused",
+                resume_phase=self._progress_before_pause.get("phase", ""),
+            )
+        while pause.is_set():
+            if self._search_stop.wait(0.2):
+                raise SearchCancelled()
+        if self._search_stop.is_set():
+            raise SearchCancelled()
+        self._search_status = "running"
+        self._search_progress = {
+            **self._progress_before_pause,
+            "resumed_at_utc": self._utc_now(),
+        }
+        self._pause_active = False
+        self._record_alignment_event("resumed")
+
     def _raise_if_cancelled(self):
+        if self._search_stop.is_set():
+            raise SearchCancelled()
+        self._wait_if_paused()
         if self._search_stop.is_set():
             raise SearchCancelled()
 
