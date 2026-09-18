@@ -2,6 +2,11 @@ from tango import Database, DbDevInfo
 
 db = Database()
 
+CG_THRESHOLDS = {
+    "Cam1_V0": 20,
+    "Cam2_V0": 120,
+}
+
 
 names = {
     22929018: [
@@ -53,7 +58,7 @@ names = {
                 "Width": 400,
                 "Height": 500,
                 "OffsetX": 280,
-                "OffsetY": 240,
+                "OffsetY": 0,
             },
             "Acquisition_Controls": {
                 "TriggerSource": "Line1",
@@ -118,6 +123,7 @@ def main():
                 "server_id": i,
                 "serial_number": val[4],
                 "parameters": str(val[5]),
+                "cg_threshold": CG_THRESHOLDS.get(val[2], 50),
             },
         )
         i += 1

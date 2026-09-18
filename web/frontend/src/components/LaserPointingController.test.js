@@ -149,10 +149,13 @@ describe('LaserPointing optical point presentation', () => {
             camera_info: {
               exposure_time: 1500,
               gain: 2,
+              gain_min: 0,
+              gain_max: 3,
               width: 1280,
               height: 1024,
               offsetX: 16,
               offsetY: 24,
+              center_gravity_threshold: 120,
               trigger_mode: 0,
               format_pixel: 'Mono8',
             },
@@ -201,10 +204,29 @@ describe('LaserPointing optical point presentation', () => {
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByText('Camera controls'));
+    const threshold = await screen.findByLabelText('Threshold CG');
     const offsetX = await screen.findByLabelText('Offset X');
+    expect(threshold).toHaveValue(120);
     expect(offsetX).toHaveValue(16);
-    expect(screen.getAllByRole('spinbutton')).toHaveLength(6);
+    expect(screen.getAllByRole('spinbutton')).toHaveLength(7);
     expect(screen.queryByLabelText('Trigger mode')).not.toBeInTheDocument();
+    const gain = screen.getByLabelText('Gain');
+    fireEvent.change(gain, { target: { value: '10' } });
+    fireEvent.blur(gain);
+    expect(await screen.findByText('Gain must be at most 3.')).toBeInTheDocument();
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam1_V0/parameters',
+      expect.objectContaining({ body: JSON.stringify({ gain: 10 }) })
+    );
+    fireEvent.change(threshold, { target: { value: '125' } });
+    fireEvent.blur(threshold);
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam1_V0/parameters',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ center_gravity_threshold: 125 }),
+      })
+    ));
     fireEvent.change(offsetX, { target: { value: '32' } });
     fireEvent.blur(offsetX);
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(

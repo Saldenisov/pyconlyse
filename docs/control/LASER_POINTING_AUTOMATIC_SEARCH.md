@@ -31,6 +31,7 @@ Device: `manip/V0/LaserPointing-Cam1`; camera: `manip/V0/Cam1_V0`.
   `ActuatorX1` and `ActuatorY1` align this plane.
 - Points 4, 5, and 6 close the second downstream diaphragm to 40, 20, and 10.
   `ActuatorX2` and `ActuatorY2` align this plane.
+- Basler1 uses centroid/profile threshold 20.
 
 ### LaserPointing2 / Basler2
 
@@ -46,6 +47,9 @@ Device: `manip/V0/LaserPointing-Cam2`; camera: `manip/V0/Cam2_V0`.
 - Points 4-6 use translation-stage position -700 and diaphragm settings 40,
   20, and 10. The extra propagation distance increases angular sensitivity;
   `ActuatorX4` and `ActuatorY4` are adjusted.
+- Basler2 uses `OffsetY = 0` to keep the beam inside its 500-pixel ROI and
+  centroid/profile threshold 120. Both settings are editable under **Camera
+  controls** in the web client.
 
 The translation stage is moved only through these point rules. It is not an
 optimisation variable.

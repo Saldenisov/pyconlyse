@@ -1142,6 +1142,11 @@ class DS_LaserPointing(DS_ControlPosition):
         text = str(result).strip()
         return "" if text in ("", "0", "0.0") else text
 
+    @staticmethod
+    def _is_command_timeout(error) -> bool:
+        normalized = str(error).lower().replace("_", "")
+        return "timeout" in normalized or "timedout" in normalized
+
     def _move_pair(self, devices, positions, config):
         errors = []
 
@@ -1163,10 +1168,22 @@ class DS_LaserPointing(DS_ControlPosition):
             raise RuntimeError("actuator movement failed: " + "; ".join(errors))
 
     def _move_single_axis(self, device, target: float, config):
-        result = device.move_axis_abs(float(target))
-        command_error = self._command_error(result)
-        if command_error:
-            raise RuntimeError(command_error)
+        command_timed_out = False
+        try:
+            result = device.move_axis_abs(float(target))
+        except Exception as error:
+            # Standa commands block until the physical move and final hardware
+            # readback complete. A move longer than the Tango client's short
+            # request timeout can therefore keep running successfully on the
+            # server. Treat only that timeout as an unknown result and prove
+            # completion from direct position/state reads below.
+            if not self._is_command_timeout(error):
+                raise
+            command_timed_out = True
+        else:
+            command_error = self._command_error(result)
+            if command_error:
+                raise RuntimeError(command_error)
 
         # DS_Standa_Motor.move_axis_abs blocks on command_wait_for_stop and then
         # performs a hardware get_position read. Verify the published result as
@@ -1178,6 +1195,9 @@ class DS_LaserPointing(DS_ControlPosition):
             try:
                 last_actual, state = self._fresh_position_and_state(device)
             except Exception as error:
+                if command_timed_out and self._is_command_timeout(error):
+                    self._interruptible_sleep(config["motion_poll_s"])
+                    continue
                 raise RuntimeError(f"could not read motor position/state: {error}")
             if (
                 abs(last_actual - target) <= config["position_tolerance"]

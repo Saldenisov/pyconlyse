@@ -270,6 +270,12 @@ const OpticalPointState = ({ point, snapshot, transition }) => {
 };
 
 const CAMERA_NUMERIC_PARAMETERS = [
+  {
+    name: 'center_gravity_threshold',
+    label: 'Threshold CG',
+    minValue: 0,
+    maxValue: 255,
+  },
   { name: 'offsetX', label: 'Offset X' },
   { name: 'offsetY', label: 'Offset Y' },
   { name: 'exposure_time', label: 'Exposure (µs)', min: 'exposure_min', max: 'exposure_max', step: 'any' },
@@ -600,6 +606,17 @@ export const CameraPreview = ({
       setControlError(`${name} must be a number.`);
       return;
     }
+    const definition = CAMERA_NUMERIC_PARAMETERS.find((item) => item.name === name);
+    const minimum = finiteNumber(definition?.minValue ?? cameraInfo[definition?.min]);
+    const maximum = finiteNumber(definition?.maxValue ?? cameraInfo[definition?.max]);
+    if (name !== 'format_pixel' && minimum !== null && value < minimum) {
+      setControlError(`${definition?.label || name} must be at least ${minimum}.`);
+      return;
+    }
+    if (name !== 'format_pixel' && maximum !== null && value > maximum) {
+      setControlError(`${definition?.label || name} must be at most ${maximum}.`);
+      return;
+    }
     if (String(value) === String(cameraInfo[name])) return;
 
     setParameterBusy(name);
@@ -697,7 +714,7 @@ export const CameraPreview = ({
                   type="number"
                   value={parameters[parameter.name] ?? ''}
                   min={parameter.minValue ?? cameraInfo[parameter.min]}
-                  max={cameraInfo[parameter.max]}
+                  max={parameter.maxValue ?? cameraInfo[parameter.max]}
                   step={parameter.step || 1}
                   disabled={Boolean(parameterBusy)}
                   onChange={(event) => setParameters((current) => ({

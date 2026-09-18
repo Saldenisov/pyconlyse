@@ -988,6 +988,54 @@ def test_stopped_axis_readback_mismatch_fails_without_long_polling():
         DS_LaserPointing._move_single_axis(controller, Axis(), -1.0, config)
 
 
+def test_timed_out_blocking_move_is_accepted_after_direct_target_readback():
+    class Axis:
+        position = 10.0
+        state = "ON"
+
+        @staticmethod
+        def move_axis_abs(_target):
+            raise RuntimeError("API_DeviceTimedOut: Timeout (3000 mS) exceeded")
+
+    controller = object.__new__(DS_LaserPointing)
+    controller._raise_if_cancelled = lambda: None
+    controller._interruptible_sleep = lambda _delay: pytest.fail(
+        "target readback is already available"
+    )
+
+    DS_LaserPointing._move_single_axis(
+        controller,
+        Axis(),
+        10.0,
+        {
+            "motion_timeout_s": 10.0,
+            "motion_poll_s": 0.2,
+            "position_tolerance": 0.05,
+        },
+    )
+
+
+def test_non_timeout_move_exception_is_not_hidden():
+    class Axis:
+        @staticmethod
+        def move_axis_abs(_target):
+            raise RuntimeError("controller rejected target")
+
+    controller = object.__new__(DS_LaserPointing)
+
+    with pytest.raises(RuntimeError, match="controller rejected target"):
+        DS_LaserPointing._move_single_axis(
+            controller,
+            Axis(),
+            10.0,
+            {
+                "motion_timeout_s": 10.0,
+                "motion_poll_s": 0.2,
+                "position_tolerance": 0.05,
+            },
+        )
+
+
 def test_move_verification_bypasses_stale_taurus_position_cache():
     class Source(Enum):
         DEV = "DEV"
