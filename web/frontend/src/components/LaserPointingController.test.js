@@ -76,8 +76,14 @@ describe('LaserPointing optical point presentation', () => {
     expect(cameraVisibilityWarning({
       ambient_light_high: true,
       centroid_valid: false,
-      beam_visibility_message: 'Room light is too high. Switch it off.',
-    })).toBe('Room light is too high. Switch it off.');
+      device: 'manip/V0/Cam2_V0',
+      beam_background: 134.3,
+      beam_foreground_fraction: 0.9997,
+    })).toBe(
+      'Camera 2 cannot be used for alignment: external room light is blocking beam detection. '
+      + 'Background is 134/255 and 100% of the image is bright. Switch off the room light or '
+      + 'shield Camera 2. Automatic alignment is blocked until a distinct beam is visible.'
+    );
     expect(cameraVisibilityWarning({
       ambient_light_high: false,
       centroid_valid: false,

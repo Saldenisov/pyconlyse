@@ -305,8 +305,14 @@ export const laserSnapshotErrorMessage = (error) => {
 
 export const cameraVisibilityWarning = (camera = {}) => {
   if (camera.ambient_light_high) {
-    return camera.beam_visibility_message
-      || 'Room/background light is too high for reliable beam detection. Switch off or reduce the room light.';
+    const rawName = String(camera.device || 'Camera').split('/').pop();
+    const cameraName = rawName.replace(/_V0$/i, '').replace(/^Cam(\d+)$/i, 'Camera $1');
+    const background = finiteNumber(camera.beam_background);
+    const brightFraction = finiteNumber(camera.beam_foreground_fraction);
+    const measurement = background !== null && brightFraction !== null
+      ? ` Background is ${background.toFixed(0)}/255 and ${(100 * brightFraction).toFixed(0)}% of the image is bright.`
+      : '';
+    return `${cameraName} cannot be used for alignment: external room light is blocking beam detection.${measurement} Switch off the room light or shield ${cameraName}. Automatic alignment is blocked until a distinct beam is visible.`;
   }
   if (!camera.centroid_valid) {
     const diagnosis = camera.beam_visibility_message || 'Laser centroid is not visible.';
