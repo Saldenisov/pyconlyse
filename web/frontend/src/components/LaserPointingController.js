@@ -303,6 +303,18 @@ export const laserSnapshotErrorMessage = (error) => {
   return message;
 };
 
+export const cameraVisibilityWarning = (camera = {}) => {
+  if (camera.ambient_light_high) {
+    return camera.beam_visibility_message
+      || 'Room/background light is too high for reliable beam detection. Switch off or reduce the room light.';
+  }
+  if (!camera.centroid_valid) {
+    const diagnosis = camera.beam_visibility_message || 'Laser centroid is not visible.';
+    return `${diagnosis} Automatic search is unavailable; manual optical point selection and Standa movement remain available.`;
+  }
+  return '';
+};
+
 const PROFILE_COLORS = [
   '#39d0ff', '#35e0a1', '#7be04b', '#c8e43d', '#ffd23d',
   '#ff9f31', '#ff6b45', '#f0447d', '#c05cff',
@@ -1657,10 +1669,12 @@ const LaserPointingController = ({ deviceName }) => {
       {!error && pointApplicationError && (
         <div className="laser-error-banner">{pointApplicationError}</div>
       )}
-      {!snapshot.camera?.centroid_valid && (
-        <div className="laser-warning-banner">
-          Laser centroid is not visible. Automatic search is unavailable; manual optical
-          point selection and Standa movement remain available.
+      {cameraVisibilityWarning(snapshot.camera) && (
+        <div
+          className="laser-warning-banner"
+          role={snapshot.camera?.ambient_light_high ? 'alert' : undefined}
+        >
+          {cameraVisibilityWarning(snapshot.camera)}
         </div>
       )}
       {(!snapshot.capabilities?.automatic_search

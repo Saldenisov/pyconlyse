@@ -1635,6 +1635,12 @@ def get_laser_pointing_snapshot(device_name):
             camera_grabbing = False
             centroid = None
             centroid_valid = False
+            beam_visibility_status = 'unavailable'
+            beam_visibility_message = ''
+            ambient_light_high = False
+            beam_background = None
+            beam_contrast = None
+            beam_foreground_fraction = None
             if camera_name:
                 camera = DeviceManager.get_device(str(camera_name))
                 try:
@@ -1650,6 +1656,41 @@ def get_laser_pointing_snapshot(device_name):
                     centroid_valid = bool(camera.read_attribute('cg_valid').value)
                 except Exception:
                     centroid_valid = bool(centroid)
+                try:
+                    beam_visibility_status = str(
+                        camera.read_attribute('beam_visibility_status').value
+                    )
+                except Exception:
+                    beam_visibility_status = (
+                        'beam_visible' if centroid_valid else 'beam_not_visible'
+                    )
+                try:
+                    beam_visibility_message = str(
+                        camera.read_attribute('beam_visibility_message').value
+                    )
+                except Exception:
+                    beam_visibility_message = ''
+                try:
+                    ambient_light_high = bool(
+                        camera.read_attribute('ambient_light_high').value
+                    )
+                except Exception:
+                    ambient_light_high = False
+                for attribute_name, local_name in (
+                    ('beam_background', 'background'),
+                    ('beam_contrast', 'contrast'),
+                    ('beam_foreground_fraction', 'foreground_fraction'),
+                ):
+                    try:
+                        value = float(camera.read_attribute(attribute_name).value)
+                    except Exception:
+                        value = None
+                    if local_name == 'background':
+                        beam_background = value
+                    elif local_name == 'contrast':
+                        beam_contrast = value
+                    else:
+                        beam_foreground_fraction = value
 
             actuators = []
             for role, specification in device_map.items():
@@ -1989,6 +2030,12 @@ def get_laser_pointing_snapshot(device_name):
                     'grabbing': camera_grabbing,
                     'centroid': make_json_safe(centroid),
                     'centroid_valid': centroid_valid,
+                    'beam_visibility_status': beam_visibility_status,
+                    'beam_visibility_message': beam_visibility_message,
+                    'ambient_light_high': ambient_light_high,
+                    'beam_background': beam_background,
+                    'beam_contrast': beam_contrast,
+                    'beam_foreground_fraction': beam_foreground_fraction,
                 },
                 'actuators': actuators,
                 'other_devices': other_devices,

@@ -5,6 +5,7 @@ import pytest
 from DeviceServers.control.laser_pointing.beam_metrics import (
     beam_contour_symmetry,
     beam_roundness,
+    beam_visibility,
 )
 
 
@@ -126,3 +127,28 @@ def test_clipped_contours_are_not_accepted_as_alignment():
 
     with pytest.raises(ValueError, match="clipped by the camera frame"):
         beam_contour_symmetry([clipped] * 3, threshold=10)
+
+
+def test_broad_room_light_is_not_accepted_as_a_laser_centroid():
+    yy, xx = np.indices((108, 108), dtype=float)
+    room_light = 125.0 + 0.35 * xx + 0.20 * yy
+    image = np.repeat(room_light[..., None], 3, axis=2)
+
+    diagnosis = beam_visibility(image, threshold=50)
+
+    assert diagnosis["ambient_light_high"] is True
+    assert diagnosis["beam_visible"] is False
+    assert diagnosis["status"] == "ambient_light_high"
+    assert "Switch off or reduce the room light" in diagnosis["message"]
+    with pytest.raises(ValueError, match="Room/background light is too high"):
+        beam_contour_symmetry([image] * 3, threshold=50)
+
+
+def test_dark_margin_beam_remains_visible_with_adaptive_diagnosis():
+    image = _gaussian(16.0, 16.0)
+
+    diagnosis = beam_visibility(image, threshold=20)
+
+    assert diagnosis["ambient_light_high"] is False
+    assert diagnosis["beam_visible"] is True
+    assert diagnosis["centroid"] == pytest.approx((40, 40), abs=0.5)

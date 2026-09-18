@@ -18,6 +18,8 @@ from typing import Union
 
 import numpy as np
 
+from DeviceServers.control.laser_pointing.beam_metrics import beam_visibility
+
 try:
     from pypylon import genicam, pylon
 except ImportError:  # Allow the Tango server to report a recoverable SDK error.
@@ -229,6 +231,12 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         self._grabbing_stop_event = None
         self.CG_valid = False
         self.CG_area = 0.0
+        self.beam_visibility_state = "unavailable"
+        self.beam_visibility_detail = "No camera frame has been analysed yet."
+        self.ambient_light_detected = False
+        self.beam_background_value = 0.0
+        self.beam_contrast_value = 0.0
+        self.beam_foreground_fraction_value = 0.0
         self._last_trigger_timeout_warning = 0.0
         super().init_device()
         self.register_variables_for_archive()
@@ -403,7 +411,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         return self.last_image
 
     def calc_cg(self, image):
-        """Track the largest bright connected contour in the current frame."""
+        """Track a distinct beam without accepting broad room illumination."""
         cX, cY = 1024, 1024
         self.CG_valid = False
         self.CG_area = 0.0
@@ -411,21 +419,26 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             self.warn("OpenCV unavailable; center-of-gravity calculation skipped.")
             self.CG_position = {"X": cX, "Y": cY}
             return
-        img = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-        _ret, thresh = cv2.threshold(img, self.cg_threshold, 255, cv2.THRESH_BINARY)
-        contours, _hierarchy = cv2.findContours(
-            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        if contours:
-            # Vertex count depends on contour geometry and can select a thin,
-            # noisy outline. Area is a more stable discriminator for the spot.
-            tracked_contour = max(contours, key=cv2.contourArea)
-            self.CG_area = float(cv2.contourArea(tracked_contour))
-            M = cv2.moments(tracked_contour)
-            if M["m00"] != 0:
-                cX = int(M["m10"] / M["m00"])
-                cY = int(M["m01"] / M["m00"])
+        try:
+            diagnosis = beam_visibility(image, self.cg_threshold)
+            self.beam_visibility_state = str(diagnosis["status"])
+            self.beam_visibility_detail = str(diagnosis["message"])
+            self.ambient_light_detected = bool(diagnosis["ambient_light_high"])
+            self.beam_background_value = float(diagnosis["background_level"])
+            self.beam_contrast_value = float(diagnosis["contrast"])
+            self.beam_foreground_fraction_value = float(
+                diagnosis["foreground_fraction"]
+            )
+            self.CG_area = float(diagnosis["area"])
+            centroid = diagnosis["centroid"]
+            if diagnosis["beam_visible"] and centroid is not None:
+                cX, cY = (int(round(value)) for value in centroid)
                 self.CG_valid = True
+        except Exception as error:
+            self.beam_visibility_state = "unavailable"
+            self.beam_visibility_detail = f"Beam visibility analysis failed: {error}"
+            self.ambient_light_detected = False
+            self.warn(self.beam_visibility_detail)
 
         self.CG_position = {"X": cX, "Y": cY}
         data = self.form_archive_data(
@@ -652,6 +665,30 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     @attribute(label="Tracked contour area", dtype=float, access=AttrWriteType.READ)
     def cg_area(self):
         return self.CG_area
+
+    @attribute(label="Beam visibility status", dtype=str, access=AttrWriteType.READ)
+    def beam_visibility_status(self):
+        return self.beam_visibility_state
+
+    @attribute(label="Beam visibility message", dtype=str, access=AttrWriteType.READ)
+    def beam_visibility_message(self):
+        return self.beam_visibility_detail
+
+    @attribute(label="Ambient light is too high", dtype=bool, access=AttrWriteType.READ)
+    def ambient_light_high(self):
+        return self.ambient_light_detected
+
+    @attribute(label="Camera background level", dtype=float, access=AttrWriteType.READ)
+    def beam_background(self):
+        return self.beam_background_value
+
+    @attribute(label="Beam contrast above background", dtype=float, access=AttrWriteType.READ)
+    def beam_contrast(self):
+        return self.beam_contrast_value
+
+    @attribute(label="Fraction of image above beam threshold", dtype=float, access=AttrWriteType.READ)
+    def beam_foreground_fraction(self):
+        return self.beam_foreground_fraction_value
 
 
 if __name__ == "__main__":

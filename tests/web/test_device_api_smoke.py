@@ -795,6 +795,12 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
             "cg": "{'X': 12, 'Y': 18}",
             "cg_valid": True,
             "isgrabbing": True,
+            "beam_visibility_status": "beam_visible",
+            "beam_visibility_message": "A distinct laser beam is visible.",
+            "ambient_light_high": False,
+            "beam_background": 12.5,
+            "beam_contrast": 180.0,
+            "beam_foreground_fraction": 0.24,
         }
     )
     devices[x_name] = FakeDevice(x_name, attributes={
@@ -885,6 +891,11 @@ def test_laser_pointing_snapshot_exposes_convergence_and_interlock(monkeypatch):
     assert snapshot["automatic_search"]["session_event_count"] == 12
     assert snapshot["pair_initialization"]["group"] == 1
     assert snapshot["camera"]["grabbing"] is True
+    assert snapshot["camera"]["beam_visibility_status"] == "beam_visible"
+    assert snapshot["camera"]["ambient_light_high"] is False
+    assert snapshot["camera"]["beam_background"] == 12.5
+    assert snapshot["camera"]["beam_contrast"] == 180.0
+    assert snapshot["camera"]["beam_foreground_fraction"] == 0.24
     assert snapshot["actuators"][0]["ready"] is True
     assert snapshot["actuators"][0]["move_supported"] is True
     assert snapshot["actuators"][1]["disconnected"] is True

@@ -8,6 +8,7 @@ import LaserPointingController, {
   actuatorGroupForPoint,
   actuatorGroupForRole,
   actuatorVisualState,
+  cameraVisibilityWarning,
   formatOpticalStatusValue,
   laserSnapshotErrorMessage,
   measuredProfileSnapshot,
@@ -69,6 +70,23 @@ describe('LaserPointing optical point presentation', () => {
     expect(laserSnapshotErrorMessage(new Error(
       'API_CommandTimedOut: Not able to acquire serialization monitor'
     ))).toBe('LaserPointing controller is busy; retrying automatically…');
+  });
+
+  test('distinguishes excessive room light from a dark camera', () => {
+    expect(cameraVisibilityWarning({
+      ambient_light_high: true,
+      centroid_valid: false,
+      beam_visibility_message: 'Room light is too high. Switch it off.',
+    })).toBe('Room light is too high. Switch it off.');
+    expect(cameraVisibilityWarning({
+      ambient_light_high: false,
+      centroid_valid: false,
+      beam_visibility_message: 'No separable laser beam is visible.',
+    })).toMatch(/^No separable laser beam is visible\./);
+    expect(cameraVisibilityWarning({
+      ambient_light_high: false,
+      centroid_valid: true,
+    })).toBe('');
   });
 
   test('uses beam roundness for automatic convergence while retaining legacy history', () => {
