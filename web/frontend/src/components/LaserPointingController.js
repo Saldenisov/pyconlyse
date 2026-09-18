@@ -291,6 +291,9 @@ const CAMERA_NUMERIC_PARAMETERS = [
 ];
 
 const CAMERA_PARAMETER_NAMES = CAMERA_NUMERIC_PARAMETERS.map(({ name }) => name);
+const CAMERA_ADVANCED_PARAMETERS = CAMERA_NUMERIC_PARAMETERS.filter(
+  ({ name }) => name !== 'center_gravity_threshold'
+);
 
 export const laserSnapshotErrorMessage = (error) => {
   const message = String(error?.message || error || 'Snapshot failed');
@@ -445,6 +448,7 @@ const drawBeamOverlays = (context, width, marker, contours) => {
 
 export const CameraPreview = ({
   camera,
+  controllerName = '',
   enabled = true,
   state = 'UNKNOWN',
   history = [],
@@ -517,6 +521,10 @@ export const CameraPreview = ({
     setCameraControlsLoaded(false);
     setCameraInfoLoading(false);
   }, [camera]);
+
+  useEffect(() => {
+    if (camera) loadCameraInfo();
+  }, [camera, loadCameraInfo]);
 
   const handleCameraControlsToggle = async (event) => {
     if (!event.currentTarget.open || cameraControlsLoaded) return;
@@ -646,7 +654,7 @@ export const CameraPreview = ({
       }
       setRequestedGrabbing(expectedGrabbing);
       if (onRefresh) await onRefresh();
-      if (cameraControlsLoaded) await loadCameraInfo();
+      await loadCameraInfo();
     } catch (requestError) {
       setRequestedGrabbing(null);
       setControlError(requestError.message);
@@ -714,6 +722,26 @@ export const CameraPreview = ({
         <div className="laser-camera-toolbar">
           <span>{previewEnabled ? 'Grabbing' : `Acquisition stopped · device ${state}`}</span>
           <div className="laser-camera-actions">
+            <label className="laser-threshold-control">
+              <span>Threshold CG</span>
+              <input
+                aria-label={`${controllerName || camera} threshold CG`}
+                type="number"
+                value={parameters.center_gravity_threshold ?? ''}
+                min={0}
+                max={255}
+                step={1}
+                disabled={Boolean(parameterBusy) || cameraInfoLoading}
+                onChange={(event) => setParameters((current) => ({
+                  ...current,
+                  center_gravity_threshold: event.target.value,
+                }))}
+                onBlur={() => writeParameter('center_gravity_threshold')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') event.currentTarget.blur();
+                }}
+              />
+            </label>
             <button
               type="button"
               onClick={() => setCameraGrabbing(previewEnabled ? 'stop' : 'start')}
@@ -768,7 +796,7 @@ export const CameraPreview = ({
           )}
           {cameraControlsLoaded && !cameraInfoLoading && (
             <div className="laser-camera-parameter-grid">
-            {CAMERA_NUMERIC_PARAMETERS.map((parameter) => (
+            {CAMERA_ADVANCED_PARAMETERS.map((parameter) => (
               <label key={parameter.name}>
                 <span>{parameter.label}</span>
                 <input
@@ -1676,6 +1704,7 @@ const LaserPointingController = ({ deviceName }) => {
       <div className="laser-controller-grid">
         <CameraPreview
           camera={snapshot.camera?.device}
+          controllerName={snapshot.device}
           state={snapshot.camera?.state}
           enabled={snapshot.camera?.grabbing ?? !['OFF', 'FAULT', 'UNKNOWN'].includes(
             String(snapshot.camera?.state || 'UNKNOWN').toUpperCase()

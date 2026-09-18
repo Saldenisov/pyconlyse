@@ -255,7 +255,34 @@
 
 .laser-camera-actions {
   display: flex;
+  align-items: center;
   gap: 5px;
+}
+
+.laser-threshold-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #334155;
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.laser-threshold-control input {
+  width: 58px;
+  box-sizing: border-box;
+  padding: 4px 5px;
+  border: 1px solid #9fb0c3;
+  border-radius: 4px;
+  background: #fff;
+  color: #172b44;
+  font: inherit;
+  font-weight: 700;
+}
+
+.laser-threshold-control input:focus {
+  border-color: #1c6c91;
+  outline: 2px solid rgba(28, 108, 145, 0.18);
 }
 
 .laser-camera-frame canvas {

@@ -82,6 +82,8 @@ class Basler_camera(DS_General_Widget):
 
         lo_buttons.addWidget(grabbing_led)
         lo_buttons.addWidget(button_start_grabbing)
+        lo_buttons.addWidget(self.cg_threshold_label)
+        lo_buttons.addWidget(self.cg_threshold)
         lo_buttons.addWidget(self.grab_status_label)
         lo_buttons.addWidget(button_init)
         lo_buttons.addWidget(button_on)
@@ -130,6 +132,8 @@ class Basler_camera(DS_General_Widget):
 
         lo_status.addWidget(grabbing_led)
         lo_status.addWidget(button_start_grabbing)
+        lo_status.addWidget(self.cg_threshold_label)
+        lo_status.addWidget(self.cg_threshold)
         lo_status.addWidget(self.grab_status_label)
 
         lo_device.addLayout(lo_status)
@@ -299,19 +303,26 @@ class Basler_camera(DS_General_Widget):
         self.roi_circle = pg.CircleROI([0, 0], size=2, pen=pg.mkPen("r", width=2))
         self.view.addItem(self.roi_circle)
 
-        layout_cg_threshold = Qt.QHBoxLayout()
-
         self.cg_threshold = TaurusValueSpinBox()
         self.cg_threshold.model = f"{self.dev_name}/center_gravity_threshold"
         self.cg_threshold.setValue(self.ds.center_gravity_threshold)
-        self.cg_threshold.setMaximumWidth(60)
+        self.cg_threshold.setAccessibleName(
+            f"{self.dev_name} threshold CG"
+        )
+        self.cg_threshold.setToolTip(
+            "Camera-specific centroid threshold (0-255)"
+        )
+        self.cg_threshold.setMaximumWidth(68)
+        self.cg_threshold_label = QtWidgets.QLabel("Threshold CG")
+        self.cg_threshold_label.setToolTip(self.cg_threshold.toolTip())
+
+        layout_centroid = Qt.QHBoxLayout()
         self.label_X_pos = TaurusLabel("X position: ")
         self.label_Y_pos = TaurusLabel("Y position: ")
 
-        layout_cg_threshold.addWidget(self.label_X_pos)
-        layout_cg_threshold.addWidget(self.label_Y_pos)
-        layout_cg_threshold.addWidget(TaurusLabel("Threshold CG"))
-        layout_cg_threshold.addWidget(self.cg_threshold)
+        layout_centroid.addWidget(self.label_X_pos)
+        layout_centroid.addWidget(self.label_Y_pos)
+        layout_centroid.addStretch(1)
 
         # Enable antialiasing for prettier plots
         pg.setConfigOptions(antialias=True)
@@ -328,7 +339,7 @@ class Basler_camera(DS_General_Widget):
         p2.setLabel("bottom", "N of measurement", units="")
         p2.showGrid(x=True, y=True)
         self.y_pos = p2.plot(self.positions["Y"])
-        lo_image.addLayout(layout_cg_threshold)
+        lo_image.addLayout(layout_centroid)
         lo_image.addWidget(win)
 
         ## Set a custom color map

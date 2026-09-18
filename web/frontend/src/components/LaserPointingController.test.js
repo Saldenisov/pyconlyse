@@ -203,6 +203,7 @@ describe('LaserPointing optical point presentation', () => {
     const view = render(
       <CameraPreview
         camera="manip/V0/Cam1_V0"
+        controllerName="manip/V0/LaserPointing-Cam1"
         enabled={false}
         state="OFF"
         onRefresh={onRefresh}
@@ -210,10 +211,14 @@ describe('LaserPointing optical point presentation', () => {
     );
 
     expect(screen.queryByLabelText('Offset X')).not.toBeInTheDocument();
-    expect(global.fetch).not.toHaveBeenCalledWith(
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       '/api/camera/manip%2FV0%2FCam1_V0/info',
-      expect.anything()
+      { credentials: 'include' }
+    ));
+    const threshold = await screen.findByLabelText(
+      'manip/V0/LaserPointing-Cam1 threshold CG'
     );
+    expect(threshold).toHaveValue(120);
 
     fireEvent.click(screen.getByRole('button', { name: 'Start camera' }));
 
@@ -227,7 +232,6 @@ describe('LaserPointing optical point presentation', () => {
     await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
 
     fireEvent.click(screen.getByText('Camera controls'));
-    const threshold = await screen.findByLabelText('Threshold CG');
     const offsetX = await screen.findByLabelText('Offset X');
     expect(threshold).toHaveValue(120);
     expect(offsetX).toHaveValue(16);
@@ -259,6 +263,83 @@ describe('LaserPointing optical point presentation', () => {
         body: JSON.stringify({ offsetX: 32 }),
       })
     ));
+
+    view.unmount();
+    global.fetch = originalFetch;
+  });
+
+  test('keeps visible threshold writes scoped to the selected LaserPointing camera', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = jest.fn().mockImplementation((url, options = {}) => {
+      if (url.endsWith('/info')) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            camera_info: {
+              center_gravity_threshold: url.includes('Cam1_V0') ? 20 : 50,
+            },
+          }),
+        });
+      }
+      if (url.endsWith('/parameters')) {
+        const requested = JSON.parse(options.body);
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            success: true,
+            results: {
+              center_gravity_threshold: {
+                success: true,
+                value: requested.center_gravity_threshold,
+              },
+            },
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ success: true }) });
+    });
+
+    const view = render(
+      <>
+        <CameraPreview
+          camera="manip/V0/Cam1_V0"
+          controllerName="manip/V0/LaserPointing-Cam1"
+          enabled={false}
+        />
+        <CameraPreview
+          camera="manip/V0/Cam2_V0"
+          controllerName="manip/V0/LaserPointing-Cam2"
+          enabled={false}
+        />
+      </>
+    );
+
+    const cam1Threshold = await screen.findByLabelText(
+      'manip/V0/LaserPointing-Cam1 threshold CG'
+    );
+    const cam2Threshold = await screen.findByLabelText(
+      'manip/V0/LaserPointing-Cam2 threshold CG'
+    );
+    expect(cam1Threshold).toHaveValue(20);
+    expect(cam2Threshold).toHaveValue(50);
+
+    fireEvent.change(cam2Threshold, { target: { value: '55' } });
+    fireEvent.blur(cam2Threshold);
+
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam2_V0/parameters',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ center_gravity_threshold: 55 }),
+      })
+    ));
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/camera/manip%2FV0%2FCam1_V0/parameters',
+      expect.objectContaining({
+        body: JSON.stringify({ center_gravity_threshold: 55 }),
+      })
+    );
 
     view.unmount();
     global.fetch = originalFetch;
