@@ -57,6 +57,44 @@ class DS_Basler_camera(DS_CAMERA_CCD):
     cg_threshold = device_property(dtype=int, default_value=50)
     ip_address = device_property(dtype=str)
 
+    # Publish the GenICam node ranges on the corresponding writable Tango
+    # attributes. Taurus input widgets use this metadata to reject invalid
+    # values before a write reaches the camera SDK.
+    WRITABLE_RANGE_NODES = {
+        "width": ("Width", int),
+        "height": ("Height", int),
+        "offsetX": ("OffsetX", int),
+        "offsetY": ("OffsetY", int),
+        "exposure_time": ("ExposureTimeAbs", float),
+        "gain": ("GainRaw", int),
+    }
+
+    def _publish_writable_attribute_ranges(self):
+        if self.camera is None or not self.camera.IsOpen():
+            return
+
+        try:
+            device_attributes = self.get_device_attr()
+        except Exception:
+            # Unit-test stubs and partially constructed server instances do not
+            # necessarily expose Tango's MultiAttribute object.
+            return
+
+        for attribute_name, (node_name, value_type) in (
+            self.WRITABLE_RANGE_NODES.items()
+        ):
+            try:
+                node = getattr(self.camera, node_name)
+                writable_attribute = device_attributes.get_w_attr_by_name(
+                    attribute_name
+                )
+                writable_attribute.set_min_value(value_type(node.Min))
+                writable_attribute.set_max_value(value_type(node.Max))
+            except Exception as error:
+                self.warn(
+                    f"Could not publish {attribute_name} camera limits: {error}"
+                )
+
     def get_camera_friendly_name(self):
         return self.camera.DeviceUserID.GetValue()
 
@@ -109,6 +147,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             was_grabbing = True
             self.stop_grabbing()
         self.camera.Width.SetValue(value)
+        self._publish_writable_attribute_ranges()
         if was_grabbing:
             self.start_grabbing()
 
@@ -124,6 +163,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             was_grabbing = True
             self.stop_grabbing()
         self.camera.Height.SetValue(value)
+        self._publish_writable_attribute_ranges()
         if was_grabbing:
             self.start_grabbing()
 
@@ -141,12 +181,14 @@ class DS_Basler_camera(DS_CAMERA_CCD):
 
     def set_offsetX(self, value: int):
         self.camera.OffsetX.SetValue(value)
+        self._publish_writable_attribute_ranges()
 
     def get_offsetY(self) -> int:
         return self.camera.OffsetY()
 
     def set_offsetY(self, value: int):
         self.camera.OffsetY.SetValue(value)
+        self._publish_writable_attribute_ranges()
 
     def set_format_pixel(self, value: str):
         was_grabbing = False
@@ -228,6 +270,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
             self.camera.Open()
         if self.converter is None:
             self.converter = pylon.ImageFormatConverter()
+        self._publish_writable_attribute_ranges()
         self.set_state(DevState.ON)
         self.get_camera_friendly_name()
         self.info(f"{self.device_name} was Opened.", True)
@@ -255,6 +298,7 @@ class DS_Basler_camera(DS_CAMERA_CCD):
         results = []
         for func in functions:
             results.append(func())
+        self._publish_writable_attribute_ranges()
         results_s = ""
         for res in results:
             if res != 0:

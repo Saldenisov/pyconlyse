@@ -38,6 +38,42 @@ sys.modules[widget_module.__name__] = widget_module
 from DeviceServers.cameras.basler.DS_BASLER_Widget import Basler_camera
 
 
+def test_laser_camera_editor_forces_initial_value_and_range_refresh():
+    value = SimpleNamespace(wvalue=300)
+
+    class FakeLineEdit:
+        refreshed_with = None
+
+        def _updateValidator(self, received):
+            self.refreshed_with = received
+
+    class FakeModel:
+        def read(self, cache=True):
+            assert cache is False
+            return value
+
+    class FakeEditor:
+        def __init__(self):
+            self.line_edit = FakeLineEdit()
+            self.displayed_value = None
+
+        def getModelObj(self):
+            return FakeModel()
+
+        def lineEdit(self):
+            return self.line_edit
+
+        def setValue(self, received):
+            self.displayed_value = received
+
+    editor = FakeEditor()
+
+    Basler_camera._synchronize_laser_camera_editor(editor)
+
+    assert editor.line_edit.refreshed_with is value
+    assert editor.displayed_value == 300
+
+
 def test_laser_camera_controls_are_collapsed_and_bind_offsets_on_open(monkeypatch):
     monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     class FakeSpinBox(QtWidgets.QSpinBox):

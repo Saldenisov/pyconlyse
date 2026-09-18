@@ -61,6 +61,35 @@ class FakeCamera:
         return info
 
 
+class FakeNode:
+    def __init__(self, minimum, maximum):
+        self.Min = minimum
+        self.Max = maximum
+
+
+class FakeWritableAttribute:
+    def __init__(self):
+        self.minimum = None
+        self.maximum = None
+
+    def set_min_value(self, value):
+        self.minimum = value
+
+    def set_max_value(self, value):
+        self.maximum = value
+
+
+class FakeMultiAttribute:
+    def __init__(self):
+        self.attributes = {
+            name: FakeWritableAttribute()
+            for name in basler_module.DS_Basler_camera.WRITABLE_RANGE_NODES
+        }
+
+    def get_w_attr_by_name(self, name):
+        return self.attributes[name]
+
+
 class FakeFactory:
     def __init__(self, discovered, camera):
         self.discovered = discovered
@@ -208,3 +237,33 @@ def test_image_read_is_passive_while_camera_is_stopped():
     assert device.get_image() is expected_image
     assert camera.start_grabbing_calls == 0
     assert camera.IsGrabbing() is False
+
+
+def test_camera_node_limits_are_published_on_writable_tango_attributes():
+    device = make_device()
+    camera = FakeCamera()
+    camera._open = True
+    camera.Width = FakeNode(2, 1280)
+    camera.Height = FakeNode(2, 1024)
+    camera.OffsetX = FakeNode(0, 980)
+    camera.OffsetY = FakeNode(0, 724)
+    camera.ExposureTimeAbs = FakeNode(15.0, 896000.0)
+    camera.GainRaw = FakeNode(0, 3)
+    attributes = FakeMultiAttribute()
+    device.camera = camera
+    device.get_device_attr = lambda: attributes
+
+    device._publish_writable_attribute_ranges()
+
+    expected = {
+        "width": (2, 1280),
+        "height": (2, 1024),
+        "offsetX": (0, 980),
+        "offsetY": (0, 724),
+        "exposure_time": (15.0, 896000.0),
+        "gain": (0, 3),
+    }
+    assert {
+        name: (attribute.minimum, attribute.maximum)
+        for name, attribute in attributes.attributes.items()
+    } == expected

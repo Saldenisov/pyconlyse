@@ -195,9 +195,31 @@ class Basler_camera(DS_General_Widget):
             editor.setAccessibleName(label_text)
             editor.setMinimumWidth(80)
             editor.model = f"{self.dev_name}/{attribute_name}"
+            Basler_camera._synchronize_laser_camera_editor(editor)
             grid.addWidget(label, row, 2 * column)
             grid.addWidget(editor, row, 2 * column + 1)
             self.laser_camera_parameter_editors[attribute_name] = editor
+
+    @staticmethod
+    def _synchronize_laser_camera_editor(editor):
+        """Force the first value and range read after a lazy Taurus bind.
+
+        Taurus can deliver the value event before its attribute configuration
+        has arrived. In that ordering the editor remains at its default zero
+        and its validator has no GenICam range until another event occurs.
+        A direct read here makes the expanded panel immediately show the real
+        value and installs the published Tango min/max limits.
+        """
+
+        try:
+            model = editor.getModelObj()
+            value = model.read(cache=False)
+            editor.lineEdit()._updateValidator(value)
+            editor.setValue(value.wvalue)
+        except Exception:
+            # The normal Taurus event path remains available if a camera is
+            # temporarily unreachable while the controls are opened.
+            return
 
     def set_camera_parameters(self):
         dev_name = self.dev_name
