@@ -3,6 +3,7 @@ import types
 from enum import Enum
 from types import SimpleNamespace
 
+import numpy as np
 import tango
 import taurus.core
 from PyQt5 import QtWidgets
@@ -36,6 +37,34 @@ widget_module.VisType = SimpleNamespace(FULL="full")
 sys.modules[widget_module.__name__] = widget_module
 
 from DeviceServers.cameras.basler.DS_BASLER_Widget import Basler_camera
+
+
+def test_camera_image_autoranges_when_calibrated_roi_shape_changes():
+    class FakeView:
+        def __init__(self):
+            self.calls = []
+
+        def setImage(self, image, **kwargs):
+            self.calls.append((image.shape, kwargs))
+
+    widget = SimpleNamespace(
+        view=FakeView(),
+        _display_image_shape=None,
+        convert_image=lambda image: image,
+    )
+
+    assert Basler_camera._show_camera_image(
+        widget, np.zeros((3, 108, 108))
+    )
+    assert not Basler_camera._show_camera_image(
+        widget, np.zeros((3, 108, 108))
+    )
+    assert Basler_camera._show_camera_image(
+        widget, np.zeros((3, 120, 120))
+    )
+    assert [call[1]["autoRange"] for call in widget.view.calls] == [
+        True, False, True
+    ]
 
 
 def test_laser_camera_editor_forces_initial_value_and_range_refresh():

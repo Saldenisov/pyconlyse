@@ -287,6 +287,12 @@ class Basler_camera(DS_General_Widget):
         image = np.ones(shape=(512, 512))
         self.view.setImage(image)
         self.view.autoRange()
+        self.view.getView().setAspectLocked(True)
+        # The placeholder is deliberately larger than the calibrated camera
+        # ROI. Force the first real frame to replace its plot range so a
+        # 108x108 beam image fills the ImageView instead of occupying a small
+        # corner of the initial 512x512 range.
+        self._display_image_shape = None
         self.view.setMinimumSize(300, 300)
         lo_image.addWidget(self.view)
 
@@ -478,7 +484,7 @@ class Basler_camera(DS_General_Widget):
 
     def image_listener(self):
         ds: Device = getattr(self, f"ds_{self.dev_name}")
-        self.view.setImage(self.convert_image(ds.image))
+        self._show_camera_image(ds.image)
 
         positions = eval(ds.cg)
         x_pos = self.positions["X"]
@@ -494,6 +500,18 @@ class Basler_camera(DS_General_Widget):
         self.x_pos.setData(self.positions["X"])
         self.y_pos.setData(self.positions["Y"])
         self.roi_circle.setPos([x, y])
+
+    def _show_camera_image(self, image):
+        """Scale a new camera ROI to the complete ImageView display area."""
+
+        display_image = self.convert_image(image)
+        spatial_shape = tuple(display_image.shape[-2:])
+        auto_range = spatial_shape != getattr(
+            self, "_display_image_shape", None
+        )
+        self.view.setImage(display_image, autoRange=auto_range)
+        self._display_image_shape = spatial_shape
+        return auto_range
 
     def convert_image(self, image):
         image2D = image
