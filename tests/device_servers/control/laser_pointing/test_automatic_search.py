@@ -291,64 +291,47 @@ def test_working_point_attempts_all_diaphragms_when_one_fails():
     assert controller._active_point == ""
 
 
-def test_working_point_excludes_all_flippers():
+def test_working_point_commands_only_the_registered_camera_route():
+    class Flipper:
+        def __init__(self):
+            self.commanded_flipper_state = "UNKNOWN"
+            self.commands = []
+
+        def move_axis_abs(self, target):
+            self.commands.append(target)
+            self.commanded_flipper_state = (
+                "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
+            )
+
     controller = object.__new__(DS_LaserPointing)
     controller.ds_dict = {
         "Shutter1": "shutter-1",
         "Shutter2": "shutter-2",
     }
-    controller.controller_rules = {"working": {"Shutter1": 1.0}}
+    controller.controller_rules = {"working": {"Shutter1": -1.0}}
     controller._active_point = ""
     controller._actuator_initialization_status = {}
     controller._raise_if_cancelled = lambda: None
-    controller._device_for_role = lambda role: role
-    events = []
+    flippers = {"Shutter1": Flipper(), "Shutter2": Flipper()}
+    controller._device_for_role = flippers.__getitem__
 
-    controller._move_single_axis = (
-        lambda device, target, _config: events.append((device, target))
-    )
+    controller._move_single_axis = lambda *_args: None
 
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    assert events == []
+    assert flippers["Shutter1"].commands == [-1.0]
+    assert flippers["Shutter2"].commands == []
     assert controller._active_point == "working"
 
 
-@pytest.mark.parametrize("camera_number", [1, 2])
-def test_rule_normalization_uses_only_camera_owned_flipper(camera_number):
-    controller = object.__new__(DS_LaserPointing)
-    controller.ds_dict = {
-        "Camera": f"manip/V0/Cam{camera_number}_V0",
-        "Shutter1": "shutter-1",
-        "Shutter2": "shutter-2",
-    }
-    old_rules = {
-        **{
-            f"point{number}": {
-                "Shutter1": 1.0,
-                "Shutter2": 1.0,
-                "Diaphragm": float(number),
-            }
-            for number in range(1, 7)
-        },
-        "working": {"Shutter1": -1.0, "Shutter2": -1.0},
-    }
-
-    rules = controller._rules_with_owned_flipper(old_rules)
-    owned_roles = (
-        ("Shutter1", "Shutter2") if camera_number == 2 else ("Shutter1",)
-    )
-
-    for number in range(1, 7):
-        assert rules[f"point{number}"] == {
-            "Diaphragm": float(number),
-            **{role: -1.0 for role in owned_roles},
-        }
-    assert rules["working"] == {role: 1.0 for role in owned_roles}
-
-
-@pytest.mark.parametrize("camera_number", [1, 2])
-def test_all_numbered_points_block_only_owned_flipper_and_working_clears(camera_number):
+@pytest.mark.parametrize(
+    "camera_number, route",
+    [
+        (1, {"Shutter1": -1.0}),
+        (2, {"Shutter1": 1.0, "Shutter2": -1.0}),
+    ],
+)
+def test_all_points_preserve_the_registered_camera_route(camera_number, route):
     class Flipper:
         def __init__(self):
             self.commanded_flipper_state = "UNKNOWN"
@@ -368,12 +351,9 @@ def test_all_numbered_points_block_only_owned_flipper_and_working_clears(camera_
         "Shutter2": "shutter-2",
     }
     controller.controller_rules = {
-        **{f"point{number}": {} for number in range(1, 7)},
-        "working": {},
+        **{f"point{number}": dict(route) for number in range(1, 7)},
+        "working": dict(route),
     }
-    owned_roles = (
-        ("Shutter1", "Shutter2") if camera_number == 2 else ("Shutter1",)
-    )
     flippers = {"Shutter1": Flipper(), "Shutter2": Flipper()}
     controller._device_for_role = flippers.__getitem__
     controller._raise_if_cancelled = lambda: None
@@ -382,28 +362,35 @@ def test_all_numbered_points_block_only_owned_flipper_and_working_clears(camera_
 
     for number in range(1, 7):
         DS_LaserPointing._apply_point(controller, f"point{number}", {})
-        for role in owned_roles:
-            assert flippers[role].commanded_flipper_state == "UP_BLOCKED"
     DS_LaserPointing._apply_point(controller, "working", {})
 
-    for role in owned_roles:
-        assert flippers[role].commands == [-1.0, 1.0]
+    for role, target in route.items():
+        assert flippers[role].commands == [target]
         assert flippers[role].position == 0.0
-    if camera_number == 1:
-        assert flippers["Shutter2"].commands == []
+    expected_states = {
+        role: ("UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR")
+        for role, target in route.items()
+    }
+    assert {
+        role: flippers[role].commanded_flipper_state for role in route
+    } == expected_states
+    for role in set(flippers) - set(route):
+        assert flippers[role].commands == []
 
 
-def test_cam2_working_completes_all_optics_before_lowering_both_flippers():
+def test_cam2_routes_flippers_before_applying_working_optics():
     events = []
 
     class Flipper:
         def __init__(self, role):
             self.role = role
-            self.commanded_flipper_state = "UP_BLOCKED"
+            self.commanded_flipper_state = "UNKNOWN"
 
         def move_axis_abs(self, target):
             events.append((self.role, target))
-            self.commanded_flipper_state = "DOWN_CLEAR"
+            self.commanded_flipper_state = (
+                "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
+            )
 
     controller = object.__new__(DS_LaserPointing)
     controller.ds_dict = {
@@ -419,6 +406,8 @@ def test_cam2_working_completes_all_optics_before_lowering_both_flippers():
     }
     controller.controller_rules = {
         "working": {
+            "Shutter1": 1.0,
+            "Shutter2": -1.0,
             "MainLaserDiaphragm1": 100.0,
             "MainLaserDiaphragm2": 100.0,
             "CrimpingDiaphragm1": 100.0,
@@ -442,14 +431,14 @@ def test_cam2_working_completes_all_optics_before_lowering_both_flippers():
     DS_LaserPointing._apply_point(controller, "working", {})
 
     assert events == [
+        ("Shutter1", 1.0),
+        ("Shutter2", -1.0),
         ("MainLaserDiaphragm1", 100.0),
         ("MainLaserDiaphragm2", 100.0),
         ("CrimpingDiaphragm1", 100.0),
         ("CrimpingDiaphragm2", 100.0),
         ("TranslationStage1", (3, 0.0)),
         ("HalfWavePlate1", 20.5),
-        ("Shutter1", 1.0),
-        ("Shutter2", 1.0),
     ]
     assert controller._active_point == "working"
 
@@ -480,7 +469,7 @@ def test_cam2_working_does_not_lower_either_flipper_if_optics_fail():
 def test_numbered_point_not_published_if_flipper_command_did_not_complete():
     controller = object.__new__(DS_LaserPointing)
     controller.ds_dict = {"Camera": "manip/V0/Cam1_V0", "Shutter1": "shutter-1"}
-    controller.controller_rules = {"point3": {}}
+    controller.controller_rules = {"point3": {"Shutter1": -1.0}}
     controller._raise_if_cancelled = lambda: None
     controller._active_point = "working"
     controller._device_for_role = lambda _role: SimpleNamespace(
@@ -751,6 +740,66 @@ def test_worse_probe_returns_to_last_good_actuator_position(monkeypatch):
     assert moves[:4] == [
         (0.0, 0.0), (1.0, 0.0), (0.0, 0.0), (0.0, 1.0)
     ]
+
+
+def test_noisier_fine_pass_retains_better_position_from_coarse_pass(monkeypatch):
+    controller = object.__new__(DS_LaserPointing)
+    controller.pid_groups = {"near": ("point1", "point3")}
+    controller.groups = {"Actuators 1": ("ActuatorX1", "ActuatorY1")}
+    controller._search_stop = Event()
+    controller._search_history = []
+    controller._search_started_at = None
+    controller._search_stage_bests = {}
+    controller._raise_if_cancelled = lambda: None
+    controller._device_for_role = {
+        "ActuatorX1": "x", "ActuatorY1": "y"
+    }.__getitem__
+    position = [0.0, 0.0]
+    controller._fresh_position_and_state = lambda device: (
+        position[0] if device == "x" else position[1], "ON"
+    )
+    controller._search_bounds = lambda *_args: ((-3, 3), (-3, 3))
+    moves = []
+
+    def move(_devices, target, _config):
+        position[:] = target
+        moves.append(tuple(target))
+
+    controller._move_pair = move
+    results = iter([
+        SimpleNamespace(
+            best_position=(1.0, 0.0), best_score=5.0,
+            evaluations=5, reason="minimum_step",
+        ),
+        SimpleNamespace(
+            best_position=(2.0, 0.0), best_score=8.0,
+            evaluations=5, reason="minimum_step",
+        ),
+    ])
+    monkeypatch.setitem(
+        DS_LaserPointing._optimise_group.__globals__,
+        "bounded_pattern_search",
+        lambda *_args, **_kwargs: next(results),
+    )
+    config = {
+        "radius": 3.0, "roundness_tolerance_pct": 7.0,
+        "max_evaluations": 5, "minimum_improvement_px": 0.1,
+        "probe_repetitions": 1, "unchanged_response_tolerance_px": 0.25,
+    }
+
+    coarse = DS_LaserPointing._optimise_group(
+        controller, "near", ("point1", "point3"), "sensitive", 1,
+        2.0, config, {},
+    )
+    fine = DS_LaserPointing._optimise_group(
+        controller, "near", ("point1", "point3"), "sensitive", 1,
+        1.0, config, {},
+    )
+
+    assert coarse["best_position"] == [1.0, 0.0]
+    assert fine["best_position"] == [1.0, 0.0]
+    assert fine["best_roundness_error_pct"] == 5.0
+    assert moves[-1] == (1.0, 0.0)
 
 
 def test_cancelled_search_does_not_issue_a_rollback_move(monkeypatch):

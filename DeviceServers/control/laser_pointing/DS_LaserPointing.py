@@ -1,5 +1,4 @@
 import json
-import re
 import sys
 from math import hypot
 from pathlib import Path
@@ -122,14 +121,9 @@ class DS_LaserPointing(DS_ControlPosition):
         }
 
         super().init_device()
-        # Ignore legacy database flipper rules, which can address both cameras
-        # or use stale targets. Cam1 owns S1; Cam2 needs both S1 and S2.
-        # Numbered points block their path, while Working clears it only after
-        # the other optics have completed. Child motors record command state
-        # independently of their unreliable numeric position readback.
-        self.controller_rules = self._rules_with_owned_flipper(
-            self.controller_rules
-        )
+        # Flipper targets are camera-routing settings owned by the registered
+        # controller rules. They are deliberately not inferred from camera
+        # number: Cam1 uses S1=-1, while Cam2 uses S1=+1 and S2=-1.
         camera_name = self.ds_dict["Camera"]
         self.devices[camera_name] = Device(camera_name)
         self._search_config = self._normalise_search_config(
@@ -641,6 +635,11 @@ class DS_LaserPointing(DS_ControlPosition):
             config["_camera_verified_roles_validated"] = True
             converged = False
             search_origins = {}
+            # Keep the best measured position across motor-step passes. A
+            # finer pass can be noisier than a coarse pass; it must not leave
+            # the hardware at a demonstrably worse position merely because
+            # each bounded search has its own local result object.
+            self._search_stage_bests = {}
             for cycle in range(1, config["max_cycles"] + 1):
                 for motor_step in config["step_schedule"]:
                     for stage_name, point_pairs in stages:
@@ -864,6 +863,37 @@ class DS_LaserPointing(DS_ControlPosition):
             nonlocal last_optical_signature, best_visible_position
             nonlocal best_visible_score, baseline_centre, baseline_shape
             self._raise_if_cancelled()
+            previous_position = tuple(
+                self._fresh_position_and_state(device)[0]
+                for device in actuator_devices
+            )
+            move_delta = [
+                float(target) - float(current)
+                for target, current in zip(position, previous_position)
+            ]
+            last_beam_shape = getattr(self, "_search_progress", {}).get("beam_shape")
+            self._search_progress = {
+                "phase": "moving_actuators",
+                "cycle": cycle,
+                "stage": stage_name,
+                "group": group_name,
+                "motor_step": motor_step,
+                "points": list(point_pair),
+                "measured_point": target_point,
+                "actuator_roles": list(actuator_roles),
+                "previous_actuator_position": list(previous_position),
+                "actuator_position": list(position),
+                "move_delta": move_delta,
+                "message": (
+                    f"Adjusting {group_name}: "
+                    + ", ".join(
+                        f"{role} {delta:+.3f}"
+                        for role, delta in zip(actuator_roles, move_delta)
+                    )
+                ),
+            }
+            if last_beam_shape:
+                self._search_progress["beam_shape"] = last_beam_shape
             self._move_pair(actuator_devices, position, config)
             test = self._measure_point(target_point, config)
             test_shape = self._read_beam_shape()
@@ -976,7 +1006,22 @@ class DS_LaserPointing(DS_ControlPosition):
             raise
         if result.reason == "cancelled":
             raise SearchCancelled()
-        self._move_pair(actuator_devices, result.best_position, config)
+
+        retained_position = tuple(result.best_position)
+        retained_score = float(result.best_score)
+        stage_bests = getattr(self, "_search_stage_bests", None)
+        if stage_bests is not None:
+            best_key = (stage_name, group_name)
+            previous_best = stage_bests.get(best_key)
+            if previous_best is None or retained_score < previous_best["score"]:
+                stage_bests[best_key] = {
+                    "position": retained_position,
+                    "score": retained_score,
+                }
+            else:
+                retained_position = tuple(previous_best["position"])
+                retained_score = float(previous_best["score"])
+        self._move_pair(actuator_devices, retained_position, config)
 
         return {
             "cycle": cycle,
@@ -986,9 +1031,9 @@ class DS_LaserPointing(DS_ControlPosition):
             "points": list(point_pair),
             "start_position": list(start),
             "search_origin": list(origin),
-            "best_position": list(result.best_position),
-            "best_roundness_error_pct": result.best_score,
-            "best_error_px": result.best_score,
+            "best_position": list(retained_position),
+            "best_roundness_error_pct": retained_score,
+            "best_error_px": retained_score,
             "evaluations": result.evaluations,
             "reason": result.reason,
         }
@@ -1225,49 +1270,6 @@ class DS_LaserPointing(DS_ControlPosition):
         normalized_role = str(role).lower()
         return "shutter" in normalized_role or "flipper" in normalized_role
 
-    def _owned_flipper_roles(self):
-        device_map = getattr(self, "ds_dict", None) or {}
-        camera = str(device_map.get("Camera", ""))
-        match = re.search(r"cam(?:era)?[_-]?(\d+)", camera, re.IGNORECASE)
-        if not match:
-            return ()
-        camera_number = int(match.group(1))
-        controlled_numbers = {1, 2} if camera_number == 2 else {camera_number}
-        owned = []
-        for role in device_map:
-            role_number = re.search(r"(\d+)$", str(role))
-            if (
-                self._is_flipper_role(role)
-                and role_number
-                and int(role_number.group(1)) in controlled_numbers
-            ):
-                owned.append((int(role_number.group(1)), role))
-        return tuple(role for _number, role in sorted(owned))
-
-    @staticmethod
-    def _flipper_target_for_point(point_name):
-        if optical_point_group(point_name):
-            return -1.0
-        if str(point_name).strip().lower() == "working":
-            return 1.0
-        return None
-
-    def _rules_with_owned_flipper(self, rules):
-        owned_roles = self._owned_flipper_roles()
-        normalized = type(rules)()
-        for point_name, point_rule in rules.items():
-            targets = {
-                role: value
-                for role, value in point_rule.items()
-                if not self._is_flipper_role(role)
-            }
-            flipper_target = self._flipper_target_for_point(point_name)
-            if flipper_target is not None:
-                for role in owned_roles:
-                    targets[role] = flipper_target
-            normalized[point_name] = targets
-        return normalized
-
     @staticmethod
     def _fresh_flipper_command_state(device):
         try:
@@ -1286,15 +1288,16 @@ class DS_LaserPointing(DS_ControlPosition):
             if direct_source is not None:
                 proxy.set_source(original_source)
 
-    def _command_owned_flippers(self, point_name):
-        roles = self._owned_flipper_roles()
-        if not roles:
-            return
-        target = self._flipper_target_for_point(point_name)
-        if target is None:
-            return
-        expected = "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
-        for role in roles:
+    def _command_route_flippers(self, point_name):
+        point_rule = self.controller_rules.get(point_name, {})
+        device_map = getattr(self, "ds_dict", None) or {}
+        targets = [
+            (role, float(target))
+            for role, target in point_rule.items()
+            if self._is_flipper_role(role) and role in device_map
+        ]
+        for role, target in targets:
+            expected = "UP_BLOCKED" if target == -1.0 else "DOWN_CLEAR"
             self._raise_if_cancelled()
             device = self._device_for_role(role)
             try:
@@ -1316,10 +1319,10 @@ class DS_LaserPointing(DS_ControlPosition):
 
     def _apply_point(self, point_name: str, config: Dict):
         self._raise_if_cancelled()
-        # Blocking happens before the other optical moves. Unblocking Working
-        # happens only after the entire open-beam recipe has succeeded.
-        if optical_point_group(point_name):
-            self._command_owned_flippers(point_name)
+        # Route the selected camera before changing apertures or propagation
+        # plane. Each controller's registered rules specify the exact flipper
+        # combination; the topology cannot be derived from point number.
+        self._command_route_flippers(point_name)
         # Optical presets commonly contain several Standa-backed devices on
         # the same host. Apply them deterministically so their Tango/libximc
         # transactions cannot contend and leave a partial preset behind.
@@ -1362,6 +1365,14 @@ class DS_LaserPointing(DS_ControlPosition):
         deferred_errors = []
         for role, value in targets:
             self._raise_if_cancelled()
+            if getattr(self, "cgc", False):
+                self._search_progress.update({
+                    "phase": "applying_point",
+                    "point": point_name,
+                    "optical_role": role,
+                    "optical_target": value,
+                    "message": f"Moving optics to {point_name}: {role} -> {value}",
+                })
             if (
                 config.get("_camera_verified_roles_validated")
                 and role in config.get("camera_verified_roles", [])
@@ -1405,8 +1416,6 @@ class DS_LaserPointing(DS_ControlPosition):
                 f"could not fully apply {point_name} after attempting all diaphragms: "
                 + "; ".join(deferred_errors)
             )
-        if working_point:
-            self._command_owned_flippers(point_name)
         # Publish the point only after every child has reached its readback.
         # Both clients use this as the source of truth for the mount interlock.
         self._publish_active_point(point_name)
@@ -1452,6 +1461,12 @@ class DS_LaserPointing(DS_ControlPosition):
 
     def _measure_point(self, point_name: str, config: Dict):
         if getattr(self, "_active_point", None) != point_name:
+            if getattr(self, "cgc", False):
+                self._search_progress.update({
+                    "phase": "applying_point",
+                    "point": point_name,
+                    "message": f"Moving optics to {point_name}",
+                })
             self._apply_point(point_name, config)
         # Motion completion is readback-driven. This short wait only ensures
         # Basler has published a frame acquired after the final movement.
@@ -1460,6 +1475,17 @@ class DS_LaserPointing(DS_ControlPosition):
         self._last_beam_shape = None
         frames = []
         for sample_index in range(config["samples"]):
+            if getattr(self, "cgc", False):
+                self._search_progress.update({
+                    "phase": "capturing_profiles",
+                    "point": point_name,
+                    "sample": sample_index + 1,
+                    "samples": config["samples"],
+                    "message": (
+                        f"Capturing beam profile at {point_name}: "
+                        f"frame {sample_index + 1}/{config['samples']}"
+                    ),
+                })
             retries_remaining = config["invalid_frame_retries"]
             while True:
                 self._raise_if_cancelled()
@@ -1484,6 +1510,14 @@ class DS_LaserPointing(DS_ControlPosition):
             if sample_index + 1 < config["samples"]:
                 self._interruptible_sleep(config["sample_interval_s"])
         try:
+            if getattr(self, "cgc", False):
+                self._search_progress.update({
+                    "phase": "calculating_profiles",
+                    "point": point_name,
+                    "message": (
+                        f"Calculating nine iso-intensity profiles at {point_name}"
+                    ),
+                })
             shape = beam_contour_symmetry(
                 frames,
                 threshold=float(camera.center_gravity_threshold),

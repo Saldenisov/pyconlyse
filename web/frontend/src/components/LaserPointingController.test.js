@@ -4,6 +4,7 @@ import LaserPointingController, {
   CameraPreview,
   ConvergenceChart,
   DeltaVectorChart,
+  alignmentActivityText,
   actuatorGroupForPoint,
   actuatorGroupForRole,
   actuatorVisualState,
@@ -87,6 +88,22 @@ describe('LaserPointing optical point presentation', () => {
     expect(screen.getByText('Roundness tolerance')).toBeInTheDocument();
     expect(screen.getAllByText(/Diaphragm 1 · Standa pair 1/i).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Diaphragm 2 · Standa pair 2/i).length).toBeGreaterThan(0);
+  });
+
+  test('describes point changes, actuator corrections and profile calculations for the operator', () => {
+    expect(alignmentActivityText({
+      phase: 'applying_point', point: 'point3', optical_role: 'CrimpingDiaphragm1', optical_target: 10,
+    })).toEqual({ title: 'Moving optics to point 3', detail: 'CrimpingDiaphragm1 → 10' });
+    expect(alignmentActivityText({
+      phase: 'moving_actuators', group: 'group1',
+      actuator_roles: ['ActuatorX3', 'ActuatorY3'], move_delta: [5, 0],
+    })).toEqual({ title: 'Adjusting group1', detail: 'ActuatorX3 +5.00 · ActuatorY3 +0.00' });
+    expect(alignmentActivityText({
+      phase: 'calculating_profiles', point: 'point6',
+    })).toEqual({
+      title: 'Calculating profiles at point 6',
+      detail: 'Fitting nine iso-intensity contours from the outer beam to the core',
+    });
   });
 
   test('formats the desktop-equivalent passive optical readback', () => {
@@ -442,7 +459,9 @@ describe('LaserPointing optical point presentation', () => {
       })
     ));
     const secondFlipper = screen.getByText('Camera flipper · Shutter2').closest('section');
-    fireEvent.click(within(secondFlipper).getByRole('button', { name: '+1 · Lower / clear' }));
+    const secondFlipperButton = within(secondFlipper).getByRole('button', { name: '+1 · Lower / clear' });
+    await waitFor(() => expect(secondFlipperButton).toBeEnabled());
+    fireEvent.click(secondFlipperButton);
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       '/api/device/manip%2FV0%2Fs2/command/move_axis_abs',
       expect.objectContaining({

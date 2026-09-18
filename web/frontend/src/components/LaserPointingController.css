@@ -264,6 +264,128 @@
   object-fit: contain;
 }
 
+.laser-camera-activity {
+  position: absolute;
+  top: 9px;
+  left: 9px;
+  z-index: 2;
+  display: grid;
+  max-width: calc(100% - 18px);
+  gap: 2px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid rgba(83, 204, 255, 0.8);
+  border-radius: 6px;
+  background: rgba(4, 18, 31, 0.86);
+  color: #f5fbff;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.32);
+  pointer-events: none;
+}
+
+.laser-camera-activity strong {
+  font-size: 0.85rem;
+}
+
+.laser-camera-activity span {
+  overflow: hidden;
+  color: #bfe8ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.laser-camera-activity.phase-error,
+.laser-camera-activity.phase-laser-not-visible {
+  border-color: #ff747a;
+  background: rgba(73, 9, 14, 0.9);
+}
+
+.laser-profile-legend {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 70%;
+  gap: 3px 7px;
+  padding: 5px 7px;
+  border-radius: 5px;
+  background: rgba(4, 12, 20, 0.78);
+  color: white;
+  font-size: 0.65rem;
+  pointer-events: none;
+}
+
+.laser-profile-legend span,
+.laser-profile-levels div {
+  display: inline-flex;
+  align-items: center;
+}
+
+.laser-profile-legend i,
+.laser-profile-levels i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 3px;
+  border-radius: 50%;
+}
+
+.laser-profile-summary {
+  margin-top: 6px;
+  padding: 6px 7px;
+  border: 1px solid #cdd8e4;
+  border-radius: 6px;
+  background: #f4f8fc;
+}
+
+.laser-profile-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  color: #26364c;
+  font-size: 0.78rem;
+}
+
+.laser-profile-heading span {
+  color: #65748a;
+  font-size: 0.68rem;
+}
+
+.laser-profile-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.laser-profile-levels div {
+  min-width: 0;
+  gap: 3px;
+  padding: 3px 5px;
+  border: 1px solid #d8e0ea;
+  border-radius: 4px;
+  background: white;
+  color: #5b6a7e;
+  font-size: 0.62rem;
+}
+
+.laser-profile-levels strong {
+  color: #26364c;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.62rem;
+}
+
+.laser-profile-levels small {
+  margin-left: auto;
+  color: #758297;
+  font-size: 0.58rem;
+}
+
 .laser-camera-placeholder {
   position: absolute;
   display: flex;

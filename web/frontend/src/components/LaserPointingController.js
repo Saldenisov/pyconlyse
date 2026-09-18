@@ -288,6 +288,95 @@ export const laserSnapshotErrorMessage = (error) => {
   return message;
 };
 
+const PROFILE_COLORS = [
+  '#39d0ff', '#35e0a1', '#7be04b', '#c8e43d', '#ffd23d',
+  '#ff9f31', '#ff6b45', '#f0447d', '#c05cff',
+];
+
+const signedMotorDelta = (value) => {
+  const numeric = finiteNumber(value);
+  if (numeric === null) return '—';
+  return `${numeric >= 0 ? '+' : ''}${numeric.toFixed(2)}`;
+};
+
+export const alignmentActivityText = (progress = {}) => {
+  const phase = String(progress.phase || '').toLowerCase();
+  const point = String(progress.point || progress.measured_point || '').replace(/^point/i, 'point ');
+  if (!phase) return null;
+  if (phase === 'starting') {
+    return { title: 'Preparing automatic alignment', detail: 'Checking camera and optical sequence' };
+  }
+  if (phase === 'applying_point') {
+    const role = progress.optical_role ? ` · ${progress.optical_role}` : '';
+    const target = progress.optical_target !== undefined
+      ? ` → ${formatOpticalValue(progress.optical_target)}` : '';
+    return { title: `Moving optics to ${point || 'the next point'}`, detail: `${role}${target}`.replace(/^ · /, '') };
+  }
+  if (phase === 'moving_actuators') {
+    const roles = Array.isArray(progress.actuator_roles) ? progress.actuator_roles : [];
+    const deltas = Array.isArray(progress.move_delta) ? progress.move_delta : [];
+    const changes = roles.map((role, index) => `${role} ${signedMotorDelta(deltas[index])}`);
+    return {
+      title: `Adjusting ${progress.group || 'Standa pair'}`,
+      detail: changes.filter(Boolean).join(' · ') || `Candidate ${JSON.stringify(progress.actuator_position || [])}`,
+    };
+  }
+  if (phase === 'capturing_profiles') {
+    return {
+      title: `Capturing ${point || 'beam'} profile`,
+      detail: `Frame ${progress.sample || '?'} of ${progress.samples || '?'}`,
+    };
+  }
+  if (phase === 'calculating_profiles') {
+    return {
+      title: `Calculating profiles at ${point || 'current point'}`,
+      detail: 'Fitting nine iso-intensity contours from the outer beam to the core',
+    };
+  }
+  if (phase === 'measuring') {
+    const error = roundnessError(progress);
+    return {
+      title: `${point || 'Beam'} profiles measured`,
+      detail: error === null
+        ? 'Evaluating roundness'
+        : `Roundness error ${error.toFixed(2)}% · ${progress.group || 'active pair'}`,
+    };
+  }
+  if (phase === 'verifying') {
+    return { title: 'Verifying both optical planes', detail: `Motor step ${formatOpticalValue(progress.motor_step)}` };
+  }
+  if (phase === 'finished') return { title: 'Alignment converged', detail: 'Final verification passed' };
+  if (phase === 'not_converged') return { title: 'Alignment did not converge', detail: 'Best measured positions were retained' };
+  if (phase === 'laser_not_visible') return { title: 'Laser not visible', detail: progress.message || 'Search stopped safely' };
+  if (phase === 'cancelled') return { title: 'Alignment stopped', detail: 'No further movement will be issued' };
+  if (phase === 'error') return { title: 'Alignment error', detail: progress.message || 'Search stopped' };
+  return { title: progress.message || phase.replace(/_/g, ' '), detail: '' };
+};
+
+const BeamProfileSummary = ({ progress = {} }) => {
+  const contours = Array.isArray(progress?.beam_shape?.contours)
+    ? progress.beam_shape.contours : [];
+  if (!contours.length) return null;
+  return (
+    <div className="laser-profile-summary" aria-label="Beam profiles at multiple thresholds">
+      <div className="laser-profile-heading">
+        <strong>Beam profiles · threshold sweep</strong>
+        <span>{contours.length} fitted contours</span>
+      </div>
+      <div className="laser-profile-levels">
+        {contours.map((contour, index) => (
+          <div key={`${contour.relative_height}-${index}`}>
+            <i style={{ backgroundColor: PROFILE_COLORS[index % PROFILE_COLORS.length] }} />
+            <span>{`${Math.round(Number(contour.relative_height) * 100)}%`}</span>
+            <strong>{`${finiteNumber(contour.axis_roundness_pct)?.toFixed(1) || '—'}% round`}</strong>
+            <small>{`r ${finiteNumber(contour.radius_px)?.toFixed(1) || '—'} px`}</small>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export const CameraPreview = ({
   camera,
   enabled = true,
@@ -312,6 +401,12 @@ export const CameraPreview = ({
   const [cameraInfoLoading, setCameraInfoLoading] = useState(false);
   const [requestedGrabbing, setRequestedGrabbing] = useState(null);
   const previewEnabled = requestedGrabbing ?? enabled;
+  const activity = alignmentActivityText(progress);
+  const beamContours = useMemo(
+    () => (Array.isArray(progress?.beam_shape?.contours)
+      ? progress.beam_shape.contours : []),
+    [progress]
+  );
 
   useEffect(() => {
     if (requestedGrabbing !== null
@@ -436,7 +531,26 @@ export const CameraPreview = ({
       context.lineTo(x, y + 15);
       context.stroke();
     }
-  }, [frame, centroid]);
+
+    beamContours.forEach((contour, index) => {
+      const centreX = finiteNumber(contour?.centre?.[0]);
+      const centreY = finiteNumber(contour?.centre?.[1]);
+      const radius = finiteNumber(contour?.radius_px);
+      const axisRatio = Math.max(0.05, Math.min(1, (finiteNumber(contour?.axis_roundness_pct) ?? 100) / 100));
+      if (centreX === null || centreY === null || radius === null || radius <= 0) return;
+      const major = radius / Math.sqrt(axisRatio);
+      const minor = radius * Math.sqrt(axisRatio);
+      const angle = ((finiteNumber(contour?.major_axis_angle_deg) ?? 0) * Math.PI) / 180;
+      context.save();
+      context.strokeStyle = PROFILE_COLORS[index % PROFILE_COLORS.length];
+      context.lineWidth = Math.max(1.3, width / 500);
+      context.setLineDash(index % 2 ? [5, 3] : []);
+      context.beginPath();
+      context.ellipse(centreX, centreY, major, minor, angle, 0, Math.PI * 2);
+      context.stroke();
+      context.restore();
+    });
+  }, [frame, centroid, beamContours]);
 
   const setCameraGrabbing = async (action) => {
     if (!camera || cameraAction) return;
@@ -540,6 +654,22 @@ export const CameraPreview = ({
       )}
       <div className="laser-camera-frame">
         <canvas ref={canvasRef} />
+        {activity && (
+          <div className={`laser-camera-activity phase-${String(progress.phase || '').replace(/_/g, '-')}`}>
+            <strong>{activity.title}</strong>
+            {activity.detail && <span>{activity.detail}</span>}
+          </div>
+        )}
+        {beamContours.length > 0 && (
+          <div className="laser-profile-legend" aria-hidden="true">
+            {beamContours.map((contour, index) => (
+              <span key={`${contour.relative_height}-${index}`}>
+                <i style={{ backgroundColor: PROFILE_COLORS[index % PROFILE_COLORS.length] }} />
+                {Math.round(Number(contour.relative_height) * 100)}%
+              </span>
+            ))}
+          </div>
+        )}
         {!frame && (
           <div className="laser-camera-placeholder">
             <span>{previewEnabled
@@ -550,6 +680,7 @@ export const CameraPreview = ({
       </div>
       {controlError && <div className="laser-inline-error">{controlError}</div>}
       {frameError && <div className="laser-inline-error">{frameError}</div>}
+      <BeamProfileSummary progress={progress} />
       {camera && (
         <details className="laser-camera-controls" onToggle={handleCameraControlsToggle}>
           <summary>Camera controls</summary>

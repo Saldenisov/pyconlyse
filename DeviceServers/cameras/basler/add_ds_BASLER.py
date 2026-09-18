@@ -21,14 +21,14 @@ names = {
             "AOI_Controls": {
                 "Width": 370,
                 "Height": 370,
-                "OffsetX": 300,
+                "OffsetX": 100,
                 "OffsetY": 380,
             },
             "Acquisition_Controls": {
                 "TriggerSource": "Line1",
                 "TriggerMode": "On",
                 "TriggerDelayAbs": 185000,
-                "ExposureTimeAbs": 20000,
+                "ExposureTimeAbs": 80000,
                 "AcquisitionFrameRateAbs": 10,
                 "AcquisitionFrameRateEnable": True,
             },

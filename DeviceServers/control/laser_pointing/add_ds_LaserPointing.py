@@ -15,7 +15,6 @@ names = {
             "Camera": "manip/V0/Cam1_V0",
             "MainLaserDiaphragm1": "elyse/motorized_devices/de1",
             "Shutter1": "manip/V0/s1",
-            "Shutter2": "manip/V0/s2",
             "CrimpingDiaphragm1": "manip/V0/dv01",
             "CrimpingDiaphragm2": "manip/V0/dv02",
             "ActuatorX1": "elyse/motorized_devices/mm1_x",
@@ -27,7 +26,7 @@ names = {
         od(
             {
                 "Laser Parameters": ("MainLaserDiaphragm1", "HalfWavePlate1"),
-                "Shutters": ("Shutter1", "Shutter2"),
+                "Shutters": ("Shutter1",),
                 "Crimping Diaphragms": ("CrimpingDiaphragm1", "CrimpingDiaphragm2"),
                 "Actuators 1": ("ActuatorX1", "ActuatorY1"),
                 "Actuators 2": ("ActuatorX2", "ActuatorY2"),
@@ -40,42 +39,49 @@ names = {
             {
                 "point1": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 40,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 20,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 10,
                     "CrimpingDiaphragm2": 60,
                     "HalfWavePlate1": 100,
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 40,
                     "HalfWavePlate1": 100,
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 20,
                     "HalfWavePlate1": 100,
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 60,
                     "CrimpingDiaphragm2": 10,
                     "HalfWavePlate1": 100,
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,
+                    "Shutter1": -1,
                     "CrimpingDiaphragm1": 100,
                     "CrimpingDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
@@ -126,6 +132,8 @@ names = {
             {
                 "point1": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -134,6 +142,8 @@ names = {
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -142,6 +152,8 @@ names = {
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
@@ -150,6 +162,8 @@ names = {
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -158,6 +172,8 @@ names = {
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -166,6 +182,8 @@ names = {
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
@@ -174,6 +192,8 @@ names = {
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,
+                    "Shutter1": 1,
+                    "Shutter2": -1,
                     "MainLaserDiaphragm2": 100,
                     "HalfWavePlate1": 20.5,
                     "TranslationStage1": (3, 0),
@@ -232,8 +252,10 @@ names = {
 }
 
 
-# At server startup, DS_LaserPointing replaces any legacy flipper entries with
-# -1 numbered-point / +1 Working rules: Cam1 controls S1, Cam2 controls S1+S2.
+# Flipper routing is camera-specific and remains constant across all optical
+# points. Cam1 observes with S1 at -1; Cam2 observes with S1 at +1 and S2 at
+# -1. DS_LaserPointing executes these registered targets without rewriting
+# them.
 CAMERA_VERIFIED_ROLES = {}
 
 
@@ -264,7 +286,13 @@ def main():
                         "step_schedule": [10.0, 6.0, 2.0],
                         "radius": 30.0,
                         "tolerance_px": 2.0,
-                        "roundness_tolerance_pct": 7.0,
+                        # Cam1's measured nine-contour baseline is 8-11% even
+                        # after alignment. Use its validated acceptance band;
+                        # keep the stricter generic value until Cam2 is
+                        # calibrated through its own optical path.
+                        "roundness_tolerance_pct": (
+                            12.0 if dev_id == "LaserPointingV0_Cam1" else 7.0
+                        ),
                         "minimum_improvement_px": 0.1,
                         "unchanged_response_tolerance_px": 0.25,
                         "probe_repetitions": 3,

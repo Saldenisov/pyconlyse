@@ -24,6 +24,9 @@ Device: `manip/V0/LaserPointing-Cam1`; camera: `manip/V0/Cam1_V0`.
 
 - The Elyse entry diaphragm (`MainLaserDiaphragm1`) stays at 9.2 for points
   1-6.
+- The camera route is fixed at `Shutter1 = -1` (LEFT/up) for every numbered
+  point and for Working. Lowering S1 sends the beam past Basler1, so the
+  controller must not derive this setting from point type.
 - Points 1, 2, and 3 close the first downstream diaphragm to 40, 20, and 10.
   `ActuatorX1` and `ActuatorY1` align this plane.
 - Points 4, 5, and 6 close the second downstream diaphragm to 40, 20, and 10.
@@ -34,6 +37,10 @@ Device: `manip/V0/LaserPointing-Cam1`; camera: `manip/V0/Cam1_V0`.
 Device: `manip/V0/LaserPointing-Cam2`; camera: `manip/V0/Cam2_V0`.
 
 - The Elyse entry diaphragm again stays at 9.2.
+- The camera route is fixed at `Shutter1 = +1` (RIGHT/down) and
+  `Shutter2 = -1` (LEFT/up) for every numbered point and for Working. This
+  mixed route is intentional; commanding both flippers to the same endpoint
+  hides the beam from Basler2.
 - Points 1-3 use translation-stage position 0 and diaphragm settings 40, 20,
   and 10. `ActuatorX3` and `ActuatorY3` are adjusted.
 - Points 4-6 use translation-stage position -700 and diaphragm settings 40,
@@ -69,6 +76,13 @@ remeasures them; it declares convergence only when both remain below the
 symmetry-error tolerance in that complete pass. A second complete cycle is
 available because the separated-plane adjustments can interact. If the
 configured passes are exhausted, status is **not converged**, not completed.
+Cam1 uses a measured 12% acceptance band because its stable nine-contour
+baseline after alignment is approximately 8-11%. Cam2 retains the generic 7%
+default until its routed optical path is calibrated.
+
+The best position is retained across motor-step passes within the same optical
+stage. A noisier fine pass therefore cannot replace a better position already
+measured during a coarser pass.
 
 ## Mechanical stiction handling
 
@@ -112,8 +126,10 @@ These defaults come from the registered hardware settings. OWIS axis 3 is
 configured at speed 15 and must travel 700 units between the two propagation
 planes, so its nominal full move is about 47 seconds; 180 seconds allows ample
 margin without guessing that it completed. Basler1 and Basler2 are configured
-at 10 frames/s with 20 ms exposure, so 0.25 seconds spans more than two normal
-frame periods after motion completion.
+at 10 frames/s. Basler1 uses 80 ms exposure for the 10 Hz pulsed laser (leaving
+margin inside its 100 ms period); Basler2 keeps 20 ms until its path is
+calibrated. The 0.25-second wait spans more than two normal frame periods after
+motion completion.
 
 ## Laser-loss and stop behaviour
 
