@@ -10,6 +10,7 @@ import LaserPointingController, {
   actuatorVisualState,
   formatOpticalStatusValue,
   laserSnapshotErrorMessage,
+  measuredProfileSnapshot,
   pointAperture,
   pointNumber,
   roundnessError,
@@ -104,6 +105,25 @@ describe('LaserPointing optical point presentation', () => {
       title: 'Calculating profiles at point 6',
       detail: 'Fitting nine iso-intensity contours from the outer beam to the core',
     });
+  });
+
+  test('binds fitted contours to their measured camera frame and centroid', () => {
+    const snapshot = measuredProfileSnapshot({
+      measured_point: 'point6',
+      beam_shape: {
+        preview_data_url: 'data:image/png;base64,AAAA',
+        preview_centroid: [143.5, 207.25],
+      },
+    });
+
+    expect(snapshot).toEqual({
+      dataUrl: 'data:image/png;base64,AAAA',
+      centroid: { X: 143.5, Y: 207.25 },
+      point: 'point6',
+    });
+    expect(measuredProfileSnapshot({
+      beam_shape: { preview_data_url: 'https://example.test/stale.png' },
+    })).toBeNull();
   });
 
   test('formats the desktop-equivalent passive optical readback', () => {

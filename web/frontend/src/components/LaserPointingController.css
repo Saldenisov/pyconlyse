@@ -319,6 +319,21 @@
   pointer-events: none;
 }
 
+.laser-profile-frame-label {
+  position: absolute;
+  bottom: 9px;
+  left: 9px;
+  z-index: 2;
+  padding: 4px 7px;
+  border: 1px solid rgba(83, 204, 255, 0.65);
+  border-radius: 5px;
+  background: rgba(4, 12, 20, 0.78);
+  color: #d8f4ff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+
 .laser-profile-legend span,
 .laser-profile-levels div {
   display: inline-flex;

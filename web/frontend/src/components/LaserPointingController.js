@@ -383,6 +383,60 @@ const BeamProfileSummary = ({ progress = {} }) => {
   );
 };
 
+export const measuredProfileSnapshot = (progress = {}) => {
+  const shape = progress?.beam_shape;
+  const dataUrl = typeof shape?.preview_data_url === 'string'
+    && shape.preview_data_url.startsWith('data:image/png;base64,')
+    ? shape.preview_data_url : '';
+  if (!dataUrl) return null;
+  const centroid = Array.isArray(shape.preview_centroid)
+    ? {
+      X: finiteNumber(shape.preview_centroid[0]),
+      Y: finiteNumber(shape.preview_centroid[1]),
+    }
+    : null;
+  return {
+    dataUrl,
+    centroid: centroid?.X !== null && centroid?.Y !== null ? centroid : null,
+    point: progress.measured_point || progress.point || '',
+  };
+};
+
+const drawBeamOverlays = (context, width, marker, contours) => {
+  const x = finiteNumber(marker?.X);
+  const y = finiteNumber(marker?.Y);
+  if (x !== null && y !== null) {
+    context.strokeStyle = '#ff3b30';
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(x, y, 10, 0, Math.PI * 2);
+    context.moveTo(x - 15, y);
+    context.lineTo(x + 15, y);
+    context.moveTo(x, y - 15);
+    context.lineTo(x, y + 15);
+    context.stroke();
+  }
+
+  contours.forEach((contour, index) => {
+    const centreX = finiteNumber(contour?.centre?.[0]);
+    const centreY = finiteNumber(contour?.centre?.[1]);
+    const radius = finiteNumber(contour?.radius_px);
+    const axisRatio = Math.max(0.05, Math.min(1, (finiteNumber(contour?.axis_roundness_pct) ?? 100) / 100));
+    if (centreX === null || centreY === null || radius === null || radius <= 0) return;
+    const major = radius / Math.sqrt(axisRatio);
+    const minor = radius * Math.sqrt(axisRatio);
+    const angle = ((finiteNumber(contour?.major_axis_angle_deg) ?? 0) * Math.PI) / 180;
+    context.save();
+    context.strokeStyle = PROFILE_COLORS[index % PROFILE_COLORS.length];
+    context.lineWidth = Math.max(1.3, width / 500);
+    context.setLineDash(index % 2 ? [5, 3] : []);
+    context.beginPath();
+    context.ellipse(centreX, centreY, major, minor, angle, 0, Math.PI * 2);
+    context.stroke();
+    context.restore();
+  });
+};
+
 export const CameraPreview = ({
   camera,
   enabled = true,
@@ -411,6 +465,10 @@ export const CameraPreview = ({
   const beamContours = useMemo(
     () => (Array.isArray(progress?.beam_shape?.contours)
       ? progress.beam_shape.contours : []),
+    [progress]
+  );
+  const profileSnapshot = useMemo(
+    () => measuredProfileSnapshot(progress),
     [progress]
   );
 
@@ -504,10 +562,34 @@ export const CameraPreview = ({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !Array.isArray(frame) || !frame.length || !Array.isArray(frame[0])) return;
+    if (!canvas) return undefined;
+
+    if (profileSnapshot && beamContours.length) {
+      let active = true;
+      const measuredImage = new Image();
+      measuredImage.onload = () => {
+        if (!active) return;
+        canvas.width = measuredImage.naturalWidth;
+        canvas.height = measuredImage.naturalHeight;
+        const context = canvas.getContext('2d');
+        context.drawImage(measuredImage, 0, 0);
+        drawBeamOverlays(
+          context,
+          measuredImage.naturalWidth,
+          profileSnapshot.centroid,
+          beamContours
+        );
+      };
+      measuredImage.src = profileSnapshot.dataUrl;
+      return () => {
+        active = false;
+      };
+    }
+
+    if (!Array.isArray(frame) || !frame.length || !Array.isArray(frame[0])) return undefined;
     const height = Math.floor(frame.length / 3);
     const width = frame[0].length;
-    if (!height || !width) return;
+    if (!height || !width) return undefined;
 
     canvas.width = width;
     canvas.height = height;
@@ -523,40 +605,9 @@ export const CameraPreview = ({
       }
     }
     context.putImageData(image, 0, 0);
-
-    const x = Number(centroid?.X);
-    const y = Number(centroid?.Y);
-    if (Number.isFinite(x) && Number.isFinite(y)) {
-      context.strokeStyle = '#ff3b30';
-      context.lineWidth = 2;
-      context.beginPath();
-      context.arc(x, y, 10, 0, Math.PI * 2);
-      context.moveTo(x - 15, y);
-      context.lineTo(x + 15, y);
-      context.moveTo(x, y - 15);
-      context.lineTo(x, y + 15);
-      context.stroke();
-    }
-
-    beamContours.forEach((contour, index) => {
-      const centreX = finiteNumber(contour?.centre?.[0]);
-      const centreY = finiteNumber(contour?.centre?.[1]);
-      const radius = finiteNumber(contour?.radius_px);
-      const axisRatio = Math.max(0.05, Math.min(1, (finiteNumber(contour?.axis_roundness_pct) ?? 100) / 100));
-      if (centreX === null || centreY === null || radius === null || radius <= 0) return;
-      const major = radius / Math.sqrt(axisRatio);
-      const minor = radius * Math.sqrt(axisRatio);
-      const angle = ((finiteNumber(contour?.major_axis_angle_deg) ?? 0) * Math.PI) / 180;
-      context.save();
-      context.strokeStyle = PROFILE_COLORS[index % PROFILE_COLORS.length];
-      context.lineWidth = Math.max(1.3, width / 500);
-      context.setLineDash(index % 2 ? [5, 3] : []);
-      context.beginPath();
-      context.ellipse(centreX, centreY, major, minor, angle, 0, Math.PI * 2);
-      context.stroke();
-      context.restore();
-    });
-  }, [frame, centroid, beamContours]);
+    drawBeamOverlays(context, width, centroid, []);
+    return undefined;
+  }, [frame, centroid, beamContours, profileSnapshot]);
 
   const setCameraGrabbing = async (action) => {
     if (!camera || cameraAction) return;
@@ -671,6 +722,11 @@ export const CameraPreview = ({
       )}
       <div className="laser-camera-frame">
         <canvas ref={canvasRef} />
+        {profileSnapshot && beamContours.length > 0 && (
+          <div className="laser-profile-frame-label">
+            {`Measured profile frame${profileSnapshot.point ? ` · ${String(profileSnapshot.point).replace(/point/i, 'point ')}` : ''}`}
+          </div>
+        )}
         {activity && (
           <div className={`laser-camera-activity phase-${String(progress.phase || '').replace(/_/g, '-')}`}>
             <strong>{activity.title}</strong>
@@ -687,7 +743,7 @@ export const CameraPreview = ({
             ))}
           </div>
         )}
-        {!frame && (
+        {!frame && !profileSnapshot && (
           <div className="laser-camera-placeholder">
             <span>{previewEnabled
               ? 'Waiting for camera frame…'

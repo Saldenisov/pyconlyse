@@ -1,5 +1,7 @@
 """Concentric-contour symmetry measurements for laser-beam alignment."""
 
+import base64
+
 import numpy as np
 
 try:
@@ -69,7 +71,44 @@ def _fitted_contour(contour):
     }
 
 
-def beam_contour_symmetry(images, threshold, width=None, height=None):
+def _profile_preview(gray, threshold):
+    """Encode the measured median frame and its threshold centroid for the UI."""
+
+    display = np.clip(gray, 0, 255).astype(np.uint8)
+    encoded, png = cv2.imencode(".png", display)
+    if not encoded:
+        raise ValueError("could not encode the measured beam-profile frame")
+
+    _ret, binary = cv2.threshold(
+        display, float(threshold), 255, cv2.THRESH_BINARY
+    )
+    contours, _hierarchy = cv2.findContours(
+        binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    centroid = None
+    if contours:
+        tracked = max(contours, key=cv2.contourArea)
+        moments = cv2.moments(tracked)
+        if moments["m00"]:
+            centroid = [
+                float(moments["m10"] / moments["m00"]),
+                float(moments["m01"] / moments["m00"]),
+            ]
+
+    return {
+        "preview_data_url": (
+            "data:image/png;base64,"
+            + base64.b64encode(png.tobytes()).decode("ascii")
+        ),
+        "preview_centroid": centroid,
+        "preview_width": int(display.shape[1]),
+        "preview_height": int(display.shape[0]),
+    }
+
+
+def beam_contour_symmetry(
+    images, threshold, width=None, height=None, include_preview=False
+):
     """Score a few frames by sweeping beam contours from outer ring to core.
 
     No term uses the absolute location of the beam in the camera frame.
@@ -150,7 +189,7 @@ def beam_contour_symmetry(images, threshold, width=None, height=None):
     axis_roundness = float(np.mean([
         level["axis_roundness_pct"] for level in levels
     ]))
-    return {
+    result = {
         "roundness_pct": 100.0 - error,
         "roundness_error_pct": error,
         "axis_roundness_pct": axis_roundness,
@@ -169,6 +208,9 @@ def beam_contour_symmetry(images, threshold, width=None, height=None):
         "contours": levels,
         "sample_count": len(frames),
     }
+    if include_preview:
+        result.update(_profile_preview(gray, threshold))
+    return result
 
 
 def beam_roundness(image, threshold, width=None, height=None):

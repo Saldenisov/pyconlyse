@@ -11,6 +11,7 @@ from DeviceServers.control.laser_pointing.automatic_search import (
 )
 from DeviceServers.control.laser_pointing.DS_LaserPointing import (
     DS_LaserPointing,
+    LaserNotVisible,
     SearchCancelled,
 )
 
@@ -678,6 +679,90 @@ def test_failed_optical_probe_restores_last_visible_mount_position(monkeypatch):
     assert moves == [(5.0, 7.0), (6.0, 7.0), (5.0, 7.0)]
 
 
+def test_invisible_directional_probe_is_rejected_without_aborting_search(
+    monkeypatch,
+):
+    controller = object.__new__(DS_LaserPointing)
+    controller.pid_groups = {"group1": ("point1", "point3")}
+    controller.groups = {"Actuators 1": ("ActuatorX1", "ActuatorY1")}
+    controller._search_stop = Event()
+    controller._search_history = []
+    controller._search_started_at = None
+    controller._raise_if_cancelled = lambda: None
+    controller._device_for_role = {
+        "ActuatorX1": "x",
+        "ActuatorY1": "y",
+    }.__getitem__
+    controller._fresh_position_and_state = lambda device: (
+        5.0 if device == "x" else 7.0,
+        "ON",
+    )
+    controller._search_bounds = lambda *_args: ((-30.0, 30.0), (-30.0, 30.0))
+    controller._search_stage_bests = {}
+    moves = []
+    position = [5.0, 7.0]
+
+    def move_pair(_devices, target, _config):
+        position[:] = target
+        moves.append(tuple(target))
+
+    controller._move_pair = move_pair
+
+    def measure(_point_name, _config):
+        if tuple(position) == (6.0, 7.0):
+            raise LaserNotVisible("beam left the camera")
+        return (10.0, 10.0)
+
+    controller._measure_point = measure
+    controller._read_beam_shape = lambda: {
+        "roundness_pct": 98.0,
+        "roundness_error_pct": 2.0,
+        "contour_centre_drift_px": 0.0,
+    }
+
+    def search(objective, **_kwargs):
+        assert objective((5.0, 7.0)) == 2.0
+        assert objective((6.0, 7.0)) == 100.0
+        assert tuple(position) == (5.0, 7.0)
+        return SimpleNamespace(
+            best_position=(5.0, 7.0),
+            best_score=2.0,
+            evaluations=2,
+            reason="minimum_step",
+        )
+
+    monkeypatch.setitem(
+        DS_LaserPointing._optimise_group.__globals__,
+        "bounded_pattern_search",
+        search,
+    )
+    config = {
+        "radius": 30.0,
+        "roundness_tolerance_pct": 7.0,
+        "max_evaluations": 16,
+        "minimum_improvement_px": 0.1,
+        "probe_repetitions": 3,
+        "unchanged_response_tolerance_px": 0.25,
+    }
+
+    result = DS_LaserPointing._optimise_group(
+        controller,
+        "group1",
+        ("point1", "point3"),
+        "sensitive",
+        1,
+        2.0,
+        config,
+        {},
+    )
+
+    assert result["best_position"] == [5.0, 7.0]
+    assert controller._search_history[-1]["roundness_error_pct"] == 100.0
+    assert controller._search_history[-1]["message"].startswith(
+        "Rejected invisible probe"
+    )
+
+
 def test_worse_probe_returns_to_last_good_actuator_position(monkeypatch):
     controller = object.__new__(DS_LaserPointing)
     controller.pid_groups = {"near": ("point1", "point3")}
@@ -899,6 +984,107 @@ def test_measurement_retries_a_transient_invalid_camera_frame():
     ) == pytest.approx((34.0, 42.0), abs=0.25)
     assert controller._read_beam_shape()["contour_count"] >= 3
     assert waits == [0.25, 0.25]
+
+
+def test_measurement_discards_a_beamless_pulsed_laser_frame():
+    import numpy as np
+
+    class Camera:
+        def __init__(self):
+            self.frame_reads = 0
+            self.isgrabbing = True
+            self.width = 81
+            self.height = 81
+            self.center_gravity_threshold = 10
+
+        @property
+        def image(self):
+            self.frame_reads += 1
+            if self.frame_reads == 1:
+                return np.zeros((81, 81), dtype=float)
+            yy, xx = np.indices((81, 81), dtype=float)
+            return 220 * np.exp(
+                -0.5 * (((xx - 34) / 7) ** 2 + ((yy - 42) / 7) ** 2)
+            )
+
+    camera = Camera()
+    controller = object.__new__(DS_LaserPointing)
+    controller.ds_dict = {"Camera": "camera"}
+    controller.devices = {"camera": camera}
+    controller._active_point = "point6"
+    controller._raise_if_cancelled = lambda: None
+    waits = []
+    controller._interruptible_sleep = waits.append
+    config = {
+        "samples": 1,
+        "invalid_frame_retries": 1,
+        "camera_frame_wait_s": 0.25,
+        "sample_interval_s": 0.2,
+    }
+
+    assert DS_LaserPointing._measure_point(
+        controller, "point6", config
+    ) == pytest.approx((34.0, 42.0), abs=0.25)
+    assert camera.frame_reads == 2
+    assert waits == [0.25, 0.25]
+
+
+def test_camera_profile_settings_bypass_stale_taurus_cache():
+    class Source(Enum):
+        DEV = "direct"
+        CACHE_DEV = "cached"
+
+    class Proxy:
+        def __init__(self):
+            self.source = Source.CACHE_DEV
+            self.sources = []
+
+        def get_source(self):
+            return self.source
+
+        def set_source(self, source):
+            self.source = source
+            self.sources.append(source)
+
+        def read_attribute(self, name):
+            assert self.source is Source.DEV
+            values = {
+                "center_gravity_threshold": 50,
+                "width": 400,
+                "height": 400,
+                "isgrabbing": True,
+            }
+            return SimpleNamespace(value=values[name])
+
+    class Camera:
+        center_gravity_threshold = 120
+        width = 300
+        height = 300
+        isgrabbing = False
+
+        def __init__(self):
+            self.proxy = Proxy()
+
+        def getDeviceProxy(self):
+            return self.proxy
+
+    camera = Camera()
+
+    values = DS_LaserPointing._fresh_camera_values(
+        camera,
+        "center_gravity_threshold",
+        "width",
+        "height",
+        "isgrabbing",
+    )
+
+    assert values == {
+        "center_gravity_threshold": 50,
+        "width": 400,
+        "height": 400,
+        "isgrabbing": True,
+    }
+    assert camera.proxy.sources == [Source.DEV, Source.CACHE_DEV]
 
 
 def test_automatic_worker_revisits_both_points_before_declaring_convergence():

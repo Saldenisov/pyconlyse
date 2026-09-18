@@ -104,6 +104,21 @@ def test_median_of_three_frames_suppresses_one_hot_pixel():
     assert measured["roundness_error_pct"] < 3
 
 
+def test_profile_preview_is_the_exact_median_measurement_frame():
+    yy, xx = np.indices((101, 101), dtype=float)
+    frame = 220 * np.exp(-0.5 * (((xx - 61) / 8) ** 2
+                                  + ((yy - 37) / 8) ** 2))
+
+    measured = beam_contour_symmetry(
+        [frame] * 3, threshold=10, include_preview=True
+    )
+
+    assert measured["preview_data_url"].startswith("data:image/png;base64,")
+    assert measured["preview_width"] == 101
+    assert measured["preview_height"] == 101
+    assert measured["preview_centroid"] == pytest.approx((61, 37), abs=0.2)
+
+
 def test_clipped_contours_are_not_accepted_as_alignment():
     yy, xx = np.indices((81, 81), dtype=float)
     clipped = 220 * np.exp(-0.5 * (((xx - 2) / 10) ** 2

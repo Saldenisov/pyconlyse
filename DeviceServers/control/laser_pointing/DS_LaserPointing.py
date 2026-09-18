@@ -895,8 +895,50 @@ class DS_LaserPointing(DS_ControlPosition):
             if last_beam_shape:
                 self._search_progress["beam_shape"] = last_beam_shape
             self._move_pair(actuator_devices, position, config)
-            test = self._measure_point(target_point, config)
-            test_shape = self._read_beam_shape()
+            try:
+                test = self._measure_point(target_point, config)
+                test_shape = self._read_beam_shape()
+            except LaserNotVisible as error:
+                # The baseline must be visible, but a directional probe is
+                # allowed to leave the usable camera/beam path. Score that
+                # candidate as rejected, restore the last measured-good
+                # position, and let the bounded search try another direction.
+                if baseline_centre is None:
+                    raise
+                last_optical_signature = (
+                    1.0e9,
+                    *tuple(float(value) for value in position),
+                )
+                elapsed_s = (
+                    monotonic() - self._search_started_at
+                    if self._search_started_at is not None
+                    else 0.0
+                )
+                observation = {
+                    "index": len(self._search_history) + 1,
+                    "elapsed_s": elapsed_s,
+                    "group": group_name,
+                    "stage": stage_name,
+                    "motor_step": motor_step,
+                    "points": list(point_pair),
+                    "measured_point": target_point,
+                    "actuator_position": list(position),
+                    "roundness_error_pct": 100.0,
+                    "score_metric": "contour_symmetry_error_pct",
+                    "error_px": 100.0,
+                    "message": f"Rejected invisible probe: {error}",
+                }
+                self._search_history.append(observation)
+                self._search_progress = {
+                    **observation,
+                    "phase": "probe_rejected",
+                    "observation_index": observation["index"],
+                }
+                if tuple(position) != best_visible_position:
+                    self._move_pair(
+                        actuator_devices, best_visible_position, config
+                    )
+                return 100.0
             if baseline_centre is None:
                 baseline_centre = test
                 baseline_shape = test_shape
@@ -1454,22 +1496,35 @@ class DS_LaserPointing(DS_ControlPosition):
         }
 
     @staticmethod
-    def _fresh_camera_image(camera):
-        """Take a direct image snapshot, bypassing any Taurus polling cache."""
+    def _fresh_camera_values(camera, *attribute_names):
+        """Read camera attributes directly, bypassing the Taurus polling cache."""
 
         try:
             proxy = camera.getDeviceProxy()
         except AttributeError:
-            return np.array(camera.image, copy=True)
+            return {
+                attribute_name: getattr(camera, attribute_name)
+                for attribute_name in attribute_names
+            }
         original_source = proxy.get_source()
         direct_source = getattr(type(original_source), "DEV", None)
         if direct_source is None:
             raise RuntimeError("camera proxy does not expose a direct-read source")
         try:
             proxy.set_source(direct_source)
-            return np.array(proxy.read_attribute("image").value, copy=True)
+            return {
+                attribute_name: proxy.read_attribute(attribute_name).value
+                for attribute_name in attribute_names
+            }
         finally:
             proxy.set_source(original_source)
+
+    @staticmethod
+    def _fresh_camera_image(camera):
+        """Take a direct image snapshot, bypassing any Taurus polling cache."""
+
+        value = DS_LaserPointing._fresh_camera_values(camera, "image")["image"]
+        return np.array(value, copy=True)
 
     def _read_beam_shape(self):
         """Return the contour score calculated for the latest point sample."""
@@ -1493,6 +1548,17 @@ class DS_LaserPointing(DS_ControlPosition):
         self._interruptible_sleep(config["camera_frame_wait_s"])
         camera = self.devices[self.ds_dict["Camera"]]
         self._last_beam_shape = None
+        profile = self._fresh_camera_values(
+            camera,
+            "center_gravity_threshold",
+            "width",
+            "height",
+        )
+        profile_arguments = {
+            "threshold": float(profile["center_gravity_threshold"]),
+            "width": int(profile["width"]),
+            "height": int(profile["height"]),
+        }
         frames = []
         for sample_index in range(config["samples"]):
             if getattr(self, "cgc", False):
@@ -1510,11 +1576,19 @@ class DS_LaserPointing(DS_ControlPosition):
             while True:
                 self._raise_if_cancelled()
                 try:
-                    if not bool(camera.isgrabbing):
+                    acquisition = self._fresh_camera_values(
+                        camera, "isgrabbing"
+                    )
+                    if not bool(acquisition["isgrabbing"]):
                         raise ValueError("camera acquisition is stopped")
                     frame = self._fresh_camera_image(camera)
                     if frame.size == 0 or frame.ndim < 2:
                         raise ValueError("camera returned an empty frame")
+                    # A valid camera transfer can still contain no usable
+                    # beam after an optical or actuator move. Do not let that
+                    # frame poison the median profile; consume the existing
+                    # invalid-frame retry budget and wait for another frame.
+                    beam_contour_symmetry([frame], **profile_arguments)
                     frames.append(frame)
                     break
                 except Exception as error:
@@ -1529,6 +1603,7 @@ class DS_LaserPointing(DS_ControlPosition):
                     ))
             if sample_index + 1 < config["samples"]:
                 self._interruptible_sleep(config["sample_interval_s"])
+        profile_diagnostics = {}
         try:
             if getattr(self, "cgc", False):
                 self._search_progress.update({
@@ -1538,15 +1613,20 @@ class DS_LaserPointing(DS_ControlPosition):
                         f"Calculating nine iso-intensity profiles at {point_name}"
                     ),
                 })
+            profile_diagnostics = {
+                **profile_arguments,
+                "frame_shapes": [list(np.asarray(frame).shape) for frame in frames],
+                "frame_peaks": [float(np.max(frame)) for frame in frames],
+            }
             shape = beam_contour_symmetry(
                 frames,
-                threshold=float(camera.center_gravity_threshold),
-                width=int(camera.width),
-                height=int(camera.height),
+                include_preview=True,
+                **profile_arguments,
             )
         except Exception as error:
             raise LaserNotVisible(
-                f"Basler beam contours are invalid at {point_name}: {error}"
+                f"Basler beam contours are invalid at {point_name}: {error}; "
+                f"profile input={profile_diagnostics}"
             ) from error
         self._last_beam_shape = shape
         return tuple(shape["shape_centroid"])
