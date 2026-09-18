@@ -57,6 +57,28 @@ controllers, point 3 was applied and checked on each camera:
 - The controller now retries transient OWIS status-read timeouts during a long
   translation move and publishes the point only after final readback.
 
+## Point-1 camera framing
+
+The camera areas of interest were measured from ten full-sensor point-1 frames
+and then verified over twelve cropped frames. The crop targets approximately
+20% total dark space across the larger beam dimension (roughly 10% on each
+side) while centring the beam.
+
+| Camera | Offset X | Offset Y | Width | Height | Beam box | Centre error | Valid frames |
+| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |
+| Cam1 | 268 | 464 | 108 | 108 | 85 × 84 px | 1.7 px | 12/12 |
+| Cam2 | 400 | 398 | 108 | 108 | 76 × 85 px | 3.8 px | 12/12 |
+
+Cam1 retains threshold 20, exposure 80,000 us, and gain 0. Cam2 retains
+threshold 50, exposure 50,000 us, and gain 2. No exposure exceeds the 100 ms
+period of the 10 Hz laser.
+
+The tighter crops were also checked at the fine alignment points 3 and 6.
+Every point returned valid centroids in 8/8 frames, with complete fitted
+contours and no frame-edge clipping. Cam2 point 6 completed the OWIS move to
+-700 and point 1 subsequently returned it to 0. The Standa readbacks remained
+unchanged throughout this framing check.
+
 These values describe the present optical and camera conditions. Repeat the
 same sweep after material optical changes, camera replacement, or a substantial
 change in beam energy/profile; do not infer new presets only from the nominal

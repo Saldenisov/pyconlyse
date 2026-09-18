@@ -4,7 +4,7 @@ db = Database()
 
 CG_THRESHOLDS = {
     "Cam1_V0": 20,
-    "Cam2_V0": 120,
+    "Cam2_V0": 50,
 }
 
 
@@ -24,10 +24,12 @@ names = {
                 "BalanceRatioRaw": 64,
             },
             "AOI_Controls": {
-                "Width": 370,
-                "Height": 370,
-                "OffsetX": 100,
-                "OffsetY": 380,
+                # Point-1 beam calibration, 2026-09-18: about 20% total dark
+                # margin around the measured beam and a centred centroid.
+                "Width": 108,
+                "Height": 108,
+                "OffsetX": 268,
+                "OffsetY": 464,
             },
             "Acquisition_Controls": {
                 "TriggerSource": "Line1",
@@ -50,21 +52,23 @@ names = {
             "Transport_layer": {"Packet_size": 1500, "Inter-Packet_Delay": 1000},
             "Analog_Controls": {
                 "GainAuto": "Off",
-                "GainRaw": 0,
+                "GainRaw": 2,
                 "BlackLevelRaw": -30,
                 "BalanceRatioRaw": 64,
             },
             "AOI_Controls": {
-                "Width": 400,
-                "Height": 500,
-                "OffsetX": 280,
-                "OffsetY": 0,
+                # Point-1 beam calibration, 2026-09-18: about 20% total dark
+                # margin around the measured beam and a centred centroid.
+                "Width": 108,
+                "Height": 108,
+                "OffsetX": 400,
+                "OffsetY": 398,
             },
             "Acquisition_Controls": {
                 "TriggerSource": "Line1",
                 "TriggerMode": "On",
                 "TriggerDelayAbs": 185000,
-                "ExposureTimeAbs": 20000,
+                "ExposureTimeAbs": 50000,
                 "AcquisitionFrameRateAbs": 10,
                 "AcquisitionFrameRateEnable": True,
             },
