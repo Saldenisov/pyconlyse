@@ -44,13 +44,19 @@ export const pointAperture = (settings = {}) => {
   const candidates = Object.entries(settings)
     .filter(([role]) => role.includes('CrimpingDiaphragm'))
     .map(([, value]) => Number(value))
-    .filter((value) => [10, 20, 40].includes(value));
-  return candidates.length ? candidates[candidates.length - 1] : null;
+    .filter((value) => Number.isFinite(value) && value >= 0);
+  // The inactive diaphragm is parked at its measured open plateau. The
+  // smaller opening is therefore the diaphragm that defines this point.
+  return candidates.length ? Math.min(...candidates) : null;
 };
 
-const pointSensitivity = (aperture) => (
-  ({ 40: 'Wide', 20: 'Medium', 10: 'Fine' }[aperture] || 'Preset')
-);
+const pointSensitivity = (name) => {
+  const number = pointNumber(name);
+  if ([1, 4].includes(number)) return 'Wide';
+  if ([2, 5].includes(number)) return 'Medium';
+  if ([3, 6].includes(number)) return 'Fine';
+  return 'Preset';
+};
 
 const formatOpticalValue = (value) => {
   const numeric = Number(value);
@@ -1528,7 +1534,7 @@ const LaserPointingController = ({ deviceName }) => {
                     className={(pointTransition?.name || activePoint) === point.name ? 'selected' : ''}
                     onClick={() => activateOpticalPoint(point)}
                     disabled={pointControlsDisabled}
-                    aria-label={`Point ${point.number} ${pointSensitivity(aperture)} ${aperture !== null ? `${aperture}%` : 'preset'}`}
+                    aria-label={`Point ${point.number} ${pointSensitivity(point.name)} ${aperture !== null ? `${aperture}%` : 'preset'}`}
                     title={Object.entries(point.settings).map(([key, value]) => `${key}=${value}`).join(', ')}
                   >
                     <strong>P{point.number}</strong>

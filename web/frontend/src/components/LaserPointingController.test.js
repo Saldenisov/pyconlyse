@@ -23,9 +23,12 @@ describe('LaserPointing optical point presentation', () => {
     expect(pointNumber('working')).toBeNull();
   });
 
-  test('selects the active 40/20/10 diaphragm aperture from each preset', () => {
+  test('selects the smaller active diaphragm aperture from each preset', () => {
     expect(pointAperture({ CrimpingDiaphragm1: 40, CrimpingDiaphragm2: 60 })).toBe(40);
     expect(pointAperture({ CrimpingDiaphragm1: 30, CrimpingDiaphragm2: 10 })).toBe(10);
+    expect(pointAperture({ CrimpingDiaphragm1: 10, CrimpingDiaphragm2: 20 })).toBe(10);
+    expect(pointAperture({ CrimpingDiaphragm1: 6.5, CrimpingDiaphragm2: 20 })).toBe(6.5);
+    expect(pointAperture({ CrimpingDiaphragm1: 20, CrimpingDiaphragm2: 7.5 })).toBe(7.5);
     expect(pointAperture({ TranslationStage1: [3, -700] })).toBeNull();
   });
 

@@ -519,6 +519,45 @@ def test_multi_axis_point_move_uses_owis_array_command():
     assert owis.commands == [[3.0, -700.0]]
 
 
+def test_multi_axis_point_move_retries_transient_owis_read_timeout():
+    class Owis:
+        def __init__(self):
+            self.status_calls = 0
+
+        @staticmethod
+        def move_axis(_command):
+            return 0
+
+        def get_status_axis(self, _axis):
+            self.status_calls += 1
+            if self.status_calls == 1:
+                raise RuntimeError("API_DeviceTimedOut")
+            return 0
+
+        @staticmethod
+        def read_position_axis(_axis):
+            return 0.0
+
+    controller = object.__new__(DS_LaserPointing)
+    controller._raise_if_cancelled = lambda: None
+    controller._interruptible_sleep = lambda _delay: None
+    owis = Owis()
+
+    DS_LaserPointing._move_multi_axis(
+        controller,
+        owis,
+        (3, 0.0),
+        {
+            "motion_timeout_s": 1.0,
+            "motion_poll_s": 0.01,
+            "position_tolerance": 0.05,
+            "position_stable_reads": 1,
+        },
+    )
+
+    assert owis.status_calls == 2
+
+
 def test_camera_verified_static_shutter_is_left_untouched_when_laser_is_visible():
     controller = object.__new__(DS_LaserPointing)
     controller.controller_rules = {

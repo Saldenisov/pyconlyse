@@ -1287,20 +1287,37 @@ class DS_LaserPointing(DS_ControlPosition):
         # Multi-axis OWIS servers expose move_axis as a DevVarDoubleArray.
         # The historical move_axis_abs alias used to be declared as a scalar
         # command and could not transport [axis, target] through Tango.
-        result = device.move_axis([float(axis), target])
-        command_error = self._command_error(result)
-        if command_error:
-            raise RuntimeError(command_error)
+        try:
+            result = device.move_axis([float(axis), target])
+        except Exception as error:
+            # A Tango request timeout is an unknown command result: the OWIS
+            # server can keep executing the accepted move. Prove completion
+            # from subsequent position/state reads instead of issuing the
+            # command a second time while the stage may already be moving.
+            if not self._is_command_timeout(error):
+                raise
+        else:
+            command_error = self._command_error(result)
+            if command_error:
+                raise RuntimeError(command_error)
 
         deadline = monotonic() + config["motion_timeout_s"]
         stable = 0
         last_actual = None
+        last_read_error = ""
         while monotonic() < deadline:
             self._raise_if_cancelled()
             try:
                 state = device.get_status_axis(axis)
                 last_actual = float(device.read_position_axis(axis))
             except Exception as error:
+                # The OWIS aggregator may be serialization-busy for longer
+                # than the client's 3 s timeout while a long axis move is in
+                # progress. Retry only timeouts; other errors remain fatal.
+                if self._is_command_timeout(error):
+                    last_read_error = str(error)
+                    self._interruptible_sleep(config["motion_poll_s"])
+                    continue
                 raise RuntimeError(
                     f"could not read OWIS axis {axis} position/state: {error}"
                 )
@@ -1317,7 +1334,8 @@ class DS_LaserPointing(DS_ControlPosition):
             self._interruptible_sleep(config["motion_poll_s"])
         raise RuntimeError(
             f"OWIS axis {axis} did not reach {target} within "
-            f"{config['motion_timeout_s']} s; last readback was {last_actual}"
+            f"{config['motion_timeout_s']} s; last readback was {last_actual}; "
+            f"last transient read error was {last_read_error or 'none'}"
         )
 
     @staticmethod

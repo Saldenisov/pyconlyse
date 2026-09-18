@@ -32,51 +32,52 @@ names = {
                 "Actuators 2": ("ActuatorX2", "ActuatorY2"),
             }
         ),
-        # Basler1 optical sequence: points 1-3 close the first downstream
-        # diaphragm; points 4-6 close the second. The Elyse entry diaphragm is
-        # held near 10% for a small, accurately positioned beam.
+        # Basler1 optical sequence calibrated from dark-room camera statistics
+        # on 2026-09-18. Points 1-3 close the first downstream diaphragm;
+        # points 4-6 close the second. The inactive diaphragm is held at the
+        # measured open plateau (20%), avoiding redundant presets above it.
         od(
             {
                 "point1": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 40,
-                    "CrimpingDiaphragm2": 60,
+                    "CrimpingDiaphragm1": 10,
+                    "CrimpingDiaphragm2": 20,
                     "HalfWavePlate1": 100,
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 20,
-                    "CrimpingDiaphragm2": 60,
+                    "CrimpingDiaphragm1": 6.5,
+                    "CrimpingDiaphragm2": 20,
                     "HalfWavePlate1": 100,
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 10,
-                    "CrimpingDiaphragm2": 60,
+                    "CrimpingDiaphragm1": 5,
+                    "CrimpingDiaphragm2": 20,
                     "HalfWavePlate1": 100,
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 60,
-                    "CrimpingDiaphragm2": 40,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 15,
                     "HalfWavePlate1": 100,
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 60,
-                    "CrimpingDiaphragm2": 20,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 10,
                     "HalfWavePlate1": 100,
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
                     "Shutter1": -1,
-                    "CrimpingDiaphragm1": 60,
-                    "CrimpingDiaphragm2": 10,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 7.5,
                     "HalfWavePlate1": 100,
                 },
                 "working": {
@@ -125,9 +126,10 @@ names = {
                 "Translation stages": ("TranslationStage1"),
             }
         ),
-        # Basler2 optical sequence: points 1-3 observe the near propagation
-        # plane; points 4-6 move the translation stage to -700 for a more
-        # sensitive, long-distance position/angle constraint.
+        # Basler2 optical sequence calibrated from dark-room camera statistics
+        # on 2026-09-18. Points 1-3 observe the near propagation plane; points
+        # 4-6 move the translation stage to -700. The first crimping diaphragm
+        # is held at its measured open plateau (20%).
         od(
             {
                 "point1": {
@@ -137,8 +139,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 40,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 15,
                 },
                 "point2": {
                     "MainLaserDiaphragm1": 9.2,
@@ -147,8 +149,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 20,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 10,
                 },
                 "point3": {
                     "MainLaserDiaphragm1": 9.2,
@@ -157,8 +159,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, 0),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 10,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 5,
                 },
                 "point4": {
                     "MainLaserDiaphragm1": 9.2,
@@ -167,8 +169,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 40,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 15,
                 },
                 "point5": {
                     "MainLaserDiaphragm1": 9.2,
@@ -177,8 +179,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 20,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 10,
                 },
                 "point6": {
                     "MainLaserDiaphragm1": 9.2,
@@ -187,8 +189,8 @@ names = {
                     "MainLaserDiaphragm2": 80,
                     "HalfWavePlate1": 100,
                     "TranslationStage1": (3, -700),
-                    "CrimpingDiaphragm1": 30,
-                    "CrimpingDiaphragm2": 10,
+                    "CrimpingDiaphragm1": 20,
+                    "CrimpingDiaphragm2": 5,
                 },
                 "working": {
                     "MainLaserDiaphragm1": 100,

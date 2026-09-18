@@ -21,6 +21,7 @@ from DeviceServers.shared.DS_Widget import DS_General_Widget, VisType
 from DeviceServers.motion.standa.DS_STANDA_LaserPointing_Widget import Standa_LaserPointing
 from DeviceServers.control.laser_pointing.automatic_search import optical_point_group
 from DeviceServers.control.laser_pointing.widget_helpers import (
+    active_point_aperture,
     format_optical_status_value,
     is_other_optical_role,
     manual_alignment_motion_enabled,
@@ -600,8 +601,10 @@ class LaserPointing(DS_General_Widget):
                 if entry is None:
                     continue
                 _, state, parameters = entry
-                aperture = self._point_aperture(parameters)
-                detail = f"{int(aperture)}%" if aperture is not None else ""
+                aperture = active_point_aperture(parameters)
+                detail = (
+                    f"{aperture:g}%" if aperture is not None else ""
+                )
                 button = QtWidgets.QPushButton(f"P{point_number} {detail}".rstrip())
                 button.setCheckable(True)
                 button.setFixedHeight(25)
@@ -841,20 +844,6 @@ class LaserPointing(DS_General_Widget):
             """
         )
         return group
-
-    @staticmethod
-    def _point_aperture(parameters):
-        candidates = []
-        for role, value in parameters.items():
-            if "CrimpingDiaphragm" not in str(role):
-                continue
-            try:
-                numeric = float(value)
-            except (TypeError, ValueError):
-                continue
-            if numeric in (10.0, 20.0, 40.0):
-                candidates.append(numeric)
-        return candidates[-1] if candidates else None
 
     @staticmethod
     def _point_tooltip(state, parameters):

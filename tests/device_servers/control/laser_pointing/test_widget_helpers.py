@@ -1,9 +1,20 @@
 from DeviceServers.control.laser_pointing.widget_helpers import (
     STANDA_STEP_SIZES,
+    active_point_aperture,
     format_optical_status_value,
     is_other_optical_role,
     manual_alignment_motion_enabled,
 )
+
+
+def test_active_point_aperture_uses_calibrated_smaller_diaphragm():
+    assert active_point_aperture(
+        {"CrimpingDiaphragm1": 6.5, "CrimpingDiaphragm2": 20}
+    ) == 6.5
+    assert active_point_aperture(
+        {"CrimpingDiaphragm1": 20, "CrimpingDiaphragm2": 7.5}
+    ) == 7.5
+    assert active_point_aperture({"TranslationStage1": (3, -700)}) is None
 
 
 def test_compact_standa_step_sizes_match_operator_choices():

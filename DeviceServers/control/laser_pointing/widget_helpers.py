@@ -6,6 +6,24 @@ import re
 STANDA_STEP_SIZES = (0.5, 1.0, 2.0, 5.0, 20.0, 50.0, 100.0)
 
 
+def active_point_aperture(parameters):
+    """Return the diaphragm opening that defines an optical point preset."""
+
+    candidates = []
+    for role, value in parameters.items():
+        if "CrimpingDiaphragm" not in str(role):
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        if numeric >= 0:
+            candidates.append(numeric)
+    # The inactive diaphragm is parked at its measured open plateau. The
+    # smaller opening is therefore the diaphragm that defines this point.
+    return min(candidates) if candidates else None
+
+
 def _camera_number(value):
     match = re.search(r"cam(?:era)?[_-]?(\d+)", str(value or ""), re.IGNORECASE)
     return int(match.group(1)) if match else None
