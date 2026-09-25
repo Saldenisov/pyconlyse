@@ -8611,6 +8611,21 @@ packaging = "*"
 test = ["pytest (>=6,!=7.0.0,!=7.0.1)", "pytest-cov (>=3.0.0)", "pytest-qt"]
 
 [[package]]
+name = "reactivex"
+version = "4.1.0"
+description = "ReactiveX (Rx) for Python"
+optional = false
+python-versions = "<4.0,>=3.8"
+groups = ["main"]
+files = [
+    {file = "reactivex-4.1.0-py3-none-any.whl", hash = "sha256:485750ec8d9b34bcc8ff4318971d234dc4f595058a1b4435a74aefef4b2bc9bd"},
+    {file = "reactivex-4.1.0.tar.gz", hash = "sha256:c7499e3c802bccaa20839b3e17355a7d939573fded3f38ba3d4796278a169a3d"},
+]
+
+[package.dependencies]
+typing-extensions = ">=4.1.1,<5.0.0"
+
+[[package]]
 name = "referencing"
 version = "0.36.2"
 description = "JSON Referencing + Python"
@@ -10069,6 +10084,26 @@ files = [
 platformdirs = ">=3.5.1"
 
 [[package]]
+name = "zaber-motion"
+version = "10.1.0"
+description = "An official library for communicating with Zaber devices."
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "zaber_motion-10.1.0-py3-none-macosx_10_4_universal2.whl", hash = "sha256:6cbb49ac093b02461151fa857cfc6693187598937e8add55fb9204c17702b222"},
+    {file = "zaber_motion-10.1.0-py3-none-manylinux_2_35_aarch64.whl", hash = "sha256:7910d53e328c2195e46ab10f3d7297ed7acbf2f9d82c87d1e64a9f34650a5086"},
+    {file = "zaber_motion-10.1.0-py3-none-manylinux_2_35_x86_64.whl", hash = "sha256:ae118c08e2d99bd1e5bb823da6a58de14059298e61768afed80fd1f9d0641d3a"},
+    {file = "zaber_motion-10.1.0-py3-none-win32.whl", hash = "sha256:277a446c1775a018de6ea800a332653a180f0ca1abf2f73fec6ab461706ec270"},
+    {file = "zaber_motion-10.1.0-py3-none-win_amd64.whl", hash = "sha256:582edf7adc9e47deb739ca54d0b9accc6611a9c1dc187adafa6406236a904982"},
+    {file = "zaber_motion-10.1.0-py3-none-win_arm64.whl", hash = "sha256:c82c4bb259aa239210a02457ee3eb8178e9820756f78184965dd26a1bf9c9dc1"},
+    {file = "zaber_motion-10.1.0.tar.gz", hash = "sha256:8de25d7334043dc0f02a5042cac74a6eee025f09857ee524a883579f0b6a92bd"},
+]
+
+[package.dependencies]
+reactivex = ">=4.0,<5.0"
+
+[[package]]
 name = "zipp"
 version = "3.23.0"
 description = "Backport of pathlib-compatible object wrapper for zip files"
@@ -10091,4 +10126,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "78e67272bb4a853c11294e4964062578559a2ed758c37d4636b9abe22d237ccd"
+content-hash = "64bd4e66ad907d6bcc686ae14993af81e2d89b8794975c63f6492d4cf1386632"

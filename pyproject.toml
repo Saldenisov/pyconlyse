@@ -50,6 +50,7 @@ h5py = "==3.14.0"
 msl-package-manager = "==2.5.4"
 # Added based on project usage scan
 pyzmq = ">=25.0.0"
+zaber-motion = "==10.1.0"
 joblib = ">=1.0.0"
 flask = ">=2.0.0"
 flask-cors = ">=3.0.0"
