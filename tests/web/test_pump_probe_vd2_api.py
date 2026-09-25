@@ -208,7 +208,7 @@ def test_initialize_powers_both_pdus_before_starting_instruments(monkeypatch):
     assert events[:5] == [
         ("ensure", vd2_api_module.VD2_PDU_DEVICE),
         ("ensure", vd2_api_module.ZABER_PDU_DEVICE),
-        ("SD2", [1, 1, 0, 0]),
+        ("SD2", [1, 1, 1, 0]),
         ("VD2", [0, 0, 1, 1]),
         ("ensure", vd2_api_module.ZABER_STAGE_DEVICE),
     ]
@@ -218,3 +218,55 @@ def test_initialize_powers_both_pdus_before_starting_instruments(monkeypatch):
     ]
     assert events[-1] == ("streak", "PrepareDG645ForHPDTA")
     assert result["device"] == {}
+
+
+def test_sd2_shutdown_keeps_power_control_enabled(monkeypatch):
+    states = [1, 1, 1, 0]
+    writes = []
+
+    class Pdu:
+        def read_attribute(self, name):
+            value = [1, 2, 3, 4] if name == "ids" else states
+            return type("Attribute", (), {"value": value})()
+
+        def command_inout(self, name, desired):
+            assert name == "set_channels_states"
+            writes.append(list(desired))
+            states[:] = desired
+
+    monkeypatch.setattr(vd2_api_module.time, "sleep", lambda _: None)
+    vd2_api_module._disable_vd2_power(Pdu(), [])
+
+    assert writes == [[0, 0, 1, 0]]
+    assert states == [0, 0, 1, 0]
+
+
+def test_zaber_reconnect_precedes_astor_restart(monkeypatch):
+    class Zaber:
+        def __init__(self):
+            self.current_state = "FAULT"
+            self.commands = []
+
+        def state(self):
+            return self.current_state
+
+        def command_inout(self, name):
+            self.commands.append(name)
+            if name == "Reconnect":
+                self.current_state = "ON"
+
+        def read_attribute(self, name):
+            assert name == "position_mm"
+            return type("Attribute", (), {"value": 50.8})()
+
+    zaber = Zaber()
+    monkeypatch.setattr(vd2_api_module, "_wait_for_device", lambda *a, **k: zaber)
+    monkeypatch.setattr(
+        vd2_api_module, "_restart_server",
+        lambda *a: (_ for _ in ()).throw(AssertionError("restart not expected")),
+    )
+
+    result = vd2_api_module._ensure_server(vd2_api_module.ZABER_STAGE_DEVICE, [])
+
+    assert result is zaber
+    assert zaber.commands == ["Reconnect"]

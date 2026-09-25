@@ -34,7 +34,13 @@ VD2_SERVERS = {
     DG645_DEVICE: "DS_DG645/1_DG645",
     STREAK_DEVICE: "DS_HAMAMATSU_STREAK/1_hamamatsu_streak_main",
 }
-VD2_REQUIRED_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
+VD2_REQUIRED_PDU_OUTPUTS = {
+    1: "Streak camera / spectrograph",
+    2: "DG645",
+    3: "Power control",
+}
+# Shutdown retains the control supply; preparation must always verify it is ON.
+VD2_SHUTDOWN_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
 ZABER_REQUIRED_PDU_OUTPUTS = {3: "Zaber"}
 
 READ_ATTRIBUTES = {
@@ -157,24 +163,25 @@ def _target(device: str, command: str) -> dict[str, str]:
     return {"device": device, "command": command}
 
 
+def _recovery_command(device: str) -> str:
+    return "Reconnect" if device == ZABER_STAGE_DEVICE else "recover"
+
+
 def _server_recovery_targets(device: str) -> list[dict[str, str]]:
     """Potential recovery calls in the order used by ``_ensure_server``."""
+    astor = ELYSIUM_ASTOR_DEVICE if device == ZABER_STAGE_DEVICE else ASTOR_DEVICE
     return [
-        _target(device, "recover"),
-        _target(ASTOR_DEVICE, "DevStop"),
-        _target(ASTOR_DEVICE, "DevStart"),
+        _target(device, _recovery_command(device)),
+        _target(astor, "DevStop"),
+        _target(astor, "DevStart"),
         # A stale Astor running flag takes one explicit second stop/start.
-        _target(ASTOR_DEVICE, "DevStop"),
-        _target(ASTOR_DEVICE, "DevStart"),
+        _target(astor, "DevStop"),
+        _target(astor, "DevStart"),
     ]
 
 
 def _server_arguments() -> dict[str, str]:
-    return {
-        VD2_PDU_DEVICE: VD2_SERVERS[VD2_PDU_DEVICE],
-        DG645_DEVICE: VD2_SERVERS[DG645_DEVICE],
-        STREAK_DEVICE: VD2_SERVERS[STREAK_DEVICE],
-    }
+    return dict(VD2_SERVERS)
 
 
 def _recovery_plan(*devices: str) -> list[dict[str, Any]]:
@@ -183,7 +190,9 @@ def _recovery_plan(*devices: str) -> list[dict[str, Any]]:
         {
             "device": device,
             "server": VD2_SERVERS[device],
-            "commands": ["recover", "DevStop", "DevStart", "DevStop", "DevStart"],
+            "commands": [
+                _recovery_command(device), "DevStop", "DevStart", "DevStop", "DevStart"
+            ],
         }
         for device in devices
     ]
@@ -270,7 +279,10 @@ def _mutation_payload(wrapper_fields: set[str]):
 
 def _initialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
     targets = _server_recovery_targets(VD2_PDU_DEVICE)
+    targets.extend(_server_recovery_targets(ZABER_PDU_DEVICE))
     targets.append(_target(VD2_PDU_DEVICE, "set_channels_states"))
+    targets.append(_target(ZABER_PDU_DEVICE, "set_channels_states"))
+    targets.extend(_server_recovery_targets(ZABER_STAGE_DEVICE))
     targets.extend(_server_recovery_targets(DG645_DEVICE))
     targets.extend(_server_recovery_targets(STREAK_DEVICE))
     targets.extend(
@@ -282,10 +294,16 @@ def _initialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
     )
     return targets, {
         "servers": _server_arguments(),
-        "recovery_plan": _recovery_plan(VD2_PDU_DEVICE, DG645_DEVICE, STREAK_DEVICE),
+        "recovery_plan": _recovery_plan(
+            VD2_PDU_DEVICE, ZABER_PDU_DEVICE, ZABER_STAGE_DEVICE,
+            DG645_DEVICE, STREAK_DEVICE,
+        ),
         "pdu_output_states": [
-            {"output_id": output_id, "state": 1}
+            {"device": VD2_PDU_DEVICE, "output_id": output_id, "state": 1}
             for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+        ] + [
+            {"device": ZABER_PDU_DEVICE, "output_id": output_id, "state": 1}
+            for output_id in sorted(ZABER_REQUIRED_PDU_OUTPUTS)
         ],
     }
 
@@ -305,7 +323,7 @@ def _deinitialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]
         "recovery_plan": _recovery_plan(VD2_PDU_DEVICE),
         "pdu_output_states": [
             {"output_id": output_id, "state": 0}
-            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+            for output_id in sorted(VD2_SHUTDOWN_PDU_OUTPUTS)
         ],
         "shutters": {
             "streak_shutter": "Closed",
@@ -454,7 +472,7 @@ def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
     server = VD2_SERVERS[device]
     try:
         proxy = _wait_for_device(device, timeout_s=2.0)
-        proxy.command_inout("recover")
+        proxy.command_inout(_recovery_command(device))
         if _is_healthy_device(proxy, device):
             steps.append({"step": f"Tango {device}", "status": "recovered"})
             return proxy
@@ -523,12 +541,12 @@ def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
     ids = [int(value) for value in pdu.read_attribute("ids").value]
     states = [int(value) for value in pdu.read_attribute("states").value]
     positions = {output_id: index for index, output_id in enumerate(ids)}
-    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    missing = sorted(set(VD2_SHUTDOWN_PDU_OUTPUTS) - set(positions))
     if missing:
         raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
     desired = list(states)
     changed = []
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, label in VD2_SHUTDOWN_PDU_OUTPUTS.items():
         position = positions[output_id]
         if desired[position] != 0:
             desired[position] = 0
@@ -537,7 +555,7 @@ def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
         pdu.command_inout("set_channels_states", desired)
         time.sleep(1.0)
     confirmed = [int(value) for value in pdu.read_attribute("states").value]
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, label in VD2_SHUTDOWN_PDU_OUTPUTS.items():
         if confirmed[positions[output_id]] != 0:
             raise RuntimeError(f"PDU SD2 did not disable {label}")
     steps.append(

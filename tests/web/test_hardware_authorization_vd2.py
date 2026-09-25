@@ -104,6 +104,18 @@ def test_initialize_and_deinitialize_denial_precedes_experiment_helpers(monkeypa
         "PrepareDG645ForHPDTA", "StartRemoteEx", "StartApplication",
     }
     assert calls[0]["args"]["servers"] == vd2._server_arguments()
+    assert {tuple(item.values()) for item in calls[0]["args"]["pdu_output_states"]} == {
+        (vd2.VD2_PDU_DEVICE, 1, 1),
+        (vd2.VD2_PDU_DEVICE, 2, 1),
+        (vd2.VD2_PDU_DEVICE, 3, 1),
+        (vd2.ZABER_PDU_DEVICE, 3, 1),
+    }
+    assert {target["device"] for target in initialize_targets} >= {
+        vd2.VD2_PDU_DEVICE,
+        vd2.ZABER_PDU_DEVICE,
+        vd2.ZABER_STAGE_DEVICE,
+        vd2.ELYSIUM_ASTOR_DEVICE,
+    }
     assert calls[0]["wrapper_fields"] == set()
     deinitialize_targets = calls[1]["targets"]
     assert {target["command"] for target in deinitialize_targets} >= {
@@ -111,6 +123,10 @@ def test_initialize_and_deinitialize_denial_precedes_experiment_helpers(monkeypa
         "write_attribute:spectrograph_shutter", "StopApplication", "StopRemoteEx",
         "recover", "DevStop", "DevStart", "set_channels_states",
     }
+    assert calls[1]["args"]["pdu_output_states"] == [
+        {"output_id": 1, "state": 0},
+        {"output_id": 2, "state": 0},
+    ]
 
 
 def test_runtime_parameter_and_command_denial_precedes_proxy(monkeypatch):
