@@ -145,6 +145,9 @@ const Equipment = () => {
               <button type="button" className="modal-link" onClick={() => openBackendPage("/owis_ps90.html")}>
                 OWIS PS90 Control
               </button>
+              <button type="button" className="modal-link" onClick={() => openRoute("/zaber-stage")}>
+                Zaber mirror stage
+              </button>
             </div>
             <button onClick={() => setShowMotorizedModal(false)} className="modal-close">Close</button>
           </div>

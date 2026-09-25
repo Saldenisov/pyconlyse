@@ -1597,6 +1597,7 @@ class PyConlyseMainWindow(QMainWindow):
             # Map DS class name -> widget class from registry (values are classes)
             # We only need to pick one based on keywords
             keyword_map = [
+                ("zaber", "ZaberStageWidget"),
                 ("netio", "Netio_pdu"),
                 ("basler", "Basler_camera"),
                 ("owis", "OWIS_motor"),

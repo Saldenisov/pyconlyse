@@ -233,6 +233,54 @@ def test_initialize_plan_requires_flash_xenon_and_zaber_power():
     ]
 
 
+def test_translation_stage_snapshot_uses_zaber_mm_and_vd2_owis_axis_two(monkeypatch):
+    class StageProxy:
+        def __init__(self, name):
+            self.name = name
+
+        def set_timeout_millis(self, timeout):
+            assert timeout == 2000
+
+        def state(self):
+            return "ON"
+
+        def status(self):
+            return "Ready"
+
+        def read_attribute(self, name):
+            values = {
+                "position_mm": 12.5,
+                "minimum_mm": 0.0,
+                "maximum_mm": 50.8,
+                "pos2": 36.0,
+            }
+            return type("Attribute", (), {"value": values[name]})()
+
+        def command_inout(self, name, axis):
+            assert self.name == vd2_api_module.OWIS_SAMPLE_DEVICE
+            assert (name, axis) == ("get_status_axis", 2)
+            return 1  # ON in the process-local Tango stub
+
+        def get_property(self, names):
+            assert names == ["delay_lines_parameters"]
+            return {"delay_lines_parameters": ["{2: {'limit_min': -40.0, 'limit_max': 260.0}}"]}
+
+    monkeypatch.setattr(vd2_api_module, "DeviceProxy", StageProxy)
+    app = Flask(__name__)
+    app.register_blueprint(vd2_api_module.pump_probe_vd2_api)
+
+    with app.test_client() as client:
+        response = client.get("/api/pump-probe-vd2/stages/state")
+
+    payload = response.get_json()
+    assert response.status_code == 200
+    assert payload["zaber_mirror"]["position_mm"] == 12.5
+    assert payload["zaber_mirror"]["maximum_mm"] == 50.8
+    assert payload["owis_sample"]["axis"] == 2
+    assert payload["owis_sample"]["axis_state"] == "ON"
+    assert payload["owis_sample"]["minimum_mm"] == -40.0
+
+
 def test_sd2_shutdown_keeps_power_control_enabled(monkeypatch):
     states = [1, 1, 1, 0]
     writes = []

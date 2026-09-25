@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import ast
 import base64
 import json
 import time
 from typing import Any, Dict, Mapping
 
 from flask import Blueprint, jsonify, request
-from tango import DeviceProxy
+from tango import DevState, DeviceProxy
 
 from hardware_authorization import authorization_required, require_http_hardware
 from mutation_auth import install_mutation_auth
@@ -24,6 +25,8 @@ DG645_DEVICE = "manip/sync/DG645"
 VD2_PDU_DEVICE = "manip/SD2/PDU_SD2"
 ZABER_PDU_DEVICE = "manip/VD2/PDU_VD2"
 ZABER_STAGE_DEVICE = "manip/VD2/Zaber"
+OWIS_SAMPLE_DEVICE = "manip/general/DS_OWIS_Aggregator"
+OWIS_SAMPLE_AXIS = 2
 ASTOR_DEVICE = "tango/admin/everest"
 ELYSIUM_ASTOR_DEVICE = "tango/admin/elysium2"
 
@@ -770,6 +773,72 @@ def runtime_state():
         )
     except Exception as exc:
         return jsonify({"success": False, "error": _control_error(exc)}), 503
+
+
+def _zaber_stage_state() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "device": ZABER_STAGE_DEVICE,
+        "state": "UNKNOWN",
+        "position_mm": None,
+        "minimum_mm": None,
+        "maximum_mm": None,
+    }
+    try:
+        proxy = DeviceProxy(ZABER_STAGE_DEVICE)
+        proxy.set_timeout_millis(2000)
+        result["state"] = str(proxy.state()).rsplit(".", 1)[-1]
+        result["status"] = str(proxy.status())
+        if result["state"] == "ON":
+            for key in ("position_mm", "minimum_mm", "maximum_mm"):
+                result[key] = float(proxy.read_attribute(key).value)
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def _owis_sample_stage_state() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "device": OWIS_SAMPLE_DEVICE,
+        "axis": OWIS_SAMPLE_AXIS,
+        "state": "UNKNOWN",
+        "position_mm": None,
+        "minimum_mm": None,
+        "maximum_mm": None,
+    }
+    try:
+        proxy = DeviceProxy(OWIS_SAMPLE_DEVICE)
+        proxy.set_timeout_millis(2000)
+        result["state"] = str(proxy.state()).rsplit(".", 1)[-1]
+        axis_state = int(proxy.command_inout("get_status_axis", OWIS_SAMPLE_AXIS))
+        result["axis_state"] = next(
+            (
+                str(candidate).rsplit(".", 1)[-1]
+                for candidate in (DevState.ON, DevState.OFF, DevState.MOVING, DevState.FAULT)
+                if int(candidate) == axis_state
+            ),
+            "UNKNOWN",
+        )
+        result["position_mm"] = float(proxy.read_attribute("pos2").value)
+        properties = proxy.get_property(["delay_lines_parameters"])
+        raw = properties.get("delay_lines_parameters", [])
+        if raw:
+            parameters = ast.literal_eval(str(raw[0]))
+            axis = parameters.get(OWIS_SAMPLE_AXIS, parameters.get(str(OWIS_SAMPLE_AXIS), {}))
+            result["minimum_mm"] = float(axis["limit_min"])
+            result["maximum_mm"] = float(axis["limit_max"])
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+@pump_probe_vd2_api.route("/stages/state", methods=["GET"])
+def stages_state():
+    """Passive, structured readings for the mirror and VD2 sample stage."""
+    return jsonify({
+        "success": True,
+        "zaber_mirror": _zaber_stage_state(),
+        "owis_sample": _owis_sample_stage_state(),
+    })
 
 
 @pump_probe_vd2_api.route("/initialize", methods=["POST"])

@@ -90,6 +90,7 @@ def client_configs() -> List[Tuple[str, str, List[str], str, str]]:
     return [
         ("NETIO", "NETIO", ["netio"], "start_netio_client", "icons/NETIO.png"),
         ("OWIS", "OWIS", ["owis", "delay"], "start_owis_widget", "icons/OWIS.png"),
+        ("ZABER", "Zaber", ["zaber"], "start_zaber_widget", "icons/OWIS.png"),
         ("STANDA", "STANDA", ["standa"], "start_standa_widget", "icons/STANDA.svg"),
         (
             "TOPDIRECT",
@@ -244,6 +245,7 @@ class SimpleMainWindow(QMainWindow):
             # Instance/config names matching legacy cbox items (from DS_*_client.py)
             "NETIO": ["all", "V0", "VD2"],
             "OWIS": ["V0", "VD2", "all"],
+            "ZABER": ["VD2"],
             "STANDA": ["alignment", "V0", "V0_short", "ELYSE", "OPA"],
             "TOPDIRECT": ["VD2", "all"],
             "BASLER": ["V0", "Cam1", "Cam2", "Cam3", "all"],
@@ -275,12 +277,13 @@ class SimpleMainWindow(QMainWindow):
                     "V0 Delay Lines: axes 2,3 from DS_OWIS_PS90_IP + axis 4 "
                     "from DS_OWIS_PS90"
                 ),
-                "VD2": "VD2 Delay Line: axis 1 (preferred DS_OWIS_PS90_IP)",
+                "VD2": "VD2 sample holder: OWIS axis 2 (Aggregator / Ethernet backend)",
                 "all": (
                     "All Delay Lines: axes 1,2,3 from DS_OWIS_PS90_IP + axis 4 "
                     "from DS_OWIS_PS90"
                 ),
             },
+            "ZABER": {"VD2": "VD2 source-selection mirror on Elysium2 (millimetres)"},
             "STANDA": {
                 "ELYSE": "ELYSE Motors: DE1, F1, MME_X/Y, MM1_X/Y, MM2_X/Y (8 motors)",
                 "V0": (
@@ -342,6 +345,7 @@ class SimpleMainWindow(QMainWindow):
         self._ds_rows_def = [
             ("NETIO", "NETIO", self.icons_dir / "NETIO.png", "client"),
             ("OWIS", "OWIS", self.icons_dir / "OWIS.svg", "widget"),
+            ("ZABER", "Zaber", self.icons_dir / "OWIS.svg", "client"),
             ("STANDA", "STANDA", self.icons_dir / "STANDA.svg", "widget"),
             ("TOPDIRECT", "TOPDIRECT", self.icons_dir / "TopDirect.svg", "widget"),
             ("BASLER", "BASLER", self.icons_dir / "basler_camera.svg", "widget"),
@@ -588,6 +592,7 @@ class SimpleMainWindow(QMainWindow):
         module_map = {
             "NETIO": "DeviceServers.power.netio.DS_NETIO_client",
             "OWIS": "DeviceServers.motion.owis.DS_OWIS_client",
+            "ZABER": "DeviceServers.motion.zaber.DS_Zaber_client",
             "STANDA": "DeviceServers.motion.standa.DS_STANDA_client",
             "TOPDIRECT": "DeviceServers.motion.topdirect.DS_TOPDIRECT_client",
             "BASLER": "DeviceServers.cameras.basler.DS_BASLER_client",
@@ -723,6 +728,7 @@ class SimpleMainWindow(QMainWindow):
             # But we can still detect presence and suggest appropriate instances
             categories = {
                 "OWIS": ["V0", "VD2", "all"] if match(["owis", "delay"]) else [],
+                "ZABER": ["VD2"] if match(["zaber"]) else [],
                 "STANDA": (
                     ["alignment", "V0", "V0_short", "ELYSE", "OPA"]
                     if match(["standa", "mm3", "mm4", "mm", "opa"])
@@ -965,6 +971,7 @@ class SimpleMainWindow(QMainWindow):
             client_paths = {
                 "NETIO": "DeviceServers\\power\\netio\\DS_NETIO_client.py",
                 "OWIS": "DeviceServers\\motion\\owis\\DS_OWIS_client.py",
+                "ZABER": "DeviceServers\\motion\\zaber\\DS_Zaber_client.py",
                 "STANDA": "DeviceServers\\motion\\standa\\DS_STANDA_client.py",
                 "TOPDIRECT": "DeviceServers\\motion\\topdirect\\DS_TOPDIRECT_client.py",
                 "BASLER": "DeviceServers\\cameras\\basler\\DS_BASLER_client.py",

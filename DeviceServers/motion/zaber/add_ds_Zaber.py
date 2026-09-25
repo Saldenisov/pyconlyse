@@ -35,6 +35,7 @@ def main():
             "baud_rate": args.baud_rate,
             "address": 1,
             "motion_timeout_s": 120.0,
+            "reconnect_interval_s": 5.0,
             "power_dependency_device": "manip/VD2/PDU_VD2",
             "power_dependency_output_id": 3,
         },

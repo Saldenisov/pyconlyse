@@ -20,6 +20,7 @@ import LaserPointingClients from './LaserPointingClients';
 import Login from './Login';
 import PumpProbeV0 from './PumpProbeV0';
 import PumpProbeVD2 from './PumpProbeVD2';
+import ZaberStagePage from './ZaberStagePage';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
           <Route path="/laser-pointing-clients" element={<LaserPointingClients />} />
           <Route path="/pump-probe-v0" element={<PumpProbeV0 />} />
           <Route path="/pump-probe-vd2" element={<PumpProbeVD2 />} />
+          <Route path="/zaber-stage" element={<ZaberStagePage />} />
           <Route path="/login" element={<Login />} />
           {/* Fallback route */}
           <Route path="*" element={<Navigate to="/" />} />

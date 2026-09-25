@@ -69,6 +69,7 @@ SERVER_CLASS_BY_TYPE: Dict[str, str] = {
     "BASLER": "DS_Basler_camera",
     "ARCHIVE": "DS_Archive",
     "OWIS": "DS_OWIS_PS90",
+    "ZABER": "DS_Zaber",
     "STANDA": "DS_Standa_Motor",
     "NETIO": "DS_Netio_pdu",
     "DG645": "DS_DG645",

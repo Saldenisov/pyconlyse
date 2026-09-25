@@ -1,0 +1,69 @@
+.vd2-translation-stages {
+  margin: 1.5rem 0;
+}
+
+.vd2-translation-stages > header {
+  margin-bottom: 1rem;
+}
+
+.vd2-translation-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.vd2-translation-stage {
+  padding: 1.25rem;
+  border: 1px solid #6d7888;
+  border-radius: 0.75rem;
+  background: #17212f;
+  color: #f5f7fa;
+}
+
+.vd2-translation-stage h3 {
+  margin: 0 0 0.5rem;
+}
+
+.vd2-stage-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.5rem;
+  margin: 1rem 0;
+}
+
+.vd2-stage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+.vd2-stage-actions label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.vd2-stage-actions input {
+  width: 10rem;
+  padding: 0.45rem;
+}
+
+.vd2-stage-actions button {
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+}
+
+.vd2-stage-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.vd2-stage-error {
+  color: #ffb4b4;
+  overflow-wrap: anywhere;
+}
+
+.vd2-stage-status {
+  overflow-wrap: anywhere;
+}

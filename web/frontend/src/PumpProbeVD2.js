@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { fetchWithHardwareApproval } from './api/csrfRequest';
+import VD2TranslationStages from './components/VD2TranslationStages';
 import './css/PumpProbeVD2.css';
 
 const API_BASE = '/api/pump-probe-vd2';
@@ -1359,6 +1360,7 @@ function PumpProbeVD2() {
               <ParameterCard card={card} values={values} onApply={writeParameter} busy={busy} key={card.title} />
             ))}
           </section>
+          <VD2TranslationStages />
         </>
       )}
       <Vd2HardwareModal
