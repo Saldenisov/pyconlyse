@@ -32,6 +32,10 @@ if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
 if not defined PYCONLYSE_LOG_DIR set "PYCONLYSE_LOG_DIR=C:\temp\ds.log"
 if not "%SERVER_ENVIRONMENT%"=="" set "%SERVER_ENVIRONMENT%"
 
+REM An optional host-local override can select an isolated runtime per server.
+REM It is deliberately outside the repository so the Python 3.9 rollback stays intact.
+if exist "C:\ProgramData\Pyconlyse\device-runtime-override.cmd" call "C:\ProgramData\Pyconlyse\device-runtime-override.cmd"
+
 if not exist "%PYCONLYSE_LOG_DIR%" mkdir "%PYCONLYSE_LOG_DIR%"
 set "PYCONLYSE_DS_LOG_FILE=%PYCONLYSE_LOG_DIR%\%SERVER_NAME%_%INSTANCE_NAME%.log"
 echo ==== %date% %time% runner entered %SERVER_NAME%/%INSTANCE_NAME% ==== >> "%PYCONLYSE_DS_LOG_FILE%"
