@@ -209,7 +209,7 @@ def test_initialize_powers_both_pdus_before_starting_instruments(monkeypatch):
         ("ensure", vd2_api_module.VD2_PDU_DEVICE),
         ("ensure", vd2_api_module.ZABER_PDU_DEVICE),
         ("SD2", [1, 1, 1, 0]),
-        ("VD2", [0, 0, 1, 1]),
+        ("VD2", [1, 1, 1, 1]),
         ("ensure", vd2_api_module.ZABER_STAGE_DEVICE),
     ]
     assert events[5:7] == [
@@ -218,6 +218,19 @@ def test_initialize_powers_both_pdus_before_starting_instruments(monkeypatch):
     ]
     assert events[-1] == ("streak", "PrepareDG645ForHPDTA")
     assert result["device"] == {}
+
+
+def test_initialize_plan_requires_flash_xenon_and_zaber_power():
+    _, arguments = vd2_api_module._initialize_authorization()
+
+    vd2_outputs = [
+        output for output in arguments["pdu_output_states"]
+        if output["device"] == vd2_api_module.ZABER_PDU_DEVICE
+    ]
+    assert vd2_outputs == [
+        {"device": vd2_api_module.ZABER_PDU_DEVICE, "output_id": output_id, "state": 1}
+        for output_id in (1, 2, 3)
+    ]
 
 
 def test_sd2_shutdown_keeps_power_control_enabled(monkeypatch):

@@ -34,14 +34,18 @@ VD2_SERVERS = {
     DG645_DEVICE: "DS_DG645/1_DG645",
     STREAK_DEVICE: "DS_HAMAMATSU_STREAK/1_hamamatsu_streak_main",
 }
-VD2_REQUIRED_PDU_OUTPUTS = {
+SD2_REQUIRED_PDU_OUTPUTS = {
     1: "Streak camera / spectrograph",
     2: "DG645",
     3: "Power control",
 }
 # Shutdown retains the control supply; preparation must always verify it is ON.
 VD2_SHUTDOWN_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
-ZABER_REQUIRED_PDU_OUTPUTS = {3: "Zaber"}
+VD2_REQUIRED_PDU_OUTPUTS = {
+    1: "Flash Lamp",
+    2: "Xe-lamp-CW",
+    3: "Zaber",
+}
 
 READ_ATTRIBUTES = {
     "connected": "connected",
@@ -300,10 +304,10 @@ def _initialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
         ),
         "pdu_output_states": [
             {"device": VD2_PDU_DEVICE, "output_id": output_id, "state": 1}
-            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+            for output_id in sorted(SD2_REQUIRED_PDU_OUTPUTS)
         ] + [
             {"device": ZABER_PDU_DEVICE, "output_id": output_id, "state": 1}
-            for output_id in sorted(ZABER_REQUIRED_PDU_OUTPUTS)
+            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
         ],
     }
 
@@ -534,7 +538,7 @@ def _enable_required_power(
 
 
 def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
-    _enable_required_power(pdu, steps, VD2_REQUIRED_PDU_OUTPUTS, "SD2")
+    _enable_required_power(pdu, steps, SD2_REQUIRED_PDU_OUTPUTS, "SD2")
 
 
 def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
@@ -572,7 +576,7 @@ def _initialize_experiment() -> dict[str, Any]:
     zaber_pdu = _ensure_server(ZABER_PDU_DEVICE, steps)
     _enable_vd2_power(sd2_pdu, steps)
     _enable_required_power(
-        zaber_pdu, steps, ZABER_REQUIRED_PDU_OUTPUTS, "VD2"
+        zaber_pdu, steps, VD2_REQUIRED_PDU_OUTPUTS, "VD2"
     )
     _ensure_server(ZABER_STAGE_DEVICE, steps)
     _ensure_server(DG645_DEVICE, steps)
