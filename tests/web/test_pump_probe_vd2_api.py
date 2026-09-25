@@ -162,3 +162,59 @@ def test_ensure_server_recovers_exported_dg645_before_astor_restart(monkeypatch)
         ("scpi_query", "*IDN?"),
     ]
     assert steps == [{"step": f"Tango {vd2_api_module.DG645_DEVICE}", "status": "recovered"}]
+
+
+def test_initialize_powers_both_pdus_before_starting_instruments(monkeypatch):
+    events = []
+
+    class Pdu:
+        def __init__(self, name, states):
+            self.name = name
+            self.states = states
+
+        def read_attribute(self, name):
+            value = [1, 2, 3, 4] if name == "ids" else self.states
+            return type("Attribute", (), {"value": value})()
+
+        def command_inout(self, name, desired):
+            assert name == "set_channels_states"
+            events.append((self.name, list(desired)))
+            self.states = list(desired)
+
+    class Streak:
+        def command_inout(self, name):
+            events.append(("streak", name))
+
+    devices = {
+        vd2_api_module.VD2_PDU_DEVICE: Pdu("SD2", [0, 0, 0, 0]),
+        vd2_api_module.ZABER_PDU_DEVICE: Pdu("VD2", [0, 0, 0, 1]),
+        vd2_api_module.ZABER_STAGE_DEVICE: object(),
+        vd2_api_module.DG645_DEVICE: object(),
+        vd2_api_module.STREAK_DEVICE: Streak(),
+    }
+
+    def ensure(device, steps):
+        events.append(("ensure", device))
+        return devices[device]
+
+    monkeypatch.setattr(vd2_api_module, "_ensure_server", ensure)
+    monkeypatch.setattr(vd2_api_module, "_value", lambda proxy, attr: True)
+    monkeypatch.setattr(vd2_api_module, "_snapshot", lambda proxy: {})
+    monkeypatch.setattr(vd2_api_module, "_wait_for_device", lambda *args: devices[vd2_api_module.STREAK_DEVICE])
+    monkeypatch.setattr(vd2_api_module.time, "sleep", lambda _: None)
+
+    result = vd2_api_module._initialize_experiment()
+
+    assert events[:5] == [
+        ("ensure", vd2_api_module.VD2_PDU_DEVICE),
+        ("ensure", vd2_api_module.ZABER_PDU_DEVICE),
+        ("SD2", [1, 1, 0, 0]),
+        ("VD2", [0, 0, 1, 1]),
+        ("ensure", vd2_api_module.ZABER_STAGE_DEVICE),
+    ]
+    assert events[5:7] == [
+        ("ensure", vd2_api_module.DG645_DEVICE),
+        ("ensure", vd2_api_module.STREAK_DEVICE),
+    ]
+    assert events[-1] == ("streak", "PrepareDG645ForHPDTA")
+    assert result["device"] == {}

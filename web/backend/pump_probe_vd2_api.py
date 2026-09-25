@@ -22,14 +22,20 @@ install_mutation_auth(pump_probe_vd2_api)
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"
 VD2_PDU_DEVICE = "manip/SD2/PDU_SD2"
+ZABER_PDU_DEVICE = "manip/VD2/PDU_VD2"
+ZABER_STAGE_DEVICE = "manip/VD2/Zaber"
 ASTOR_DEVICE = "tango/admin/everest"
+ELYSIUM_ASTOR_DEVICE = "tango/admin/elysium2"
 
 VD2_SERVERS = {
     VD2_PDU_DEVICE: "DS_Netio_pdu/4_SD2",
+    ZABER_PDU_DEVICE: "DS_Netio_pdu/2_VD2",
+    ZABER_STAGE_DEVICE: "DS_Zaber/1_Zaber",
     DG645_DEVICE: "DS_DG645/1_DG645",
     STREAK_DEVICE: "DS_HAMAMATSU_STREAK/1_hamamatsu_streak_main",
 }
 VD2_REQUIRED_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
+ZABER_REQUIRED_PDU_OUTPUTS = {3: "Zaber"}
 
 READ_ATTRIBUTES = {
     "connected": "connected",
@@ -362,8 +368,10 @@ def _control_error(exc: Exception) -> str:
     return message
 
 
-def _astor() -> DeviceProxy:
-    proxy = DeviceProxy(ASTOR_DEVICE)
+def _astor(device: str = "") -> DeviceProxy:
+    proxy = DeviceProxy(
+        ELYSIUM_ASTOR_DEVICE if device == ZABER_STAGE_DEVICE else ASTOR_DEVICE
+    )
     proxy.set_timeout_millis(15000)
     return proxy
 
@@ -389,8 +397,10 @@ def _is_healthy_device(proxy: DeviceProxy, device: str) -> bool:
         return False
     if device == DG645_DEVICE:
         return bool(str(proxy.command_inout("scpi_query", "*IDN?")).strip())
-    if device == VD2_PDU_DEVICE:
+    if device in {VD2_PDU_DEVICE, ZABER_PDU_DEVICE}:
         return bool(list(proxy.read_attribute("ids").value))
+    if device == ZABER_STAGE_DEVICE:
+        return proxy.read_attribute("position_mm").value is not None
     # RemoteEx may intentionally be stopped while its Tango launcher remains ON.
     return True
 
@@ -411,7 +421,7 @@ def _wait_for_healthy_device(device: str, timeout_s: float = 20.0) -> DeviceProx
 
 
 def _restart_server(device: str, server: str) -> DeviceProxy:
-    astor = _astor()
+    astor = _astor(device)
     try:
         astor.command_inout("DevStop", server)
     except Exception as exc:
@@ -457,7 +467,7 @@ def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
         if "already running" in str(exc).lower():
             # A stale process can retain Astor's running flag after its device
             # has disappeared. One explicit stop/start resolves that state.
-            astor = _astor()
+            astor = _astor(device)
             try:
                 astor.command_inout("DevStop", server)
             except Exception:
@@ -471,33 +481,42 @@ def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
     return proxy
 
 
-def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+def _enable_required_power(
+    pdu: DeviceProxy,
+    steps: list[dict[str, str]],
+    required_outputs: dict[int, str],
+    label: str,
+) -> None:
     ids = [int(value) for value in pdu.read_attribute("ids").value]
     states = [int(value) for value in pdu.read_attribute("states").value]
     positions = {output_id: index for index, output_id in enumerate(ids)}
-    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    missing = sorted(set(required_outputs) - set(positions))
     if missing:
-        raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
+        raise RuntimeError(f"PDU {label} required outputs are missing: {missing}")
     desired = list(states)
     changed = []
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, output_label in required_outputs.items():
         position = positions[output_id]
         if desired[position] != 1:
             desired[position] = 1
-            changed.append(label)
+            changed.append(output_label)
     if changed:
         pdu.command_inout("set_channels_states", desired)
         time.sleep(2.0)
     confirmed = [int(value) for value in pdu.read_attribute("states").value]
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, output_label in required_outputs.items():
         if confirmed[positions[output_id]] != 1:
-            raise RuntimeError(f"PDU SD2 did not enable {label}")
+            raise RuntimeError(f"PDU {label} did not enable {output_label}")
     steps.append(
         {
-            "step": "VD2 power",
+            "step": f"{label} power",
             "status": "enabled" if changed else "already enabled",
         }
     )
+
+
+def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+    _enable_required_power(pdu, steps, VD2_REQUIRED_PDU_OUTPUTS, "SD2")
 
 
 def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
@@ -531,8 +550,13 @@ def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
 
 def _initialize_experiment() -> dict[str, Any]:
     steps: list[dict[str, str]] = []
-    pdu = _ensure_server(VD2_PDU_DEVICE, steps)
-    _enable_vd2_power(pdu, steps)
+    sd2_pdu = _ensure_server(VD2_PDU_DEVICE, steps)
+    zaber_pdu = _ensure_server(ZABER_PDU_DEVICE, steps)
+    _enable_vd2_power(sd2_pdu, steps)
+    _enable_required_power(
+        zaber_pdu, steps, ZABER_REQUIRED_PDU_OUTPUTS, "VD2"
+    )
+    _ensure_server(ZABER_STAGE_DEVICE, steps)
     _ensure_server(DG645_DEVICE, steps)
     streak = _ensure_server(STREAK_DEVICE, steps)
 
