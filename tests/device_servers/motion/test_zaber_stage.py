@@ -66,7 +66,7 @@ def test_connection_reads_identity_limits_and_position_without_motion():
 
     assert snapshot.position_mm == pytest.approx(4.7625)
     assert snapshot.minimum_mm == 0
-    assert snapshot.maximum_mm == 50.8
+    assert snapshot.maximum_mm == pytest.approx(50.800015875)
     assert snapshot.resolution == 64
     assert all(call[0] not in {"home", "move_absolute", "stop"} for call in device.calls)
     stage.close()

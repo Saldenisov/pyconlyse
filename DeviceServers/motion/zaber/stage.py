@@ -59,7 +59,7 @@ class ZaberStage:
 
     @property
     def maximum_mm(self) -> float:
-        return min(TRAVEL_MM, self._maximum_native * self._step_mm)
+        return self._maximum_native * self._step_mm
 
     def _api(self):
         from zaber_motion import Units
@@ -106,7 +106,7 @@ class ZaberStage:
                 MOTOR_STEPS_PER_REVOLUTION * resolution
             )
             travel_mm = maximum_native * step_mm
-            if not 50.7 <= travel_mm <= 50.9:
+            if abs(travel_mm - TRAVEL_MM) > 0.1:
                 raise RuntimeError(
                     "Zaber travel does not match the 50.8 mm stage: {:.6f} mm".format(
                         travel_mm
