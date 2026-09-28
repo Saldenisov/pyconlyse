@@ -13,9 +13,22 @@ if not exist "%ENTRY%" (
   exit /b 1
 )
 
-rem Use pyconlyse_env conda environment
+rem Prefer the configured direct runtime, then the configured Conda environment.
+rem A selected Pyconlyse runtime must never fall back to system Python.
 set "CONDA_CMD="
 set "PY="
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
+set "pyconlyse_env=%PYCONLYSE_ENV%"
+if /I "%PYCONLYSE_ENV%"=="pyconlyse312" set "PYTHONNOUSERSITE=1"
+
+if defined PYCONLYSE_PYTHON (
+  set "PY=%PYCONLYSE_PYTHON%"
+  if not exist "%PY%" (
+    echo Error: configured PYCONLYSE_PYTHON "%PY%" not found.
+    exit /b 1
+  )
+  goto :gotpy
+)
 
 rem Try to find conda
 where conda >nul 2>&1
@@ -49,7 +62,12 @@ if defined CONDA_CMD if defined pyconlyse_env (
 )
 
 :gotpy
-rem Fallback to system Python if conda not found
+if not defined PY if defined PYCONLYSE_ENV if not defined CONDA_CMD (
+  echo Error: Conda was not found for configured PYCONLYSE_ENV "%PYCONLYSE_ENV%".
+  exit /b 1
+)
+
+rem Fallback to system Python only when no Pyconlyse runtime was configured.
 if not defined PY (
   where pythonw >nul 2>&1
   if not errorlevel 1 set "PY=pythonw"

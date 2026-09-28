@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Callable, Mapping, Optional, Sequence
 
 
-DEFAULT_ENVIRONMENT = "pyconlyse39"
+DEFAULT_ENVIRONMENT = "pyconlyse312"
 
 
 @dataclass(frozen=True)

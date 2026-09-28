@@ -33,8 +33,8 @@ if not defined PYCONLYSE (
 
 REM Set default conda environment if not specified
 if not defined PYCONLYSE_ENV (
-    set PYCONLYSE_ENV=pyconlyse39
-    echo INFO: Using default conda environment: pyconlyse39
+    set PYCONLYSE_ENV=pyconlyse312
+    echo INFO: Using default conda environment: pyconlyse312
 )
 
 if not defined ANACONDA (

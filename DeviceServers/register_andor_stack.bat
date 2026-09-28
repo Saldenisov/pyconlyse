@@ -18,8 +18,8 @@ if not defined PYCONLYSE (
 )
 
 if not defined PYCONLYSE_ENV (
-    set PYCONLYSE_ENV=pyconlyse39
-    echo INFO: Using default conda environment: pyconlyse39
+    set PYCONLYSE_ENV=pyconlyse312
+    echo INFO: Using default conda environment: pyconlyse312
 )
 
 cd /d "%PYCONLYSE%\DeviceServers\andor"
