@@ -1,44 +1,38 @@
 @echo off
-REM Start NETIO Client using Conda Environment (Fixed DLL Issues)
-REM Usage: start_netio_conda.cmd [instance] [vis_type]
-REM   instance: V0, VD2, all (or leave blank for dialog)
-REM   vis_type: FULL, MIN (default: FULL)
+setlocal EnableExtensions
+rem Start NETIO client with the selected Pyconlyse Python runtime.
+rem Usage: start_netio_conda.cmd [instance] [vis_type]
 
-echo === NETIO Client Launcher (Conda) ===
-echo Available instances: V0, VD2, all
-echo Available vis_types: FULL, MIN
-echo.
-echo Using conda environment: pyconlyse39
-echo Python: C:\Users\denisov\miniconda3\envs\pyconlyse39\python.exe
-echo.
-
-set INSTANCE=%1
-set VIS_TYPE=%2
-
-if "%INSTANCE%"=="" (
-    echo No instance specified - will show selection dialog
-) else (
-    echo Instance: %INSTANCE%
+for %%I in ("%~dp0..") do set "ROOT=%%~fI"
+set "ENTRY=%ROOT%\scripts\start_netio_client.py"
+if not exist "%ENTRY%" (
+    echo Error: NETIO client entry point not found: "%ENTRY%".
+    exit /b 1
 )
 
-if "%VIS_TYPE%"=="" (
-    echo Vis Type: FULL (default)
-) else (
-    echo Vis Type: %VIS_TYPE%
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
+if /I "%PYCONLYSE_ENV%"=="pyconlyse312" set "PYTHONNOUSERSITE=1"
+set "PY=%PYCONLYSE_PYTHON%"
+if not defined PY (
+    for %%P in (
+        "%ANACONDA%\envs\%PYCONLYSE_ENV%\python.exe"
+        "%USERPROFILE%\miniconda3\envs\%PYCONLYSE_ENV%\python.exe"
+        "%USERPROFILE%\.conda\envs\%PYCONLYSE_ENV%\python.exe"
+        "%ProgramData%\miniconda3\envs\%PYCONLYSE_ENV%\python.exe"
+    ) do if not defined PY if exist "%%~P" set "PY=%%~P"
+)
+if not exist "%PY%" (
+    echo Error: Python for "%PYCONLYSE_ENV%" not found: "%PY%".
+    exit /b 1
 )
 
-echo.
-
-REM Change to script directory
-cd /d "%~dp0"
-
-echo Starting NETIO client...
-if "%VIS_TYPE%"=="" (
-    "C:\Users\denisov\miniconda3\envs\pyconlyse39\python.exe" start_netio_client.py "%INSTANCE%"
+echo NETIO client runtime: "%PY%"
+pushd "%ROOT%" || exit /b 1
+if "%~2"=="" (
+    "%PY%" "%ENTRY%" "%~1"
 ) else (
-    "C:\Users\denisov\miniconda3\envs\pyconlyse39\python.exe" start_netio_client.py "%INSTANCE%" "%VIS_TYPE%"
+    "%PY%" "%ENTRY%" "%~1" "%~2"
 )
-
-echo.
-echo NETIO client finished.
-pause
+set "RESULT=%ERRORLEVEL%"
+popd
+exit /b %RESULT%

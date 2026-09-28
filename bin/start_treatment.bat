@@ -2,9 +2,11 @@
 setlocal EnableExtensions
 REM Batch file to start Treatment.py GUI application
 REM Created for pyconlyse Treatment GUI
-REM Uses conda environment pyconlyse39
+REM Uses configured Pyconlyse environment, defaulting to Python 3.12
 
-set "TARGET_ENV=pyconlyse39"
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
+set "TARGET_ENV=%PYCONLYSE_ENV%"
+if /I "%TARGET_ENV%"=="pyconlyse312" set "PYTHONNOUSERSITE=1"
 echo Starting Treatment GUI...
 echo Working directory: %CD%
 
