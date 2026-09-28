@@ -23,10 +23,7 @@ if /I "%PYCONLYSE_ENV%"=="pyconlyse312" set "PYTHONNOUSERSITE=1"
 
 if defined PYCONLYSE_PYTHON (
   set "PY=%PYCONLYSE_PYTHON%"
-  if not exist "%PY%" (
-    echo Error: configured PYCONLYSE_PYTHON "%PY%" not found.
-    exit /b 1
-  )
+  if not exist "%PYCONLYSE_PYTHON%" goto :missing_python
   goto :gotpy
 )
 
@@ -103,3 +100,7 @@ if %EXIT_CODE% neq 0 (
 
 endlocal
 exit /b 0
+
+:missing_python
+echo Error: configured PYCONLYSE_PYTHON "%PYCONLYSE_PYTHON%" not found.
+endlocal & exit /b 1
