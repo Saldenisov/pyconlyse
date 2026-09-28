@@ -2,7 +2,7 @@
 REM Resolve PYCONLYSE_PYTHON without invoking conda activation.
 REM Called with CALL so selected variables remain in the device-server shell.
 
-if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
 set "PYCONLYSE_PYTHON_SOURCE="
 
 if defined PYCONLYSE_PYTHON (

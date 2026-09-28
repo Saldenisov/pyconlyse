@@ -13,11 +13,12 @@ if not exist "%ENTRY%" (
   exit /b 1
 )
 
-rem Prefer explicitly configured interpreter, then configured Conda environment.
-rem A configured runtime must never silently fall back to system Python.
+rem Prefer the configured direct runtime, then the configured Conda environment.
+rem A selected Pyconlyse runtime must never fall back to system Python.
 set "CONDA_CMD="
 set "PY="
-set "ENV_NAME="
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
+set "ENV_NAME=%PYCONLYSE_ENV%"
 set "USE_CONDA="
 
 if defined PYCONLYSE_PYTHON (
@@ -27,8 +28,6 @@ if defined PYCONLYSE_PYTHON (
     exit /b 1
   )
 )
-
-if defined PYCONLYSE_ENV set "ENV_NAME=%PYCONLYSE_ENV%"
 
 rem Keep Python 3.12 isolated from per-user package installations.
 if /I "%ENV_NAME%"=="pyconlyse312" set "PYTHONNOUSERSITE=1"
@@ -68,7 +67,7 @@ if not defined PY if defined ENV_NAME if not defined USE_CONDA (
   exit /b 1
 )
 
-rem Preserve legacy fallback only when no Pyconlyse runtime was configured.
+rem Fallback to system Python only when no Pyconlyse runtime was configured.
 if not defined PY (
   where pythonw >nul 2>&1
   if not errorlevel 1 set "PY=pythonw"

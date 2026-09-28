@@ -6,7 +6,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 set "STARTER_HOME=C:\dev\pyconlyse-runtime\starter-9.1"
 set "TANGO_HOST=10.20.30.202:10000"
 if not defined PYCONLYSE set "PYCONLYSE=C:\dev\pyconlyse"
-if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse39"
+if not defined PYCONLYSE_ENV set "PYCONLYSE_ENV=pyconlyse312"
 set "OMNIORB_CONFIG=%PYCONLYSE%\OMNIORB.CFG"
 set "LOG_FILE=%~dp0elysium2_starter_startup.log"
 set "STARTER_READY_TIMEOUT_SECONDS=30"
