@@ -7958,48 +7958,48 @@ yaml = ["ruamel.yaml"]
 
 [[package]]
 name = "pytango"
-version = "10.0.3"
+version = "10.0.4"
 description = "Python bindings for the cppTango library; part of the Tango Distributed Control System toolkit"
 optional = false
 python-versions = ">=3.9"
 groups = ["main"]
 files = [
-    {file = "pytango-10.0.3-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:14a091601cab6af84f5ee255dd7f114ad67e9bc724b367099d13d994c8036ae6"},
-    {file = "pytango-10.0.3-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:82608e6d90666a248b6913c9b03f5a8b3d65a5a1c87acb004e22ec2326ef5a28"},
-    {file = "pytango-10.0.3-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:16c933594e944df521c7bfd1bcad9a01ce2b6e9ab8d162875d4e3b971dcddfe1"},
-    {file = "pytango-10.0.3-cp310-cp310-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:5e83cc53f55f03053996781f1446072e6279bcb12cd966b03022b7e86afeb754"},
-    {file = "pytango-10.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:e5326fca2b76ab0f9137428c375b4d999b7dba442fee0c82569ca52380ad0bbd"},
-    {file = "pytango-10.0.3-cp310-cp310-win32.whl", hash = "sha256:86c74400847d103f6970da7be38e4feaf49a8f3d276994afb650fb84409fb86b"},
-    {file = "pytango-10.0.3-cp310-cp310-win_amd64.whl", hash = "sha256:6aa0c0a1cba9dc31f2a317fa633ac89e0e4e30c3580941507f155634cc96bfc0"},
-    {file = "pytango-10.0.3-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:51464e31b63b9f80687f84d9ece6d79ca82e8f5c483ccabf07c973cba15fd9d5"},
-    {file = "pytango-10.0.3-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:44ca2954feed026d55808b763b6666c58763cda60c6d5ab84867f2381b6ce705"},
-    {file = "pytango-10.0.3-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:bd463f5a34b6b3a890bc8358c737635c062a71ca61afe838c0fe1cb86297bc10"},
-    {file = "pytango-10.0.3-cp311-cp311-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:c4771cc920fe712f148064cdf949ef325fe57cdf67a9adde9c71a06b08553cfd"},
-    {file = "pytango-10.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:0ce03d82253e427dd21618763b820c58691e4d1e1ed9bad5e26cb8301d67e72f"},
-    {file = "pytango-10.0.3-cp311-cp311-win32.whl", hash = "sha256:7e545b50782812ca0ba8609f2666f284805db3826361576c11202f81505b3ce7"},
-    {file = "pytango-10.0.3-cp311-cp311-win_amd64.whl", hash = "sha256:5b733d00cb7ea260a91b3c040e073b6cbec9a1f530884318a55d9e0800278fc3"},
-    {file = "pytango-10.0.3-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:b90db10d2fe44c81260f91bf7e61949e5a913ff9f5909017d27a90a2a595e181"},
-    {file = "pytango-10.0.3-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:ff313775ea4eb07224926026d48caa5fb41e143a61c17da626513834876b1b95"},
-    {file = "pytango-10.0.3-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:75e4b95bb33ccddc311e41774c1ce3af5c75db4c9fab4da4640c585a93c50ff4"},
-    {file = "pytango-10.0.3-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:870cae6a4f17e6477d91f08430b63a66f93360aabe40feeee8a1ee94a43c6cc1"},
-    {file = "pytango-10.0.3-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:4414f1dbdf8e76ab1a66fbfb7bb46d01dc554db8e1f8e060626056a07783d2cb"},
-    {file = "pytango-10.0.3-cp312-cp312-win32.whl", hash = "sha256:d5a263f896ff9d02416628d0935157fb0d0cde7a90791140caa2ec805c087b28"},
-    {file = "pytango-10.0.3-cp312-cp312-win_amd64.whl", hash = "sha256:627aa73bc6fa338a9ee5b8aa76ace5c623680d88c4f4706c808fcf22909bd135"},
-    {file = "pytango-10.0.3-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:9a3f648f7dd66eeac5786ff9e315afa100064ff5873145d5c79a41321b56a57a"},
-    {file = "pytango-10.0.3-cp313-cp313-macosx_12_0_x86_64.whl", hash = "sha256:07be8db2b72fe339ab525cabb3f0c5c833bbe47f685ab440ec99c4116b9d19de"},
-    {file = "pytango-10.0.3-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:e5da2b3e0d4c53d1ee19a86698ed708adfa67c94fc07bc6ebc609c21c872dafa"},
-    {file = "pytango-10.0.3-cp313-cp313-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:623173943c27e3db069922c0b7b7d5b57750c759b543de5334b791cbbc7a5842"},
-    {file = "pytango-10.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:3196361eccdd06a6874e5dc2119ea68c2cb385f3e0122301bbbf378205a08770"},
-    {file = "pytango-10.0.3-cp313-cp313-win32.whl", hash = "sha256:33d560cdd2e7da1eb86be880390cf9b37333a6514f5b26f2e77710ddbafbc8de"},
-    {file = "pytango-10.0.3-cp313-cp313-win_amd64.whl", hash = "sha256:c7d2bd4d4e5b4d6bfac20c13515e6d69243dca9b2d5fe337970cb5d06d2def8b"},
-    {file = "pytango-10.0.3-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:777967d6d4f10f662941a1dcde984f89066b1d43d263192decbcd3ea7987d312"},
-    {file = "pytango-10.0.3-cp39-cp39-macosx_12_0_x86_64.whl", hash = "sha256:515b6a59bdada204e020e8f91c682392e015a428fdfb2a32041c10300fbffc58"},
-    {file = "pytango-10.0.3-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:38d08b5eddb702a13df0027256a8190e71fb5fa5d207e264ffa155af90559c19"},
-    {file = "pytango-10.0.3-cp39-cp39-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:43d8613d6836f7395fd7c848013add1af606a5a5ce1afaa5371c865151bd361a"},
-    {file = "pytango-10.0.3-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:ab6b40390b3b4543c3c49145bca78a3dd44144deebb7a1bfe5ae7feb31d1f301"},
-    {file = "pytango-10.0.3-cp39-cp39-win32.whl", hash = "sha256:f39983b2abe24696982467917f4ca5cc3db132e49895b8a82d725868a3d5f3fd"},
-    {file = "pytango-10.0.3-cp39-cp39-win_amd64.whl", hash = "sha256:d6398cecee9e815b79d4860a2468a76b41b887df7a4f6ea32f9a655a9bdc1cfa"},
-    {file = "pytango-10.0.3.tar.gz", hash = "sha256:afb1db9df5c658a4dacd50134a39e75ce093d2d8858dfeec6330668b2d689943"},
+    {file = "pytango-10.0.4-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:d1ed5ff34ef80b6235480abe66c931aea7f80d96a6c516206d81460b14c31e3b"},
+    {file = "pytango-10.0.4-cp310-cp310-macosx_12_0_x86_64.whl", hash = "sha256:3d49f1e54978234c21165fe55ececc563e4293cd4de50a9e5e3d4ac4cce50890"},
+    {file = "pytango-10.0.4-cp310-cp310-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:66558a0551b0748717591a8e6fd9d13b003ba815f1483aa574596d748a932c2a"},
+    {file = "pytango-10.0.4-cp310-cp310-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:092f3682d9433f68c555adaaceb69be11116444cbf7ede43ba2d9599da349728"},
+    {file = "pytango-10.0.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:f25fcd1fe500c475acea903ecb2e9d528f5d7ef3a3f49151efe44d33b788a5c0"},
+    {file = "pytango-10.0.4-cp310-cp310-win32.whl", hash = "sha256:186a1cc2342b8f2a43c302e6de02bb356fec421b01684dfa50e8668780137f61"},
+    {file = "pytango-10.0.4-cp310-cp310-win_amd64.whl", hash = "sha256:f245354f046d25fd933669eb9de760f3849b0668a24c8e8c31819d1e20d1912f"},
+    {file = "pytango-10.0.4-cp311-cp311-macosx_12_0_arm64.whl", hash = "sha256:d62db4356efdd8d2708f57185df82fd8f88fedf272a245f00c8658821d6c2476"},
+    {file = "pytango-10.0.4-cp311-cp311-macosx_12_0_x86_64.whl", hash = "sha256:3d2b4556ecfaf7a3589a3bdf09e939891c38140b5a7e52bf2ae40ceb9477d554"},
+    {file = "pytango-10.0.4-cp311-cp311-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:e3de8e008d0a90e518087c7888c97810ce38efc6585d970d8a1b0f37ceaad94e"},
+    {file = "pytango-10.0.4-cp311-cp311-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:d34d7e0a2ee4815751ef1acecea709639075b5e467b438d6224d851c04e8565c"},
+    {file = "pytango-10.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:91ac9468246eda1382e5cc4375995a7cd8b7b302d828eded8bad512601de3c89"},
+    {file = "pytango-10.0.4-cp311-cp311-win32.whl", hash = "sha256:90a32d97ce48c3b4718b0069368a2cdc82e4e152c94ab58d182089b1c09ee0f5"},
+    {file = "pytango-10.0.4-cp311-cp311-win_amd64.whl", hash = "sha256:a50b4b6cf99753820fa507de423c97f3f4be94deefde0f4a7fb876cff94133ae"},
+    {file = "pytango-10.0.4-cp312-cp312-macosx_12_0_arm64.whl", hash = "sha256:2a21275394bd9aca0fae3cb6d7843e25fbae97ec8d595050833b3872cb0ad983"},
+    {file = "pytango-10.0.4-cp312-cp312-macosx_12_0_x86_64.whl", hash = "sha256:f17b1fad06b8ed6fd294436afa4bcfb6097062a71acea8fab7d3d9a22a328d78"},
+    {file = "pytango-10.0.4-cp312-cp312-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:c931edfa0213c8bec8fee4af119bb12810621cbda139b5593c89c4b0ced01b57"},
+    {file = "pytango-10.0.4-cp312-cp312-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:1804b569591ef245588c059919ada79040b7cf25789099a13121289821902c8d"},
+    {file = "pytango-10.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:fc77a130edbeea7ad56c8091db08ab86982d014572afb4f2fb25aac3805625ed"},
+    {file = "pytango-10.0.4-cp312-cp312-win32.whl", hash = "sha256:a1e9b3016f5497aff99d565e42b27b64f776a9db6ea9d16578d05fd43b34702a"},
+    {file = "pytango-10.0.4-cp312-cp312-win_amd64.whl", hash = "sha256:655b1a10342db329258199ee8044d5bbcf14e395fb620e2a08b5e85844f46e91"},
+    {file = "pytango-10.0.4-cp313-cp313-macosx_12_0_arm64.whl", hash = "sha256:9910d310e8267fd0ed258578f59d76dc843a33a6659d063cdbe82472b43e7041"},
+    {file = "pytango-10.0.4-cp313-cp313-macosx_12_0_x86_64.whl", hash = "sha256:2e79c90f81fe2f975e696d285a26adf0a7e5d313db5d39531fee94078020d5d5"},
+    {file = "pytango-10.0.4-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:25b15ff84ad4149c9bb1cc0bedd159d1628ac83fb3f39e02e393629016052684"},
+    {file = "pytango-10.0.4-cp313-cp313-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:17d070c4693e6dddde6bce995110094cbc81ec8fc5731402b0b84392d24a9735"},
+    {file = "pytango-10.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:1fc3a1ef284a825d6e2ee71dcf75f6acb93a80738df68bf37ccb3971321a7791"},
+    {file = "pytango-10.0.4-cp313-cp313-win32.whl", hash = "sha256:12e9f24bcbca1dcd707242f0f1f3f893482462b82cc6f26127647b9f94eb7b46"},
+    {file = "pytango-10.0.4-cp313-cp313-win_amd64.whl", hash = "sha256:945069651d3124b389961bb5ce4fc76c99780a2c4a9742c7d8cdc05a716ae9a8"},
+    {file = "pytango-10.0.4-cp39-cp39-macosx_12_0_arm64.whl", hash = "sha256:bb572a80b0e0cf4a479e47e82cc0f4b0cfd8fb16064c93ef5c473be9ee7f2468"},
+    {file = "pytango-10.0.4-cp39-cp39-macosx_12_0_x86_64.whl", hash = "sha256:a56814ad94bde38358174906025b10ddc7ba7ce08f2519be7e8449bdf0dff89a"},
+    {file = "pytango-10.0.4-cp39-cp39-manylinux2014_aarch64.manylinux_2_17_aarch64.whl", hash = "sha256:d0e52d9c951df90d16083e5ce58196285a34acdb6f57858573e227cb4bf3f648"},
+    {file = "pytango-10.0.4-cp39-cp39-manylinux2014_i686.manylinux_2_17_i686.whl", hash = "sha256:d6075136dcf651beb68b4bc71e2ee85802969f32546553dfa5cd8c2c4f252a61"},
+    {file = "pytango-10.0.4-cp39-cp39-manylinux2014_x86_64.manylinux_2_17_x86_64.whl", hash = "sha256:c4ace7a5bfcf0fe63b6107bf6ed1fda2a222c2ae86f13e382043b6dd4f171a62"},
+    {file = "pytango-10.0.4-cp39-cp39-win32.whl", hash = "sha256:13977e82b81360f5e9e71b7684376f107ad2b7e2cb5c9d615a92bd999f4c4429"},
+    {file = "pytango-10.0.4-cp39-cp39-win_amd64.whl", hash = "sha256:82ffc0aa7013f963d4f5b5a53722d8acd7332d0363a180471c3ff85545cc5d5c"},
+    {file = "pytango-10.0.4.tar.gz", hash = "sha256:1b85c3318ccdd2af330165e77df9a2ed60680f90083929535a94980dc3db7cf6"},
 ]
 
 [package.dependencies]
@@ -10126,4 +10126,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "64bd4e66ad907d6bcc686ae14993af81e2d89b8794975c63f6492d4cf1386632"
+content-hash = "33a35ea8ef5a75eedd76990a0540ec11567ec92d0b89e5c889fc9b0d2af87e06"
