@@ -23,10 +23,7 @@ set "USE_CONDA="
 
 if defined PYCONLYSE_PYTHON (
   set "PY=%PYCONLYSE_PYTHON%"
-  if not exist "!PY!" (
-    echo Error: configured PYCONLYSE_PYTHON "!PY!" not found.
-    exit /b 1
-  )
+  if not exist "!PY!" goto :missing_python
 )
 
 rem Keep Python 3.12 isolated from per-user package installations.
@@ -112,3 +109,8 @@ if %EXIT_CODE% neq 0 (
 
 endlocal
 exit /b %EXIT_CODE%
+
+:missing_python
+echo Error: configured PYCONLYSE_PYTHON "!PY!" not found.
+endlocal
+exit /b 1
