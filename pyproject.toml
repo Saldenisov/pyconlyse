@@ -35,7 +35,7 @@ pylablib = ">=1.4,<2.0"
 # 4.2.0 publishes a Windows CPython 3.12 wheel; 3.0.1 does not.
 pypylon = "==4.2.0"
 pyserial = "==3.5"
-PyTango = "==10.0.3"
+PyTango = "==10.0.4"
 requests = "==2.32.5"
 scipy = "==1.13.1"
 taurus = "==5.3.1"
