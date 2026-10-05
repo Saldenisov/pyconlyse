@@ -3,6 +3,7 @@ from __future__ import annotations
 import socket
 import threading
 import re
+import time
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -15,6 +16,7 @@ from .remoteex_protocol import (
     RemoteExResponse,
     RemoteExTransportError,
     ensure_command_terminated,
+    base_command_name,
     parse_response_line,
     response_summary,
 )
@@ -140,7 +142,8 @@ class RemoteExClient:
             if self._command_socket is None:
                 raise RemoteExTransportError("RemoteEx is not connected")
 
-            self.command_socket.settimeout(timeout or self.timeout)
+            command_timeout = float(timeout or self.timeout)
+            self.command_socket.settimeout(command_timeout)
             try:
                 self.command_socket.sendall(payload)
             except OSError as exc:
@@ -150,8 +153,15 @@ class RemoteExClient:
 
             messages: List[RemoteExResponse] = []
             unparsable_lines: List[str] = []
+            expected_name = base_command_name(command).lower()
+            deadline = time.monotonic() + command_timeout
+            unrelated = 0
 
             while True:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RemoteExTransportError(f"No matching RemoteEx response for {command!r}")
+                self.command_socket.settimeout(remaining)
                 line = self._read_line(self.command_socket)
                 stripped = line.strip()
                 if not stripped:
@@ -171,6 +181,18 @@ class RemoteExClient:
 
                 if response.is_message:
                     messages.append(response)
+                    continue
+
+                if response.command_name.strip().lower() != expected_name:
+                    # A late AppStart/status reply must not become a grating or
+                    # shutter readback. A Status/AppInfo boundary also realigns
+                    # the stream before repeated DevParamGet requests.
+                    messages.append(response)
+                    unrelated += 1
+                    if unrelated >= 16:
+                        raise RemoteExTransportError(
+                            f"Too many unrelated replies while waiting for {command!r}"
+                        )
                     continue
 
                 self.last_messages = messages

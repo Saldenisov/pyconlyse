@@ -101,7 +101,7 @@ def test_initialize_and_deinitialize_denial_precedes_experiment_helpers(monkeypa
     initialize_targets = calls[0]["targets"]
     assert {target["command"] for target in initialize_targets} >= {
         "recover", "DevStop", "DevStart", "set_channels_states",
-        "PrepareDG645ForHPDTA", "StartRemoteEx", "StartApplication",
+        "PrepareDG645ForHPDTA", "StartRemoteEx", "StartApplication", "PrepareVD2Startup",
     }
     assert calls[0]["args"]["servers"] == vd2._server_arguments()
     assert calls[0]["wrapper_fields"] == set()

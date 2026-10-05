@@ -84,6 +84,91 @@ class TestRemoteExProtocol(unittest.TestCase):
 
 
 class TestHamamatsuStreakController(unittest.TestCase):
+    def test_stopped_application_status_does_not_query_device_or_camera_parameters(self):
+        fake = FakeRemoteExClient({
+            "Status()": [parse_response_line("0,Status,0,")],
+            "AppInfo(Version)": [parse_response_line("3,AppInfo,Application not running")],
+        })
+        controller = HamamatsuStreakController(fake)
+        fake.connect()
+        snapshot = controller.refresh_cached_state()
+        self.assertFalse(snapshot.application_running)
+        self.assertEqual(fake.sent_commands, ["Status()", "AppInfo(Version)"])
+
+    def test_application_start_uses_initialization_budget_not_status_timeout(self):
+        class StartupClient(FakeRemoteExClient):
+            def send_command_checked(self, command, timeout=None):
+                self.start_timeout = timeout
+                return super().send_command_checked(command, timeout=timeout)
+
+        fake = StartupClient({"AppStart()": [parse_response_line("0,AppStart")]})
+        controller = HamamatsuStreakController(fake, async_timeout=120.0)
+        controller.start_application()
+        self.assertEqual(fake.start_timeout, 120.0)
+        self.assertEqual(fake.sent_commands, ["AppStart()"])
+        self.assertTrue(controller.snapshot.application_running)
+
+    def test_failed_application_start_remains_fault_after_disconnected_poll(self):
+        states = []
+        statuses = []
+        device = SimpleNamespace(
+            _startup_configuration_error="",
+            _application_start_thread=None,
+            controller=None,
+            _reset_remoteex_connection=lambda reason: states.append(DevState.ON),
+            set_state=states.append,
+            set_status=statuses.append,
+        )
+
+        def fail_start():
+            raise RemoteExTransportError("DCAM initialization timeout")
+
+        DS_HAMAMATSU_STREAK._start_application_background(
+            device, SimpleNamespace(start_application=fail_start)
+        )
+        self.assertEqual(states[-1], DevState.FAULT)
+        self.assertIn("DCAM initialization timeout", statuses[-1])
+        DS_HAMAMATSU_STREAK.get_controller_status_local(device)
+        self.assertEqual(states[-1], DevState.FAULT)
+        self.assertFalse(device.application_running_value)
+
+    def test_start_reconnect_keeps_readonly_probe_socket_for_initialization_budget(self):
+        class ResetClient(FakeRemoteExClient):
+            def __init__(self):
+                super().__init__({})
+                self.timeouts = []
+
+            def send_command_checked(self, command, timeout=None):
+                self.sent_commands.append(command)
+                self.timeouts.append(timeout)
+                if command == "AppStart()":
+                    raise RemoteExTransportError("AppStart reset the command socket")
+                assert command == "AppInfo(Version)"
+                return parse_response_line("0,AppInfo,9.5")
+
+        fake = ResetClient()
+        controller = HamamatsuStreakController(fake, async_timeout=120.0)
+        controller.start_application()
+        self.assertEqual(fake.sent_commands, ["AppStart()", "AppInfo(Version)"])
+        self.assertEqual(fake.timeouts[0], 120.0)
+        self.assertGreater(fake.timeouts[1], 100.0)
+        self.assertEqual(controller.snapshot.application_version, "9.5")
+        self.assertTrue(controller.snapshot.application_running)
+
+    def test_start_timeout_does_not_add_a_second_initialization_budget(self):
+        class ExpiredClient(FakeRemoteExClient):
+            def send_command_checked(self, command, timeout=None):
+                self.sent_commands.append(command)
+                raise RemoteExTransportError("startup timeout")
+
+        fake = ExpiredClient({})
+        controller = HamamatsuStreakController(fake, async_timeout=120.0)
+        clock = controller.start_application.__globals__["time"]
+        with patch.object(clock, "monotonic", side_effect=[0.0, 120.0]):
+            with self.assertRaises(RemoteExTransportError):
+                controller.start_application()
+        self.assertEqual(fake.sent_commands, ["AppStart()"])
+
     def test_power_off_keeps_tango_launcher_on_but_reports_hardware_off(self):
         calls = []
         device = SimpleNamespace(

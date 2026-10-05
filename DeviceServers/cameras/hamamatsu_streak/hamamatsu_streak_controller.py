@@ -130,6 +130,7 @@ class HamamatsuStreakController:
         *,
         retry_on_transport: bool = False,
         reconnect_timeout: float = 10.0,
+        timeout: Optional[float] = None,
     ) -> RemoteExResponse:
         """Execute one RemoteEx command.
 
@@ -139,14 +140,15 @@ class HamamatsuStreakController:
         """
         if not self.client.is_connected:
             self._reconnect_transport(reconnect_timeout)
+        send_options = {} if timeout is None else {"timeout": timeout}
         try:
-            response = self.client.send_command_checked(command)
-        except RemoteExTransportError:
+            response = self.client.send_command_checked(command, **send_options)
+        except RemoteExTransportError as exc:
             self.client.close()
             if not retry_on_transport:
-                raise
+                raise RemoteExTransportError(f"{command}: {exc}") from exc
             self._reconnect_transport(reconnect_timeout)
-            response = self.client.send_command_checked(command)
+            response = self.client.send_command_checked(command, **send_options)
         self.last_command = command
         self.last_response_text = response.raw_line
         self.last_messages = [message.raw_line for message in self.client.last_messages]
@@ -168,27 +170,36 @@ class HamamatsuStreakController:
         )
         if not self.client.is_connected:
             self.client.connect()
+        deadline = time.monotonic() + self.async_timeout
         try:
             # TaRemoteEx may intentionally reset its client sockets while it
             # attaches HPD-TA. That reset is part of AppStart, not a device
             # failure and must not trigger a second AppStart command.
-            response = self.client.send_command_checked(command)
+            response = self.client.send_command_checked(command, timeout=self.async_timeout)
         except RemoteExTransportError:
-            response = self._reconnect_after_application_start()
+            response = self._reconnect_after_application_start(deadline=deadline)
         self.last_command = command
         self.last_response_text = response.raw_line
         self.last_messages = [message.raw_line for message in self.client.last_messages]
         self.snapshot.application_running = True
         return response
 
-    def _reconnect_after_application_start(self) -> RemoteExResponse:
+    def _reconnect_after_application_start(self, *, deadline: Optional[float] = None) -> RemoteExResponse:
         self.client.close()
-        deadline = time.monotonic() + 20.0
+        if deadline is None:
+            deadline = time.monotonic() + self.async_timeout
         last_error: Optional[Exception] = None
         while time.monotonic() < deadline:
             try:
                 self.client.connect()
-                version = self.client.send_command_checked("AppInfo(Version)", timeout=3.0)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise RemoteExTransportError("AppStart reconnect deadline expired")
+                # A new command socket can accept its greeting while native
+                # device initialization is still running. Keep that socket and
+                # wait for the read-only probe instead of abandoning it every
+                # 3 s and repeatedly reconnecting during HPD-TA startup.
+                version = self.client.send_command_checked("AppInfo(Version)", timeout=remaining)
                 self.snapshot.application_version = version.parameter(0, "") or ""
                 return RemoteExResponse(
                     raw_line="0,AppStart,reconnected",
@@ -296,9 +307,9 @@ class HamamatsuStreakController:
         return self.execute_raw(build_command("SeqParamSet", parameter, value))
 
     def set_device_parameter(
-        self, location: str, parameter: str, value: object
+        self, location: str, parameter: str, value: object, *, timeout: Optional[float] = None
     ) -> RemoteExResponse:
-        return self.execute_raw(build_command("DevParamSet", location, parameter, value))
+        return self.execute_raw(build_command("DevParamSet", location, parameter, value), timeout=timeout)
 
     def set_live_exposure_time(self, value: str) -> str:
         self.set_camera_parameter("Live", "Exposure", value)
@@ -370,12 +381,12 @@ class HamamatsuStreakController:
         return self.snapshot.sequence_acquisition_speed
 
     def set_time_range(self, value: str) -> str:
-        self.set_device_parameter("TD", "Time Range", value)
+        self.set_device_parameter("TD", "Time Range", value, timeout=30.0)
         self.snapshot.current_time_range = self.get_device_parameter("TD", "Time Range")
         return self.snapshot.current_time_range
 
     def set_streak_mode(self, value: str) -> str:
-        self.set_device_parameter("TD", "Mode", value)
+        self.set_device_parameter("TD", "Mode", value, timeout=30.0)
         self.snapshot.current_streak_mode = self.get_device_parameter("TD", "Mode")
         return self.snapshot.current_streak_mode
 
@@ -394,7 +405,7 @@ class HamamatsuStreakController:
         return self.snapshot.current_mcp_gain
 
     def set_streak_shutter(self, value: object) -> str:
-        self.set_device_parameter("TD", "Shutter", value)
+        self.set_device_parameter("TD", "Shutter", value, timeout=30.0)
         self.snapshot.current_streak_shutter = self.get_device_parameter("TD", "Shutter")
         return self.snapshot.current_streak_shutter
 
@@ -414,7 +425,7 @@ class HamamatsuStreakController:
 
     def set_wavelength_nm(self, value_nm: float) -> str:
         text_value = self._format_numeric(value_nm)
-        self.set_device_parameter("Spec", "Wavelength", text_value)
+        self.set_device_parameter("Spec", "Wavelength", text_value, timeout=30.0)
         self.snapshot.current_wavelength = self.get_device_parameter("Spec", "Wavelength")
         return self.snapshot.current_wavelength
 
@@ -430,7 +441,7 @@ class HamamatsuStreakController:
         return self.snapshot.current_slit_width
 
     def set_spectrograph_shutter(self, value: object) -> str:
-        self.set_device_parameter("Spec", "Shutter", value)
+        self.set_device_parameter("Spec", "Shutter", value, timeout=30.0)
         self.snapshot.current_spectrograph_shutter = self.get_device_parameter(
             "Spec", "Shutter"
         )
@@ -447,6 +458,114 @@ class HamamatsuStreakController:
         self.set_device_parameter("Spec", "Turret", value)
         self.snapshot.current_turret = self.get_device_parameter("Spec", "Turret")
         return self.snapshot.current_turret
+
+    def configure_vd2_startup(self) -> HamamatsuStreakSnapshot:
+        """Put HPD-TA optics in the VD2 starting state after AppStart."""
+        snapshot = self.refresh_cached_state()
+        if not snapshot.application_running:
+            raise RuntimeError("HPD-TA must be running before VD2 preparation")
+        if snapshot.remoteex_status.strip().lower() != "idle":
+            raise RuntimeError(
+                f"Cannot prepare VD2 while RemoteEx is {snapshot.remoteex_status}: "
+                f"{snapshot.busy_command}"
+            )
+        try:
+            return self._configure_vd2_optics(snapshot)
+        except Exception as exc:
+            close_errors = []
+            for label, setter in (
+                ("streak-camera", self.set_streak_shutter),
+                ("spectrograph", self.set_spectrograph_shutter),
+            ):
+                try:
+                    setter("Closed")
+                except Exception as close_exc:
+                    close_errors.append(f"{label}: {close_exc}")
+            if close_errors:
+                raise RuntimeError(
+                    f"VD2 startup failed ({exc}); shutter closure could not be confirmed: "
+                    + "; ".join(close_errors)
+                ) from exc
+            raise
+
+    def _configure_vd2_optics(
+        self, snapshot: HamamatsuStreakSnapshot
+    ) -> HamamatsuStreakSnapshot:
+        if snapshot.current_streak_shutter.strip().lower() != "closed":
+            self.set_streak_shutter("Closed")
+
+        # Keep the spectrograph dark while selecting a grating or wavelength.
+        if snapshot.current_spectrograph_shutter.strip().lower() != "closed":
+            self.set_spectrograph_shutter("Closed")
+
+        # All installed Kymera gratings have the same RemoteEx label "150 g/mm".
+        # Preparation must select physical index 2 through its Tango/SDK server
+        # before HPD-TA takes ownership. Never move by this ambiguous UI string.
+        grating = snapshot.current_grating.strip().lower()
+        if grating not in {"2", "150 g/mm"}:
+            raise RuntimeError(
+                "VD2 grating was not prepared through the Kymera device server "
+                f"(grating={snapshot.current_grating!r})"
+            )
+        deadline = time.monotonic() + 20.0
+        while True:
+            blaze = self.get_device_parameter("Spec", "Blaze").strip()
+            ruling = self.get_device_parameter("Spec", "Ruling").strip()
+            if blaze == "800" and ruling == "150":
+                break
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"VD2 grating 2 did not report blaze 800 / ruling 150 "
+                    f"(blaze={blaze!r}, ruling={ruling!r})"
+                )
+            time.sleep(0.5)
+
+        try:
+            wavelength = float(snapshot.current_wavelength)
+        except (TypeError, ValueError):
+            wavelength = float("nan")
+        if not abs(wavelength - 550.0) <= 0.1:
+            self.set_wavelength_nm(550.0)
+        if snapshot.current_time_range.strip().lower() != "1 us":
+            self.set_time_range("1 us")
+        if snapshot.current_streak_mode.strip().lower() != "operate":
+            self.set_streak_mode("Operate")
+
+        # Read back all moving and timing settings before opening the optical path.
+        snapshot = self.refresh_cached_state()
+        actual = {
+            "grating": snapshot.current_grating,
+            "blaze": snapshot.current_blaze,
+            "ruling": snapshot.current_ruling,
+            "wavelength": snapshot.current_wavelength,
+            "time range": snapshot.current_time_range,
+            "mode": snapshot.current_streak_mode,
+            "streak shutter": snapshot.current_streak_shutter,
+        }
+        try:
+            wavelength = float(snapshot.current_wavelength)
+        except (TypeError, ValueError):
+            wavelength = float("nan")
+        if not (
+            snapshot.current_grating.strip().lower() in {"2", "150 g/mm"}
+            and snapshot.current_blaze.strip() == "800"
+            and snapshot.current_ruling.strip() == "150"
+            and abs(wavelength - 550.0) <= 0.1
+            and snapshot.current_time_range.strip().lower() == "1 us"
+            and snapshot.current_streak_mode.strip().lower() == "operate"
+            and snapshot.current_streak_shutter.strip().lower() == "closed"
+        ):
+            raise RuntimeError(f"VD2 startup readback mismatch: {actual}")
+
+        self.set_spectrograph_shutter("Open")
+        if self.get_device_parameter("Spec", "Shutter").strip().lower() != "open":
+            raise RuntimeError("VD2 spectrograph shutter did not open")
+        snapshot = self.refresh_cached_state()
+        if snapshot.current_spectrograph_shutter.strip().lower() != "open":
+            raise RuntimeError("VD2 spectrograph shutter readback is not open")
+        if snapshot.current_streak_shutter.strip().lower() != "closed":
+            raise RuntimeError("VD2 streak-camera shutter readback is not closed")
+        return snapshot
 
     def set_focus_mirror(self, value: object) -> str:
         self.set_device_parameter("Spec", "Focus Mirror", value)
@@ -605,6 +724,11 @@ class HamamatsuStreakController:
 
         self.snapshot.application_version = self._safe_query(self.get_app_info, "Version")
         self.snapshot.application_running = bool(self.snapshot.application_version)
+        if not self.snapshot.application_running:
+            # RemoteEx can be available before AppStart. Do not issue camera,
+            # streak, spectrograph, or delay-generator queries to an application
+            # that has not finished initializing its hardware.
+            return self.snapshot
         self.snapshot.live_exposure_time = self._safe_query(
             self.get_camera_parameter, "Live", "Exposure"
         )

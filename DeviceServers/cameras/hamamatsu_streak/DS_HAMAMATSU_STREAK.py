@@ -66,6 +66,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.application_running_value = False
         self.remoteex_status_value = "disconnected"
         self.busy_command_value = ""
+        self._startup_configuration_error = ""
         self.application_version_value = ""
         self.live_exposure_time_value = ""
         self.acquire_exposure_time_value = ""
@@ -115,12 +116,8 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.last_command_value = ""
         self.last_response_value = ""
         super().init_device()
-        try:
-            # DS_General declares this command at 300 ms. HPD-TA RemoteEx cannot
-            # service that rate while acquiring; the web API requests refreshes.
-            self.stop_poll_command("get_controller_status")
-        except Exception:
-            pass
+        # Poll read-only RemoteEx status so manual HPD-TA changes reach Tango
+        # and the web UI. The controller skips detailed reads during acquisition.
         self.register_variables_for_archive()
         # This server can run before RemoteEx. It is the launcher for that
         # process, so a closed TCP port is a normal initial state, not a Tango
@@ -184,9 +181,9 @@ class DS_HAMAMATSU_STREAK(DS_General):
             self.warn(f"RemoteEx discovery failed: {exc}", True)
         self._device_id_internal, self._uri = arg_return
 
-    @command(polling_period=0)
+    @command(polling_period=5000)
     def get_controller_status(self):
-        """Refresh only on demand without DS_General's auto-turn-on loop.
+        """Refresh read-only status without DS_General's auto-turn-on loop.
 
         A streak acquisition is legitimately RUNNING. The generic implementation
         treats every non-ON state as a failed power-up and reconnects RemoteEx,
@@ -203,17 +200,27 @@ class DS_HAMAMATSU_STREAK(DS_General):
         return result
 
     def get_controller_status_local(self) -> Union[int, str]:
+        # AppStart and its optical setup own the RemoteEx command socket.
+        if self._application_start_thread is not None and self._application_start_thread.is_alive():
+            return 0
         if self.controller is None or not self.controller.is_connected:
             self.connected_value = False
             self.application_running_value = False
             self.remoteex_status_value = "disconnected"
-            self.set_state(DevState.ON)
+            if self._startup_configuration_error:
+                self.set_state(DevState.FAULT)
+                self.set_status(self._startup_configuration_error)
+            else:
+                self.set_state(DevState.ON)
             return 0
 
         try:
             snapshot = self.controller.refresh_cached_state()
             self._sync_from_snapshot(snapshot)
-            if self.remoteex_status_value.lower() == "busy":
+            if self._startup_configuration_error:
+                self.set_state(DevState.FAULT)
+                self.set_status(self._startup_configuration_error)
+            elif self.remoteex_status_value.lower() == "busy":
                 self.set_state(DevState.RUNNING)
             else:
                 self.set_state(DevState.ON)
@@ -228,6 +235,19 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
             if bool(int(self.start_application_on_turn_on or 0)):
                 self.controller.start_application()
+                try:
+                    snapshot = self.controller.configure_vd2_startup()
+                except Exception as exc:
+                    self._startup_configuration_error = (
+                        f"VD2 startup configuration failed: {exc}"
+                    )
+                    self.application_running_value = True
+                    self.set_state(DevState.FAULT)
+                    self.set_status(self._startup_configuration_error)
+                    return self._startup_configuration_error
+                self._sync_from_snapshot(snapshot)
+                self._startup_configuration_error = ""
+                self.set_state(DevState.ON)
             else:
                 # RemoteEx can accept TCP connections while HPD-TA is stopped.
                 # Probe once after an explicit connection so the web UI is not
@@ -327,7 +347,11 @@ class DS_HAMAMATSU_STREAK(DS_General):
         self.remoteex_status_value = "disconnected"
         self.busy_command_value = ""
         self.last_response_value = f"RemoteEx unavailable: {reason}"
-        self.set_state(DevState.ON)
+        if self._startup_configuration_error:
+            self.set_state(DevState.FAULT)
+            self.set_status(self._startup_configuration_error)
+        else:
+            self.set_state(DevState.ON)
 
     def _prepare_dg645_for_hpdta(self) -> None:
         """Apply the VD2 timing preset before HPD-TA starts.
@@ -952,7 +976,10 @@ class DS_HAMAMATSU_STREAK(DS_General):
 
     @command
     def RefreshStatus(self):
-        if self._live_start_thread is not None and self._live_start_thread.is_alive():
+        if any(
+            thread is not None and thread.is_alive()
+            for thread in (self._live_start_thread, self._application_start_thread)
+        ):
             return json.dumps(
                 {
                     "connected": self.connected_value,
@@ -988,6 +1015,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
             return self.application_version_value
 
         controller = self._require_controller()
+        self._startup_configuration_error = ""
         self.busy_command_value = f"DG645 Recall {int(self.dg645_hpdta_recall_slot or 9)}"
         try:
             self._prepare_dg645_for_hpdta()
@@ -1014,16 +1042,60 @@ class DS_HAMAMATSU_STREAK(DS_General):
     ) -> None:
         try:
             controller.start_application()
-            snapshot = controller.refresh_cached_state()
+        except Exception as exc:
+            self._reset_remoteex_connection(f"StartApplication failed: {exc}")
+            self._startup_configuration_error = f"HPD-TA startup failed: {exc}"
+            self.set_state(DevState.FAULT)
+            self.set_status(self._startup_configuration_error)
+            return
+
+        self._configure_vd2_startup_background(controller)
+
+    @command
+    def PrepareVD2Startup(self):
+        """Apply the VD2 optical profile to an already running HPD-TA."""
+        if not self._power_dependency_allows_hardware_operation(force=True):
+            raise RuntimeError(self._power_dependency_status)
+        if (
+            self._application_start_thread is not None
+            and self._application_start_thread.is_alive()
+        ):
+            return
+
+        controller = self._require_controller()
+        self._startup_configuration_error = ""
+        self.remoteex_status_value = "preparing"
+        self.busy_command_value = "VD2 startup configuration"
+        self.set_state(DevState.RUNNING)
+        self._application_start_thread = threading.Thread(
+            target=self._configure_vd2_startup_background,
+            args=(controller,),
+            daemon=True,
+            name="hamamatsu-prepare-vd2",
+        )
+        self._application_start_thread.start()
+
+    def _configure_vd2_startup_background(
+        self, controller: HamamatsuStreakController
+    ) -> None:
+        try:
+            snapshot = controller.configure_vd2_startup()
             self._sync_from_snapshot(snapshot)
             self.last_command_value = controller.last_command
             self.last_response_value = controller.last_response_text
             self.application_running_value = True
             self.remoteex_status_value = "idle"
             self.busy_command_value = ""
+            self._startup_configuration_error = ""
             self.set_state(DevState.ON)
         except Exception as exc:
-            self._reset_remoteex_connection(f"StartApplication failed: {exc}")
+            self._startup_configuration_error = f"VD2 startup configuration failed: {exc}"
+            self.last_response_value = self._startup_configuration_error
+            self.application_running_value = bool(controller.snapshot.application_running)
+            self.remoteex_status_value = "idle"
+            self.busy_command_value = ""
+            self.set_state(DevState.FAULT)
+            self.set_status(self._startup_configuration_error)
 
     @command
     def StopApplication(self):
@@ -1038,6 +1110,7 @@ class DS_HAMAMATSU_STREAK(DS_General):
                 raise
             self.last_response_value = f"AppEnd closed RemoteEx socket: {exc}"
         self.application_running_value = False
+        self._startup_configuration_error = ""
         self.remoteex_status_value = "idle"
         self.busy_command_value = ""
         self.last_command_value = controller.last_command

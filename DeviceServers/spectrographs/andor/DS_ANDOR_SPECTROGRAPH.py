@@ -1,4 +1,7 @@
 #!/usr/bin/python3 -u
+import json
+import math
+import re
 import sys
 from pathlib import Path
 from typing import Union
@@ -23,6 +26,7 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
     dll_path = device_property(dtype=str, default_value="")
     shamrock_dll_path = device_property(dtype=str, default_value="")
     spectrograph_index = device_property(dtype=int, default_value=0)
+    spectrograph_serial = device_property(dtype=str, default_value="")
     pixel_number = device_property(dtype=int, default_value=1064)
     pixel_width_um = device_property(dtype=float, default_value=13.5)
     linked_camera_ds = device_property(dtype=str, default_value="")
@@ -178,9 +182,30 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             sdk_path=self.dll_path,
             shamrock_path=self.shamrock_dll_path,
         )
-        return Andor.ShamrockSpectrograph(
-            idx=self._coerce_int(self.spectrograph_index, 0)
-        )
+        index = self._coerce_int(self.spectrograph_index, 0)
+        serial = str(self.spectrograph_serial or "").strip()
+        if serial:
+            serials = list(Andor.list_shamrock_spectrographs())
+            if serials.count(serial) != 1:
+                raise RuntimeError(f"Spectrograph {serial} is not uniquely available: {serials}")
+            index = serials.index(serial)
+        spectrograph = Andor.ShamrockSpectrograph(idx=index)
+        if serial:
+            try:
+                if str(spectrograph.get_device_info().serial_number) != serial:
+                    raise RuntimeError(f"Spectrograph identity changed while opening {serial}")
+            except Exception:
+                spectrograph.close()
+                raise
+        return spectrograph
+
+    @staticmethod
+    def _parse_blaze_nm(value):
+        # Shamrock returns a string (e.g. "800nm"), not metres or a float.
+        match = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*(?:nm)?\s*", str(value), re.IGNORECASE)
+        if match is None:
+            raise ValueError(f"Unsupported grating blaze wavelength: {value!r}")
+        return float(match.group(1))
 
     def _setup_calibration_geometry(self):
         if self.spectrograph is None:
@@ -236,7 +261,8 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             pass
         try:
             blaze_raw = getattr(info, "blaze_wavelength", info[1])
-            self.blaze_wavelength_nm_value = float(blaze_raw) * 1e9
+            # pylablib returns the SDK blaze string in nm, unlike wavelength.
+            self.blaze_wavelength_nm_value = self._parse_blaze_nm(blaze_raw)
         except Exception:
             pass
 
@@ -358,6 +384,45 @@ class DS_ANDOR_SPECTROGRAPH(DS_General):
             self.current_grating = int(self.spectrograph.get_grating())
             self._read_grating_info(self.spectrograph)
             self.refresh_calibration_axis()
+
+    @command(dtype_out=str)
+    def PrepareVD2Grating(self):
+        """Select physical grating 2 and verify SDK metadata, never a UI label."""
+        with self._get_lifecycle_lock():
+            if not self._power_dependency_allows_hardware_operation(force=True):
+                raise RuntimeError("Kymera power has not been confirmed")
+            spectrograph = self.spectrograph
+            if spectrograph is None:
+                raise RuntimeError("Kymera must be initialized before VD2 preparation")
+
+            def verified_info(index):
+                info = spectrograph.get_grating_info(index)
+                lines = float(info[0])
+                blaze = self._parse_blaze_nm(info[1])
+                if not (
+                    math.isfinite(lines) and math.isfinite(blaze)
+                    and abs(lines - 150.0) <= 0.01
+                    and abs(blaze - 800.0) <= 0.01
+                ):
+                    raise RuntimeError(
+                        f"Kymera grating {index} is not VD2 150 g/mm / Blaze 800 "
+                        f"(ruling={lines}, blaze={blaze})"
+                    )
+                return lines, blaze
+
+            # Validate the target before moving; a changed turret must fail closed.
+            verified_info(2)
+            if int(spectrograph.get_grating()) != 2:
+                spectrograph.set_grating(2)
+            actual = int(spectrograph.get_grating())
+            if actual != 2:
+                raise RuntimeError(f"Kymera selected grating {actual}, expected 2")
+            lines, blaze = verified_info(actual)
+            self.current_grating = actual
+            self.lines_per_mm_value = lines
+            self.blaze_wavelength_nm_value = blaze
+            self.refresh_calibration_axis()
+            return json.dumps({"grating": actual, "ruling": lines, "blaze": blaze})
 
     def _set_slit_width(self, slit_name: str, value_um: float):
         attr_name = f"{slit_name}_slit_um_value"

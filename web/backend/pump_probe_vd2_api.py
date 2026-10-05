@@ -2,34 +2,68 @@
 
 from __future__ import annotations
 
+import ast
 import base64
 import json
+import math
 import time
+from threading import Lock
 from typing import Any, Dict, Mapping
 
 from flask import Blueprint, jsonify, request
-from tango import DeviceProxy
+from tango import DevState, DeviceProxy
 
 from hardware_authorization import authorization_required, require_http_hardware
 from mutation_auth import install_mutation_auth
+from experiment_readiness import recover_device, start_managed_server, stop_managed_server
 from vd2_measurement_protocol import PhaseRequest, Vd2MeasurementProtocol, Vd2ProtocolError
 
 pump_probe_vd2_api = Blueprint(
     "pump_probe_vd2_api", __name__, url_prefix="/api/pump-probe-vd2"
 )
 install_mutation_auth(pump_probe_vd2_api)
+_preparation_lock = Lock()
 
 STREAK_DEVICE = "manip/camera/hamamatsu_streak_main"
 DG645_DEVICE = "manip/sync/DG645"
 VD2_PDU_DEVICE = "manip/SD2/PDU_SD2"
+ZABER_PDU_DEVICE = "manip/VD2/PDU_VD2"
+ZABER_STAGE_DEVICE = "manip/VD2/Zaber"
+OWIS_SAMPLE_DEVICE = "manip/general/DS_OWIS_Aggregator"
+OWIS_SAMPLE_AXIS = 2
+OWIS_CONTROLLER_DEVICE = "manip/general/DS_OWIS_PS90_IP"
+OWIS_LEGACY_DEVICE = "manip/general/DS_OWIS_PS90"
+OWIS_PDU_DEVICE = "manip/V0/PDU_VO"
+VD2_DG645_RECALL_SLOT = 9
+KYMERA_DEVICE = "manip/CR/ANDOR_KYMERA1"
 ASTOR_DEVICE = "tango/admin/everest"
+ELYSIUM_ASTOR_DEVICE = "tango/admin/elysium2"
 
 VD2_SERVERS = {
     VD2_PDU_DEVICE: "DS_Netio_pdu/4_SD2",
+    ZABER_PDU_DEVICE: "DS_Netio_pdu/2_VD2",
+    OWIS_PDU_DEVICE: "DS_Netio_pdu/1_V0",
+    OWIS_CONTROLLER_DEVICE: "DS_OWIS_PS90/2_IP",
+    OWIS_LEGACY_DEVICE: "DS_OWIS_PS90/1",
+    OWIS_SAMPLE_DEVICE: "DS_OWIS_Aggregator/AGG",
+    ZABER_STAGE_DEVICE: "DS_Zaber/1_Zaber",
     DG645_DEVICE: "DS_DG645/1_DG645",
     STREAK_DEVICE: "DS_HAMAMATSU_STREAK/1_hamamatsu_streak_main",
+    KYMERA_DEVICE: "DS_ANDOR_SPECTROGRAPH/2_ANDOR_KYMERA1",
 }
-VD2_REQUIRED_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
+SD2_REQUIRED_PDU_OUTPUTS = {
+    1: "Streak camera / spectrograph",
+    2: "DG645",
+    3: "Power control",
+}
+# Shutdown retains the control supply; preparation must always verify it is ON.
+VD2_SHUTDOWN_PDU_OUTPUTS = {1: "Streak camera / spectrograph", 2: "DG645"}
+VD2_REQUIRED_PDU_OUTPUTS = {
+    1: "Flash Lamp",
+    2: "Xe-lamp-CW",
+    3: "Zaber",
+}
+OWIS_REQUIRED_PDU_OUTPUTS = {2: "OWIS controller (VD2 sample axis 2)"}
 
 READ_ATTRIBUTES = {
     "connected": "connected",
@@ -151,24 +185,24 @@ def _target(device: str, command: str) -> dict[str, str]:
     return {"device": device, "command": command}
 
 
+def _recovery_command(device: str) -> str:
+    return "Reconnect" if device == ZABER_STAGE_DEVICE else "recover"
+
+
 def _server_recovery_targets(device: str) -> list[dict[str, str]]:
     """Potential recovery calls in the order used by ``_ensure_server``."""
+    astor = ELYSIUM_ASTOR_DEVICE if device == ZABER_STAGE_DEVICE else ASTOR_DEVICE
     return [
-        _target(device, "recover"),
-        _target(ASTOR_DEVICE, "DevStop"),
-        _target(ASTOR_DEVICE, "DevStart"),
-        # A stale Astor running flag takes one explicit second stop/start.
-        _target(ASTOR_DEVICE, "DevStop"),
-        _target(ASTOR_DEVICE, "DevStart"),
+        _target(device, _recovery_command(device)),
+        _target(device, "Init"),
+        _target(device, "turn_on"),
+        _target(astor, "DevStop"),
+        _target(astor, "DevStart"),
     ]
 
 
 def _server_arguments() -> dict[str, str]:
-    return {
-        VD2_PDU_DEVICE: VD2_SERVERS[VD2_PDU_DEVICE],
-        DG645_DEVICE: VD2_SERVERS[DG645_DEVICE],
-        STREAK_DEVICE: VD2_SERVERS[STREAK_DEVICE],
-    }
+    return dict(VD2_SERVERS)
 
 
 def _recovery_plan(*devices: str) -> list[dict[str, Any]]:
@@ -177,7 +211,9 @@ def _recovery_plan(*devices: str) -> list[dict[str, Any]]:
         {
             "device": device,
             "server": VD2_SERVERS[device],
-            "commands": ["recover", "DevStop", "DevStart", "DevStop", "DevStart"],
+            "commands": [
+                _recovery_command(device), "Init", "turn_on", "DevStop", "DevStart"
+            ],
         }
         for device in devices
     ]
@@ -264,23 +300,55 @@ def _mutation_payload(wrapper_fields: set[str]):
 
 def _initialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]:
     targets = _server_recovery_targets(VD2_PDU_DEVICE)
+    targets.extend(_server_recovery_targets(ZABER_PDU_DEVICE))
+    targets.extend(_server_recovery_targets(OWIS_PDU_DEVICE))
     targets.append(_target(VD2_PDU_DEVICE, "set_channels_states"))
+    targets.append(_target(ZABER_PDU_DEVICE, "set_channels_states"))
+    targets.append(_target(OWIS_PDU_DEVICE, "set_channels_states"))
+    targets.extend(_server_recovery_targets(ZABER_STAGE_DEVICE))
     targets.extend(_server_recovery_targets(DG645_DEVICE))
+    targets.append(_target(DG645_DEVICE, "scpi_write"))
+    targets.extend(_server_recovery_targets(OWIS_CONTROLLER_DEVICE))
+    targets.extend(_server_recovery_targets(OWIS_LEGACY_DEVICE))
+    targets.extend(_server_recovery_targets(OWIS_SAMPLE_DEVICE))
+    targets.append(_target(OWIS_SAMPLE_DEVICE, "turn_on_axis"))
     targets.extend(_server_recovery_targets(STREAK_DEVICE))
+    targets.extend(_server_recovery_targets(KYMERA_DEVICE))
     targets.extend(
         [
             _target(STREAK_DEVICE, "PrepareDG645ForHPDTA"),
             _target(STREAK_DEVICE, "StartRemoteEx"),
             _target(STREAK_DEVICE, "StartApplication"),
+            _target(STREAK_DEVICE, "PrepareVD2Startup"),
+            _target(STREAK_DEVICE, "write_attribute:streak_shutter"),
+            _target(STREAK_DEVICE, "write_attribute:spectrograph_shutter"),
+            _target(STREAK_DEVICE, "StopApplication"),
+            _target(STREAK_DEVICE, "StopRemoteEx"),
+            _target(KYMERA_DEVICE, "PrepareVD2Grating"),
+            _target(KYMERA_DEVICE, "turn_off"),
+            _target(ASTOR_DEVICE, "DevStop"),
         ]
     )
     return targets, {
         "servers": _server_arguments(),
-        "recovery_plan": _recovery_plan(VD2_PDU_DEVICE, DG645_DEVICE, STREAK_DEVICE),
+        "recovery_plan": _recovery_plan(
+            VD2_PDU_DEVICE, ZABER_PDU_DEVICE, OWIS_PDU_DEVICE,
+            DG645_DEVICE, OWIS_CONTROLLER_DEVICE, OWIS_LEGACY_DEVICE,
+            OWIS_SAMPLE_DEVICE, ZABER_STAGE_DEVICE, STREAK_DEVICE, KYMERA_DEVICE,
+        ),
         "pdu_output_states": [
-            {"output_id": output_id, "state": 1}
+            {"device": VD2_PDU_DEVICE, "output_id": output_id, "state": 1}
+            for output_id in sorted(SD2_REQUIRED_PDU_OUTPUTS)
+        ] + [
+            {"device": ZABER_PDU_DEVICE, "output_id": output_id, "state": 1}
             for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+        ] + [
+            {"device": OWIS_PDU_DEVICE, "output_id": output_id, "state": 1}
+            for output_id in sorted(OWIS_REQUIRED_PDU_OUTPUTS)
         ],
+        "dg645_commands": [f"*RCL {VD2_DG645_RECALL_SLOT}", "BURM 0"],
+        "owis_axis": OWIS_SAMPLE_AXIS,
+        "kymera_grating": 2,
     }
 
 
@@ -299,7 +367,7 @@ def _deinitialize_authorization() -> tuple[list[dict[str, str]], dict[str, Any]]
         "recovery_plan": _recovery_plan(VD2_PDU_DEVICE),
         "pdu_output_states": [
             {"output_id": output_id, "state": 0}
-            for output_id in sorted(VD2_REQUIRED_PDU_OUTPUTS)
+            for output_id in sorted(VD2_SHUTDOWN_PDU_OUTPUTS)
         ],
         "shutters": {
             "streak_shutter": "Closed",
@@ -343,6 +411,7 @@ def _snapshot(proxy: DeviceProxy) -> Dict[str, Any]:
     return {
         "device": STREAK_DEVICE,
         "state": state,
+        "status": str(proxy.status()) if state in {"FAULT", "ALARM"} else "",
         "connected": bool(values.get("connected", False)),
         "application_running": bool(values.get("application_running", False)),
         "remoteex_status": _string(values.get("remoteex_status", "unknown")),
@@ -362,8 +431,10 @@ def _control_error(exc: Exception) -> str:
     return message
 
 
-def _astor() -> DeviceProxy:
-    proxy = DeviceProxy(ASTOR_DEVICE)
+def _astor(device: str = "") -> DeviceProxy:
+    proxy = DeviceProxy(
+        ELYSIUM_ASTOR_DEVICE if device == ZABER_STAGE_DEVICE else ASTOR_DEVICE
+    )
     proxy.set_timeout_millis(15000)
     return proxy
 
@@ -385,12 +456,20 @@ def _wait_for_device(device: str, timeout_s: float = 15.0) -> DeviceProxy:
 
 def _is_healthy_device(proxy: DeviceProxy, device: str) -> bool:
     state = str(proxy.state()).split(".")[-1].upper()
-    if state in {"FAULT", "UNKNOWN"}:
+    if state in {"FAULT", "UNKNOWN", "OFF", "DISABLE", "ALARM", "INIT"}:
         return False
     if device == DG645_DEVICE:
         return bool(str(proxy.command_inout("scpi_query", "*IDN?")).strip())
-    if device == VD2_PDU_DEVICE:
+    if device in {VD2_PDU_DEVICE, ZABER_PDU_DEVICE, OWIS_PDU_DEVICE}:
         return bool(list(proxy.read_attribute("ids").value))
+    if device == ZABER_STAGE_DEVICE:
+        return proxy.read_attribute("position_mm").value is not None
+    if device == KYMERA_DEVICE:
+        return state == "ON" and int(proxy.read_attribute("grating").value) > 0
+    if device in {OWIS_CONTROLLER_DEVICE, OWIS_SAMPLE_DEVICE}:
+        # Axis commands require an initialized controller/router, not just an
+        # exported transport in STANDBY. Verify the VD2 axis below separately.
+        return state == "ON" and math.isfinite(float(proxy.read_attribute("pos2").value))
     # RemoteEx may intentionally be stopped while its Tango launcher remains ON.
     return True
 
@@ -411,105 +490,127 @@ def _wait_for_healthy_device(device: str, timeout_s: float = 20.0) -> DeviceProx
 
 
 def _restart_server(device: str, server: str) -> DeviceProxy:
-    astor = _astor()
-    try:
-        astor.command_inout("DevStop", server)
-    except Exception as exc:
-        if "not running" not in str(exc).lower():
-            raise
+    astor = _astor(device)
 
-    # Astor acknowledges DevStop before the child Python process has unregistered.
-    # Waiting here prevents the misleading "already running" start failure.
-    stopped_deadline = time.monotonic() + 12.0
-    while time.monotonic() < stopped_deadline:
-        try:
-            _wait_for_device(device, timeout_s=0.5)
-        except Exception:
-            break
-        time.sleep(0.5)
+    def wait_ready():
+        if device in {OWIS_CONTROLLER_DEVICE, OWIS_SAMPLE_DEVICE, KYMERA_DEVICE}:
+            # OWIS server startup discovers the transport but intentionally
+            # leaves it in STANDBY. Preparation must initialize it explicitly.
+            proxy = _wait_for_device(device, timeout_s=45.0 if device == KYMERA_DEVICE else 15.0)
+            if device == KYMERA_DEVICE:
+                proxy.set_timeout_millis(60000)
+            if not _is_healthy_device(proxy, device):
+                recover_device(
+                    proxy, lambda candidate: _is_healthy_device(candidate, device),
+                    ("turn_on", _recovery_command(device), "Init", "turn_on"),
+                )
+        return _wait_for_healthy_device(device)
 
-    astor.command_inout("DevStart", server)
-    return _wait_for_healthy_device(device)
+    return start_managed_server(astor, server, wait_ready)
 
 
 def _ensure_server(device: str, steps: list[dict[str, str]]) -> DeviceProxy:
+    initial_error = "device is exported but hardware is not ready"
+    proxy = None
     try:
         proxy = _wait_for_device(device, timeout_s=2.0)
         if _is_healthy_device(proxy, device):
             steps.append({"step": f"Tango {device}", "status": "already running"})
             return proxy
-    except Exception:
-        pass
+        initial_error = f"state={proxy.state()}; device is exported but hardware is not ready"
+    except Exception as exc:
+        initial_error = str(exc)
 
     server = VD2_SERVERS[device]
-    try:
-        proxy = _wait_for_device(device, timeout_s=2.0)
-        proxy.command_inout("recover")
-        if _is_healthy_device(proxy, device):
+    recovery_errors = []
+    if proxy is not None:
+        recovery_commands = (_recovery_command(device), "Init", "turn_on")
+        if device == KYMERA_DEVICE:
+            # Native SDK initialization outlasts the ordinary Tango timeout.
+            # An exported OFF device needs turn_on, not another passive SDK
+            # open/close through Init before opening it again.
+            proxy.set_timeout_millis(60000)
+            recovery_commands = ("turn_on", "Init", "turn_on")
+        recovered, recovery_errors = recover_device(
+            proxy, lambda candidate: _is_healthy_device(candidate, device),
+            recovery_commands,
+        )
+        if recovered:
             steps.append({"step": f"Tango {device}", "status": "recovered"})
             return proxy
-    except Exception:
-        pass
 
     try:
         proxy = _restart_server(device, server)
     except Exception as exc:
-        if "already running" in str(exc).lower():
-            # A stale process can retain Astor's running flag after its device
-            # has disappeared. One explicit stop/start resolves that state.
-            astor = _astor()
-            try:
-                astor.command_inout("DevStop", server)
-            except Exception:
-                pass
-            time.sleep(3.0)
-            astor.command_inout("DevStart", server)
-            proxy = _wait_for_healthy_device(device)
-        else:
-            raise
+        detail = (
+            f"{device}: {exc}. Initial check: {initial_error}. "
+            + ("Recovery: " + "; ".join(recovery_errors) + ". " if recovery_errors else "")
+            + "Check the confirmed PDU output and instrument connection, then press Prepare again."
+        )
+        steps.append({"step": f"Tango {device}", "status": "failed", "detail": detail})
+        raise RuntimeError(detail) from exc
     steps.append({"step": f"Tango {device}", "status": "started by Astor"})
     return proxy
 
 
-def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+def _enable_required_power(
+    pdu: DeviceProxy,
+    steps: list[dict[str, str]],
+    required_outputs: dict[int, str],
+    label: str,
+) -> None:
     ids = [int(value) for value in pdu.read_attribute("ids").value]
     states = [int(value) for value in pdu.read_attribute("states").value]
+    if len(ids) != len(states):
+        raise RuntimeError(f"PDU {label} output IDs and states do not match")
     positions = {output_id: index for index, output_id in enumerate(ids)}
-    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    missing = sorted(set(required_outputs) - set(positions))
     if missing:
-        raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
+        raise RuntimeError(f"PDU {label} required outputs are missing: {missing}")
     desired = list(states)
     changed = []
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, output_label in required_outputs.items():
         position = positions[output_id]
         if desired[position] != 1:
             desired[position] = 1
-            changed.append(label)
+            changed.append(output_label)
     if changed:
         pdu.command_inout("set_channels_states", desired)
-        time.sleep(2.0)
-    confirmed = [int(value) for value in pdu.read_attribute("states").value]
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
-        if confirmed[positions[output_id]] != 1:
-            raise RuntimeError(f"PDU SD2 did not enable {label}")
+    deadline = time.monotonic() + 8.0
+    while True:
+        confirmed_ids = [int(value) for value in pdu.read_attribute("ids").value]
+        confirmed = [int(value) for value in pdu.read_attribute("states").value]
+        confirmed_states = dict(zip(confirmed_ids, confirmed))
+        failed = [name for output_id, name in required_outputs.items() if confirmed_states.get(output_id) != 1]
+        if not failed:
+            break
+        if time.monotonic() >= deadline:
+            raise RuntimeError(f"PDU {label} did not confirm power for: {', '.join(failed)}")
+        time.sleep(0.5)
+    if changed:
+        time.sleep(5.0 if label == "SD2" else 2.0)
     steps.append(
         {
-            "step": "VD2 power",
+            "step": f"{label} power",
             "status": "enabled" if changed else "already enabled",
         }
     )
+
+
+def _enable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
+    _enable_required_power(pdu, steps, SD2_REQUIRED_PDU_OUTPUTS, "SD2")
 
 
 def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
     ids = [int(value) for value in pdu.read_attribute("ids").value]
     states = [int(value) for value in pdu.read_attribute("states").value]
     positions = {output_id: index for index, output_id in enumerate(ids)}
-    missing = sorted(set(VD2_REQUIRED_PDU_OUTPUTS) - set(positions))
+    missing = sorted(set(VD2_SHUTDOWN_PDU_OUTPUTS) - set(positions))
     if missing:
         raise RuntimeError(f"PDU SD2 required outputs are missing: {missing}")
     desired = list(states)
     changed = []
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, label in VD2_SHUTDOWN_PDU_OUTPUTS.items():
         position = positions[output_id]
         if desired[position] != 0:
             desired[position] = 0
@@ -518,7 +619,7 @@ def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
         pdu.command_inout("set_channels_states", desired)
         time.sleep(1.0)
     confirmed = [int(value) for value in pdu.read_attribute("states").value]
-    for output_id, label in VD2_REQUIRED_PDU_OUTPUTS.items():
+    for output_id, label in VD2_SHUTDOWN_PDU_OUTPUTS.items():
         if confirmed[positions[output_id]] != 0:
             raise RuntimeError(f"PDU SD2 did not disable {label}")
     steps.append(
@@ -531,13 +632,151 @@ def _disable_vd2_power(pdu: DeviceProxy, steps: list[dict[str, str]]) -> None:
 
 def _initialize_experiment() -> dict[str, Any]:
     steps: list[dict[str, str]] = []
-    pdu = _ensure_server(VD2_PDU_DEVICE, steps)
-    _enable_vd2_power(pdu, steps)
-    _ensure_server(DG645_DEVICE, steps)
-    streak = _ensure_server(STREAK_DEVICE, steps)
+    try:
+        return _initialize_equipment(steps)
+    except Exception as exc:
+        raise PreparationFailure(str(exc), steps) from exc
 
-    streak.command_inout("PrepareDG645ForHPDTA")
-    steps.append({"step": "DG645 Recall 9", "status": "applied; burst mode off"})
+
+class PreparationFailure(RuntimeError):
+    def __init__(self, message, steps):
+        super().__init__(message)
+        self.steps = list(steps)
+
+
+def _prepare_dg645_for_vd2(dg645, steps):
+    """Apply single-trigger timing before starting any VD2 camera software."""
+    label = f"DG645 Recall {VD2_DG645_RECALL_SLOT}"
+    try:
+        dg645.command_inout("scpi_write", f"*RCL {VD2_DG645_RECALL_SLOT}")
+        time.sleep(1.0)
+        dg645.command_inout("scpi_write", "BURM 0")
+        dg645.command_inout("scpi_query", "*OPC?")
+        burst_mode = str(dg645.command_inout("scpi_query", "BURM?")).strip()
+        if float(burst_mode) != 0.0:
+            raise RuntimeError(f"burst mode is still enabled (BURM?={burst_mode})")
+    except Exception as exc:
+        detail = f"{label} / burst-off verification failed: {exc}"
+        steps.append({"step": label, "status": "failed", "detail": detail})
+        raise RuntimeError(detail) from exc
+    steps.append({"step": label, "status": "applied; verified BURM=0"})
+
+
+def _verify_owis_sample_axis(owis, steps):
+    """Verify VD2 axis 2 without issuing movement or homing commands."""
+    label = f"OWIS sample axis {OWIS_SAMPLE_AXIS}"
+    try:
+        state = int(owis.command_inout("get_status_axis", OWIS_SAMPLE_AXIS))
+        # An OFF motor can be enabled explicitly, but do not reinitialize an
+        # axis or move it as a side effect of a readiness check.
+        if state == int(DevState.OFF):
+            result = owis.command_inout("turn_on_axis", OWIS_SAMPLE_AXIS)
+            if str(result).strip() != "0":
+                raise RuntimeError(f"turn_on_axis: {result}")
+            state = int(owis.command_inout("get_status_axis", OWIS_SAMPLE_AXIS))
+        if state != int(DevState.ON):
+            raise RuntimeError(f"axis is not ready (state={state}); correct its condition and press Prepare again")
+        position = float(owis.command_inout("read_position_axis", OWIS_SAMPLE_AXIS))
+        if not math.isfinite(position):
+            raise RuntimeError("axis position readback is invalid")
+    except Exception as exc:
+        detail = f"{label}: {exc}"
+        steps.append({"step": label, "status": "failed", "detail": detail})
+        raise RuntimeError(detail) from exc
+    steps.append({"step": label, "status": f"verified ON; {position:.4f} mm"})
+
+
+def _assert_preparation_idle(streak=None):
+    if _measurement_protocol.status().get("status") in {"acquiring", "saving"}:
+        raise RuntimeError("Stop the VD2 measurement before Prepare")
+    if streak is None:
+        try:
+            streak = _wait_for_device(STREAK_DEVICE, timeout_s=1.0)
+        except Exception:
+            return
+    if str(_value(streak, "remoteex_status")).lower() in {"busy", "starting", "preparing"}:
+        raise RuntimeError("HPD-TA is busy; stop acquisition before Prepare")
+    if bool(_value(streak, "connected")) or bool(_value(streak, "application_running")):
+        try:
+            status = str(streak.command_inout("ExecuteRaw", "AcqStatus()")).strip().lower()
+        except Exception as exc:
+            # This exact RemoteEx reply confirms a cold application; absence of
+            # a response or a stale application_running=False cache does not.
+            if "3,acqstatus,application not running" in str(exc).lower():
+                return
+            raise RuntimeError(f"Cannot confirm HPD-TA acquisition idle: {exc}") from exc
+        if status != "0,acqstatus,idle":
+            raise RuntimeError(f"HPD-TA acquisition is not confirmed idle: {status}")
+
+
+def _prepare_kymera_for_vd2(streak, steps):
+    """Hand Kymera from HPD-TA to its SDK server, then release it before AppStart."""
+    _assert_preparation_idle(streak)
+    streak.set_timeout_millis(30000)
+    if bool(_value(streak, "application_running")):
+        for attribute in ("streak_shutter", "spectrograph_shutter"):
+            streak.write_attribute(attribute, "Closed")
+            if str(_value(streak, attribute)).lower() != "closed":
+                raise RuntimeError(f"Cannot confirm {attribute} closed before Kymera handoff")
+        streak.command_inout("StopApplication")
+        deadline = time.monotonic() + 20.0
+        while bool(_value(streak, "application_running")):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("HPD-TA did not stop; cannot give Kymera to its SDK server")
+            time.sleep(0.5)
+        steps.append({"step": "HPD-TA handoff", "status": "stopped; both shutters closed"})
+
+    # AppEnd does not unload the spectrograph SDK from TaRemoteEx. Stop its
+    # process too, otherwise a second SDK owner can hang or access-violate.
+    streak.command_inout("StopRemoteEx")
+    if bool(_value(streak, "connected")):
+        raise RuntimeError("RemoteEx ownership was not released before Kymera SDK startup")
+    steps.append({"step": "RemoteEx SDK ownership", "status": "process stopped before Kymera startup"})
+
+    kymera = None
+    try:
+        kymera = _ensure_server(KYMERA_DEVICE, steps)
+        kymera.set_timeout_millis(45000)
+        result = json.loads(kymera.command_inout("PrepareVD2Grating"))
+        if not (
+            int(result["grating"]) == 2
+            and math.isfinite(float(result["blaze"]))
+            and abs(float(result["blaze"]) - 800.0) <= 0.01
+            and math.isfinite(float(result["ruling"]))
+            and abs(float(result["ruling"]) - 150.0) <= 0.01
+        ):
+            raise RuntimeError(f"Kymera grating preparation readback mismatch: {result}")
+        steps.append({"step": "Kymera grating 2", "status": "SDK verified: Blaze 800; 150 g/mm"})
+    finally:
+        # Stop even after a partial startup/selection failure. Do not let an SDK
+        # owner or its automatic power monitor survive into HPD-TA startup.
+        try:
+            if kymera is not None:
+                kymera.command_inout("turn_off")
+        finally:
+            stop_managed_server(_astor(KYMERA_DEVICE), VD2_SERVERS[KYMERA_DEVICE])
+    steps.append({"step": "Kymera SDK ownership", "status": "server stopped; released to HPD-TA"})
+
+
+def _initialize_equipment(steps) -> dict[str, Any]:
+    _assert_preparation_idle()
+    sd2_pdu = _ensure_server(VD2_PDU_DEVICE, steps)
+    zaber_pdu = _ensure_server(ZABER_PDU_DEVICE, steps)
+    owis_pdu = _ensure_server(OWIS_PDU_DEVICE, steps)
+    _enable_vd2_power(sd2_pdu, steps)
+    _enable_required_power(
+        zaber_pdu, steps, VD2_REQUIRED_PDU_OUTPUTS, "VD2"
+    )
+    _enable_required_power(owis_pdu, steps, OWIS_REQUIRED_PDU_OUTPUTS, "OWIS")
+    dg645 = _ensure_server(DG645_DEVICE, steps)
+    _prepare_dg645_for_vd2(dg645, steps)
+    _ensure_server(OWIS_CONTROLLER_DEVICE, steps)
+    _ensure_server(OWIS_LEGACY_DEVICE, steps)
+    owis = _ensure_server(OWIS_SAMPLE_DEVICE, steps)
+    _verify_owis_sample_axis(owis, steps)
+    _ensure_server(ZABER_STAGE_DEVICE, steps)
+    streak = _ensure_server(STREAK_DEVICE, steps)
+    streak.set_timeout_millis(30000)
 
     if not bool(_value(streak, "connected")):
         streak.command_inout("StartRemoteEx")
@@ -546,12 +785,30 @@ def _initialize_experiment() -> dict[str, Any]:
         raise RuntimeError("RemoteEx did not connect after startup")
     steps.append({"step": "RemoteEx", "status": "connected"})
 
-    if not bool(_value(streak, "application_running")):
-        streak.command_inout("StartApplication")
-    deadline = time.monotonic() + 45.0
+    _prepare_kymera_for_vd2(streak, steps)
+    streak.command_inout("StartRemoteEx")
+    if not bool(_value(streak, "connected")):
+        raise RuntimeError("RemoteEx did not reconnect after Kymera SDK release")
+    streak.command_inout("StartApplication")
+    # AppStart can reconnect RemoteEx and then move the spectrograph before ready.
+    deadline = time.monotonic() + 180.0
     while time.monotonic() < deadline:
-        if bool(_value(streak, "application_running")):
+        state = str(streak.state()).split(".")[-1]
+        if state in {"FAULT", "ALARM"}:
+            raise RuntimeError(f"HPD-TA startup failed: {streak.status()}")
+        if (
+            state == "ON"
+            and bool(_value(streak, "application_running"))
+            and str(_value(streak, "remoteex_status")).lower() == "idle"
+        ):
             steps.append({"step": "HPD-TA", "status": "running"})
+            steps.append({
+                "step": "VD2 optical profile",
+                "status": (
+                    "verified: 550 nm; grating 2 (Blaze 800); 1 us; Operate; "
+                    "Kymera shutter open; streak-camera shutter closed"
+                ),
+            })
             return {"steps": steps, "device": _snapshot(streak)}
         time.sleep(1.0)
     raise RuntimeError(
@@ -726,6 +983,72 @@ def runtime_state():
         return jsonify({"success": False, "error": _control_error(exc)}), 503
 
 
+def _zaber_stage_state() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "device": ZABER_STAGE_DEVICE,
+        "state": "UNKNOWN",
+        "position_mm": None,
+        "minimum_mm": None,
+        "maximum_mm": None,
+    }
+    try:
+        proxy = DeviceProxy(ZABER_STAGE_DEVICE)
+        proxy.set_timeout_millis(2000)
+        result["state"] = str(proxy.state()).rsplit(".", 1)[-1]
+        result["status"] = str(proxy.status())
+        if result["state"] == "ON":
+            for key in ("position_mm", "minimum_mm", "maximum_mm"):
+                result[key] = float(proxy.read_attribute(key).value)
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+def _owis_sample_stage_state() -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "device": OWIS_SAMPLE_DEVICE,
+        "axis": OWIS_SAMPLE_AXIS,
+        "state": "UNKNOWN",
+        "position_mm": None,
+        "minimum_mm": None,
+        "maximum_mm": None,
+    }
+    try:
+        proxy = DeviceProxy(OWIS_SAMPLE_DEVICE)
+        proxy.set_timeout_millis(2000)
+        result["state"] = str(proxy.state()).rsplit(".", 1)[-1]
+        axis_state = int(proxy.command_inout("get_status_axis", OWIS_SAMPLE_AXIS))
+        result["axis_state"] = next(
+            (
+                str(candidate).rsplit(".", 1)[-1]
+                for candidate in (DevState.ON, DevState.OFF, DevState.MOVING, DevState.FAULT)
+                if int(candidate) == axis_state
+            ),
+            "UNKNOWN",
+        )
+        result["position_mm"] = float(proxy.read_attribute("pos2").value)
+        properties = proxy.get_property(["delay_lines_parameters"])
+        raw = properties.get("delay_lines_parameters", [])
+        if raw:
+            parameters = ast.literal_eval(str(raw[0]))
+            axis = parameters.get(OWIS_SAMPLE_AXIS, parameters.get(str(OWIS_SAMPLE_AXIS), {}))
+            result["minimum_mm"] = float(axis["limit_min"])
+            result["maximum_mm"] = float(axis["limit_max"])
+    except Exception as exc:
+        result["error"] = str(exc)
+    return result
+
+
+@pump_probe_vd2_api.route("/stages/state", methods=["GET"])
+def stages_state():
+    """Passive, structured readings for the mirror and VD2 sample stage."""
+    return jsonify({
+        "success": True,
+        "zaber_mirror": _zaber_stage_state(),
+        "owis_sample": _owis_sample_stage_state(),
+    })
+
+
 @pump_probe_vd2_api.route("/initialize", methods=["POST"])
 def initialize_experiment():
     _, rejected = _mutation_payload(set())
@@ -743,11 +1066,18 @@ def initialize_experiment():
     )
     if blocked is not None:
         return blocked
+    if not _preparation_lock.acquire(blocking=False):
+        return jsonify({"success": False, "error": "VD2 preparation is already in progress"}), 409
     try:
         result = _initialize_experiment()
         return jsonify({"success": True, **result})
     except Exception as exc:
-        return jsonify({"success": False, "error": _control_error(exc)}), 503
+        return jsonify({
+            "success": False, "error": _control_error(exc),
+            "steps": getattr(exc, "steps", []),
+        }), 503
+    finally:
+        _preparation_lock.release()
 
 
 @pump_probe_vd2_api.route("/deinitialize", methods=["POST"])
