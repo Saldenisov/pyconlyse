@@ -1,0 +1,38 @@
+.fluides-panel { padding: 12px; margin: 12px 0 18px; background: #b3b3b3; color: #001b77; border: 1px solid #8c8c8c; box-shadow: inset 1px 1px #eee; }
+.fluides-panel__notice { background: #dde4ec; color: #263c54; padding: 6px 8px; font-size: 11px; margin-bottom: 14px; }
+.fluides-panel > h3 { font-size: 15px; text-align: center; margin: 12px 0 20px; }
+.fluides-panel__equipment { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+.fluides-panel__equipment > section { min-width: 0; }
+.fluides-panel__columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.fluides-panel__indicator { min-height: 42px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; white-space: pre-line; padding: 4px; border: 1px solid #777; box-shadow: inset 1px 1px 3px #ffffff55, inset -1px -1px 3px #00000055; color: #050505; font-size: 11px; line-height: 1.15; }
+.fluides-panel__indicator small { margin-top: 3px; font-size: 9px; }
+.fluides-panel__temperature { display: flex; align-items: center; justify-content: space-between; gap: 7px; margin-top: 18px; color: #142339; font-size: 12px; }
+.fluides-panel__temperature > div { display: flex; gap: 4px; }
+.fluides-panel__temperature small { display: block; font-size: 9px; color: #3b4a60; margin-top: 3px; }
+.fluides-panel__reading { color: #002da3; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.fluides-panel__setpoint { color: #4d5866; }
+.fluides-panel__command { border: 1px solid #5d6e82; color: #152c51; background: linear-gradient(#e7edf8, #a1b3d1); box-shadow: inset 1px 1px #f6f8fc; min-height: 25px; border-radius: 0; padding: 3px 6px; opacity: 1; cursor: not-allowed; }
+.fluides-panel__commands { display: flex; gap: 24px; margin-top: 22px; }
+.fluides-panel__commands button { min-width: 110px; min-height: 32px; }
+.fluides-panel__limits { color: #314051; font-size: 11px; line-height: 1.5; }
+.fluides-panel__sources { background: #dce3ea; padding: 8px; color: #273e58; font-size: 11px; }
+.fluides-panel__sources summary { cursor: pointer; }
+.fluides-trend { margin: 18px 0 12px; padding: 14px; border: 1px solid #8092a4; background: #edf2f6; color: #163049; }
+.fluides-trend__header, .fluides-trend__legend { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.fluides-trend__header h3 { margin: 0; font-size: 15px; }
+.fluides-trend__header > span { font-size: 11px; color: #28635f; }
+.fluides-trend__header > .fluides-trend__paused { color: #a33e22; }
+.fluides-trend__legend { justify-content: flex-start; gap: 24px; font-size: 12px; }
+.fluides-trend__canon { color: #2159bd; }
+.fluides-trend__section { color: #b64c0c; }
+.fluides-trend svg { width: 100%; height: auto; display: block; }
+.fluides-trend svg text { fill: #354c61; font-size: 12px; }
+.fluides-trend p { font-size: 11px; line-height: 1.5; margin: 6px 0 0; color: #43566c; }
+.fluides-trend__empty { min-height: 150px; display: flex; align-items: center; justify-content: center; text-align: center; color: #526577; }
+@media (max-width: 800px) {
+  .fluides-panel__equipment { gap: 18px; }
+  .fluides-panel__columns { gap: 9px; }
+  .fluides-panel__temperature { flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+  .fluides-panel__indicator { font-size: 10px; }
+}
+@media (max-width: 540px) { .fluides-panel__equipment { grid-template-columns: 1fr; } }

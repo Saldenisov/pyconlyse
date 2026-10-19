@@ -1,0 +1,47 @@
+.sup-line, .sup-synoptic, .sup-integration { color: #10243a; }
+.sup-line h2, .sup-synoptic h2, .sup-integration h2 { margin: 10px 0 16px; color: #001d78; font-size: 18px; }
+.sup-line__viewport { overflow-x: auto; padding-bottom: 4px; }
+.sup-line__grid { display: grid; grid-template-columns: repeat(4, minmax(148px, 1fr)); grid-auto-rows: minmax(132px, auto); gap: 8px; min-width: 616px; max-width: 900px; }
+.sup-line__card { padding: 6px; border: 1px solid #8d969f; background: linear-gradient(#c4c4c4, #b3b3b3); box-shadow: inset 1px 1px #e8e8e8; min-width: 0; }
+.sup-line__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.sup-line button, .sup-integration button { color: #34465d; background: linear-gradient(#edf0f4, #b5bfce); border: 1px solid #7d8997; padding: 4px 7px; font-size: 11px; opacity: 1; cursor: not-allowed; }
+.sup-line__toolbar button { min-width: 28px; padding: 2px 4px; height: 23px; font-size: 10px; }
+.sup-line__states { display: flex; gap: 3px; }
+.sup-line__states span { display: block; width: 11px; height: 7px; background: #88939e; border: 1px solid #6c7782; }
+.sup-line__range { font-size: 9px; text-align: center; line-height: 13px; color: #454545; }
+.sup-line__card h3 { margin: 2px 0 4px; font-size: 13px; text-align: center; color: #101010; font-weight: 700; white-space: nowrap; }
+.sup-line__card--dipole h3 { color: #ae1000; font-weight: 500; }
+.sup-line__card--phase h3 { color: #8c3d13; font-weight: 500; }
+.sup-line__readings { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.sup-line__value { display: grid; grid-template-columns: 1fr auto; align-items: baseline; padding: 0 2px; color: #101010; }
+.sup-line__value small { grid-column: 1 / -1; font-size: 9px; margin-bottom: 1px; }
+.sup-line__value output { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sup-line__value--lecture output { color: #003ca6; }
+.sup-line__value > span { font-size: 10px; }
+.sup-line__arrows { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-top: 5px; }
+.sup-line__arrows button { font-size: 14px; font-weight: 700; padding: 2px; height: 25px; }
+.sup-workspace__details { margin-top: 18px; padding: 9px; background: #e3e9ef; font-size: 12px; color: #344c65; }
+.sup-workspace__details summary { cursor: pointer; }
+.sup-workspace__details table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+.sup-workspace__details th, .sup-workspace__details td { padding: 5px; border: 1px solid #b9c5d0; text-align: left; }
+.sup-synoptic figure { margin: 0; text-align: center; }
+.sup-synoptic img { display: block; max-width: 100%; width: 866px; height: auto; margin: 0 auto; background: white; border: 1px solid #9ba6b1; }
+.sup-synoptic figcaption { font-size: 11px; color: #52677b; margin-top: 6px; }
+.sup-integration__state { display: inline-block; margin: 0 0 14px; padding: 6px 10px; background: #e7ebee; border: 1px solid #a9b4c0; }
+.sup-integration__columns, .sup-camera__layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.sup-integration fieldset { border: 1px solid #9da9b7; padding: 14px; min-width: 0; background: #e1e5ea; }
+.sup-integration legend { color: #001d78; font-weight: 600; font-size: 14px; width: auto; margin-bottom: 4px; }
+.sup-integration label { display: grid; gap: 5px; margin-bottom: 12px; font-size: 12px; }
+.sup-integration input, .sup-integration select { width: 100%; min-width: 0; padding: 7px; border: 1px solid #a6b1be; background: #f8fafc; font-size: 13px; }
+.sup-integration__jog { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 12px; }
+.sup-integration__actions { display: flex; gap: 10px; margin-top: 12px; }
+.sup-integration__counters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-top: 18px; }
+.sup-integration__counters > div { display: grid; gap: 8px; padding: 14px; background: #e7ebf0; border: 1px solid #a5b2c0; }
+.sup-integration__counters output { font-size: 22px; color: #001d78; }
+.sup-camera__image { min-height: 300px; background: #131d29; color: #c3ccd8; display: grid; place-items: center; border: 1px solid #718296; }
+@media (max-width: 950px) {
+  .sup-integration__columns, .sup-camera__layout { grid-template-columns: 1fr; }
+}
+@media (max-width: 550px) {
+  .sup-integration__counters { grid-template-columns: repeat(2, 1fr); }
+}
