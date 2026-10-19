@@ -1,0 +1,1902 @@
+{
+  "plans": {
+    "cooling.start": {
+      "blocked_reason": "",
+      "dps_index": 0,
+      "legacy_event_case": 3,
+      "name": "cooling.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "gun cooling start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "gun cooling start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "gun cooling start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.8,
+          "label": "gun-to-section delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "section cooling start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.03"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "section cooling start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "section cooling start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.03"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level modulator start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "low-level modulator start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level modulator start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.5,
+          "label": "pre-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 5,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "cooling.stop": {
+      "blocked_reason": "",
+      "dps_index": 1,
+      "legacy_event_case": 4,
+      "name": "cooling.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "gun cooling stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.01"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "gun cooling stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "gun cooling stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.01"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.4,
+          "label": "gun-to-section delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "section cooling stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "section cooling stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "section cooling stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C3_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "hf_att_deph.start": {
+      "blocked_reason": "",
+      "dps_index": 13,
+      "legacy_event_case": 18,
+      "name": "hf_att_deph.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "enable attenuator/dephaser power",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.29"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "hf_att_deph.stop": {
+      "blocked_reason": "",
+      "dps_index": 14,
+      "legacy_event_case": 19,
+      "name": "hf_att_deph.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "disable attenuator/dephaser power",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.29"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "ht_power.reset": {
+      "blocked_reason": "",
+      "dps_index": 16,
+      "legacy_event_case": 22,
+      "name": "ht_power.reset",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "HT supply reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.20"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT supply reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT supply reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.20"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "ht_power.start": {
+      "blocked_reason": "",
+      "dps_index": 15,
+      "legacy_event_case": 20,
+      "name": "ht_power.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "HT supply start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.18"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT supply start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT supply start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.18"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "ht_power.stop": {
+      "blocked_reason": "",
+      "dps_index": 17,
+      "legacy_event_case": 21,
+      "name": "ht_power.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "HT supply stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.19"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT supply stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT supply stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.19"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "magnets_power.start": {
+      "blocked_reason": "Magnet ownership unresolved; legacy DAQmx fallback forbidden",
+      "dps_index": 20,
+      "legacy_event_case": 16,
+      "name": "magnets_power.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "enable triplet and quadrupole supplies",
+          "metadata": {},
+          "operation": "write_digital_group",
+          "targets": [
+            "C3_OUT_DIO96.09",
+            "C3_OUT_DIO96.11",
+            "C3_OUT_DIO96.15",
+            "C3_OUT_DIO96.17",
+            "C3_OUT_DIO96.21",
+            "C3_OUT_DIO96.23"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.5,
+          "label": "magnet enable group delay 1",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "enable dipole supplies",
+          "metadata": {},
+          "operation": "write_digital_group",
+          "targets": [
+            "C3_OUT_DIO96.27",
+            "C3_OUT_DIO96.29"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.5,
+          "label": "magnet enable group delay 2",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "enable focal and steering supplies",
+          "metadata": {},
+          "operation": "write_digital_group",
+          "targets": [
+            "C3_OUT_DIO96.25",
+            "C3_OUT_DIO96.31",
+            "C3_OUT_DIO96.32",
+            "C3_OUT_DIO96.33",
+            "C3_OUT_DIO96.34",
+            "C3_OUT_DIO96.35",
+            "C3_OUT_DIO96.36",
+            "C3_OUT_DIO96.37",
+            "C3_OUT_DIO96.38",
+            "C3_OUT_DIO96.39"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0,
+          "label": "initialize all magnet setpoints to zero",
+          "metadata": {},
+          "operation": "write_analog_group",
+          "targets": [
+            "C6NI6703.00",
+            "C6NI6703.01",
+            "C6NI6703.02",
+            "C6NI6703.03",
+            "C6NI6703.04",
+            "C6NI6703.05",
+            "C6NI6703.06",
+            "C6NI6703.07",
+            "C6NI6703.09",
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.05",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": 0
+        },
+        {
+          "duration_s": 0,
+          "label": "condition magnets 0 to +16",
+          "metadata": {
+            "delta": 0.1,
+            "initial": 0,
+            "iterations": 160,
+            "period_s": 0.1
+          },
+          "operation": "analog_sweep",
+          "targets": [
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 20,
+          "label": "conditioning dwell at +16",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "condition magnets +16 to -16",
+          "metadata": {
+            "delta": -0.1,
+            "initial": 16,
+            "iterations": 320,
+            "period_s": 0.1
+          },
+          "operation": "analog_sweep",
+          "targets": [
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 20,
+          "label": "conditioning dwell at -16",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "condition magnets -16 to +16",
+          "metadata": {
+            "delta": 0.1,
+            "initial": -16,
+            "iterations": 320,
+            "period_s": 0.1
+          },
+          "operation": "analog_sweep",
+          "targets": [
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 20,
+          "label": "conditioning dwell at +16",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "condition magnets +16 to 0",
+          "metadata": {
+            "delta": -0.1,
+            "initial": 16,
+            "iterations": 160,
+            "period_s": 0.1
+          },
+          "operation": "analog_sweep",
+          "targets": [
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.2,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "magnets_power.stop": {
+      "blocked_reason": "Magnet ownership unresolved; legacy DAQmx fallback forbidden",
+      "dps_index": 23,
+      "legacy_event_case": 17,
+      "name": "magnets_power.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "zero all magnet setpoints",
+          "metadata": {},
+          "operation": "write_analog_group",
+          "targets": [
+            "C6NI6703.00",
+            "C6NI6703.01",
+            "C6NI6703.02",
+            "C6NI6703.03",
+            "C6NI6703.04",
+            "C6NI6703.05",
+            "C6NI6703.06",
+            "C6NI6703.07",
+            "C6NI6703.09",
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.05",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": 0
+        },
+        {
+          "duration_s": 1,
+          "label": "zero-setpoint settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "disable all magnet supplies",
+          "metadata": {},
+          "operation": "write_digital_group",
+          "targets": [
+            "C3_OUT_DIO96.09",
+            "C3_OUT_DIO96.11",
+            "C3_OUT_DIO96.15",
+            "C3_OUT_DIO96.17",
+            "C3_OUT_DIO96.21",
+            "C3_OUT_DIO96.23",
+            "C3_OUT_DIO96.27",
+            "C3_OUT_DIO96.29",
+            "C3_OUT_DIO96.25",
+            "C3_OUT_DIO96.31",
+            "C3_OUT_DIO96.32",
+            "C3_OUT_DIO96.33",
+            "C3_OUT_DIO96.34",
+            "C3_OUT_DIO96.35",
+            "C3_OUT_DIO96.36",
+            "C3_OUT_DIO96.37",
+            "C3_OUT_DIO96.38",
+            "C3_OUT_DIO96.39"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.2,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "magnets_power.zero_v": {
+      "blocked_reason": "Magnet ownership unresolved; legacy DAQmx fallback forbidden",
+      "dps_index": 21,
+      "legacy_event_case": 25,
+      "name": "magnets_power.zero_v",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "zero selected magnet setpoints",
+          "metadata": {},
+          "operation": "write_analog_group",
+          "targets": [
+            "C6NI6703.00",
+            "C6NI6703.01",
+            "C6NI6703.02",
+            "C6NI6703.03",
+            "C6NI6703.04",
+            "C6NI6703.05",
+            "C6NI6703.06",
+            "C6NI6703.07",
+            "C6NI6703.09",
+            "C7NI6703.00",
+            "C7NI6703.01",
+            "C7NI6703.03",
+            "C7NI6703.04",
+            "C7NI6703.06",
+            "C7NI6703.07",
+            "C7NI6703.08",
+            "C7NI6703.09"
+          ],
+          "timeout_s": 0,
+          "value": 0
+        },
+        {
+          "duration_s": 1,
+          "label": "zero-setpoint settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.2,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.focale.start": {
+      "blocked_reason": "",
+      "dps_index": 10,
+      "legacy_event_case": 15,
+      "name": "modulator.focale.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "klystron focal start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.07"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "klystron focal start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "klystron focal start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.07"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 29,
+          "label": "klystron focal warm-up",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "enable three focal supplies",
+          "metadata": {},
+          "operation": "set_focal_supplies",
+          "targets": [],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1.5,
+          "label": "focal supply settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.25,
+          "label": "post-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.focale.stop": {
+      "blocked_reason": "",
+      "dps_index": 11,
+      "legacy_event_case": 10,
+      "name": "modulator.focale.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "disable three focal supplies",
+          "metadata": {},
+          "operation": "set_focal_supplies",
+          "targets": [],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.5,
+          "label": "focal supply settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "klystron focal stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.08"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "klystron focal stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "klystron focal stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.08"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.general.start": {
+      "blocked_reason": "",
+      "dps_index": 2,
+      "legacy_event_case": 5,
+      "name": "modulator.general.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "low-level start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.00"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 1,
+          "label": "pre-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset 1: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset 1: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset 1: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 1,
+          "label": "inter-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset 2: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset 2: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset 2: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.general.stop": {
+      "blocked_reason": "",
+      "dps_index": 3,
+      "legacy_event_case": 6,
+      "name": "modulator.general.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "disable three focal supplies",
+          "metadata": {},
+          "operation": "set_focal_supplies",
+          "targets": [],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.5,
+          "label": "focal supply settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "klystron focal stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.08"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "klystron focal stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "klystron focal stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.08"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "focal-to-relay delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT relay stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.17"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT relay stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT relay stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.17"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "relay-to-prema delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "premagnetization stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.06"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "premagnetization stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "premagnetization stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.06"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 1,
+          "label": "prema-to-heating delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "heating stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "heating stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "heating stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 2,
+          "label": "heating-to-low-level delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.01"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.01"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.heating.start": {
+      "blocked_reason": "",
+      "dps_index": 4,
+      "legacy_event_case": 12,
+      "name": "modulator.heating.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "heating start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.03"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "heating start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "heating start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.03"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 3,
+          "label": "heating settle",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.heating.stop": {
+      "blocked_reason": "",
+      "dps_index": 5,
+      "legacy_event_case": 7,
+      "name": "modulator.heating.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "heating stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "heating stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "heating stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.04"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.prema.start": {
+      "blocked_reason": "",
+      "dps_index": 6,
+      "legacy_event_case": 13,
+      "name": "modulator.prema.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "premagnetization start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.05"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "premagnetization start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "premagnetization start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.05"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.5,
+          "label": "pre-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.25,
+          "label": "post-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.prema.stop": {
+      "blocked_reason": "",
+      "dps_index": 7,
+      "legacy_event_case": 8,
+      "name": "modulator.prema.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "premagnetization stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.06"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "premagnetization stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "premagnetization stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.06"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.relay_ht.start": {
+      "blocked_reason": "",
+      "dps_index": 8,
+      "legacy_event_case": 14,
+      "name": "modulator.relay_ht.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "HT relay start: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.16"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT relay start: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT relay start: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.16"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.5,
+          "label": "pre-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.25,
+          "label": "post-reset delay",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.relay_ht.stop": {
+      "blocked_reason": "",
+      "dps_index": 9,
+      "legacy_event_case": 9,
+      "name": "modulator.relay_ht.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "HT relay stop: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.17"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.15,
+          "label": "HT relay stop: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "HT relay stop: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.17"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator.reset": {
+      "blocked_reason": "",
+      "dps_index": 12,
+      "legacy_event_case": 11,
+      "name": "modulator.reset",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "low-level reset: assert",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": true
+        },
+        {
+          "duration_s": 0.15,
+          "label": "low-level reset: hold",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "low-level reset: restore",
+          "metadata": {},
+          "operation": "write_digital",
+          "targets": [
+            "C4_OUT_DIO96.02"
+          ],
+          "timeout_s": 0,
+          "value": false
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator_impulse.start": {
+      "blocked_reason": "",
+      "dps_index": 18,
+      "legacy_event_case": 23,
+      "name": "modulator_impulse.start",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "start modulator and HF counters",
+          "metadata": {},
+          "operation": "start_counters",
+          "targets": [
+            "C10_NI6602.ctr3",
+            "C10_NI6602.ctr4"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    },
+    "modulator_impulse.stop": {
+      "blocked_reason": "",
+      "dps_index": 19,
+      "legacy_event_case": 24,
+      "name": "modulator_impulse.stop",
+      "steps": [
+        {
+          "duration_s": 0,
+          "label": "stop modulator counter",
+          "metadata": {
+            "max_loop_index": 40,
+            "poll_interval_s": 0.001
+          },
+          "operation": "stop_counter_when_done",
+          "targets": [
+            "C10_NI6602.ctr3"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0,
+          "label": "stop HF counter",
+          "metadata": {
+            "max_loop_index": 40,
+            "poll_interval_s": 0.001
+          },
+          "operation": "stop_counter_when_done",
+          "targets": [
+            "C10_NI6602.ctr4"
+          ],
+          "timeout_s": 0,
+          "value": null
+        },
+        {
+          "duration_s": 0.1,
+          "label": "legacy completion dwell",
+          "metadata": {},
+          "operation": "wait",
+          "targets": [],
+          "timeout_s": 0,
+          "value": null
+        }
+      ]
+    }
+  },
+  "schema_version": 1,
+  "simulation_only": true,
+  "source": "DeviceServers/control/elyse_acq/plans.py"
+}

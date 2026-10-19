@@ -1,0 +1,1272 @@
+{
+  "format": "saved-numeric-source-contract/1",
+  "sites": [
+    {
+      "source_id": "APP-60",
+      "uid": "85",
+      "prim_id": 1187,
+      "terminals": [
+        {
+          "uid": "259",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        },
+        {
+          "uid": "260",
+          "slot": 1,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset past number",
+          "wired": false
+        },
+        {
+          "uid": "264",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "266",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "default (0 dbl)",
+          "wired": false
+        },
+        {
+          "uid": "269",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset",
+          "wired": false
+        },
+        {
+          "uid": "273",
+          "slot": 5,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "SubString",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "string",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "4919CA0D81A84FF159FAC290E797DA3E674A3F312B68D123E38A83B05662B23A",
+      "source_xml": {
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\lifecycle\\vendor_xml\\Pressure\\vi.xml",
+          "bytes": 100676,
+          "sha256": "CC6E9DF7B890B78659804B94A108E1BE467F58BF6D912E3CC438549287A28DEA"
+        },
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\lifecycle\\vendor_xml\\Pressure\\vi_BDHb.xml",
+          "bytes": 51664,
+          "sha256": "F8C87DA1A488BAB5FBF42B8150301B3DF363299912FD0FCD294FFA2352C8DEC3"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\lifecycle\\vendor_xml\\Pressure\\vi_FPHb.xml",
+          "bytes": 88965,
+          "sha256": "4466F764D63D41DBF1BEC4DEBEFA7F4CBFB4BF88207FA43A3DBEED7EAEA44CDF"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\APP-60.json.gz",
+        "bytes": 5612,
+        "sha256": "3069D5CC86EF54C0D0A5CC61F625110C0FF33CC7199DFA207EFC6F9A6FF08B2F"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "320",
+            "node_id": "308",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "273",
+            "node_id": "85",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\pyconlyse\\legacy\\xp_acq_agent\\data\\source_exports\\TPG300_pressure_XML_20261002.zip\\.vi",
+          "saved_signal_uid": "195",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "86"
+        },
+        {
+          "source": {
+            "terminal_id": "259",
+            "node_id": "85",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "185",
+            "node_id": "C:\\dev\\pyconlyse\\legacy\\xp_acq_agent\\data\\source_exports\\TPG300_pressure_XML_20261002.zip\\.vi",
+            "index": 2,
+            "name": "Pressure",
+            "parent_kind": "vi"
+          },
+          "vi": "C:\\dev\\pyconlyse\\legacy\\xp_acq_agent\\data\\source_exports\\TPG300_pressure_XML_20261002.zip\\.vi",
+          "saved_signal_uid": "196",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "86"
+        }
+      ]
+    },
+    {
+      "source_id": "LOCAL-537e6026a0f7f7974ada2615",
+      "uid": "85",
+      "prim_id": 1187,
+      "terminals": [
+        {
+          "uid": "259",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        },
+        {
+          "uid": "260",
+          "slot": 1,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset past number",
+          "wired": false
+        },
+        {
+          "uid": "264",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "266",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "default (0 dbl)",
+          "wired": false
+        },
+        {
+          "uid": "269",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset",
+          "wired": false
+        },
+        {
+          "uid": "273",
+          "slot": 5,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "String",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "string",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "4919CA0D81A84FF159FAC290E797DA3E674A3F312B68D123E38A83B05662B23A",
+      "source_xml": {
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-558fe4e57a1da736\\vi_BDHb.xml",
+          "bytes": 52138,
+          "sha256": "1092ED1E6AB4E13C9565CCF9B88440C12E938AF468A90B492370723BEBD8F068"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-558fe4e57a1da736\\vi_FPHb.xml",
+          "bytes": 89867,
+          "sha256": "B7257365AEFABE7A239FFAD040B87414DF80FACE3A56DDD981765BCCA8AEF785"
+        },
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-558fe4e57a1da736\\vi.xml",
+          "bytes": 81023,
+          "sha256": "27961D440EA5F4D64E185AEFA51F892802F07165DC6AF528F4B1AA3B07AC2711"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\LOCAL-537e6026a0f7f7974ada2615.json.gz",
+        "bytes": 5637,
+        "sha256": "625127B9EFF151CB06A28F391876EC3CE53C20D0A2960EDCB31F3A5E72C17CB0"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "320",
+            "node_id": "308",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "273",
+            "node_id": "85",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\Data\\TPG300-Get Pressure-Status.vi",
+          "saved_signal_uid": "195",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "86"
+        },
+        {
+          "source": {
+            "terminal_id": "259",
+            "node_id": "85",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "185",
+            "node_id": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\Data\\TPG300-Get Pressure-Status.vi",
+            "index": 2,
+            "name": "Pressure",
+            "parent_kind": "vi"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\Data\\TPG300-Get Pressure-Status.vi",
+          "saved_signal_uid": "196",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "86"
+        }
+      ]
+    },
+    {
+      "source_id": "LOCAL-acb9d43229892f568d13ded7",
+      "uid": "358",
+      "prim_id": 1187,
+      "terminals": [
+        {
+          "uid": "361",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        },
+        {
+          "uid": "360",
+          "slot": 1,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset past number",
+          "wired": false
+        },
+        {
+          "uid": "362",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "372",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "default (0 dbl)",
+          "wired": false
+        },
+        {
+          "uid": "367",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset",
+          "wired": false
+        },
+        {
+          "uid": "370",
+          "slot": 5,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "String",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "string",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "321FBDF8C8B1CBEFAF15B9167FB67A4CC374CC44C7554E1B858F6D339103677C",
+      "source_xml": {
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_BDHb.xml",
+          "bytes": 105079,
+          "sha256": "C4268F3E8274FDF93E9DDDCCD8280830636036ACEF43E27CCA6B0F7B1E1045D9"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_FPHb.xml",
+          "bytes": 47693,
+          "sha256": "D4B50B0E59492503334A7120F2A4F79E01BA42C749A34464FE8DCBCDE9203779"
+        },
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi.xml",
+          "bytes": 108323,
+          "sha256": "E1A32832B125941AE8348BD403747F08583FF52088F0E6555E3838333D6DFD68"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\LOCAL-acb9d43229892f568d13ded7.json.gz",
+        "bytes": 6377,
+        "sha256": "F124C4FD58FC26C5EAAD75473FF6C8B99F6CBEF4E4FE738F925D06F46AE1C7B9"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "361",
+            "node_id": "358",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "290",
+            "node_id": "110",
+            "index": 8,
+            "name": null,
+            "parent_kind": "caseStruct"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "292",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "140"
+        },
+        {
+          "source": {
+            "terminal_id": "561",
+            "node_id": "562",
+            "index": 0,
+            "name": null,
+            "parent_kind": "vi"
+          },
+          "dest": {
+            "terminal_id": "370",
+            "node_id": "358",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "287",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "140"
+        }
+      ]
+    },
+    {
+      "source_id": "LOCAL-acb9d43229892f568d13ded7",
+      "uid": "419",
+      "prim_id": 1505,
+      "terminals": [
+        {
+          "uid": "413",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "String",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "E-format string",
+          "wired": true
+        },
+        {
+          "uid": "418",
+          "slot": 1,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "425",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt16",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "precision (6)",
+          "wired": true
+        },
+        {
+          "uid": "428",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt16",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "width (-)",
+          "wired": true
+        },
+        {
+          "uid": "431",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "F9D895DA98BD6476B0A81DF47547265DE3FF73DF583A4F284723CC9DE2B0F82A",
+      "source_xml": {
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_BDHb.xml",
+          "bytes": 105079,
+          "sha256": "C4268F3E8274FDF93E9DDDCCD8280830636036ACEF43E27CCA6B0F7B1E1045D9"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_FPHb.xml",
+          "bytes": 47693,
+          "sha256": "D4B50B0E59492503334A7120F2A4F79E01BA42C749A34464FE8DCBCDE9203779"
+        },
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi.xml",
+          "bytes": 108323,
+          "sha256": "E1A32832B125941AE8348BD403747F08583FF52088F0E6555E3838333D6DFD68"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\LOCAL-acb9d43229892f568d13ded7.json.gz",
+        "bytes": 6377,
+        "sha256": "F124C4FD58FC26C5EAAD75473FF6C8B99F6CBEF4E4FE738F925D06F46AE1C7B9"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "338",
+            "node_id": "338",
+            "index": 0,
+            "name": null,
+            "parent_kind": "constant"
+          },
+          "dest": {
+            "terminal_id": "425",
+            "node_id": "419",
+            "index": 2,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "168",
+          "saved_branch_index": 1,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "347",
+            "node_id": "347",
+            "index": 0,
+            "name": null,
+            "parent_kind": "constant"
+          },
+          "dest": {
+            "terminal_id": "428",
+            "node_id": "419",
+            "index": 3,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "322",
+          "saved_branch_index": 1,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "413",
+            "node_id": "419",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "576",
+            "node_id": "567",
+            "index": 1,
+            "name": null,
+            "parent_kind": "vi"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "197",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "187",
+            "node_id": "110",
+            "index": 2,
+            "name": null,
+            "parent_kind": "caseStruct"
+          },
+          "dest": {
+            "terminal_id": "431",
+            "node_id": "419",
+            "index": 4,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "184",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        }
+      ]
+    },
+    {
+      "source_id": "LOCAL-acb9d43229892f568d13ded7",
+      "uid": "375",
+      "prim_id": 1187,
+      "terminals": [
+        {
+          "uid": "378",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        },
+        {
+          "uid": "381",
+          "slot": 1,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset past number",
+          "wired": false
+        },
+        {
+          "uid": "384",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "386",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "default (0 dbl)",
+          "wired": false
+        },
+        {
+          "uid": "389",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt32",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "offset",
+          "wired": false
+        },
+        {
+          "uid": "392",
+          "slot": 5,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "String",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "string",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "7862BECF45036CA1A2535D42C7B2589C66A5F69DF842A81739B08938C0488912",
+      "source_xml": {
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_BDHb.xml",
+          "bytes": 105079,
+          "sha256": "C4268F3E8274FDF93E9DDDCCD8280830636036ACEF43E27CCA6B0F7B1E1045D9"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_FPHb.xml",
+          "bytes": 47693,
+          "sha256": "D4B50B0E59492503334A7120F2A4F79E01BA42C749A34464FE8DCBCDE9203779"
+        },
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi.xml",
+          "bytes": 108323,
+          "sha256": "E1A32832B125941AE8348BD403747F08583FF52088F0E6555E3838333D6DFD68"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\LOCAL-acb9d43229892f568d13ded7.json.gz",
+        "bytes": 6377,
+        "sha256": "F124C4FD58FC26C5EAAD75473FF6C8B99F6CBEF4E4FE738F925D06F46AE1C7B9"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "378",
+            "node_id": "375",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "299",
+            "node_id": "110",
+            "index": 9,
+            "name": null,
+            "parent_kind": "caseStruct"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "296",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "140"
+        },
+        {
+          "source": {
+            "terminal_id": "543",
+            "node_id": "548",
+            "index": 0,
+            "name": null,
+            "parent_kind": "vi"
+          },
+          "dest": {
+            "terminal_id": "392",
+            "node_id": "375",
+            "index": 5,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "286",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "140"
+        }
+      ]
+    },
+    {
+      "source_id": "LOCAL-acb9d43229892f568d13ded7",
+      "uid": "397",
+      "prim_id": 1505,
+      "terminals": [
+        {
+          "uid": "400",
+          "slot": 0,
+          "direction": "output",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "String",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "E-format string",
+          "wired": true
+        },
+        {
+          "uid": "402",
+          "slot": 1,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "Boolean",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "use system decimal point (T)",
+          "wired": false
+        },
+        {
+          "uid": "405",
+          "slot": 2,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt16",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "precision (6)",
+          "wired": true
+        },
+        {
+          "uid": "415",
+          "slot": 3,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumInt16",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "width (-)",
+          "wired": true
+        },
+        {
+          "uid": "410",
+          "slot": 4,
+          "direction": "input",
+          "type": {
+            "kind": "primitive",
+            "underlying_type": "NumFloat64",
+            "ref_type": null,
+            "classname": null,
+            "values": null,
+            "fields": null,
+            "element_type": null,
+            "dimensions": null,
+            "typedef_path": null,
+            "typedef_name": null,
+            "description": null,
+            "measure_flavor": null,
+            "wire_style": null
+          },
+          "display_name": "number",
+          "wired": true
+        }
+      ],
+      "raw_node_xml_sha256": "ED03CB840B47F98EA59D21A404BE472982AEF13A2FF54294DE0A8CCD9056E898",
+      "source_xml": {
+        "bd": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_BDHb.xml",
+          "bytes": 105079,
+          "sha256": "C4268F3E8274FDF93E9DDDCCD8280830636036ACEF43E27CCA6B0F7B1E1045D9"
+        },
+        "fp": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi_FPHb.xml",
+          "bytes": 47693,
+          "sha256": "D4B50B0E59492503334A7120F2A4F79E01BA42C749A34464FE8DCBCDE9203779"
+        },
+        "main": {
+          "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\convergence_20261007\\project_sources\\cache\\projects\\pyconlyse-3e6bdc7c\\extract\\3f270617\\vi-deba0ea25955ca32\\vi.xml",
+          "bytes": 108323,
+          "sha256": "E1A32832B125941AE8348BD403747F08583FF52088F0E6555E3838333D6DFD68"
+        }
+      },
+      "predecessor_model": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\corpus_refresh_followup_20261009\\models\\LOCAL-acb9d43229892f568d13ded7.json.gz",
+        "bytes": 6377,
+        "sha256": "F124C4FD58FC26C5EAAD75473FF6C8B99F6CBEF4E4FE738F925D06F46AE1C7B9"
+      },
+      "saved_wire_branches": [
+        {
+          "source": {
+            "terminal_id": "338",
+            "node_id": "338",
+            "index": 0,
+            "name": null,
+            "parent_kind": "constant"
+          },
+          "dest": {
+            "terminal_id": "405",
+            "node_id": "397",
+            "index": 2,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "168",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "347",
+            "node_id": "347",
+            "index": 0,
+            "name": null,
+            "parent_kind": "constant"
+          },
+          "dest": {
+            "terminal_id": "415",
+            "node_id": "397",
+            "index": 3,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "322",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "400",
+            "node_id": "397",
+            "index": 0,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "dest": {
+            "terminal_id": "590",
+            "node_id": "583",
+            "index": 1,
+            "name": null,
+            "parent_kind": "vi"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "200",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        },
+        {
+          "source": {
+            "terminal_id": "196",
+            "node_id": "110",
+            "index": 3,
+            "name": null,
+            "parent_kind": "caseStruct"
+          },
+          "dest": {
+            "terminal_id": "410",
+            "node_id": "397",
+            "index": 4,
+            "name": null,
+            "parent_kind": "primitive"
+          },
+          "vi": "C:\\dev\\ELYSE-ACQ-analysis\\source\\10.20.30.10\\TPG300\\SubVI\\TPG300-ConvertEngEngInt.vi",
+          "saved_signal_uid": "198",
+          "saved_branch_index": 0,
+          "saved_frame_uid": "144"
+        }
+      ]
+    }
+  ],
+  "source_proof": {
+    "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\numeric_runtime_followup_20261009\\SOURCE_PROOF.json",
+    "bytes": 69077,
+    "sha256": "9BDC7052CFC1BB39D5E19166229494E7A2FCC6BB258AF495F539108CAFB2482F"
+  },
+  "original_system_locale_qualified": false,
+  "native_runtime_equivalence": false
+}

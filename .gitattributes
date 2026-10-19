@@ -1,2 +1,11 @@
 .py filter=lfs diff=lfs merge=lfs -text
 *.iml filter=lfs diff=lfs merge=lfs -text
+
+# Preserve byte identities of reviewed ELYSE evidence and pinned catalogs.
+legacy/xp_acq_agent/elyse_agent/saved_*.py -text whitespace=cr-at-eol
+legacy/xp_acq_agent/data/*.json -text whitespace=cr-at-eol
+Supervision/python_reconstruction/EVENT_MODEL_COVERAGE.json -text whitespace=cr-at-eol
+Supervision/python_reconstruction/src/supervision_reconstruction/catalog/*.json -text whitespace=cr-at-eol
+Supervision/integration_analysis/**/RESULT.json -text whitespace=cr-at-eol
+docs/ELYSE_*.json -text whitespace=cr-at-eol
+web/frontend/src/elyse*.json -text whitespace=cr-at-eol

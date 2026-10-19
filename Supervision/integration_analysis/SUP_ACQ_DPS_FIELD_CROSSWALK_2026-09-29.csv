@@ -1,0 +1,25 @@
+dps_bank_index,supervision_event,supervision_scope_uid,supervision_control,dps_field_label,acq_event_case,acq_procedure,static_status
+0,14,38117,Marche régulation,Marche refroidissement X,3,Marche refroidissement,FIELD_AND_HANDLER_MATCH
+1,14,38117,Arrêt régulation,Arret refroidissement X,4,Arrêt refroidissement,FIELD_AND_HANDLER_MATCH
+2,18,30946,Marche MOD,X Marche GENERAL Mod.,5,Marche GENERAL Mod.,FIELD_AND_HANDLER_MATCH
+3,18,30946,Arrêt MOD,X Arrêt GENERAL Mod.,6,Arrêt GENERAL Mod.,FIELD_AND_HANDLER_MATCH
+4,18,30946,Marche CHAUFFAGE MOD,X Marche CHAUFFAGE Mod.,12,Marche CHAUFFAGE Mod.,FIELD_AND_HANDLER_MATCH
+5,18,30946,Arrêt CHAUFFAGE MOD,X Arrêt CHAUFFAGE Mod.,7,Arrêt CHAUFFAGE Mod.,FIELD_AND_HANDLER_MATCH
+6,18,30946,Marche PREMA MOD,X Marche PREMA Mod.,13,Marche PREMA Mod.,FIELD_AND_HANDLER_MATCH
+7,18,30946,Arrêt PREMA MOD,X Arrêt PREMA Mod.,8,Arrêt PREMA Mod.,FIELD_AND_HANDLER_MATCH
+8,18,30946,Marche RELAIS HT MOD,X Marche RELAIS HT Mod.,14,Marche RELAIS HT Mod.,FIELD_AND_HANDLER_MATCH
+9,18,30946,Arrêt RELAIS HT MOD,X Arrêt RELAIS HT Mod.,9,Arrêt RELAIS HT Mod.,FIELD_AND_HANDLER_MATCH
+10,18,30946,Marche FOCALES MOD,X Marche FOCALE Mod.,15,Marche FOCALE Mod.,FIELD_AND_HANDLER_MATCH
+11,18,30946,Arrêt FOCALES MOD,X Arrêt FOCALE Mod.,10,Arrêt FOCALE Mod.,FIELD_AND_HANDLER_MATCH
+12,18,30946,Reset MOD,X RESET Mod.,11,RESET Mod.,FIELD_AND_HANDLER_MATCH
+13,16,53782,Marche att./déph.,X Marche Att Déph,18,Marche Att et Déph HF,FIELD_AND_HANDLER_MATCH
+14,16,53782,Arrêt att./déph.,X Arret Att Déph,19,Arrêt Att et Déph HF,FIELD_AND_HANDLER_MATCH
+15,15,38758,Marche HT,X Marche alimentation HT,20,Marche alimentation HT,FIELD_AND_HANDLER_MATCH
+16,15,38758,Reset HT,X Reset alimentation HT,22,Reset alimentation HT,FIELD_AND_HANDLER_MATCH
+17,15,38758,Arrêt HT,X Arrêt alimentation HT,21,Arrêt alimentation HT,FIELD_AND_HANDLER_MATCH
+18,15,38758,Marche pulse MOD,X Marche impulsion mod,23,Marche impulsion modulateur,FIELD_AND_HANDLER_MATCH
+19,15,38758,Arrêt pulse MOD,X Arret impulsion mod,24,Arrêt impulsion modulateur,FIELD_AND_HANDLER_MATCH
+20,17,47154,Marche Aimants.,X Marche alimentation aimant,16,Marche alimentation aimants,FIELD_AND_HANDLER_MATCH
+21,17,47154,Aimant 0V,X Alimentation aimant = 0V,25,Alimentation aimant = 0V,FIELD_AND_HANDLER_MATCH
+22,,,,X Alimentation aimant = PT,,,ORPHANED_DISPATCH_INTENT
+23,17,47154,Arrêt Aimants,X Arrêt alimentation aimant,17,Arrêt alimentation aimants,FIELD_AND_HANDLER_MATCH

@@ -1,0 +1,14 @@
+runtime/
+__pycache__/
+*.pyc
+*.key
+*.sqlite*
+*.owner*
+*.jsonl
+config.acquisition.json
+config.xp.json
+config.labview-telemetry.json
+config.shared-state.json
+config.telemetry-relay.json
+config.simulation.everest.json
+config.simulation.xp.json

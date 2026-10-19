@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "43634",
+      "module": "saved_acq_event_43634.py",
+      "implementation_sha256": "7E3687F90A881F34B717136E587A2522BE8CF89A0806F66A94EB5033DDFCF140",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\sixth_next_event_alignment_followup_20261009\\acq\\SOURCE_PROOF.json",
+        "bytes": 1292591,
+        "sha256": "79ACC56BF6F0B4CD0C450DDB9EA30C0D1165B0CD4293697DD5C7548BB452EC8D"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_INTRINSIC_AND_STORAGE_BOUNDARIES",
+      "native_range_comparison_mode_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "event_selection_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "53716",
+      "module": "saved_sup_event_53716.py",
+      "implementation_sha256": "2EB7C41D7431A989A94B9C299B7EA6EDAC0EEE070F914C3C3218224DCD7D2B02",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\sixth_next_event_alignment_followup_20261009\\sup\\SOURCE_PROOF.json",
+        "bytes": 26850082,
+        "sha256": "347D865FD5470F7992BCD419471986CF721E04F911D9B46DC5B7B6E336C4C960"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_INTRINSIC_AND_STORAGE_BOUNDARIES",
+      "native_range_comparison_mode_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "event_selection_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

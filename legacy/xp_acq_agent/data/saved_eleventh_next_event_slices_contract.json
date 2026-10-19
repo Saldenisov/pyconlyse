@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "38732",
+      "module": "saved_acq_event_38732.py",
+      "implementation_sha256": "5163AC2247188F02F95896993221924C9CE1D5F798B1F318F0EDBB6C462C07B7",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\eleventh_next_event_alignment_followup_20261010\\acq\\SOURCE_PROOF.json",
+        "bytes": 2187076,
+        "sha256": "41FCCC2427025132A90A07862BACE5B01F9CD65B1489CB23CC0F07D4EB22D503"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_LITERAL_FIELD_BINDINGS_SNAPSHOTS_SCHEDULE_WAIT_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_variant_conversion_qualified": false,
+      "native_argmax_tie_or_empty_policy_qualified": false,
+      "native_loop_output_policy_qualified": false,
+      "native_field_index_selection_qualified": false,
+      "native_unwired_input_defaults_qualified": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "26490",
+      "module": "saved_sup_event_26490.py",
+      "implementation_sha256": "BEB2E70DAB4EB9090A96A277632A96DD3D8E8A39605C48BE9BD7C7592D6E73EB",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\eleventh_next_event_alignment_followup_20261010\\sup\\SOURCE_PROOF.json",
+        "bytes": 848821,
+        "sha256": "6ACC633FD0A8F6954075063D14ABA61B5808B0F1ACE24102F1DB72C0678BDEE3"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_LITERAL_FIELD_BINDINGS_SNAPSHOTS_SCHEDULE_WAIT_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_variant_conversion_qualified": false,
+      "native_argmax_tie_or_empty_policy_qualified": false,
+      "native_loop_output_policy_qualified": false,
+      "native_field_index_selection_qualified": false,
+      "native_unwired_input_defaults_qualified": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

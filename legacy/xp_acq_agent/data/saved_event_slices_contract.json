@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "event_uid": "43",
+      "frame_uid": "33620",
+      "module": "saved_acq_event_33620.py",
+      "implementation_sha256": "F9D2B1BFB8FBA126258867D766A4AC7192F33788B3DFF7C324D02BB01EAFB5CC",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\event_slice_alignment_followup_20261009\\acq_body\\SOURCE_PROOF.json",
+        "bytes": 979333,
+        "sha256": "D39DA5670B2B649DDB0653FF776DAAADA5ACABD0799C45BF49A0E1A8C4FF63EE"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "event_uid": "5909",
+      "frame_uid": "70866",
+      "module": "saved_sup_frequency.py",
+      "implementation_sha256": "7E3ADDAEFD139CE859CA7CAB3D56ADF256E11FC03904DCE74081C51D70896870",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\event_slice_alignment_followup_20261009\\sup_body\\SOURCE_PROOF.json",
+        "bytes": 676998,
+        "sha256": "73C51021B7AF6E90A21D38CC631C6FBE6667D35ED1BC712BC1AF5DB102462A03"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

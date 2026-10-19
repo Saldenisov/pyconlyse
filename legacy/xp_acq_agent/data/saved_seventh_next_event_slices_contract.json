@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "31552",
+      "module": "saved_acq_event_31552.py",
+      "implementation_sha256": "311680C9C8AB360252ED4C52DA375E3B84D10281E9A88DE97C4B4219C96F50B3",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\seventh_next_event_alignment_followup_20261010\\acq\\SOURCE_PROOF.json",
+        "bytes": 1364536,
+        "sha256": "6E26CB4DE8F4896A39162545C9843309736EBFB83F542A72B3F38D21A172C046"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_VARIANT_FORMAT_STORAGE_AND_LOOP_INTRINSICS",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_variant_conversion_qualified": false,
+      "native_formatting_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_loop_default_or_completion_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "18780",
+      "module": "saved_sup_event_18780.py",
+      "implementation_sha256": "F8D6072818032C7EEF79D2E567C0414D54200092393E0F7CFB23E7B16395ADC2",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\seventh_next_event_alignment_followup_20261010\\sup\\SOURCE_PROOF.json",
+        "bytes": 8460929,
+        "sha256": "B724E666D743D1D84E090F45B85A797AD76FF44CB5657A5FDC0034C635674320"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_VARIANT_FORMAT_STORAGE_AND_LOOP_INTRINSICS",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_variant_conversion_qualified": false,
+      "native_formatting_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_loop_default_or_completion_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

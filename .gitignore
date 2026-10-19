@@ -13,12 +13,36 @@
 !web/frontend/package.json
 !web/frontend/package-lock.json
 
+# Reviewed ELYSE source contracts and static display maps, not runtime state.
+!web/frontend/src/elyseControlPanels.json
+!web/frontend/src/elyseFluidesPanel.json
+!web/frontend/src/elyseLiveDisplayMap.json
+!web/frontend/src/elyseModulatorPanel.json
+!web/frontend/src/elyseSupervisionHeader.json
+!web/frontend/src/elyseSupervisionWorkspace.json
+!web/frontend/src/elyseVacuumPanel.json
+!legacy/xp_acq_agent/config.example.json
+!legacy/xp_acq_agent/config.acquisition.demo.json
+!legacy/xp_acq_agent/config.acquisition.example.json
+!legacy/xp_acq_agent/data/*.json
+!Supervision/python_reconstruction/EVENT_MODEL_COVERAGE.json
+!Supervision/python_reconstruction/src/supervision_reconstruction/catalog/*.json
+!Supervision/integration_analysis/beam_switch_trace_20261016/RESULT.json
+!Supervision/integration_analysis/h1_triplet_source_20261017/RESULT.json
+!Supervision/integration_analysis/phase_status_20261017/RESULT.json
+!Supervision/integration_analysis/completion_audit_20261017/RESULT.json
+!docs/ELYSE_PYTHON_LABVIEW_GENERAL_AB_2026-10-19.json
+!docs/ELYSE_PYTHON_HT_READINESS_2026-10-19.json
+!docs/ELYSE_ACQ_STAGE_ADMISSION_2026-10-19.json
+!docs/ELYSE_ACQ_RUNNING_FAULT_RESPONSE_2026-10-19.json
+
 *.xml
 
 *.stpmtr
 
 *.txt
 !Gamma-spectrometer/requirements*.txt
+!legacy/xp_acq_agent/requirements-xp-py34.txt
 
 .idea/pyconlyse.iml
 /DeviceServers/DS_DenisBox_Motor.exe

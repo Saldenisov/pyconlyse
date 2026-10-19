@@ -1,0 +1,41 @@
+bank,field_idx,logical_value,field_label,physical_channel,method,requested_volts,task_min_volts,task_max_volts,within_configured_range
+C6NI6703,0,0.0,00 OUT00 b01 Cmd Guidage H1,/6/ao0,linear,0.0,-10,10,True
+C6NI6703,1,0.0,01 OUT01 b05 Cmd Guidage V1,/6/ao1,linear,0.0,-10,10,True
+C6NI6703,2,0.0,02 OUT02 b09 Cmd Guidage H2,/6/ao2,linear,0.0,-10,10,True
+C6NI6703,3,0.0,03 OUT03 b13 Cmd Guidage V2,/6/ao3,linear,0.0,-10,10,True
+C6NI6703,4,0.0,04 OUT04 b17 Cmd Guidage H3,/6/ao4,linear,0.0,-10,10,True
+C6NI6703,5,0.0,05 OUT05 b21 Cmd Guidage V3,/6/ao5,linear,0.0,-10,10,True
+C6NI6703,6,0.0,06 OUT06 b25 Cmd Guidage H4,/6/ao6,linear,0.0,-10,10,True
+C6NI6703,7,0.0,07 OUT07 b29 Cmd Guidage V4,/6/ao7,linear,0.0,-10,10,True
+C6NI6703,8,0.0,08 OUT08 b33 Réserve,/6/ao8,linear,0.0,-10,10,True
+C6NI6703,9,0.0,09 OUT09 b37 Cmd Guidage V5,/6/ao9,linear,0.0,-10,10,True
+C7NI6703,0,0.0,00 OUT00 b01 Cmd I Triplet 1-1,/7/ao0,linear,0.0,-10,10,True
+C7NI6703,1,0.0,01 OUT01 b05 Cmd I Triplet 1-2,/7/ao1,linear,0.0,-10,10,True
+C7NI6703,2,0.0,02 OUT02 b09 Réserve,/7/ao2,linear,0.0,-10,10,True
+C7NI6703,3,0.0,03 OUT03 b13 Cmd I Triplet 2-1,/7/ao3,linear,0.0,-10,10,True
+C7NI6703,4,0.0,04 OUT04 b17 Cmd I Triplet 2-2,/7/ao4,linear,0.0,-10,10,True
+C7NI6703,5,0.0,05 OUT05 b21 Cmd I Solénoïde,/7/ao5,linear,0.0,-10,10,True
+C7NI6703,6,0.0,06 OUT06 b25 Cmd I Quad 1,/7/ao6,linear,0.0,-10,10,True
+C7NI6703,7,0.0,07 OUT07 b29 Cmd I Quad 2,/7/ao7,linear,0.0,-10,10,True
+C7NI6703,8,0.0,08 OUT08 b33 Cmd I Dipôle 1,/7/ao8,linear,0.0,-10,10,True
+C7NI6703,9,0.0,09 OUT09 b37 Cmd I Dipôle 2,/7/ao9,linear,0.0,-10,10,True
+C8NI6703,0,0.0,00 OUT00 b01 Réserve,/8/ao0,linear,0.0,-10,10,True
+C8NI6703,1,21.0,01 OUT01 b05 Cmd Temp. Canon,/8/ao1,linear,2.2,-10,10,True
+C8NI6703,2,27.9,02 OUT02 b09 Cmd Temp. Section,/8/ao2,linear,3.58,-10,10,True
+C8NI6703,3,0.0,03 OUT03 b13 Cmd Pos. Déphaseur,/8/ao3,dephaser_polynomial,2.1775,-10,10,True
+C8NI6703,4,0.0,04 OUT04 b17 Cmd Pos. Atténuateur,/8/ao4,attenuator_acos_polynomial,3.8587,-10,10,True
+C8NI6703,5,0.0,05 OUT05 b21 Cmd déphasage HF/LASER,/8/ao5,linear,0.0,-10,10,True
+C8NI6703,6,360.0,06 OUT06 b25 Cmd amplitude HF préampli,/8/ao6,linear,9.0,-10,10,True
+C8NI6703,7,0.0,07 OUT07 b29 Réserve,/8/ao7,linear,0.0,-10,10,True
+C8NI6703,8,0.0,08 OUT08 b33 Cmd position Miroir X,/8/ao8,linear,0.0,-10,10,True
+C8NI6703,9,0.0,09 OUT09 b37 Cmd position Miroir Y,/8/ao9,linear,0.0,-10,10,True
+C9NI6703,0,6.5,00 OUT00 b01 Cmd alimentation HT,/9/ao0,linear,3.25,-10,10,True
+C9NI6703,1,0.0,01 OUT01 b05 Cmd DeQing,/9/ao1,linear,0.0,-10,10,True
+C9NI6703,2,4.755,02 OUT02 b09 Cmd position fente HG,/9/ao2,linear,4.755,-10,10,True
+C9NI6703,3,4.755,03 OUT03 b13 Cmd position fente HD,/9/ao3,linear,4.755,-10,10,True
+C9NI6703,4,2.126,04 OUT04 b17 Cmd position translateur Ecran 1,/9/ao4,linear,2.126,-10,10,True
+C9NI6703,5,2.126,05 OUT05 b21 Cmd position translateur Ecran 2,/9/ao5,linear,2.126,-10,10,True
+C9NI6703,6,2.126,06 OUT06 b25 Cmd position translateur Ecran 3,/9/ao6,linear,2.126,-10,10,True
+C9NI6703,7,0.0,07 OUT07 b29 Réserve,/9/ao7,linear,0.0,-10,10,True
+C9NI6703,8,0.0,08 OUT08 b33 Réserve,/9/ao8,linear,0.0,-10,10,True
+C9NI6703,9,0.0,09 OUT09 b37 Réserve,/9/ao9,linear,0.0,-10,10,True

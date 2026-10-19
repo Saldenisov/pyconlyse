@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "8896",
+      "module": "saved_acq_event_8896.py",
+      "implementation_sha256": "9C2938AD6406620A9006F99967A1D226DA7AF620605A51E79017E2E122F6CACC",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\ninth_next_event_alignment_followup_20261010\\acq\\SOURCE_PROOF.json",
+        "bytes": 1509394,
+        "sha256": "C2E14F610D08AA6C9AD78A637C3CDD6CDE461F9970A14445335F0FE8EDA79549"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_STORAGE_RANGE_ERRORCASE_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "38707",
+      "module": "saved_sup_event_38707.py",
+      "implementation_sha256": "CFADA47CF250CCF7D6DAE7E47D5B0A9F8739DF831448DEC25F11694F59C1CB65",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\ninth_next_event_alignment_followup_20261010\\sup\\SOURCE_PROOF.json",
+        "bytes": 29392552,
+        "sha256": "8131E05CB2A779F499C8738C041C3DC9A748FF714C083851D21FCB7EC3FAEC24"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_STORAGE_RANGE_ERRORCASE_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

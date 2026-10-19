@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "23113",
+      "module": "saved_acq_event_23113.py",
+      "implementation_sha256": "74990D90D8289D0458F3F69B0C79B83BCB46ED09A8E9B6F2F2170D41F824E8C3",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\tenth_next_event_alignment_followup_20261010\\acq\\SOURCE_PROOF.json",
+        "bytes": 1671588,
+        "sha256": "504671BA07A4E37923D8855A5FE1D1AFDC907EED9BF0F55AC771F4DFDD2C9E47"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_VARIANT_STORAGE_ARGMAX_RANGE_LOOP_ERRORCASE_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_variant_conversion_qualified": false,
+      "native_argmax_tie_or_empty_policy_qualified": false,
+      "native_loop_output_policy_qualified": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "5847",
+      "module": "saved_sup_event_5847.py",
+      "implementation_sha256": "0C014A943A43352C3DAA879BE5B652848A37B2A91B36E8FA11C2E1CA38D865EB",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\tenth_next_event_alignment_followup_20261010\\sup\\SOURCE_PROOF.json",
+        "bytes": 33663541,
+        "sha256": "0C0519104B116283E953F71B0FAA9A3D0D995C6089E1AF12281EED3B22007BDB"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "boundary_scope": "EXPLICIT_UNQUALIFIED_PROPERTY_VARIANT_STORAGE_ARGMAX_RANGE_LOOP_ERRORCASE_AND_NATIVE_LEAVES",
+      "event_selection_qualified": false,
+      "native_property_or_reference_validity_qualified": false,
+      "native_literal_serializer_qualified": false,
+      "native_range_mode_qualified": false,
+      "native_error_case_selection_qualified": false,
+      "native_wait_units_or_timing_qualified": false,
+      "supplied_snapshots_are_acquired_data_qualified": false,
+      "supplied_completion_is_feasible_native_trace": false,
+      "native_variant_conversion_qualified": false,
+      "native_argmax_tie_or_empty_policy_qualified": false,
+      "native_loop_output_policy_qualified": false,
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}

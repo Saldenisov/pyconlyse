@@ -1,0 +1,7 @@
+{
+  "bind_host": "127.0.0.1",
+  "port": 8772,
+  "key_file": "telemetry_soak_fixture.key",
+  "period_seconds": 0.2,
+  "read_timeout_seconds": 0.5
+}

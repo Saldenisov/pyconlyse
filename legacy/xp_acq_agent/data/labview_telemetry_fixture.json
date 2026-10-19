@@ -1,0 +1,13 @@
+{
+  "id": "lv-fixture-0",
+  "command": "ingest_labview_telemetry",
+  "params": {
+    "session_id": "acq-copy-20261012",
+    "publication": "C1NI6071E",
+    "sequence": 0,
+    "source_seconds_1904": 3870000000.25,
+    "producer_kind": "fixture",
+    "data": [1.5, null, -0.2],
+    "error": {"status": false, "code": 0, "source": ""}
+  }
+}

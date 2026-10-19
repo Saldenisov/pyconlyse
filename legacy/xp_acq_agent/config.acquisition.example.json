@@ -1,0 +1,17 @@
+{
+  "bind_host": "127.0.0.1",
+  "port": 8771,
+  "key_file": "runtime/acquisition.key",
+  "period_seconds": 0.2,
+  "read_timeout_seconds": 0.5,
+  "control_profile": "legacy_full",
+  "focal_stop": {
+    "resources_verified": false,
+    "timeout_seconds": 10
+  },
+  "ht_shutdown": {
+    "feedback_verified": false,
+    "zero_tolerance_kv": 0.0,
+    "timeout_seconds": 10.0
+  }
+}

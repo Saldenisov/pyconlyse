@@ -1,0 +1,13 @@
+{
+  "agent_name": "elyse-acq-xp",
+  "mode": "simulation",
+  "bind_host": "127.0.0.1",
+  "command_port": 8765,
+  "max_frame_bytes": 1048576,
+  "socket_timeout_seconds": 10.0,
+  "allow_input_task_creation": false,
+  "allow_hardware_writes": false,
+  "allow_remote_shutdown": false,
+  "audit_path": "runtime/audit.jsonl",
+  "data_path": "data"
+}

@@ -1,0 +1,248 @@
+"""Offline freshness regression; no Tango import, sockets, processes or NI."""
+
+import ast
+import copy
+import importlib.util
+import json
+from pathlib import Path
+import threading
+import types
+import unittest
+
+
+ROOT = Path(__file__).resolve().parents[2]
+MODULE_PATH = ROOT / "DeviceServers/control/elyse_acq/runtime_health.py"
+SPEC = importlib.util.spec_from_file_location("isolated_acq_runtime_health", MODULE_PATH)
+HEALTH = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(HEALTH)
+
+
+def snapshot(**changes):
+    value = dict(state="RUNNING", stale=False, age_seconds=0.1, error="",
+                 latest=dict(source="python_daqmx_acquisition", simulated=False, banks={}))
+    value.update(changes)
+    return value
+
+
+class RuntimeHealthTests(unittest.TestCase):
+    def test_fresh_bridge_and_source_are_running_without_mutating_inputs(self):
+        value = snapshot()
+        before = copy.deepcopy(value)
+        result = HEALTH.project_runtime_health(value, 0.2)
+        self.assertEqual(result["tango_state"], "RUNNING")
+        self.assertTrue(result["source_current"])
+        self.assertFalse(result["source_stale"])
+        self.assertFalse(result["bridge_stale"])
+        self.assertEqual(value, before)
+
+    def test_fresh_http_cannot_hide_runtime_reported_stale_ni(self):
+        result = HEALTH.project_runtime_health(snapshot(stale=True), 0.1)
+        self.assertFalse(result["bridge_stale"])
+        self.assertTrue(result["source_stale"])
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+        self.assertIn("NI input snapshot stale", result["status"])
+
+    def test_old_source_cannot_claim_running_even_when_source_flag_is_false(self):
+        for age in (2.000001, 99.0):
+            with self.subTest(age=age):
+                result = HEALTH.project_runtime_health(snapshot(age_seconds=age), 0.1)
+                self.assertEqual(result["tango_state"], "UNKNOWN")
+                self.assertEqual(result["source_age_seconds"], age + 0.1)
+                self.assertEqual(result["source_reported_age_seconds"], age)
+
+    def test_existing_source_and_bridge_thresholds_remain_inclusive(self):
+        result = HEALTH.project_runtime_health(snapshot(age_seconds=2.0), 0.0)
+        self.assertEqual(result["tango_state"], "RUNNING")
+        result = HEALTH.project_runtime_health(snapshot(age_seconds=0.0), 3.0)
+        self.assertFalse(result["bridge_stale"])
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+        result = HEALTH.project_runtime_health(snapshot(), 3.000001)
+        self.assertTrue(result["bridge_stale"])
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+
+    def test_cached_bridge_elapsed_is_added_to_source_age(self):
+        result = HEALTH.project_runtime_health(snapshot(age_seconds=1.9), 0.2)
+        self.assertAlmostEqual(result["source_age_seconds"], 2.1)
+        self.assertEqual(result["source_reported_age_seconds"], 1.9)
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+
+    def test_whole_http_duration_is_conservative_age_allowance(self):
+        result = HEALTH.project_runtime_health(snapshot(age_seconds=1.6), 0.2,
+                                               read_duration_seconds=0.3)
+        self.assertAlmostEqual(result["source_age_seconds"], 2.1)
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+        for duration in (-1, None, True, float("nan")):
+            with self.subTest(duration=duration):
+                result = HEALTH.project_runtime_health(snapshot(), 0.1,
+                                                       read_duration_seconds=duration)
+                self.assertFalse(result["source_current"])
+
+    def test_invalid_source_age_is_not_fresh(self):
+        for age in (None, True, -1, float("nan"), float("inf"), "0.1"):
+            with self.subTest(age=age):
+                result = HEALTH.project_runtime_health(snapshot(age_seconds=age), 0.1)
+                self.assertFalse(result["source_current"])
+                self.assertIsNone(result["source_age_seconds"])
+
+    def test_invalid_bridge_age_is_not_fresh(self):
+        for age in (None, False, -1, float("nan"), float("inf"), "0.1"):
+            with self.subTest(age=age):
+                result = HEALTH.project_runtime_health(snapshot(), age)
+                self.assertTrue(result["bridge_stale"])
+                self.assertEqual(result["tango_state"], "UNKNOWN")
+
+    def test_missing_data_or_stale_flag_cannot_claim_running(self):
+        for change in (dict(latest=None), dict(stale=None), dict(stale=0), dict(error="read failed")):
+            with self.subTest(change=change):
+                self.assertEqual(HEALTH.project_runtime_health(snapshot(**change), 0.1)["tango_state"],
+                                 "UNKNOWN")
+
+    def test_fresh_demo_or_unidentified_data_are_not_current_ni_inputs(self):
+        for latest in ({}, dict(source="python_acquisition_demo", simulated=True),
+                       dict(source="python_daqmx_acquisition", simulated=True),
+                       dict(source="python_daqmx_acquisition")):
+            with self.subTest(latest=latest):
+                result = HEALTH.project_runtime_health(snapshot(latest=latest), 0.1)
+                self.assertFalse(result["source_current"])
+                self.assertEqual(result["tango_state"], "UNKNOWN")
+
+    def test_bridge_error_overrides_cached_fresh_source(self):
+        result = HEALTH.project_runtime_health(snapshot(), 0.1, "connection refused")
+        self.assertEqual(result["tango_state"], "UNKNOWN")
+        self.assertFalse(result["source_current"])
+        self.assertIn("connection refused", result["status"])
+
+    def test_no_reader_is_fault_not_merely_unknown(self):
+        result = HEALTH.project_runtime_health(None, None, "key unavailable", reader_started=False)
+        self.assertEqual(result["tango_state"], "FAULT")
+        self.assertTrue(result["bridge_stale"])
+
+    def test_fault_retains_runtime_error_and_source_is_not_current(self):
+        result = HEALTH.project_runtime_health(snapshot(state="FAULT", error="stop failed"), 0.1)
+        self.assertEqual(result["tango_state"], "FAULT")
+        self.assertFalse(result["source_current"])
+        self.assertIn("stop failed", result["status"])
+
+    def test_inactive_lifecycle_is_standby_without_inventing_measurements(self):
+        for state in ("IDLE", "INITIALIZING", "DEINITIALIZING", "STOPPED"):
+            with self.subTest(state=state):
+                result = HEALTH.project_runtime_health(
+                    snapshot(state=state, stale=True, age_seconds=None, latest=None), 0.1)
+                self.assertEqual(result["tango_state"], "STANDBY")
+                self.assertEqual(result["runtime_state"], state)
+                self.assertTrue(result["source_stale"])
+                self.assertIn("no current NI acquisition data expected", result["status"])
+
+    def test_executing_is_activity_not_a_fresh_acquisition_claim(self):
+        result = HEALTH.project_runtime_health(snapshot(state="EXECUTING", stale=True), 0.1)
+        self.assertEqual(result["tango_state"], "MOVING")
+        self.assertEqual(result["runtime_state"], "EXECUTING")
+        self.assertFalse(result["source_current"])
+        self.assertIn("procedure active", result["status"])
+
+    def test_unknown_payload_fails_closed_without_exception(self):
+        for value in (None, [], {}, snapshot(state="UNKNOWN"), snapshot(state=7), snapshot(state=[])):
+            with self.subTest(value=value):
+                self.assertEqual(HEALTH.project_runtime_health(value, 0.1)["tango_state"], "UNKNOWN")
+
+
+class RuntimeDeviceProjectionTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Execute only these adapter methods, not imports/class construction or
+        # decorators. This verifies their wiring to the pure projection while
+        # allowing the suite to run when PyTango is unavailable.
+        path = ROOT / "DeviceServers/control/elyse_acq/DS_AcqRuntime.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        device = next(node for node in tree.body if isinstance(node, ast.ClassDef)
+                      and node.name == "AcqRuntime")
+        methods = [node for node in device.body if isinstance(node, ast.FunctionDef)
+                   and node.name in ("_poll", "_health", "runtime_json", "dev_state")]
+        for node in methods:
+            node.decorator_list = []
+        namespace = dict(json=json, time=types.SimpleNamespace(monotonic=lambda: 100.0),
+                         project_runtime_health=HEALTH.project_runtime_health,
+                         tango=types.SimpleNamespace(DevState=types.SimpleNamespace(
+                             FAULT="FAULT", UNKNOWN="UNKNOWN", RUNNING="RUNNING",
+                             STANDBY="STANDBY", MOVING="MOVING")))
+        module = ast.Module(body=methods, type_ignores=[])
+        exec(compile(ast.fix_missing_locations(module), str(path), "exec"), namespace)
+        cls.namespace = namespace
+        cls.device_type = type("OfflineRuntimeView", (), {
+            name: namespace[name] for name in ("_poll", "_health", "runtime_json", "dev_state")})
+
+    def make_device(self, value):
+        device = self.device_type()
+        device._cache_lock = threading.RLock()
+        device._last_read = 100.0
+        device._last_read_duration = 0.0
+        device._latest = value
+        device._last_error = ""
+        device._worker = object()
+        device.set_status = lambda status: setattr(device, "status", status)
+        device.set_state = lambda state: setattr(device, "state", state)
+        return device
+
+    def test_device_no_longer_reports_running_for_fresh_http_stale_source(self):
+        device = self.make_device(snapshot(stale=True, age_seconds=99.0))
+        self.assertEqual(device.dev_state(), "UNKNOWN")
+        body = json.loads(device.runtime_json())
+        self.assertFalse(body["bridge_stale"])
+        self.assertTrue(body["source_stale"])
+        self.assertFalse(body["source_current"])
+        self.assertEqual(body["source_age_seconds"], 99.0)
+        self.assertEqual(device.state, "UNKNOWN")
+
+    def test_device_fresh_data_remain_running(self):
+        device = self.make_device(snapshot())
+        body = json.loads(device.runtime_json())
+        self.assertTrue(body["source_current"])
+        self.assertEqual(device.state, "RUNNING")
+        self.assertEqual(device.dev_state(), "RUNNING")
+
+    def test_device_distinguishes_idle_from_executing(self):
+        for state, expected in (("IDLE", "STANDBY"), ("EXECUTING", "MOVING")):
+            with self.subTest(state=state):
+                device = self.make_device(snapshot(state=state, stale=True))
+                body = json.loads(device.runtime_json())
+                self.assertEqual(body["runtime_state"], state)
+                self.assertFalse(body["source_current"])
+                self.assertEqual(device.dev_state(), expected)
+
+    def test_device_adds_last_http_duration_before_claiming_source_current(self):
+        device = self.make_device(snapshot(age_seconds=1.9))
+        device._last_read_duration = 0.2
+        body = json.loads(device.runtime_json())
+        self.assertAlmostEqual(body["source_age_seconds"], 2.1)
+        self.assertEqual(body["source_reported_age_seconds"], 1.9)
+        self.assertEqual(device.dev_state(), "UNKNOWN")
+
+    def test_poll_records_elapsed_duration_without_network(self):
+        class OnePoll:
+            stopped = False
+
+            def is_set(self):
+                return self.stopped
+
+            def wait(self, _seconds):
+                self.stopped = True
+
+        device = self.make_device(None)
+        device._stop = OnePoll()
+        device._key = b"synthetic key"
+        device.xp_port = 8771
+        times = iter((100.0, 100.3))
+        self.namespace["time"].monotonic = lambda: next(times)
+        self.namespace["read_runtime"] = lambda _key, **_kwargs: snapshot()
+        try:
+            device._poll()
+        finally:
+            self.namespace["time"].monotonic = lambda: 100.0
+            del self.namespace["read_runtime"]
+        self.assertEqual(device._last_read, 100.3)
+        self.assertAlmostEqual(device._last_read_duration, 0.3)
+        self.assertEqual(device._latest["state"], "RUNNING")
+
+
+if __name__ == "__main__":
+    unittest.main()

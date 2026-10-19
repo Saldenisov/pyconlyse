@@ -1,0 +1,13 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "supervision-reconstruction"
+version = "0.1.0"
+description = "Auditable, non-executable reconstruction catalog for ELYSE SuperVision LabVIEW VIs"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/supervision_reconstruction"]

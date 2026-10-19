@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "sources": [
+    {
+      "source_id": "APP-00",
+      "source_version": "57E1B106EEB57D70124D21CC3FEE775BCADFBF47081F02ED9335A28BAFBC9DD5",
+      "event_uid": "43",
+      "frame_uid": "22879",
+      "module": "saved_acq_event_22879.py",
+      "implementation_sha256": "D6A8C1222CB1530B7636FB970BF5F3B84B1D142941471AF5443D0C15581A1AB7",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\next_event_alignment_followup_20261009\\acq\\SOURCE_PROOF.json",
+        "bytes": 1034197,
+        "sha256": "459E3D1FE1143157F5FE6F8DBC2B0650043AF91A0CF6E74C383610A7155CDFBA"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "native_execution": false,
+      "whole_event_equivalence": false
+    },
+    {
+      "source_id": "APP-17",
+      "source_version": "D3356F86853E718BB80F5F874620E201CA635400025D35DF6DBC2629C14874A9",
+      "event_uid": "5909",
+      "frame_uid": "56135",
+      "module": "saved_sup_gain.py",
+      "implementation_sha256": "82F0FCADFB8D8D73D9982B16D239821DAE85D20FCC55F10B523F2B8881332A1E",
+      "source_proof": {
+        "path": "C:\\dev\\pyconlyse\\Supervision\\integration_analysis\\orchestrator\\next_event_alignment_followup_20261009\\sup\\SOURCE_PROOF.json",
+        "bytes": 1088285,
+        "sha256": "D67C098998ACBAAB09D5B5C4B9A62190B0105F95B7887DC5C4280537A5F2EB68"
+      },
+      "scope": "SUPPLIED_SELECTED_EVENT_BODY",
+      "native_execution": false,
+      "whole_event_equivalence": false
+    }
+  ],
+  "native_execution": false,
+  "hardware_execution": false,
+  "PSP_execution": false,
+  "deployed": false,
+  "whole_event_equivalence": false,
+  "whole_business_scope_complete": false
+}
